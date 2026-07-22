@@ -1,0 +1,29 @@
+{
+	"name": "aktasfatih/kanso",
+	"description": "Fast open-source kanban boards for Nextcloud",
+	"license": "AGPL-3.0-or-later",
+	"config": {
+		"platform": {
+			"php": "8.2.27"
+		},
+		"allow-plugins": {
+			"composer/package-versions-deprecated": true
+		}
+	},
+	"require-dev": {
+		"nextcloud/ocp": "^32.0",
+		"nextcloud/coding-standard": "^1.4",
+		"vimeo/psalm": "^6.0"
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"OCA\\Kanso\\": "lib/",
+			"OCP\\": "vendor/nextcloud/ocp/OCP"
+		}
+	},
+	"scripts": {
+		"cs:check": "php-cs-fixer fix --dry-run --diff",
+		"cs:fix": "php-cs-fixer fix",
+		"psalm": "psalm"
+	}
+}

@@ -1,0 +1,30 @@
+{
+  "name": "kanso",
+  "version": "0.1.0",
+  "description": "Fast open-source kanban boards for Nextcloud",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --mode production",
+    "dev": "vite build --mode development",
+    "watch": "vite build --mode development --watch"
+  },
+  "dependencies": {
+    "@nextcloud/axios": "^2.5.0",
+    "@nextcloud/l10n": "^3.1.0",
+    "@nextcloud/router": "^3.0.0",
+    "@nextcloud/vue": "^9.0.0",
+    "@tanstack/vue-query": "^5.0.0",
+    "vue": "^3.5.0",
+    "vue-material-design-icons": "^5.3.0"
+  },
+  "devDependencies": {
+    "@nextcloud/vite-config": "^2.2.0",
+    "typescript": "~5.9",
+    "vite": "^7.0.0"
+  },
+  "engines": {
+    "node": "^20 || ^22"
+  }
+}

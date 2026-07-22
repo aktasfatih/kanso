@@ -1,0 +1,10 @@
+node_modules/
+js/
+css/
+vendor/
+*.tar.gz
+.DS_Store
+.phpunit.result.cache
+test-results/
+playwright-report/
+.php-cs-fixer.cache

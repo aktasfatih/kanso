@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>kanso</id>
+	<name>Kanso</name>
+	<summary>Fast open-source kanban boards</summary>
+	<description><![CDATA[
+Kanso is a kanban board app built for speed. Boards, stacks and cards with
+instant drag & drop, optimistic updates and payloads sized for large boards.
+
+Early development — not feature complete yet.
+	]]></description>
+	<version>0.1.0</version>
+	<licence>agpl</licence>
+	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
+	<namespace>Kanso</namespace>
+	<category>organization</category>
+	<bugs>https://github.com/aktasfatih/kanso/issues</bugs>
+	<repository type="git">https://github.com/aktasfatih/kanso.git</repository>
+	<dependencies>
+		<nextcloud min-version="30" max-version="32"/>
+	</dependencies>
+	<navigations>
+		<navigation>
+			<name>Kanso</name>
+			<route>kanso.page.index</route>
+			<icon>app.svg</icon>
+		</navigation>
+	</navigations>
+</info>
