@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+// SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+namespace OCA\Kanso\Db;
+
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\MultipleObjectsReturnedException;
+use OCP\AppFramework\Db\QBMapper;
+use OCP\DB\Exception;
+use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\IDBConnection;
+
+/**
+ * Mapper for `kanso_stacks`.
+ *
+ * @template-extends QBMapper<Stack>
+ */
+class StackMapper extends QBMapper {
+	public function __construct(IDBConnection $db) {
+		parent::__construct($db, 'kanso_stacks', Stack::class);
+	}
+
+	/**
+	 * @throws DoesNotExistException if the stack does not exist
+	 * @throws MultipleObjectsReturnedException
+	 * @throws Exception
+	 */
+	public function find(int $id): Stack {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+
+		return $this->findEntity($qb);
+	}
+
+	/**
+	 * All non-deleted stacks of a board in display order.
+	 *
+	 * @return Stack[]
+	 * @throws Exception
+	 */
+	public function findByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('sort_key', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+}
