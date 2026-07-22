@@ -8,9 +8,13 @@
   "scripts": {
     "build": "vite build --mode production",
     "dev": "vite build --mode development",
-    "watch": "vite build --mode development --watch"
+    "watch": "vite build --mode development --watch",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "^2.0.1",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
     "@nextcloud/axios": "^2.5.0",
     "@nextcloud/l10n": "^3.1.0",
     "@nextcloud/router": "^3.0.0",
@@ -22,6 +26,7 @@
   },
   "devDependencies": {
     "@nextcloud/vite-config": "^2.2.0",
+    "@playwright/test": "^1.61.1",
     "typescript": "~5.9",
     "vite": "^7.0.0"
   },

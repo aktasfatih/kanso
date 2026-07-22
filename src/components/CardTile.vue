@@ -3,22 +3,32 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<button class="card-tile" @click="$emit('click')">
-		<span class="card-tile__title">{{ card.title }}</span>
-		<span
-			v-if="card.duedate"
-			class="card-tile__due"
-			:class="dueDateClass">
-			<CalendarIcon :size="14" />
-			{{ formatDue(card.duedate) }}
-		</span>
-	</button>
+	<div class="card-tile-wrap" :class="{ 'card-tile-wrap--dragging': isDragging }">
+		<!-- Top drop indicator -->
+		<div v-if="closestEdge === 'top'" class="card-tile__drop-line card-tile__drop-line--top" />
+
+		<button ref="el" class="card-tile" @click="$emit('click')">
+			<span class="card-tile__title">{{ card.title }}</span>
+			<span
+				v-if="card.duedate"
+				class="card-tile__due"
+				:class="dueDateClass">
+				<CalendarIcon :size="14" />
+				{{ formatDue(card.duedate) }}
+			</span>
+		</button>
+
+		<!-- Bottom drop indicator -->
+		<div v-if="closestEdge === 'bottom'" class="card-tile__drop-line card-tile__drop-line--bottom" />
+	</div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { translate as t } from '@nextcloud/l10n'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
+import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 
 const props = defineProps({
 	card: {
@@ -28,6 +38,45 @@ const props = defineProps({
 })
 
 defineEmits(['click'])
+
+const el = ref(null)
+const isDragging = ref(false)
+const closestEdge = ref(null)
+let cleanup = () => {}
+
+onMounted(() => {
+	if (!el.value) return
+	cleanup = combine(
+		draggable({
+			element: el.value,
+			getInitialData: () => ({
+				type: 'card',
+				cardId: props.card.id,
+				stackId: props.card.stackId,
+				sortKey: props.card.sortKey,
+			}),
+			onDragStart: () => { isDragging.value = true },
+			onDrop: () => { isDragging.value = false },
+		}),
+		dropTargetForElements({
+			element: el.value,
+			canDrop: ({ source }) => source.data.type === 'card' && source.data.cardId !== props.card.id,
+			getData: ({ input, element: el2 }) => attachClosestEdge(
+				{ type: 'card', cardId: props.card.id, stackId: props.card.stackId, sortKey: props.card.sortKey },
+				{ input, element: el2, allowedEdges: ['top', 'bottom'] },
+			),
+			onDrag: ({ self }) => {
+				closestEdge.value = extractClosestEdge(self.data)
+			},
+			onDragLeave: () => { closestEdge.value = null },
+			onDrop: () => { closestEdge.value = null },
+		}),
+	)
+})
+
+onUnmounted(() => {
+	cleanup()
+})
 
 const dueDateClass = computed(() => {
 	if (!props.card.duedate) return ''
@@ -47,6 +96,33 @@ function formatDue(iso) {
 </script>
 
 <style scoped>
+.card-tile-wrap {
+	position: relative;
+}
+
+.card-tile-wrap--dragging .card-tile {
+	opacity: 0.4;
+}
+
+.card-tile__drop-line {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: var(--color-primary-element);
+	border-radius: 1px;
+	z-index: 10;
+	pointer-events: none;
+}
+
+.card-tile__drop-line--top {
+	top: -1px;
+}
+
+.card-tile__drop-line--bottom {
+	bottom: -1px;
+}
+
 .card-tile {
 	display: flex;
 	flex-direction: column;

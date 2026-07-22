@@ -23,22 +23,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
 		</form>
 
-		<!-- Card list — structured as its own scrollable div for future TanStack Virtual drop-in -->
-		<div class="stack-column__cards">
+		<!-- Card list — own scrollable element for future TanStack Virtual drop-in -->
+		<div ref="cardListRef" class="stack-column__cards" :class="{ 'stack-column__cards--drop-over': isDropOver && cards.length === 0 }">
 			<CardTile
 				v-for="card in cards"
 				:key="card.id"
 				:card="card"
 				@click="openCard(card.id)" />
+			<!-- Empty stack placeholder so empty columns are droppable -->
+			<div v-if="cards.length === 0" class="stack-column__empty-placeholder" />
 		</div>
 	</div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import CardTile from './CardTile.vue'
+import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
+import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 
 const props = defineProps({
 	stack: {
@@ -60,9 +65,35 @@ const router = useRouter()
 const route = useRoute()
 
 const composerInputRef = ref(null)
+const cardListRef = ref(null)
 const newCardTitle = ref('')
 const composerError = ref('')
 const isPending = ref(false)
+const isDropOver = ref(false)
+let cleanup = () => {}
+
+onMounted(() => {
+	if (!cardListRef.value) return
+	cleanup = combine(
+		// Column-level drop target: catches drops on the empty space below all cards
+		dropTargetForElements({
+			element: cardListRef.value,
+			canDrop: ({ source }) => source.data.type === 'card',
+			getData: () => ({ type: 'column', stackId: props.stack.id }),
+			onDragEnter: () => { isDropOver.value = true },
+			onDragLeave: () => { isDropOver.value = false },
+			onDrop: () => { isDropOver.value = false },
+		}),
+		// Auto-scroll the card list when dragging near the edges
+		autoScrollForElements({
+			element: cardListRef.value,
+		}),
+	)
+})
+
+onUnmounted(() => {
+	cleanup()
+})
 
 function openCard(cardId) {
 	router.push({
@@ -176,5 +207,16 @@ async function submitCard() {
 	overflow-y: auto;
 	flex: 1;
 	min-height: 0;
+	transition: background 0.15s ease;
+}
+
+.stack-column__cards--drop-over {
+	background: rgba(var(--color-primary-element-rgb, 0, 130, 201), 0.06);
+	border-radius: var(--border-radius);
+}
+
+.stack-column__empty-placeholder {
+	min-height: 48px;
+	border-radius: var(--border-radius);
 }
 </style>

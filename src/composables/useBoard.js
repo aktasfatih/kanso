@@ -10,6 +10,16 @@ import {
 	createCard as apiCreateCard,
 } from '../services/api.js'
 
+/**
+ * The one place the board query key shape is defined. useCardMove patches
+ * this cache entry directly — a divergent key there would silently turn
+ * every optimistic move into a no-op against a different entry.
+ */
+export function boardQueryKey(id) {
+	const value = typeof id === 'object' && id !== null && id.value !== undefined ? id.value : id
+	return ['board', value]
+}
+
 export function useBoard(id) {
 	const queryClient = useQueryClient()
 

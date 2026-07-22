@@ -22,13 +22,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 		</div>
 
+		<!-- DnD error banner -->
+		<div v-if="moveError" class="board-view__move-error">
+			{{ moveError }}
+			<button class="board-view__move-error-dismiss" @click="dismissMoveError">×</button>
+		</div>
+
 		<!-- Error -->
 		<div v-if="isError" class="board-view__error">
 			{{ t('kanso', 'Failed to load board.') }}
 		</div>
 
 		<!-- Stacks row -->
-		<div class="board-view__stacks-wrap">
+		<div ref="stacksWrapRef" class="board-view__stacks-wrap">
 			<!-- Skeleton stacks on cold load -->
 			<template v-if="isLoading">
 				<div v-for="n in 3" :key="n" class="stack-skeleton">
@@ -68,13 +74,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import StackColumn from '../components/StackColumn.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { useCardMove } from '../composables/useCardMove.js'
+import { initial, between, after, before } from '../services/sortKey.js'
+import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
+import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 
 const props = defineProps({
 	id: {
@@ -84,16 +96,15 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const { data: boardData, isLoading, isError, createStack, createCard } = useBoard(
-	computed(() => props.id),
-)
+const boardId = computed(() => props.id)
+const { data: boardData, isLoading, isError, createStack, createCard } = useBoard(boardId)
+const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 
 const newStackTitle = ref('')
 const stackError = ref('')
+const stacksWrapRef = ref(null)
+let boardCleanup = () => {}
 
-// Codepoint comparison, matching the server's byte-ordered fractional keys.
-// localeCompare must not be used here: locale collation disagrees with the
-// backend's ORDER BY and would shuffle cards.
 const bySortKey = (a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)
 
 const sortedStacks = computed(() => {
@@ -118,6 +129,112 @@ function cardsForStack(stackId) {
 	return cardsByStack.value.get(stackId) ?? []
 }
 
+onMounted(() => {
+	const cleanups = [
+		monitorForElements({
+			canMonitor: ({ source }) => source.data.type === 'card',
+			onDrop({ source, location }) {
+				const { cardId, stackId: sourceStackId } = source.data
+
+				// Walk drop targets innermost-first to find what we landed on
+				const targets = location.current.dropTargets
+				if (!targets.length) return
+
+				let targetStackId = null
+				let afterCardId = null
+				let optimisticKey = null
+
+				// Find card-level target (innermost) and column-level target
+				const cardTarget = targets.find((t) => t.data.type === 'card')
+				const columnTarget = targets.find((t) => t.data.type === 'column')
+
+				if (cardTarget) {
+					const edge = extractClosestEdge(cardTarget.data)
+					const targetCardId = cardTarget.data.cardId
+					const targetStackId2 = cardTarget.data.stackId
+					targetStackId = targetStackId2
+
+					// Resolve neighbors as if the dragged card were already
+					// removed — otherwise dropping on the top edge of the card
+					// below yields the dragged card as its own anchor (400).
+					const stackCards = (cardsByStack.value.get(targetStackId2) ?? [])
+						.filter((c) => c.id !== cardId)
+					const targetIdx = stackCards.findIndex((c) => c.id === targetCardId)
+					const targetCard = stackCards[targetIdx]
+
+					if (!targetCard) return // stale, or dropped onto itself
+
+					if (edge === 'top') {
+						// Insert before targetCard
+						const prevCard = targetIdx > 0 ? stackCards[targetIdx - 1] : null
+						afterCardId = prevCard?.id ?? null
+						try {
+							optimisticKey = prevCard
+								? between(prevCard.sortKey, targetCard.sortKey)
+								: before(targetCard.sortKey)
+						} catch {
+							// Keys too close or overflow; fall back to server truth via invalidation
+							optimisticKey = targetCard.sortKey // will be fixed on reconcile
+						}
+					} else {
+						// Insert after targetCard (bottom edge)
+						const nextCard = targetIdx < stackCards.length - 1 ? stackCards[targetIdx + 1] : null
+						afterCardId = targetCard.id
+						try {
+							optimisticKey = nextCard
+								? between(targetCard.sortKey, nextCard.sortKey)
+								: after(targetCard.sortKey)
+						} catch {
+							optimisticKey = targetCard.sortKey
+						}
+					}
+				} else if (columnTarget) {
+					// Drop on empty column space → append to end (excluding the
+					// dragged card so it can't become its own anchor)
+					targetStackId = columnTarget.data.stackId
+					const stackCards = (cardsByStack.value.get(targetStackId) ?? [])
+						.filter((c) => c.id !== cardId)
+					const lastCard = stackCards.length > 0 ? stackCards[stackCards.length - 1] : null
+					afterCardId = lastCard?.id ?? null
+					try {
+						optimisticKey = lastCard ? after(lastCard.sortKey) : initial()
+					} catch {
+						optimisticKey = initial()
+					}
+				} else {
+					return // No valid target
+				}
+
+				// No-op guard: check if card is already in this position
+				if (targetStackId === sourceStackId) {
+					const stackCards = cardsByStack.value.get(targetStackId) ?? []
+					const draggedIdx = stackCards.findIndex((c) => c.id === cardId)
+					const cardBefore = draggedIdx > 0 ? stackCards[draggedIdx - 1] : null
+					const currentAfterCardId = cardBefore?.id ?? null
+					if (currentAfterCardId === afterCardId) return // already in this position
+				}
+
+				enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey })
+			},
+		}),
+	]
+
+	// Auto-scroll the horizontal stacks container
+	if (stacksWrapRef.value) {
+		cleanups.push(
+			autoScrollForElements({
+				element: stacksWrapRef.value,
+			}),
+		)
+	}
+
+	boardCleanup = combine(...cleanups)
+})
+
+onUnmounted(() => {
+	boardCleanup()
+})
+
 function goBack() {
 	router.push({ name: 'board-list' })
 }
@@ -136,7 +253,6 @@ async function submitNewStack() {
 }
 
 async function handleCreateCard(stackId, title) {
-	// Throws on error — StackColumn catches and shows inline error
 	await createCard.mutateAsync({ stackId, title })
 }
 </script>
@@ -195,6 +311,27 @@ async function handleCreateCard(stackId, title) {
 	color: var(--color-error);
 }
 
+.board-view__move-error {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 24px;
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+	color: var(--color-error);
+	font-size: 0.875rem;
+	flex-shrink: 0;
+}
+
+.board-view__move-error-dismiss {
+	background: none;
+	border: none;
+	color: var(--color-error);
+	cursor: pointer;
+	font-size: 1.2rem;
+	line-height: 1;
+	padding: 0 4px;
+}
+
 /* Stacks scrollable row */
 .board-view__stacks-wrap {
 	display: flex;
@@ -235,7 +372,6 @@ async function handleCreateCard(stackId, title) {
 	animation: shimmer 1.4s infinite linear;
 }
 
-/* Shimmer animation shared with BoardList but scoped here */
 @keyframes shimmer {
 	0% { background-position: -400px 0; }
 	100% { background-position: 400px 0; }
