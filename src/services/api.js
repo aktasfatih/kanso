@@ -1,0 +1,49 @@
+// SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+import axios from '@nextcloud/axios'
+import { generateUrl } from '@nextcloud/router'
+
+const url = (path) => generateUrl('/apps/kanso' + path)
+
+// Boards
+export const fetchBoards = () =>
+	axios.get(url('/api/boards')).then((r) => r.data)
+
+export const fetchBoard = (id) =>
+	axios.get(url(`/api/boards/${id}`)).then((r) => r.data)
+
+export const createBoard = (data) =>
+	axios.post(url('/api/boards'), data).then((r) => r.data)
+
+export const updateBoard = (id, data) =>
+	axios.patch(url(`/api/boards/${id}`), data).then((r) => r.data)
+
+export const deleteBoard = (id) =>
+	axios.delete(url(`/api/boards/${id}`)).then((r) => r.data)
+
+// Stacks
+export const createStack = (data) =>
+	axios.post(url('/api/stacks'), data).then((r) => r.data)
+
+export const updateStack = (id, data) =>
+	axios.patch(url(`/api/stacks/${id}`), data).then((r) => r.data)
+
+export const deleteStack = (id) =>
+	axios.delete(url(`/api/stacks/${id}`)).then((r) => r.data)
+
+// Cards
+export const fetchCard = (id) =>
+	axios.get(url(`/api/cards/${id}`)).then((r) => r.data)
+
+export const createCard = (data) =>
+	axios.post(url('/api/cards'), data).then((r) => r.data)
+
+export const updateCard = (id, data) =>
+	axios.patch(url(`/api/cards/${id}`), data).then((r) => r.data)
+
+export const deleteCard = (id) =>
+	axios.delete(url(`/api/cards/${id}`)).then((r) => r.data)
+
+export const moveCard = (id, data) =>
+	axios.post(url(`/api/cards/${id}/move`), data).then((r) => r.data)
