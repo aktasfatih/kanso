@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = tab
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

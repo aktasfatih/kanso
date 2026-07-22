@@ -1,5 +1,7 @@
 # Kanso
 
+[![CI](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml)
+
 Fast open-source kanban boards for [Nextcloud](https://nextcloud.com). Early development.
 
 Kanso is a from-scratch kanban app built for speed: instant drag & drop with

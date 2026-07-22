@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+	bootstrap="tests/bootstrap.php"
+	colors="true"
+	failOnWarning="true"
+	failOnRisky="true"
+	cacheDirectory=".phpunit.cache">
+	<testsuites>
+		<testsuite name="unit">
+			<directory>tests/unit</directory>
+		</testsuite>
+	</testsuites>
+</phpunit>

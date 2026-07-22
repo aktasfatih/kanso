@@ -5,6 +5,7 @@ vendor/
 *.tar.gz
 .DS_Store
 .phpunit.result.cache
+.phpunit.cache/
 test-results/
 playwright-report/
 .php-cs-fixer.cache
