@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Throwaway development Nextcloud with this app mounted from the checkout.
+# Mirrors production (nextcloud:32-apache + postgres 16). No volumes are
+# persisted: `docker compose down` resets everything.
+#
+#   cd dev && ./setup.sh          # start + enable the app
+#   http://localhost:8891         # login: admin / admin
+#
+# Explicit project name: without it compose uses the directory name ("dev"),
+# which collides with any sibling app's dev/ stack.
+name: kanso-dev
+services:
+  db:
+    image: postgres:16
+    container_name: kanso-dev-db
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: nextcloud
+
+  nextcloud:
+    image: nextcloud:32-apache
+    container_name: kanso-dev
+    ports:
+      - "8891:80"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: admin
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost
+    volumes:
+      - ..:/var/www/html/custom_apps/kanso
+    depends_on:
+      - db
