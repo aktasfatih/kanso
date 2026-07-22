@@ -18,5 +18,11 @@ return [
 		['name' => 'stack#create', 'url' => '/api/stacks', 'verb' => 'POST'],
 		['name' => 'stack#update', 'url' => '/api/stacks/{id}', 'verb' => 'PATCH'],
 		['name' => 'stack#destroy', 'url' => '/api/stacks/{id}', 'verb' => 'DELETE'],
+
+		['name' => 'card#create', 'url' => '/api/cards', 'verb' => 'POST'],
+		['name' => 'card#show', 'url' => '/api/cards/{id}', 'verb' => 'GET'],
+		['name' => 'card#update', 'url' => '/api/cards/{id}', 'verb' => 'PATCH'],
+		['name' => 'card#destroy', 'url' => '/api/cards/{id}', 'verb' => 'DELETE'],
+		['name' => 'card#move', 'url' => '/api/cards/{id}/move', 'verb' => 'POST'],
 	],
 ];

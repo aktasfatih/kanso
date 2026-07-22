@@ -1,0 +1,597 @@
+<?php
+
+declare(strict_types=1);
+
+// SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+namespace OCA\Kanso\Tests\Unit\Service;
+
+use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Db\Stack;
+use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\SortKeyService;
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+
+class CardServiceTest extends TestCase {
+	private CardMapper&MockObject $cardMapper;
+	private StackMapper&MockObject $stackMapper;
+	private BoardMapper&MockObject $boardMapper;
+	private ChangeMapper&MockObject $changeMapper;
+	private PermissionService&MockObject $permissionService;
+	private IDBConnection&MockObject $db;
+	private CardService $service;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->stackMapper = $this->createMock(StackMapper::class);
+		$this->boardMapper = $this->createMock(BoardMapper::class);
+		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->db = $this->createMock(IDBConnection::class);
+		$this->service = new CardService(
+			$this->cardMapper,
+			$this->stackMapper,
+			$this->boardMapper,
+			$this->changeMapper,
+			$this->permissionService,
+			new SortKeyService(),
+			$this->db
+		);
+	}
+
+	private function board(int $id = 1): Board {
+		$board = new Board();
+		$board->setId($id);
+		$board->setOwner('alice');
+		$board->setDeletedAt(0);
+		return $board;
+	}
+
+	private function stack(int $id = 5, int $boardId = 1): Stack {
+		$stack = new Stack();
+		$stack->setId($id);
+		$stack->setBoardId($boardId);
+		$stack->setTitle('Existing stack');
+		$stack->setSortKey('I');
+		$stack->setDeletedAt(0);
+		return $stack;
+	}
+
+	private function card(int $id = 9, int $stackId = 5, int $boardId = 1, string $sortKey = 'I'): Card {
+		$card = new Card();
+		$card->setId($id);
+		$card->setBoardId($boardId);
+		$card->setStackId($stackId);
+		$card->setTitle('Existing card');
+		$card->setSortKey($sortKey);
+		$card->setDoneAt(0);
+		$card->setArchived(false);
+		$card->setOwner('alice');
+		$card->setDeletedAt(0);
+		return $card;
+	}
+
+	// ---- create -----------------------------------------------------------
+
+	public function testCreateOnEmptyStackUsesInitialSortKey(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame('I', $card->getSortKey());
+				self::assertSame('A card', $card->getTitle());
+				self::assertSame(1, $card->getBoardId());
+				self::assertSame(5, $card->getStackId());
+				self::assertSame('alice', $card->getOwner());
+				self::assertSame(0, $card->getDoneAt());
+				self::assertFalse($card->getArchived());
+				self::assertGreaterThan(0, $card->getCreatedAt());
+				self::assertGreaterThan(0, $card->getLastModified());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				9,
+				Change::ACTION_CREATE,
+				'alice',
+				self::greaterThan(0)
+			)
+			->willReturn(new Change());
+
+		$card = $this->service->create(5, 'A card', 'alice');
+		self::assertSame(9, $card->getId());
+	}
+
+	public function testCreateAppendsAfterLastCard(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)
+			->willReturn($this->card(8, 5, 1, 'J'));
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				// after('J') === 'K'
+				self::assertSame('K', $card->getSortKey());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	public function testCreateRejectsEmptyTitle(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(5, '   ', 'alice');
+	}
+
+	public function testCreateRejectsOverlongTitle(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(5, str_repeat('x', 101), 'alice');
+	}
+
+	public function testCreateAssertsEditPermission(): void {
+		$board = $this->board();
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->create(5, 'A card', 'bob');
+	}
+
+	public function testCreateRejectsDeletedStack(): void {
+		$stack = $this->stack();
+		$stack->setDeletedAt(1234);
+		$this->stackMapper->method('find')->with(5)->willReturn($stack);
+		$this->cardMapper->expects(self::never())->method('insert');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	// ---- find -------------------------------------------------------------
+
+	public function testFindAssertsReadPermissionAndReturnsCard(): void {
+		$card = $this->card();
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'alice', PermissionService::PERMISSION_READ);
+
+		self::assertSame($card, $this->service->find(9, 'alice'));
+	}
+
+	public function testFindThrowsForSoftDeletedCard(): void {
+		$card = $this->card();
+		$card->setDeletedAt(1234);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->find(9, 'alice');
+	}
+
+	// ---- update -----------------------------------------------------------
+
+	public function testUpdateAppliesFieldsAndWritesChangeRow(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnArgument(0);
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				9,
+				Change::ACTION_UPDATE,
+				'alice',
+				self::greaterThan(0)
+			)
+			->willReturn(new Change());
+
+		$updated = $this->service->update(9, 'Renamed', 'A description', null, null, true, 'alice');
+		self::assertSame('Renamed', $updated->getTitle());
+		self::assertSame('A description', $updated->getDescription());
+		self::assertTrue($updated->getArchived());
+		self::assertGreaterThan(0, $updated->getLastModified());
+	}
+
+	public function testUpdateLeavesFieldsUnchangedOnNull(): void {
+		$card = $this->card();
+		$card->setDescription('Keep me');
+		$card->setDuedate(new \DateTime('2026-08-01T10:00:00+00:00'));
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice');
+		self::assertSame('Existing card', $updated->getTitle());
+		self::assertSame('Keep me', $updated->getDescription());
+		self::assertNotNull($updated->getDuedate());
+		self::assertFalse($updated->getArchived());
+	}
+
+	public function testUpdateClearsDuedateOnEmptyString(): void {
+		$card = $this->card();
+		$card->setDuedate(new \DateTime('2026-08-01T10:00:00+00:00'));
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, '', null, null, 'alice');
+		self::assertNull($updated->getDuedate());
+	}
+
+	public function testUpdateParsesAtomDuedateAndNormalizesToUtc(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, '2026-08-01T10:00:00+02:00', null, null, 'alice');
+		self::assertSame(
+			'2026-08-01T08:00:00+00:00',
+			$updated->getDuedate()?->format(\DateTimeInterface::ATOM)
+		);
+	}
+
+	public function testUpdateParsesMillisecondDuedate(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		// JS Date.toISOString() shape: milliseconds + 'Z'.
+		$updated = $this->service->update(9, null, null, '2026-08-01T10:00:00.000Z', null, null, 'alice');
+		self::assertSame(
+			'2026-08-01T10:00:00+00:00',
+			$updated->getDuedate()?->format(\DateTimeInterface::ATOM)
+		);
+	}
+
+	public function testUpdateRejectsInvalidDuedate(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, 'tomorrow', null, null, 'alice');
+	}
+
+	public function testUpdateRejectsRolledOverDuedate(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		// createFromFormat would silently roll February 30th to March 2nd.
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, '2026-02-30T12:00:00Z', null, null, 'alice');
+	}
+
+	public function testUpdateDoneStampsDoneAt(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, true, null, 'alice');
+		self::assertGreaterThan(0, $updated->getDoneAt());
+	}
+
+	public function testUpdateDoneIsIdempotent(): void {
+		$card = $this->card();
+		$card->setDoneAt(12345);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, true, null, 'alice');
+		self::assertSame(12345, $updated->getDoneAt());
+	}
+
+	public function testUpdateUndoneClearsDoneAt(): void {
+		$card = $this->card();
+		$card->setDoneAt(12345);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, false, null, 'alice');
+		self::assertSame(0, $updated->getDoneAt());
+	}
+
+	public function testUpdateAssertsEditPermission(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, 'Renamed', null, null, null, null, 'bob');
+	}
+
+	// ---- delete -----------------------------------------------------------
+
+	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn (Card $c): bool => $c->getDeletedAt() > 0))
+			->willReturnArgument(0);
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				9,
+				Change::ACTION_DELETE,
+				'alice',
+				self::greaterThan(0)
+			)
+			->willReturn(new Change());
+
+		$this->service->delete(9, 'alice');
+	}
+
+	// ---- move -------------------------------------------------------------
+
+	public function testMoveToTopUsesBeforeFirstKey(): void {
+		$this->cardMapper->method('find')->with(9)
+			->willReturn($this->card(9, 5, 1, 'K'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->method('findFirstInStack')->with(6)
+			->willReturn($this->card(10, 6, 1, 'I'));
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnArgument(0);
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				9,
+				Change::ACTION_MOVE,
+				'alice',
+				self::greaterThan(0)
+			)
+			->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		// before('I') === 'H'
+		self::assertSame('H', $moved->getSortKey());
+		self::assertSame(6, $moved->getStackId());
+	}
+
+	public function testMoveToEmptyStackUsesInitialKey(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame('I', $moved->getSortKey());
+		self::assertSame(6, $moved->getStackId());
+	}
+
+	public function testMoveBetweenCardsUsesMidpointKeyInsideTransaction(): void {
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $this->card(9, 5, 1, 'V'),
+			10 => $this->card(10, 6, 1, 'I'),
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->method('findNextInStack')->with(6, 'I')
+			->willReturn($this->card(11, 6, 1, 'J'));
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnArgument(0);
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->willReturn(new Change());
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$moved = $this->service->move(9, 6, 10, 'alice');
+		// between('I', 'J') === 'II'
+		self::assertSame('II', $moved->getSortKey());
+		self::assertSame(6, $moved->getStackId());
+	}
+
+	public function testMoveAfterLastCardUsesAfterKey(): void {
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $this->card(9, 5, 1, 'V'),
+			10 => $this->card(10, 6, 1, 'J'),
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->method('findNextInStack')->with(6, 'J')->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, 10, 'alice');
+		// after('J') === 'K'
+		self::assertSame('K', $moved->getSortKey());
+	}
+
+	public function testSequentialBetweenMovesProduceDistinctOrderedKeys(): void {
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $this->card(9, 5, 1, 'V'),
+			10 => $this->card(10, 6, 1, 'I'),
+			12 => $this->card(12, 5, 1, 'W'),
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		// First move sees 'J' as the next card; the second one sees the card
+		// just moved to 'II'.
+		$this->cardMapper->method('findNextInStack')->with(6, 'I')
+			->willReturnOnConsecutiveCalls(
+				$this->card(11, 6, 1, 'J'),
+				$this->card(9, 6, 1, 'II')
+			);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeMapper->method('insertChange')->willReturn(new Change());
+
+		$firstKey = $this->service->move(9, 6, 10, 'alice')->getSortKey();
+		$secondKey = $this->service->move(12, 6, 10, 'alice')->getSortKey();
+
+		self::assertSame('II', $firstKey);
+		self::assertSame('I9', $secondKey);
+		self::assertNotSame($firstKey, $secondKey);
+		// Both sort after the anchor 'I'; the second insertion lands between.
+		self::assertLessThan(0, strcmp('I', $secondKey));
+		self::assertLessThan(0, strcmp($secondKey, $firstKey));
+	}
+
+	public function testMoveRejectsCrossBoardTarget(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6, 2));
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	public function testMoveRejectsAfterCardInAnotherStack(): void {
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $this->card(9, 5, 1, 'V'),
+			10 => $this->card(10, 7, 1, 'I'),
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(9, 6, 10, 'alice');
+	}
+
+	public function testMoveRejectsAfterCardSelf(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(9, 5, 9, 'alice');
+	}
+
+	public function testMoveRejectsDeletedAfterCard(): void {
+		$deleted = $this->card(10, 6, 1, 'I');
+		$deleted->setDeletedAt(1234);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $this->card(9, 5, 1, 'V'),
+			10 => $deleted,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(9, 6, 10, 'alice');
+	}
+
+	public function testMoveRejectsMissingAfterCard(): void {
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id): Card {
+			if ($id === 9) {
+				return $this->card(9, 5, 1, 'V');
+			}
+			throw new DoesNotExistException('gone');
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(9, 6, 10, 'alice');
+	}
+
+	public function testMoveAssertsEditPermission(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->move(9, 6, null, 'bob');
+	}
+
+	public function testMoveRollsBackTransactionOnMapperFailure(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')
+			->willThrowException(new \RuntimeException('db gone'));
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+}

@@ -30,6 +30,16 @@ trait ApiErrorTrait {
 			return new JSONResponse(['error' => 'Access denied'], Http::STATUS_FORBIDDEN);
 		} catch (DoesNotExistException) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		} catch (\OverflowException) {
+			// SortKeyService: a derived fractional sort key would exceed the
+			// column width — the affected list needs a rebalance before the
+			// operation can succeed. Clients should surface a retry.
+			return new JSONResponse(['error' => 'rebalance_required'], Http::STATUS_CONFLICT);
+		} catch (\InvalidArgumentException) {
+			// Defensive: SortKeyService rejects malformed/misordered keys with
+			// InvalidArgumentException. That must never surface as a 500 — it
+			// means the request was built against stale or inconsistent state.
+			return new JSONResponse(['error' => 'Invalid input'], Http::STATUS_BAD_REQUEST);
 		}
 	}
 }
