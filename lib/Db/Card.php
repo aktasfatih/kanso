@@ -44,7 +44,7 @@ use OCP\DB\Types;
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
  */
-class Card extends Entity {
+class Card extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
 	// explicit sets of that same value out of INSERT statements.
@@ -74,5 +74,39 @@ class Card extends Entity {
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
+	}
+
+	/**
+	 * Summary payload for board/stack listings — deliberately without the
+	 * description (the charter's summary-payload performance bet).
+	 *
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int}
+	 */
+	public function jsonSerializeSummary(): array {
+		return [
+			'id' => $this->getId(),
+			'boardId' => $this->boardId,
+			'stackId' => $this->stackId,
+			'title' => $this->title,
+			'sortKey' => $this->sortKey,
+			'duedate' => $this->duedate?->format(\DateTimeInterface::ATOM),
+			'doneAt' => $this->doneAt ?? 0,
+			'archived' => $this->archived ?? false,
+			'owner' => $this->owner,
+			'createdAt' => $this->createdAt ?? 0,
+			'lastModified' => $this->lastModified ?? 0,
+		];
+	}
+
+	/**
+	 * Full payload including the description — only meaningful for entities
+	 * hydrated by {@see CardMapper::find()} (summary queries leave the
+	 * description null).
+	 *
+	 * @return array<string, mixed>
+	 */
+	#[\Override]
+	public function jsonSerialize(): array {
+		return $this->jsonSerializeSummary() + ['description' => $this->description];
 	}
 }

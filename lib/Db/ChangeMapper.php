@@ -9,6 +9,7 @@ namespace OCA\Kanso\Db;
 
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /**
@@ -41,5 +42,25 @@ class ChangeMapper extends QBMapper {
 		$change->setCreatedAt($createdAt);
 
 		return $this->insert($change);
+	}
+
+	/**
+	 * Highest change id of a board — the board's sync cursor and ETag
+	 * source. 0 for boards without any change rows (which regular flows
+	 * never produce: board creation itself writes the first row).
+	 *
+	 * @throws Exception
+	 */
+	public function getLatestChangeId(int $boardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->max('id'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$max = $result->fetchOne();
+		$result->closeCursor();
+
+		return is_numeric($max) ? (int)$max : 0;
 	}
 }

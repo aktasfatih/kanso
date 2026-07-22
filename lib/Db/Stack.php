@@ -27,7 +27,7 @@ use OCP\DB\Types;
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
  */
-class Stack extends Entity {
+class Stack extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
 	// explicit sets of that same value out of INSERT statements.
@@ -43,5 +43,19 @@ class Stack extends Entity {
 		$this->addType('sortKey', Types::STRING);
 		$this->addType('archived', Types::BOOLEAN);
 		$this->addType('deletedAt', Types::INTEGER);
+	}
+
+	/**
+	 * @return array{id: int, boardId: ?int, title: ?string, sortKey: ?string, archived: bool}
+	 */
+	#[\Override]
+	public function jsonSerialize(): array {
+		return [
+			'id' => $this->getId(),
+			'boardId' => $this->boardId,
+			'title' => $this->title,
+			'sortKey' => $this->sortKey,
+			'archived' => $this->archived ?? false,
+		];
 	}
 }

@@ -8,5 +8,15 @@ declare(strict_types=1);
 return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
+
+		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
+		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
+		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
+		['name' => 'board#update', 'url' => '/api/boards/{id}', 'verb' => 'PATCH'],
+		['name' => 'board#destroy', 'url' => '/api/boards/{id}', 'verb' => 'DELETE'],
+
+		['name' => 'stack#create', 'url' => '/api/stacks', 'verb' => 'POST'],
+		['name' => 'stack#update', 'url' => '/api/stacks/{id}', 'verb' => 'PATCH'],
+		['name' => 'stack#destroy', 'url' => '/api/stacks/{id}', 'verb' => 'DELETE'],
 	],
 ];
