@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
@@ -17,6 +18,7 @@ use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
+use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -39,6 +41,8 @@ class BoardController extends Controller {
 		private LabelMapper $labelMapper,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private AclMapper $aclMapper,
+		private PermissionService $permissionService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -60,16 +64,18 @@ class BoardController extends Controller {
 	}
 
 	/**
-	 * Full board payload: the board, its stacks, its labels and card
+	 * Full board payload: the board, its stacks, its labels, its sharing
+	 * rules (`acl`), the requesting user's own permission bits and card
 	 * SUMMARIES (no descriptions — those load on card open; each summary
 	 * carries its labelIds and assigneeIds). The board's latest change id
 	 * doubles as ETag: on an If-None-Match hit we return 304 before touching
-	 * the stack/card/label/assignee tables at all.
+	 * the stack/card/label/assignee/acl tables at all.
 	 */
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
-			$board = $this->boardService->find($id, $this->currentUserId());
+			$uid = $this->currentUserId();
+			$board = $this->boardService->find($id, $uid);
 
 			$etag = (string)$this->changeMapper->getLatestChangeId($id);
 			if ($this->matchesIfNoneMatch($etag)) {
@@ -90,6 +96,10 @@ class BoardController extends Controller {
 					$this->cardMapper->findSummariesByBoard($id)
 				),
 				'labels' => $this->labelMapper->findByBoard($id),
+				'acl' => $this->aclMapper->findByBoard($id),
+				// The requester's own bits, so the frontend can gate the
+				// share/manage UI without re-deriving ACL semantics.
+				'permissions' => $this->permissionService->getPermissions($board, $uid),
 			]);
 			$response->setETag($etag);
 			return $response;

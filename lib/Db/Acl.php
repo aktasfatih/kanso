@@ -14,8 +14,8 @@ use OCP\DB\Types;
  * One board sharing rule (table `kanso_board_acl`).
  *
  * `permission` is a bitmask of the PermissionService::PERMISSION_* bits.
- * Rows are only read for now — the write path (sharing endpoints) comes
- * with the sharing card.
+ * Rows are written by AclService (the sharing endpoints) and read by
+ * PermissionService for every permission check.
  *
  * @method int getBoardId()
  * @method void setBoardId(int $boardId)
@@ -26,7 +26,7 @@ use OCP\DB\Types;
  * @method int getPermission()
  * @method void setPermission(int $permission)
  */
-class Acl extends Entity {
+class Acl extends Entity implements \JsonSerializable {
 	public const TYPE_USER = 0;
 	public const TYPE_GROUP = 1;
 
@@ -43,5 +43,22 @@ class Acl extends Entity {
 		$this->addType('participantType', Types::INTEGER);
 		$this->addType('participant', Types::STRING);
 		$this->addType('permission', Types::INTEGER);
+	}
+
+	/**
+	 * `participantType` serializes as 'user'/'group' — the API never leaks
+	 * the numeric storage constants.
+	 *
+	 * @return array{id: int, boardId: ?int, participant: ?string, participantType: string, permission: ?int}
+	 */
+	#[\Override]
+	public function jsonSerialize(): array {
+		return [
+			'id' => $this->getId(),
+			'boardId' => $this->boardId,
+			'participant' => $this->participant,
+			'participantType' => $this->participantType === self::TYPE_GROUP ? 'group' : 'user',
+			'permission' => $this->permission,
+		];
 	}
 }

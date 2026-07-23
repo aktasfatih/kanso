@@ -16,6 +16,13 @@ return [
 		['name' => 'board#update', 'url' => '/api/boards/{id}', 'verb' => 'PATCH'],
 		['name' => 'board#destroy', 'url' => '/api/boards/{id}', 'verb' => 'DELETE'],
 
+		// The literal /search segment must precede the {aclId} routes so the
+		// router never captures "search" as an id.
+		['name' => 'acl#search', 'url' => '/api/boards/{id}/acl/search', 'verb' => 'GET'],
+		['name' => 'acl#create', 'url' => '/api/boards/{id}/acl', 'verb' => 'POST'],
+		['name' => 'acl#update', 'url' => '/api/boards/{id}/acl/{aclId}', 'verb' => 'PATCH'],
+		['name' => 'acl#destroy', 'url' => '/api/boards/{id}/acl/{aclId}', 'verb' => 'DELETE'],
+
 		['name' => 'stack#create', 'url' => '/api/stacks', 'verb' => 'POST'],
 		['name' => 'stack#update', 'url' => '/api/stacks/{id}', 'verb' => 'PATCH'],
 		['name' => 'stack#destroy', 'url' => '/api/stacks/{id}', 'verb' => 'DELETE'],

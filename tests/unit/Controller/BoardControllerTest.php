@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace OCA\Kanso\Tests\Unit\Controller;
 
 use OCA\Kanso\Controller\BoardController;
+use OCA\Kanso\Db\Acl;
+use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -22,6 +24,7 @@ use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
+use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
@@ -41,6 +44,8 @@ class BoardControllerTest extends TestCase {
 	private LabelMapper&MockObject $labelMapper;
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private AclMapper&MockObject $aclMapper;
+	private PermissionService&MockObject $permissionService;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -55,6 +60,8 @@ class BoardControllerTest extends TestCase {
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
+		$this->aclMapper = $this->createMock(AclMapper::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -71,7 +78,9 @@ class BoardControllerTest extends TestCase {
 			$this->cardMapper,
 			$this->labelMapper,
 			$this->cardLabelMapper,
-			$this->cardAssigneeMapper
+			$this->cardAssigneeMapper,
+			$this->aclMapper,
+			$this->permissionService
 		);
 	}
 
@@ -94,6 +103,8 @@ class BoardControllerTest extends TestCase {
 		$this->labelMapper->expects(self::never())->method('findByBoard');
 		$this->cardLabelMapper->expects(self::never())->method('findLabelIdsByBoard');
 		$this->cardAssigneeMapper->expects(self::never())->method('findUserIdsByBoard');
+		$this->aclMapper->expects(self::never())->method('findByBoard');
+		$this->permissionService->expects(self::never())->method('getPermissions');
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
@@ -143,6 +154,17 @@ class BoardControllerTest extends TestCase {
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([3 => [7]]);
 		$this->cardAssigneeMapper->method('findUserIdsByBoard')->with(1)->willReturn([3 => ['bob']]);
 
+		$acl = new Acl();
+		$acl->setId(40);
+		$acl->setBoardId(1);
+		$acl->setParticipantType(Acl::TYPE_USER);
+		$acl->setParticipant('bob');
+		$acl->setPermission(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$acl]);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'alice')
+			->willReturn(PermissionService::PERMISSION_ALL);
+
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame('7', $response->getETag());
@@ -151,6 +173,9 @@ class BoardControllerTest extends TestCase {
 		self::assertSame($board, $data['board']);
 		self::assertSame([$stack], $data['stacks']);
 		self::assertSame([$label], $data['labels']);
+		self::assertSame([$acl], $data['acl']);
+		self::assertSame('user', $acl->jsonSerialize()['participantType']);
+		self::assertSame(PermissionService::PERMISSION_ALL, $data['permissions']);
 		self::assertCount(2, $data['cards']);
 		self::assertSame(3, $data['cards'][0]['id']);
 		self::assertSame([7], $data['cards'][0]['labelIds']);

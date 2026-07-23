@@ -109,6 +109,32 @@ class CardAssigneeMapper extends QBMapper {
 	}
 
 	/**
+	 * Removes the user's assignments from every card of the board (stale-
+	 * assignee cleanup after an unshare). DELETE cannot join in the NC query
+	 * builder, so the board's card ids arrive via an uncorrelated subquery
+	 * spliced in with createFunction — same pattern as
+	 * {@see ChangeMapper::findPrunableIds()}. The subquery's parameter is
+	 * registered on the outer builder, which is the one that executes.
+	 *
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteByBoardAndUser(int $boardId, string $uid): int {
+		$qb = $this->db->getQueryBuilder();
+		$sub = $this->db->getQueryBuilder();
+		$sub->select('id')
+			->from('kanso_cards')
+			->where($sub->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		$qb->delete($this->getTableName())
+			->where($qb->createFunction('card_id IN (' . $sub->getSQL() . ')'))
+			->andWhere($qb->expr()->eq('participant', $qb->createNamedParameter($uid)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * @return int number of deleted rows (0 when the assignment was absent)
 	 * @throws Exception
 	 */
