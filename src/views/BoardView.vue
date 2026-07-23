@@ -55,12 +55,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcButton>
 		</div>
 
-		<!-- Label settings panel -->
-		<LabelSettingsPanel
+		<!-- Board settings modal (Labels + Sharing tabs) -->
+		<BoardSettingsModal
 			v-if="showSettings && boardData"
 			:board-id="props.id"
 			:labels="boardLabels"
-			@close="showSettings = false" />
+			:acl="boardData.acl ?? []"
+			:permissions="boardData.permissions ?? 0"
+			:participants="participants.data.value ?? []"
+			:current-user-id="currentUserId"
+			@close="showSettings = false"
+			@leave="showSettings = false" />
 
 		<!-- DnD error banner -->
 		<div v-if="moveError" class="board-view__move-error">
@@ -122,8 +127,9 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import StackColumn from '../components/StackColumn.vue'
-import LabelSettingsPanel from '../components/LabelSettingsPanel.vue'
+import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { cssColor } from '../services/color.js'
 import { initial, between, after, before } from '../services/sortKey.js'
@@ -143,6 +149,16 @@ const router = useRouter()
 const boardId = computed(() => props.id)
 const { data: boardData, isLoading, isError, createStack, createCard } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
+const { participants } = useAssignees(boardId)
+
+// Resolve current Nextcloud user id — OC.getCurrentUser() is always available in NC apps
+const currentUserId = (() => {
+	try {
+		return window.OC?.getCurrentUser?.()?.uid ?? ''
+	} catch {
+		return ''
+	}
+})()
 
 const newStackTitle = ref('')
 const stackError = ref('')

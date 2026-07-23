@@ -73,3 +73,16 @@ export const assignUser = (cardId, userId) =>
 
 export const unassignUser = (cardId, userId) =>
 	axios.delete(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)
+
+// ACL (board sharing)
+export const searchSharees = (boardId, q) =>
+	axios.get(url(`/api/boards/${boardId}/acl/search`), { params: { q } }).then((r) => r.data)
+
+export const createAcl = (boardId, data) =>
+	axios.post(url(`/api/boards/${boardId}/acl`), data).then((r) => r.data)
+
+export const updateAcl = (boardId, aclId, permission) =>
+	axios.patch(url(`/api/boards/${boardId}/acl/${aclId}`), { permission }).then((r) => r.data)
+
+export const deleteAcl = (boardId, aclId) =>
+	axios.delete(url(`/api/boards/${boardId}/acl/${aclId}`)).then((r) => r.data)
