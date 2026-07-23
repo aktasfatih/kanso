@@ -67,10 +67,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@close="showSettings = false"
 			@leave="showSettings = false" />
 
-		<!-- DnD error banner -->
-		<div v-if="moveError" class="board-view__move-error">
-			{{ moveError }}
-			<button class="board-view__move-error-dismiss" @click="dismissMoveError">×</button>
+		<!-- DnD / shortcut error banner -->
+		<div v-if="moveError || shortcutError" class="board-view__move-error">
+			{{ moveError || shortcutError }}
+			<button class="board-view__move-error-dismiss" @click="dismissActionError">×</button>
 		</div>
 
 		<!-- Error -->
@@ -169,6 +169,7 @@ import CogIcon from 'vue-material-design-icons/Cog.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { boardQueryKey } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -214,6 +215,12 @@ const showSettings = ref(false)
 
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
+const shortcutError = ref('')
+
+function dismissActionError() {
+	dismissMoveError()
+	shortcutError.value = ''
+}
 
 // ── Keyboard navigation state ─────────────────────────────────────────────────
 /** Currently keyboard-focused card id (number | null). */
@@ -313,6 +320,8 @@ const nonEmptyStacks = computed(() =>
  * 2. wait for nextTick + rAF
  * 3. querySelector and .focus()
  */
+let navSeq = 0
+
 async function navigateTo(stackId, cardIdx) {
 	const cards = cardsByStack.value.get(stackId) ?? []
 	if (!cards.length) return
@@ -321,8 +330,12 @@ async function navigateTo(stackId, cardIdx) {
 	focusedCardId.value = card.id
 	const col = columnRefs.get(stackId)
 	if (col) col.scrollToIndex(clamped)
+	// Rapid keypresses race here: only the newest navigation may focus,
+	// or an older one resolving late would drag DOM focus backwards.
+	const seq = ++navSeq
 	await nextTick()
 	await new Promise((resolve) => requestAnimationFrame(resolve))
+	if (seq !== navSeq) return
 	document.querySelector(`[data-card-id="${card.id}"]`)?.focus()
 }
 
@@ -343,6 +356,13 @@ function handleKeydown(e) {
 	if (target.closest('input, textarea, [contenteditable]')) return
 	// Guard: card modal child route active
 	if (route.name === 'card-modal') return
+	// '?' toggles the shortcuts overlay in BOTH directions, so it must be
+	// handled before the overlay-open guard below.
+	if (e.key === '?') {
+		e.preventDefault()
+		showShortcuts.value = !showShortcuts.value
+		return
+	}
 	// Guard: settings modal or shortcuts overlay open
 	if (showSettings.value || showShortcuts.value) return
 
@@ -433,16 +453,14 @@ function handleKeydown(e) {
 				}
 			}
 		}
-		apiUpdateCard(id, { done: !isDone }).finally(() => {
-			// Same key shape as boardQueryKey(id) = ['board', id]
-			queryClient.invalidateQueries({ queryKey: ['board', props.id] })
-		})
-		return
-	}
-
-	if (key === '?') {
-		e.preventDefault()
-		showShortcuts.value = !showShortcuts.value
+		apiUpdateCard(id, { done: !isDone })
+			.catch((err) => {
+				shortcutError.value =
+					err?.response?.data?.error || t('kanso', 'Failed to update the card.')
+			})
+			.finally(() => {
+				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
+			})
 		return
 	}
 }
