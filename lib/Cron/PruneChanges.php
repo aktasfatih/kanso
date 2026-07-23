@@ -36,6 +36,7 @@ class PruneChanges extends TimedJob {
 		$this->setTimeSensitivity(self::TIME_INSENSITIVE);
 	}
 
+	#[\Override]
 	protected function run($argument): void {
 		$cutoff = $this->time->getTime() - self::RETENTION_SECONDS;
 		for ($batch = 0; $batch < self::MAX_BATCHES; $batch++) {

@@ -24,5 +24,11 @@ return [
 		['name' => 'card#update', 'url' => '/api/cards/{id}', 'verb' => 'PATCH'],
 		['name' => 'card#destroy', 'url' => '/api/cards/{id}', 'verb' => 'DELETE'],
 		['name' => 'card#move', 'url' => '/api/cards/{id}/move', 'verb' => 'POST'],
+		['name' => 'card#assignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'PUT'],
+		['name' => 'card#unassignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'DELETE'],
+
+		['name' => 'label#create', 'url' => '/api/labels', 'verb' => 'POST'],
+		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],
+		['name' => 'label#destroy', 'url' => '/api/labels/{id}', 'verb' => 'DELETE'],
 	],
 ];

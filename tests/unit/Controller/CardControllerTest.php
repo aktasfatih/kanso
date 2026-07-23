@@ -9,8 +9,10 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 
 use OCA\Kanso\Controller\CardController;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -22,6 +24,8 @@ use PHPUnit\Framework\TestCase;
 
 class CardControllerTest extends TestCase {
 	private CardService&MockObject $cardService;
+	private LabelService&MockObject $labelService;
+	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -29,6 +33,8 @@ class CardControllerTest extends TestCase {
 		$request = $this->createMock(IRequest::class);
 		$userSession = $this->createMock(IUserSession::class);
 		$this->cardService = $this->createMock(CardService::class);
+		$this->labelService = $this->createMock(LabelService::class);
+		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -38,7 +44,9 @@ class CardControllerTest extends TestCase {
 			'kanso',
 			$request,
 			$userSession,
-			$this->cardService
+			$this->cardService,
+			$this->labelService,
+			$this->cardLabelMapper
 		);
 	}
 
@@ -78,15 +86,19 @@ class CardControllerTest extends TestCase {
 		self::assertArrayHasKey('error', $response->getData());
 	}
 
-	public function testShowReturnsFullCardWithDescription(): void {
+	public function testShowReturnsFullCardWithDescriptionAndLabelIds(): void {
 		$card = $this->card();
 		$card->setDescription('Full detail');
 		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([3, 7]);
 
 		$response = $this->controller->show(9);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame($card, $response->getData());
-		self::assertSame('Full detail', $card->jsonSerialize()['description']);
+
+		$data = $response->getData();
+		self::assertSame(9, $data['id']);
+		self::assertSame('Full detail', $data['description']);
+		self::assertSame([3, 7], $data['labelIds']);
 	}
 
 	public function testShowMapsDoesNotExistTo404(): void {
@@ -206,5 +218,53 @@ class CardControllerTest extends TestCase {
 
 		$response = $this->controller->move(9, 6, 10);
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	public function testAssignLabelReturnsEmptyBody(): void {
+		$this->labelService->expects(self::once())->method('assign')->with(9, 7, 'alice');
+
+		$response = $this->controller->assignLabel(9, 7);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame([], $response->getData());
+	}
+
+	public function testAssignLabelMapsNotPermittedTo403(): void {
+		$this->labelService->method('assign')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->assignLabel(9, 7);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testAssignLabelMapsCrossBoardTo400(): void {
+		$this->labelService->method('assign')
+			->willThrowException(new InvalidInputException('Cannot assign a label from another board'));
+
+		$response = $this->controller->assignLabel(9, 7);
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertSame('Cannot assign a label from another board', $response->getData()['error']);
+	}
+
+	public function testAssignLabelMapsDoesNotExistTo404(): void {
+		$this->labelService->method('assign')
+			->willThrowException(new DoesNotExistException('gone'));
+
+		$response = $this->controller->assignLabel(9, 7);
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	public function testUnassignLabelReturnsEmptyBody(): void {
+		$this->labelService->expects(self::once())->method('unassign')->with(9, 7, 'alice');
+
+		$response = $this->controller->unassignLabel(9, 7);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame([], $response->getData());
+	}
+
+	public function testUnassignLabelMapsNotPermittedTo403(): void {
+		$this->labelService->method('unassign')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->unassignLabel(9, 7);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 }

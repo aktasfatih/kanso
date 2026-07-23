@@ -10,8 +10,11 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 use OCA\Kanso\Controller\BoardController;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Db\Label;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
@@ -32,6 +35,8 @@ class BoardControllerTest extends TestCase {
 	private ChangeMapper&MockObject $changeMapper;
 	private StackMapper&MockObject $stackMapper;
 	private CardMapper&MockObject $cardMapper;
+	private LabelMapper&MockObject $labelMapper;
+	private CardLabelMapper&MockObject $cardLabelMapper;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -42,6 +47,8 @@ class BoardControllerTest extends TestCase {
 		$this->changeMapper = $this->createMock(ChangeMapper::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->labelMapper = $this->createMock(LabelMapper::class);
+		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -54,7 +61,9 @@ class BoardControllerTest extends TestCase {
 			$this->boardService,
 			$this->changeMapper,
 			$this->stackMapper,
-			$this->cardMapper
+			$this->cardMapper,
+			$this->labelMapper,
+			$this->cardLabelMapper
 		);
 	}
 
@@ -67,13 +76,15 @@ class BoardControllerTest extends TestCase {
 		return $board;
 	}
 
-	public function testShowReturns304WithoutTouchingStacksAndCards(): void {
+	public function testShowReturns304WithoutTouchingStacksCardsAndLabels(): void {
 		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
 		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
 		$this->request->method('getHeader')->with('If-None-Match')->willReturn('"7"');
 
 		$this->stackMapper->expects(self::never())->method('findByBoard');
 		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$this->cardLabelMapper->expects(self::never())->method('findLabelIdsByBoard');
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
@@ -108,7 +119,19 @@ class BoardControllerTest extends TestCase {
 		$card->setStackId(2);
 		$card->setTitle('A card');
 		$card->setDescription('must not leak into summaries');
-		$this->cardMapper->method('findSummariesByBoard')->with(1)->willReturn([$card]);
+		$unlabeled = new Card();
+		$unlabeled->setId(4);
+		$unlabeled->setBoardId(1);
+		$unlabeled->setStackId(2);
+		$unlabeled->setTitle('No labels');
+		$this->cardMapper->method('findSummariesByBoard')->with(1)->willReturn([$card, $unlabeled]);
+
+		$label = new Label();
+		$label->setId(7);
+		$label->setBoardId(1);
+		$label->setTitle('Urgent');
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$label]);
+		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([3 => [7]]);
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
@@ -117,8 +140,11 @@ class BoardControllerTest extends TestCase {
 		$data = $response->getData();
 		self::assertSame($board, $data['board']);
 		self::assertSame([$stack], $data['stacks']);
-		self::assertCount(1, $data['cards']);
+		self::assertSame([$label], $data['labels']);
+		self::assertCount(2, $data['cards']);
 		self::assertSame(3, $data['cards'][0]['id']);
+		self::assertSame([7], $data['cards'][0]['labelIds']);
+		self::assertSame([], $data['cards'][1]['labelIds']);
 		self::assertArrayNotHasKey('description', $data['cards'][0]);
 	}
 

@@ -8,8 +8,10 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -31,6 +33,8 @@ class BoardController extends Controller {
 		private ChangeMapper $changeMapper,
 		private StackMapper $stackMapper,
 		private CardMapper $cardMapper,
+		private LabelMapper $labelMapper,
+		private CardLabelMapper $cardLabelMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -52,10 +56,11 @@ class BoardController extends Controller {
 	}
 
 	/**
-	 * Full board payload: the board, its stacks and card SUMMARIES (no
-	 * descriptions — those load on card open). The board's latest change id
-	 * doubles as ETag: on an If-None-Match hit we return 304 before touching
-	 * the stack/card tables at all.
+	 * Full board payload: the board, its stacks, its labels and card
+	 * SUMMARIES (no descriptions — those load on card open; each summary
+	 * carries its labelIds). The board's latest change id doubles as ETag:
+	 * on an If-None-Match hit we return 304 before touching the
+	 * stack/card/label tables at all.
 	 */
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
@@ -69,13 +74,16 @@ class BoardController extends Controller {
 				return $response;
 			}
 
+			$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($id);
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
 				'cards' => array_map(
-					static fn (Card $card): array => $card->jsonSerializeSummary(),
+					static fn (Card $card): array => $card->jsonSerializeSummary()
+						+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []],
 					$this->cardMapper->findSummariesByBoard($id)
 				),
+				'labels' => $this->labelMapper->findByBoard($id),
 			]);
 			$response->setETag($etag);
 			return $response;

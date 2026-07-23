@@ -61,7 +61,7 @@ class BoardService {
 
 		$board = new Board();
 		$board->setTitle($this->validateTitle($title));
-		$board->setColor($this->validateColor($color));
+		$board->setColor(ColorValidator::assertValid($color));
 		$board->setOwner($uid);
 		$board->setArchived(false);
 		$board->setLastModified($now);
@@ -96,7 +96,7 @@ class BoardService {
 			$board->setTitle($this->validateTitle($title));
 		}
 		if ($color !== null) {
-			$board->setColor($this->validateColor($color));
+			$board->setColor(ColorValidator::assertValid($color));
 		}
 		if ($archived !== null) {
 			$board->setArchived($archived);
@@ -170,20 +170,5 @@ class BoardService {
 			);
 		}
 		return $title;
-	}
-
-	/**
-	 * Null and the empty string both mean "no color".
-	 *
-	 * @throws InvalidInputException
-	 */
-	private function validateColor(?string $color): ?string {
-		if ($color === null || $color === '') {
-			return null;
-		}
-		if (preg_match('/^[0-9A-Fa-f]{6}$/', $color) !== 1) {
-			throw new InvalidInputException('Color must be a 6-digit hex value without "#"');
-		}
-		return $color;
 	}
 }

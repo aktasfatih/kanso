@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -28,6 +30,8 @@ class CardController extends Controller {
 		IRequest $request,
 		private IUserSession $userSession,
 		private CardService $cardService,
+		private LabelService $labelService,
+		private CardLabelMapper $cardLabelMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -44,8 +48,10 @@ class CardController extends Controller {
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
+			$card = $this->cardService->find($id, $this->currentUserId());
 			return new JSONResponse(
-				$this->cardService->find($id, $this->currentUserId())
+				$card->jsonSerialize()
+				+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
 			);
 		});
 	}
@@ -85,6 +91,30 @@ class CardController extends Controller {
 			return new JSONResponse(
 				$this->cardService->move($id, $targetStackId, $afterCardId, $this->currentUserId())
 			);
+		});
+	}
+
+	/**
+	 * Assigns a label of the card's board to the card. Idempotent — PUT of
+	 * an already assigned label succeeds without writing anything.
+	 */
+	#[NoAdminRequired]
+	public function assignLabel(int $id, int $labelId): JSONResponse {
+		return $this->respond(function () use ($id, $labelId): JSONResponse {
+			$this->labelService->assign($id, $labelId, $this->currentUserId());
+			return new JSONResponse([]);
+		});
+	}
+
+	/**
+	 * Removes a label from the card. Idempotent — DELETE of an absent
+	 * assignment succeeds without writing anything.
+	 */
+	#[NoAdminRequired]
+	public function unassignLabel(int $id, int $labelId): JSONResponse {
+		return $this->respond(function () use ($id, $labelId): JSONResponse {
+			$this->labelService->unassign($id, $labelId, $this->currentUserId());
+			return new JSONResponse([]);
 		});
 	}
 
