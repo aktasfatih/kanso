@@ -103,6 +103,9 @@ class ChangeNotifier {
 	 */
 	private function getQueue(): ?object {
 		if (!$this->queueResolved) {
+			// Cached for this instance's lifetime — per-request under FPM.
+			// Under a persistent runtime this memo would go stale (notify_push
+			// enabled mid-life stays unnoticed) and must become time-bounded.
 			$this->queueResolved = true;
 			try {
 				$queue = $this->container->get(self::QUEUE_CLASS);

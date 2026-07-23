@@ -16,6 +16,8 @@ import { listen } from '@nextcloud/notify_push'
 
 const EVENT_NAME = 'kanso_board_changed'
 
+// initRealtime is called once from main.js module top-level; if it ever
+// moves into a component's setup it needs an idempotency guard.
 let active = false
 
 /**
