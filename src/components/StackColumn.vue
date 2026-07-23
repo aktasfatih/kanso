@@ -102,6 +102,14 @@ const props = defineProps({
 		type: Map,
 		default: () => new Map(),
 	},
+	/**
+	 * Optional callback (cardId: number) → void — called when a card tile is
+	 * clicked so BoardView can keep focusedCardId in sync with mouse navigation.
+	 */
+	onCardFocus: {
+		type: Function,
+		default: null,
+	},
 })
 
 const router = useRouter()
@@ -178,11 +186,32 @@ onUnmounted(() => {
 })
 
 function openCard(cardId) {
+	// Notify BoardView so keyboard focusedCardId stays in sync with mouse clicks
+	props.onCardFocus?.(cardId)
 	router.push({
 		name: 'card-modal',
 		params: { id: route.params.id, cardId },
 	})
 }
+
+// ── Exposed API for BoardView keyboard navigation ─────────────────────────────
+
+/**
+ * Scroll the virtualizer to the given card index and return after layout.
+ * BoardView calls this before focusing the tile DOM element.
+ */
+function scrollToIndex(index) {
+	virtualizer.value.scrollToIndex(index, { align: 'auto' })
+}
+
+/**
+ * Focus the inline card composer input for rapid card creation.
+ */
+function focusComposer() {
+	composerInputRef.value?.focus()
+}
+
+defineExpose({ scrollToIndex, focusComposer })
 
 async function submitCard() {
 	const title = newCardTitle.value.trim()

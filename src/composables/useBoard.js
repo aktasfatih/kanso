@@ -11,16 +11,9 @@ import {
 } from '../services/api.js'
 import { pushActive } from '../services/realtime.js'
 import { isBoardMovePending } from './useCardMove.js'
-
-/**
- * The one place the board query key shape is defined. useCardMove patches
- * this cache entry directly — a divergent key there would silently turn
- * every optimistic move into a no-op against a different entry.
- */
-export function boardQueryKey(id) {
-	const value = typeof id === 'object' && id !== null && id.value !== undefined ? id.value : id
-	return ['board', value]
-}
+// Re-export from the shared key module so existing callers of
+// import { boardQueryKey } from './useBoard.js' continue to work.
+export { boardQueryKey } from './queryKeys.js'
 
 export function useBoard(id) {
 	const queryClient = useQueryClient()

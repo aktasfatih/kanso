@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			ref="el"
 			class="card-tile"
 			:class="{ 'card-tile--done': isDone }"
+			:data-card-id="card.id"
 			@click="$emit('click')">
 			<!-- Label chips row — only rendered when the card has assigned labels -->
 			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">

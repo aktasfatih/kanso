@@ -93,10 +93,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<StackColumn
 					v-for="stack in sortedStacks"
 					:key="stack.id"
+					:ref="(el) => registerColumnRef(stack.id, el)"
 					:stack="stack"
 					:cards="cardsForStack(stack.id)"
 					:labels-by-id="labelsById"
-					:on-create-card="handleCreateCard" />
+					:on-create-card="handleCreateCard"
+					:on-card-focus="(cardId) => { focusedCardId = cardId }" />
 
 				<!-- Add stack inline input -->
 				<div class="add-stack">
@@ -114,16 +116,54 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 		</div>
 
+		<!-- Keyboard shortcuts overlay -->
+		<NcModal
+			v-if="showShortcuts"
+			:name="t('kanso', 'Keyboard shortcuts')"
+			@close="showShortcuts = false">
+			<div class="shortcuts-modal">
+				<table class="shortcuts-modal__table">
+					<tbody>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>↓</kbd> / <kbd>↑</kbd></td>
+							<td>{{ t('kanso', 'Navigate cards up / down') }}</td>
+						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>→</kbd> / <kbd>←</kbd></td>
+							<td>{{ t('kanso', 'Move to next / previous stack') }}</td>
+						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>n</kbd></td>
+							<td>{{ t('kanso', 'Add new card in focused stack') }}</td>
+						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>e</kbd></td>
+							<td>{{ t('kanso', 'Open focused card') }}</td>
+						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>d</kbd></td>
+							<td>{{ t('kanso', 'Toggle done on focused card') }}</td>
+						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>?</kbd></td>
+							<td>{{ t('kanso', 'Show / hide this shortcuts overlay') }}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</NcModal>
+
 		<!-- Child route: CardModal renders over this view -->
 		<router-view />
 	</div>
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcModal from '@nextcloud/vue/components/NcModal'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import StackColumn from '../components/StackColumn.vue'
@@ -131,8 +171,10 @@ import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
+import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
 import { initial, between, after, before } from '../services/sortKey.js'
+import { updateCard as apiUpdateCard } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -146,6 +188,8 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
+const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
 const { data: boardData, isLoading, isError, createStack, createCard } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
@@ -167,6 +211,24 @@ let boardCleanup = () => {}
 
 // Label settings panel visibility
 const showSettings = ref(false)
+
+// ── Keyboard shortcuts overlay ────────────────────────────────────────────────
+const showShortcuts = ref(false)
+
+// ── Keyboard navigation state ─────────────────────────────────────────────────
+/** Currently keyboard-focused card id (number | null). */
+const focusedCardId = ref(null)
+
+/** Map<stackId, StackColumn component instance> — populated by function refs. */
+const columnRefs = new Map()
+
+function registerColumnRef(stackId, el) {
+	if (el) {
+		columnRefs.set(stackId, el)
+	} else {
+		columnRefs.delete(stackId)
+	}
+}
 
 // ── Label computed helpers ────────────────────────────────────────────────────
 
@@ -221,7 +283,173 @@ function cardsForStack(stackId) {
 	return cardsByStack.value.get(stackId) ?? []
 }
 
+// ── Keyboard navigation helpers (declared after cardsByStack + sortedStacks) ──
+// NOTE: function declarations are hoisted and can reference these computeds
+// safely. Only computed() and watch() calls must follow their dependencies.
+
+/**
+ * Derive (stackIdx, cardIdx) for a given cardId from the current sortedStacks
+ * + cardsByStack. Returns null when the card is not found (e.g. after archive).
+ */
+function findCardPosition(cardId) {
+	if (cardId == null) return null
+	for (let si = 0; si < sortedStacks.value.length; si++) {
+		const stack = sortedStacks.value[si]
+		const cards = cardsByStack.value.get(stack.id) ?? []
+		const ci = cards.findIndex((c) => c.id === cardId)
+		if (ci !== -1) return { stackIdx: si, cardIdx: ci }
+	}
+	return null
+}
+
+/** Non-empty stacks in sorted order (for left/right navigation). */
+const nonEmptyStacks = computed(() =>
+	sortedStacks.value.filter((s) => (cardsByStack.value.get(s.id) ?? []).length > 0),
+)
+
+/**
+ * After computing target stackId + cardIdx, focus the card:
+ * 1. scroll virtualizer to the index
+ * 2. wait for nextTick + rAF
+ * 3. querySelector and .focus()
+ */
+async function navigateTo(stackId, cardIdx) {
+	const cards = cardsByStack.value.get(stackId) ?? []
+	if (!cards.length) return
+	const clamped = Math.max(0, Math.min(cardIdx, cards.length - 1))
+	const card = cards[clamped]
+	focusedCardId.value = card.id
+	const col = columnRefs.get(stackId)
+	if (col) col.scrollToIndex(clamped)
+	await nextTick()
+	await new Promise((resolve) => requestAnimationFrame(resolve))
+	document.querySelector(`[data-card-id="${card.id}"]`)?.focus()
+}
+
+// Clear focusedCardId when the card disappears from cardsByStack (archived, deleted, filtered out)
+watch(cardsByStack, () => {
+	if (focusedCardId.value == null) return
+	const pos = findCardPosition(focusedCardId.value)
+	if (!pos) focusedCardId.value = null
+})
+
+function handleKeydown(e) {
+	// Guard: composing (IME)
+	if (e.isComposing) return
+	// Guard: modifier keys held (but allow Shift for '?')
+	if (e.ctrlKey || e.metaKey || e.altKey) return
+	// Guard: typing context
+	const target = e.target
+	if (target.closest('input, textarea, [contenteditable]')) return
+	// Guard: card modal child route active
+	if (route.name === 'card-modal') return
+	// Guard: settings modal or shortcuts overlay open
+	if (showSettings.value || showShortcuts.value) return
+
+	const key = e.key
+
+	if (key === 'ArrowDown' || key === 'ArrowUp') {
+		e.preventDefault()
+		const pos = findCardPosition(focusedCardId.value)
+		if (!pos) {
+			// Seed to first card of the first non-empty stack
+			const first = nonEmptyStacks.value[0]
+			if (first) navigateTo(first.id, 0)
+			return
+		}
+		const { stackIdx, cardIdx } = pos
+		const stack = sortedStacks.value[stackIdx]
+		const cards = cardsByStack.value.get(stack.id) ?? []
+		const nextIdx = key === 'ArrowDown'
+			? Math.min(cardIdx + 1, cards.length - 1)
+			: Math.max(cardIdx - 1, 0)
+		navigateTo(stack.id, nextIdx)
+		return
+	}
+
+	if (key === 'ArrowRight' || key === 'ArrowLeft') {
+		e.preventDefault()
+		const pos = findCardPosition(focusedCardId.value)
+		// Determine current stack index among NON-EMPTY stacks for left/right
+		const ne = nonEmptyStacks.value
+		if (!ne.length) return
+		let neIdx
+		if (!pos) {
+			neIdx = key === 'ArrowRight' ? 0 : ne.length - 1
+		} else {
+			const curStackId = sortedStacks.value[pos.stackIdx].id
+			neIdx = ne.findIndex((s) => s.id === curStackId)
+			if (neIdx === -1) neIdx = 0
+			neIdx = key === 'ArrowRight'
+				? Math.min(neIdx + 1, ne.length - 1)
+				: Math.max(neIdx - 1, 0)
+		}
+		const targetStack = ne[neIdx]
+		const targetCards = cardsByStack.value.get(targetStack.id) ?? []
+		// Clamp card index to new stack's length
+		const clampedCardIdx = pos ? Math.min(pos.cardIdx, targetCards.length - 1) : 0
+		navigateTo(targetStack.id, clampedCardIdx)
+		return
+	}
+
+	if (key === 'n') {
+		e.preventDefault()
+		// Focus composer of the focused card's stack, or first stack
+		const pos = findCardPosition(focusedCardId.value)
+		let stackId
+		if (pos) {
+			stackId = sortedStacks.value[pos.stackIdx].id
+		} else {
+			const first = sortedStacks.value[0]
+			if (!first) return
+			stackId = first.id
+		}
+		const col = columnRefs.get(stackId)
+		if (col) col.focusComposer()
+		return
+	}
+
+	if (key === 'e') {
+		e.preventDefault()
+		if (focusedCardId.value == null) return
+		router.push({
+			name: 'card-modal',
+			params: { id: props.id, cardId: focusedCardId.value },
+		})
+		return
+	}
+
+	if (key === 'd') {
+		e.preventDefault()
+		if (focusedCardId.value == null) return
+		const id = focusedCardId.value
+		// Look up current done state from cardsByStack cache
+		let isDone = false
+		outer: for (const cards of cardsByStack.value.values()) {
+			for (const c of cards) {
+				if (c.id === id) {
+					isDone = Number(c.doneAt) > 0
+					break outer
+				}
+			}
+		}
+		apiUpdateCard(id, { done: !isDone }).finally(() => {
+			// Same key shape as boardQueryKey(id) = ['board', id]
+			queryClient.invalidateQueries({ queryKey: ['board', props.id] })
+		})
+		return
+	}
+
+	if (key === '?') {
+		e.preventDefault()
+		showShortcuts.value = !showShortcuts.value
+		return
+	}
+}
+
 onMounted(() => {
+	document.addEventListener('keydown', handleKeydown)
+
 	const cleanups = [
 		monitorForElements({
 			canMonitor: ({ source }) => source.data.type === 'card',
@@ -324,6 +552,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+	document.removeEventListener('keydown', handleKeydown)
 	boardCleanup()
 })
 
@@ -568,5 +797,37 @@ async function handleCreateCard(stackId, title) {
 	color: var(--color-error);
 	font-size: 0.8rem;
 	margin: 4px 0 0;
+}
+
+/* Keyboard shortcuts modal */
+.shortcuts-modal {
+	padding: 16px 24px 24px;
+}
+
+.shortcuts-modal__table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.shortcuts-modal__table tr + tr td {
+	padding-top: 10px;
+}
+
+.shortcuts-modal__key {
+	width: 120px;
+	padding-right: 16px;
+	white-space: nowrap;
+	vertical-align: top;
+}
+
+.shortcuts-modal__key kbd {
+	display: inline-block;
+	padding: 2px 7px;
+	font-size: 0.8rem;
+	font-family: monospace;
+	background: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	color: var(--color-main-text);
 }
 </style>

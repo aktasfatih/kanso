@@ -5,7 +5,7 @@ import { ref } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import { moveCard } from '../services/api.js'
 import { translate as t } from '@nextcloud/l10n'
-import { boardQueryKey } from './useBoard.js'
+import { boardQueryKey } from './queryKeys.js'
 
 /**
  * Per-board FIFO move queue with optimistic cache updates.
