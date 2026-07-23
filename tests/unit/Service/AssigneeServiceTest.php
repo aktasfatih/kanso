@@ -115,6 +115,24 @@ class AssigneeServiceTest extends TestCase {
 		$this->service->assign(9, 'bob', 'alice');
 	}
 
+	public function testAssignTreatsLostInsertRaceAsIdempotentSuccess(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$this->cardAssigneeMapper->method('exists')->with(9, 'bob')->willReturn(false);
+		$uniqueViolation = $this->createMock(\OCP\DB\Exception::class);
+		$uniqueViolation->method('getReason')
+			->willReturn(\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION);
+		$this->cardAssigneeMapper->method('insertAssignment')->willThrowException($uniqueViolation);
+		$this->changeMapper->expects(self::never())->method('insertChange');
+
+		// A concurrent PUT winning the check-then-insert race must not 500.
+		$this->service->assign(9, 'bob', 'alice');
+	}
+
 	public function testAssignAssertsActorEditPermission(): void {
 		$board = $this->board();
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());

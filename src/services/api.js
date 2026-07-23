@@ -63,3 +63,13 @@ export const assignLabel = (cardId, labelId) =>
 
 export const unassignLabel = (cardId, labelId) =>
 	axios.delete(url(`/api/cards/${cardId}/labels/${labelId}`)).then((r) => r.data)
+
+// Assignees
+export const fetchParticipants = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/participants`)).then((r) => r.data)
+
+export const assignUser = (cardId, userId) =>
+	axios.put(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)
+
+export const unassignUser = (cardId, userId) =>
+	axios.delete(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)

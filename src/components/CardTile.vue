@@ -7,7 +7,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Top drop indicator -->
 		<div v-if="closestEdge === 'top'" class="card-tile__drop-line card-tile__drop-line--top" />
 
-		<button ref="el" class="card-tile" @click="$emit('click')">
+		<button
+			ref="el"
+			class="card-tile"
+			:class="{ 'card-tile--done': isDone }"
+			@click="$emit('click')">
 			<!-- Label chips row — only rendered when the card has assigned labels -->
 			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
 				<span
@@ -20,7 +24,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
-			<span class="card-tile__title">{{ card.title }}</span>
+			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
+			<!-- Due date chip — suppress overdue/soon when done -->
 			<span
 				v-if="card.duedate"
 				class="card-tile__due"
@@ -28,6 +33,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<CalendarIcon :size="14" />
 				{{ formatDue(card.duedate) }}
 			</span>
+			<!-- Assignee avatar stack — only when there are assignees -->
+			<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
+				<NcAvatar
+					v-for="uid in visibleAssigneeIds"
+					:key="uid"
+					:user="uid"
+					:size="24"
+					:show-user-status="false"
+					:disable-tooltip="false"
+					class="card-tile__avatar" />
+				<span v-if="extraAssigneeCount > 0" class="card-tile__avatar-overflow">
+					+{{ extraAssigneeCount }}
+				</span>
+			</div>
 		</button>
 
 		<!-- Bottom drop indicator -->
@@ -38,6 +57,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import { translate as t } from '@nextcloud/l10n'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -116,8 +137,13 @@ const cardLabels = computed(() => {
 	return ids.map((id) => props.labelsById.get(id)).filter(Boolean)
 })
 
+// Done: doneAt > 0
+const isDone = computed(() => Number(props.card.doneAt) > 0)
+
 const dueDateClass = computed(() => {
 	if (!props.card.duedate) return ''
+	// When done, suppress overdue/soon coloring — show chip neutrally
+	if (isDone.value) return ''
 	const due = new Date(props.card.duedate)
 	const now = new Date()
 	if (due < now) return 'card-tile__due--overdue'
@@ -131,6 +157,19 @@ function formatDue(iso) {
 	const d = new Date(iso)
 	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
+
+// Assignee avatar stack: max 3 visible + overflow count
+const MAX_VISIBLE_ASSIGNEES = 3
+
+const visibleAssigneeIds = computed(() => {
+	const ids = Array.isArray(props.card.assigneeIds) ? props.card.assigneeIds : []
+	return ids.slice(0, MAX_VISIBLE_ASSIGNEES)
+})
+
+const extraAssigneeCount = computed(() => {
+	const ids = Array.isArray(props.card.assigneeIds) ? props.card.assigneeIds : []
+	return Math.max(0, ids.length - MAX_VISIBLE_ASSIGNEES)
+})
 </script>
 
 <style scoped>
@@ -243,5 +282,47 @@ function formatDue(iso) {
 	background: var(--color-background-dark);
 	color: var(--color-main-text);
 	border: 1px solid var(--color-border);
+}
+
+/* Done state */
+.card-tile--done {
+	opacity: 0.6;
+}
+
+.card-tile__title--done {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Assignee avatar stack */
+.card-tile__assignees {
+	display: flex;
+	align-items: center;
+	margin-top: 2px;
+}
+
+.card-tile__avatar {
+	margin-left: -6px;
+	border: 2px solid var(--color-main-background);
+	border-radius: 50%;
+}
+
+.card-tile__assignees .card-tile__avatar:first-child {
+	margin-left: 0;
+}
+
+.card-tile__avatar-overflow {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--color-background-dark);
+	border: 2px solid var(--color-main-background);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.65rem;
+	font-weight: 700;
+	margin-left: -6px;
 }
 </style>

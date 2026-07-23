@@ -57,7 +57,16 @@ class AssigneeService {
 			return;
 		}
 
-		$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid);
+		try {
+			$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid);
+		} catch (\OCP\DB\Exception $e) {
+			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+				// Concurrent PUT lost the check-then-insert race — the
+				// assignment exists, which is the idempotent success case.
+				return;
+			}
+			throw $e;
+		}
 
 		$this->changeMapper->insertChange(
 			$card->getBoardId(),
