@@ -9,6 +9,8 @@ import {
 	deleteStack as apiDeleteStack,
 	createCard as apiCreateCard,
 } from '../services/api.js'
+import { pushActive } from '../services/realtime.js'
+import { isBoardMovePending } from './useCardMove.js'
 
 /**
  * The one place the board query key shape is defined. useCardMove patches
@@ -26,6 +28,15 @@ export function useBoard(id) {
 	const query = useQuery({
 		queryKey: ['board', id],
 		queryFn: () => fetchBoard(typeof id === 'object' ? id.value : id),
+		// Delta polling: the fallback realtime channel (5s, cheap thanks to
+		// ETag/304) or a slow safety net when push covers realtime (60s).
+		// Never fires mid-drag — a refetch would clobber optimistic patches.
+		refetchInterval: () => {
+			if (isBoardMovePending(id)) {
+				return false
+			}
+			return pushActive() ? 60_000 : 5_000
+		},
 	})
 
 	const createStack = useMutation({

@@ -12,7 +12,6 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -31,7 +30,7 @@ class CardService {
 		private CardMapper $cardMapper,
 		private StackMapper $stackMapper,
 		private BoardMapper $boardMapper,
-		private ChangeMapper $changeMapper,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
@@ -84,13 +83,12 @@ class CardService {
 		$card->setDeletedAt(0);
 		$card = $this->cardMapper->insert($card);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$stack->getBoardId(),
 			Change::ENTITY_CARD,
 			$card->getId(),
 			Change::ACTION_CREATE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $card;
@@ -145,13 +143,12 @@ class CardService {
 		$card->setLastModified($now);
 		$card = $this->cardMapper->update($card);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_UPDATE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $card;
@@ -173,13 +170,12 @@ class CardService {
 		$card->setLastModified($now);
 		$this->cardMapper->update($card);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_DELETE,
-			$uid,
-			$now
+			$uid
 		);
 	}
 
@@ -223,13 +219,12 @@ class CardService {
 			$card->setLastModified($now);
 			$card = $this->cardMapper->update($card);
 
-			$this->changeMapper->insertChange(
+			$this->changeNotifier->notify(
 				$card->getBoardId(),
 				Change::ENTITY_CARD,
 				$id,
 				Change::ACTION_MOVE,
-				$uid,
-				$now
+				$uid
 			);
 
 			$this->db->commit();

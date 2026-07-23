@@ -10,9 +10,9 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
@@ -23,7 +23,7 @@ use PHPUnit\Framework\TestCase;
 class StackServiceTest extends TestCase {
 	private StackMapper&MockObject $stackMapper;
 	private BoardMapper&MockObject $boardMapper;
-	private ChangeMapper&MockObject $changeMapper;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private StackService $service;
 
@@ -31,12 +31,12 @@ class StackServiceTest extends TestCase {
 		parent::setUp();
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->service = new StackService(
 			$this->stackMapper,
 			$this->boardMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			$this->permissionService,
 			new SortKeyService()
 		);
@@ -72,15 +72,14 @@ class StackServiceTest extends TestCase {
 				$stack->setId(7);
 				return $stack;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_STACK,
 				7,
 				Change::ACTION_CREATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -102,8 +101,8 @@ class StackServiceTest extends TestCase {
 				$stack->setId(8);
 				return $stack;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->willReturn(new Change());
 
 		$this->service->create(1, 'Done', 'alice');
@@ -117,7 +116,7 @@ class StackServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->stackMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(1, 'To do', 'bob');
@@ -129,15 +128,14 @@ class StackServiceTest extends TestCase {
 		$this->stackMapper->expects(self::once())
 			->method('update')
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_STACK,
 				5,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -153,15 +151,14 @@ class StackServiceTest extends TestCase {
 			->method('update')
 			->with(self::callback(static fn (Stack $s): bool => $s->getDeletedAt() > 0))
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_STACK,
 				5,
 				Change::ACTION_DELETE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 

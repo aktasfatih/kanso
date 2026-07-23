@@ -10,7 +10,6 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -23,7 +22,7 @@ class BoardService {
 
 	public function __construct(
 		private BoardMapper $boardMapper,
-		private ChangeMapper $changeMapper,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 	) {
 	}
@@ -68,13 +67,12 @@ class BoardService {
 		$board->setDeletedAt(0);
 		$board = $this->boardMapper->insert($board);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$board->getId(),
 			Change::ENTITY_BOARD,
 			$board->getId(),
 			Change::ACTION_CREATE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $board;
@@ -106,13 +104,12 @@ class BoardService {
 		$board->setLastModified($now);
 		$board = $this->boardMapper->update($board);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$id,
 			Change::ENTITY_BOARD,
 			$id,
 			Change::ACTION_UPDATE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $board;
@@ -133,13 +130,12 @@ class BoardService {
 		$board->setLastModified($now);
 		$board = $this->boardMapper->update($board);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$id,
 			Change::ENTITY_BOARD,
 			$id,
 			Change::ACTION_DELETE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $board;

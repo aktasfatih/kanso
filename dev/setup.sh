@@ -35,5 +35,29 @@ if ! $OCC user:list | grep -q '^  - tester:'; then
 	docker exec -u www-data -e OC_PASS='kanso-dev-tester!1' kanso-dev php occ user:add --password-from-env tester
 fi
 
+# --- notify_push (realtime push) ---------------------------------------------
+# Browsers reach the push daemon through apache at http://localhost:8891/push.
+# Apache additionally listens on 8891 INSIDE the container so the very same
+# URL is reachable from occ/php too (notify_push:setup connects to it).
+docker exec kanso-dev bash -c '
+	a2enmod -q proxy proxy_http proxy_wstunnel >/dev/null
+	cat > /etc/apache2/conf-enabled/notify_push.conf <<CONF
+ProxyPass /push/ws ws://notify_push:7867/ws
+ProxyPass /push/ http://notify_push:7867/
+ProxyPassReverse /push/ http://notify_push:7867/
+CONF
+	grep -q "Listen 8891" /etc/apache2/ports.conf || echo "Listen 8891" >> /etc/apache2/ports.conf
+	apache2ctl graceful
+' 2>/dev/null
+
+if ! $OCC app:list | grep -q notify_push; then
+	$OCC app:install notify_push
+fi
+# The daemon talks to Nextcloud as http://nextcloud and sits behind the
+# compose network's apache proxy.
+$OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
+$OCC config:system:set trusted_domains 1 --value nextcloud
+$OCC notify_push:setup http://localhost:8891/push
+
 echo
 echo "Ready: http://localhost:8891  (admin / admin, test user: tester / kanso-dev-tester!1)"

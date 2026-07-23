@@ -10,8 +10,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -20,18 +20,18 @@ use PHPUnit\Framework\TestCase;
 
 class BoardServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
-	private ChangeMapper&MockObject $changeMapper;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private BoardService $service;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->service = new BoardService(
 			$this->boardMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			$this->permissionService
 		);
 	}
@@ -58,15 +58,14 @@ class BoardServiceTest extends TestCase {
 				$board->setId(42);
 				return $board;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				42,
 				Change::ENTITY_BOARD,
 				42,
 				Change::ACTION_CREATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -76,7 +75,7 @@ class BoardServiceTest extends TestCase {
 
 	public function testCreateRejectsEmptyTitle(): void {
 		$this->boardMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->create('   ', null, 'alice');
@@ -97,7 +96,7 @@ class BoardServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
 			->willThrowException(new NotPermittedException());
 		$this->boardMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->update(1, 'New title', null, null, 'bob');
@@ -109,15 +108,14 @@ class BoardServiceTest extends TestCase {
 		$this->boardMapper->expects(self::once())
 			->method('update')
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_BOARD,
 				1,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -138,15 +136,14 @@ class BoardServiceTest extends TestCase {
 			->method('update')
 			->with(self::callback(static fn (Board $b): bool => $b->getDeletedAt() > 0))
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_BOARD,
 				1,
 				Change::ACTION_DELETE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 

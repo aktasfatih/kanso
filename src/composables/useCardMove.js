@@ -25,6 +25,27 @@ import { boardQueryKey } from './useBoard.js'
  * matches server because each success reconciles that card, and the drain
  * invalidate catches any edge-case divergence.
  */
+// Module-level registry of boards with in-flight or queued moves, keyed by
+// String(boardId). Realtime consumers (push invalidation in main.js, the
+// poll interval in useBoard) check this to never refetch mid-drag — a
+// refetch would clobber optimistic patches with pre-move server state.
+const pendingByBoard = new Map()
+
+function pendingKeyOf(boardId) {
+	const value = typeof boardId === 'object' && boardId !== null && boardId.value !== undefined ? boardId.value : boardId
+	return String(value)
+}
+
+/**
+ * Whether the board has moves that have not reached the server yet.
+ *
+ * @param {number|string|import('vue').Ref} boardId
+ * @return {boolean}
+ */
+export function isBoardMovePending(boardId) {
+	return (pendingByBoard.get(pendingKeyOf(boardId)) ?? 0) > 0
+}
+
 export function useCardMove(boardId) {
 	const queryClient = useQueryClient()
 	const lastError = ref(null)
@@ -73,7 +94,10 @@ export function useCardMove(boardId) {
 		// Apply optimistic patch synchronously
 		applyOptimisticPatch(cardId, targetStackId, optimisticKey)
 
+		// Capture the key now — boardId may be a ref that changes on navigation
+		const pendingKey = pendingKeyOf(boardId)
 		pendingCount++
+		pendingByBoard.set(pendingKey, (pendingByBoard.get(pendingKey) ?? 0) + 1)
 
 		queue = queue.then(async () => {
 			try {
@@ -95,6 +119,12 @@ export function useCardMove(boardId) {
 				// refetch pre-move state over newer optimistic patches.
 			} finally {
 				pendingCount--
+				const remaining = (pendingByBoard.get(pendingKey) ?? 1) - 1
+				if (remaining > 0) {
+					pendingByBoard.set(pendingKey, remaining)
+				} else {
+					pendingByBoard.delete(pendingKey)
+				}
 				if (pendingCount === 0) {
 					// Queue drained — one sync covers rollbacks and divergence.
 					queryClient.invalidateQueries({ queryKey: getBoardQueryKey() })

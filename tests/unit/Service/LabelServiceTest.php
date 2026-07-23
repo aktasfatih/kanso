@@ -13,9 +13,9 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -30,7 +30,7 @@ class LabelServiceTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardMapper&MockObject $cardMapper;
 	private BoardMapper&MockObject $boardMapper;
-	private ChangeMapper&MockObject $changeMapper;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
 	private LabelService $service;
@@ -41,7 +41,7 @@ class LabelServiceTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new LabelService(
@@ -49,7 +49,7 @@ class LabelServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->cardMapper,
 			$this->boardMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			$this->permissionService,
 			$this->db
 		);
@@ -100,15 +100,14 @@ class LabelServiceTest extends TestCase {
 				$label->setId(7);
 				return $label;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_LABEL,
 				7,
 				Change::ACTION_CREATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -119,7 +118,7 @@ class LabelServiceTest extends TestCase {
 	public function testCreateRejectsEmptyTitle(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->labelMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->create(1, '   ', null, 'alice');
@@ -163,7 +162,7 @@ class LabelServiceTest extends TestCase {
 				}
 			});
 		$this->labelMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(1, 'Urgent', null, 'bob');
@@ -177,15 +176,14 @@ class LabelServiceTest extends TestCase {
 		$this->labelMapper->expects(self::once())
 			->method('update')
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_LABEL,
 				7,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -198,7 +196,7 @@ class LabelServiceTest extends TestCase {
 		$this->labelMapper->method('find')->with(7)->willReturn($this->label());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->labelMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(7, null, null, 'alice');
 		self::assertSame('Existing label', $updated->getTitle());
@@ -209,7 +207,7 @@ class LabelServiceTest extends TestCase {
 		$this->labelMapper->method('find')->with(7)->willReturn($this->label());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->labelMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(7, null, '', 'alice');
 		self::assertNull($updated->getColor());
@@ -224,7 +222,7 @@ class LabelServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
 			->willThrowException(new NotPermittedException());
 		$this->labelMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->update(7, 'Renamed', null, 'bob');
@@ -244,15 +242,14 @@ class LabelServiceTest extends TestCase {
 			->method('delete')
 			->with($label)
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_LABEL,
 				7,
 				Change::ACTION_DELETE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -269,7 +266,7 @@ class LabelServiceTest extends TestCase {
 			->willThrowException(new NotPermittedException());
 		$this->cardLabelMapper->expects(self::never())->method('deleteByLabel');
 		$this->labelMapper->expects(self::never())->method('delete');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->delete(7, 'bob');
@@ -289,15 +286,14 @@ class LabelServiceTest extends TestCase {
 		$this->cardLabelMapper->expects(self::once())
 			->method('insertAssignment')
 			->with(9, 7);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -313,7 +309,7 @@ class LabelServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->cardLabelMapper->expects(self::never())->method('insertAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->assign(9, 7, 'bob');
@@ -324,7 +320,7 @@ class LabelServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->labelMapper->method('find')->with(7)->willReturn($this->label(7, 2));
 		$this->cardLabelMapper->expects(self::never())->method('insertAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->assign(9, 7, 'alice');
@@ -336,7 +332,7 @@ class LabelServiceTest extends TestCase {
 		$this->labelMapper->method('find')->with(7)->willReturn($this->label());
 		$this->cardLabelMapper->method('exists')->with(9, 7)->willReturn(true);
 		$this->cardLabelMapper->expects(self::never())->method('insertAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->service->assign(9, 7, 'alice');
 	}
@@ -364,15 +360,14 @@ class LabelServiceTest extends TestCase {
 			->method('deleteAssignment')
 			->with(9, 7)
 			->willReturn(1);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -383,7 +378,7 @@ class LabelServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardLabelMapper->method('deleteAssignment')->with(9, 7)->willReturn(0);
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->service->unassign(9, 7, 'alice');
 	}
@@ -397,7 +392,7 @@ class LabelServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->cardLabelMapper->expects(self::never())->method('deleteAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->unassign(9, 7, 'bob');

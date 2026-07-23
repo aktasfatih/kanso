@@ -15,8 +15,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\AssigneeService;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -31,7 +31,7 @@ class AssigneeServiceTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardMapper&MockObject $cardMapper;
 	private BoardMapper&MockObject $boardMapper;
-	private ChangeMapper&MockObject $changeMapper;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private AssigneeService $service;
 
@@ -40,13 +40,13 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->service = new AssigneeService(
 			$this->cardAssigneeMapper,
 			$this->cardMapper,
 			$this->boardMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			$this->permissionService
 		);
 	}
@@ -86,15 +86,14 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper->expects(self::once())
 			->method('insertAssignment')
 			->with(9, 'bob');
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -110,7 +109,7 @@ class AssigneeServiceTest extends TestCase {
 			->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardAssigneeMapper->method('exists')->with(9, 'bob')->willReturn(true);
 		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->service->assign(9, 'bob', 'alice');
 	}
@@ -127,7 +126,7 @@ class AssigneeServiceTest extends TestCase {
 		$uniqueViolation->method('getReason')
 			->willReturn(\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION);
 		$this->cardAssigneeMapper->method('insertAssignment')->willThrowException($uniqueViolation);
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		// A concurrent PUT winning the check-then-insert race must not 500.
 		$this->service->assign(9, 'bob', 'alice');
@@ -142,7 +141,7 @@ class AssigneeServiceTest extends TestCase {
 			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->assign(9, 'bob', 'mallory');
@@ -158,7 +157,7 @@ class AssigneeServiceTest extends TestCase {
 			->willReturn(0);
 		$this->cardAssigneeMapper->expects(self::never())->method('exists');
 		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->expectExceptionMessage('User has no access to this board');
@@ -190,7 +189,7 @@ class AssigneeServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->cardMapper,
 			$this->boardMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			new PermissionService($aclMapper, $groupManager, $userManager)
 		);
 
@@ -200,8 +199,8 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper->expects(self::once())
 			->method('insertAssignment')
 			->with(9, 'carol');
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->willReturn(new Change());
 
 		$service->assign(9, 'carol', 'alice');
@@ -230,15 +229,14 @@ class AssigneeServiceTest extends TestCase {
 			->method('deleteAssignment')
 			->with(9, 'bob')
 			->willReturn(1);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -249,7 +247,7 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardAssigneeMapper->method('deleteAssignment')->with(9, 'bob')->willReturn(0);
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->service->unassign(9, 'bob', 'alice');
 	}
@@ -263,7 +261,7 @@ class AssigneeServiceTest extends TestCase {
 			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->cardAssigneeMapper->expects(self::never())->method('deleteAssignment');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->unassign(9, 'bob', 'mallory');

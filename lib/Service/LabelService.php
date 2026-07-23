@@ -13,7 +13,6 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -34,7 +33,7 @@ class LabelService {
 		private CardLabelMapper $cardLabelMapper,
 		private CardMapper $cardMapper,
 		private BoardMapper $boardMapper,
-		private ChangeMapper $changeMapper,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private IDBConnection $db,
 	) {
@@ -57,13 +56,12 @@ class LabelService {
 		$label->setColor(ColorValidator::assertValid($color));
 		$label = $this->labelMapper->insert($label);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$boardId,
 			Change::ENTITY_LABEL,
 			$label->getId(),
 			Change::ACTION_CREATE,
-			$uid,
-			time()
+			$uid
 		);
 
 		return $label;
@@ -91,13 +89,12 @@ class LabelService {
 
 		$label = $this->labelMapper->update($label);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$label->getBoardId(),
 			Change::ENTITY_LABEL,
 			$id,
 			Change::ACTION_UPDATE,
-			$uid,
-			time()
+			$uid
 		);
 
 		return $label;
@@ -122,13 +119,12 @@ class LabelService {
 		try {
 			$this->cardLabelMapper->deleteByLabel($id);
 			$this->labelMapper->delete($label);
-			$this->changeMapper->insertChange(
+			$this->changeNotifier->notify(
 				$label->getBoardId(),
 				Change::ENTITY_LABEL,
 				$id,
 				Change::ACTION_DELETE,
-				$uid,
-				time()
+				$uid
 			);
 			$this->db->commit();
 		} catch (\Throwable $e) {
@@ -161,13 +157,12 @@ class LabelService {
 
 		$this->cardLabelMapper->insertAssignment($cardId, $labelId);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$uid,
-			time()
+			$uid
 		);
 	}
 
@@ -187,13 +182,12 @@ class LabelService {
 			return;
 		}
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$uid,
-			time()
+			$uid
 		);
 	}
 

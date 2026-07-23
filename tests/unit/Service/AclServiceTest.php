@@ -13,8 +13,8 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\AclService;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -30,7 +30,7 @@ class AclServiceTest extends TestCase {
 	private AclMapper&MockObject $aclMapper;
 	private BoardMapper&MockObject $boardMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
-	private ChangeMapper&MockObject $changeMapper;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private IUserManager&MockObject $userManager;
 	private IGroupManager&MockObject $groupManager;
@@ -41,7 +41,7 @@ class AclServiceTest extends TestCase {
 		$this->aclMapper = $this->createMock(AclMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
-		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->groupManager = $this->createMock(IGroupManager::class);
@@ -49,7 +49,7 @@ class AclServiceTest extends TestCase {
 			$this->aclMapper,
 			$this->boardMapper,
 			$this->cardAssigneeMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			$this->permissionService,
 			$this->userManager,
 			$this->groupManager
@@ -102,15 +102,14 @@ class AclServiceTest extends TestCase {
 				$acl->setId(40);
 				return $acl;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_ACL,
 				40,
 				Change::ACTION_CREATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -141,7 +140,7 @@ class AclServiceTest extends TestCase {
 				$acl->setId(41);
 				return $acl;
 			});
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 
 		$this->service->create(1, 'devs', 'group', PermissionService::PERMISSION_READ, 'alice');
 	}
@@ -166,7 +165,7 @@ class AclServiceTest extends TestCase {
 				$acl->setId(40);
 				return $acl;
 			});
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 
 		// EDIT only — READ must be forced into the stored mask.
 		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_EDIT, 'alice');
@@ -180,7 +179,7 @@ class AclServiceTest extends TestCase {
 			->with($board, 'mallory', PermissionService::PERMISSION_SHARE)
 			->willThrowException(new NotPermittedException());
 		$this->aclMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_READ, 'mallory');
@@ -199,7 +198,7 @@ class AclServiceTest extends TestCase {
 			);
 		$this->userManager->method('userExists')->with('bob')->willReturn(true);
 		$this->aclMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_MANAGE, 'carol');
@@ -223,7 +222,7 @@ class AclServiceTest extends TestCase {
 				$acl->setId(40);
 				return $acl;
 			});
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 
 		$this->service->create(
 			1,
@@ -294,7 +293,7 @@ class AclServiceTest extends TestCase {
 			->with(1, Acl::TYPE_USER, 'bob')
 			->willReturn($this->acl());
 		$this->aclMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->expectExceptionMessage('Already shared with this participant');
@@ -311,7 +310,7 @@ class AclServiceTest extends TestCase {
 		$uniqueViolation->method('getReason')
 			->willReturn(\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION);
 		$this->aclMapper->method('insert')->willThrowException($uniqueViolation);
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		// A concurrent POST winning the check-then-insert race must surface
 		// as the same 400, not as a 500.
@@ -351,15 +350,14 @@ class AclServiceTest extends TestCase {
 				);
 				return $acl;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_ACL,
 				40,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -385,7 +383,7 @@ class AclServiceTest extends TestCase {
 				);
 				return $acl;
 			});
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 
 		// Mask 0 for a rule downgrade still keeps READ; EDIT here for variety.
 		$this->service->update(1, 40, PermissionService::PERMISSION_EDIT, 'alice');
@@ -406,7 +404,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('find')->with(40)->willReturn($this->acl(40, 2));
 		$this->aclMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->expectExceptionMessage('ACL entry does not belong to this board');
@@ -441,7 +439,7 @@ class AclServiceTest extends TestCase {
 			$this->acl(40, 1, 'bob', Acl::TYPE_USER, PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT)
 		);
 		$this->aclMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->update(
@@ -473,7 +471,7 @@ class AclServiceTest extends TestCase {
 		$this->aclMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static fn (Acl $acl): Acl => $acl);
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 
 		$acl = $this->service->update(1, 40, $existingMask, 'carol');
 		self::assertSame($existingMask, $acl->getPermission());
@@ -494,15 +492,14 @@ class AclServiceTest extends TestCase {
 			->with($board, 'bob')
 			->willReturn(0);
 		$this->aclMapper->expects(self::once())->method('delete')->with($acl);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_ACL,
 				40,
 				Change::ACTION_DELETE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 		$this->cardAssigneeMapper->expects(self::once())
@@ -518,7 +515,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('find')->with(40)->willReturn($this->acl(40, 2));
 		$this->aclMapper->expects(self::never())->method('delete');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->expectExceptionMessage('ACL entry does not belong to this board');
@@ -534,7 +531,7 @@ class AclServiceTest extends TestCase {
 			->with($board, 'carol', PermissionService::PERMISSION_MANAGE)
 			->willThrowException(new NotPermittedException());
 		$this->aclMapper->expects(self::never())->method('delete');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 		$this->cardAssigneeMapper->expects(self::never())->method('deleteByBoardAndUser');
 
 		$this->expectException(NotPermittedException::class);
@@ -552,15 +549,14 @@ class AclServiceTest extends TestCase {
 			->with($board, 'bob')
 			->willReturn(0);
 		$this->aclMapper->expects(self::once())->method('delete')->with($acl);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_ACL,
 				40,
 				Change::ACTION_DELETE,
-				'bob',
-				self::greaterThan(0)
+				'bob'
 			)
 			->willReturn(new Change());
 		$this->cardAssigneeMapper->expects(self::once())
@@ -582,7 +578,7 @@ class AclServiceTest extends TestCase {
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
 		$this->aclMapper->expects(self::once())->method('delete')->with($acl);
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 		$this->cardAssigneeMapper->expects(self::never())->method('deleteByBoardAndUser');
 
 		$this->service->delete(1, 40, 'alice');
@@ -598,7 +594,7 @@ class AclServiceTest extends TestCase {
 			->with($board, 'alice', PermissionService::PERMISSION_MANAGE);
 		$this->permissionService->expects(self::never())->method('getPermissions');
 		$this->aclMapper->expects(self::once())->method('delete')->with($acl);
-		$this->changeMapper->expects(self::once())->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 		// Group unshares defer stale-assignee cleanup (Backlog #3393).
 		$this->cardAssigneeMapper->expects(self::never())->method('deleteByBoardAndUser');
 

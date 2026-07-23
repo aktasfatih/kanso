@@ -13,7 +13,6 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IGroupManager;
 use OCP\IUserManager;
@@ -33,7 +32,7 @@ class AclService {
 		private AclMapper $aclMapper,
 		private BoardMapper $boardMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
-		private ChangeMapper $changeMapper,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private IUserManager $userManager,
 		private IGroupManager $groupManager,
@@ -93,13 +92,12 @@ class AclService {
 			throw $e;
 		}
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$boardId,
 			Change::ENTITY_ACL,
 			$acl->getId(),
 			Change::ACTION_CREATE,
-			$actorUid,
-			time()
+			$actorUid
 		);
 
 		return $acl;
@@ -128,13 +126,12 @@ class AclService {
 		$acl->setPermission($permission);
 		$acl = $this->aclMapper->update($acl);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$boardId,
 			Change::ENTITY_ACL,
 			$aclId,
 			Change::ACTION_UPDATE,
-			$actorUid,
-			time()
+			$actorUid
 		);
 
 		return $acl;
@@ -163,13 +160,12 @@ class AclService {
 
 		$this->aclMapper->delete($acl);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$boardId,
 			Change::ENTITY_ACL,
 			$aclId,
 			Change::ACTION_DELETE,
-			$actorUid,
-			time()
+			$actorUid
 		);
 
 		if ($acl->getParticipantType() === Acl::TYPE_USER) {

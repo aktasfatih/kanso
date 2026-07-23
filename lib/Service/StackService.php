@@ -10,7 +10,6 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -26,7 +25,7 @@ class StackService {
 	public function __construct(
 		private StackMapper $stackMapper,
 		private BoardMapper $boardMapper,
-		private ChangeMapper $changeMapper,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
 	) {
@@ -49,8 +48,6 @@ class StackService {
 			? $this->sortKeyService->initial()
 			: $this->sortKeyService->after($lastStack->getSortKey());
 
-		$now = time();
-
 		$stack = new Stack();
 		$stack->setBoardId($boardId);
 		$stack->setTitle($this->validateTitle($title));
@@ -59,13 +56,12 @@ class StackService {
 		$stack->setDeletedAt(0);
 		$stack = $this->stackMapper->insert($stack);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$boardId,
 			Change::ENTITY_STACK,
 			$stack->getId(),
 			Change::ACTION_CREATE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $stack;
@@ -92,13 +88,12 @@ class StackService {
 
 		$stack = $this->stackMapper->update($stack);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$stack->getBoardId(),
 			Change::ENTITY_STACK,
 			$id,
 			Change::ACTION_UPDATE,
-			$uid,
-			time()
+			$uid
 		);
 
 		return $stack;
@@ -119,13 +114,12 @@ class StackService {
 		$stack->setDeletedAt($now);
 		$stack = $this->stackMapper->update($stack);
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$stack->getBoardId(),
 			Change::ENTITY_STACK,
 			$id,
 			Change::ACTION_DELETE,
-			$uid,
-			$now
+			$uid
 		);
 
 		return $stack;

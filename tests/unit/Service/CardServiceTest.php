@@ -12,10 +12,10 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -29,7 +29,7 @@ class CardServiceTest extends TestCase {
 	private CardMapper&MockObject $cardMapper;
 	private StackMapper&MockObject $stackMapper;
 	private BoardMapper&MockObject $boardMapper;
-	private ChangeMapper&MockObject $changeMapper;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
 	private CardService $service;
@@ -39,14 +39,14 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$this->changeMapper = $this->createMock(ChangeMapper::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
 			$this->boardMapper,
-			$this->changeMapper,
+			$this->changeNotifier,
 			$this->permissionService,
 			new SortKeyService(),
 			$this->db
@@ -106,15 +106,14 @@ class CardServiceTest extends TestCase {
 				$card->setId(9);
 				return $card;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_CREATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -135,8 +134,8 @@ class CardServiceTest extends TestCase {
 				$card->setId(9);
 				return $card;
 			});
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->willReturn(new Change());
 
 		$this->service->create(5, 'A card', 'alice');
@@ -146,7 +145,7 @@ class CardServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->create(5, '   ', 'alice');
@@ -170,7 +169,7 @@ class CardServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->cardMapper->expects(self::never())->method('insert');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(5, 'A card', 'bob');
@@ -217,15 +216,14 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())
 			->method('update')
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_UPDATE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -243,7 +241,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, null, null, null, 'alice');
 		self::assertSame('Existing card', $updated->getTitle());
@@ -258,7 +256,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, '', null, null, 'alice');
 		self::assertNull($updated->getDuedate());
@@ -268,7 +266,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, '2026-08-01T10:00:00+02:00', null, null, 'alice');
 		self::assertSame(
@@ -281,7 +279,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		// JS Date.toISOString() shape: milliseconds + 'Z'.
 		$updated = $this->service->update(9, null, null, '2026-08-01T10:00:00.000Z', null, null, 'alice');
@@ -295,7 +293,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(9, null, null, 'tomorrow', null, null, 'alice');
@@ -305,7 +303,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		// createFromFormat would silently roll February 30th to March 2nd.
 		$this->expectException(InvalidInputException::class);
@@ -316,7 +314,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, null, true, null, 'alice');
 		self::assertGreaterThan(0, $updated->getDoneAt());
@@ -328,7 +326,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, null, true, null, 'alice');
 		self::assertSame(12345, $updated->getDoneAt());
@@ -340,7 +338,7 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, null, false, null, 'alice');
 		self::assertSame(0, $updated->getDoneAt());
@@ -369,15 +367,14 @@ class CardServiceTest extends TestCase {
 			->method('update')
 			->with(self::callback(static fn (Card $c): bool => $c->getDeletedAt() > 0))
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_DELETE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -396,15 +393,14 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())
 			->method('update')
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->with(
 				1,
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_MOVE,
-				'alice',
-				self::greaterThan(0)
+				'alice'
 			)
 			->willReturn(new Change());
 
@@ -420,7 +416,7 @@ class CardServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
 		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$moved = $this->service->move(9, 6, null, 'alice');
 		self::assertSame('I', $moved->getSortKey());
@@ -439,8 +435,8 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())
 			->method('update')
 			->willReturnArgument(0);
-		$this->changeMapper->expects(self::once())
-			->method('insertChange')
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
 			->willReturn(new Change());
 		$this->db->expects(self::once())->method('beginTransaction');
 		$this->db->expects(self::once())->method('commit');
@@ -461,7 +457,7 @@ class CardServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
 		$this->cardMapper->method('findNextInStack')->with(6, 'J')->willReturn(null);
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$moved = $this->service->move(9, 6, 10, 'alice');
 		// after('J') === 'K'
@@ -484,7 +480,7 @@ class CardServiceTest extends TestCase {
 				$this->card(9, 6, 1, 'II')
 			);
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeMapper->method('insertChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$firstKey = $this->service->move(9, 6, 10, 'alice')->getSortKey();
 		$secondKey = $this->service->move(12, 6, 10, 'alice')->getSortKey();
@@ -503,7 +499,7 @@ class CardServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6, 2));
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->cardMapper->expects(self::never())->method('update');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->move(9, 6, null, 'alice');
@@ -589,7 +585,7 @@ class CardServiceTest extends TestCase {
 		$this->db->expects(self::once())->method('beginTransaction');
 		$this->db->expects(self::once())->method('rollBack');
 		$this->db->expects(self::never())->method('commit');
-		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(\RuntimeException::class);
 		$this->service->move(9, 6, null, 'alice');

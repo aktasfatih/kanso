@@ -20,6 +20,26 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: nextcloud
 
+  redis:
+    image: redis:7-alpine
+    container_name: kanso-dev-redis
+
+  # notify_push daemon for realtime push testing. Reaches Nextcloud and its
+  # DB/Redis over the compose network; browsers reach it through the apache
+  # reverse proxy at http://localhost:8891/push (see setup.sh).
+  notify_push:
+    image: icewind1991/notify_push
+    container_name: kanso-dev-push
+    environment:
+      NEXTCLOUD_URL: http://nextcloud
+      DATABASE_URL: postgres://nextcloud:nextcloud@db/nextcloud
+      DATABASE_PREFIX: oc_
+      REDIS_URL: redis://redis
+    depends_on:
+      - db
+      - redis
+      - nextcloud
+
   nextcloud:
     image: nextcloud:32-apache
     container_name: kanso-dev
@@ -33,7 +53,9 @@ services:
       NEXTCLOUD_ADMIN_USER: admin
       NEXTCLOUD_ADMIN_PASSWORD: admin
       NEXTCLOUD_TRUSTED_DOMAINS: localhost
+      REDIS_HOST: redis
     volumes:
       - ..:/var/www/html/custom_apps/kanso
     depends_on:
       - db
+      - redis

@@ -13,7 +13,6 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChangeMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -29,7 +28,7 @@ class AssigneeService {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardMapper $cardMapper,
 		private BoardMapper $boardMapper,
-		private ChangeMapper $changeMapper,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 	) {
 	}
@@ -68,13 +67,12 @@ class AssigneeService {
 			throw $e;
 		}
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$actorUid,
-			time()
+			$actorUid
 		);
 	}
 
@@ -94,13 +92,12 @@ class AssigneeService {
 			return;
 		}
 
-		$this->changeMapper->insertChange(
+		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$actorUid,
-			time()
+			$actorUid
 		);
 	}
 
