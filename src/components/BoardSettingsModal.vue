@@ -36,6 +36,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@click="activeTab = 'workflow'">
 					{{ t('kanso', 'Workflow') }}
 				</button>
+				<button
+					class="board-settings__tab"
+					:class="{ 'board-settings__tab--active': activeTab === 'automation' }"
+					role="tab"
+					:aria-selected="activeTab === 'automation'"
+					@click="activeTab = 'automation'">
+					{{ t('kanso', 'Automation') }}
+				</button>
 			</div>
 
 			<!-- Labels tab -->
@@ -423,6 +431,191 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'No stacks yet.') }}
 				</p>
 			</div>
+
+			<!-- Automation tab -->
+			<div v-show="activeTab === 'automation'" class="board-settings__panel" role="tabpanel">
+
+				<!-- Auto-archive section -->
+				<h3 class="automation__section-heading">{{ t('kanso', 'Auto-archive') }}</h3>
+
+				<p v-if="!canManage" class="workflow__readonly-notice">
+					{{ t('kanso', 'You need manage permission to configure automation rules.') }}
+				</p>
+
+				<!-- Loading / error states -->
+				<p v-if="archiveRulesQuery.isLoading.value" class="automation__loading">
+					{{ t('kanso', 'Loading…') }}
+				</p>
+				<p v-else-if="archiveRulesQuery.isError.value" class="label-settings__error">
+					{{ t('kanso', 'Failed to load archive rules.') }}
+				</p>
+
+				<!-- Rules list -->
+				<template v-else>
+					<ul class="automation__rules-list" role="list">
+						<li v-if="!archiveRules.length" class="label-settings__empty">
+							{{ t('kanso', 'No auto-archive rules yet.') }}
+						</li>
+
+						<li
+							v-for="rule in archiveRules"
+							:key="rule.id"
+							class="automation__rule-item">
+
+							<!-- Rule description row -->
+							<div class="automation__rule-main">
+								<!-- Human-readable description -->
+								<span class="automation__rule-desc">
+									<template v-if="rule.condition === 0">
+										{{ t('kanso', 'Archive cards done for more than {n} days', { n: secondsToDays(rule.thresholdSeconds) }) }}
+									</template>
+									<template v-else>
+										{{ t('kanso', 'Archive cards done AND created more than {n} days ago', { n: secondsToDays(rule.thresholdSeconds) }) }}
+									</template>
+									<span v-if="rule.stackId" class="automation__rule-scope">
+										— {{ t('kanso', 'stack: {name}', { name: resolveStackName(rule.stackId) }) }}
+									</span>
+									<span v-else class="automation__rule-scope">
+										— {{ t('kanso', 'whole board') }}
+									</span>
+								</span>
+
+								<!-- Enable/disable toggle -->
+								<label
+									v-if="canManage"
+									class="automation__toggle-label"
+									:title="rule.enabled ? t('kanso', 'Disable rule') : t('kanso', 'Enable rule')">
+									<input
+										type="checkbox"
+										:checked="rule.enabled"
+										:disabled="togglingRuleId === rule.id"
+										class="automation__toggle-input"
+										@change="toggleRuleEnabled(rule, $event.target.checked)" />
+									<span class="automation__toggle-track" aria-hidden="true" />
+									<span class="automation__toggle-sr">
+										{{ rule.enabled ? t('kanso', 'Enabled') : t('kanso', 'Disabled') }}
+									</span>
+								</label>
+								<span v-else class="automation__rule-status">
+									{{ rule.enabled ? t('kanso', 'Enabled') : t('kanso', 'Disabled') }}
+								</span>
+							</div>
+
+							<!-- Action buttons row (MANAGE only) -->
+							<div v-if="canManage" class="automation__rule-actions">
+								<!-- Archive now button -->
+								<button
+									class="automation__archive-now-btn"
+									:disabled="archivingRuleId === rule.id"
+									@click="doArchiveNow(rule)">
+									{{ archivingRuleId === rule.id ? t('kanso', 'Running…') : t('kanso', 'Archive now') }}
+								</button>
+
+								<!-- Inline "Archived N cards" feedback -->
+								<span
+									v-if="archiveNowResults[rule.id] !== undefined"
+									class="automation__archive-result">
+									{{ t('kanso', 'Archived {n} cards', { n: archiveNowResults[rule.id] }) }}
+								</span>
+
+								<!-- Delete button -->
+								<button
+									class="label-settings__action-btn label-settings__action-btn--danger"
+									:title="t('kanso', 'Delete rule')"
+									:aria-label="t('kanso', 'Delete rule')"
+									:disabled="confirmDeleteRuleId === rule.id && isDeletingRule"
+									@click="confirmDeleteRule(rule)">
+									<DeleteIcon :size="14" />
+								</button>
+							</div>
+
+							<!-- Inline delete confirm -->
+							<div v-if="confirmDeleteRuleId === rule.id" class="label-settings__confirm">
+								<span>{{ t('kanso', 'Delete this rule?') }}</span>
+								<button class="label-settings__confirm-yes" :disabled="isDeletingRule" @click="doDeleteRule(rule)">
+									{{ t('kanso', 'Delete') }}
+								</button>
+								<button class="label-settings__confirm-no" @click="confirmDeleteRuleId = null">
+									{{ t('kanso', 'Cancel') }}
+								</button>
+								<span v-if="deleteRuleError" class="label-settings__error">{{ deleteRuleError }}</span>
+							</div>
+
+							<!-- Toggle error -->
+							<span v-if="toggleRuleErrors[rule.id]" class="label-settings__error">
+								{{ toggleRuleErrors[rule.id] }}
+							</span>
+
+							<!-- Archive now error -->
+							<span v-if="archiveNowErrors[rule.id]" class="label-settings__error">
+								{{ archiveNowErrors[rule.id] }}
+							</span>
+						</li>
+					</ul>
+
+					<!-- Add rule form (MANAGE only) -->
+					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateRule">
+						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+
+						<!-- Scope selector -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`archive-scope-${boardId}`">
+								{{ t('kanso', 'Scope') }}
+							</label>
+							<select
+								:id="`archive-scope-${boardId}`"
+								v-model="newRuleStackId"
+								class="workflow__select automation__form-select">
+								<option :value="null">{{ t('kanso', 'Whole board') }}</option>
+								<option
+									v-for="stack in activeStacks"
+									:key="stack.id"
+									:value="stack.id">
+									{{ stack.title }}
+								</option>
+							</select>
+						</div>
+
+						<!-- Condition selector -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`archive-condition-${boardId}`">
+								{{ t('kanso', 'Condition') }}
+							</label>
+							<select
+								:id="`archive-condition-${boardId}`"
+								v-model="newRuleCondition"
+								class="workflow__select automation__form-select">
+								<option :value="0">{{ t('kanso', 'Done for ≥ N days') }}</option>
+								<option :value="1">{{ t('kanso', 'Done AND created ≥ N days ago') }}</option>
+							</select>
+						</div>
+
+						<!-- Threshold (days) -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`archive-days-${boardId}`">
+								{{ t('kanso', 'Days') }}
+							</label>
+							<input
+								:id="`archive-days-${boardId}`"
+								v-model.number="newRuleDays"
+								type="number"
+								min="0"
+								step="1"
+								class="workflow__wip-input"
+								:placeholder="t('kanso', '0')" />
+						</div>
+
+						<button
+							class="label-settings__create-btn automation__create-btn"
+							type="submit"
+							:disabled="isCreatingRule || newRuleDays < 0">
+							{{ isCreatingRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+						</button>
+
+						<span v-if="createRuleError" class="label-settings__error">{{ createRuleError }}</span>
+					</form>
+				</template>
+			</div>
 		</div>
 	</NcModal>
 </template>
@@ -440,6 +633,7 @@ import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
 import { useLabels } from '../composables/useLabels.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useBoard } from '../composables/useBoard.js'
+import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { cssColor } from '../services/color.js'
 
 const props = defineProps({
@@ -838,6 +1032,149 @@ function resolveDisplayName(entry) {
 		return entry.participant
 	}
 	return entry.participant
+}
+
+// ── Automation tab: archive rules ─────────────────────────────────────────────
+
+const {
+	data: archiveRulesData,
+	isLoading: archiveRulesLoading,
+	isError: archiveRulesError,
+	createRule,
+	updateRule,
+	deleteRule,
+	archiveNow: archiveNowMutation,
+} = useArchiveRules(computed(() => props.boardId))
+
+/**
+ * Expose the query object as a reactive handle for the template's
+ * isLoading / isError checks (the spread above exposes the raw refs).
+ */
+const archiveRulesQuery = {
+	isLoading: archiveRulesLoading,
+	isError: archiveRulesError,
+}
+
+const archiveRules = computed(() => archiveRulesData.value ?? [])
+
+/** Active (non-archived) stacks for the scope selector. */
+const activeStacks = computed(() =>
+	[...props.stacks]
+		.filter((s) => !s.archived)
+		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)),
+)
+
+/** Convert thresholdSeconds → display days (rounded, minimum 0). */
+function secondsToDays(secs) {
+	return Math.max(0, Math.round(secs / 86400))
+}
+
+/** Resolve a stackId to its title; falls back to the raw id string. */
+function resolveStackName(stackId) {
+	const stack = props.stacks.find((s) => s.id === stackId)
+	return stack?.title ?? String(stackId)
+}
+
+// ── Create rule form state ────────────────────────────────────────────────────
+const newRuleStackId = ref(null)   // null = whole board
+const newRuleCondition = ref(0)    // 0 = done for ≥N, 1 = done AND created ≥N
+const newRuleDays = ref(0)
+const isCreatingRule = ref(false)
+const createRuleError = ref('')
+
+async function submitCreateRule() {
+	if (newRuleDays.value < 0) return
+	isCreatingRule.value = true
+	createRuleError.value = ''
+	try {
+		const data = {
+			condition: newRuleCondition.value,
+			thresholdSeconds: newRuleDays.value * 86400,
+			enabled: true,
+		}
+		// Only include stackId when a specific stack is selected.
+		// Omitting it (not sending the key at all) → whole board.
+		if (newRuleStackId.value !== null) {
+			data.stackId = newRuleStackId.value
+		}
+		await createRule.mutateAsync(data)
+		// Reset form
+		newRuleStackId.value = null
+		newRuleCondition.value = 0
+		newRuleDays.value = 0
+	} catch (err) {
+		createRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+	} finally {
+		isCreatingRule.value = false
+	}
+}
+
+// ── Toggle enable/disable ─────────────────────────────────────────────────────
+const togglingRuleId = ref(null)
+const toggleRuleErrors = ref({})
+
+async function toggleRuleEnabled(rule, enabled) {
+	togglingRuleId.value = rule.id
+	toggleRuleErrors.value = { ...toggleRuleErrors.value, [rule.id]: '' }
+	try {
+		// PATCH with only `enabled`; omit stackId entirely to keep existing scope.
+		await updateRule.mutateAsync({ id: rule.id, data: { enabled } })
+	} catch (err) {
+		toggleRuleErrors.value = {
+			...toggleRuleErrors.value,
+			[rule.id]: err?.response?.data?.error || t('kanso', 'Failed to update rule.'),
+		}
+	} finally {
+		togglingRuleId.value = null
+	}
+}
+
+// ── Archive now ───────────────────────────────────────────────────────────────
+const archivingRuleId = ref(null)
+const archiveNowResults = ref({})  // Map<ruleId, archivedCount>
+const archiveNowErrors = ref({})
+
+async function doArchiveNow(rule) {
+	archivingRuleId.value = rule.id
+	archiveNowErrors.value = { ...archiveNowErrors.value, [rule.id]: '' }
+	// Clear previous result so the count resets when triggering again
+	const { [rule.id]: _prev, ...rest } = archiveNowResults.value
+	archiveNowResults.value = rest
+	try {
+		const result = await archiveNowMutation.mutateAsync(rule.id)
+		// result = { archived: N }
+		archiveNowResults.value = { ...archiveNowResults.value, [rule.id]: result.archived ?? 0 }
+	} catch (err) {
+		archiveNowErrors.value = {
+			...archiveNowErrors.value,
+			[rule.id]: err?.response?.data?.error || t('kanso', 'Failed to run archive.'),
+		}
+	} finally {
+		archivingRuleId.value = null
+	}
+}
+
+// ── Delete rule ───────────────────────────────────────────────────────────────
+const confirmDeleteRuleId = ref(null)
+const isDeletingRule = ref(false)
+const deleteRuleError = ref('')
+
+function confirmDeleteRule(rule) {
+	confirmDeleteRuleId.value = rule.id
+	deleteRuleError.value = ''
+}
+
+async function doDeleteRule(rule) {
+	isDeletingRule.value = true
+	deleteRuleError.value = ''
+	try {
+		await deleteRule.mutateAsync(rule.id)
+		confirmDeleteRuleId.value = null
+	} catch (err) {
+		deleteRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
+	} finally {
+		isDeletingRule.value = false
+	}
 }
 </script>
 
@@ -1511,5 +1848,190 @@ function resolveDisplayName(entry) {
 	grid-column: 1 / -1;
 	font-size: 0.78rem;
 	color: var(--color-text-maxcontrast);
+}
+
+/* ── Automation tab styles ───────────────────────────────────────────────── */
+
+.automation__section-heading {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin: 0 0 14px;
+}
+
+.automation__loading {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.875rem;
+}
+
+.automation__rules-list {
+	list-style: none;
+	margin: 0 0 20px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.automation__rule-item {
+	padding: 8px 0;
+	border-bottom: 1px solid var(--color-border);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.automation__rule-item:last-child {
+	border-bottom: none;
+}
+
+.automation__rule-main {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.automation__rule-desc {
+	flex: 1;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	min-width: 0;
+}
+
+.automation__rule-scope {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8rem;
+}
+
+.automation__rule-status {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	flex-shrink: 0;
+}
+
+/* Toggle switch */
+.automation__toggle-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.automation__toggle-input {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.automation__toggle-track {
+	display: inline-block;
+	width: 34px;
+	height: 18px;
+	border-radius: 9px;
+	background: var(--color-border);
+	position: relative;
+	transition: background 0.2s ease;
+	flex-shrink: 0;
+}
+
+.automation__toggle-track::after {
+	content: '';
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--color-main-background);
+	transition: transform 0.2s ease;
+}
+
+.automation__toggle-input:checked + .automation__toggle-track {
+	background: var(--color-primary);
+}
+
+.automation__toggle-input:checked + .automation__toggle-track::after {
+	transform: translateX(16px);
+}
+
+.automation__toggle-input:disabled + .automation__toggle-track {
+	opacity: 0.5;
+}
+
+.automation__toggle-sr {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.automation__rule-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.automation__archive-now-btn {
+	height: 28px;
+	padding: 0 12px;
+	border-radius: var(--border-radius);
+	border: 1px solid var(--color-primary);
+	background: transparent;
+	color: var(--color-primary);
+	font-size: 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.automation__archive-now-btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.automation__archive-now-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.automation__archive-result {
+	font-size: 0.8rem;
+	color: var(--color-success, #46ba61);
+	font-weight: 600;
+}
+
+/* Create form */
+.automation__create-form {
+	border-top: 1px solid var(--color-border);
+	padding-top: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.automation__form-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.automation__form-label {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	width: 70px;
+	flex-shrink: 0;
+}
+
+.automation__form-select {
+	flex: 1;
+	min-width: 0;
+}
+
+.automation__create-btn {
+	align-self: flex-start;
 }
 </style>

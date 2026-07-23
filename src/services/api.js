@@ -89,3 +89,19 @@ export const updateAcl = (boardId, aclId, permission) =>
 
 export const deleteAcl = (boardId, aclId) =>
 	axios.delete(url(`/api/boards/${boardId}/acl/${aclId}`)).then((r) => r.data)
+
+// Archive rules
+export const fetchArchiveRules = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/archive-rules`)).then((r) => r.data)
+
+export const createArchiveRule = (boardId, data) =>
+	axios.post(url(`/api/boards/${boardId}/archive-rules`), data).then((r) => r.data)
+
+export const updateArchiveRule = (id, data) =>
+	axios.patch(url(`/api/archive-rules/${id}`), data).then((r) => r.data)
+
+export const deleteArchiveRule = (id) =>
+	axios.delete(url(`/api/archive-rules/${id}`)).then((r) => r.data)
+
+export const archiveNow = (id) =>
+	axios.post(url(`/api/archive-rules/${id}/archive-now`)).then((r) => r.data)
