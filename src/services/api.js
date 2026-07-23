@@ -121,3 +121,19 @@ export const deleteRecurRule = (id) =>
 
 export const createNowRecurRule = (id) =>
 	axios.post(url(`/api/recur-rules/${id}/create-now`)).then((r) => r.data)
+
+// Checklist
+export const fetchChecklist = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/checklist`)).then((r) => r.data)
+
+export const createChecklistItem = (cardId, data) =>
+	axios.post(url(`/api/cards/${cardId}/checklist`), data).then((r) => r.data)
+
+export const updateChecklistItem = (itemId, data) =>
+	axios.patch(url(`/api/checklist/${itemId}`), data).then((r) => r.data)
+
+export const moveChecklistItem = (itemId, afterItemId) =>
+	axios.post(url(`/api/checklist/${itemId}/move`), { afterItemId: afterItemId ?? null }).then((r) => r.data)
+
+export const deleteChecklistItem = (itemId) =>
+	axios.delete(url(`/api/checklist/${itemId}`)).then((r) => r.data)

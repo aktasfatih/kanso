@@ -34,6 +34,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<CalendarIcon :size="14" />
 				{{ formatDue(card.duedate) }}
 			</span>
+			<!-- Checklist progress badge — only when the card has checklist items -->
+			<span
+				v-if="card.checklist && card.checklist.total > 0"
+				class="card-tile__checklist"
+				:class="{ 'card-tile__checklist--complete': card.checklist.done === card.checklist.total }"
+				:aria-label="t('kanso', 'Checklist progress')">
+				<CheckboxMarkedOutlineIcon :size="12" />
+				{{ card.checklist.done }}/{{ card.checklist.total }}
+			</span>
 			<!-- Assignee avatar stack — only when there are assignees -->
 			<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
 				<NcAvatar
@@ -58,6 +67,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
 
@@ -293,6 +303,24 @@ const extraAssigneeCount = computed(() => {
 .card-tile__title--done {
 	text-decoration: line-through;
 	color: var(--color-text-maxcontrast);
+}
+
+/* Checklist progress badge */
+.card-tile__checklist {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	padding: 1px 7px;
+}
+
+.card-tile__checklist--complete {
+	color: var(--color-success, #46ba61);
+	border-color: var(--color-success, #46ba61);
+	background: rgba(70, 186, 97, 0.1);
 }
 
 /* Assignee avatar stack */

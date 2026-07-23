@@ -13,6 +13,7 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
@@ -41,6 +42,7 @@ class BoardController extends Controller {
 		private LabelMapper $labelMapper,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private ChecklistItemMapper $checklistItemMapper,
 		private AclMapper $aclMapper,
 		private PermissionService $permissionService,
 	) {
@@ -86,13 +88,15 @@ class BoardController extends Controller {
 
 			$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($id);
 			$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($id);
+			$checklistByCard = $this->checklistItemMapper->progressByBoard($id);
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
 				'cards' => array_map(
 					static fn (Card $card): array => $card->jsonSerializeSummary()
 						+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
-						+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []],
+						+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
+						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]],
 					$this->cardMapper->findSummariesByBoard($id)
 				),
 				'labels' => $this->labelMapper->findByBoard($id),

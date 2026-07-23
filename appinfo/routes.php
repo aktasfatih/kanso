@@ -38,6 +38,12 @@ return [
 		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'DELETE'],
 
+		['name' => 'checklist#index', 'url' => '/api/cards/{cardId}/checklist', 'verb' => 'GET'],
+		['name' => 'checklist#create', 'url' => '/api/cards/{cardId}/checklist', 'verb' => 'POST'],
+		['name' => 'checklist#update', 'url' => '/api/checklist/{itemId}', 'verb' => 'PATCH'],
+		['name' => 'checklist#move', 'url' => '/api/checklist/{itemId}/move', 'verb' => 'POST'],
+		['name' => 'checklist#destroy', 'url' => '/api/checklist/{itemId}', 'verb' => 'DELETE'],
+
 		['name' => 'label#create', 'url' => '/api/labels', 'verb' => 'POST'],
 		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],
 		['name' => 'label#destroy', 'url' => '/api/labels/{id}', 'verb' => 'DELETE'],

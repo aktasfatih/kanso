@@ -9,6 +9,8 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\ChecklistItem;
+use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\LabelService;
@@ -36,6 +38,7 @@ class CardController extends Controller {
 		private AssigneeService $assigneeService,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private ChecklistItemMapper $checklistItemMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -53,10 +56,17 @@ class CardController extends Controller {
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
 			$card = $this->cardService->find($id, $this->currentUserId());
+			$checklistItems = $this->checklistItemMapper->findByCard($id);
+			$checklistDone = count(array_filter(
+				$checklistItems,
+				static fn (ChecklistItem $item): bool => $item->getDone()
+			));
 			return new JSONResponse(
 				$card->jsonSerialize()
 				+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
 				+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
+				+ ['checklistItems' => $checklistItems]
+				+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
 			);
 		});
 	}

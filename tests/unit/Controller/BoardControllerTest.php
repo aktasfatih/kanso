@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
@@ -44,6 +45,7 @@ class BoardControllerTest extends TestCase {
 	private LabelMapper&MockObject $labelMapper;
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private AclMapper&MockObject $aclMapper;
 	private PermissionService&MockObject $permissionService;
 	private BoardController $controller;
@@ -60,6 +62,7 @@ class BoardControllerTest extends TestCase {
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
+		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->aclMapper = $this->createMock(AclMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 
@@ -79,6 +82,7 @@ class BoardControllerTest extends TestCase {
 			$this->labelMapper,
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
+			$this->checklistItemMapper,
 			$this->aclMapper,
 			$this->permissionService
 		);
@@ -153,6 +157,7 @@ class BoardControllerTest extends TestCase {
 		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$label]);
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([3 => [7]]);
 		$this->cardAssigneeMapper->method('findUserIdsByBoard')->with(1)->willReturn([3 => ['bob']]);
+		$this->checklistItemMapper->method('progressByBoard')->with(1)->willReturn([3 => ['total' => 4, 'done' => 1]]);
 
 		$acl = new Acl();
 		$acl->setId(40);
@@ -182,6 +187,8 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(['bob'], $data['cards'][0]['assigneeIds']);
 		self::assertSame([], $data['cards'][1]['labelIds']);
 		self::assertSame([], $data['cards'][1]['assigneeIds']);
+		self::assertSame(['total' => 4, 'done' => 1], $data['cards'][0]['checklist']);
+		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['checklist']);
 		self::assertArrayNotHasKey('description', $data['cards'][0]);
 	}
 

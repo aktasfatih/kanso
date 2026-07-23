@@ -246,6 +246,102 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</template>
 				</div>
+
+				<!-- Checklist section -->
+				<div class="card-modal__checklist-section">
+					<div class="card-modal__checklist-header">
+						<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-header-icon" />
+						<label class="card-modal__label">{{ t('kanso', 'Checklist') }}</label>
+						<span v-if="checklistTotal > 0" class="card-modal__checklist-progress-text">
+							{{ checklistDone }}/{{ checklistTotal }}
+						</span>
+					</div>
+
+					<!-- Progress bar -->
+					<div v-if="checklistTotal > 0" class="card-modal__checklist-bar-wrap">
+						<div
+							class="card-modal__checklist-bar-fill"
+							:class="{ 'card-modal__checklist-bar-fill--complete': checklistDone === checklistTotal }"
+							:style="{ width: checklistProgressPct + '%' }" />
+					</div>
+
+					<!-- Items list -->
+					<ul class="card-modal__checklist-list">
+						<li
+							v-for="item in checklistItems"
+							:key="item.id"
+							class="card-modal__checklist-item"
+							:class="{ 'card-modal__checklist-item--done': item.done }"
+							:data-item-id="item.id"
+							:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
+							@dragover.prevent="onItemDragOver($event, item)"
+							@dragleave="onItemDragLeave($event, item)"
+							@drop.prevent="onItemDrop($event, item)">
+							<!-- Drag handle -->
+							<span
+								class="card-modal__checklist-drag-handle"
+								:draggable="true"
+								:title="t('kanso', 'Drag to reorder')"
+								@dragstart="onItemDragStart($event, item)"
+								@dragend="onItemDragEnd">
+								<DragIcon :size="14" />
+							</span>
+
+							<!-- Checkbox -->
+							<input
+								type="checkbox"
+								class="card-modal__checklist-checkbox"
+								:checked="item.done"
+								:disabled="toggleItem.isPending.value"
+								:aria-label="t('kanso', 'Toggle item done')"
+								@change="handleToggleItem(item)" />
+
+							<!-- Inline-editable title -->
+							<input
+								v-if="editingItemId === item.id"
+								:ref="(el) => setItemInputRef(item.id, el)"
+								v-model="editingItemTitle"
+								class="card-modal__checklist-item-input"
+								type="text"
+								@keydown.enter.prevent="saveItemTitle(item)"
+								@keydown.escape="cancelItemEdit"
+								@blur="saveItemTitle(item)" />
+							<span
+								v-else
+								class="card-modal__checklist-item-title"
+								:class="{ 'card-modal__checklist-item-title--done': item.done }"
+								@click="startItemEdit(item)">
+								{{ item.title }}
+							</span>
+
+							<!-- Delete button -->
+							<button
+								class="card-modal__checklist-item-delete"
+								:title="t('kanso', 'Delete item')"
+								:disabled="deleteItem.isPending.value"
+								@click="handleDeleteItem(item)">
+								<CloseIcon :size="14" />
+							</button>
+						</li>
+					</ul>
+
+					<!-- Drag-over indicator between items is handled by item highlight;
+					     drop line shown via CSS on dragover target -->
+
+					<!-- Add item input -->
+					<div class="card-modal__checklist-add">
+						<CheckboxBlankOutlineIcon :size="16" class="card-modal__checklist-add-icon" />
+						<input
+							ref="addItemInputRef"
+							v-model="newItemTitle"
+							class="card-modal__checklist-add-input"
+							type="text"
+							:placeholder="t('kanso', 'Add an item…')"
+							:disabled="addItem.isPending.value"
+							@keydown.enter.prevent="handleAddItem" />
+					</div>
+					<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
+				</div>
 			</template>
 		</div>
 	</NcModal>
@@ -268,11 +364,15 @@ import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
+import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
+import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOutline.vue'
+import DragIcon from 'vue-material-design-icons/Drag.vue'
 import { useCard } from '../composables/useCard.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardActions } from '../composables/useCardActions.js'
+import { useChecklist } from '../composables/useChecklist.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -520,6 +620,177 @@ async function saveDescription() {
 			err?.response?.data?.error || t('kanso', 'Failed to save.')
 	} finally {
 		isSaving.value = false
+	}
+}
+
+// ── Checklist ────────────────────────────────────────────────────────────────
+const {
+	items: checklistQuery,
+	addItem,
+	toggleItem,
+	renameItem,
+	deleteItem,
+	moveItem,
+} = useChecklist(computed(() => props.cardId), boardId)
+
+const checklistItems = computed(() => checklistQuery.data.value ?? [])
+
+const checklistTotal = computed(() => checklistItems.value.length)
+const checklistDone = computed(() => checklistItems.value.filter((i) => i.done).length)
+const checklistProgressPct = computed(() =>
+	checklistTotal.value === 0 ? 0 : Math.round((checklistDone.value / checklistTotal.value) * 100),
+)
+
+const checklistError = ref('')
+const newItemTitle = ref('')
+const addItemInputRef = ref(null)
+
+async function handleAddItem() {
+	const title = newItemTitle.value.trim()
+	if (!title) return
+	checklistError.value = ''
+	newItemTitle.value = ''
+	try {
+		await addItem.mutateAsync({ title })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to add item.')
+	}
+	// Keep focus for rapid entry
+	await nextTick()
+	addItemInputRef.value?.focus()
+}
+
+async function handleToggleItem(item) {
+	checklistError.value = ''
+	try {
+		await toggleItem.mutateAsync({ item })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to update item.')
+	}
+}
+
+async function handleDeleteItem(item) {
+	checklistError.value = ''
+	try {
+		await deleteItem.mutateAsync({ item })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to delete item.')
+	}
+}
+
+// Inline item title editing
+const editingItemId = ref(null)
+const editingItemTitle = ref('')
+const itemInputRefs = {}
+
+function setItemInputRef(id, el) {
+	if (el) {
+		itemInputRefs[id] = el
+	} else {
+		delete itemInputRefs[id]
+	}
+}
+
+async function startItemEdit(item) {
+	editingItemId.value = item.id
+	editingItemTitle.value = item.title
+	await nextTick()
+	itemInputRefs[item.id]?.focus()
+	itemInputRefs[item.id]?.select()
+}
+
+function cancelItemEdit() {
+	editingItemId.value = null
+	editingItemTitle.value = ''
+}
+
+async function saveItemTitle(item) {
+	const title = editingItemTitle.value.trim()
+	if (!title || title === item.title) {
+		cancelItemEdit()
+		return
+	}
+	checklistError.value = ''
+	try {
+		await renameItem.mutateAsync({ item, title })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to rename item.')
+	} finally {
+		cancelItemEdit()
+	}
+}
+
+// ── Checklist drag-and-drop (native HTML5 DnD) ─────────────────────────────
+// Using HTML5 DnD (draggable=true) on the drag handle for intra-list reordering.
+// The board uses @atlaskit/pragmatic-drag-and-drop for cross-column card DnD;
+// wiring Pragmatic DnD here would require data type namespacing to avoid conflicts
+// with the card DnD, which is out of scope for this composable. HTML5 DnD is
+// sufficient and self-contained for checklist reorder.
+const draggingItem = ref(null)
+const dragOverItemId = ref(null)
+
+function onItemDragStart(event, item) {
+	draggingItem.value = item
+	event.dataTransfer.effectAllowed = 'move'
+	event.dataTransfer.setData('text/plain', String(item.id))
+}
+
+function onItemDragEnd() {
+	draggingItem.value = null
+	dragOverItemId.value = null
+}
+
+function onItemDragOver(event, item) {
+	if (!draggingItem.value || draggingItem.value.id === item.id) return
+	event.dataTransfer.dropEffect = 'move'
+	dragOverItemId.value = item.id
+}
+
+function onItemDragLeave(_event, item) {
+	if (dragOverItemId.value === item.id) {
+		dragOverItemId.value = null
+	}
+}
+
+async function onItemDrop(event, targetItem) {
+	if (!draggingItem.value || draggingItem.value.id === targetItem.id) {
+		dragOverItemId.value = null
+		return
+	}
+	checklistError.value = ''
+	const itemToMove = draggingItem.value
+	dragOverItemId.value = null
+	draggingItem.value = null
+
+	// Closest-edge: dropping on the TOP half of the target inserts the item
+	// before it, on the bottom half after it. This makes "move to the very top"
+	// reachable — a top-half drop on the first row resolves to afterItemId=null.
+	const rect = event.currentTarget.getBoundingClientRect()
+	const dropBefore = event.clientY - rect.top < rect.height / 2
+
+	let afterItemId
+	if (dropBefore) {
+		// Insert before the target → sit after the target's predecessor,
+		// skipping the item being moved (so dragging item #2 onto item #1's top
+		// half lands it at the top, not back where it was).
+		const ordered = checklistItems.value
+		const targetIdx = ordered.findIndex((i) => i.id === targetItem.id)
+		let predecessor = null
+		for (let k = targetIdx - 1; k >= 0; k--) {
+			if (ordered[k].id !== itemToMove.id) {
+				predecessor = ordered[k]
+				break
+			}
+		}
+		afterItemId = predecessor ? predecessor.id : null
+	} else {
+		afterItemId = targetItem.id
+	}
+
+	try {
+		await moveItem.mutateAsync({ item: itemToMove, afterItemId })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to reorder item.')
 	}
 }
 
@@ -1075,5 +1346,229 @@ function closeModal() {
 .card-modal__action-error {
 	display: block;
 	margin-bottom: 12px;
+}
+
+/* ── Checklist ─────────────────────────────────────────────────────────────── */
+.card-modal__checklist-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 24px;
+}
+
+.card-modal__checklist-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.card-modal__checklist-header-icon {
+	color: var(--color-text-maxcontrast);
+	flex-shrink: 0;
+}
+
+.card-modal__checklist-progress-text {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	margin-left: auto;
+}
+
+/* Progress bar */
+.card-modal__checklist-bar-wrap {
+	height: 4px;
+	background: var(--color-border);
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.card-modal__checklist-bar-fill {
+	height: 100%;
+	background: var(--color-primary-element);
+	border-radius: 2px;
+	transition: width 0.25s ease, background 0.2s ease;
+}
+
+.card-modal__checklist-bar-fill--complete {
+	background: var(--color-success, #46ba61);
+}
+
+/* Items list */
+.card-modal__checklist-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.card-modal__checklist-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px;
+	border-radius: var(--border-radius);
+	background: transparent;
+	transition: background 0.1s ease;
+	border: 2px solid transparent;
+	cursor: default;
+}
+
+.card-modal__checklist-item:hover {
+	background: var(--color-background-hover);
+}
+
+.card-modal__checklist-item--done .card-modal__checklist-item-title {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Drag-over indicator */
+.card-modal__checklist-item[data-drag-over='true'] {
+	border-bottom-color: var(--color-primary-element);
+}
+
+/* Drag handle */
+.card-modal__checklist-drag-handle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+	cursor: grab;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+	padding: 2px;
+}
+
+.card-modal__checklist-item:hover .card-modal__checklist-drag-handle {
+	opacity: 1;
+}
+
+.card-modal__checklist-drag-handle:active {
+	cursor: grabbing;
+}
+
+/* Checkbox */
+.card-modal__checklist-checkbox {
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	accent-color: var(--color-primary-element);
+	cursor: pointer;
+}
+
+.card-modal__checklist-checkbox:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Item title (display) */
+.card-modal__checklist-item-title {
+	flex: 1;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	line-height: 1.4;
+	word-break: break-word;
+	cursor: text;
+	border-radius: var(--border-radius);
+	padding: 2px 4px;
+}
+
+.card-modal__checklist-item-title:hover {
+	background: var(--color-background-dark);
+}
+
+.card-modal__checklist-item-title--done {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Item title (editing) */
+.card-modal__checklist-item-input {
+	flex: 1;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	border: 2px solid var(--color-primary);
+	border-radius: var(--border-radius);
+	padding: 2px 6px;
+	background: var(--color-main-background);
+	font-family: inherit;
+}
+
+.card-modal__checklist-item-input:focus {
+	outline: none;
+}
+
+/* Delete button */
+.card-modal__checklist-item-delete {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	padding: 0;
+	opacity: 0;
+	transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.card-modal__checklist-item:hover .card-modal__checklist-item-delete {
+	opacity: 1;
+}
+
+.card-modal__checklist-item-delete:hover:not(:disabled) {
+	background: var(--color-error);
+	color: #fff;
+}
+
+.card-modal__checklist-item-delete:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Add item row */
+.card-modal__checklist-add {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 4px;
+	padding: 4px 6px;
+}
+
+.card-modal__checklist-add-icon {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__checklist-add-input {
+	flex: 1;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	border: 1px dashed var(--color-border);
+	border-radius: var(--border-radius);
+	padding: 5px 10px;
+	background: transparent;
+	font-family: inherit;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card-modal__checklist-add-input::placeholder {
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__checklist-add-input:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	background: var(--color-main-background);
+}
+
+.card-modal__checklist-add-input:disabled {
+	opacity: 0.5;
 }
 </style>
