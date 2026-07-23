@@ -19,7 +19,6 @@ const ALLOWED_TAGS = [
 	'blockquote',
 	'hr', 'br',
 	'del',
-	'span',
 ]
 
 const ALLOWED_ATTR = ['href', 'title', 'rel', 'target']
@@ -28,6 +27,9 @@ const FORBID_TAGS = ['style', 'script']
 
 const FORBID_ATTR = ['style', 'onerror', 'onclick', 'onload', 'onmouseover']
 
+// Registered once at module load on the shared DOMPurify singleton. This is
+// currently the only DOMPurify consumer; if a second one is added, scope this
+// to a dedicated DOMPurify() instance so it doesn't inherit the link rewriting.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 	if (node.tagName === 'A') {
 		const href = node.getAttribute('href') || ''
