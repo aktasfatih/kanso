@@ -128,6 +128,10 @@ const virtualizerOptions = computed(() => ({
 	estimateSize: () => 90,
 	overscan: 6,
 	gap: 8,
+	// Key the size cache by card id, not index: on a same-length reorder an
+	// index-keyed cache would briefly apply the old occupant's height to the
+	// new one, jumping the scroll position.
+	getItemKey: (index) => props.cards[index]?.id ?? index,
 }))
 
 const virtualizer = useVirtualizer(virtualizerOptions)

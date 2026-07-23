@@ -122,9 +122,17 @@ test.describe('Realtime sync', () => {
 
 	test('fallback: tester sees a new card via the 5s poll when push is off', async ({ browser }) => {
 		occ('app:disable notify_push')
-		// Give Nextcloud a moment to clear any capabilities cache so the tester
-		// page loads with push marked as unavailable → 5s poll interval.
-		await new Promise((r) => setTimeout(r, 1000))
+		// Wait until the capabilities endpoint actually stops advertising
+		// notify_push (a fixed sleep here was a flake source: the tester page
+		// could still load with push enabled and take the 60s path).
+		for (let i = 0; i < 20; i++) {
+			const r = await fetch(BASE + '/ocs/v2.php/cloud/capabilities?format=json', {
+				headers: { ...HEADERS, Authorization: ADMIN_AUTH },
+			})
+			const caps = (await r.json())?.ocs?.data?.capabilities ?? {}
+			if (!('notify_push' in caps)) break
+			await new Promise((resolve) => setTimeout(resolve, 500))
+		}
 		const testerCtx = await browser.newContext()
 		try {
 			const testerPage = await testerCtx.newPage()
