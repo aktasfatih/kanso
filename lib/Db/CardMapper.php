@@ -158,4 +158,48 @@ class CardMapper extends QBMapper {
 		$cards = $this->findEntities($qb);
 		return $cards[0] ?? null;
 	}
+
+	/**
+	 * Summaries (no description) of cards eligible for auto-archive under a
+	 * rule's scope and condition, oldest done first, capped at $limit.
+	 *
+	 * All timestamp columns (`done_at`, `created_at`) are plain unix ints, so
+	 * the age test is a direct integer comparison — no PARAM_DATE dance. A
+	 * card qualifies when it is done (`done_at > 0`), not yet archived, not
+	 * soft-deleted, in scope (board, and stack when $stackId is set), and:
+	 *   - condition 0 (done-for): it has been done for at least the threshold
+	 *     (`done_at <= cutoff`);
+	 *   - condition 1 (done-and-age): it is done AND was created at least the
+	 *     threshold ago (`created_at <= cutoff`).
+	 * The query alone enforces "never touch not-done / archived / deleted",
+	 * which is what makes the sweep idempotent.
+	 *
+	 * @param int $condition one of ArchiveRule::CONDITION_*
+	 * @param int $cutoff now minus the rule's threshold (unix seconds)
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findEligibleForArchive(int $boardId, ?int $stackId, int $condition, int $cutoff, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('done_at', 'ASC')
+			->addOrderBy('id', 'ASC')
+			->setMaxResults($limit);
+
+		if ($stackId !== null) {
+			$qb->andWhere($qb->expr()->eq('stack_id', $qb->createNamedParameter($stackId, IQueryBuilder::PARAM_INT)));
+		}
+
+		// The done_at > 0 guard above already covers the "done" half of both
+		// conditions; here we add the age half against the right column.
+		$column = $condition === ArchiveRule::CONDITION_DONE_AND_AGE ? 'created_at' : 'done_at';
+		$qb->andWhere($qb->expr()->lte($column, $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
+
+		return $this->findEntities($qb);
+	}
 }

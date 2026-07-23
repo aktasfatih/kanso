@@ -22,6 +22,7 @@ Early development — not feature complete yet.
 	</dependencies>
 	<background-jobs>
 		<job>OCA\Kanso\Cron\PruneChanges</job>
+		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>
 	</background-jobs>
 	<navigations>
 		<navigation>

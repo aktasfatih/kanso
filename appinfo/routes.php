@@ -41,5 +41,11 @@ return [
 		['name' => 'label#create', 'url' => '/api/labels', 'verb' => 'POST'],
 		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],
 		['name' => 'label#destroy', 'url' => '/api/labels/{id}', 'verb' => 'DELETE'],
+
+		['name' => 'archiveRule#index', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'GET'],
+		['name' => 'archiveRule#create', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'POST'],
+		['name' => 'archiveRule#update', 'url' => '/api/archive-rules/{id}', 'verb' => 'PATCH'],
+		['name' => 'archiveRule#destroy', 'url' => '/api/archive-rules/{id}', 'verb' => 'DELETE'],
+		['name' => 'archiveRule#archiveNow', 'url' => '/api/archive-rules/{id}/archive-now', 'verb' => 'POST'],
 	],
 ];
