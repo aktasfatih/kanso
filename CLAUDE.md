@@ -15,6 +15,7 @@ performance-first alternative to Deck. AGPL, targets Nextcloud 30–32.
 - State pattern: database-first — server is source of truth, realtime deltas patch the client cache, local mutations are optimistic with rollback.
 - Tests: PHPUnit for API/services (happy path + permission denial), Playwright smoke tests for board interactions, psalm + php-cs-fixer clean.
 - Branch strategy: work directly on `main` until v0.1; conventional-ish commit messages.
+- Git remote: there is none, and that's intentional — commit locally after each completed card and keep working. Never push, never add a remote; publishing to GitHub happens as a deliberate release step later.
 
 ## Dev workflow
 - NEVER test against prod (sv1). Use the local docker dev stack in `dev/` (copied from ../deck_recurrence/dev). Prod only gets tagged releases via the scoped deploy playbook.
