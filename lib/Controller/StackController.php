@@ -54,6 +54,15 @@ class StackController extends Controller {
 		});
 	}
 
+	#[NoAdminRequired]
+	public function move(int $id, ?int $afterStackId = null): JSONResponse {
+		return $this->respond(function () use ($id, $afterStackId): JSONResponse {
+			return new JSONResponse(
+				$this->stackService->move($id, $afterStackId, $this->currentUserId())
+			);
+		});
+	}
+
 	/**
 	 * @throws NotPermittedException if there is no user session
 	 */

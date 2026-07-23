@@ -175,7 +175,7 @@ import { useCardMove } from '../composables/useCardMove.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
 import { initial, between, after, before } from '../services/sortKey.js'
-import { updateCard as apiUpdateCard } from '../services/api.js'
+import { updateCard as apiUpdateCard, moveStack as apiMoveStack } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -553,6 +553,90 @@ onMounted(() => {
 				}
 
 				enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey })
+			},
+		}),
+		// Stack reordering: header-dragged columns dropped on another column's
+		// left/right edge. Single-flight plain optimistic patch (no queue) —
+		// stack moves are rare compared to card moves.
+		monitorForElements({
+			canMonitor: ({ source }) => source.data.type === 'stack',
+			onDrop({ source, location }) {
+				const draggedStackId = source.data.stackId
+
+				const stackTarget = location.current.dropTargets.find((t) => t.data.type === 'stack')
+				if (!stackTarget) return
+
+				const edge = extractClosestEdge(stackTarget.data)
+				const targetStackId = stackTarget.data.stackId
+
+				// Resolve neighbours as if the dragged stack were already removed —
+				// otherwise dropping on the near edge of an adjacent column yields
+				// the dragged stack as its own anchor (400).
+				const stacks = sortedStacks.value.filter((s) => s.id !== draggedStackId)
+				const targetIdx = stacks.findIndex((s) => s.id === targetStackId)
+				const targetStack = stacks[targetIdx]
+				if (!targetStack) return // stale, or dropped onto itself
+
+				// left edge → land before target (after its predecessor);
+				// right edge → land after the target itself.
+				const afterStack = edge === 'left'
+					? (targetIdx > 0 ? stacks[targetIdx - 1] : null)
+					: targetStack
+				const afterStackId = afterStack?.id ?? null
+
+				// No-op guard: already directly after that anchor
+				const all = sortedStacks.value
+				const draggedIdx = all.findIndex((s) => s.id === draggedStackId)
+				if (draggedIdx === -1) return
+				const currentAfterId = draggedIdx > 0 ? all[draggedIdx - 1].id : null
+				if (currentAfterId === afterStackId) return
+
+				// Optimistic client-side sort key, mirroring the card path
+				let optimisticKey
+				try {
+					if (afterStack === null) {
+						optimisticKey = stacks.length > 0 ? before(stacks[0].sortKey) : initial()
+					} else if (edge === 'left') {
+						optimisticKey = between(afterStack.sortKey, targetStack.sortKey)
+					} else {
+						const nextStack = targetIdx < stacks.length - 1 ? stacks[targetIdx + 1] : null
+						optimisticKey = nextStack
+							? between(targetStack.sortKey, nextStack.sortKey)
+							: after(targetStack.sortKey)
+					}
+				} catch {
+					// Keys too close or overflow; server truth arrives on reconcile
+					optimisticKey = targetStack.sortKey
+				}
+
+				const key = boardQueryKey(props.id)
+				const patchStackKey = (sortKey) => {
+					queryClient.setQueryData(key, (old) => {
+						if (!old) return old
+						return {
+							...old,
+							stacks: old.stacks.map((s) =>
+								s.id === draggedStackId ? { ...s, sortKey } : s,
+							),
+						}
+					})
+				}
+
+				// Cancel in-flight board fetches so they can't clobber the patch
+				queryClient.cancelQueries({ queryKey: key })
+				patchStackKey(optimisticKey)
+
+				apiMoveStack(draggedStackId, afterStackId)
+					.then((updated) => {
+						patchStackKey(updated.sortKey)
+					})
+					.catch((err) => {
+						const serverError = err?.response?.data?.error
+						shortcutError.value = serverError === 'rebalance_required'
+							? t('kanso', 'Board ordering needs a refresh.')
+							: t('kanso', 'Failed to move stack. Please try again.')
+						queryClient.invalidateQueries({ queryKey: key })
+					})
 			},
 		}),
 	]

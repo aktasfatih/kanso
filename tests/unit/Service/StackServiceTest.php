@@ -13,10 +13,12 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\ChangeNotifier;
+use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
 use OCA\Kanso\Service\StackService;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -25,6 +27,7 @@ class StackServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private IDBConnection&MockObject $db;
 	private StackService $service;
 
 	protected function setUp(): void {
@@ -33,12 +36,14 @@ class StackServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new StackService(
 			$this->stackMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			new SortKeyService()
+			new SortKeyService(),
+			$this->db
 		);
 	}
 
@@ -164,5 +169,151 @@ class StackServiceTest extends TestCase {
 
 		$deleted = $this->service->delete(5, 'alice');
 		self::assertGreaterThan(0, $deleted->getDeletedAt());
+	}
+
+	// ---- move -------------------------------------------------------------
+
+	public function testMoveBetweenNeighboursUsesMidpointKeyInsideTransaction(): void {
+		// Board order: 5(I), 6(J), 7(K) — move 7 directly after 5.
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 1, 'K'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+			$this->stack(6, 1, 'J'),
+			$this->stack(7, 1, 'K'),
+		]);
+		$this->stackMapper->expects(self::once())
+			->method('update')
+			->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(
+				1,
+				Change::ENTITY_STACK,
+				7,
+				Change::ACTION_MOVE,
+				'alice'
+			)
+			->willReturn(new Change());
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$moved = $this->service->move(7, 5, 'alice');
+		// between('I', 'J') === 'II'
+		self::assertSame('II', $moved->getSortKey());
+	}
+
+	public function testMoveToFrontUsesBeforeFirstKey(): void {
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 1, 'K'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+			$this->stack(7, 1, 'K'),
+		]);
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_STACK, 7, Change::ACTION_MOVE, 'alice')
+			->willReturn(new Change());
+
+		$moved = $this->service->move(7, null, 'alice');
+		// before('I') === 'H'
+		self::assertSame('H', $moved->getSortKey());
+	}
+
+	public function testMoveAfterLastStackUsesAfterKey(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 1, 'I'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+			$this->stack(6, 1, 'J'),
+		]);
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(5, 6, 'alice');
+		// after('J') === 'K'
+		self::assertSame('K', $moved->getSortKey());
+	}
+
+	public function testMoveAssertsEditPermission(): void {
+		$board = $this->board();
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->move(5, null, 'bob');
+	}
+
+	public function testMoveRejectsSelfAnchor(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+			$this->stack(6, 1, 'J'),
+		]);
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(5, 5, 'alice');
+	}
+
+	public function testMoveRejectsAnchorNotOnBoard(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+		]);
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->move(5, 99, 'alice');
+	}
+
+	public function testMovePropagatesOverflowAndRollsBack(): void {
+		// after('Z' x 64) would need a 65th character → OverflowException.
+		$maxKey = str_repeat('Z', 64);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 1, 'I'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+			$this->stack(6, 1, $maxKey),
+		]);
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(\OverflowException::class);
+		$this->service->move(5, 6, 'alice');
+	}
+
+	public function testMoveRollsBackTransactionOnMapperFailure(): void {
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 1, 'K'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([
+			$this->stack(5, 1, 'I'),
+			$this->stack(7, 1, 'K'),
+		]);
+		$this->stackMapper->method('update')
+			->willThrowException(new \RuntimeException('db gone'));
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->move(7, 5, 'alice');
 	}
 }

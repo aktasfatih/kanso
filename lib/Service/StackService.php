@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 
 /**
  * Stack CRUD. Every mutation appends a row to the `kanso_changes` log in
@@ -28,6 +29,7 @@ class StackService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -123,6 +125,104 @@ class StackService {
 		);
 
 		return $stack;
+	}
+
+	/**
+	 * Moves the stack inside its board: directly after $afterStackId, or to
+	 * the front of the board when $afterStackId is null. Neighbours are
+	 * resolved in-memory from the board's stack list with the moved stack
+	 * excluded — otherwise dropping on the left edge of the stack to the
+	 * right would yield the moved stack as its own predecessor. The
+	 * transaction makes the stack update and its change row atomic (rollback
+	 * on failure), mirroring CardService::move — including its accepted
+	 * concurrent-move caveat (duplicate keys possible under READ COMMITTED;
+	 * cosmetic, next move repairs it).
+	 *
+	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
+	 * @throws NotPermittedException if the user may not edit the board
+	 * @throws InvalidInputException if $afterStackId is unusable (missing, deleted, other board, the moved stack itself)
+	 * @throws \OverflowException if the new sort key would overflow (board needs a rebalance)
+	 */
+	public function move(int $id, ?int $afterStackId, string $uid): Stack {
+		$stack = $this->loadStack($id);
+		$board = $this->loadBoard($stack->getBoardId());
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		// Board stacks in display order, without the moved stack itself.
+		$siblings = array_values(array_filter(
+			$this->stackMapper->findByBoard($stack->getBoardId()),
+			static fn (Stack $s): bool => $s->getId() !== $id
+		));
+		$anchor = $afterStackId === null ? null : $this->resolveAnchor($afterStackId, $id, $siblings);
+
+		$this->db->beginTransaction();
+		try {
+			$stack->setSortKey($this->deriveMoveKey($siblings, $anchor));
+			$stack = $this->stackMapper->update($stack);
+
+			$this->changeNotifier->notify(
+				$stack->getBoardId(),
+				Change::ENTITY_STACK,
+				$id,
+				Change::ACTION_MOVE,
+				$uid
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		return $stack;
+	}
+
+	/**
+	 * New sort key for the moved stack landing after $anchor (null = front of
+	 * the board). $siblings is the board's stack order with the moved stack
+	 * excluded.
+	 *
+	 * @param list<Stack> $siblings
+	 * @throws \OverflowException if the key would overflow — rebalance needed
+	 */
+	private function deriveMoveKey(array $siblings, ?Stack $anchor): string {
+		if ($anchor === null) {
+			$first = $siblings[0] ?? null;
+			return $first === null
+				? $this->sortKeyService->initial()
+				: $this->sortKeyService->before($first->getSortKey());
+		}
+		$next = null;
+		foreach ($siblings as $index => $sibling) {
+			if ($sibling->getId() === $anchor->getId()) {
+				$next = $siblings[$index + 1] ?? null;
+				break;
+			}
+		}
+		return $next === null
+			? $this->sortKeyService->after($anchor->getSortKey())
+			: $this->sortKeyService->between($anchor->getSortKey(), $next->getSortKey());
+	}
+
+	/**
+	 * Validates the move anchor against the in-memory sibling list. Any
+	 * unusable anchor (the moved stack itself, or not among the board's
+	 * live stacks) is invalid input — the client's picture of the board is
+	 * stale, not the moved stack's fault.
+	 *
+	 * @param list<Stack> $siblings
+	 * @throws InvalidInputException
+	 */
+	private function resolveAnchor(int $afterStackId, int $movedStackId, array $siblings): Stack {
+		if ($afterStackId === $movedStackId) {
+			throw new InvalidInputException('afterStackId must not be the moved stack itself');
+		}
+		foreach ($siblings as $sibling) {
+			if ($sibling->getId() === $afterStackId) {
+				return $sibling;
+			}
+		}
+		throw new InvalidInputException('Stack ' . $afterStackId . ' is not on the board');
 	}
 
 	/**

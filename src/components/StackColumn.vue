@@ -3,9 +3,13 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="stack-column">
-		<!-- Column header -->
-		<div class="stack-column__header">
+	<div ref="columnRef" class="stack-column" :class="{ 'stack-column--dragging': isStackDragging }">
+		<!-- Left / right stack drop indicators — same visual language as the card tile drop line -->
+		<div v-if="stackDropEdge === 'left'" class="stack-column__drop-line stack-column__drop-line--left" />
+		<div v-if="stackDropEdge === 'right'" class="stack-column__drop-line stack-column__drop-line--right" />
+
+		<!-- Column header — drag handle for stack reordering -->
+		<div ref="headerRef" class="stack-column__header">
 			<span class="stack-column__title">{{ stack.title }}</span>
 			<span class="stack-column__badge">{{ cards.length }}</span>
 		</div>
@@ -78,9 +82,10 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import CardTile from './CardTile.vue'
-import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
+import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 
 const props = defineProps({
@@ -117,10 +122,14 @@ const route = useRoute()
 
 const composerInputRef = ref(null)
 const cardListRef = ref(null)
+const columnRef = ref(null)
+const headerRef = ref(null)
 const newCardTitle = ref('')
 const composerError = ref('')
 const isPending = ref(false)
 const isDropOver = ref(false)
+const isStackDragging = ref(false)
+const stackDropEdge = ref(null)
 let cleanup = () => {}
 
 // ── TanStack Virtual ──────────────────────────────────────────────────────────
@@ -178,6 +187,27 @@ onMounted(() => {
 		autoScrollForElements({
 			element: cardListRef.value,
 		}),
+		// Stack reordering: only the header is the drag handle …
+		draggable({
+			element: headerRef.value,
+			getInitialData: () => ({ type: 'stack', stackId: props.stack.id }),
+			onDragStart: () => { isStackDragging.value = true },
+			onDrop: () => { isStackDragging.value = false },
+		}),
+		// … but the whole column is the drop target (left/right edges).
+		dropTargetForElements({
+			element: columnRef.value,
+			canDrop: ({ source }) => source.data.type === 'stack' && source.data.stackId !== props.stack.id,
+			getData: ({ input, element: el }) => attachClosestEdge(
+				{ type: 'stack', stackId: props.stack.id },
+				{ input, element: el, allowedEdges: ['left', 'right'] },
+			),
+			onDrag: ({ self }) => {
+				stackDropEdge.value = extractClosestEdge(self.data)
+			},
+			onDragLeave: () => { stackDropEdge.value = null },
+			onDrop: () => { stackDropEdge.value = null },
+		}),
 	)
 })
 
@@ -234,6 +264,7 @@ async function submitCard() {
 
 <style scoped>
 .stack-column {
+	position: relative;
 	flex-shrink: 0;
 	width: 280px;
 	display: flex;
@@ -246,6 +277,30 @@ async function submitCard() {
 	max-height: calc(100vh - 140px);
 }
 
+.stack-column--dragging {
+	opacity: 0.4;
+}
+
+/* Stack drop indicators — same visual language as .card-tile__drop-line */
+.stack-column__drop-line {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	background: var(--color-primary-element);
+	border-radius: 1px;
+	z-index: 10;
+	pointer-events: none;
+}
+
+.stack-column__drop-line--left {
+	left: -9px;
+}
+
+.stack-column__drop-line--right {
+	right: -9px;
+}
+
 .stack-column__header {
 	display: flex;
 	align-items: center;
@@ -253,6 +308,7 @@ async function submitCard() {
 	gap: 8px;
 	padding-bottom: 8px;
 	border-bottom: 1px solid var(--color-border);
+	cursor: grab;
 }
 
 .stack-column__title {

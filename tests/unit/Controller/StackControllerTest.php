@@ -106,4 +106,28 @@ class StackControllerTest extends TestCase {
 		$response = $this->controller->destroy(5);
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
+
+	public function testMoveReturnsStack(): void {
+		$stack = $this->stack();
+		$this->stackService->method('move')->with(5, 3, 'alice')->willReturn($stack);
+
+		$response = $this->controller->move(5, 3);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($stack, $response->getData());
+	}
+
+	public function testMoveMapsNotPermittedTo403(): void {
+		$this->stackService->method('move')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->move(5, null);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testMoveMapsOverflowTo409(): void {
+		$this->stackService->method('move')->willThrowException(new \OverflowException('rebalance'));
+
+		$response = $this->controller->move(5, 3);
+		self::assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		self::assertSame(['error' => 'rebalance_required'], $response->getData());
+	}
 }

@@ -32,6 +32,9 @@ export const updateStack = (id, data) =>
 export const deleteStack = (id) =>
 	axios.delete(url(`/api/stacks/${id}`)).then((r) => r.data)
 
+export const moveStack = (id, afterStackId) =>
+	axios.post(url(`/api/stacks/${id}/move`), { afterStackId: afterStackId ?? null }).then((r) => r.data)
+
 // Cards
 export const fetchCard = (id) =>
 	axios.get(url(`/api/cards/${id}`)).then((r) => r.data)

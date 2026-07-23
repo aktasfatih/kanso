@@ -26,6 +26,7 @@ return [
 		['name' => 'stack#create', 'url' => '/api/stacks', 'verb' => 'POST'],
 		['name' => 'stack#update', 'url' => '/api/stacks/{id}', 'verb' => 'PATCH'],
 		['name' => 'stack#destroy', 'url' => '/api/stacks/{id}', 'verb' => 'DELETE'],
+		['name' => 'stack#move', 'url' => '/api/stacks/{id}/move', 'verb' => 'POST'],
 
 		['name' => 'card#create', 'url' => '/api/cards', 'verb' => 'POST'],
 		['name' => 'card#show', 'url' => '/api/cards/{id}', 'verb' => 'GET'],

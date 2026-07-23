@@ -59,10 +59,16 @@ async function dragWithMouse(page, sourceLocator, targetLocator, targetPosition 
 
 	const srcX = srcBox.x + srcBox.width / 2
 	const srcY = srcBox.y + srcBox.height / 2
-	const tgtX = tgtBox.x + tgtBox.width / 2
-	const tgtY = targetPosition === 'top'
-		? tgtBox.y + tgtBox.height * 0.2
-		: tgtBox.y + tgtBox.height * 0.8
+	// 'left' aims at the left edge of the target (stack column reordering);
+	// 'top'/'bottom' aim at the vertical edges (card reordering).
+	const tgtX = targetPosition === 'left'
+		? tgtBox.x + tgtBox.width * 0.1
+		: tgtBox.x + tgtBox.width / 2
+	const tgtY = targetPosition === 'left'
+		? tgtBox.y + tgtBox.height / 2
+		: targetPosition === 'top'
+			? tgtBox.y + tgtBox.height * 0.2
+			: tgtBox.y + tgtBox.height * 0.8
 
 	await page.mouse.move(srcX, srcY)
 	await page.mouse.down()
@@ -227,5 +233,35 @@ test.describe('Card drag and drop', () => {
 
 		const s2CardsAfter = s2After.locator('.card-tile-wrap .card-tile')
 		await expect(s2CardsAfter).toHaveCount(0, { timeout: 5000 })
+	})
+
+	test('drag stack S2 header to the left edge of S1 flips column order, persists after reload', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		// Starting order: S1, S2
+		const titles = page.locator('.stack-column__title')
+		await expect(titles.nth(0)).toHaveText('S1', { timeout: 5000 })
+		await expect(titles.nth(1)).toHaveText('S2')
+
+		// Drag S2's HEADER (the stack drag handle) onto the LEFT edge of S1
+		const s2Header = page.locator('.stack-column').nth(1).locator('.stack-column__header')
+		const s1Column = page.locator('.stack-column').nth(0)
+		await dragWithMouse(page, s2Header, s1Column, 'left')
+
+		// Column order flips: S2, S1
+		await expect(titles.nth(0)).toHaveText('S2', { timeout: 8000 })
+		await expect(titles.nth(1)).toHaveText('S1')
+
+		// Reload and verify persistence
+		await page.reload()
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		const titlesAfter = page.locator('.stack-column__title')
+		await expect(titlesAfter.nth(0)).toHaveText('S2', { timeout: 8000 })
+		await expect(titlesAfter.nth(1)).toHaveText('S1')
 	})
 })
