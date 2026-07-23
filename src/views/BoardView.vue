@@ -64,6 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:permissions="boardData.permissions ?? 0"
 			:participants="participants.data.value ?? []"
 			:current-user-id="currentUserId"
+			:stacks="boardData.stacks ?? []"
 			@close="showSettings = false"
 			@leave="showSettings = false" />
 

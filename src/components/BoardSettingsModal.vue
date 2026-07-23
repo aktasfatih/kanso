@@ -28,6 +28,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@click="activeTab = 'sharing'">
 					{{ t('kanso', 'Sharing') }}
 				</button>
+				<button
+					class="board-settings__tab"
+					:class="{ 'board-settings__tab--active': activeTab === 'workflow' }"
+					role="tab"
+					:aria-selected="activeTab === 'workflow'"
+					@click="activeTab = 'workflow'">
+					{{ t('kanso', 'Workflow') }}
+				</button>
 			</div>
 
 			<!-- Labels tab -->
@@ -343,6 +351,78 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 			</div>
+
+			<!-- Workflow tab -->
+			<div v-show="activeTab === 'workflow'" class="board-settings__panel" role="tabpanel">
+				<p v-if="!canEdit" class="workflow__readonly-notice">
+					{{ t('kanso', 'You need edit permission to configure workflows.') }}
+				</p>
+
+				<ul v-if="sortedStacks.length > 0" class="workflow__list" role="list">
+					<li
+						v-for="stack in sortedStacks"
+						:key="stack.id"
+						class="workflow__item">
+
+						<span class="workflow__stack-name">{{ stack.title }}</span>
+
+						<!-- Role selector -->
+						<div class="workflow__field">
+							<label
+								:for="`workflow-role-${stack.id}`"
+								class="workflow__label">
+								{{ t('kanso', 'Role') }}
+							</label>
+							<select
+								:id="`workflow-role-${stack.id}`"
+								class="workflow__select"
+								:disabled="!canEdit || workflowSaving[stack.id]"
+								:value="stack.role ?? 0"
+								@change="onRoleChange(stack, $event.target.value)">
+								<option
+									v-for="opt in ROLE_OPTIONS"
+									:key="opt.value"
+									:value="opt.value">
+									{{ opt.label }}
+								</option>
+							</select>
+						</div>
+
+						<!-- WIP limit input -->
+						<div class="workflow__field">
+							<label
+								:for="`workflow-wip-${stack.id}`"
+								class="workflow__label">
+								{{ t('kanso', 'WIP limit') }}
+							</label>
+							<input
+								:id="`workflow-wip-${stack.id}`"
+								class="workflow__wip-input"
+								type="number"
+								min="0"
+								step="1"
+								:disabled="!canEdit || workflowSaving[stack.id]"
+								:value="wipLimitDisplay(stack)"
+								:placeholder="t('kanso', 'No limit')"
+								@change="onWipLimitChange(stack, $event.target.value)" />
+						</div>
+
+						<!-- Per-stack saving indicator -->
+						<span v-if="workflowSaving[stack.id]" class="workflow__saving" aria-live="polite">
+							{{ t('kanso', 'Saving…') }}
+						</span>
+
+						<!-- Per-stack error -->
+						<span v-if="workflowErrors[stack.id]" class="label-settings__error">
+							{{ workflowErrors[stack.id] }}
+						</span>
+					</li>
+				</ul>
+
+				<p v-else class="label-settings__empty">
+					{{ t('kanso', 'No stacks yet.') }}
+				</p>
+			</div>
 		</div>
 	</NcModal>
 </template>
@@ -359,6 +439,7 @@ import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
 import { useLabels } from '../composables/useLabels.js'
 import { useAcl } from '../composables/useAcl.js'
+import { useBoard } from '../composables/useBoard.js'
 import { cssColor } from '../services/color.js'
 
 const props = defineProps({
@@ -390,6 +471,11 @@ const props = defineProps({
 		type: String,
 		default: '',
 	},
+	/** stacks array from board payload — used in Workflow tab */
+	stacks: {
+		type: Array,
+		default: () => [],
+	},
 })
 
 const emit = defineEmits(['close', 'leave'])
@@ -402,6 +488,7 @@ const PERM_MANAGE = 8
 
 const canManage = computed(() => (props.permissions & PERM_MANAGE) !== 0)
 const canShare = computed(() => (props.permissions & PERM_SHARE) !== 0)
+const canEdit = computed(() => (props.permissions & PERM_EDIT) !== 0)
 
 function hasBit(mask, bit) {
 	return (mask & bit) !== 0
@@ -434,6 +521,93 @@ const {
 	searchError,
 	clearSearch,
 } = useAcl(() => props.boardId)
+
+// ── Workflow composable ───────────────────────────────────────────────────────
+const { updateStack } = useBoard(computed(() => props.boardId))
+
+const ROLE_OPTIONS = [
+	{ value: 0, label: t('kanso', 'None') },
+	{ value: 1, label: t('kanso', 'Backlog') },
+	{ value: 2, label: t('kanso', 'To do') },
+	{ value: 3, label: t('kanso', 'In progress') },
+	{ value: 4, label: t('kanso', 'Review') },
+	{ value: 5, label: t('kanso', 'Done') },
+]
+
+/**
+ * Sorted active (non-archived) stacks for the Workflow tab.
+ */
+const sortedStacks = computed(() =>
+	[...props.stacks]
+		.filter((s) => !s.archived)
+		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)),
+)
+
+/**
+ * Per-stack workflow error state.
+ * Key: stackId, value: error string.
+ */
+const workflowErrors = ref({})
+
+/**
+ * Per-stack saving state.
+ */
+const workflowSaving = ref({})
+
+async function onRoleChange(stack, newRole) {
+	workflowErrors.value = { ...workflowErrors.value, [stack.id]: '' }
+	workflowSaving.value = { ...workflowSaving.value, [stack.id]: true }
+	try {
+		await updateStack.mutateAsync({ stackId: stack.id, data: { role: Number(newRole) } })
+	} catch (err) {
+		workflowErrors.value = {
+			...workflowErrors.value,
+			[stack.id]: err?.response?.data?.error || t('kanso', 'Failed to update role.'),
+		}
+	} finally {
+		workflowSaving.value = { ...workflowSaving.value, [stack.id]: false }
+	}
+}
+
+/**
+ * WIP limit input: empty string → send null (no limit).
+ * "0" also maps to null (backend treats both as unlimited).
+ * Positive integer → send that integer.
+ */
+async function onWipLimitChange(stack, rawValue) {
+	workflowErrors.value = { ...workflowErrors.value, [stack.id]: '' }
+	const trimmed = String(rawValue).trim()
+	// Treat empty or "0" as "no limit" → null
+	const wipLimit = trimmed === '' || trimmed === '0' ? null : parseInt(trimmed, 10)
+	if (trimmed !== '' && trimmed !== '0' && (isNaN(wipLimit) || wipLimit < 0)) {
+		workflowErrors.value = {
+			...workflowErrors.value,
+			[stack.id]: t('kanso', 'WIP limit must be a positive number or empty.'),
+		}
+		return
+	}
+	workflowSaving.value = { ...workflowSaving.value, [stack.id]: true }
+	try {
+		await updateStack.mutateAsync({ stackId: stack.id, data: { wipLimit } })
+	} catch (err) {
+		workflowErrors.value = {
+			...workflowErrors.value,
+			[stack.id]: err?.response?.data?.error || t('kanso', 'Failed to update WIP limit.'),
+		}
+	} finally {
+		workflowSaving.value = { ...workflowSaving.value, [stack.id]: false }
+	}
+}
+
+/**
+ * Convert the stack's current wipLimit to a display string for the input.
+ * null and 0 → empty string (no limit).
+ */
+function wipLimitDisplay(stack) {
+	const wl = stack.wipLimit
+	if (wl == null || wl === 0) return ''
+	return String(wl)
+}
 
 // ── Color presets ─────────────────────────────────────────────────────────────
 const COLOR_PRESETS = [
@@ -1228,5 +1402,114 @@ function resolveDisplayName(entry) {
 
 .sharing__leave-btn:hover {
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+}
+
+/* ── Workflow tab styles ──────────────────────────────────────────────────── */
+
+.workflow__readonly-notice {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.875rem;
+	margin: 0 0 16px;
+}
+
+.workflow__list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.workflow__item {
+	display: grid;
+	grid-template-columns: 1fr auto auto;
+	grid-template-rows: auto auto;
+	align-items: center;
+	gap: 6px 10px;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.workflow__item:last-child {
+	border-bottom: none;
+}
+
+.workflow__stack-name {
+	grid-column: 1 / -1;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--color-main-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workflow__field {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.workflow__label {
+	font-size: 0.78rem;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.workflow__select {
+	height: 30px;
+	padding: 0 6px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8rem;
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.workflow__select:focus {
+	outline: none;
+	border-color: var(--color-primary);
+}
+
+.workflow__select:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.workflow__wip-input {
+	width: 80px;
+	height: 30px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8rem;
+	transition: border-color 0.15s ease;
+}
+
+.workflow__wip-input:focus {
+	outline: none;
+	border-color: var(--color-primary);
+}
+
+.workflow__wip-input:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+/* Remove browser spin buttons — they are tiny and touch-unfriendly */
+.workflow__wip-input::-webkit-inner-spin-button,
+.workflow__wip-input::-webkit-outer-spin-button {
+	opacity: 0.5;
+}
+
+.workflow__saving {
+	grid-column: 1 / -1;
+	font-size: 0.78rem;
+	color: var(--color-text-maxcontrast);
 }
 </style>

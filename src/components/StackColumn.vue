@@ -11,7 +11,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Column header — drag handle for stack reordering -->
 		<div ref="headerRef" class="stack-column__header">
 			<span class="stack-column__title">{{ stack.title }}</span>
-			<span class="stack-column__badge">{{ cards.length }}</span>
+			<span
+				v-if="stack.role > 0"
+				class="stack-column__role-chip"
+				:class="`stack-column__role-chip--${stack.role}`"
+				:title="roleLabel(stack.role)">
+				{{ roleLabel(stack.role) }}
+			</span>
+			<span
+				class="stack-column__badge"
+				:class="{ 'stack-column__badge--over-limit': isOverLimit }">
+				{{ wipBadgeText }}
+			</span>
 		</div>
 
 		<!-- Inline card composer at TOP — signature rapid-entry UX -->
@@ -119,6 +130,31 @@ const props = defineProps({
 
 const router = useRouter()
 const route = useRoute()
+
+// ── Role + WIP helpers ────────────────────────────────────────────────────────
+const ROLE_LABELS = {
+	1: t('kanso', 'Backlog'),
+	2: t('kanso', 'To do'),
+	3: t('kanso', 'In progress'),
+	4: t('kanso', 'Review'),
+	5: t('kanso', 'Done'),
+}
+
+function roleLabel(role) {
+	return ROLE_LABELS[role] ?? ''
+}
+
+/**
+ * WIP limit is "active" when wipLimit is a positive integer (> 0).
+ * Both null and 0 mean "no limit" per the backend spec.
+ */
+const hasWipLimit = computed(() => typeof props.stack.wipLimit === 'number' && props.stack.wipLimit > 0)
+const isOverLimit = computed(() => hasWipLimit.value && props.cards.length > props.stack.wipLimit)
+
+const wipBadgeText = computed(() => {
+	if (!hasWipLimit.value) return String(props.cards.length)
+	return `${props.cards.length} / ${props.stack.wipLimit}`
+})
 
 const composerInputRef = ref(null)
 const cardListRef = ref(null)
@@ -395,5 +431,60 @@ async function submitCard() {
 .stack-column__empty-placeholder {
 	min-height: 48px;
 	border-radius: var(--border-radius);
+}
+
+/* Role chip */
+.stack-column__role-chip {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 9px;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	/* default neutral style — overridden per-role below */
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+}
+
+/* Backlog — muted */
+.stack-column__role-chip--1 {
+	background: color-mix(in srgb, var(--color-text-maxcontrast) 12%, transparent);
+	color: var(--color-text-maxcontrast);
+}
+
+/* To do — blue tint */
+.stack-column__role-chip--2 {
+	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 15%, transparent);
+	color: var(--color-primary-element, #0082c9);
+}
+
+/* In progress — info/primary */
+.stack-column__role-chip--3 {
+	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 22%, transparent);
+	color: var(--color-primary-element, #0082c9);
+}
+
+/* Review — warning */
+.stack-column__role-chip--4 {
+	background: color-mix(in srgb, var(--color-warning, #eca700) 18%, transparent);
+	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
+}
+
+/* Done — success */
+.stack-column__role-chip--5 {
+	background: color-mix(in srgb, var(--color-success, #46ba61) 18%, transparent);
+	color: color-mix(in srgb, var(--color-success, #46ba61) 85%, var(--color-main-text));
+}
+
+/* WIP badge over-limit warning */
+.stack-column__badge--over-limit {
+	background: color-mix(in srgb, var(--color-warning, #eca700) 25%, transparent);
+	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
+	outline: 1px solid color-mix(in srgb, var(--color-warning, #eca700) 50%, transparent);
 }
 </style>
