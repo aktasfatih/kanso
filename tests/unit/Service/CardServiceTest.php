@@ -61,12 +61,13 @@ class CardServiceTest extends TestCase {
 		return $board;
 	}
 
-	private function stack(int $id = 5, int $boardId = 1): Stack {
+	private function stack(int $id = 5, int $boardId = 1, int $role = Stack::ROLE_NONE): Stack {
 		$stack = new Stack();
 		$stack->setId($id);
 		$stack->setBoardId($boardId);
 		$stack->setTitle('Existing stack');
 		$stack->setSortKey('I');
+		$stack->setRole($role);
 		$stack->setDeletedAt(0);
 		return $stack;
 	}
@@ -387,7 +388,10 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)
 			->willReturn($this->card(9, 5, 1, 'K'));
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->method('findFirstInStack')->with(6)
 			->willReturn($this->card(10, 6, 1, 'I'));
 		$this->cardMapper->expects(self::once())
@@ -413,7 +417,10 @@ class CardServiceTest extends TestCase {
 	public function testMoveToEmptyStackUsesInitialKey(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
 		$this->cardMapper->method('update')->willReturnArgument(0);
 		$this->changeNotifier->method('notify')->willReturn(new Change());
@@ -429,7 +436,10 @@ class CardServiceTest extends TestCase {
 			10 => $this->card(10, 6, 1, 'I'),
 		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->method('findNextInStack')->with(6, 'I')
 			->willReturn($this->card(11, 6, 1, 'J'));
 		$this->cardMapper->expects(self::once())
@@ -454,7 +464,10 @@ class CardServiceTest extends TestCase {
 			10 => $this->card(10, 6, 1, 'J'),
 		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->method('findNextInStack')->with(6, 'J')->willReturn(null);
 		$this->cardMapper->method('update')->willReturnArgument(0);
 		$this->changeNotifier->method('notify')->willReturn(new Change());
@@ -471,7 +484,10 @@ class CardServiceTest extends TestCase {
 			12 => $this->card(12, 5, 1, 'W'),
 		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		// First move sees 'J' as the next card; the second one sees the card
 		// just moved to 'II'.
 		$this->cardMapper->method('findNextInStack')->with(6, 'I')
@@ -511,7 +527,10 @@ class CardServiceTest extends TestCase {
 			10 => $this->card(10, 7, 1, 'I'),
 		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->cardMapper->expects(self::never())->method('update');
 
@@ -538,7 +557,10 @@ class CardServiceTest extends TestCase {
 			10 => $deleted,
 		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->expects(self::never())->method('update');
 
 		$this->expectException(InvalidInputException::class);
@@ -553,7 +575,10 @@ class CardServiceTest extends TestCase {
 			throw new DoesNotExistException('gone');
 		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->expects(self::never())->method('update');
 
 		$this->expectException(InvalidInputException::class);
@@ -578,7 +603,10 @@ class CardServiceTest extends TestCase {
 	public function testMoveRollsBackTransactionOnMapperFailure(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->stackMapper->method('find')->with(6)->willReturn($this->stack(6));
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
 		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
 		$this->cardMapper->method('update')
 			->willThrowException(new \RuntimeException('db gone'));
@@ -589,5 +617,91 @@ class CardServiceTest extends TestCase {
 
 		$this->expectException(\RuntimeException::class);
 		$this->service->move(9, 6, null, 'alice');
+	}
+
+	// ---- move done-automation --------------------------------------------
+
+	public function testMoveIntoDoneStackStampsDoneAtInsideTransaction(): void {
+		// Card 9 lives in a plain stack (5); target stack 6 has the done role.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn (Card $c): bool => $c->getDoneAt() > 0))
+			->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_MOVE, 'alice')
+			->willReturn(new Change());
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertGreaterThan(0, $moved->getDoneAt());
+	}
+
+	public function testMoveIntoDoneStackLeavesAlreadyDoneCardStamp(): void {
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(12345);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(12345, $moved->getDoneAt());
+	}
+
+	public function testMoveOutOfDoneStackClearsDoneAt(): void {
+		// Card 9 sits done in the done-role source stack (5) and moves to a
+		// plain target stack (6).
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(12345);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_DONE),
+			6 => $this->stack(6),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn (Card $c): bool => $c->getDoneAt() === 0))
+			->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(0, $moved->getDoneAt());
+	}
+
+	public function testMoveBetweenNonDoneStacksLeavesDoneAtUntouched(): void {
+		// Neither stack is done-role; a done card keeps its stamp.
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(12345);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(12345, $moved->getDoneAt());
 	}
 }

@@ -69,7 +69,7 @@ class StackControllerTest extends TestCase {
 
 	public function testUpdateReturnsStack(): void {
 		$stack = $this->stack();
-		$this->stackService->method('update')->with(5, 'Renamed', null, 'alice')->willReturn($stack);
+		$this->stackService->method('update')->with(5, 'Renamed', null, null, null, 'alice')->willReturn($stack);
 
 		$response = $this->controller->update(5, 'Renamed');
 		self::assertSame(Http::STATUS_OK, $response->getStatus());

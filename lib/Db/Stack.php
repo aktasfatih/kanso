@@ -24,10 +24,24 @@ use OCP\DB\Types;
  * @method void setSortKey(string $sortKey)
  * @method bool getArchived()
  * @method void setArchived(bool $archived)
+ * @method int getRole()
+ * @method void setRole(int $role)
+ * @method int|null getWipLimit()
+ * @method void setWipLimit(?int $wipLimit)
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
  */
 class Stack extends Entity implements \JsonSerializable {
+	// Workflow roles: a stack's function in the board pipeline. ROLE_DONE is
+	// the one the automation reacts to (moving a card into a done-role stack
+	// stamps done_at); the others are advisory metadata for the client.
+	public const ROLE_NONE = 0;
+	public const ROLE_BACKLOG = 1;
+	public const ROLE_TODO = 2;
+	public const ROLE_IN_PROGRESS = 3;
+	public const ROLE_REVIEW = 4;
+	public const ROLE_DONE = 5;
+
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
 	// explicit sets of that same value out of INSERT statements.
@@ -35,6 +49,8 @@ class Stack extends Entity implements \JsonSerializable {
 	protected ?string $title = null;
 	protected ?string $sortKey = null;
 	protected ?bool $archived = null;
+	protected ?int $role = null;
+	protected ?int $wipLimit = null;
 	protected ?int $deletedAt = null;
 
 	public function __construct() {
@@ -42,11 +58,13 @@ class Stack extends Entity implements \JsonSerializable {
 		$this->addType('title', Types::STRING);
 		$this->addType('sortKey', Types::STRING);
 		$this->addType('archived', Types::BOOLEAN);
+		$this->addType('role', Types::INTEGER);
+		$this->addType('wipLimit', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, boardId: ?int, title: ?string, sortKey: ?string, archived: bool}
+	 * @return array{id: int, boardId: ?int, title: ?string, sortKey: ?string, archived: bool, role: int, wipLimit: ?int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -56,6 +74,8 @@ class Stack extends Entity implements \JsonSerializable {
 			'title' => $this->title,
 			'sortKey' => $this->sortKey,
 			'archived' => $this->archived ?? false,
+			'role' => $this->role ?? self::ROLE_NONE,
+			'wipLimit' => $this->wipLimit,
 		];
 	}
 }

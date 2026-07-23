@@ -144,9 +144,89 @@ class StackServiceTest extends TestCase {
 			)
 			->willReturn(new Change());
 
-		$updated = $this->service->update(5, 'Renamed', true, 'alice');
+		$updated = $this->service->update(5, 'Renamed', true, null, null, 'alice');
 		self::assertSame('Renamed', $updated->getTitle());
 		self::assertTrue($updated->getArchived());
+	}
+
+	public function testUpdateSetsRole(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::once())
+			->method('update')
+			->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_STACK, 5, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(5, null, null, Stack::ROLE_DONE, null, 'alice');
+		self::assertSame(Stack::ROLE_DONE, $updated->getRole());
+	}
+
+	public function testUpdateRejectsOutOfRangeRole(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(5, null, null, 6, null, 'alice');
+	}
+
+	public function testUpdateRejectsNegativeRole(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(5, null, null, -1, null, 'alice');
+	}
+
+	public function testUpdateSetsWipLimit(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(5, null, null, null, 3, 'alice');
+		self::assertSame(3, $updated->getWipLimit());
+	}
+
+	public function testUpdateClearsWipLimitWithZero(): void {
+		$stack = $this->stack();
+		$stack->setWipLimit(5);
+		$this->stackMapper->method('find')->with(5)->willReturn($stack);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(5, null, null, null, 0, 'alice');
+		self::assertSame(0, $updated->getWipLimit());
+	}
+
+	public function testUpdateRejectsNegativeWipLimit(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(5, null, null, null, -2, 'alice');
+	}
+
+	public function testUpdateAssertsEditPermission(): void {
+		$board = $this->board();
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(5, null, null, Stack::ROLE_DONE, null, 'bob');
 	}
 
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {

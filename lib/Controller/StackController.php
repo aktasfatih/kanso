@@ -37,10 +37,16 @@ class StackController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?bool $archived = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $archived): JSONResponse {
+	public function update(
+		int $id,
+		?string $title = null,
+		?bool $archived = null,
+		?int $role = null,
+		?int $wipLimit = null,
+	): JSONResponse {
+		return $this->respond(function () use ($id, $title, $archived, $role, $wipLimit): JSONResponse {
 			return new JSONResponse(
-				$this->stackService->update($id, $title, $archived, $this->currentUserId())
+				$this->stackService->update($id, $title, $archived, $role, $wipLimit, $this->currentUserId())
 			);
 		});
 	}

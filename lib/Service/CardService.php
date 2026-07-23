@@ -209,6 +209,12 @@ class CardService {
 			? null
 			: $this->loadAfterCard($afterCardId, $targetStackId, $id);
 
+		// Source stack role for the done-automation. A move within the same
+		// stack keeps the target's role — done state then stays put.
+		$sourceStack = $targetStackId === $card->getStackId()
+			? $targetStack
+			: $this->stackMapper->find($card->getStackId());
+
 		$this->db->beginTransaction();
 		try {
 			$sortKey = $this->deriveMoveKey($targetStackId, $afterCard);
@@ -217,6 +223,7 @@ class CardService {
 			$card->setStackId($targetStackId);
 			$card->setSortKey($sortKey);
 			$card->setLastModified($now);
+			$this->applyDoneAutomation($card, $sourceStack, $targetStack, $now);
 			$card = $this->cardMapper->update($card);
 
 			$this->changeNotifier->notify(
@@ -234,6 +241,26 @@ class CardService {
 		}
 
 		return $card;
+	}
+
+	/**
+	 * Done-automation for a move: entering a done-role stack stamps the card
+	 * done (once — an already-done card is left alone); leaving a done-role
+	 * stack for a non-done one clears it. The done_at change rides the same
+	 * card UPDATE as the move, so no extra change row is written. Unconditional
+	 * for v1 — a done-role stack stamping done is the expected default.
+	 */
+	private function applyDoneAutomation(Card $card, Stack $sourceStack, Stack $targetStack, int $now): void {
+		$sourceDone = $sourceStack->getRole() === Stack::ROLE_DONE;
+		$targetDone = $targetStack->getRole() === Stack::ROLE_DONE;
+
+		if ($targetDone) {
+			if ($card->getDoneAt() === 0) {
+				$card->setDoneAt($now);
+			}
+		} elseif ($sourceDone) {
+			$card->setDoneAt(0);
+		}
 	}
 
 	/**

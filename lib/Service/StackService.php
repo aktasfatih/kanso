@@ -70,13 +70,23 @@ class StackService {
 	}
 
 	/**
-	 * Updates the given fields (null = leave unchanged).
+	 * Updates the given fields (null = leave unchanged). `role` is one of the
+	 * Stack::ROLE_* constants (moving a card into a done-role stack stamps its
+	 * done_at — see CardService::move); `wipLimit` is a non-negative soft cap
+	 * (null clears it — no server-side enforcement, the client warns).
 	 *
 	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title
+	 * @throws InvalidInputException on invalid title, role or wip limit
 	 */
-	public function update(int $id, ?string $title, ?bool $archived, string $uid): Stack {
+	public function update(
+		int $id,
+		?string $title,
+		?bool $archived,
+		?int $role,
+		?int $wipLimit,
+		string $uid,
+	): Stack {
 		$stack = $this->loadStack($id);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
@@ -86,6 +96,12 @@ class StackService {
 		}
 		if ($archived !== null) {
 			$stack->setArchived($archived);
+		}
+		if ($role !== null) {
+			$stack->setRole($this->validateRole($role));
+		}
+		if ($wipLimit !== null) {
+			$stack->setWipLimit($this->validateWipLimit($wipLimit));
 		}
 
 		$stack = $this->stackMapper->update($stack);
@@ -245,6 +261,28 @@ class StackService {
 			throw new DoesNotExistException('Stack ' . $id . ' is deleted');
 		}
 		return $stack;
+	}
+
+	/**
+	 * @throws InvalidInputException if the role is not one of the Stack::ROLE_* values
+	 */
+	private function validateRole(int $role): int {
+		if ($role < Stack::ROLE_NONE || $role > Stack::ROLE_DONE) {
+			throw new InvalidInputException(
+				'Role must be between ' . Stack::ROLE_NONE . ' and ' . Stack::ROLE_DONE
+			);
+		}
+		return $role;
+	}
+
+	/**
+	 * @throws InvalidInputException if the wip limit is negative
+	 */
+	private function validateWipLimit(int $wipLimit): int {
+		if ($wipLimit < 0) {
+			throw new InvalidInputException('WIP limit must not be negative');
+		}
+		return $wipLimit;
 	}
 
 	/**
