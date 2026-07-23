@@ -47,7 +47,9 @@ class ChangeMapper extends QBMapper {
 	/**
 	 * Highest change id of a board — the board's sync cursor and ETag
 	 * source. 0 for boards without any change rows (which regular flows
-	 * never produce: board creation itself writes the first row).
+	 * never produce: board creation itself writes the first row, and
+	 * pruning always retains each board's newest row — see
+	 * {@see ChangeMapper::findPrunableIds()}).
 	 *
 	 * @throws Exception
 	 */
@@ -62,5 +64,50 @@ class ChangeMapper extends QBMapper {
 		$result->closeCursor();
 
 		return is_numeric($max) ? (int)$max : 0;
+	}
+
+	/**
+	 * Ids of change rows eligible for pruning: older than $olderThan, but
+	 * NEVER a board's newest row — deleting that would regress
+	 * getLatestChangeId() to 0 for idle boards, flipping their ETag to "0"
+	 * and forcing a spurious full refetch on the next poll.
+	 *
+	 * @return int[] at most $limit ids, oldest first
+	 * @throws Exception
+	 */
+	public function findPrunableIds(int $olderThan, int $limit): array {
+		$sub = $this->db->getQueryBuilder();
+		$sub->select($sub->func()->max('id'))
+			->from($this->getTableName())
+			->groupBy('board_id');
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->lt('created_at', $qb->createNamedParameter($olderThan, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->createFunction('id NOT IN (' . $sub->getSQL() . ')'))
+			->orderBy('id', 'ASC')
+			->setMaxResults($limit);
+
+		$result = $qb->executeQuery();
+		$ids = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
+	 * @param int[] $ids
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteByIds(array $ids): int {
+		if ($ids === []) {
+			return 0;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
+		return $qb->executeStatement();
 	}
 }

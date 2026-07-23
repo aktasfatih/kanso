@@ -20,6 +20,9 @@ Early development — not feature complete yet.
 	<dependencies>
 		<nextcloud min-version="30" max-version="32"/>
 	</dependencies>
+	<background-jobs>
+		<job>OCA\Kanso\Cron\PruneChanges</job>
+	</background-jobs>
 	<navigations>
 		<navigation>
 			<name>Kanso</name>
