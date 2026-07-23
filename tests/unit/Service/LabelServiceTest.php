@@ -21,6 +21,7 @@ use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -31,6 +32,7 @@ class LabelServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeMapper&MockObject $changeMapper;
 	private PermissionService&MockObject $permissionService;
+	private IDBConnection&MockObject $db;
 	private LabelService $service;
 
 	protected function setUp(): void {
@@ -41,13 +43,15 @@ class LabelServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeMapper = $this->createMock(ChangeMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new LabelService(
 			$this->labelMapper,
 			$this->cardLabelMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeMapper,
-			$this->permissionService
+			$this->permissionService,
+			$this->db
 		);
 	}
 

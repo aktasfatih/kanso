@@ -17,6 +17,7 @@ use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 
 /**
  * Label CRUD and card assignments. Every mutation appends a row to the
@@ -35,6 +36,7 @@ class LabelService {
 		private BoardMapper $boardMapper,
 		private ChangeMapper $changeMapper,
 		private PermissionService $permissionService,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -113,17 +115,26 @@ class LabelService {
 		$board = $this->loadBoard($label->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$this->cardLabelMapper->deleteByLabel($id);
-		$this->labelMapper->delete($label);
-
-		$this->changeMapper->insertChange(
-			$label->getBoardId(),
-			Change::ENTITY_LABEL,
-			$id,
-			Change::ACTION_DELETE,
-			$uid,
-			time()
-		);
+		// Cascade + label row + change row are one transaction (same convention
+		// as CardService::move): a torn delete would leave orphaned assignment
+		// rows reappearing in labelIds, or a deletion invisible to the ETag.
+		$this->db->beginTransaction();
+		try {
+			$this->cardLabelMapper->deleteByLabel($id);
+			$this->labelMapper->delete($label);
+			$this->changeMapper->insertChange(
+				$label->getBoardId(),
+				Change::ENTITY_LABEL,
+				$id,
+				Change::ACTION_DELETE,
+				$uid,
+				time()
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 	}
 
 	/**

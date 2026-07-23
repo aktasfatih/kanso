@@ -47,3 +47,19 @@ export const deleteCard = (id) =>
 
 export const moveCard = (id, data) =>
 	axios.post(url(`/api/cards/${id}/move`), data).then((r) => r.data)
+
+// Labels
+export const createLabel = (data) =>
+	axios.post(url('/api/labels'), data).then((r) => r.data)
+
+export const updateLabel = (id, data) =>
+	axios.patch(url(`/api/labels/${id}`), data).then((r) => r.data)
+
+export const deleteLabel = (id) =>
+	axios.delete(url(`/api/labels/${id}`)).then((r) => r.data)
+
+export const assignLabel = (cardId, labelId) =>
+	axios.put(url(`/api/cards/${cardId}/labels/${labelId}`)).then((r) => r.data)
+
+export const unassignLabel = (cardId, labelId) =>
+	axios.delete(url(`/api/cards/${cardId}/labels/${labelId}`)).then((r) => r.data)

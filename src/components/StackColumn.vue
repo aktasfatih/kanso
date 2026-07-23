@@ -29,6 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-for="card in cards"
 				:key="card.id"
 				:card="card"
+				:labels-by-id="labelsById"
 				@click="openCard(card.id)" />
 			<!-- Empty stack placeholder so empty columns are droppable -->
 			<div v-if="cards.length === 0" class="stack-column__empty-placeholder" />
@@ -58,6 +59,11 @@ const props = defineProps({
 	onCreateCard: {
 		type: Function,
 		required: true,
+	},
+	/** Map<labelId, label> from the board payload — passed down from BoardView */
+	labelsById: {
+		type: Map,
+		default: () => new Map(),
 	},
 })
 

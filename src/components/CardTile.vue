@@ -8,6 +8,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div v-if="closestEdge === 'top'" class="card-tile__drop-line card-tile__drop-line--top" />
 
 		<button ref="el" class="card-tile" @click="$emit('click')">
+			<!-- Label chips row — only rendered when the card has assigned labels -->
+			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
+				<span
+					v-for="label in cardLabels"
+					:key="label.id"
+					class="card-tile__label-chip"
+					:class="{ 'card-tile__label-chip--no-color': !label.color }"
+					:style="label.color ? { background: cssColor(label.color), color: readableColor(label.color) } : {}"
+					:title="label.title">
+					{{ label.title }}
+				</span>
+			</div>
 			<span class="card-tile__title">{{ card.title }}</span>
 			<span
 				v-if="card.duedate"
@@ -26,14 +38,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+
+/**
+ * Given a hex background color return '#000' or '#fff' for readable contrast.
+ * Uses the W3C relative luminance formula (sRGB).
+ */
+function readableColor(hex) {
+	if (!hex) return '#000'
+	const raw = hex.replace('#', '')
+	const [r, g, b] = raw.length === 3
+		? [parseInt(raw[0] + raw[0], 16), parseInt(raw[1] + raw[1], 16), parseInt(raw[2] + raw[2], 16)]
+		: [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)]
+	const toLinear = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4) }
+	const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
+	return L > 0.179 ? '#000000' : '#ffffff'
+}
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
+import { cssColor } from '../services/color.js'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 
 const props = defineProps({
 	card: {
 		type: Object,
 		required: true,
+	},
+	labelsById: {
+		type: Map,
+		default: () => new Map(),
 	},
 })
 
@@ -76,6 +108,12 @@ onMounted(() => {
 
 onUnmounted(() => {
 	cleanup()
+})
+
+// Resolve label objects from the labelsById map for the card's assigned labelIds
+const cardLabels = computed(() => {
+	const ids = Array.isArray(props.card.labelIds) ? props.card.labelIds : []
+	return ids.map((id) => props.labelsById.get(id)).filter(Boolean)
 })
 
 const dueDateClass = computed(() => {
@@ -176,5 +214,34 @@ function formatDue(iso) {
 	color: var(--color-warning, #f0a844);
 	border-color: var(--color-warning, #f0a844);
 	background: rgba(240, 168, 68, 0.08);
+}
+
+/* Label chips */
+.card-tile__labels {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 2px;
+}
+
+.card-tile__label-chip {
+	display: inline-block;
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.7rem;
+	font-weight: 600;
+	line-height: 1;
+	padding: 3px 7px;
+	border-radius: 10px;
+	letter-spacing: 0.02em;
+	user-select: none;
+}
+
+.card-tile__label-chip--no-color {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
 }
 </style>

@@ -50,6 +50,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span :class="dueDateClass">{{ formatDue(cardData.duedate) }}</span>
 				</div>
 
+				<!-- Labels section -->
+				<div class="card-modal__labels-section">
+					<label class="card-modal__label">{{ t('kanso', 'Labels') }}</label>
+					<div
+						v-if="boardLabels.length === 0"
+						class="card-modal__labels-empty">
+						{{ t('kanso', 'No labels on this board yet.') }}
+					</div>
+					<div v-else class="card-modal__label-chips" role="group" :aria-label="t('kanso', 'Toggle labels')">
+						<button
+							v-for="label in boardLabels"
+							:key="label.id"
+							class="card-modal__label-chip"
+							:class="{
+								'card-modal__label-chip--assigned': cardLabelIds.has(label.id),
+								'card-modal__label-chip--no-color': !label.color,
+							}"
+							:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
+							:aria-pressed="cardLabelIds.has(label.id)"
+							:disabled="toggleLabel.isPending.value"
+							@click="handleToggleLabel(label)">
+							{{ label.title }}
+						</button>
+					</div>
+					<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
+				</div>
+
 				<!-- Description -->
 				<div class="card-modal__description-section">
 					<label class="card-modal__label">{{ t('kanso', 'Description') }}</label>
@@ -92,7 +119,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcModal from '@nextcloud/vue/components/NcModal'
@@ -100,6 +127,9 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import { useCard } from '../composables/useCard.js'
+import { useBoard } from '../composables/useBoard.js'
+import { useLabels } from '../composables/useLabels.js'
+import { cssColor } from '../services/color.js'
 
 const props = defineProps({
 	cardId: {
@@ -111,12 +141,45 @@ const props = defineProps({
 const router = useRouter()
 const route = useRoute()
 
+// Board id from route params — modal is a child route of /boards/:id
+const boardId = computed(() => route.params.id)
+
 // Modal is open when this component is mounted — enabled is always true here
 const isOpen = ref(true)
 const { data: cardData, isLoading, isError, updateCard } = useCard(
 	computed(() => props.cardId),
 	isOpen,
 )
+
+// Read board data from cache (same queryKey as BoardView — no extra request).
+// The board query is already mounted and live in BoardView; this just taps the
+// TanStack Query cache so we get labels without prop drilling.
+const { data: boardData } = useBoard(boardId)
+const boardLabels = computed(() => boardData.value?.labels ?? [])
+
+// Current card's assigned label ids as a Set for O(1) .has() in the template
+const cardLabelIds = computed(() => {
+	const ids = Array.isArray(cardData.value?.labelIds) ? cardData.value.labelIds : []
+	return new Set(ids)
+})
+
+// Label toggle mutation
+const { toggleLabel } = useLabels(boardId)
+const labelToggleError = ref('')
+
+async function handleToggleLabel(label) {
+	const assign = !cardLabelIds.value.has(label.id)
+	labelToggleError.value = ''
+	try {
+		await toggleLabel.mutateAsync({
+			cardId: Number(props.cardId),
+			labelId: label.id,
+			assign,
+		})
+	} catch (err) {
+		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
+	}
+}
 
 const cardTitle = computed(() => cardData.value?.title || t('kanso', 'Card'))
 
@@ -326,6 +389,68 @@ function closeModal() {
 .card-modal__due--soon {
 	color: var(--color-warning, #f0a844);
 	font-weight: 600;
+}
+
+/* Labels */
+.card-modal__labels-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 20px;
+}
+
+.card-modal__labels-empty {
+	font-size: 0.875rem;
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
+}
+
+.card-modal__label-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.card-modal__label-chip {
+	display: inline-flex;
+	align-items: center;
+	height: 28px;
+	padding: 0 12px;
+	border-radius: 14px;
+	border: 2px solid var(--label-color, var(--color-border));
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease, opacity 0.1s ease;
+	white-space: nowrap;
+}
+
+.card-modal__label-chip:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--label-color, var(--color-primary)) 15%, transparent);
+}
+
+.card-modal__label-chip--assigned {
+	background: var(--label-color, var(--color-primary));
+	border-color: var(--label-color, var(--color-primary));
+	color: #fff;
+}
+
+.card-modal__label-chip--no-color {
+	border-color: var(--color-border);
+	color: var(--color-main-text);
+}
+
+.card-modal__label-chip--no-color.card-modal__label-chip--assigned {
+	background: var(--color-background-dark);
+	border-color: var(--color-border);
+	color: var(--color-main-text);
+}
+
+.card-modal__label-chip:disabled {
+	opacity: 0.6;
+	cursor: default;
 }
 
 /* Description */
