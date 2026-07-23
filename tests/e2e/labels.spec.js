@@ -93,8 +93,13 @@ test.describe('Labels', () => {
 		const label = boardPayload.labels.find((l) => l.title === 'ColoredE2E')
 		expect(label?.color).toBe('e74c3c')
 
-		// Filter chip in the header exists for it
+		// Filter button is visible in the header now that the board has a label
 		await page.keyboard.press('Escape')
-		await expect(page.locator('.board-view__filter-chip', { hasText: 'ColoredE2E' })).toHaveCount(1)
+		const filterBtn = page.locator('.board-view__filter-menu button', { hasText: /filter/i })
+		await expect(filterBtn).toHaveCount(1)
+
+		// Opening the filter menu shows a checkbox row for the new label
+		await filterBtn.click()
+		await expect(page.locator('.board-view__filter-label-item .action-checkbox__text', { hasText: 'ColoredE2E' })).toHaveCount(1)
 	})
 })

@@ -21,26 +21,48 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</h1>
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
-			<!-- Label filter chips — rendered after board loads -->
-			<div v-if="boardData && boardLabels.length" class="board-view__label-filter" role="group" :aria-label="t('kanso', 'Filter by label')">
-				<button
+			<!-- Filter dropdown — compact NcActions menu replacing the old chip row.
+			     Only rendered when the board has at least one label.
+			     Future filter dimensions (assignee, due date, priority) can be
+			     added as additional NcActionCheckbox sections inside this same
+			     NcActions menu; keep label items as the first section. -->
+			<NcActions
+				v-if="boardData && boardLabels.length"
+				class="board-view__filter-menu"
+				:aria-label="t('kanso', 'Filter cards')"
+				:menu-name="activeFilterIds.size > 0
+					? t('kanso', 'Filter · {count}', { count: activeFilterIds.size })
+					: t('kanso', 'Filter')"
+				:primary="activeFilterIds.size > 0">
+				<template #icon>
+					<FilterVariantIcon :size="20" />
+				</template>
+
+				<!-- ── Label filter section ───────────────────────────────────────
+				     One NcActionCheckbox per board label.
+				     NcActionCheckbox (NC Vue 9) reads the default slot as plain text
+				     via ActionGlobalMixin.getText(); a wrapper span would be silently
+				     dropped. The color dot is therefore injected via a CSS custom
+				     property (--filter-dot-color) set on the root li element and a
+				     :deep(::before) pseudo-element that draws the circle. -->
+				<NcActionCheckbox
 					v-for="label in boardLabels"
 					:key="label.id"
-					class="board-view__filter-chip"
-					:class="{ 'board-view__filter-chip--active': activeFilterIds.has(label.id) }"
-					:style="label.color ? { '--chip-color': cssColor(label.color) } : {}"
-					:aria-pressed="activeFilterIds.has(label.id)"
-					@click="toggleFilterLabel(label.id)">
-					{{ label.title }}
-				</button>
-				<button
+					class="board-view__filter-label-item"
+					:style="label.color ? { '--filter-dot-color': '#' + label.color } : { '--filter-dot-color': 'var(--color-border)' }"
+					:model-value="activeFilterIds.has(label.id)"
+					@update:model-value="toggleFilterLabel(label.id)">{{ label.title }}</NcActionCheckbox>
+
+				<!-- ── Clear action (hidden when no filters active) ───────────── -->
+				<NcActionButton
 					v-if="activeFilterIds.size > 0"
-					class="board-view__filter-clear"
-					:aria-label="t('kanso', 'Clear label filter')"
 					@click="activeFilterIds.clear()">
-					{{ t('kanso', 'Clear') }}
-				</button>
-			</div>
+					<template #icon>
+						<FilterVariantRemoveIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Clear filters') }}
+				</NcActionButton>
+			</NcActions>
 
 			<!-- Archived cards badge button — only shown when ≥1 archived card -->
 			<NcButton
@@ -187,9 +209,14 @@ import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
+import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
+import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ArchivedPanel from '../components/ArchivedPanel.vue'
@@ -774,55 +801,31 @@ async function handleCreateCard(stackId, title) {
 	border-radius: 4px;
 }
 
-/* Label filter chips */
-.board-view__label-filter {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex-wrap: wrap;
+/* Filter dropdown button — sits in the header, pushed right via margin-left: auto */
+.board-view__filter-menu {
 	margin-left: auto;
+	flex-shrink: 0;
 }
 
-.board-view__filter-chip {
-	display: inline-flex;
-	align-items: center;
-	height: 26px;
-	padding: 0 10px;
-	border-radius: 13px;
-	border: 2px solid var(--chip-color, var(--color-border));
-	background: transparent;
-	color: var(--color-main-text);
-	font-size: 0.75rem;
-	font-weight: 600;
-	cursor: pointer;
-	transition: background 0.15s ease, color 0.15s ease;
-	white-space: nowrap;
-}
+/* Color dot injected as a ::before pseudo-element on the NcActionCheckbox text span.
+   NcActionCheckbox (NC Vue 9) only accepts plain text in its default slot (the slot
+   content is extracted with getText() as a string); rich HTML is silently dropped.
+   Instead we set --filter-dot-color on each NcActionCheckbox root and draw the dot
+   via :deep() targeting the inner .action-checkbox__text span.
 
-.board-view__filter-chip:hover {
-	background: color-mix(in srgb, var(--chip-color, var(--color-primary)) 15%, transparent);
-}
-
-.board-view__filter-chip--active {
-	background: var(--chip-color, var(--color-primary));
-	color: #fff;
-	border-color: var(--chip-color, var(--color-primary));
-}
-
-.board-view__filter-clear {
-	height: 26px;
-	padding: 0 10px;
-	border-radius: 13px;
-	border: 1px solid var(--color-border);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.75rem;
-	cursor: pointer;
-	transition: color 0.15s ease;
-}
-
-.board-view__filter-clear:hover {
-	color: var(--color-main-text);
+   The dot is a true circle: width == height, border-radius:50%, flex-shrink is N/A
+   because it uses display:inline-block with explicit fixed dimensions. */
+.board-view__filter-label-item:deep(.action-checkbox__text)::before {
+	content: '';
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	background: var(--filter-dot-color, var(--color-border));
+	margin-right: 6px;
+	vertical-align: middle;
+	flex-shrink: 0;
 }
 
 /* Settings gear button */
