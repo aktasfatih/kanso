@@ -158,6 +158,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([3 => [7]]);
 		$this->cardAssigneeMapper->method('findUserIdsByBoard')->with(1)->willReturn([3 => ['bob']]);
 		$this->checklistItemMapper->method('progressByBoard')->with(1)->willReturn([3 => ['total' => 4, 'done' => 1]]);
+		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
 
 		$acl = new Acl();
 		$acl->setId(40);
@@ -189,6 +190,9 @@ class BoardControllerTest extends TestCase {
 		self::assertSame([], $data['cards'][1]['assigneeIds']);
 		self::assertSame(['total' => 4, 'done' => 1], $data['cards'][0]['checklist']);
 		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['checklist']);
+		self::assertSame(['total' => 2, 'done' => 1], $data['cards'][0]['childProgress']);
+		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['childProgress']);
+		self::assertNull($data['cards'][0]['parentCardId']);
 		self::assertArrayNotHasKey('description', $data['cards'][0]);
 	}
 

@@ -89,6 +89,7 @@ class BoardController extends Controller {
 			$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($id);
 			$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($id);
 			$checklistByCard = $this->checklistItemMapper->progressByBoard($id);
+			$childProgressByCard = $this->cardMapper->childProgressByBoard($id);
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
@@ -96,7 +97,8 @@ class BoardController extends Controller {
 					static fn (Card $card): array => $card->jsonSerializeSummary()
 						+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
 						+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
-						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]],
+						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+						+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]],
 					$this->cardMapper->findSummariesByBoard($id)
 				),
 				'labels' => $this->labelMapper->findByBoard($id),

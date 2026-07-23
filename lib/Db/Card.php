@@ -43,6 +43,8 @@ use OCP\DB\Types;
  * @method void setLastModified(int $lastModified)
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
+ * @method int|null getParentCardId()
+ * @method void setParentCardId(?int $parentCardId)
  */
 class Card extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -60,6 +62,7 @@ class Card extends Entity implements \JsonSerializable {
 	protected ?int $createdAt = null;
 	protected ?int $lastModified = null;
 	protected ?int $deletedAt = null;
+	protected ?int $parentCardId = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -74,13 +77,14 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
+		$this->addType('parentCardId', Types::INTEGER);
 	}
 
 	/**
 	 * Summary payload for board/stack listings — deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -95,6 +99,7 @@ class Card extends Entity implements \JsonSerializable {
 			'owner' => $this->owner,
 			'createdAt' => $this->createdAt ?? 0,
 			'lastModified' => $this->lastModified ?? 0,
+			'parentCardId' => $this->parentCardId,
 		];
 	}
 

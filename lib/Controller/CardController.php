@@ -7,8 +7,10 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Service\AssigneeService;
@@ -16,6 +18,7 @@ use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
@@ -39,6 +42,7 @@ class CardController extends Controller {
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private ChecklistItemMapper $checklistItemMapper,
+		private CardMapper $cardMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -56,18 +60,62 @@ class CardController extends Controller {
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
 			$card = $this->cardService->find($id, $this->currentUserId());
-			$checklistItems = $this->checklistItemMapper->findByCard($id);
-			$checklistDone = count(array_filter(
-				$checklistItems,
-				static fn (ChecklistItem $item): bool => $item->getDone()
-			));
-			return new JSONResponse(
-				$card->jsonSerialize()
-				+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
-				+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
-				+ ['checklistItems' => $checklistItems]
-				+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
-			);
+			return new JSONResponse($this->detailPayload($card));
+		});
+	}
+
+	/**
+	 * Full single-card detail payload (description + labels + assignees +
+	 * checklist + parent/children). Shared by show() and setParent() so both
+	 * return the identical shape. Takes a fully-hydrated Card (from
+	 * CardService::find or ::setParent, both of which load the description).
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function detailPayload(Card $card): array {
+		$id = $card->getId();
+		$checklistItems = $this->checklistItemMapper->findByCard($id);
+		$checklistDone = count(array_filter(
+			$checklistItems,
+			static fn (ChecklistItem $item): bool => $item->getDone()
+		));
+
+		$parentId = $card->getParentCardId();
+		$parent = null;
+		if ($parentId !== null) {
+			try {
+				$parentCard = $this->cardMapper->find($parentId);
+				if ($parentCard->getDeletedAt() === 0) {
+					$parent = $parentCard->jsonSerializeSummary();
+				}
+			} catch (DoesNotExistException) {
+				$parent = null;
+			}
+		}
+		$children = array_map(
+			static fn (Card $child): array => $child->jsonSerializeSummary(),
+			$this->cardMapper->findChildren($id)
+		);
+
+		return $card->jsonSerialize()
+			+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
+			+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
+			+ ['checklistItems' => $checklistItems]
+			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
+			+ ['parent' => $parent]
+			+ ['children' => $children];
+	}
+
+	/**
+	 * Sets ($parentCardId given) or clears ($parentCardId null) the card's
+	 * parent. One level, same board — invalid requests surface as 400 via
+	 * ApiErrorTrait. Returns the updated full card detail.
+	 */
+	#[NoAdminRequired]
+	public function setParent(int $id, ?int $parentCardId = null): JSONResponse {
+		return $this->respond(function () use ($id, $parentCardId): JSONResponse {
+			$card = $this->cardService->setParent($id, $parentCardId, $this->currentUserId());
+			return new JSONResponse($this->detailPayload($card));
 		});
 	}
 

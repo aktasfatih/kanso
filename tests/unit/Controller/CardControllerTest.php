@@ -11,6 +11,7 @@ use OCA\Kanso\Controller\CardController;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardService;
@@ -32,6 +33,7 @@ class CardControllerTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
+	private CardMapper&MockObject $cardMapper;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -44,6 +46,7 @@ class CardControllerTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
+		$this->cardMapper = $this->createMock(CardMapper::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -58,7 +61,8 @@ class CardControllerTest extends TestCase {
 			$this->assigneeService,
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
-			$this->checklistItemMapper
+			$this->checklistItemMapper,
+			$this->cardMapper
 		);
 	}
 

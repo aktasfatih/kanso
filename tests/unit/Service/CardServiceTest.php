@@ -704,4 +704,200 @@ class CardServiceTest extends TestCase {
 		$moved = $this->service->move(9, 6, null, 'alice');
 		self::assertSame(12345, $moved->getDoneAt());
 	}
+
+	// ---- setParent --------------------------------------------------------
+
+	public function testSetParentLinksChildAndWritesCardChangeRow(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with(self::anything(), 'alice', PermissionService::PERMISSION_EDIT);
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Card $c): Card {
+				self::assertSame(20, $c->getParentCardId());
+				return $c;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$result = $this->service->setParent(9, 20, 'alice');
+		self::assertSame(20, $result->getParentCardId());
+	}
+
+	public function testSetParentClearsParentAndWritesChangeRow(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setParentCardId(20);
+		$this->cardMapper->method('find')->with(9)->willReturn($child);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Card $c): Card {
+				self::assertNull($c->getParentCardId());
+				return $c;
+			});
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$this->service->setParent(9, null, 'alice');
+	}
+
+	public function testSetParentClearingAlreadyUnparentedIsNoOp(): void {
+		$child = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($child);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->service->setParent(9, null, 'alice');
+	}
+
+	public function testSetParentToSameParentIsNoOp(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setParentCardId(20);
+		$parent = $this->card(20, 5, 1);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	public function testSetParentRejectsSelfParent(): void {
+		$child = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($child);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->setParent(9, 9, 'alice');
+	}
+
+	public function testSetParentRejectsParentOnAnotherBoard(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 8, 2); // board 2
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('same board');
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	public function testSetParentRejectsGrandparentDepth(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$parent->setParentCardId(30); // the chosen parent is itself a child
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('one level');
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	public function testSetParentRejectsWhenChildAlreadyHasChildren(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(true);
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('has children');
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	public function testSetParentRejectsMissingParentAsInvalidInput(): void {
+		$child = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id): Card {
+			if ($id === 9) {
+				return $this->card(9, 5, 1);
+			}
+			throw new DoesNotExistException('gone');
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->setParent(9, 999, 'alice');
+	}
+
+	public function testSetParentAssertsActorEditPermission(): void {
+		$child = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($child);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with(self::anything(), 'mallory', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setParent(9, 20, 'mallory');
+	}
+
+	public function testSetParentRejectsDeletedCard(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setDeletedAt(999);
+		$this->cardMapper->method('find')->with(9)->willReturn($child);
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	// ---- delete detaches children -----------------------------------------
+
+	public function testDeleteDetachesChildrenBeforeSoftDeletingParent(): void {
+		$parent = $this->card(9, 5, 1);
+		$childA = $this->card(11, 5, 1);
+		$childA->setParentCardId(9);
+		$childB = $this->card(12, 5, 1);
+		$childB->setParentCardId(9);
+
+		$this->cardMapper->method('find')->with(9)->willReturn($parent);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(9)->willReturn([$childA, $childB]);
+
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[$c->getId()] = $c;
+			return $c;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->delete(9, 'alice');
+
+		// Both children were detached...
+		self::assertNull($updated[11]->getParentCardId());
+		self::assertNull($updated[12]->getParentCardId());
+		// ...and the parent itself was soft-deleted.
+		self::assertGreaterThan(0, $updated[9]->getDeletedAt());
+	}
 }

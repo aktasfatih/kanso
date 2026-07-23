@@ -33,6 +33,7 @@ return [
 		['name' => 'card#update', 'url' => '/api/cards/{id}', 'verb' => 'PATCH'],
 		['name' => 'card#destroy', 'url' => '/api/cards/{id}', 'verb' => 'DELETE'],
 		['name' => 'card#move', 'url' => '/api/cards/{id}/move', 'verb' => 'POST'],
+		['name' => 'card#setParent', 'url' => '/api/cards/{id}/parent', 'verb' => 'PUT'],
 		['name' => 'card#assignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'DELETE'],
 		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],

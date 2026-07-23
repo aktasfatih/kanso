@@ -122,6 +122,10 @@ export const deleteRecurRule = (id) =>
 export const createNowRecurRule = (id) =>
 	axios.post(url(`/api/recur-rules/${id}/create-now`)).then((r) => r.data)
 
+// Parent / child hierarchy
+export const setCardParent = (cardId, parentCardId) =>
+	axios.put(url(`/api/cards/${cardId}/parent`), { parentCardId: parentCardId ?? null }).then((r) => r.data)
+
 // Checklist
 export const fetchChecklist = (cardId) =>
 	axios.get(url(`/api/cards/${cardId}/checklist`)).then((r) => r.data)

@@ -123,6 +123,85 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 				</div>
 
+				<!-- Hierarchy section: parent OR children (mutually exclusive per one-level rule) -->
+				<!-- Case 1: this card HAS a parent — show parent link + detach button -->
+				<div v-if="cardData.parentCardId" class="card-modal__hierarchy-section">
+					<div class="card-modal__hierarchy-header">
+						<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
+						<label class="card-modal__label">{{ t('kanso', 'Parent card') }}</label>
+					</div>
+					<div class="card-modal__parent-row">
+						<button
+							class="card-modal__parent-link"
+							@click="openCard(cardData.parentCardId)">
+							{{ parentTitle }}
+						</button>
+						<button
+							class="card-modal__hierarchy-detach"
+							:title="t('kanso', 'Detach from parent')"
+							:disabled="setParentMutation.isPending.value"
+							@click="handleClearParent">
+							<LinkOffIcon :size="14" />
+							{{ t('kanso', 'Detach') }}
+						</button>
+					</div>
+					<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
+				</div>
+
+				<!-- Case 2: this card has NO parent — show sub-cards section -->
+				<div v-else class="card-modal__hierarchy-section">
+					<div class="card-modal__hierarchy-header">
+						<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
+						<label class="card-modal__label">{{ t('kanso', 'Sub-cards') }}</label>
+						<span v-if="children.length > 0" class="card-modal__hierarchy-progress-text">
+							{{ childrenDone }}/{{ children.length }}
+						</span>
+					</div>
+
+					<!-- Children list -->
+					<ul v-if="children.length > 0" class="card-modal__children-list">
+						<li
+							v-for="child in children"
+							:key="child.id"
+							class="card-modal__child-item"
+							:class="{ 'card-modal__child-item--done': Number(child.doneAt) > 0 }">
+							<!-- Done indicator -->
+							<span
+								class="card-modal__child-done-dot"
+								:class="{ 'card-modal__child-done-dot--done': Number(child.doneAt) > 0 }"
+								:title="Number(child.doneAt) > 0 ? t('kanso', 'Done') : t('kanso', 'Not done')" />
+							<!-- Title link -->
+							<button
+								class="card-modal__child-link"
+								:class="{ 'card-modal__child-link--done': Number(child.doneAt) > 0 }"
+								@click="openCard(child.id)">
+								{{ child.title }}
+							</button>
+							<!-- Detach (remove) button -->
+							<button
+								class="card-modal__child-remove"
+								:title="t('kanso', 'Detach sub-card')"
+								:disabled="setParentMutation.isPending.value"
+								@click="handleDetachChild(child)">
+								<CloseIcon :size="12" />
+							</button>
+						</li>
+					</ul>
+
+					<!-- Add sub-card input -->
+					<div class="card-modal__add-child-row">
+						<input
+							ref="addChildInputRef"
+							v-model="newChildTitle"
+							class="card-modal__add-child-input"
+							type="text"
+							:placeholder="t('kanso', 'Add a sub-card…')"
+							:disabled="addChildMutation.isPending.value"
+							@keydown.enter.prevent="handleAddChild" />
+					</div>
+					<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
+				</div>
+
 				<!-- Labels section -->
 				<div class="card-modal__labels-section">
 					<label class="card-modal__label">{{ t('kanso', 'Labels') }}</label>
@@ -367,12 +446,15 @@ import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOutline.vue'
 import DragIcon from 'vue-material-design-icons/Drag.vue'
+import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
+import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import { useCard } from '../composables/useCard.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
+import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -797,6 +879,77 @@ async function onItemDrop(event, targetItem) {
 function closeModal() {
 	isOpen.value = false
 	router.push({ name: 'board', params: { id: route.params.id } })
+}
+
+// ── Card hierarchy (parent / sub-cards) ─────────────────────────────────────
+const { setParent, clearParent, addChild, setParentMutation, addChildMutation } =
+	useCardHierarchy(boardId)
+
+const hierarchyError = ref('')
+const newChildTitle = ref('')
+const addChildInputRef = ref(null)
+
+// Children list from card detail (summary objects with id, title, doneAt, stackId, archived)
+const children = computed(() =>
+	Array.isArray(cardData.value?.children) ? cardData.value.children : [],
+)
+
+const childrenDone = computed(() =>
+	children.value.filter((c) => Number(c.doneAt) > 0).length,
+)
+
+// Parent title: look up the parent's title from the board cache (fast path),
+// falling back to a generic label so we never render an undefined value.
+const parentTitle = computed(() => {
+	const parentId = cardData.value?.parentCardId
+	if (!parentId) return ''
+	const boardCards = boardData.value?.cards ?? []
+	const parentCard = boardCards.find((c) => c.id === Number(parentId))
+	return parentCard?.title || t('kanso', 'Parent card')
+})
+
+/**
+ * Navigate to another card modal within the same board.
+ */
+function openCard(cardId) {
+	router.push({ name: 'card-modal', params: { id: route.params.id, cardId: String(cardId) } })
+}
+
+async function handleClearParent() {
+	hierarchyError.value = ''
+	const currentParentId = cardData.value?.parentCardId ?? null
+	try {
+		await clearParent(Number(props.cardId), currentParentId ? Number(currentParentId) : null)
+	} catch (err) {
+		hierarchyError.value = err?.response?.data?.error || t('kanso', 'Failed to detach from parent.')
+	}
+}
+
+async function handleDetachChild(child) {
+	hierarchyError.value = ''
+	try {
+		await clearParent(Number(child.id), Number(props.cardId))
+	} catch (err) {
+		hierarchyError.value = err?.response?.data?.error || t('kanso', 'Failed to detach sub-card.')
+	}
+}
+
+async function handleAddChild() {
+	const title = newChildTitle.value.trim()
+	if (!title) return
+	hierarchyError.value = ''
+	newChildTitle.value = ''
+	try {
+		await addChild(
+			{ id: Number(props.cardId), stackId: cardData.value?.stackId },
+			title,
+		)
+	} catch (err) {
+		hierarchyError.value = err?.response?.data?.error || t('kanso', 'Failed to add sub-card.')
+	}
+	// Keep focus for rapid entry
+	await nextTick()
+	addChildInputRef.value?.focus()
 }
 </script>
 
@@ -1569,6 +1722,224 @@ function closeModal() {
 }
 
 .card-modal__checklist-add-input:disabled {
+	opacity: 0.5;
+}
+
+/* ── Hierarchy (parent / sub-cards) ───────────────────────────────────────── */
+.card-modal__hierarchy-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 16px;
+	margin-bottom: 8px;
+}
+
+.card-modal__hierarchy-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.card-modal__hierarchy-icon {
+	color: var(--color-text-maxcontrast);
+	flex-shrink: 0;
+}
+
+.card-modal__hierarchy-progress-text {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	margin-left: auto;
+}
+
+/* Parent row */
+.card-modal__parent-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.card-modal__parent-link {
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+	background: var(--color-background-dark);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	padding: 5px 10px;
+	font-size: 0.875rem;
+	color: var(--color-primary-element);
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.card-modal__parent-link:hover {
+	border-color: var(--color-primary);
+	color: var(--color-primary);
+}
+
+.card-modal__hierarchy-detach {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	height: 30px;
+	padding: 0 10px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8rem;
+	cursor: pointer;
+	transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.card-modal__hierarchy-detach:hover:not(:disabled) {
+	border-color: var(--color-error);
+	color: var(--color-error);
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.06);
+}
+
+.card-modal__hierarchy-detach:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Children list */
+.card-modal__children-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.card-modal__child-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border-radius: var(--border-radius);
+	transition: background 0.1s ease;
+}
+
+.card-modal__child-item:hover {
+	background: var(--color-background-hover);
+}
+
+/* Done dot indicator */
+.card-modal__child-done-dot {
+	flex-shrink: 0;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 2px solid var(--color-border);
+	background: transparent;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.card-modal__child-done-dot--done {
+	background: var(--color-success, #46ba61);
+	border-color: var(--color-success, #46ba61);
+}
+
+.card-modal__child-link {
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+	background: transparent;
+	border: none;
+	padding: 0;
+	font-size: 0.875rem;
+	color: var(--color-primary-element);
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	transition: color 0.15s ease;
+}
+
+.card-modal__child-link:hover {
+	color: var(--color-primary);
+	text-decoration: underline;
+}
+
+.card-modal__child-link--done {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__child-link--done:hover {
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__child-remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	padding: 0;
+	opacity: 0;
+	transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.card-modal__child-item:hover .card-modal__child-remove {
+	opacity: 1;
+}
+
+.card-modal__child-remove:hover:not(:disabled) {
+	background: var(--color-error);
+	color: #fff;
+}
+
+.card-modal__child-remove:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Add sub-card input row */
+.card-modal__add-child-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 2px;
+	padding: 2px 6px;
+}
+
+.card-modal__add-child-input {
+	flex: 1;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	border: 1px dashed var(--color-border);
+	border-radius: var(--border-radius);
+	padding: 5px 10px;
+	background: transparent;
+	font-family: inherit;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card-modal__add-child-input::placeholder {
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__add-child-input:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	background: var(--color-main-background);
+}
+
+.card-modal__add-child-input:disabled {
 	opacity: 0.5;
 }
 </style>

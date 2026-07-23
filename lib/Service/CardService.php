@@ -155,7 +155,11 @@ class CardService {
 	}
 
 	/**
-	 * Soft-deletes the card (sets deleted_at).
+	 * Soft-deletes the card (sets deleted_at). Any children are first detached
+	 * (parent_card_id cleared) so no live card is left pointing at a hidden
+	 * parent — the one-level hierarchy stays self-healing. The parent's DELETE
+	 * change row bumps the board ETag, so clients refetch and see the detached
+	 * children; the per-child clears ride along without their own change rows.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
@@ -166,6 +170,13 @@ class CardService {
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 
 		$now = time();
+
+		foreach ($this->cardMapper->findChildren($id) as $child) {
+			$child->setParentCardId(null);
+			$child->setLastModified($now);
+			$this->cardMapper->update($child);
+		}
+
 		$card->setDeletedAt($now);
 		$card->setLastModified($now);
 		$this->cardMapper->update($card);
@@ -241,6 +252,88 @@ class CardService {
 		}
 
 		return $card;
+	}
+
+	/**
+	 * Sets ($parentCardId given) or clears ($parentCardId null) the card's
+	 * parent. Requires EDIT on the card's board. The hierarchy is ONE level and
+	 * same-board only:
+	 *   - the parent must be on the same board and not the card itself;
+	 *   - the parent must not itself have a parent (no grandparents);
+	 *   - a card that already has children may not become a child.
+	 * A no-op (parent already as requested) writes no change row.
+	 *
+	 * The checks and the write are not serialized (like {@see self::move()}):
+	 * two concurrent setParent calls could interleave to build a 2-level chain
+	 * (set A's parent = B while B's parent is set = C, each seeing the other's
+	 * pre-state). Accepted for now — cosmetic, a subsequent edit repairs it, no
+	 * data loss; a DB-level guard is the planned mitigation.
+	 *
+	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
+	 * @throws NotPermittedException if the user may not edit the board
+	 * @throws InvalidInputException if the parent is invalid (self, other board, deleted, or the one-level rule is violated)
+	 */
+	public function setParent(int $id, ?int $parentCardId, string $uid): Card {
+		$card = $this->loadCard($id);
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		if ($parentCardId === null) {
+			if ($card->getParentCardId() === null) {
+				return $card;
+			}
+			$card->setParentCardId(null);
+		} else {
+			if ($parentCardId === $id) {
+				throw new InvalidInputException('A card cannot be its own parent');
+			}
+			$parent = $this->loadParentCard($parentCardId);
+			if ($parent->getBoardId() !== $card->getBoardId()) {
+				throw new InvalidInputException('Parent card must be on the same board');
+			}
+			if ($parent->getParentCardId() !== null) {
+				throw new InvalidInputException('Cards can only be nested one level deep');
+			}
+			if ($this->cardMapper->hasChildren($id)) {
+				throw new InvalidInputException('A card that has children cannot become a child');
+			}
+			if ($card->getParentCardId() === $parentCardId) {
+				return $card;
+			}
+			$card->setParentCardId($parentCardId);
+		}
+
+		$card->setLastModified(time());
+		$card = $this->cardMapper->update($card);
+
+		$this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			$id,
+			Change::ACTION_UPDATE,
+			$uid
+		);
+
+		return $card;
+	}
+
+	/**
+	 * Loads the prospective parent card, mapping absence/deletion to invalid
+	 * input (the client picked a card that is gone) rather than a 404 on the
+	 * card being edited.
+	 *
+	 * @throws InvalidInputException
+	 */
+	private function loadParentCard(int $parentCardId): Card {
+		try {
+			$parent = $this->cardMapper->find($parentCardId);
+		} catch (DoesNotExistException) {
+			throw new InvalidInputException('Parent card ' . $parentCardId . ' does not exist');
+		}
+		if ($parent->getDeletedAt() > 0) {
+			throw new InvalidInputException('Parent card ' . $parentCardId . ' does not exist');
+		}
+		return $parent;
 	}
 
 	/**

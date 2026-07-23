@@ -40,6 +40,7 @@ class CardMapper extends QBMapper {
 		'created_at',
 		'last_modified',
 		'deleted_at',
+		'parent_card_id',
 	];
 
 	public function __construct(IDBConnection $db) {
@@ -157,6 +158,99 @@ class CardMapper extends QBMapper {
 
 		$cards = $this->findEntities($qb);
 		return $cards[0] ?? null;
+	}
+
+	/**
+	 * Summaries (no description) of the non-deleted children of a card, in
+	 * display order (by stack, then sort key).
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findChildren(int $parentCardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('parent_card_id', $qb->createNamedParameter($parentCardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('stack_id', 'ASC')
+			->addOrderBy('sort_key', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Whether the card has at least one non-deleted child — the one-level guard
+	 * for {@see \OCA\Kanso\Service\CardService::setParent} (a card that is
+	 * already a parent may not itself become a child).
+	 *
+	 * @throws Exception
+	 */
+	public function hasChildren(int $cardId): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('parent_card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$result = $qb->executeQuery();
+		$has = $result->fetchOne() !== false;
+		$result->closeCursor();
+
+		return $has;
+	}
+
+	/**
+	 * Per-parent child progress for every non-deleted card on a board that has
+	 * children, as a fixed two-query self-scan — the board payload stays a
+	 * constant number of queries. "done" counts children whose `done_at > 0`.
+	 * Parents with no children are absent from the map (callers default to 0/0).
+	 *
+	 * @return array<int, array{total: int, done: int}> map of parentCardId => counts
+	 * @throws Exception
+	 */
+	public function childProgressByBoard(int $boardId): array {
+		$totals = $this->countChildrenByBoard($boardId, false);
+		$done = $this->countChildrenByBoard($boardId, true);
+
+		$map = [];
+		foreach ($totals as $parentId => $count) {
+			$map[$parentId] = ['total' => $count, 'done' => $done[$parentId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
+	 * Child counts grouped by parent for a board, optionally restricted to done
+	 * children (`done_at > 0`). Only non-deleted children with a parent are
+	 * counted.
+	 *
+	 * @return array<int, int> map of parentCardId => count
+	 * @throws Exception
+	 */
+	private function countChildrenByBoard(int $boardId, bool $doneOnly): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('parent_card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNotNull('parent_card_id'))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('parent_card_id');
+
+		if ($doneOnly) {
+			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		}
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['parent_card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
 	}
 
 	/**

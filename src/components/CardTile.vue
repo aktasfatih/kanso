@@ -43,6 +43,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<CheckboxMarkedOutlineIcon :size="12" />
 				{{ card.checklist.done }}/{{ card.checklist.total }}
 			</span>
+			<!-- Child-progress badge — only when the card has children -->
+			<span
+				v-if="card.childProgress && card.childProgress.total > 0"
+				class="card-tile__children"
+				:class="{ 'card-tile__children--complete': card.childProgress.done === card.childProgress.total }"
+				:aria-label="t('kanso', 'Sub-card progress')">
+				<SitemapIcon :size="12" />
+				{{ card.childProgress.done }}/{{ card.childProgress.total }}
+			</span>
 			<!-- Assignee avatar stack — only when there are assignees -->
 			<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
 				<NcAvatar
@@ -68,6 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
+import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
 
@@ -318,6 +328,24 @@ const extraAssigneeCount = computed(() => {
 }
 
 .card-tile__checklist--complete {
+	color: var(--color-success, #46ba61);
+	border-color: var(--color-success, #46ba61);
+	background: rgba(70, 186, 97, 0.1);
+}
+
+/* Child-progress badge */
+.card-tile__children {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	padding: 1px 7px;
+}
+
+.card-tile__children--complete {
 	color: var(--color-success, #46ba61);
 	border-color: var(--color-success, #46ba61);
 	background: rgba(70, 186, 97, 0.1);
