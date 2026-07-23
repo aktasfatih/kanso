@@ -615,6 +615,317 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="createRuleError" class="label-settings__error">{{ createRuleError }}</span>
 					</form>
 				</template>
+
+				<!-- Recurring cards section -->
+				<h3 class="automation__section-heading automation__section-heading--spaced">
+					{{ t('kanso', 'Recurring cards') }}
+				</h3>
+
+				<!-- Loading / error states -->
+				<p v-if="recurRulesQuery.isLoading.value" class="automation__loading">
+					{{ t('kanso', 'Loading…') }}
+				</p>
+				<p v-else-if="recurRulesQuery.isError.value" class="label-settings__error">
+					{{ t('kanso', 'Failed to load recur rules.') }}
+				</p>
+
+				<template v-else>
+					<ul class="automation__rules-list" role="list">
+						<li v-if="!recurRules.length" class="label-settings__empty">
+							{{ t('kanso', 'No recurring card rules yet.') }}
+						</li>
+
+						<li
+							v-for="rule in recurRules"
+							:key="rule.id"
+							class="automation__rule-item">
+
+							<!-- Rule description row -->
+							<div class="automation__rule-main">
+								<span class="automation__rule-desc">
+									<strong>{{ resolveCardTitle(rule.templateCardId) }}</strong>
+									<span class="automation__rule-scope">
+										→ {{ resolveStackName(rule.targetStackId) }}
+									</span>
+									·
+									<span class="automation__rule-mode">
+										{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}
+									</span>
+									<br>
+									<span class="automation__recur-summary">{{ humanRrule(rule.rrule) }}</span>
+									<span v-if="rule.nextOccurrenceAt" class="automation__rule-scope">
+										· {{ t('kanso', 'next: {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}
+									</span>
+								</span>
+
+								<!-- Enable/disable toggle -->
+								<label
+									v-if="canManage"
+									class="automation__toggle-label"
+									:title="rule.enabled ? t('kanso', 'Disable rule') : t('kanso', 'Enable rule')">
+									<input
+										type="checkbox"
+										:checked="rule.enabled"
+										:disabled="togglingRecurRuleId === rule.id"
+										class="automation__toggle-input"
+										@change="toggleRecurRuleEnabled(rule, $event.target.checked)" />
+									<span class="automation__toggle-track" aria-hidden="true" />
+									<span class="automation__toggle-sr">
+										{{ rule.enabled ? t('kanso', 'Enabled') : t('kanso', 'Disabled') }}
+									</span>
+								</label>
+								<span v-else class="automation__rule-status">
+									{{ rule.enabled ? t('kanso', 'Enabled') : t('kanso', 'Disabled') }}
+								</span>
+							</div>
+
+							<!-- Action buttons row (MANAGE only) -->
+							<div v-if="canManage" class="automation__rule-actions">
+								<!-- Create now button -->
+								<button
+									class="automation__archive-now-btn"
+									:disabled="creatingNowRuleId === rule.id"
+									@click="doCreateNow(rule)">
+									{{ creatingNowRuleId === rule.id ? t('kanso', 'Creating…') : t('kanso', 'Create now') }}
+								</button>
+
+								<!-- Inline "Created" feedback -->
+								<span
+									v-if="createNowResults[rule.id]"
+									class="automation__archive-result">
+									{{ t('kanso', 'Created') }}
+								</span>
+
+								<!-- Delete button -->
+								<button
+									class="label-settings__action-btn label-settings__action-btn--danger"
+									:title="t('kanso', 'Delete rule')"
+									:aria-label="t('kanso', 'Delete rule')"
+									:disabled="confirmDeleteRecurRuleId === rule.id && isDeletingRecurRule"
+									@click="confirmDeleteRecurRule(rule)">
+									<DeleteIcon :size="14" />
+								</button>
+							</div>
+
+							<!-- Inline delete confirm -->
+							<div v-if="confirmDeleteRecurRuleId === rule.id" class="label-settings__confirm">
+								<span>{{ t('kanso', 'Delete this rule?') }}</span>
+								<button class="label-settings__confirm-yes" :disabled="isDeletingRecurRule" @click="doDeleteRecurRule(rule)">
+									{{ t('kanso', 'Delete') }}
+								</button>
+								<button class="label-settings__confirm-no" @click="confirmDeleteRecurRuleId = null">
+									{{ t('kanso', 'Cancel') }}
+								</button>
+								<span v-if="deleteRecurRuleError" class="label-settings__error">{{ deleteRecurRuleError }}</span>
+							</div>
+
+							<!-- Toggle error -->
+							<span v-if="toggleRecurRuleErrors[rule.id]" class="label-settings__error">
+								{{ toggleRecurRuleErrors[rule.id] }}
+							</span>
+
+							<!-- Create now error -->
+							<span v-if="createNowErrors[rule.id]" class="label-settings__error">
+								{{ createNowErrors[rule.id] }}
+							</span>
+						</li>
+					</ul>
+
+					<!-- Add recur rule form (MANAGE only) -->
+					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateRecurRule">
+						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+
+						<!-- Template card -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-card-${boardId}`">
+								{{ t('kanso', 'Template card') }}
+							</label>
+							<select
+								:id="`recur-card-${boardId}`"
+								v-model="newRecurTemplateCardId"
+								class="workflow__select automation__form-select">
+								<option :value="null" disabled>{{ t('kanso', 'Select a card…') }}</option>
+								<option
+									v-for="card in activeCards"
+									:key="card.id"
+									:value="card.id">
+									{{ card.title }}
+								</option>
+							</select>
+						</div>
+
+						<!-- Target stack -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-stack-${boardId}`">
+								{{ t('kanso', 'Target stack') }}
+							</label>
+							<select
+								:id="`recur-stack-${boardId}`"
+								v-model="newRecurTargetStackId"
+								class="workflow__select automation__form-select">
+								<option :value="null" disabled>{{ t('kanso', 'Select a stack…') }}</option>
+								<option
+									v-for="stack in activeStacks"
+									:key="stack.id"
+									:value="stack.id">
+									{{ stack.title }}
+								</option>
+							</select>
+						</div>
+
+						<!-- Mode -->
+						<div class="automation__form-row">
+							<label class="automation__form-label">{{ t('kanso', 'Mode') }}</label>
+							<div class="automation__radio-group">
+								<label class="automation__radio-label">
+									<input type="radio" :value="0" v-model="newRecurMode" />
+									{{ t('kanso', 'Clone') }}
+								</label>
+								<label class="automation__radio-label">
+									<input type="radio" :value="1" v-model="newRecurMode" />
+									{{ t('kanso', 'Reset') }}
+								</label>
+							</div>
+						</div>
+
+						<!-- Frequency + interval -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-freq-${boardId}`">
+								{{ t('kanso', 'Frequency') }}
+							</label>
+							<div class="automation__freq-row">
+								<span class="automation__freq-every">{{ t('kanso', 'Every') }}</span>
+								<input
+									:id="`recur-interval-${boardId}`"
+									v-model.number="newRecurInterval"
+									type="number"
+									min="1"
+									step="1"
+									class="workflow__wip-input automation__interval-input" />
+								<select
+									:id="`recur-freq-${boardId}`"
+									v-model="newRecurFreq"
+									class="workflow__select">
+									<option value="DAILY">{{ t('kanso', 'day(s)') }}</option>
+									<option value="WEEKLY">{{ t('kanso', 'week(s)') }}</option>
+									<option value="MONTHLY">{{ t('kanso', 'month(s)') }}</option>
+									<option value="YEARLY">{{ t('kanso', 'year(s)') }}</option>
+								</select>
+							</div>
+						</div>
+
+						<!-- Weekday multi-select (only when WEEKLY) -->
+						<div v-if="newRecurFreq === 'WEEKLY'" class="automation__form-row automation__form-row--top">
+							<label class="automation__form-label">{{ t('kanso', 'On days') }}</label>
+							<div class="automation__weekday-group">
+								<button
+									v-for="wd in WEEKDAY_OPTIONS"
+									:key="wd.value"
+									type="button"
+									class="automation__weekday-btn"
+									:class="{ 'automation__weekday-btn--active': newRecurWeekdays.includes(wd.value) }"
+									:aria-pressed="newRecurWeekdays.includes(wd.value)"
+									@click="toggleWeekday(wd.value)">
+									{{ wd.label }}
+								</button>
+							</div>
+						</div>
+
+						<!-- End condition -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-end-${boardId}`">
+								{{ t('kanso', 'Ends') }}
+							</label>
+							<select
+								:id="`recur-end-${boardId}`"
+								v-model="newRecurEndType"
+								class="workflow__select automation__form-select">
+								<option value="forever">{{ t('kanso', 'Forever') }}</option>
+								<option value="count">{{ t('kanso', 'After N occurrences') }}</option>
+								<option value="until">{{ t('kanso', 'Until date') }}</option>
+							</select>
+						</div>
+
+						<!-- After N occurrences -->
+						<div v-if="newRecurEndType === 'count'" class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-count-${boardId}`">
+								{{ t('kanso', 'Count') }}
+							</label>
+							<input
+								:id="`recur-count-${boardId}`"
+								v-model.number="newRecurCount"
+								type="number"
+								min="1"
+								step="1"
+								class="workflow__wip-input" />
+						</div>
+
+						<!-- Until date -->
+						<div v-if="newRecurEndType === 'until'" class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-until-${boardId}`">
+								{{ t('kanso', 'Until') }}
+							</label>
+							<input
+								:id="`recur-until-${boardId}`"
+								v-model="newRecurUntil"
+								type="date"
+								class="workflow__select automation__form-select" />
+						</div>
+
+						<!-- Due-date policy -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-due-${boardId}`">
+								{{ t('kanso', 'Due date') }}
+							</label>
+							<select
+								:id="`recur-due-${boardId}`"
+								v-model="newRecurDuedatePolicy"
+								class="workflow__select automation__form-select">
+								<option :value="0">{{ t('kanso', 'At occurrence') }}</option>
+								<option :value="1">{{ t('kanso', 'Offset after (days)') }}</option>
+								<option :value="2">{{ t('kanso', 'None') }}</option>
+							</select>
+						</div>
+
+						<!-- Offset days (only when policy = offset after) -->
+						<div v-if="newRecurDuedatePolicy === 1" class="automation__form-row">
+							<label class="automation__form-label" :for="`recur-due-offset-${boardId}`">
+								{{ t('kanso', 'Offset (days)') }}
+							</label>
+							<input
+								:id="`recur-due-offset-${boardId}`"
+								v-model.number="newRecurDuedateOffsetDays"
+								type="number"
+								min="0"
+								step="1"
+								class="workflow__wip-input" />
+						</div>
+
+						<!-- Skip while open (clone mode only) -->
+						<div v-if="newRecurMode === 0" class="automation__form-row">
+							<label class="automation__form-label">{{ t('kanso', 'Skip while open') }}</label>
+							<label class="automation__toggle-label">
+								<input
+									type="checkbox"
+									v-model="newRecurSkipWhileOpen"
+									class="automation__toggle-input" />
+								<span class="automation__toggle-track" aria-hidden="true" />
+								<span class="automation__toggle-sr">
+									{{ newRecurSkipWhileOpen ? t('kanso', 'Yes') : t('kanso', 'No') }}
+								</span>
+							</label>
+						</div>
+
+						<button
+							class="label-settings__create-btn automation__create-btn"
+							type="submit"
+							:disabled="isCreatingRecurRule || !newRecurTemplateCardId || !newRecurTargetStackId">
+							{{ isCreatingRecurRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+						</button>
+
+						<span v-if="createRecurRuleError" class="label-settings__error">{{ createRecurRuleError }}</span>
+					</form>
+				</template>
 			</div>
 		</div>
 	</NcModal>
@@ -634,6 +945,7 @@ import { useLabels } from '../composables/useLabels.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
+import { useRecurRules } from '../composables/useRecurRules.js'
 import { cssColor } from '../services/color.js'
 
 const props = defineProps({
@@ -667,6 +979,11 @@ const props = defineProps({
 	},
 	/** stacks array from board payload — used in Workflow tab */
 	stacks: {
+		type: Array,
+		default: () => [],
+	},
+	/** cards array from board payload — used in Recurring cards tab */
+	cards: {
 		type: Array,
 		default: () => [],
 	},
@@ -1176,6 +1493,271 @@ async function doDeleteRule(rule) {
 		deleteRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
 	} finally {
 		isDeletingRule.value = false
+	}
+}
+
+// ── Automation tab: recur rules ───────────────────────────────────────────────
+
+const {
+	data: recurRulesData,
+	isLoading: recurRulesLoading,
+	isError: recurRulesError,
+	createRule: createRecurRule,
+	updateRule: updateRecurRule,
+	deleteRule: deleteRecurRule,
+	createNow: createNowMutation,
+} = useRecurRules(computed(() => props.boardId))
+
+const recurRulesQuery = {
+	isLoading: recurRulesLoading,
+	isError: recurRulesError,
+}
+
+const recurRules = computed(() => recurRulesData.value ?? [])
+
+/** Resolve a templateCardId to its title; falls back to the raw id string. */
+function resolveCardTitle(cardId) {
+	const card = props.cards.find((c) => c.id === cardId)
+	return card?.title ?? String(cardId)
+}
+
+/** Format a ISO date string to a locale date (YYYY-MM-DD). */
+function formatDate(iso) {
+	if (!iso) return ''
+	try {
+		return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+	} catch {
+		return iso
+	}
+}
+
+/**
+ * Build a human-readable summary of an RFC5545 RRULE string.
+ * Handles the FREQ/INTERVAL/BYDAY/COUNT/UNTIL subset we emit.
+ */
+function humanRrule(rrule) {
+	if (!rrule) return ''
+	const parts = {}
+	for (const seg of rrule.split(';')) {
+		const eq = seg.indexOf('=')
+		if (eq === -1) continue
+		parts[seg.slice(0, eq).toUpperCase()] = seg.slice(eq + 1)
+	}
+
+	const freq = parts['FREQ'] ?? ''
+	const interval = parseInt(parts['INTERVAL'] ?? '1', 10)
+	const byday = parts['BYDAY'] ?? ''
+	const count = parts['COUNT'] ? parseInt(parts['COUNT'], 10) : null
+	const until = parts['UNTIL'] ?? ''
+
+	// Frequency + interval phrase
+	const DAY_MAP = { MO: t('kanso', 'Mon'), TU: t('kanso', 'Tue'), WE: t('kanso', 'Wed'), TH: t('kanso', 'Thu'), FR: t('kanso', 'Fri'), SA: t('kanso', 'Sat'), SU: t('kanso', 'Sun') }
+	let freqPhrase = ''
+	if (freq === 'DAILY') {
+		freqPhrase = interval === 1 ? t('kanso', 'Every day') : t('kanso', 'Every {n} days', { n: interval })
+	} else if (freq === 'WEEKLY') {
+		const base = interval === 1 ? t('kanso', 'Every week') : t('kanso', 'Every {n} weeks', { n: interval })
+		if (byday) {
+			const dayNames = byday.split(',').map((d) => DAY_MAP[d.trim()] ?? d).join(', ')
+			freqPhrase = t('kanso', '{base} on {days}', { base, days: dayNames })
+		} else {
+			freqPhrase = base
+		}
+	} else if (freq === 'MONTHLY') {
+		freqPhrase = interval === 1 ? t('kanso', 'Every month') : t('kanso', 'Every {n} months', { n: interval })
+	} else if (freq === 'YEARLY') {
+		freqPhrase = interval === 1 ? t('kanso', 'Every year') : t('kanso', 'Every {n} years', { n: interval })
+	} else {
+		freqPhrase = rrule
+	}
+
+	// End condition suffix
+	let endPhrase = ''
+	if (count !== null) {
+		endPhrase = t('kanso', '· {n} times', { n: count })
+	} else if (until) {
+		// UNTIL is YYYYMMDDTHHMMSSZ — parse to a readable date
+		const y = until.slice(0, 4)
+		const m = until.slice(4, 6)
+		const d = until.slice(6, 8)
+		try {
+			const dt = new Date(`${y}-${m}-${d}`)
+			endPhrase = t('kanso', '· until {date}', { date: dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) })
+		} catch {
+			endPhrase = t('kanso', '· until {date}', { date: `${y}-${m}-${d}` })
+		}
+	}
+
+	return endPhrase ? `${freqPhrase} ${endPhrase}` : freqPhrase
+}
+
+// ── Recur rule: enable/disable toggle ────────────────────────────────────────
+const togglingRecurRuleId = ref(null)
+const toggleRecurRuleErrors = ref({})
+
+async function toggleRecurRuleEnabled(rule, enabled) {
+	togglingRecurRuleId.value = rule.id
+	toggleRecurRuleErrors.value = { ...toggleRecurRuleErrors.value, [rule.id]: '' }
+	try {
+		await updateRecurRule.mutateAsync({ id: rule.id, data: { enabled } })
+	} catch (err) {
+		toggleRecurRuleErrors.value = {
+			...toggleRecurRuleErrors.value,
+			[rule.id]: err?.response?.data?.error || t('kanso', 'Failed to update rule.'),
+		}
+	} finally {
+		togglingRecurRuleId.value = null
+	}
+}
+
+// ── Recur rule: create now ────────────────────────────────────────────────────
+const creatingNowRuleId = ref(null)
+const createNowResults = ref({})   // Map<ruleId, true> — show "Created" flash
+const createNowErrors = ref({})
+
+async function doCreateNow(rule) {
+	creatingNowRuleId.value = rule.id
+	createNowErrors.value = { ...createNowErrors.value, [rule.id]: '' }
+	// Clear previous result
+	const { [rule.id]: _prev, ...rest } = createNowResults.value
+	createNowResults.value = rest
+	try {
+		await createNowMutation.mutateAsync(rule.id)
+		createNowResults.value = { ...createNowResults.value, [rule.id]: true }
+		// Clear the "Created" flash after 3 seconds
+		setTimeout(() => {
+			const { [rule.id]: _r, ...remaining } = createNowResults.value
+			createNowResults.value = remaining
+		}, 3000)
+	} catch (err) {
+		createNowErrors.value = {
+			...createNowErrors.value,
+			[rule.id]: err?.response?.data?.error || t('kanso', 'Failed to create card.'),
+		}
+	} finally {
+		creatingNowRuleId.value = null
+	}
+}
+
+// ── Recur rule: delete ────────────────────────────────────────────────────────
+const confirmDeleteRecurRuleId = ref(null)
+const isDeletingRecurRule = ref(false)
+const deleteRecurRuleError = ref('')
+
+function confirmDeleteRecurRule(rule) {
+	confirmDeleteRecurRuleId.value = rule.id
+	deleteRecurRuleError.value = ''
+}
+
+async function doDeleteRecurRule(rule) {
+	isDeletingRecurRule.value = true
+	deleteRecurRuleError.value = ''
+	try {
+		await deleteRecurRule.mutateAsync(rule.id)
+		confirmDeleteRecurRuleId.value = null
+	} catch (err) {
+		deleteRecurRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
+	} finally {
+		isDeletingRecurRule.value = false
+	}
+}
+
+// ── RRULE builder constants ───────────────────────────────────────────────────
+const WEEKDAY_OPTIONS = [
+	{ value: 'MO', label: t('kanso', 'Mon') },
+	{ value: 'TU', label: t('kanso', 'Tue') },
+	{ value: 'WE', label: t('kanso', 'Wed') },
+	{ value: 'TH', label: t('kanso', 'Thu') },
+	{ value: 'FR', label: t('kanso', 'Fri') },
+	{ value: 'SA', label: t('kanso', 'Sat') },
+	{ value: 'SU', label: t('kanso', 'Sun') },
+]
+
+// ── Recur rule: add-rule form state ──────────────────────────────────────────
+const newRecurTemplateCardId = ref(null)
+const newRecurTargetStackId = ref(null)
+const newRecurMode = ref(0)              // 0=clone, 1=reset
+const newRecurFreq = ref('WEEKLY')       // DAILY/WEEKLY/MONTHLY/YEARLY
+const newRecurInterval = ref(1)
+const newRecurWeekdays = ref([])         // e.g. ['MO', 'WE']
+const newRecurEndType = ref('forever')   // 'forever' | 'count' | 'until'
+const newRecurCount = ref(10)
+const newRecurUntil = ref('')            // YYYY-MM-DD input
+const newRecurDuedatePolicy = ref(0)     // 0=at occurrence, 1=offset after, 2=none
+const newRecurDuedateOffsetDays = ref(1)
+const newRecurSkipWhileOpen = ref(false)
+const isCreatingRecurRule = ref(false)
+const createRecurRuleError = ref('')
+
+/** Build the RFC5545 RRULE string from the builder controls. */
+function buildRrule() {
+	const parts = [`FREQ=${newRecurFreq.value}`]
+	if (newRecurInterval.value > 1) parts.push(`INTERVAL=${newRecurInterval.value}`)
+	if (newRecurFreq.value === 'WEEKLY' && newRecurWeekdays.value.length > 0) {
+		parts.push(`BYDAY=${newRecurWeekdays.value.join(',')}`)
+	}
+	if (newRecurEndType.value === 'count') {
+		parts.push(`COUNT=${newRecurCount.value}`)
+	} else if (newRecurEndType.value === 'until' && newRecurUntil.value) {
+		// Convert YYYY-MM-DD → YYYYMMDDТ000000Z
+		const d = newRecurUntil.value.replace(/-/g, '')
+		parts.push(`UNTIL=${d}T000000Z`)
+	}
+	return parts.join(';')
+}
+
+/** Non-archived cards for the template selector. */
+const activeCards = computed(() =>
+	props.cards.filter((c) => !c.archived),
+)
+
+async function submitCreateRecurRule() {
+	if (!newRecurTemplateCardId.value || !newRecurTargetStackId.value) return
+	isCreatingRecurRule.value = true
+	createRecurRuleError.value = ''
+	try {
+		const data = {
+			templateCardId: newRecurTemplateCardId.value,
+			targetStackId: newRecurTargetStackId.value,
+			mode: newRecurMode.value,
+			rrule: buildRrule(),
+			duedatePolicy: newRecurDuedatePolicy.value,
+			enabled: true,
+		}
+		if (newRecurDuedatePolicy.value === 1) {
+			data.duedateOffsetSeconds = newRecurDuedateOffsetDays.value * 86400
+		}
+		if (newRecurMode.value === 0) {
+			data.skipWhileOpen = newRecurSkipWhileOpen.value
+		}
+		await createRecurRule.mutateAsync(data)
+		// Reset form
+		newRecurTemplateCardId.value = null
+		newRecurTargetStackId.value = null
+		newRecurMode.value = 0
+		newRecurFreq.value = 'WEEKLY'
+		newRecurInterval.value = 1
+		newRecurWeekdays.value = []
+		newRecurEndType.value = 'forever'
+		newRecurCount.value = 10
+		newRecurUntil.value = ''
+		newRecurDuedatePolicy.value = 0
+		newRecurDuedateOffsetDays.value = 1
+		newRecurSkipWhileOpen.value = false
+	} catch (err) {
+		createRecurRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+	} finally {
+		isCreatingRecurRule.value = false
+	}
+}
+
+/** Toggle a weekday in the multi-select. */
+function toggleWeekday(day) {
+	const idx = newRecurWeekdays.value.indexOf(day)
+	if (idx === -1) {
+		newRecurWeekdays.value = [...newRecurWeekdays.value, day]
+	} else {
+		newRecurWeekdays.value = newRecurWeekdays.value.filter((d) => d !== day)
 	}
 }
 </script>
@@ -2035,5 +2617,92 @@ async function doDeleteRule(rule) {
 
 .automation__create-btn {
 	align-self: flex-start;
+}
+
+/* ── Recurring cards section extras ────────────────────────────────────────── */
+
+.automation__section-heading--spaced {
+	margin-top: 28px;
+	padding-top: 20px;
+	border-top: 1px solid var(--color-border);
+}
+
+.automation__rule-mode {
+	font-size: 0.78rem;
+	background: var(--color-background-dark);
+	border-radius: var(--border-radius);
+	padding: 1px 5px;
+	color: var(--color-text-maxcontrast);
+}
+
+.automation__recur-summary {
+	font-size: 0.85rem;
+	color: var(--color-main-text);
+	font-weight: 500;
+}
+
+.automation__radio-group {
+	display: flex;
+	gap: 14px;
+}
+
+.automation__radio-label {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.875rem;
+	cursor: pointer;
+}
+
+.automation__freq-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+}
+
+.automation__freq-every {
+	font-size: 0.875rem;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.automation__interval-input {
+	width: 54px;
+}
+
+.automation__weekday-group {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.automation__weekday-btn {
+	height: 28px;
+	min-width: 36px;
+	padding: 0 8px;
+	border-radius: var(--border-radius);
+	border: 1px solid var(--color-border);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.automation__weekday-btn:hover {
+	border-color: var(--color-primary);
+	color: var(--color-primary);
+}
+
+.automation__weekday-btn--active {
+	background: var(--color-primary);
+	border-color: var(--color-primary);
+	color: var(--color-primary-text, #fff);
+}
+
+.automation__form-row--top {
+	align-items: flex-start;
 }
 </style>

@@ -105,3 +105,19 @@ export const deleteArchiveRule = (id) =>
 
 export const archiveNow = (id) =>
 	axios.post(url(`/api/archive-rules/${id}/archive-now`)).then((r) => r.data)
+
+// Recur rules
+export const fetchRecurRules = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/recur-rules`)).then((r) => r.data)
+
+export const createRecurRule = (boardId, data) =>
+	axios.post(url(`/api/boards/${boardId}/recur-rules`), data).then((r) => r.data)
+
+export const updateRecurRule = (id, data) =>
+	axios.patch(url(`/api/recur-rules/${id}`), data).then((r) => r.data)
+
+export const deleteRecurRule = (id) =>
+	axios.delete(url(`/api/recur-rules/${id}`)).then((r) => r.data)
+
+export const createNowRecurRule = (id) =>
+	axios.post(url(`/api/recur-rules/${id}/create-now`)).then((r) => r.data)
