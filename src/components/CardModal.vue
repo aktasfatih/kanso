@@ -189,7 +189,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="cardData.description"
 							class="card-modal__desc-view"
 							@click="startDescriptionEdit">
-							{{ cardData.description }}
+							<div class="card-modal__desc-rendered" v-html="renderedDescription" />
 						</div>
 						<button
 							v-else
@@ -221,6 +221,7 @@ import { useBoard } from '../composables/useBoard.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { cssColor } from '../services/color.js'
+import { renderMarkdown } from '../services/markdown.js'
 
 const props = defineProps({
 	cardId: {
@@ -372,6 +373,7 @@ const dueDateClass = computed(() => {
 })
 
 const cardTitle = computed(() => cardData.value?.title || t('kanso', 'Card'))
+const renderedDescription = computed(() => renderMarkdown(cardData.value?.description || ''))
 
 // ── Title editing ─────────────────────────────────────────────────────────────
 const editingTitle = ref(false)
@@ -888,5 +890,72 @@ function closeModal() {
 .card-modal__save-error {
 	color: var(--color-error);
 	font-size: 0.8rem;
+}
+
+/* Rendered markdown description */
+.card-modal__desc-rendered {
+	max-width: 100%;
+	word-break: break-word;
+}
+
+.card-modal__desc-rendered :deep(code) {
+	background: var(--color-background-dark);
+	border-radius: 3px;
+	padding: 2px 5px;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.875em;
+}
+
+.card-modal__desc-rendered :deep(pre) {
+	background: var(--color-background-dark);
+	border-radius: 3px;
+	padding: 10px 14px;
+	overflow-x: auto;
+}
+
+.card-modal__desc-rendered :deep(pre code) {
+	background: transparent;
+	padding: 0;
+	border-radius: 0;
+}
+
+.card-modal__desc-rendered :deep(a) {
+	color: var(--color-primary-element);
+	text-decoration: underline;
+}
+
+.card-modal__desc-rendered :deep(ul),
+.card-modal__desc-rendered :deep(ol) {
+	padding-left: 1.5em;
+	margin: 0.5em 0;
+}
+
+.card-modal__desc-rendered :deep(blockquote) {
+	border-left: 3px solid var(--color-border);
+	margin-left: 0;
+	padding-left: 1em;
+	color: var(--color-text-lighter);
+}
+
+.card-modal__desc-rendered :deep(p) {
+	margin: 0.5em 0;
+}
+
+.card-modal__desc-rendered :deep(p:first-child) {
+	margin-top: 0;
+}
+
+.card-modal__desc-rendered :deep(p:last-child) {
+	margin-bottom: 0;
+}
+
+.card-modal__desc-rendered :deep(h1),
+.card-modal__desc-rendered :deep(h2),
+.card-modal__desc-rendered :deep(h3),
+.card-modal__desc-rendered :deep(h4),
+.card-modal__desc-rendered :deep(h5),
+.card-modal__desc-rendered :deep(h6) {
+	font-weight: 700;
+	margin: 0.75em 0 0.25em;
 }
 </style>
