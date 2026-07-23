@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -31,7 +33,9 @@ class CardController extends Controller {
 		private IUserSession $userSession,
 		private CardService $cardService,
 		private LabelService $labelService,
+		private AssigneeService $assigneeService,
 		private CardLabelMapper $cardLabelMapper,
+		private CardAssigneeMapper $cardAssigneeMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -52,6 +56,7 @@ class CardController extends Controller {
 			return new JSONResponse(
 				$card->jsonSerialize()
 				+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
+				+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
 			);
 		});
 	}
@@ -114,6 +119,30 @@ class CardController extends Controller {
 	public function unassignLabel(int $id, int $labelId): JSONResponse {
 		return $this->respond(function () use ($id, $labelId): JSONResponse {
 			$this->labelService->unassign($id, $labelId, $this->currentUserId());
+			return new JSONResponse([]);
+		});
+	}
+
+	/**
+	 * Assigns a user of the card's board to the card. Idempotent — PUT of
+	 * an already assigned user succeeds without writing anything.
+	 */
+	#[NoAdminRequired]
+	public function assignUser(int $id, string $userId): JSONResponse {
+		return $this->respond(function () use ($id, $userId): JSONResponse {
+			$this->assigneeService->assign($id, $userId, $this->currentUserId());
+			return new JSONResponse([]);
+		});
+	}
+
+	/**
+	 * Removes an assigned user from the card. Idempotent — DELETE of an
+	 * absent assignment succeeds without writing anything.
+	 */
+	#[NoAdminRequired]
+	public function unassignUser(int $id, string $userId): JSONResponse {
+		return $this->respond(function () use ($id, $userId): JSONResponse {
+			$this->assigneeService->unassign($id, $userId, $this->currentUserId());
 			return new JSONResponse([]);
 		});
 	}

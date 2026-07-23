@@ -12,6 +12,7 @@ return [
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
+		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],
 		['name' => 'board#update', 'url' => '/api/boards/{id}', 'verb' => 'PATCH'],
 		['name' => 'board#destroy', 'url' => '/api/boards/{id}', 'verb' => 'DELETE'],
 
@@ -26,6 +27,8 @@ return [
 		['name' => 'card#move', 'url' => '/api/cards/{id}/move', 'verb' => 'POST'],
 		['name' => 'card#assignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'DELETE'],
+		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],
+		['name' => 'card#unassignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'DELETE'],
 
 		['name' => 'label#create', 'url' => '/api/labels', 'verb' => 'POST'],
 		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],

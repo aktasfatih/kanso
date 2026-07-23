@@ -9,7 +9,9 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 
 use OCA\Kanso\Controller\CardController;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
@@ -25,7 +27,9 @@ use PHPUnit\Framework\TestCase;
 class CardControllerTest extends TestCase {
 	private CardService&MockObject $cardService;
 	private LabelService&MockObject $labelService;
+	private AssigneeService&MockObject $assigneeService;
 	private CardLabelMapper&MockObject $cardLabelMapper;
+	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -34,7 +38,9 @@ class CardControllerTest extends TestCase {
 		$userSession = $this->createMock(IUserSession::class);
 		$this->cardService = $this->createMock(CardService::class);
 		$this->labelService = $this->createMock(LabelService::class);
+		$this->assigneeService = $this->createMock(AssigneeService::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
+		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -46,7 +52,9 @@ class CardControllerTest extends TestCase {
 			$userSession,
 			$this->cardService,
 			$this->labelService,
-			$this->cardLabelMapper
+			$this->assigneeService,
+			$this->cardLabelMapper,
+			$this->cardAssigneeMapper
 		);
 	}
 
@@ -86,11 +94,12 @@ class CardControllerTest extends TestCase {
 		self::assertArrayHasKey('error', $response->getData());
 	}
 
-	public function testShowReturnsFullCardWithDescriptionAndLabelIds(): void {
+	public function testShowReturnsFullCardWithDescriptionLabelIdsAndAssigneeIds(): void {
 		$card = $this->card();
 		$card->setDescription('Full detail');
 		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);
 		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([3, 7]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob', 'carol']);
 
 		$response = $this->controller->show(9);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
@@ -99,6 +108,7 @@ class CardControllerTest extends TestCase {
 		self::assertSame(9, $data['id']);
 		self::assertSame('Full detail', $data['description']);
 		self::assertSame([3, 7], $data['labelIds']);
+		self::assertSame(['bob', 'carol'], $data['assigneeIds']);
 	}
 
 	public function testShowMapsDoesNotExistTo404(): void {
@@ -265,6 +275,54 @@ class CardControllerTest extends TestCase {
 		$this->labelService->method('unassign')->willThrowException(new NotPermittedException());
 
 		$response = $this->controller->unassignLabel(9, 7);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testAssignUserReturnsEmptyBody(): void {
+		$this->assigneeService->expects(self::once())->method('assign')->with(9, 'bob', 'alice');
+
+		$response = $this->controller->assignUser(9, 'bob');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame([], $response->getData());
+	}
+
+	public function testAssignUserMapsNotPermittedTo403(): void {
+		$this->assigneeService->method('assign')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->assignUser(9, 'bob');
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testAssignUserMapsNonMemberTo400(): void {
+		$this->assigneeService->method('assign')
+			->willThrowException(new InvalidInputException('User has no access to this board'));
+
+		$response = $this->controller->assignUser(9, 'stranger');
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertSame('User has no access to this board', $response->getData()['error']);
+	}
+
+	public function testAssignUserMapsDoesNotExistTo404(): void {
+		$this->assigneeService->method('assign')
+			->willThrowException(new DoesNotExistException('gone'));
+
+		$response = $this->controller->assignUser(9, 'bob');
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	public function testUnassignUserReturnsEmptyBody(): void {
+		$this->assigneeService->expects(self::once())->method('unassign')->with(9, 'bob', 'alice');
+
+		$response = $this->controller->unassignUser(9, 'bob');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame([], $response->getData());
+	}
+
+	public function testUnassignUserMapsNotPermittedTo403(): void {
+		$this->assigneeService->method('unassign')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->unassignUser(9, 'bob');
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 }

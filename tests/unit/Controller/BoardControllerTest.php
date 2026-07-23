@@ -10,6 +10,7 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 use OCA\Kanso\Controller\BoardController;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
@@ -20,6 +21,7 @@ use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ParticipantService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
@@ -32,11 +34,13 @@ class BoardControllerTest extends TestCase {
 	private IRequest&MockObject $request;
 	private IUserSession&MockObject $userSession;
 	private BoardService&MockObject $boardService;
+	private ParticipantService&MockObject $participantService;
 	private ChangeMapper&MockObject $changeMapper;
 	private StackMapper&MockObject $stackMapper;
 	private CardMapper&MockObject $cardMapper;
 	private LabelMapper&MockObject $labelMapper;
 	private CardLabelMapper&MockObject $cardLabelMapper;
+	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -44,11 +48,13 @@ class BoardControllerTest extends TestCase {
 		$this->request = $this->createMock(IRequest::class);
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->boardService = $this->createMock(BoardService::class);
+		$this->participantService = $this->createMock(ParticipantService::class);
 		$this->changeMapper = $this->createMock(ChangeMapper::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
+		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -59,11 +65,13 @@ class BoardControllerTest extends TestCase {
 			$this->request,
 			$this->userSession,
 			$this->boardService,
+			$this->participantService,
 			$this->changeMapper,
 			$this->stackMapper,
 			$this->cardMapper,
 			$this->labelMapper,
-			$this->cardLabelMapper
+			$this->cardLabelMapper,
+			$this->cardAssigneeMapper
 		);
 	}
 
@@ -85,6 +93,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
 		$this->labelMapper->expects(self::never())->method('findByBoard');
 		$this->cardLabelMapper->expects(self::never())->method('findLabelIdsByBoard');
+		$this->cardAssigneeMapper->expects(self::never())->method('findUserIdsByBoard');
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
@@ -132,6 +141,7 @@ class BoardControllerTest extends TestCase {
 		$label->setTitle('Urgent');
 		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$label]);
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([3 => [7]]);
+		$this->cardAssigneeMapper->method('findUserIdsByBoard')->with(1)->willReturn([3 => ['bob']]);
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
@@ -144,7 +154,9 @@ class BoardControllerTest extends TestCase {
 		self::assertCount(2, $data['cards']);
 		self::assertSame(3, $data['cards'][0]['id']);
 		self::assertSame([7], $data['cards'][0]['labelIds']);
+		self::assertSame(['bob'], $data['cards'][0]['assigneeIds']);
 		self::assertSame([], $data['cards'][1]['labelIds']);
+		self::assertSame([], $data['cards'][1]['assigneeIds']);
 		self::assertArrayNotHasKey('description', $data['cards'][0]);
 	}
 
@@ -188,6 +200,37 @@ class BoardControllerTest extends TestCase {
 
 		$response = $this->controller->destroy(1);
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testParticipantsReturnsList(): void {
+		$participants = [
+			['uid' => 'alice', 'displayName' => 'Alice Adams'],
+			['uid' => 'bob', 'displayName' => 'Bob Baker'],
+		];
+		$this->participantService->method('getParticipants')
+			->with(1, 'alice')
+			->willReturn($participants);
+
+		$response = $this->controller->participants(1);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($participants, $response->getData());
+	}
+
+	public function testParticipantsMapsNotPermittedTo403(): void {
+		$this->participantService->method('getParticipants')
+			->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->participants(1);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testParticipantsMapsDoesNotExistTo404(): void {
+		$this->participantService->method('getParticipants')
+			->willThrowException(new DoesNotExistException('gone'));
+
+		$response = $this->controller->participants(1);
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
 	}
 
 	public function testUpdateReturnsUpdatedBoard(): void {
