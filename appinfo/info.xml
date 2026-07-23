@@ -23,6 +23,7 @@ Early development — not feature complete yet.
 	<background-jobs>
 		<job>OCA\Kanso\Cron\PruneChanges</job>
 		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>
+		<job>OCA\Kanso\Cron\SpawnRecurringCards</job>
 	</background-jobs>
 	<navigations>
 		<navigation>

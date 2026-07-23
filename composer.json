@@ -10,6 +10,9 @@
 			"composer/package-versions-deprecated": true
 		}
 	},
+	"require": {
+		"sabre/vobject": "^4.5"
+	},
 	"require-dev": {
 		"nextcloud/ocp": "^32.0",
 		"nextcloud/coding-standard": "^1.4",

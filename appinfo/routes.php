@@ -47,5 +47,11 @@ return [
 		['name' => 'archiveRule#update', 'url' => '/api/archive-rules/{id}', 'verb' => 'PATCH'],
 		['name' => 'archiveRule#destroy', 'url' => '/api/archive-rules/{id}', 'verb' => 'DELETE'],
 		['name' => 'archiveRule#archiveNow', 'url' => '/api/archive-rules/{id}/archive-now', 'verb' => 'POST'],
+
+		['name' => 'recurRule#index', 'url' => '/api/boards/{id}/recur-rules', 'verb' => 'GET'],
+		['name' => 'recurRule#create', 'url' => '/api/boards/{id}/recur-rules', 'verb' => 'POST'],
+		['name' => 'recurRule#update', 'url' => '/api/recur-rules/{id}', 'verb' => 'PATCH'],
+		['name' => 'recurRule#destroy', 'url' => '/api/recur-rules/{id}', 'verb' => 'DELETE'],
+		['name' => 'recurRule#createNow', 'url' => '/api/recur-rules/{id}/create-now', 'verb' => 'POST'],
 	],
 ];
