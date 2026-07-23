@@ -608,7 +608,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<button
 							class="label-settings__create-btn automation__create-btn"
 							type="submit"
-							:disabled="isCreatingRule || newRuleDays < 0">
+							:disabled="isCreatingRule || newRuleDays === '' || newRuleDays === null || newRuleDays < 0">
 							{{ isCreatingRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
 						</button>
 
@@ -1083,7 +1083,9 @@ const isCreatingRule = ref(false)
 const createRuleError = ref('')
 
 async function submitCreateRule() {
-	if (newRuleDays.value < 0) return
+	// Reject a blank field ('' * 86400 === 0) so a rule that archives every
+	// done card immediately can't be created by accident — 0 must be explicit.
+	if (newRuleDays.value === '' || newRuleDays.value === null || newRuleDays.value < 0) return
 	isCreatingRule.value = true
 	createRuleError.value = ''
 	try {
