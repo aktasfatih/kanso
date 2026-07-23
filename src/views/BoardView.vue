@@ -42,6 +42,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</button>
 			</div>
 
+			<!-- Archived cards badge button — only shown when ≥1 archived card -->
+			<NcButton
+				v-if="boardData && archivedCards.length > 0"
+				class="board-view__archived-btn"
+				:title="t('kanso', 'View archived cards')"
+				:aria-label="t('kanso', 'View archived cards ({count})', { count: archivedCards.length })"
+				@click="showArchived = true">
+				<template #icon>
+					<ArchiveIcon :size="20" />
+				</template>
+				{{ archivedCards.length }}
+			</NcButton>
+
 			<!-- Settings (gear) button -->
 			<NcButton
 				v-if="boardData"
@@ -68,6 +81,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:cards="boardData.cards ?? []"
 			@close="showSettings = false"
 			@leave="showSettings = false" />
+
+		<!-- Archived cards panel -->
+		<ArchivedPanel
+			v-if="showArchived && boardData"
+			:board-id="props.id"
+			:stacks="sortedStacks"
+			:archived-cards="archivedCards"
+			@close="showArchived = false" />
 
 		<!-- DnD / shortcut error banner -->
 		<div v-if="moveError || shortcutError" class="board-view__move-error">
@@ -168,8 +189,10 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
+import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
+import ArchivedPanel from '../components/ArchivedPanel.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
@@ -214,6 +237,9 @@ let boardCleanup = () => {}
 
 // Label settings panel visibility
 const showSettings = ref(false)
+
+// Archived cards panel visibility
+const showArchived = ref(false)
 
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
@@ -268,6 +294,15 @@ const sortedStacks = computed(() => {
 		.filter((s) => !s.archived)
 		.sort(bySortKey)
 })
+
+/**
+ * Archived (but not deleted) cards sourced from the board payload.
+ * The board GET already returns archived cards in the cards array — we just
+ * need to surface them here. No additional API call is required.
+ */
+const archivedCards = computed(() =>
+	(boardData.value?.cards ?? []).filter((c) => c.archived),
+)
 
 const cardsByStack = computed(() => {
 	const map = new Map()
@@ -933,5 +968,10 @@ async function handleCreateCard(stackId, title) {
 	border: 1px solid var(--color-border);
 	border-radius: 4px;
 	color: var(--color-main-text);
+}
+
+/* Archived cards badge button */
+.board-view__archived-btn {
+	flex-shrink: 0;
 }
 </style>

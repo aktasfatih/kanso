@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Card content -->
 			<template v-else-if="cardData">
-				<!-- Title -->
+				<!-- Title row — title + edit pencil + actions (⋯) menu -->
 				<div class="card-modal__title-row">
 					<template v-if="editingTitle">
 						<input
@@ -42,7 +42,54 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<PencilIcon :size="16" />
 						</button>
 					</template>
+
+					<!-- ⋯ Actions menu -->
+					<NcActions class="card-modal__actions-menu" :force-menu="true">
+						<!-- Archive / Unarchive -->
+						<NcActionButton
+							:close-after-click="true"
+							@click="handleArchiveToggle">
+							<template #icon>
+								<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
+								<ArchiveArrowUpIcon v-else :size="20" />
+							</template>
+							{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
+						</NcActionButton>
+
+						<!-- Delete -->
+						<NcActionButton
+							:close-after-click="true"
+							@click="showDeleteConfirm = true">
+							<template #icon>
+								<TrashCanIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Delete') }}
+						</NcActionButton>
+
+						<!-- Future: Duplicate, Move-to (add items here) -->
+					</NcActions>
 				</div>
+
+				<!-- Inline delete confirmation banner -->
+				<div v-if="showDeleteConfirm" class="card-modal__delete-confirm">
+					<span>{{ t('kanso', 'Delete this card permanently?') }}</span>
+					<div class="card-modal__delete-confirm-actions">
+						<NcButton
+							type="error"
+							:disabled="deleteCard.isPending.value"
+							@click="handleDelete">
+							{{ t('kanso', 'Delete') }}
+						</NcButton>
+						<NcButton @click="showDeleteConfirm = false">
+							{{ t('kanso', 'Cancel') }}
+						</NcButton>
+					</div>
+				</div>
+
+				<!-- Action error (archive / delete) -->
+				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">
+					{{ actionError }}
+				</span>
 
 				<!-- Due date — editable via datetime-local input -->
 				<div class="card-modal__meta card-modal__meta--due">
@@ -210,16 +257,22 @@ import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
+import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
+import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
+import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import { useCard } from '../composables/useCard.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
+import { useCardActions } from '../composables/useCardActions.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -246,6 +299,38 @@ const { data: cardData, isLoading, isError, updateCard } = useCard(
 // Read board data from cache (same queryKey as BoardView — no extra request).
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
+
+// ── Card lifecycle actions (archive / delete) ────────────────────────────────
+const { setArchived, deleteCard } = useCardActions(boardId, computed(() => props.cardId))
+const actionError = ref('')
+const showDeleteConfirm = ref(false)
+
+async function handleArchiveToggle() {
+	actionError.value = ''
+	const archived = !cardData.value?.archived
+	try {
+		await setArchived.mutateAsync({ archived })
+		// On archive, close the modal so the card visually leaves the board columns.
+		// On unarchive, the modal can stay open; the card returns to its column.
+		if (archived) {
+			closeModal()
+		}
+	} catch (err) {
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
+	}
+}
+
+async function handleDelete() {
+	actionError.value = ''
+	try {
+		await deleteCard.mutateAsync()
+		showDeleteConfirm.value = false
+		closeModal()
+	} catch (err) {
+		showDeleteConfirm.value = false
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
+	}
+}
 
 // Current card's assigned label ids as a Set for O(1) .has() in the template
 const cardLabelIds = computed(() => {
@@ -957,5 +1042,38 @@ function closeModal() {
 .card-modal__desc-rendered :deep(h6) {
 	font-weight: 700;
 	margin: 0.75em 0 0.25em;
+}
+
+/* Actions menu (⋯) in the title row */
+.card-modal__actions-menu {
+	flex-shrink: 0;
+	margin-left: auto;
+}
+
+/* Delete confirmation banner */
+.card-modal__delete-confirm {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	padding: 10px 14px;
+	margin-bottom: 16px;
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+	border: 1px solid var(--color-error);
+	border-radius: var(--border-radius);
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+}
+
+.card-modal__delete-confirm-actions {
+	display: flex;
+	gap: 8px;
+}
+
+/* Standalone action error line (archive / delete errors) */
+.card-modal__action-error {
+	display: block;
+	margin-bottom: 12px;
 }
 </style>
