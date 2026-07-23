@@ -23,28 +23,65 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
 		</form>
 
-		<!-- Card list — own scrollable element for future TanStack Virtual drop-in -->
-		<div ref="cardListRef" class="stack-column__cards" :class="{ 'stack-column__cards--drop-over': isDropOver && cards.length === 0 }">
-			<CardTile
-				v-for="card in cards"
-				:key="card.id"
-				:card="card"
-				:labels-by-id="labelsById"
-				@click="openCard(card.id)" />
-			<!-- Empty stack placeholder so empty columns are droppable -->
+		<!--
+			Card list — own scrollable element.
+			This element is both the scroll container for TanStack Virtual and the
+			column-level drop target / auto-scroll target.
+		-->
+		<div
+			ref="cardListRef"
+			class="stack-column__cards"
+			:class="{ 'stack-column__cards--drop-over': isDropOver && cards.length === 0 }">
+
+			<!--
+				Empty stack placeholder — always present when there are no cards.
+				Rendered ALONGSIDE (not instead of) the virtual-host so the scroll
+				container keeps its height during the 0→1 card transition and the
+				virtualizer never loses its scrollRect.
+			-->
 			<div v-if="cards.length === 0" class="stack-column__empty-placeholder" />
+
+			<!--
+				Virtualized list: always in the DOM (no v-if guard) so that the
+				virtualizer's ResizeObserver is never detached and reattached during
+				the 0→1 card transition. When count=0 the virtual-host has height 0
+				and renders no items — the placeholder above fills the space.
+			-->
+			<div
+				class="stack-column__virtual-host"
+				:style="{ height: virtualizer.getTotalSize() + 'px' }">
+				<div
+					v-for="vRow in virtualizer.getVirtualItems()"
+					:key="cards[vRow.index].id"
+					:ref="(el) => measureVirtualEl(el, vRow.index)"
+					:data-index="vRow.index"
+					class="stack-column__virtual-item"
+					:style="{
+						position: 'absolute',
+						top: 0,
+						left: 0,
+						width: '100%',
+						transform: 'translateY(' + vRow.start + 'px)',
+					}">
+					<CardTile
+						:card="cards[vRow.index]"
+						:labels-by-id="labelsById"
+						@click="openCard(cards[vRow.index].id)" />
+				</div>
+			</div>
 		</div>
 	</div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import CardTile from './CardTile.vue'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 
 const props = defineProps({
 	stack: {
@@ -78,6 +115,41 @@ const isPending = ref(false)
 const isDropOver = ref(false)
 let cleanup = () => {}
 
+// ── TanStack Virtual ──────────────────────────────────────────────────────────
+// Pass options as a computed so that cardListRef.value is in the reactive
+// dependency graph — when the scroll element mounts, the virtualizer's internal
+// watch sees the change and calls _willUpdate() to initialize scroll tracking.
+const virtualizerOptions = computed(() => ({
+	count: props.cards.length,
+	// Reading cardListRef.value inside this computed means Vue will re-evaluate
+	// the computed (and re-run the virtualizer's internal watch on getScrollElement)
+	// when cardListRef changes from null → DOM element after mount.
+	getScrollElement: () => cardListRef.value,
+	estimateSize: () => 90,
+	overscan: 6,
+	gap: 8,
+}))
+
+const virtualizer = useVirtualizer(virtualizerOptions)
+
+// Belt-and-suspenders: explicitly call _willUpdate when the scroll element
+// appears (covers any edge case where the computed re-evaluation is batched
+// after the virtualizer's internal watch fires).
+watch(cardListRef, (el) => {
+	if (el) virtualizer.value._willUpdate()
+})
+
+/**
+ * Function-ref for each virtual item wrapper.
+ * TanStack Virtual's measureElement expects the DOM element so it can attach
+ * a ResizeObserver for dynamic-height tracking.
+ */
+function measureVirtualEl(el, index) {
+	if (!el) return
+	virtualizer.value.measureElement(el)
+}
+
+// ── Drop targets & auto-scroll ────────────────────────────────────────────────
 onMounted(() => {
 	if (!cardListRef.value) return
 	cleanup = combine(
@@ -205,20 +277,30 @@ async function submitCard() {
 	margin: 0;
 }
 
-/* Card list — own scrollable element for future TanStack Virtual drop-in */
+/* Card list — own scrollable element */
 .stack-column__cards {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
 	overflow-y: auto;
 	flex: 1;
 	min-height: 0;
 	transition: background 0.15s ease;
+	/* No flex gap here — gap is handled by the virtualizer's gap option so the
+	   measurer sees the true inter-item spacing. */
 }
 
 .stack-column__cards--drop-over {
 	background: rgba(var(--color-primary-element-rgb, 0, 130, 201), 0.06);
 	border-radius: var(--border-radius);
+}
+
+/* Virtual host: sized to totalSize so the scroll track is correct */
+.stack-column__virtual-host {
+	position: relative;
+	width: 100%;
+}
+
+/* Each absolutely-positioned virtual row wrapper */
+.stack-column__virtual-item {
+	/* height is dynamic — measured by TanStack Virtual per item */
 }
 
 .stack-column__empty-placeholder {

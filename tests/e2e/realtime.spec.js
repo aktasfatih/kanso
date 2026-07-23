@@ -122,6 +122,9 @@ test.describe('Realtime sync', () => {
 
 	test('fallback: tester sees a new card via the 5s poll when push is off', async ({ browser }) => {
 		occ('app:disable notify_push')
+		// Give Nextcloud a moment to clear any capabilities cache so the tester
+		// page loads with push marked as unavailable → 5s poll interval.
+		await new Promise((r) => setTimeout(r, 1000))
 		const testerCtx = await browser.newContext()
 		try {
 			const testerPage = await testerCtx.newPage()
@@ -134,10 +137,11 @@ test.describe('Realtime sync', () => {
 
 			await apiPost('/cards', { stackId: (await apiGet(`/boards/${state.boardId}`)).stacks[0].id, title: 'poll-card' })
 
-			// 5s interval + fetch latency, still far under the push-off 60s
+			// 5s poll interval + 5s board-load time + latency headroom = 15s budget,
+			// still far under the push-enabled 60s safety-net.
 			await expect(
 				testerPage.locator('.card-tile').filter({ hasText: 'poll-card' }),
-			).toBeVisible({ timeout: 9_000 })
+			).toBeVisible({ timeout: 15_000 })
 		} finally {
 			occ('app:enable notify_push')
 			await testerCtx.close()
