@@ -162,6 +162,33 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Cards (with description) matching a LIKE pattern in their title or
+	 * description, restricted to the given readable boards and non-deleted.
+	 * Portable case-insensitive LIKE (no per-dialect full-text) — the pattern is
+	 * pre-escaped and wrapped by the caller. Title matches sort first, then most
+	 * recent. $boardIds must be non-empty (the caller returns early otherwise).
+	 *
+	 * @param int[] $boardIds
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function searchInBoards(array $boardIds, string $likePattern, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->iLike('title', $qb->createNamedParameter($likePattern)),
+				$qb->expr()->iLike('description', $qb->createNamedParameter($likePattern)),
+			))
+			->orderBy('id', 'DESC')
+			->setMaxResults($limit);
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Summaries (no description) of the SOFT-DELETED cards of a board — the
 	 * trash listing, most-recently-deleted first.
 	 *

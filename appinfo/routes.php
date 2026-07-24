@@ -9,6 +9,8 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
+		['name' => 'search#index', 'url' => '/api/search', 'verb' => 'GET'],
+
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],

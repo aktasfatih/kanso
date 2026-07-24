@@ -146,6 +146,45 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
+	 * Non-deleted comments whose body matches a LIKE pattern, restricted to the
+	 * given readable boards (joined through non-deleted cards). Portable
+	 * case-insensitive LIKE; the pattern is pre-escaped/wrapped by the caller.
+	 * Each row carries the parent card's id, board and title so a hit can be
+	 * shown and deep-linked without a second query. $boardIds must be non-empty.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, array{id: int, cardId: int, boardId: int, cardTitle: string, body: string}>
+	 * @throws Exception
+	 */
+	public function searchInBoards(array $boardIds, string $likePattern, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('cm.id', 'cm.card_id', 'cm.body', 'c.board_id', 'c.title')
+			->from($this->getTableName(), 'cm')
+			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->iLike('cm.body', $qb->createNamedParameter($likePattern)))
+			->orderBy('cm.id', 'DESC')
+			->setMaxResults($limit);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'cardId' => (int)$row['card_id'],
+				'boardId' => (int)$row['board_id'],
+				'cardTitle' => (string)$row['title'],
+				'body' => (string)$row['body'],
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Hard-deletes every comment of a card (all threads) — cascade for a card
 	 * purge.
 	 *

@@ -21,6 +21,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</h1>
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
+			<!-- In-board search — scoped to the current board; only rendered once
+			     the board payload is available so boardId is valid. -->
+			<SearchBox
+				v-if="boardData"
+				ref="searchBoxRef"
+				class="board-view__search"
+				:board-id="props.id" />
+
 			<!-- Filter dropdown — compact NcActions menu replacing the old chip row.
 			     Only rendered when the board has at least one label OR always when
 			     priority filtering is desired (priority filter is always available).
@@ -228,6 +236,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<td class="shortcuts-modal__key"><kbd>?</kbd></td>
 							<td>{{ t('kanso', 'Show / hide this shortcuts overlay') }}</td>
 						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>/</kbd></td>
+							<td>{{ t('kanso', 'Focus search') }}</td>
+						</tr>
 					</tbody>
 				</table>
 			</div>
@@ -254,6 +266,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
 import StackColumn from '../components/StackColumn.vue'
+import SearchBox from '../components/SearchBox.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ArchivedPanel from '../components/ArchivedPanel.vue'
@@ -312,6 +325,9 @@ const showTrash = ref(false)
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
 const shortcutError = ref('')
+
+// ── Search box ref (for programmatic focus via '/' shortcut) ─────────────────
+const searchBoxRef = ref(null)
 
 function dismissActionError() {
 	dismissMoveError()
@@ -483,6 +499,13 @@ function handleKeydown(e) {
 	if (e.key === '?') {
 		e.preventDefault()
 		showShortcuts.value = !showShortcuts.value
+		return
+	}
+	// '/' focuses the search box — handled before the overlay-open guard so it
+	// always works as long as no input-like element is already focused.
+	if (e.key === '/') {
+		e.preventDefault()
+		searchBoxRef.value?.focus()
 		return
 	}
 	// Guard: settings modal or shortcuts overlay open
@@ -889,9 +912,14 @@ async function handleCreateCard(stackId, title) {
 	border-radius: 4px;
 }
 
-/* Filter dropdown button — sits in the header, pushed right via margin-left: auto */
-.board-view__filter-menu {
+/* Search box — pushed to the right edge of the title area via margin-left: auto */
+.board-view__search {
 	margin-left: auto;
+	flex-shrink: 0;
+}
+
+/* Filter dropdown button — sits after the search box */
+.board-view__filter-menu {
 	flex-shrink: 0;
 }
 

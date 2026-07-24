@@ -164,3 +164,7 @@ export const updateComment = (commentId, data) =>
 
 export const deleteComment = (commentId) =>
 	axios.delete(url(`/api/comments/${commentId}`)).then((r) => r.data)
+
+// Search
+export const search = ({ q, boardId, limit = 25, offset = 0 }) =>
+	axios.get(url('/api/search'), { params: { q, boardId, limit, offset } }).then((r) => r.data)
