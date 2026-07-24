@@ -30,6 +30,7 @@ class AssigneeService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		private NotificationService $notificationService,
 	) {
 	}
 
@@ -74,6 +75,9 @@ class AssigneeService {
 			Change::ACTION_UPDATE,
 			$actorUid
 		);
+
+		// Targeted bell notification to the assignee (not the board fan-out).
+		$this->notificationService->notifyCardAssigned($cardId, $participantUid, $actorUid);
 	}
 
 	/**
@@ -99,6 +103,9 @@ class AssigneeService {
 			Change::ACTION_UPDATE,
 			$actorUid
 		);
+
+		// Clear any pending "assigned to you" bell notification for this card.
+		$this->notificationService->dismissCardAssigned($cardId, $participantUid);
 	}
 
 	/**

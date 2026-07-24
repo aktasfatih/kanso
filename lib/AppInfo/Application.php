@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\AppInfo;
 
+use OCA\Kanso\Notification\Notifier;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -21,6 +22,7 @@ class Application extends App implements IBootstrap {
 
 	#[\Override]
 	public function register(IRegistrationContext $context): void {
+		$context->registerNotifierService(Notifier::class);
 	}
 
 	#[\Override]

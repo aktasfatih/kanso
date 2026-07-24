@@ -18,6 +18,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -33,6 +34,7 @@ class AssigneeServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private NotificationService&MockObject $notificationService;
 	private AssigneeService $service;
 
 	protected function setUp(): void {
@@ -42,12 +44,14 @@ class AssigneeServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->service = new AssigneeService(
 			$this->cardAssigneeMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
-			$this->permissionService
+			$this->permissionService,
+			$this->notificationService
 		);
 	}
 
@@ -96,6 +100,9 @@ class AssigneeServiceTest extends TestCase {
 				'alice'
 			)
 			->willReturn(new Change());
+		$this->notificationService->expects(self::once())
+			->method('notifyCardAssigned')
+			->with(9, 'bob', 'alice');
 
 		$this->service->assign(9, 'bob', 'alice');
 	}
@@ -190,7 +197,8 @@ class AssigneeServiceTest extends TestCase {
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
-			new PermissionService($aclMapper, $groupManager, $userManager)
+			new PermissionService($aclMapper, $groupManager, $userManager),
+			$this->notificationService
 		);
 
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
@@ -239,6 +247,9 @@ class AssigneeServiceTest extends TestCase {
 				'alice'
 			)
 			->willReturn(new Change());
+		$this->notificationService->expects(self::once())
+			->method('dismissCardAssigned')
+			->with(9, 'bob');
 
 		$this->service->unassign(9, 'bob', 'alice');
 	}
