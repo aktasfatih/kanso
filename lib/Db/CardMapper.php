@@ -41,6 +41,7 @@ class CardMapper extends QBMapper {
 		'last_modified',
 		'deleted_at',
 		'parent_card_id',
+		'priority',
 	];
 
 	public function __construct(IDBConnection $db) {

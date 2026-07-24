@@ -900,4 +900,37 @@ class CardServiceTest extends TestCase {
 		// ...and the parent itself was soft-deleted.
 		self::assertGreaterThan(0, $updated[9]->getDeletedAt());
 	}
+
+	// ---- update priority --------------------------------------------------
+
+	public function testUpdateSetsPriority(): void {
+		$card = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$result = $this->service->update(9, null, null, null, null, null, 'alice', 3);
+		self::assertSame(3, $result->getPriority());
+	}
+
+	public function testUpdateRejectsPriorityAboveRange(): void {
+		$card = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', 5);
+	}
+
+	public function testUpdateRejectsNegativePriority(): void {
+		$card = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', -1);
+	}
 }

@@ -112,6 +112,7 @@ class CardService {
 		?bool $done,
 		?bool $archived,
 		string $uid,
+		?int $priority = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -119,6 +120,12 @@ class CardService {
 
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
+		}
+		if ($priority !== null) {
+			if ($priority < Card::PRIORITY_NONE || $priority > Card::PRIORITY_URGENT) {
+				throw new InvalidInputException('Priority must be between 0 and 4');
+			}
+			$card->setPriority($priority);
 		}
 		if ($description !== null) {
 			$card->setDescription($description);

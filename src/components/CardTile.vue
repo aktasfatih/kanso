@@ -52,6 +52,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<SitemapIcon :size="12" />
 				{{ card.childProgress.done }}/{{ card.childProgress.total }}
 			</span>
+			<!-- Priority indicator — only when priority > 0 -->
+			<span
+				v-if="card.priority > 0"
+				class="card-tile__priority"
+				:class="`card-tile__priority--${card.priority}`"
+				:aria-label="t('kanso', 'Priority: {level}', { level: priorityLabel })">
+				<AlertIcon v-if="card.priority === 4" :size="12" />
+				<ArrowUpBoldIcon v-else-if="card.priority === 3" :size="12" />
+				<SignalCellular2Icon v-else-if="card.priority === 2" :size="12" />
+				<SignalCellular1Icon v-else :size="12" />
+				{{ priorityLabel }}
+			</span>
+
 			<!-- Assignee avatar stack — only when there are assignees -->
 			<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
 				<NcAvatar
@@ -78,8 +91,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
+import AlertIcon from 'vue-material-design-icons/Alert.vue'
+import ArrowUpBoldIcon from 'vue-material-design-icons/ArrowUpBold.vue'
+import SignalCellular2Icon from 'vue-material-design-icons/SignalCellular2.vue'
+import SignalCellular1Icon from 'vue-material-design-icons/SignalCellular1.vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
+import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -178,6 +196,12 @@ function formatDue(iso) {
 	const d = new Date(iso)
 	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
+
+// Priority label for the indicator badge
+const priorityLabel = computed(() => {
+	const level = PRIORITY_LEVELS.find((l) => l.value === Number(props.card.priority ?? 0))
+	return level?.shortLabel ?? ''
+})
 
 // Assignee avatar stack: max 3 visible + overflow count
 const MAX_VISIBLE_ASSIGNEES = 3
@@ -349,6 +373,46 @@ const extraAssigneeCount = computed(() => {
 	color: var(--color-success, #46ba61);
 	border-color: var(--color-success, #46ba61);
 	background: rgba(70, 186, 97, 0.1);
+}
+
+/* Priority indicator badge */
+.card-tile__priority {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	border-radius: 10px;
+	padding: 1px 7px;
+	border: 1px solid currentColor;
+}
+
+/* Low: grey */
+.card-tile__priority--1 {
+	color: #888;
+	border-color: #888;
+	background: rgba(136, 136, 136, 0.1);
+}
+
+/* Medium: blue */
+.card-tile__priority--2 {
+	color: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element, #0082c9);
+	background: rgba(0, 130, 201, 0.1);
+}
+
+/* High: orange */
+.card-tile__priority--3 {
+	color: #e07b00;
+	border-color: #e07b00;
+	background: rgba(224, 123, 0, 0.1);
+}
+
+/* Urgent: red */
+.card-tile__priority--4 {
+	color: var(--color-error, #e30000);
+	border-color: var(--color-error, #e30000);
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
 }
 
 /* Assignee avatar stack */

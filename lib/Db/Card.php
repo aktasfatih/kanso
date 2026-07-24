@@ -45,8 +45,13 @@ use OCP\DB\Types;
  * @method void setDeletedAt(int $deletedAt)
  * @method int|null getParentCardId()
  * @method void setParentCardId(?int $parentCardId)
+ * @method int getPriority()
+ * @method void setPriority(int $priority)
  */
 class Card extends Entity implements \JsonSerializable {
+	public const PRIORITY_NONE = 0;
+	public const PRIORITY_URGENT = 4;
+
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
 	// explicit sets of that same value out of INSERT statements.
@@ -63,6 +68,7 @@ class Card extends Entity implements \JsonSerializable {
 	protected ?int $lastModified = null;
 	protected ?int $deletedAt = null;
 	protected ?int $parentCardId = null;
+	protected ?int $priority = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -78,13 +84,14 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
 		$this->addType('parentCardId', Types::INTEGER);
+		$this->addType('priority', Types::INTEGER);
 	}
 
 	/**
 	 * Summary payload for board/stack listings — deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -100,6 +107,7 @@ class Card extends Entity implements \JsonSerializable {
 			'createdAt' => $this->createdAt ?? 0,
 			'lastModified' => $this->lastModified ?? 0,
 			'parentCardId' => $this->parentCardId,
+			'priority' => $this->priority ?? 0,
 		];
 	}
 

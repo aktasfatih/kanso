@@ -123,6 +123,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 				</div>
 
+				<!-- Priority selector -->
+				<div class="card-modal__meta card-modal__meta--priority">
+					<FlagIcon :size="16" />
+					<span class="card-modal__meta-label">{{ t('kanso', 'Priority') }}</span>
+					<div class="card-modal__priority-buttons" role="group" :aria-label="t('kanso', 'Select priority')">
+						<button
+							v-for="level in PRIORITY_LEVELS"
+							:key="level.value"
+							class="card-modal__priority-btn"
+							:class="[
+								`card-modal__priority-btn--${level.value}`,
+								{ 'card-modal__priority-btn--active': currentPriority === level.value },
+							]"
+							:title="t('kanso', level.label)"
+							:aria-pressed="currentPriority === level.value"
+							:disabled="setPriority.isPending.value"
+							@click="handleSetPriority(level.value)">
+							{{ level.value === 0 ? t('kanso', 'None') : t('kanso', level.label) }}
+						</button>
+					</div>
+					<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
+				</div>
+
 				<!-- Hierarchy section: parent OR children (mutually exclusive per one-level rule) -->
 				<!-- Case 1: this card HAS a parent — show parent link + detach button -->
 				<div v-if="cardData.parentCardId" class="card-modal__hierarchy-section">
@@ -448,7 +471,9 @@ import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOut
 import DragIcon from 'vue-material-design-icons/Drag.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
+import FlagIcon from 'vue-material-design-icons/Flag.vue'
 import { useCard } from '../composables/useCard.js'
+import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
@@ -596,6 +621,22 @@ function formatDoneAt(unixTs) {
 		hour: '2-digit',
 		minute: '2-digit',
 	})
+}
+
+// ── Priority ─────────────────────────────────────────────────────────────────
+const { setPriority } = usePriority(boardId, computed(() => props.cardId))
+const priorityError = ref('')
+
+const currentPriority = computed(() => Number(cardData.value?.priority ?? 0))
+
+async function handleSetPriority(priority) {
+	if (priority === currentPriority.value) return
+	priorityError.value = ''
+	try {
+		await setPriority.mutateAsync({ priority })
+	} catch (err) {
+		priorityError.value = err?.response?.data?.error || t('kanso', 'Failed to update priority.')
+	}
 }
 
 // ── Due date (editable) ──────────────────────────────────────────────────────
@@ -1723,6 +1764,95 @@ async function handleAddChild() {
 
 .card-modal__checklist-add-input:disabled {
 	opacity: 0.5;
+}
+
+/* ── Priority selector ────────────────────────────────────────────────────── */
+.card-modal__meta--priority {
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.card-modal__priority-buttons {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.card-modal__priority-btn {
+	display: inline-flex;
+	align-items: center;
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 13px;
+	border: 1px solid var(--color-border);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+	white-space: nowrap;
+}
+
+.card-modal__priority-btn:hover:not(:disabled) {
+	background: var(--color-background-hover);
+}
+
+.card-modal__priority-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+/* None: active = dark background */
+.card-modal__priority-btn--0.card-modal__priority-btn--active {
+	background: var(--color-background-dark);
+	border-color: var(--color-text-maxcontrast);
+	color: var(--color-main-text);
+}
+
+/* Low: grey */
+.card-modal__priority-btn--1 {
+	color: var(--color-text-maxcontrast);
+	border-color: var(--color-border);
+}
+.card-modal__priority-btn--1.card-modal__priority-btn--active {
+	background: #888;
+	border-color: #888;
+	color: #fff;
+}
+
+/* Medium: blue */
+.card-modal__priority-btn--2 {
+	color: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element, #0082c9);
+}
+.card-modal__priority-btn--2.card-modal__priority-btn--active {
+	background: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element, #0082c9);
+	color: #fff;
+}
+
+/* High: orange */
+.card-modal__priority-btn--3 {
+	color: #e07b00;
+	border-color: #e07b00;
+}
+.card-modal__priority-btn--3.card-modal__priority-btn--active {
+	background: #e07b00;
+	border-color: #e07b00;
+	color: #fff;
+}
+
+/* Urgent: red */
+.card-modal__priority-btn--4 {
+	color: var(--color-error, #e30000);
+	border-color: var(--color-error, #e30000);
+}
+.card-modal__priority-btn--4.card-modal__priority-btn--active {
+	background: var(--color-error, #e30000);
+	border-color: var(--color-error, #e30000);
+	color: #fff;
 }
 
 /* ── Hierarchy (parent / sub-cards) ───────────────────────────────────────── */

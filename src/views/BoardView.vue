@@ -22,18 +22,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
 			<!-- Filter dropdown — compact NcActions menu replacing the old chip row.
-			     Only rendered when the board has at least one label.
-			     Future filter dimensions (assignee, due date, priority) can be
-			     added as additional NcActionCheckbox sections inside this same
-			     NcActions menu; keep label items as the first section. -->
+			     Only rendered when the board has at least one label OR always when
+			     priority filtering is desired (priority filter is always available).
+			     Filter dimensions: labels (OR within), priority levels (OR within).
+			     AND is applied across the two filter types. -->
 			<NcActions
-				v-if="boardData && boardLabels.length"
+				v-if="boardData"
 				class="board-view__filter-menu"
 				:aria-label="t('kanso', 'Filter cards')"
-				:menu-name="activeFilterIds.size > 0
-					? t('kanso', 'Filter · {count}', { count: activeFilterIds.size })
+				:menu-name="totalActiveFilters > 0
+					? t('kanso', 'Filter · {count}', { count: totalActiveFilters })
 					: t('kanso', 'Filter')"
-				:primary="activeFilterIds.size > 0">
+				:primary="totalActiveFilters > 0">
 				<template #icon>
 					<FilterVariantIcon :size="20" />
 				</template>
@@ -53,10 +53,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:model-value="activeFilterIds.has(label.id)"
 					@update:model-value="toggleFilterLabel(label.id)">{{ label.title }}</NcActionCheckbox>
 
+				<!-- ── Priority filter section ────────────────────────────────────
+				     One checkbox per priority level > 0 (None is implicit when all
+				     priority filters are inactive). OR within the priority set. -->
+				<NcActionCheckbox
+					v-for="level in PRIORITY_LEVELS.filter((l) => l.value > 0)"
+					:key="'priority-' + level.value"
+					class="board-view__filter-priority-item"
+					:class="`board-view__filter-priority-item--${level.value}`"
+					:model-value="activePriorityLevels.has(level.value)"
+					@update:model-value="toggleFilterPriority(level.value)">{{ t('kanso', level.label) }}</NcActionCheckbox>
+
 				<!-- ── Clear action (hidden when no filters active) ───────────── -->
 				<NcActionButton
-					v-if="activeFilterIds.size > 0"
-					@click="activeFilterIds.clear()">
+					v-if="totalActiveFilters > 0"
+					@click="clearAllFilters">
 					<template #icon>
 						<FilterVariantRemoveIcon :size="20" />
 					</template>
@@ -190,6 +201,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<td>{{ t('kanso', 'Toggle done on focused card') }}</td>
 						</tr>
 						<tr>
+							<td class="shortcuts-modal__key"><kbd>0</kbd>–<kbd>4</kbd></td>
+							<td>{{ t('kanso', 'Set priority on focused card (0=None, 1=Low … 4=Urgent)') }}</td>
+						</tr>
+						<tr>
 							<td class="shortcuts-modal__key"><kbd>?</kbd></td>
 							<td>{{ t('kanso', 'Show / hide this shortcuts overlay') }}</td>
 						</tr>
@@ -218,6 +233,7 @@ import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
 import StackColumn from '../components/StackColumn.vue'
+import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ArchivedPanel from '../components/ArchivedPanel.vue'
 import { useBoard } from '../composables/useBoard.js'
@@ -313,6 +329,16 @@ const labelsById = computed(() => {
 // Uses a reactive Set so individual .has() calls remain reactive.
 const activeFilterIds = reactive(new Set())
 
+// ── Priority filter state ─────────────────────────────────────────────────────
+// ANY-of semantics within priority: a card passes if its priority is in the
+// selected set. AND is applied across label and priority filters.
+const activePriorityLevels = reactive(new Set())
+
+// Total active filter count — used for the filter button badge.
+const totalActiveFilters = computed(
+	() => activeFilterIds.size + activePriorityLevels.size,
+)
+
 const bySortKey = (a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)
 
 const sortedStacks = computed(() => {
@@ -333,15 +359,22 @@ const archivedCards = computed(() =>
 
 const cardsByStack = computed(() => {
 	const map = new Map()
-	const filterActive = activeFilterIds.size > 0
+	const labelFilterActive = activeFilterIds.size > 0
+	const priorityFilterActive = activePriorityLevels.size > 0
 	for (const card of boardData.value?.cards ?? []) {
 		if (card.archived) continue
-		// Label filter: ANY-of semantics — skip cards that don't carry at least
-		// one of the selected filter labels when a filter is active.
-		if (filterActive) {
+		// Label filter (OR within): skip cards that don't carry at least one
+		// of the selected filter labels when a label filter is active.
+		if (labelFilterActive) {
 			const cardLabelIds = Array.isArray(card.labelIds) ? card.labelIds : []
 			const passes = cardLabelIds.some((id) => activeFilterIds.has(id))
 			if (!passes) continue
+		}
+		// Priority filter (OR within): skip cards whose priority is not in the
+		// selected set. AND'd with the label filter above.
+		if (priorityFilterActive) {
+			const cardPriority = Number(card.priority ?? 0)
+			if (!activePriorityLevels.has(cardPriority)) continue
 		}
 		if (!map.has(card.stackId)) map.set(card.stackId, [])
 		map.get(card.stackId).push(card)
@@ -521,6 +554,23 @@ function handleKeydown(e) {
 			.catch((err) => {
 				shortcutError.value =
 					err?.response?.data?.error || t('kanso', 'Failed to update the card.')
+			})
+			.finally(() => {
+				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
+			})
+		return
+	}
+
+	// Keys 1–4 set priority on the focused card (1=Low, 2=Med, 3=High, 4=Urgent).
+	// Key 0 clears priority (sets to None). Skip when no card is focused.
+	if ((key === '0' || key === '1' || key === '2' || key === '3' || key === '4') && focusedCardId.value != null) {
+		e.preventDefault()
+		const priority = Number(key)
+		const id = focusedCardId.value
+		apiUpdateCard(id, { priority })
+			.catch((err) => {
+				shortcutError.value =
+					err?.response?.data?.error || t('kanso', 'Failed to set priority.')
 			})
 			.finally(() => {
 				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
@@ -730,6 +780,19 @@ function toggleFilterLabel(labelId) {
 	}
 }
 
+function toggleFilterPriority(level) {
+	if (activePriorityLevels.has(level)) {
+		activePriorityLevels.delete(level)
+	} else {
+		activePriorityLevels.add(level)
+	}
+}
+
+function clearAllFilters() {
+	activeFilterIds.clear()
+	activePriorityLevels.clear()
+}
+
 function goBack() {
 	router.push({ name: 'board-list' })
 }
@@ -826,6 +889,55 @@ async function handleCreateCard(stackId, title) {
 	margin-right: 6px;
 	vertical-align: middle;
 	flex-shrink: 0;
+}
+
+/* Priority filter items — color-coded dot via ::before, mirroring label dot pattern */
+.board-view__filter-priority-item--1:deep(.action-checkbox__text)::before {
+	content: '';
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	background: #888;
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+.board-view__filter-priority-item--2:deep(.action-checkbox__text)::before {
+	content: '';
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	background: var(--color-primary-element, #0082c9);
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+.board-view__filter-priority-item--3:deep(.action-checkbox__text)::before {
+	content: '';
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	background: #e07b00;
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+.board-view__filter-priority-item--4:deep(.action-checkbox__text)::before {
+	content: '';
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	background: var(--color-error, #e30000);
+	margin-right: 6px;
+	vertical-align: middle;
 }
 
 /* Settings gear button */
