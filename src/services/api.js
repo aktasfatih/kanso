@@ -192,6 +192,10 @@ export const withdrawReview = (cardId, userId) =>
 export const setReviewState = (cardId, userId, state) =>
 	axios.patch(url(`/api/cards/${cardId}/reviews/${userId}`), { state }).then((r) => r.data)
 
+// Inbox (activity feed — comments on watched cards by others)
+export const getInbox = () =>
+	axios.get(url('/api/inbox')).then((r) => r.data)
+
 // Review types
 export const createReviewType = (boardId, title, color) =>
 	axios.post(url('/api/review-types'), { boardId, title, color: color || null }).then((r) => r.data)

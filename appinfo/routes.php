@@ -46,6 +46,8 @@ return [
 		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'DELETE'],
 
+		['name' => 'inbox#index', 'url' => '/api/inbox', 'verb' => 'GET'],
+
 		['name' => 'review#mine', 'url' => '/api/reviews/mine', 'verb' => 'GET'],
 		['name' => 'review#request', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'PUT'],
 		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'DELETE'],

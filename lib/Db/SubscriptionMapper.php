@@ -70,6 +70,28 @@ class SubscriptionMapper extends QBMapper {
 	}
 
 	/**
+	 * Card ids the user actively watches at the card level (thread 0, subscribed
+	 * state) — the "followed cards" set for the Inbox feed.
+	 *
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function findSubscribedCardIds(string $subscriber): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('card_id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('subscriber', $qb->createNamedParameter($subscriber)))
+			->andWhere($qb->expr()->eq('comment_thread_id', $qb->createNamedParameter(self::THREAD_CARD, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('state', $qb->createNamedParameter(Subscription::STATE_SUBSCRIBED, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$ids = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
 	 * Uids to notify of activity in a thread: everyone watching the whole card
 	 * (thread 0) plus everyone watching that specific thread, deduplicated,
 	 * active only.

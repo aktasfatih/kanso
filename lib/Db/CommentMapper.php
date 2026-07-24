@@ -185,6 +185,59 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
+	 * The Inbox feed: recent comments on the given followed cards, enriched with
+	 * card + board context, newest first, excluding the viewer's own comments.
+	 * The caller supplies both the followed-card set and the ACL-filtered
+	 * readable board set (mirrors the readable-boards discipline), so no per-row
+	 * permission check is needed. Empty card set → [].
+	 *
+	 * @param int[] $cardIds followed card ids
+	 * @param int[] $boardIds the viewer's readable board ids
+	 * @return list<array{id: int, cardId: int, boardId: int, cardTitle: string, boardTitle: string, author: string, body: string, createdAt: int}>
+	 * @throws Exception
+	 */
+	public function findInboxForCards(array $cardIds, array $boardIds, string $excludeAuthor, int $limit): array {
+		if ($cardIds === [] || $boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('cm.id', 'cm.card_id', 'cm.author', 'cm.body', 'cm.created_at')
+			->selectAlias('c.title', 'card_title')
+			->addSelect('c.board_id')
+			->selectAlias('b.title', 'board_title')
+			->from($this->getTableName(), 'cm')
+			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->where($qb->expr()->in('cm.card_id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->neq('cm.author', $qb->createNamedParameter($excludeAuthor)))
+			->orderBy('cm.created_at', 'DESC')
+			->addOrderBy('cm.id', 'DESC')
+			->setMaxResults($limit);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'cardId' => (int)$row['card_id'],
+				'boardId' => (int)$row['board_id'],
+				'cardTitle' => (string)$row['card_title'],
+				'boardTitle' => (string)$row['board_title'],
+				'author' => (string)$row['author'],
+				'body' => (string)$row['body'],
+				'createdAt' => (int)$row['created_at'],
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Hard-deletes every comment of a card (all threads) — cascade for a card
 	 * purge.
 	 *
