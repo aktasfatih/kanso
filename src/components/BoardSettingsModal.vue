@@ -1889,8 +1889,17 @@ function toggleWeekday(day) {
 }
 
 .label-settings__color-option {
+	box-sizing: border-box;
 	width: 24px;
 	height: 24px;
+	/* Defeat the UA <button> box (line-height/padding/min-size) that otherwise
+	   inflates the height and turns the swatch into an ellipse. */
+	min-width: 24px;
+	min-height: 24px;
+	padding: 0;
+	line-height: 1;
+	flex-shrink: 0;
+	aspect-ratio: 1;
 	border-radius: 50%;
 	border: 2px solid transparent;
 	cursor: pointer;
@@ -2233,6 +2242,8 @@ function toggleWeekday(day) {
 .sharing__group-icon {
 	width: 32px;
 	height: 32px;
+	flex-shrink: 0;
+	aspect-ratio: 1;
 	border-radius: 50%;
 	background: var(--color-background-dark);
 	display: flex;

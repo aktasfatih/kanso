@@ -1479,6 +1479,8 @@ async function handleAddChild() {
 	justify-content: center;
 	width: 22px;
 	height: 22px;
+	flex-shrink: 0;
+	aspect-ratio: 1;
 	border: none;
 	border-radius: 50%;
 	background: transparent;

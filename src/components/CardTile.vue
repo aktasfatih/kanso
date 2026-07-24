@@ -445,6 +445,8 @@ const extraAssigneeCount = computed(() => {
 
 .card-tile__avatar {
 	margin-left: -6px;
+	flex-shrink: 0;
+	aspect-ratio: 1;
 	border: 2px solid var(--color-main-background);
 	border-radius: 50%;
 }
@@ -459,6 +461,8 @@ const extraAssigneeCount = computed(() => {
 	justify-content: center;
 	width: 24px;
 	height: 24px;
+	flex-shrink: 0;
+	aspect-ratio: 1;
 	border-radius: 50%;
 	background: var(--color-background-dark);
 	border: 2px solid var(--color-main-background);
