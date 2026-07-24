@@ -57,31 +57,50 @@ class CardService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 * @throws InvalidInputException on invalid title
 	 * @throws \OverflowException if the appended sort key would overflow (stack needs a rebalance)
+	 *                            or a concurrent create keeps colliding after one retry
 	 */
 	public function create(int $stackId, string $title, string $uid): Card {
 		$stack = $this->loadStack($stackId);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 
-		$lastCard = $this->cardMapper->findLastInStack($stackId);
-		$sortKey = $lastCard === null
-			? $this->sortKeyService->initial()
-			: $this->sortKeyService->after($lastCard->getSortKey());
-
+		$title = $this->validateTitle($title);
 		$now = time();
 
-		$card = new Card();
-		$card->setBoardId($stack->getBoardId());
-		$card->setStackId($stackId);
-		$card->setTitle($this->validateTitle($title));
-		$card->setSortKey($sortKey);
-		$card->setDoneAt(0);
-		$card->setArchived(false);
-		$card->setOwner($uid);
-		$card->setCreatedAt($now);
-		$card->setLastModified($now);
-		$card->setDeletedAt(0);
-		$card = $this->cardMapper->insert($card);
+		// Append to the bottom of the stack. A concurrent create into the same
+		// stack can derive the same append key; the (stack_id, sort_key,
+		// deleted_at) unique index rejects the loser, so re-read the now-current
+		// last card and re-derive once before giving up with a retryable 409.
+		for ($attempt = 0; ; $attempt++) {
+			$lastCard = $this->cardMapper->findLastInStack($stackId);
+			$sortKey = $lastCard === null
+				? $this->sortKeyService->initial()
+				: $this->sortKeyService->after($lastCard->getSortKey());
+
+			$card = new Card();
+			$card->setBoardId($stack->getBoardId());
+			$card->setStackId($stackId);
+			$card->setTitle($title);
+			$card->setSortKey($sortKey);
+			$card->setDoneAt(0);
+			$card->setArchived(false);
+			$card->setOwner($uid);
+			$card->setCreatedAt($now);
+			$card->setLastModified($now);
+			$card->setDeletedAt(0);
+
+			try {
+				$card = $this->cardMapper->insert($card);
+				break;
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					throw $e;
+				}
+				if ($attempt >= 1) {
+					throw new \OverflowException('sort key conflict on create after retry', 0, $e);
+				}
+			}
+		}
 
 		$this->changeNotifier->notify(
 			$stack->getBoardId(),
@@ -201,17 +220,19 @@ class CardService {
 	 * Moves the card inside its board: into $targetStackId, directly after
 	 * $afterCardId, or to the top of the target stack when $afterCardId is
 	 * null. The transaction makes the card update and its change row atomic
-	 * (rollback on failure) — it does NOT serialize concurrent moves: two
-	 * moves into the same gap can each read the same neighbours under READ
-	 * COMMITTED and derive the same key, leaving duplicate sort keys whose
-	 * relative order is undefined. Accepted for MVP (cosmetic wobble, next
-	 * move repairs it); a unique index on (stack_id, sort_key) is the
-	 * planned mitigation.
+	 * (rollback on failure).
+	 *
+	 * Concurrent moves are NOT serialized: two moves into the same gap can each
+	 * read the same neighbours under READ COMMITTED and derive the same key.
+	 * The composite unique index on (stack_id, sort_key, deleted_at) rejects the
+	 * loser's UPDATE, so we re-read the neighbours and re-derive once; if it
+	 * still collides, a retryable 409 (\OverflowException → rebalance_required)
+	 * is surfaced rather than persisting a duplicate key.
 	 *
 	 * @throws DoesNotExistException if the card, its board or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
 	 * @throws InvalidInputException if the target stack is on another board or $afterCardId is unusable
-	 * @throws \OverflowException if the new sort key would overflow (stack needs a rebalance)
+	 * @throws \OverflowException if the new sort key would overflow (stack needs a rebalance) or keeps colliding after one retry
 	 */
 	public function move(int $id, int $targetStackId, ?int $afterCardId, string $uid): Card {
 		$card = $this->loadCard($id);
@@ -223,16 +244,48 @@ class CardService {
 			throw new InvalidInputException('Cannot move a card to a stack on another board');
 		}
 
-		$afterCard = $afterCardId === null
-			? null
-			: $this->loadAfterCard($afterCardId, $targetStackId, $id);
-
 		// Source stack role for the done-automation. A move within the same
 		// stack keeps the target's role — done state then stays put.
 		$sourceStack = $targetStackId === $card->getStackId()
 			? $targetStack
 			: $this->stackMapper->find($card->getStackId());
 
+		for ($attempt = 0; ; $attempt++) {
+			$afterCard = $afterCardId === null
+				? null
+				: $this->loadAfterCard($afterCardId, $targetStackId, $id);
+			try {
+				return $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					throw $e;
+				}
+				if ($attempt >= 1) {
+					throw new \OverflowException('sort key conflict on move after retry', 0, $e);
+				}
+				// Discard the mutations from the rolled-back attempt before retrying.
+				$card = $this->loadCard($id);
+			}
+		}
+	}
+
+	/**
+	 * Persists a move inside a transaction: derive the key, update the single
+	 * card row and append the change row atomically (rollback on failure). A
+	 * unique-constraint violation from a concurrent move into the same gap
+	 * propagates to {@see self::move()} for a re-derive/retry.
+	 *
+	 * @throws \OCP\DB\Exception on a DB error (including the unique-key race)
+	 * @throws \OverflowException if the derived key would overflow — rebalance needed
+	 */
+	private function persistMove(
+		Card $card,
+		int $targetStackId,
+		?Card $afterCard,
+		Stack $sourceStack,
+		Stack $targetStack,
+		string $uid,
+	): Card {
 		$this->db->beginTransaction();
 		try {
 			$sortKey = $this->deriveMoveKey($targetStackId, $afterCard);
@@ -247,7 +300,7 @@ class CardService {
 			$this->changeNotifier->notify(
 				$card->getBoardId(),
 				Change::ENTITY_CARD,
-				$id,
+				$card->getId(),
 				Change::ACTION_MOVE,
 				$uid
 			);

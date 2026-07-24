@@ -86,6 +86,16 @@ class CardServiceTest extends TestCase {
 		return $card;
 	}
 
+	/**
+	 * A mocked NC-portable unique-constraint violation, as the mapper surfaces
+	 * one (see AclServiceTest/AssigneeServiceTest for the same shape).
+	 */
+	private function uniqueViolation(): \OCP\DB\Exception&MockObject {
+		$e = $this->createMock(\OCP\DB\Exception::class);
+		$e->method('getReason')->willReturn(\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION);
+		return $e;
+	}
+
 	// ---- create -----------------------------------------------------------
 
 	public function testCreateOnEmptyStackUsesInitialSortKey(): void {
@@ -183,6 +193,53 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::never())->method('insert');
 
 		$this->expectException(DoesNotExistException::class);
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	public function testCreateRetriesOnceOnSortKeyConflictThenSucceeds(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// The neighbour shifts between attempts: 'J' → after 'K' (collides),
+		// then 'K' → after 'L' (succeeds).
+		$this->cardMapper->method('findLastInStack')->with(5)
+			->willReturnOnConsecutiveCalls(
+				$this->card(8, 5, 1, 'J'),
+				$this->card(8, 5, 1, 'K'),
+			);
+		$attempt = 0;
+		$this->cardMapper->expects(self::exactly(2))
+			->method('insert')
+			->willReturnCallback(function (Card $card) use (&$attempt): Card {
+				$attempt++;
+				if ($attempt === 1) {
+					self::assertSame('K', $card->getSortKey());
+					throw $this->uniqueViolation();
+				}
+				self::assertSame('L', $card->getSortKey());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_CREATE, 'alice')
+			->willReturn(new Change());
+
+		$card = $this->service->create(5, 'A card', 'alice');
+		self::assertSame(9, $card->getId());
+		self::assertSame('L', $card->getSortKey());
+	}
+
+	public function testCreateThrowsConflictAfterRetryExhausted(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)
+			->willReturn($this->card(8, 5, 1, 'J'));
+		$this->cardMapper->expects(self::exactly(2))
+			->method('insert')
+			->willReturnCallback(fn (Card $card): Card => throw $this->uniqueViolation());
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(\OverflowException::class);
 		$this->service->create(5, 'A card', 'alice');
 	}
 
@@ -616,6 +673,85 @@ class CardServiceTest extends TestCase {
 		$this->changeNotifier->expects(self::never())->method('notify');
 
 		$this->expectException(\RuntimeException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	// ---- move sort-key conflict retry -------------------------------------
+
+	public function testMoveRetriesOnceOnSortKeyConflictThenSucceeds(): void {
+		$this->cardMapper->method('find')->willReturnCallback(
+			fn (int $id): Card => $this->card(9, 5, 1, 'V')
+		);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$attempt = 0;
+		$this->cardMapper->expects(self::exactly(2))
+			->method('update')
+			->willReturnCallback(function (Card $card) use (&$attempt): Card {
+				$attempt++;
+				if ($attempt === 1) {
+					throw $this->uniqueViolation();
+				}
+				return $card;
+			});
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+		$this->db->expects(self::exactly(2))->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::once())->method('commit');
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		// findFirstInStack === null → initial() === 'I' on the successful retry.
+		self::assertSame('I', $moved->getSortKey());
+		self::assertSame(6, $moved->getStackId());
+	}
+
+	public function testMoveThrowsConflictAfterRetryExhausted(): void {
+		$this->cardMapper->method('find')->willReturnCallback(
+			fn (int $id): Card => $this->card(9, 5, 1, 'V')
+		);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->expects(self::exactly(2))
+			->method('update')
+			->willReturnCallback(fn (Card $card): Card => throw $this->uniqueViolation());
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->db->expects(self::exactly(2))->method('beginTransaction');
+		$this->db->expects(self::exactly(2))->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+
+		$this->expectException(\OverflowException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	public function testMoveDoesNotRetryOnNonUniqueDbError(): void {
+		$this->cardMapper->method('find')->willReturnCallback(
+			fn (int $id): Card => $this->card(9, 5, 1, 'V')
+		);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$dbError = $this->createMock(\OCP\DB\Exception::class);
+		$dbError->method('getReason')->willReturn(\OCP\DB\Exception::REASON_CONNECTION_LOST);
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willThrowException($dbError);
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(\OCP\DB\Exception::class);
 		$this->service->move(9, 6, null, 'alice');
 	}
 

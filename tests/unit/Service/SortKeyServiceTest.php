@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
-use InvalidArgumentException;
+use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\SortKeyService;
 use OverflowException;
 use PHPUnit\Framework\TestCase;
@@ -87,22 +87,22 @@ class SortKeyServiceTest extends TestCase {
 	}
 
 	public function testBetweenThrowsWhenFirstKeyIsGreater(): void {
-		$this->expectException(InvalidArgumentException::class);
+		$this->expectException(InvalidInputException::class);
 		$this->service->between('J', 'I');
 	}
 
 	public function testBetweenThrowsWhenKeysAreEqual(): void {
-		$this->expectException(InvalidArgumentException::class);
+		$this->expectException(InvalidInputException::class);
 		$this->service->between('I', 'I');
 	}
 
 	public function testBetweenThrowsOnTrailingZeroKey(): void {
-		$this->expectException(InvalidArgumentException::class);
+		$this->expectException(InvalidInputException::class);
 		$this->service->between('I0', 'J');
 	}
 
 	public function testBetweenThrowsOnLowercaseKey(): void {
-		$this->expectException(InvalidArgumentException::class);
+		$this->expectException(InvalidInputException::class);
 		$this->service->between('a', 'b');
 	}
 

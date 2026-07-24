@@ -222,15 +222,25 @@ class CardControllerTest extends TestCase {
 		self::assertSame('rebalance_required', $response->getData()['error']);
 	}
 
-	public function testMoveMapsSortKeyInvalidArgumentTo400(): void {
-		// Defensive: SortKeyService throws InvalidArgumentException on
-		// malformed/misordered keys — must not surface as a 500.
+	public function testMoveMapsStaleSortKeyInputTo400(): void {
+		// Defensive: SortKeyService rejects malformed/misordered keys (built from
+		// stale client state) with InvalidInputException — must map to 400, not 500.
 		$this->cardService->method('move')
-			->willThrowException(new \InvalidArgumentException('between() requires a < b'));
+			->willThrowException(new InvalidInputException('between() requires a < b'));
 
 		$response = $this->controller->move(9, 6, 10);
 		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testMoveMapsSortKeyConflictTo409(): void {
+		// A concurrent move that keeps colliding after a retry surfaces as an
+		// \OverflowException — mapped to 409 (rebalance_required) so the client retries.
+		$this->cardService->method('move')
+			->willThrowException(new \OverflowException('sort key conflict on move after retry'));
+
+		$response = $this->controller->move(9, 6, 10);
+		self::assertSame(Http::STATUS_CONFLICT, $response->getStatus());
 	}
 
 	public function testMoveMapsNotPermittedTo403(): void {

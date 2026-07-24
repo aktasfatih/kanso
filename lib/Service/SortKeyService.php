@@ -7,7 +7,6 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
-use InvalidArgumentException;
 use OverflowException;
 
 /**
@@ -65,14 +64,14 @@ class SortKeyService {
 	 *
 	 * The result is at most one character longer than the longer input.
 	 *
-	 * @throws InvalidArgumentException if $a >= $b or either key is malformed
+	 * @throws InvalidInputException if $a >= $b or either key is malformed
 	 * @throws OverflowException if the result would exceed MAX_KEY_LENGTH
 	 */
 	public function between(string $a, string $b): string {
 		$this->assertValidKey($a);
 		$this->assertValidKey($b);
 		if (strcmp($a, $b) >= 0) {
-			throw new InvalidArgumentException(
+			throw new InvalidInputException(
 				'between() requires a < b, got "' . $a . '" >= "' . $b . '"'
 			);
 		}
@@ -86,7 +85,7 @@ class SortKeyService {
 	 * digit below 'Z' is bumped by one and the remainder dropped, so N
 	 * sequential appends need only O(log N) characters.
 	 *
-	 * @throws InvalidArgumentException if $a is malformed
+	 * @throws InvalidInputException if $a is malformed
 	 * @throws OverflowException if the result would exceed MAX_KEY_LENGTH
 	 */
 	public function after(string $a): string {
@@ -110,7 +109,7 @@ class SortKeyService {
 	 * create a forbidden trailing '0'). If $b contains only '0'/'1' digits,
 	 * its final '1' becomes '0Z'.
 	 *
-	 * @throws InvalidArgumentException if $b is malformed
+	 * @throws InvalidInputException if $b is malformed
 	 * @throws OverflowException if the result would exceed MAX_KEY_LENGTH
 	 */
 	public function before(string $b): string {
@@ -163,14 +162,14 @@ class SortKeyService {
 	}
 
 	/**
-	 * @throws InvalidArgumentException
+	 * @throws InvalidInputException
 	 */
 	private function assertValidKey(string $key): void {
 		if ($key === '' || preg_match('/^[0-9A-Z]+$/', $key) !== 1) {
-			throw new InvalidArgumentException('Invalid sort key "' . $key . '"');
+			throw new InvalidInputException('Invalid sort key "' . $key . '"');
 		}
 		if ($key[strlen($key) - 1] === '0') {
-			throw new InvalidArgumentException(
+			throw new InvalidInputException(
 				'Invalid sort key "' . $key . '": keys must not end with "0"'
 			);
 		}
@@ -190,12 +189,12 @@ class SortKeyService {
 	}
 
 	/**
-	 * @throws InvalidArgumentException
+	 * @throws InvalidInputException
 	 */
 	private function digitValue(string $digit): int {
 		$value = strpos(self::ALPHABET, $digit);
 		if ($value === false) {
-			throw new InvalidArgumentException('Invalid sort key digit "' . $digit . '"');
+			throw new InvalidInputException('Invalid sort key digit "' . $digit . '"');
 		}
 		return $value;
 	}
