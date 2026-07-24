@@ -23,6 +23,16 @@ const routes = [
 			},
 		],
 	},
+	{
+		path: '/reviews',
+		name: 'my-reviews',
+		component: () => import('../views/MyReviewsView.vue'),
+	},
+	{
+		path: '/inbox',
+		name: 'inbox',
+		component: () => import('../views/InboxView.vue'),
+	},
 ]
 
 export const router = createRouter({
