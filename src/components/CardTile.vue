@@ -25,67 +25,72 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
+			<!-- Card title — max 2 lines with ellipsis overflow -->
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
-			<!-- Due date chip — suppress overdue/soon when done -->
-			<span
-				v-if="card.duedate"
-				class="card-tile__due"
-				:class="dueDateClass">
-				<CalendarIcon :size="14" />
-				{{ formatDue(card.duedate) }}
-			</span>
-			<!-- Checklist progress badge — only when the card has checklist items -->
-			<span
-				v-if="card.checklist && card.checklist.total > 0"
-				class="card-tile__checklist"
-				:class="{ 'card-tile__checklist--complete': card.checklist.done === card.checklist.total }"
-				:aria-label="t('kanso', 'Checklist progress')">
-				<CheckboxMarkedOutlineIcon :size="12" />
-				{{ card.checklist.done }}/{{ card.checklist.total }}
-			</span>
-			<!-- Child-progress badge — only when the card has children -->
-			<span
-				v-if="card.childProgress && card.childProgress.total > 0"
-				class="card-tile__children"
-				:class="{ 'card-tile__children--complete': card.childProgress.done === card.childProgress.total }"
-				:aria-label="t('kanso', 'Sub-card progress')">
-				<SitemapIcon :size="12" />
-				{{ card.childProgress.done }}/{{ card.childProgress.total }}
-			</span>
-			<!-- Comment count badge — only when there are comments -->
-			<span
-				v-if="card.commentCount > 0"
-				class="card-tile__comments"
-				:aria-label="t('kanso', 'Comments')">
-				<CommentMultipleOutlineIcon :size="12" />
-				{{ card.commentCount }}
-			</span>
-			<!-- Priority indicator — only when priority > 0 -->
-			<span
-				v-if="card.priority > 0"
-				class="card-tile__priority"
-				:class="`card-tile__priority--${card.priority}`"
-				:aria-label="t('kanso', 'Priority: {level}', { level: priorityLabel })">
-				<AlertIcon v-if="card.priority === 4" :size="12" />
-				<ArrowUpBoldIcon v-else-if="card.priority === 3" :size="12" />
-				<SignalCellular2Icon v-else-if="card.priority === 2" :size="12" />
-				<SignalCellular1Icon v-else :size="12" />
-				{{ priorityLabel }}
-			</span>
-
-			<!-- Assignee avatar stack — only when there are assignees -->
-			<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
-				<NcAvatar
-					v-for="uid in visibleAssigneeIds"
-					:key="uid"
-					:user="uid"
-					:size="24"
-					:show-user-status="false"
-					:disable-tooltip="false"
-					class="card-tile__avatar" />
-				<span v-if="extraAssigneeCount > 0" class="card-tile__avatar-overflow">
-					+{{ extraAssigneeCount }}
+			<!-- Single meta row: all badges inline, assignees pushed to the right -->
+			<div
+				v-if="card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length)"
+				class="card-tile__meta">
+				<!-- Priority indicator — only when priority > 0 -->
+				<span
+					v-if="card.priority > 0"
+					class="card-tile__priority"
+					:class="`card-tile__priority--${card.priority}`"
+					:aria-label="t('kanso', 'Priority: {level}', { level: priorityLabel })">
+					<AlertIcon v-if="card.priority === 4" :size="12" />
+					<ArrowUpBoldIcon v-else-if="card.priority === 3" :size="12" />
+					<SignalCellular2Icon v-else-if="card.priority === 2" :size="12" />
+					<SignalCellular1Icon v-else :size="12" />
+					{{ priorityLabel }}
 				</span>
+				<!-- Due date chip — suppress overdue/soon when done -->
+				<span
+					v-if="card.duedate"
+					class="card-tile__due"
+					:class="dueDateClass">
+					<CalendarIcon :size="14" />
+					{{ formatDue(card.duedate) }}
+				</span>
+				<!-- Checklist progress badge — only when the card has checklist items -->
+				<span
+					v-if="card.checklist && card.checklist.total > 0"
+					class="card-tile__checklist"
+					:class="{ 'card-tile__checklist--complete': card.checklist.done === card.checklist.total }"
+					:aria-label="t('kanso', 'Checklist progress')">
+					<CheckboxMarkedOutlineIcon :size="12" />
+					{{ card.checklist.done }}/{{ card.checklist.total }}
+				</span>
+				<!-- Child-progress badge — only when the card has children -->
+				<span
+					v-if="card.childProgress && card.childProgress.total > 0"
+					class="card-tile__children"
+					:class="{ 'card-tile__children--complete': card.childProgress.done === card.childProgress.total }"
+					:aria-label="t('kanso', 'Sub-card progress')">
+					<SitemapIcon :size="12" />
+					{{ card.childProgress.done }}/{{ card.childProgress.total }}
+				</span>
+				<!-- Comment count badge — only when there are comments -->
+				<span
+					v-if="card.commentCount > 0"
+					class="card-tile__comments"
+					:aria-label="t('kanso', 'Comments')">
+					<CommentMultipleOutlineIcon :size="12" />
+					{{ card.commentCount }}
+				</span>
+				<!-- Assignee avatar stack — pushed to the right via margin-left:auto -->
+				<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
+					<NcAvatar
+						v-for="uid in visibleAssigneeIds"
+						:key="uid"
+						:user="uid"
+						:size="24"
+						:show-user-status="false"
+						:disable-tooltip="false"
+						class="card-tile__avatar" />
+					<span v-if="extraAssigneeCount > 0" class="card-tile__avatar-overflow">
+						+{{ extraAssigneeCount }}
+					</span>
+				</div>
 			</div>
 		</button>
 
@@ -284,6 +289,20 @@ const extraAssigneeCount = computed(() => {
 	font-size: 0.875rem;
 	line-height: 1.4;
 	word-break: break-word;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* Meta row — all badges on a single flex line; assignees pushed right */
+.card-tile__meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	width: 100%;
+	margin-top: 2px;
 }
 
 .card-tile__due {
@@ -436,11 +455,11 @@ const extraAssigneeCount = computed(() => {
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
 }
 
-/* Assignee avatar stack */
+/* Assignee avatar stack — inside .card-tile__meta, pushed to the right */
 .card-tile__assignees {
 	display: flex;
 	align-items: center;
-	margin-top: 2px;
+	margin-left: auto;
 }
 
 .card-tile__avatar {

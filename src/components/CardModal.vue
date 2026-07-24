@@ -6,9 +6,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	<NcModal
 		:show="true"
 		:name="cardTitle"
-		size="normal"
+		size="large"
 		@close="closeModal">
-		<div class="card-modal">
+		<div class="card-modal" @keydown.escape="closeModal">
 			<!-- Loading state -->
 			<div v-if="isLoading" class="card-modal__loading">
 				<div class="skeleton-text card-modal__title-skeleton" />
@@ -31,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="card-modal__title-input"
 							type="text"
 							@keydown.enter.prevent="saveTitle"
-							@keydown.escape="cancelTitleEdit"
+							@keydown.escape.stop="cancelTitleEdit"
 							@blur="saveTitle" />
 					</template>
 					<template v-else>
@@ -126,362 +126,49 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ actionError }}
 				</span>
 
-				<!-- Due date — editable via datetime-local input -->
-				<div class="card-modal__meta card-modal__meta--due">
-					<CalendarIcon :size="16" />
-					<span class="card-modal__meta-label">{{ t('kanso', 'Due date') }}</span>
-					<input
-						class="card-modal__due-input"
-						:class="dueDateClass"
-						type="datetime-local"
-						:value="dueDateInputValue"
-						@change="handleDueDateChange" />
-					<button
-						v-if="cardData.duedate"
-						class="card-modal__due-clear"
-						:title="t('kanso', 'Clear due date')"
-						@click="clearDueDate">
-						<CloseIcon :size="14" />
-					</button>
-				</div>
+				<!-- Two-column layout: main (description + discussion) | sidebar (attributes) -->
+				<div class="card-modal__columns">
+					<!-- LEFT column: description + discussion -->
+					<div class="card-modal__main">
+						<!-- Description -->
+						<div class="card-modal__description-section">
+							<label class="card-modal__label">{{ t('kanso', 'Description') }}</label>
 
-				<!-- Done toggle -->
-				<div class="card-modal__meta card-modal__meta--done">
-					<NcCheckboxRadioSwitch
-						:model-value="isDone"
-						type="checkbox"
-						@update:model-value="handleDoneToggle">
-						{{ t('kanso', 'Done') }}
-					</NcCheckboxRadioSwitch>
-					<span v-if="isDone && cardData.doneAt" class="card-modal__done-at">
-						{{ formatDoneAt(cardData.doneAt) }}
-					</span>
-				</div>
+							<template v-if="editingDescription">
+								<textarea
+									v-model="draftDescription"
+									class="card-modal__desc-textarea"
+									:placeholder="t('kanso', 'Add a description…')"
+									rows="8" />
+								<div class="card-modal__desc-actions">
+									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
+										{{ t('kanso', 'Save') }}
+									</NcButton>
+									<NcButton @click="cancelDescriptionEdit">
+										{{ t('kanso', 'Cancel') }}
+									</NcButton>
+									<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
+								</div>
+							</template>
 
-				<!-- Priority selector -->
-				<div class="card-modal__meta card-modal__meta--priority">
-					<FlagIcon :size="16" />
-					<span class="card-modal__meta-label">{{ t('kanso', 'Priority') }}</span>
-					<div class="card-modal__priority-buttons" role="group" :aria-label="t('kanso', 'Select priority')">
-						<button
-							v-for="level in PRIORITY_LEVELS"
-							:key="level.value"
-							class="card-modal__priority-btn"
-							:class="[
-								`card-modal__priority-btn--${level.value}`,
-								{ 'card-modal__priority-btn--active': currentPriority === level.value },
-							]"
-							:title="t('kanso', level.label)"
-							:aria-pressed="currentPriority === level.value"
-							:disabled="setPriority.isPending.value"
-							@click="handleSetPriority(level.value)">
-							{{ level.value === 0 ? t('kanso', 'None') : t('kanso', level.label) }}
-						</button>
-					</div>
-					<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
-				</div>
-
-				<!-- Hierarchy section: parent OR children (mutually exclusive per one-level rule) -->
-				<!-- Case 1: this card HAS a parent — show parent link + detach button -->
-				<div v-if="cardData.parentCardId" class="card-modal__hierarchy-section">
-					<div class="card-modal__hierarchy-header">
-						<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
-						<label class="card-modal__label">{{ t('kanso', 'Parent card') }}</label>
-					</div>
-					<div class="card-modal__parent-row">
-						<button
-							class="card-modal__parent-link"
-							@click="openCard(cardData.parentCardId)">
-							{{ parentTitle }}
-						</button>
-						<button
-							class="card-modal__hierarchy-detach"
-							:title="t('kanso', 'Detach from parent')"
-							:disabled="setParentMutation.isPending.value"
-							@click="handleClearParent">
-							<LinkOffIcon :size="14" />
-							{{ t('kanso', 'Detach') }}
-						</button>
-					</div>
-					<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
-				</div>
-
-				<!-- Case 2: this card has NO parent — show sub-cards section -->
-				<div v-else class="card-modal__hierarchy-section">
-					<div class="card-modal__hierarchy-header">
-						<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
-						<label class="card-modal__label">{{ t('kanso', 'Sub-cards') }}</label>
-						<span v-if="children.length > 0" class="card-modal__hierarchy-progress-text">
-							{{ childrenDone }}/{{ children.length }}
-						</span>
-					</div>
-
-					<!-- Children list -->
-					<ul v-if="children.length > 0" class="card-modal__children-list">
-						<li
-							v-for="child in children"
-							:key="child.id"
-							class="card-modal__child-item"
-							:class="{ 'card-modal__child-item--done': Number(child.doneAt) > 0 }">
-							<!-- Done indicator -->
-							<span
-								class="card-modal__child-done-dot"
-								:class="{ 'card-modal__child-done-dot--done': Number(child.doneAt) > 0 }"
-								:title="Number(child.doneAt) > 0 ? t('kanso', 'Done') : t('kanso', 'Not done')" />
-							<!-- Title link -->
-							<button
-								class="card-modal__child-link"
-								:class="{ 'card-modal__child-link--done': Number(child.doneAt) > 0 }"
-								@click="openCard(child.id)">
-								{{ child.title }}
-							</button>
-							<!-- Detach (remove) button -->
-							<button
-								class="card-modal__child-remove"
-								:title="t('kanso', 'Detach sub-card')"
-								:disabled="setParentMutation.isPending.value"
-								@click="handleDetachChild(child)">
-								<CloseIcon :size="12" />
-							</button>
-						</li>
-					</ul>
-
-					<!-- Add sub-card input -->
-					<div class="card-modal__add-child-row">
-						<input
-							ref="addChildInputRef"
-							v-model="newChildTitle"
-							class="card-modal__add-child-input"
-							type="text"
-							:placeholder="t('kanso', 'Add a sub-card…')"
-							:disabled="addChildMutation.isPending.value"
-							@keydown.enter.prevent="handleAddChild" />
-					</div>
-					<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
-				</div>
-
-				<!-- Labels section -->
-				<div class="card-modal__labels-section">
-					<label class="card-modal__label">{{ t('kanso', 'Labels') }}</label>
-					<div
-						v-if="boardLabels.length === 0"
-						class="card-modal__labels-empty">
-						{{ t('kanso', 'No labels on this board yet.') }}
-					</div>
-					<div v-else class="card-modal__label-chips" role="group" :aria-label="t('kanso', 'Toggle labels')">
-						<button
-							v-for="label in boardLabels"
-							:key="label.id"
-							class="card-modal__label-chip"
-							:class="{
-								'card-modal__label-chip--assigned': cardLabelIds.has(label.id),
-								'card-modal__label-chip--no-color': !label.color,
-							}"
-							:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
-							:aria-pressed="cardLabelIds.has(label.id)"
-							:disabled="toggleLabel.isPending.value"
-							@click="handleToggleLabel(label)">
-							{{ label.title }}
-						</button>
-					</div>
-					<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
-				</div>
-
-				<!-- Assignees section -->
-				<div class="card-modal__assignees-section">
-					<label class="card-modal__label">{{ t('kanso', 'Assignees') }}</label>
-
-					<!-- Current assignees as chips -->
-					<div class="card-modal__assignee-chips">
-						<span
-							v-for="uid in cardAssigneeIds"
-							:key="uid"
-							class="card-modal__assignee-chip">
-							<NcAvatar
-								:user="uid"
-								:display-name="participantName(uid)"
-								:size="24"
-								:show-user-status="false"
-								:disable-tooltip="false" />
-							<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
-							<button
-								class="card-modal__assignee-remove"
-								:title="t('kanso', 'Remove assignee')"
-								:disabled="toggleAssignee.isPending.value"
-								@click="handleToggleAssignee(uid, false)">
-								<CloseIcon :size="12" />
-							</button>
-						</span>
-						<span v-if="cardAssigneeIds.length === 0" class="card-modal__assignees-empty">
-							{{ t('kanso', 'No assignees yet.') }}
-						</span>
-					</div>
-
-					<!-- Assign dropdown: participants not yet assigned -->
-					<div v-if="unassignedParticipants.length > 0" class="card-modal__assign-wrap">
-						<button
-							class="card-modal__assign-toggle"
-							:aria-expanded="assignPickerOpen"
-							@click="assignPickerOpen = !assignPickerOpen">
-							<AccountPlusIcon :size="16" />
-							{{ t('kanso', 'Assign…') }}
-						</button>
-						<div v-if="assignPickerOpen" class="card-modal__assign-popover">
-							<button
-								v-for="p in unassignedParticipants"
-								:key="p.uid"
-								class="card-modal__assign-option"
-								:disabled="toggleAssignee.isPending.value"
-								@click="handleToggleAssignee(p.uid, true)">
-								<NcAvatar
-									:user="p.uid"
-									:display-name="p.displayName"
-									:size="24"
-									:show-user-status="false"
-									:disable-tooltip="true" />
-								<span>{{ p.displayName }}</span>
-							</button>
+							<template v-else>
+								<div
+									v-if="cardData.description"
+									class="card-modal__desc-view"
+									@click="startDescriptionEdit">
+									<div class="card-modal__desc-rendered" v-html="renderedDescription" />
+								</div>
+								<button
+									v-else
+									class="card-modal__desc-placeholder"
+									@click="startDescriptionEdit">
+									{{ t('kanso', 'Add a description…') }}
+								</button>
+							</template>
 						</div>
-					</div>
 
-					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
-				</div>
-
-				<!-- Description -->
-				<div class="card-modal__description-section">
-					<label class="card-modal__label">{{ t('kanso', 'Description') }}</label>
-
-					<template v-if="editingDescription">
-						<textarea
-							v-model="draftDescription"
-							class="card-modal__desc-textarea"
-							:placeholder="t('kanso', 'Add a description…')"
-							rows="8" />
-						<div class="card-modal__desc-actions">
-							<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
-								{{ t('kanso', 'Save') }}
-							</NcButton>
-							<NcButton @click="cancelDescriptionEdit">
-								{{ t('kanso', 'Cancel') }}
-							</NcButton>
-							<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
-						</div>
-					</template>
-
-					<template v-else>
-						<div
-							v-if="cardData.description"
-							class="card-modal__desc-view"
-							@click="startDescriptionEdit">
-							<div class="card-modal__desc-rendered" v-html="renderedDescription" />
-						</div>
-						<button
-							v-else
-							class="card-modal__desc-placeholder"
-							@click="startDescriptionEdit">
-							{{ t('kanso', 'Add a description…') }}
-						</button>
-					</template>
-				</div>
-
-				<!-- Checklist section -->
-				<div class="card-modal__checklist-section">
-					<div class="card-modal__checklist-header">
-						<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-header-icon" />
-						<label class="card-modal__label">{{ t('kanso', 'Checklist') }}</label>
-						<span v-if="checklistTotal > 0" class="card-modal__checklist-progress-text">
-							{{ checklistDone }}/{{ checklistTotal }}
-						</span>
-					</div>
-
-					<!-- Progress bar -->
-					<div v-if="checklistTotal > 0" class="card-modal__checklist-bar-wrap">
-						<div
-							class="card-modal__checklist-bar-fill"
-							:class="{ 'card-modal__checklist-bar-fill--complete': checklistDone === checklistTotal }"
-							:style="{ width: checklistProgressPct + '%' }" />
-					</div>
-
-					<!-- Items list -->
-					<ul class="card-modal__checklist-list">
-						<li
-							v-for="item in checklistItems"
-							:key="item.id"
-							class="card-modal__checklist-item"
-							:class="{ 'card-modal__checklist-item--done': item.done }"
-							:data-item-id="item.id"
-							:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
-							@dragover.prevent="onItemDragOver($event, item)"
-							@dragleave="onItemDragLeave($event, item)"
-							@drop.prevent="onItemDrop($event, item)">
-							<!-- Drag handle -->
-							<span
-								class="card-modal__checklist-drag-handle"
-								:draggable="true"
-								:title="t('kanso', 'Drag to reorder')"
-								@dragstart="onItemDragStart($event, item)"
-								@dragend="onItemDragEnd">
-								<DragIcon :size="14" />
-							</span>
-
-							<!-- Checkbox -->
-							<input
-								type="checkbox"
-								class="card-modal__checklist-checkbox"
-								:checked="item.done"
-								:disabled="toggleItem.isPending.value"
-								:aria-label="t('kanso', 'Toggle item done')"
-								@change="handleToggleItem(item)" />
-
-							<!-- Inline-editable title -->
-							<input
-								v-if="editingItemId === item.id"
-								:ref="(el) => setItemInputRef(item.id, el)"
-								v-model="editingItemTitle"
-								class="card-modal__checklist-item-input"
-								type="text"
-								@keydown.enter.prevent="saveItemTitle(item)"
-								@keydown.escape="cancelItemEdit"
-								@blur="saveItemTitle(item)" />
-							<span
-								v-else
-								class="card-modal__checklist-item-title"
-								:class="{ 'card-modal__checklist-item-title--done': item.done }"
-								@click="startItemEdit(item)">
-								{{ item.title }}
-							</span>
-
-							<!-- Delete button -->
-							<button
-								class="card-modal__checklist-item-delete"
-								:title="t('kanso', 'Delete item')"
-								:disabled="deleteItem.isPending.value"
-								@click="handleDeleteItem(item)">
-								<CloseIcon :size="14" />
-							</button>
-						</li>
-					</ul>
-
-					<!-- Drag-over indicator between items is handled by item highlight;
-					     drop line shown via CSS on dragover target -->
-
-					<!-- Add item input -->
-					<div class="card-modal__checklist-add">
-						<CheckboxBlankOutlineIcon :size="16" class="card-modal__checklist-add-icon" />
-						<input
-							ref="addItemInputRef"
-							v-model="newItemTitle"
-							class="card-modal__checklist-add-input"
-							type="text"
-							:placeholder="t('kanso', 'Add an item…')"
-							:disabled="addItem.isPending.value"
-							@keydown.enter.prevent="handleAddItem" />
-					</div>
-					<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
-				</div>
-
-				<!-- Discussion section -->
-				<div class="card-modal__discussion-section">
+						<!-- Discussion section -->
+						<div class="card-modal__discussion-section">
 					<div class="card-modal__discussion-header">
 						<CommentMultipleOutlineIcon :size="16" class="card-modal__discussion-header-icon" />
 						<label class="card-modal__label">{{ t('kanso', 'Discussion') }}</label>
@@ -515,7 +202,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										rows="3"
 										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
 										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
-										@keydown.escape="cancelCommentEdit" />
+										@keydown.escape.stop="cancelCommentEdit" />
 									<div class="card-modal__comment-edit-actions">
 										<NcButton
 											type="primary"
@@ -575,7 +262,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									rows="2"
 									@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
 									@keydown.meta.enter.prevent="submitReply(topComment.id)"
-									@keydown.escape="closeReplyBox" />
+									@keydown.escape.stop="closeReplyBox" />
 								<div class="card-modal__comment-compose-actions">
 									<NcButton
 										type="primary"
@@ -614,7 +301,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											rows="3"
 											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
 											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
-											@keydown.escape="cancelCommentEdit" />
+											@keydown.escape.stop="cancelCommentEdit" />
 										<div class="card-modal__comment-edit-actions">
 											<NcButton
 												type="primary"
@@ -677,6 +364,331 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 						<span v-if="commentError" class="card-modal__save-error">{{ commentError }}</span>
 					</div>
+				</div>
+				<!-- END .card-modal__main -->
+				</div>
+
+				<!-- RIGHT column: attributes sidebar -->
+				<div class="card-modal__sidebar">
+					<!-- Done toggle -->
+					<div class="card-modal__meta card-modal__meta--done">
+						<NcCheckboxRadioSwitch
+							:model-value="isDone"
+							type="checkbox"
+							@update:model-value="handleDoneToggle">
+							{{ t('kanso', 'Done') }}
+						</NcCheckboxRadioSwitch>
+						<span v-if="isDone && cardData.doneAt" class="card-modal__done-at">
+							{{ formatDoneAt(cardData.doneAt) }}
+						</span>
+					</div>
+
+					<!-- Due date — editable via datetime-local input -->
+					<div class="card-modal__meta card-modal__meta--due">
+						<CalendarIcon :size="16" />
+						<span class="card-modal__meta-label">{{ t('kanso', 'Due date') }}</span>
+						<input
+							class="card-modal__due-input"
+							:class="dueDateClass"
+							type="datetime-local"
+							:value="dueDateInputValue"
+							@change="handleDueDateChange" />
+						<button
+							v-if="cardData.duedate"
+							class="card-modal__due-clear"
+							:title="t('kanso', 'Clear due date')"
+							@click="clearDueDate">
+							<CloseIcon :size="14" />
+						</button>
+					</div>
+
+					<!-- Priority selector -->
+					<div class="card-modal__meta card-modal__meta--priority">
+						<FlagIcon :size="16" />
+						<span class="card-modal__meta-label">{{ t('kanso', 'Priority') }}</span>
+						<div class="card-modal__priority-buttons" role="group" :aria-label="t('kanso', 'Select priority')">
+							<button
+								v-for="level in PRIORITY_LEVELS"
+								:key="level.value"
+								class="card-modal__priority-btn"
+								:class="[
+									`card-modal__priority-btn--${level.value}`,
+									{ 'card-modal__priority-btn--active': currentPriority === level.value },
+								]"
+								:title="t('kanso', level.label)"
+								:aria-pressed="currentPriority === level.value"
+								:disabled="setPriority.isPending.value"
+								@click="handleSetPriority(level.value)">
+								{{ level.value === 0 ? t('kanso', 'None') : t('kanso', level.label) }}
+							</button>
+						</div>
+						<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
+					</div>
+
+					<!-- Labels section -->
+					<div class="card-modal__labels-section">
+						<label class="card-modal__label">{{ t('kanso', 'Labels') }}</label>
+						<div
+							v-if="boardLabels.length === 0"
+							class="card-modal__labels-empty">
+							{{ t('kanso', 'No labels on this board yet.') }}
+						</div>
+						<div v-else class="card-modal__label-chips" role="group" :aria-label="t('kanso', 'Toggle labels')">
+							<button
+								v-for="label in boardLabels"
+								:key="label.id"
+								class="card-modal__label-chip"
+								:class="{
+									'card-modal__label-chip--assigned': cardLabelIds.has(label.id),
+									'card-modal__label-chip--no-color': !label.color,
+								}"
+								:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
+								:aria-pressed="cardLabelIds.has(label.id)"
+								:disabled="toggleLabel.isPending.value"
+								@click="handleToggleLabel(label)">
+								{{ label.title }}
+							</button>
+						</div>
+						<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
+					</div>
+
+					<!-- Assignees section -->
+					<div class="card-modal__assignees-section">
+						<label class="card-modal__label">{{ t('kanso', 'Assignees') }}</label>
+
+						<!-- Current assignees as chips -->
+						<div class="card-modal__assignee-chips">
+							<span
+								v-for="uid in cardAssigneeIds"
+								:key="uid"
+								class="card-modal__assignee-chip">
+								<NcAvatar
+									:user="uid"
+									:display-name="participantName(uid)"
+									:size="24"
+									:show-user-status="false"
+									:disable-tooltip="false" />
+								<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
+								<button
+									class="card-modal__assignee-remove"
+									:title="t('kanso', 'Remove assignee')"
+									:disabled="toggleAssignee.isPending.value"
+									@click="handleToggleAssignee(uid, false)">
+									<CloseIcon :size="12" />
+								</button>
+							</span>
+							<span v-if="cardAssigneeIds.length === 0" class="card-modal__assignees-empty">
+								{{ t('kanso', 'No assignees yet.') }}
+							</span>
+						</div>
+
+						<!-- Assign dropdown: participants not yet assigned -->
+						<div v-if="unassignedParticipants.length > 0" class="card-modal__assign-wrap">
+							<button
+								class="card-modal__assign-toggle"
+								:aria-expanded="assignPickerOpen"
+								@click="assignPickerOpen = !assignPickerOpen">
+								<AccountPlusIcon :size="16" />
+								{{ t('kanso', 'Assign…') }}
+							</button>
+							<div v-if="assignPickerOpen" class="card-modal__assign-popover">
+								<button
+									v-for="p in unassignedParticipants"
+									:key="p.uid"
+									class="card-modal__assign-option"
+									:disabled="toggleAssignee.isPending.value"
+									@click="handleToggleAssignee(p.uid, true)">
+									<NcAvatar
+										:user="p.uid"
+										:display-name="p.displayName"
+										:size="24"
+										:show-user-status="false"
+										:disable-tooltip="true" />
+									<span>{{ p.displayName }}</span>
+								</button>
+							</div>
+						</div>
+
+						<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
+					</div>
+
+					<!-- Hierarchy section: parent OR children (mutually exclusive per one-level rule) -->
+					<!-- Case 1: this card HAS a parent — show parent link + detach button -->
+					<div v-if="cardData.parentCardId" class="card-modal__hierarchy-section">
+						<div class="card-modal__hierarchy-header">
+							<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
+							<label class="card-modal__label">{{ t('kanso', 'Parent card') }}</label>
+						</div>
+						<div class="card-modal__parent-row">
+							<button
+								class="card-modal__parent-link"
+								@click="openCard(cardData.parentCardId)">
+								{{ parentTitle }}
+							</button>
+							<button
+								class="card-modal__hierarchy-detach"
+								:title="t('kanso', 'Detach from parent')"
+								:disabled="setParentMutation.isPending.value"
+								@click="handleClearParent">
+								<LinkOffIcon :size="14" />
+								{{ t('kanso', 'Detach') }}
+							</button>
+						</div>
+						<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
+					</div>
+
+					<!-- Case 2: this card has NO parent — show sub-cards section -->
+					<div v-else class="card-modal__hierarchy-section">
+						<div class="card-modal__hierarchy-header">
+							<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
+							<label class="card-modal__label">{{ t('kanso', 'Sub-cards') }}</label>
+							<span v-if="children.length > 0" class="card-modal__hierarchy-progress-text">
+								{{ childrenDone }}/{{ children.length }}
+							</span>
+						</div>
+
+						<!-- Children list -->
+						<ul v-if="children.length > 0" class="card-modal__children-list">
+							<li
+								v-for="child in children"
+								:key="child.id"
+								class="card-modal__child-item"
+								:class="{ 'card-modal__child-item--done': Number(child.doneAt) > 0 }">
+								<!-- Done indicator -->
+								<span
+									class="card-modal__child-done-dot"
+									:class="{ 'card-modal__child-done-dot--done': Number(child.doneAt) > 0 }"
+									:title="Number(child.doneAt) > 0 ? t('kanso', 'Done') : t('kanso', 'Not done')" />
+								<!-- Title link -->
+								<button
+									class="card-modal__child-link"
+									:class="{ 'card-modal__child-link--done': Number(child.doneAt) > 0 }"
+									@click="openCard(child.id)">
+									{{ child.title }}
+								</button>
+								<!-- Detach (remove) button -->
+								<button
+									class="card-modal__child-remove"
+									:title="t('kanso', 'Detach sub-card')"
+									:disabled="setParentMutation.isPending.value"
+									@click="handleDetachChild(child)">
+									<CloseIcon :size="12" />
+								</button>
+							</li>
+						</ul>
+
+						<!-- Add sub-card input -->
+						<div class="card-modal__add-child-row">
+							<input
+								ref="addChildInputRef"
+								v-model="newChildTitle"
+								class="card-modal__add-child-input"
+								type="text"
+								:placeholder="t('kanso', 'Add a sub-card…')"
+								:disabled="addChildMutation.isPending.value"
+								@keydown.enter.prevent="handleAddChild" />
+						</div>
+						<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
+					</div>
+
+					<!-- Checklist section -->
+					<div class="card-modal__checklist-section">
+						<div class="card-modal__checklist-header">
+							<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-header-icon" />
+							<label class="card-modal__label">{{ t('kanso', 'Checklist') }}</label>
+							<span v-if="checklistTotal > 0" class="card-modal__checklist-progress-text">
+								{{ checklistDone }}/{{ checklistTotal }}
+							</span>
+						</div>
+
+						<!-- Progress bar -->
+						<div v-if="checklistTotal > 0" class="card-modal__checklist-bar-wrap">
+							<div
+								class="card-modal__checklist-bar-fill"
+								:class="{ 'card-modal__checklist-bar-fill--complete': checklistDone === checklistTotal }"
+								:style="{ width: checklistProgressPct + '%' }" />
+						</div>
+
+						<!-- Items list -->
+						<ul class="card-modal__checklist-list">
+							<li
+								v-for="item in checklistItems"
+								:key="item.id"
+								class="card-modal__checklist-item"
+								:class="{ 'card-modal__checklist-item--done': item.done }"
+								:data-item-id="item.id"
+								:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
+								@dragover.prevent="onItemDragOver($event, item)"
+								@dragleave="onItemDragLeave($event, item)"
+								@drop.prevent="onItemDrop($event, item)">
+								<!-- Drag handle -->
+								<span
+									class="card-modal__checklist-drag-handle"
+									:draggable="true"
+									:title="t('kanso', 'Drag to reorder')"
+									@dragstart="onItemDragStart($event, item)"
+									@dragend="onItemDragEnd">
+									<DragIcon :size="14" />
+								</span>
+
+								<!-- Checkbox -->
+								<input
+									type="checkbox"
+									class="card-modal__checklist-checkbox"
+									:checked="item.done"
+									:disabled="toggleItem.isPending.value"
+									:aria-label="t('kanso', 'Toggle item done')"
+									@change="handleToggleItem(item)" />
+
+								<!-- Inline-editable title -->
+								<input
+									v-if="editingItemId === item.id"
+									:ref="(el) => setItemInputRef(item.id, el)"
+									v-model="editingItemTitle"
+									class="card-modal__checklist-item-input"
+									type="text"
+									@keydown.enter.prevent="saveItemTitle(item)"
+									@keydown.escape.stop="cancelItemEdit"
+									@blur="saveItemTitle(item)" />
+								<span
+									v-else
+									class="card-modal__checklist-item-title"
+									:class="{ 'card-modal__checklist-item-title--done': item.done }"
+									@click="startItemEdit(item)">
+									{{ item.title }}
+								</span>
+
+								<!-- Delete button -->
+								<button
+									class="card-modal__checklist-item-delete"
+									:title="t('kanso', 'Delete item')"
+									:disabled="deleteItem.isPending.value"
+									@click="handleDeleteItem(item)">
+									<CloseIcon :size="14" />
+								</button>
+							</li>
+						</ul>
+
+						<!-- Drag-over indicator between items is handled by item highlight;
+						     drop line shown via CSS on dragover target -->
+
+						<!-- Add item input -->
+						<div class="card-modal__checklist-add">
+							<CheckboxBlankOutlineIcon :size="16" class="card-modal__checklist-add-icon" />
+							<input
+								ref="addItemInputRef"
+								v-model="newItemTitle"
+								class="card-modal__checklist-add-input"
+								type="text"
+								:placeholder="t('kanso', 'Add an item…')"
+								:disabled="addItem.isPending.value"
+								@keydown.enter.prevent="handleAddItem" />
+						</div>
+						<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
+					</div>
+					<!-- END .card-modal__sidebar -->
+				</div>
+				<!-- END .card-modal__columns -->
 				</div>
 			</template>
 		</div>
@@ -2862,5 +2874,81 @@ async function handleWatchToggle() {
 
 .card-modal__watch-error {
 	margin-left: 4px;
+}
+
+/* ── Two-column layout ─────────────────────────────────────────────────────── */
+.card-modal__columns {
+	display: grid;
+	grid-template-columns: 1fr 300px;
+	gap: 24px;
+	align-items: start;
+	margin-top: 4px;
+}
+
+/* Left column: description + discussion */
+.card-modal__main {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-width: 0;
+}
+
+.card-modal__main .card-modal__description-section {
+	margin-bottom: 0;
+}
+
+.card-modal__main .card-modal__discussion-section {
+	margin-top: 28px;
+}
+
+/* Right column: attributes sidebar */
+.card-modal__sidebar {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-width: 0;
+	border-left: 1px solid var(--color-border);
+	padding-left: 20px;
+}
+
+/* Tighten spacing between sidebar attribute rows */
+.card-modal__sidebar .card-modal__meta {
+	margin-bottom: 12px;
+}
+
+.card-modal__sidebar .card-modal__labels-section {
+	margin-bottom: 12px;
+}
+
+.card-modal__sidebar .card-modal__assignees-section {
+	margin-bottom: 12px;
+}
+
+.card-modal__sidebar .card-modal__hierarchy-section {
+	margin-top: 0;
+	margin-bottom: 12px;
+}
+
+.card-modal__sidebar .card-modal__checklist-section {
+	margin-top: 0;
+}
+
+/* Collapse to single column on narrow viewports */
+@media (max-width: 700px) {
+	.card-modal__columns {
+		grid-template-columns: 1fr;
+	}
+
+	.card-modal__sidebar {
+		border-left: none;
+		padding-left: 0;
+		border-top: 1px solid var(--color-border);
+		padding-top: 20px;
+	}
+
+	/* On narrow screens show sidebar above main (attributes first) */
+	.card-modal__sidebar {
+		order: -1;
+	}
 }
 </style>

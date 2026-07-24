@@ -136,8 +136,10 @@ test.describe('Checklist', () => {
 				.locator('.card-tile__checklist'),
 		).toHaveText(/1\/2/, { timeout: 5000 })
 
-		// Reload and assert persistence
-		await page.reload()
+		// Re-open the board fresh and assert persistence (navigate to the board
+		// URL rather than page.reload() so the check is independent of the
+		// post-Escape route).
+		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
