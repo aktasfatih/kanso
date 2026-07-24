@@ -9,9 +9,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcAppNavigationItem
 					:name="t('kanso', 'Boards')"
 					:to="{ name: 'board-list' }"
-					:active="isBoardsActive">
+					:active="route.name === 'board-list'"
+					:allow-collapse="boards.length > 0"
+					:open="true">
 					<template #icon>
 						<ViewDashboardIcon :size="20" />
+					</template>
+					<!-- The user's boards, so you can jump between them without
+					     returning to the board list. -->
+					<template #default>
+						<NcAppNavigationItem
+							v-for="board in boards"
+							:key="board.id"
+							:name="board.title"
+							:to="{ name: 'board', params: { id: String(board.id) } }"
+							:active="isBoardActive(board.id)">
+							<template #icon>
+								<span
+									class="app-nav__board-dot"
+									:style="{ background: board.color ? '#' + board.color : 'var(--color-primary-element)' }" />
+							</template>
+						</NcAppNavigationItem>
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
@@ -49,12 +67,29 @@ import NcContent from '@nextcloud/vue/components/NcContent'
 import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
+import { useBoards } from './composables/useBoards.js'
 
 const route = useRoute()
 
-const isBoardsActive = computed(() =>
-	route.name === 'board-list' || route.name === 'board' || route.name === 'card-modal',
-)
+const { data: boardsData } = useBoards()
+// Non-archived boards, listed under the Boards nav entry so the user can jump
+// between them. Reactive to the shared boards query (create/rename/delete reflect).
+const boards = computed(() => (boardsData.value ?? []).filter((b) => !b.archived))
+
+function isBoardActive(boardId) {
+	return (route.name === 'board' || route.name === 'card-modal')
+		&& String(route.params.id) === String(boardId)
+}
 const isMyReviewsActive = computed(() => route.name === 'my-reviews')
 const isInboxActive = computed(() => route.name === 'inbox')
 </script>
+
+<style scoped>
+.app-nav__board-dot {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border-dark);
+}
+</style>
