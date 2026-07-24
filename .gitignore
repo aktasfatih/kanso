@@ -9,3 +9,4 @@ vendor/
 test-results/
 playwright-report/
 .php-cs-fixer.cache
+.claude/
