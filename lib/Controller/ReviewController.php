@@ -37,6 +37,17 @@ class ReviewController extends Controller {
 	 * Requests a review of the card from $userId. Idempotent — a repeat request
 	 * of an already-requested reviewer succeeds without writing anything.
 	 */
+	/**
+	 * The current user's cross-board "My Reviews" feed — every review requested
+	 * from them on a board they can read, newest first.
+	 */
+	#[NoAdminRequired]
+	public function mine(): JSONResponse {
+		return $this->respond(function (): JSONResponse {
+			return new JSONResponse($this->reviewService->findMine($this->currentUserId()));
+		});
+	}
+
 	#[NoAdminRequired]
 	public function request(int $id, string $userId, ?int $reviewTypeId = null): JSONResponse {
 		return $this->respond(function () use ($id, $userId, $reviewTypeId): JSONResponse {

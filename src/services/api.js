@@ -180,6 +180,9 @@ export const search = ({ q, boardId, limit = 25, offset = 0 }) =>
 	axios.get(url('/api/search'), { params: { q, boardId, limit, offset } }).then((r) => r.data)
 
 // Reviews
+export const getMyReviews = () =>
+	axios.get(url('/api/reviews/mine')).then((r) => r.data)
+
 export const requestReview = (cardId, userId, reviewTypeId) =>
 	axios.put(url(`/api/cards/${cardId}/reviews/${userId}`), reviewTypeId != null ? { reviewTypeId } : undefined).then((r) => r.data)
 

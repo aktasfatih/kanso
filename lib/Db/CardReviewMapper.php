@@ -90,6 +90,62 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * Every review requested from $reviewer across the given (readable) boards,
+	 * enriched with its card + board context — the cross-board "My Reviews"
+	 * feed. One query joining through `kanso_cards` and `kanso_boards`; the
+	 * caller supplies the ACL-filtered board id set (see SearchService's
+	 * readable-boards discipline), so no per-row permission check is needed.
+	 * Deleted cards are excluded.
+	 *
+	 * @param int[] $boardIds the reviewer's readable board ids (empty → [])
+	 * @return list<array{id: int, cardId: int, cardTitle: string, boardId: int, boardTitle: string, state: string, reviewTypeId: ?int, reviewTypeTitle: ?string, reviewTypeColor: ?string, requestedBy: string, createdAt: int}>
+	 * @throws Exception
+	 */
+	public function findByReviewerInBoards(string $reviewer, array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('r.id', 'r.card_id', 'r.state', 'r.review_type_id', 'r.requested_by', 'r.created_at')
+			->selectAlias('c.title', 'card_title')
+			->addSelect('c.board_id')
+			->selectAlias('b.title', 'board_title')
+			->selectAlias('rt.title', 'type_title')
+			->selectAlias('rt.color', 'type_color')
+			->from($this->getTableName(), 'r')
+			->innerJoin('r', 'kanso_cards', 'c', $qb->expr()->eq('r.card_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->leftJoin('r', 'kanso_review_types', 'rt', $qb->expr()->eq('r.review_type_id', 'rt.id'))
+			->where($qb->expr()->eq('r.reviewer', $qb->createNamedParameter($reviewer)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->orderBy('r.created_at', 'DESC')
+			->addOrderBy('r.id', 'DESC');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'cardId' => (int)$row['card_id'],
+				'cardTitle' => (string)$row['card_title'],
+				'boardId' => (int)$row['board_id'],
+				'boardTitle' => (string)$row['board_title'],
+				'state' => (string)$row['state'],
+				'reviewTypeId' => $row['review_type_id'] !== null ? (int)$row['review_type_id'] : null,
+				'reviewTypeTitle' => $row['type_title'] !== null ? (string)$row['type_title'] : null,
+				'reviewTypeColor' => $row['type_color'] !== null ? (string)$row['type_color'] : null,
+				'requestedBy' => (string)$row['requested_by'],
+				'createdAt' => (int)$row['created_at'],
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * @throws Exception
 	 */
 	public function exists(int $cardId, string $reviewer): bool {

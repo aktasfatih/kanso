@@ -35,7 +35,23 @@ class ReviewService {
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
 		private ReviewTypeMapper $reviewTypeMapper,
+		private BoardService $boardService,
 	) {
+	}
+
+	/**
+	 * The current user's cross-board review feed — every review requested from
+	 * them, on a board they can still read, newest first. ACL is enforced by
+	 * restricting to the user's readable board set (mirrors SearchService).
+	 *
+	 * @return list<array<string, mixed>>
+	 */
+	public function findMine(string $uid): array {
+		$boardIds = array_map(
+			static fn ($board): int => $board->getId(),
+			$this->boardService->findAll($uid)
+		);
+		return $this->cardReviewMapper->findByReviewerInBoards($uid, $boardIds);
 	}
 
 	/**

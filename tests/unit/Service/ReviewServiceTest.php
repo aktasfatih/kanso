@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ReviewType;
 use OCA\Kanso\Db\ReviewTypeMapper;
+use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotificationService;
@@ -34,6 +35,7 @@ class ReviewServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private NotificationService&MockObject $notificationService;
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
+	private BoardService&MockObject $boardService;
 	private ReviewService $service;
 
 	protected function setUp(): void {
@@ -45,6 +47,7 @@ class ReviewServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
+		$this->boardService = $this->createMock(BoardService::class);
 		$this->service = new ReviewService(
 			$this->cardReviewMapper,
 			$this->cardMapper,
@@ -52,7 +55,8 @@ class ReviewServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->notificationService,
-			$this->reviewTypeMapper
+			$this->reviewTypeMapper,
+			$this->boardService
 		);
 	}
 
@@ -346,5 +350,37 @@ class ReviewServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->setState(9, 'bob', CardReview::STATE_APPROVED, 'bob');
+	}
+
+	// ---- findMine ---------------------------------------------------------
+
+	public function testFindMineQueriesTheReadableBoardSet(): void {
+		// findAll returns the ACL-filtered readable boards; findMine passes their
+		// ids to the cross-board query.
+		$this->boardService->method('findAll')->with('bob')->willReturn([
+			$this->board(1),
+			$this->board(2),
+		]);
+		$rows = [[
+			'id' => 1, 'cardId' => 9, 'cardTitle' => 'Card', 'boardId' => 1,
+			'boardTitle' => 'Board', 'state' => 'pending', 'reviewTypeId' => null,
+			'requestedBy' => 'alice', 'createdAt' => 100,
+		]];
+		$this->cardReviewMapper->expects(self::once())
+			->method('findByReviewerInBoards')
+			->with('bob', [1, 2])
+			->willReturn($rows);
+
+		self::assertSame($rows, $this->service->findMine('bob'));
+	}
+
+	public function testFindMineWithNoReadableBoardsReturnsEmpty(): void {
+		$this->boardService->method('findAll')->with('bob')->willReturn([]);
+		$this->cardReviewMapper->expects(self::once())
+			->method('findByReviewerInBoards')
+			->with('bob', [])
+			->willReturn([]);
+
+		self::assertSame([], $this->service->findMine('bob'));
 	}
 }
