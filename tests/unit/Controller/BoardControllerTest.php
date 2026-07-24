@@ -29,6 +29,7 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
@@ -54,6 +55,7 @@ class BoardControllerTest extends TestCase {
 	private CommentMapper&MockObject $commentMapper;
 	private AclMapper&MockObject $aclMapper;
 	private PermissionService&MockObject $permissionService;
+	private SubscriptionService&MockObject $subscriptionService;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -74,6 +76,7 @@ class BoardControllerTest extends TestCase {
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->aclMapper = $this->createMock(AclMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -96,7 +99,8 @@ class BoardControllerTest extends TestCase {
 			$this->checklistItemMapper,
 			$this->commentMapper,
 			$this->aclMapper,
-			$this->permissionService
+			$this->permissionService,
+			$this->subscriptionService
 		);
 	}
 

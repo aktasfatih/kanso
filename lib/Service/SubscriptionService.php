@@ -9,6 +9,8 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardSubscription;
+use OCA\Kanso\Db\BoardSubscriptionMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Subscription;
@@ -34,6 +36,7 @@ class SubscriptionService {
 		private BoardMapper $boardMapper,
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
+		private BoardSubscriptionMapper $boardSubscriptionMapper,
 	) {
 	}
 
@@ -140,6 +143,121 @@ class SubscriptionService {
 			'subscribers' => $subscribers,
 			'count' => count($subscribers),
 		];
+	}
+
+	// ---- Board-level subscriptions -------------------------------------------
+	//
+	// Watching a whole board is a presence model (a row means subscribed) in a
+	// separate table, NOT the card-keyed subscription store: there is no
+	// auto-subscribe to a board, so no opt-out tombstone is needed. Watchers get
+	// a fixed signal — a new card was created on the board — nothing else (the
+	// noise trap from #3426).
+
+	/**
+	 * The board-level watch state for a user: are they subscribed, who else is,
+	 * and how many. Requires READ.
+	 *
+	 * @return array{subscribed: bool, subscribers: string[], count: int}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not read the board
+	 */
+	public function getBoardSubscription(int $boardId, string $actorUid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+
+		return $this->buildBoardSubscription($boardId, $actorUid);
+	}
+
+	/**
+	 * Subscribes the actor to the whole board. Idempotent. Requires READ.
+	 *
+	 * @return array{subscribed: bool, subscribers: string[], count: int}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not read the board
+	 */
+	public function subscribeBoard(int $boardId, string $actorUid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+
+		if ($this->boardSubscriptionMapper->findOne($actorUid, $boardId) === null) {
+			$sub = new BoardSubscription();
+			$sub->setSubscriber($actorUid);
+			$sub->setBoardId($boardId);
+			$sub->setCreatedAt(time());
+			try {
+				$this->boardSubscriptionMapper->insert($sub);
+			} catch (\OCP\DB\Exception $e) {
+				// Concurrent subscribe lost the unique race — the row exists now,
+				// which is the idempotent success case.
+				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					throw $e;
+				}
+			}
+		}
+
+		return $this->buildBoardSubscription($boardId, $actorUid);
+	}
+
+	/**
+	 * Unsubscribes the actor from the board (removes the row). Idempotent.
+	 * Requires READ.
+	 *
+	 * @return array{subscribed: bool, subscribers: string[], count: int}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not read the board
+	 */
+	public function unsubscribeBoard(int $boardId, string $actorUid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+
+		$existing = $this->boardSubscriptionMapper->findOne($actorUid, $boardId);
+		if ($existing !== null) {
+			$this->boardSubscriptionMapper->delete($existing);
+		}
+
+		return $this->buildBoardSubscription($boardId, $actorUid);
+	}
+
+	/**
+	 * The board-level watch block for a user WITHOUT a permission check — the
+	 * caller (e.g. the board payload) has already established READ.
+	 *
+	 * @return array{subscribed: bool, subscribers: string[], count: int}
+	 * @throws \OCP\DB\Exception
+	 */
+	public function buildBoardSubscription(int $boardId, string $actorUid): array {
+		$subscribers = $this->boardSubscriptionMapper->findBoardSubscriberUids($boardId);
+		return [
+			'subscribed' => in_array($actorUid, $subscribers, true),
+			'subscribers' => $subscribers,
+			'count' => count($subscribers),
+		];
+	}
+
+	/**
+	 * A card was created on a board: fan a "board activity" notification out to
+	 * the board's watchers (never the creator, never a watcher who has since
+	 * lost READ). No permission check on the caller — CardService::create has
+	 * already gated the create with EDIT.
+	 */
+	public function notifyBoardCardCreated(int $boardId, int $cardId, string $actorUid): void {
+		$watchers = $this->boardSubscriptionMapper->findBoardSubscriberUids($boardId);
+		if ($watchers === []) {
+			return;
+		}
+		$board = $this->boardMapper->find($boardId);
+		foreach ($watchers as $uid) {
+			if ($uid === $actorUid) {
+				continue;
+			}
+			// Don't leak the card to a watcher who no longer has access.
+			try {
+				$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+			} catch (NotPermittedException) {
+				continue;
+			}
+			$this->notificationService->notifyBoardActivity($cardId, $uid, $actorUid);
+		}
 	}
 
 	/**

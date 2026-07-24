@@ -175,6 +175,13 @@ export const subscribeCard = (cardId) =>
 export const unsubscribeCard = (cardId) =>
 	axios.delete(url(`/api/cards/${cardId}/subscription`)).then((r) => r.data)
 
+// Subscriptions (board watchers)
+export const subscribeBoard = (boardId) =>
+	axios.put(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)
+
+export const unsubscribeBoard = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)
+
 // Search
 export const search = ({ q, boardId, limit = 25, offset = 0 }) =>
 	axios.get(url('/api/search'), { params: { q, boardId, limit, offset } }).then((r) => r.data)

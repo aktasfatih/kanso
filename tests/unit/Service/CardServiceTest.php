@@ -21,6 +21,7 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -34,6 +35,7 @@ class CardServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private IDBConnection&MockObject $db;
+	private SubscriptionService&MockObject $subscriptionService;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -45,6 +47,7 @@ class CardServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -53,7 +56,8 @@ class CardServiceTest extends TestCase {
 			$this->permissionService,
 			new SortKeyService(),
 			$this->cardReviewMapper,
-			$this->db
+			$this->db,
+			$this->subscriptionService
 		);
 	}
 

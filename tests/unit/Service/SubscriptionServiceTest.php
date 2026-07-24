@@ -9,6 +9,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardSubscription;
+use OCA\Kanso\Db\BoardSubscriptionMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Subscription;
@@ -26,6 +28,7 @@ class SubscriptionServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private PermissionService&MockObject $permissionService;
 	private NotificationService&MockObject $notificationService;
+	private BoardSubscriptionMapper&MockObject $boardSubscriptionMapper;
 	private SubscriptionService $service;
 
 	protected function setUp(): void {
@@ -35,12 +38,14 @@ class SubscriptionServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->boardSubscriptionMapper = $this->createMock(BoardSubscriptionMapper::class);
 		$this->service = new SubscriptionService(
 			$this->subscriptionMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->permissionService,
 			$this->notificationService,
+			$this->boardSubscriptionMapper,
 		);
 	}
 
@@ -218,5 +223,128 @@ class SubscriptionServiceTest extends TestCase {
 		$this->service->handleNewComment(9, 50, 'bob');
 
 		self::assertSame([0, 50], $threads);
+	}
+
+	// ---- board subscriptions ---------------------------------------------
+
+	private function boardSub(string $uid, int $boardId): BoardSubscription {
+		$s = new BoardSubscription();
+		$s->setSubscriber($uid);
+		$s->setBoardId($boardId);
+		return $s;
+	}
+
+	private function expectBoardLoaded(): Board {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		return $board;
+	}
+
+	public function testGetBoardSubscriptionReportsStateAndWatchers(): void {
+		$board = $this->expectBoardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_READ);
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->with(1)->willReturn(['bob', 'carol']);
+
+		$result = $this->service->getBoardSubscription(1, 'bob');
+		self::assertTrue($result['subscribed']);
+		self::assertSame(['bob', 'carol'], $result['subscribers']);
+		self::assertSame(2, $result['count']);
+	}
+
+	public function testGetBoardSubscriptionFalseWhenNotAmongWatchers(): void {
+		$this->expectBoardLoaded();
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->with(1)->willReturn(['carol']);
+
+		self::assertFalse($this->service->getBoardSubscription(1, 'bob')['subscribed']);
+	}
+
+	public function testSubscribeBoardInsertsWhenAbsent(): void {
+		$this->expectBoardLoaded();
+		$this->boardSubscriptionMapper->method('findOne')->with('bob', 1)->willReturn(null);
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->willReturn(['bob']);
+		$this->boardSubscriptionMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(function (BoardSubscription $s): BoardSubscription {
+				self::assertSame('bob', $s->getSubscriber());
+				self::assertSame(1, $s->getBoardId());
+				return $s;
+			});
+
+		self::assertTrue($this->service->subscribeBoard(1, 'bob')['subscribed']);
+	}
+
+	public function testSubscribeBoardIsIdempotentWhenAlreadyWatching(): void {
+		$this->expectBoardLoaded();
+		$this->boardSubscriptionMapper->method('findOne')->with('bob', 1)->willReturn($this->boardSub('bob', 1));
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->willReturn(['bob']);
+		$this->boardSubscriptionMapper->expects(self::never())->method('insert');
+
+		self::assertTrue($this->service->subscribeBoard(1, 'bob')['subscribed']);
+	}
+
+	public function testUnsubscribeBoardDeletesRow(): void {
+		$this->expectBoardLoaded();
+		$existing = $this->boardSub('bob', 1);
+		$this->boardSubscriptionMapper->method('findOne')->with('bob', 1)->willReturn($existing);
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->willReturn([]);
+		$this->boardSubscriptionMapper->expects(self::once())->method('delete')->with($existing);
+
+		self::assertFalse($this->service->unsubscribeBoard(1, 'bob')['subscribed']);
+	}
+
+	public function testUnsubscribeBoardIsIdempotentWhenAbsent(): void {
+		$this->expectBoardLoaded();
+		$this->boardSubscriptionMapper->method('findOne')->with('bob', 1)->willReturn(null);
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->willReturn([]);
+		$this->boardSubscriptionMapper->expects(self::never())->method('delete');
+
+		self::assertFalse($this->service->unsubscribeBoard(1, 'bob')['subscribed']);
+	}
+
+	public function testSubscribeBoardAssertsReadPermission(): void {
+		$board = $this->expectBoardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'stranger', PermissionService::PERMISSION_READ)
+			->willThrowException(new NotPermittedException());
+		$this->boardSubscriptionMapper->expects(self::never())->method('insert');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->subscribeBoard(1, 'stranger');
+	}
+
+	public function testNotifyBoardCardCreatedFansOutSkippingActorAndPermissionless(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->with(1)
+			->willReturn(['alice', 'bob', 'stranger']);
+
+		// bob is the actor (skipped); stranger has lost READ (skipped); alice notified.
+		$this->permissionService->method('assertPermission')
+			->willReturnCallback(function (Board $b, string $uid): void {
+				if ($uid === 'stranger') {
+					throw new NotPermittedException();
+				}
+			});
+
+		$notified = [];
+		$this->notificationService->method('notifyBoardActivity')
+			->willReturnCallback(function (int $cardId, string $target, string $actor) use (&$notified): void {
+				$notified[] = $target;
+			});
+
+		$this->service->notifyBoardCardCreated(1, 42, 'bob');
+
+		self::assertSame(['alice'], $notified);
+	}
+
+	public function testNotifyBoardCardCreatedNoWatchersIsNoop(): void {
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->with(1)->willReturn([]);
+		$this->boardMapper->expects(self::never())->method('find');
+		$this->notificationService->expects(self::never())->method('notifyBoardActivity');
+
+		$this->service->notifyBoardCardCreated(1, 42, 'bob');
 	}
 }

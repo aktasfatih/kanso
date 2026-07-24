@@ -23,6 +23,7 @@ use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -51,6 +52,7 @@ class BoardController extends Controller {
 		private CommentMapper $commentMapper,
 		private AclMapper $aclMapper,
 		private PermissionService $permissionService,
+		private SubscriptionService $subscriptionService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -117,6 +119,8 @@ class BoardController extends Controller {
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.
 				'permissions' => $this->permissionService->getPermissions($board, $uid),
+				// The requester's board-watch state {subscribed, subscribers, count}.
+				'subscription' => $this->subscriptionService->buildBoardSubscription($id, $uid),
 			]);
 			$response->setETag($etag);
 			return $response;

@@ -36,6 +36,7 @@ class CardService {
 		private SortKeyService $sortKeyService,
 		private CardReviewMapper $cardReviewMapper,
 		private IDBConnection $db,
+		private SubscriptionService $subscriptionService,
 	) {
 	}
 
@@ -113,6 +114,15 @@ class CardService {
 			Change::ACTION_CREATE,
 			$uid
 		);
+
+		// Fan a "new card on a board you watch" notification out to board
+		// watchers. Best-effort — a notification hiccup must never fail the
+		// create (the card + its change row are already committed).
+		try {
+			$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card->getId(), $uid);
+		} catch (\Throwable) {
+			// Ignore — board-activity fan-out is a non-critical side effect.
+		}
 
 		return $card;
 	}

@@ -56,6 +56,9 @@ return [
 		['name' => 'subscription#index', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'GET'],
 		['name' => 'subscription#subscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'PUT'],
 		['name' => 'subscription#unsubscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'DELETE'],
+		['name' => 'subscription#boardIndex', 'url' => '/api/boards/{boardId}/subscription', 'verb' => 'GET'],
+		['name' => 'subscription#boardSubscribe', 'url' => '/api/boards/{boardId}/subscription', 'verb' => 'PUT'],
+		['name' => 'subscription#boardUnsubscribe', 'url' => '/api/boards/{boardId}/subscription', 'verb' => 'DELETE'],
 
 		['name' => 'comment#index', 'url' => '/api/cards/{cardId}/comments', 'verb' => 'GET'],
 		['name' => 'comment#create', 'url' => '/api/cards/{cardId}/comments', 'verb' => 'POST'],

@@ -23,6 +23,7 @@ class NotificationService {
 	public const SUBJECT_CARD_ASSIGNED = 'card_assigned';
 	public const SUBJECT_CARD_COMMENT = 'card_comment';
 	public const SUBJECT_CARD_REVIEW_REQUESTED = 'card_review_requested';
+	public const SUBJECT_BOARD_ACTIVITY = 'board_activity';
 	public const OBJECT_CARD = 'card';
 
 	public function __construct(
@@ -84,6 +85,27 @@ class NotificationService {
 			->setDateTime((new \DateTime())->setTimestamp(time()))
 			->setObject(self::OBJECT_CARD, (string)$cardId)
 			->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED, ['actor' => $actorUid, 'cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Notifies $targetUid that $actorUid created a card on a board they watch.
+	 * No-op when the creator is the target (you don't get notified of your own
+	 * card even though board activity fans out to the other watchers). The
+	 * notification links to the new card.
+	 */
+	public function notifyBoardActivity(int $cardId, string $targetUid, string $actorUid): void {
+		if ($targetUid === $actorUid) {
+			return;
+		}
+
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject(self::SUBJECT_BOARD_ACTIVITY, ['actor' => $actorUid, 'cardId' => $cardId]);
 
 		$this->manager->notify($notification);
 	}

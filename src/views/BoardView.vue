@@ -96,6 +96,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ archivedCards.length }}
 			</NcButton>
 
+			<!-- Watch / unwatch this board — subscribes to a "new card created"
+			     notification. A filled bell means you're watching. -->
+			<NcButton
+				v-if="boardData"
+				class="board-view__watch-btn"
+				:type="isBoardSubscribed ? 'secondary' : 'tertiary'"
+				:title="isBoardSubscribed
+					? t('kanso', 'Watching this board — click to stop')
+					: t('kanso', 'Watch this board for new cards')"
+				:aria-label="isBoardSubscribed ? t('kanso', 'Unwatch board') : t('kanso', 'Watch board')"
+				:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
+				@click="toggleBoardWatch">
+				<template #icon>
+					<BellIcon v-if="isBoardSubscribed" :size="20" />
+					<BellOutlineIcon v-else :size="20" />
+				</template>
+			</NcButton>
+
 			<!-- Trash button — always visible when board is loaded; panel fetches on open -->
 			<NcButton
 				v-if="boardData"
@@ -281,6 +299,8 @@ import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
+import BellIcon from 'vue-material-design-icons/Bell.vue'
+import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import StackColumn from '../components/StackColumn.vue'
 import SearchBox from '../components/SearchBox.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
@@ -289,6 +309,7 @@ import ArchivedPanel from '../components/ArchivedPanel.vue'
 import TrashPanel from '../components/TrashPanel.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { useBoardSubscription } from '../composables/useBoardSubscription.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
@@ -314,6 +335,11 @@ const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
 const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
+const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
+const isBoardSubscribed = computed(() => boardData.value?.subscription?.subscribed ?? false)
+function toggleBoardWatch() {
+	boardWatchToggle.mutate({ subscribed: !isBoardSubscribed.value })
+}
 const { participants } = useAssignees(boardId)
 
 // Resolve current Nextcloud user id — OC.getCurrentUser() is always available in NC apps

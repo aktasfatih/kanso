@@ -57,7 +57,8 @@ class Notifier implements INotifier {
 		$subject = $notification->getSubject();
 		if ($subject !== NotificationService::SUBJECT_CARD_ASSIGNED
 			&& $subject !== NotificationService::SUBJECT_CARD_COMMENT
-			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED) {
+			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
+			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY) {
 			throw new UnknownNotificationException();
 		}
 
@@ -81,6 +82,8 @@ class Notifier implements INotifier {
 				=> [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')],
 			NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
 				=> [$l->t('%1$s requested your review on %2$s', [$actorName, $cardTitle]), $l->t('{actor} requested your review on {card}')],
+			NotificationService::SUBJECT_BOARD_ACTIVITY
+				=> [$l->t('%1$s created %2$s on a board you watch', [$actorName, $cardTitle]), $l->t('{actor} created {card} on a board you watch')],
 			default
 			=> [$l->t('%1$s commented on %2$s', [$actorName, $cardTitle]), $l->t('{actor} commented on {card}')],
 		};

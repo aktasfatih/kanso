@@ -58,6 +58,33 @@ class SubscriptionController extends Controller {
 		});
 	}
 
+	#[NoAdminRequired]
+	public function boardIndex(int $boardId): JSONResponse {
+		return $this->respond(function () use ($boardId): JSONResponse {
+			return new JSONResponse(
+				$this->subscriptionService->getBoardSubscription($boardId, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function boardSubscribe(int $boardId): JSONResponse {
+		return $this->respond(function () use ($boardId): JSONResponse {
+			return new JSONResponse(
+				$this->subscriptionService->subscribeBoard($boardId, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function boardUnsubscribe(int $boardId): JSONResponse {
+		return $this->respond(function () use ($boardId): JSONResponse {
+			return new JSONResponse(
+				$this->subscriptionService->unsubscribeBoard($boardId, $this->currentUserId())
+			);
+		});
+	}
+
 	/**
 	 * @throws NotPermittedException if there is no user session
 	 */
