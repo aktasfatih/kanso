@@ -18,6 +18,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
 use OCA\Kanso\Service\StackService;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -249,6 +250,53 @@ class StackServiceTest extends TestCase {
 
 		$deleted = $this->service->delete(5, 'alice');
 		self::assertGreaterThan(0, $deleted->getDeletedAt());
+	}
+
+	// ---- restore ----------------------------------------------------------
+
+	public function testRestoreClearsDeletedAtAndWritesCreateChange(): void {
+		$deleted = $this->stack();
+		$deleted->setDeletedAt(1234);
+		$this->stackMapper->method('find')->with(5)->willReturn($deleted);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with(self::anything(), 'alice', PermissionService::PERMISSION_EDIT);
+		$this->stackMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn (Stack $s): bool => $s->getDeletedAt() === 0))
+			->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_STACK, 5, Change::ACTION_CREATE, 'alice')
+			->willReturn(new Change());
+
+		$restored = $this->service->restore(5, 'alice');
+		self::assertSame(0, $restored->getDeletedAt());
+	}
+
+	public function testRestoreRejectsLiveStack(): void {
+		// A live stack must not be resurrected by a stale undo.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->restore(5, 'alice');
+	}
+
+	public function testRestoreAssertsEditPermission(): void {
+		$deleted = $this->stack();
+		$deleted->setDeletedAt(1234);
+		$this->stackMapper->method('find')->with(5)->willReturn($deleted);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->restore(5, 'mallory');
 	}
 
 	// ---- move -------------------------------------------------------------

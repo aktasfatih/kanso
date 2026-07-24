@@ -17,7 +17,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { updateCard as apiUpdateCard, deleteCard as apiDeleteCard } from '../services/api.js'
+import { updateCard as apiUpdateCard, deleteCard as apiDeleteCard, restoreCard as apiRestoreCard } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
 
 /**
@@ -135,8 +135,19 @@ export function useCardActions(boardId, cardId) {
 		},
 	})
 
+	// ── Restore (undo delete) ───────────────────────────────────────────────────
+	// Note: restore does NOT re-attach sub-cards that were detached when the card
+	// was deleted — this is documented self-healing behaviour.
+	const restoreCard = useMutation({
+		mutationFn: () => apiRestoreCard(resolve(cardId)),
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+		},
+	})
+
 	return {
 		setArchived,
 		deleteCard,
+		restoreCard,
 	}
 }

@@ -28,6 +28,7 @@ return [
 		['name' => 'stack#create', 'url' => '/api/stacks', 'verb' => 'POST'],
 		['name' => 'stack#update', 'url' => '/api/stacks/{id}', 'verb' => 'PATCH'],
 		['name' => 'stack#destroy', 'url' => '/api/stacks/{id}', 'verb' => 'DELETE'],
+		['name' => 'stack#restore', 'url' => '/api/stacks/{id}/restore', 'verb' => 'POST'],
 		['name' => 'stack#move', 'url' => '/api/stacks/{id}/move', 'verb' => 'POST'],
 
 		['name' => 'trash#index', 'url' => '/api/boards/{id}/trash', 'verb' => 'GET'],

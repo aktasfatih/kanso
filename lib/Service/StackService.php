@@ -144,6 +144,38 @@ class StackService {
 	}
 
 	/**
+	 * Restores a soft-deleted stack (clears deleted_at) — the undo for
+	 * {@see self::delete()}. The stack's cards were never touched by the delete,
+	 * so they reappear with it. Emits an ACTION_CREATE change so clients re-add
+	 * the column. Rejects a live stack so a stale undo can't resurrect one that
+	 * was meanwhile recreated.
+	 *
+	 * @throws DoesNotExistException if the stack does not exist, is not deleted, or its board is gone
+	 * @throws NotPermittedException if the user may not edit the board
+	 */
+	public function restore(int $id, string $uid): Stack {
+		$stack = $this->stackMapper->find($id);
+		if ($stack->getDeletedAt() === 0) {
+			throw new DoesNotExistException('Stack ' . $id . ' is not deleted');
+		}
+		$board = $this->loadBoard($stack->getBoardId());
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		$stack->setDeletedAt(0);
+		$stack = $this->stackMapper->update($stack);
+
+		$this->changeNotifier->notify(
+			$stack->getBoardId(),
+			Change::ENTITY_STACK,
+			$id,
+			Change::ACTION_CREATE,
+			$uid
+		);
+
+		return $stack;
+	}
+
+	/**
 	 * Moves the stack inside its board: directly after $afterStackId, or to
 	 * the front of the board when $afterStackId is null. Neighbours are
 	 * resolved in-memory from the board's stack list with the moved stack

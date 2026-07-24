@@ -7,6 +7,7 @@ import {
 	createStack as apiCreateStack,
 	updateStack as apiUpdateStack,
 	deleteStack as apiDeleteStack,
+	restoreStack as apiRestoreStack,
 	createCard as apiCreateCard,
 } from '../services/api.js'
 import { pushActive } from '../services/realtime.js'
@@ -47,6 +48,11 @@ export function useBoard(id) {
 		onSettled: () => queryClient.invalidateQueries({ queryKey: ['board', id] }),
 	})
 
+	const restoreStack = useMutation({
+		mutationFn: (stackId) => apiRestoreStack(stackId),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: ['board', id] }),
+	})
+
 	const createCard = useMutation({
 		mutationFn: (data) => apiCreateCard(data),
 		onSettled: () => queryClient.invalidateQueries({ queryKey: ['board', id] }),
@@ -57,6 +63,7 @@ export function useBoard(id) {
 		createStack,
 		updateStack,
 		deleteStack,
+		restoreStack,
 		createCard,
 	}
 }

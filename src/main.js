@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '@nextcloud/dialogs/style.css'
 import { createApp } from 'vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'

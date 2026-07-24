@@ -60,6 +60,19 @@ class StackController extends Controller {
 		});
 	}
 
+	/**
+	 * Restores a soft-deleted stack — the undo for destroy(). A live (or
+	 * unknown) stack surfaces as 404 via ApiErrorTrait.
+	 */
+	#[NoAdminRequired]
+	public function restore(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			return new JSONResponse(
+				$this->stackService->restore($id, $this->currentUserId())
+			);
+		});
+	}
+
 	#[NoAdminRequired]
 	public function move(int $id, ?int $afterStackId = null): JSONResponse {
 		return $this->respond(function () use ($id, $afterStackId): JSONResponse {

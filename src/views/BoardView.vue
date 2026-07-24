@@ -183,6 +183,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:cards="cardsForStack(stack.id)"
 					:labels-by-id="labelsById"
 					:on-create-card="handleCreateCard"
+					:on-delete-stack="handleDeleteStack"
+					:on-restore-stack="handleRestoreStack"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }" />
 
 				<!-- Add stack inline input -->
@@ -306,7 +308,7 @@ const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
-const { data: boardData, isLoading, isError, createStack, createCard } = useBoard(boardId)
+const { data: boardData, isLoading, isError, createStack, createCard, deleteStack, restoreStack } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 const { participants } = useAssignees(boardId)
 
@@ -887,6 +889,14 @@ async function submitNewStack() {
 
 async function handleCreateCard(stackId, title) {
 	await createCard.mutateAsync({ stackId, title })
+}
+
+async function handleDeleteStack(stackId) {
+	await deleteStack.mutateAsync(stackId)
+}
+
+async function handleRestoreStack(stackId) {
+	await restoreStack.mutateAsync(stackId)
 }
 </script>
 

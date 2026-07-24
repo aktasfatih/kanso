@@ -23,6 +23,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:class="{ 'stack-column__badge--over-limit': isOverLimit }">
 				{{ wipBadgeText }}
 			</span>
+			<!-- Stack actions menu -->
+			<NcActions
+				v-if="onDeleteStack"
+				class="stack-column__actions"
+				:force-menu="true"
+				:aria-label="t('kanso', 'Column actions')">
+				<NcActionButton
+					:close-after-click="true"
+					@click="handleDeleteStack">
+					<template #icon>
+						<DeleteIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Delete column') }}
+				</NcActionButton>
+			</NcActions>
 		</div>
 
 		<!-- Inline card composer at TOP — signature rapid-entry UX -->
@@ -92,6 +107,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
+import { showUndo } from '@nextcloud/dialogs'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import CardTile from './CardTile.vue'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -112,6 +131,21 @@ const props = defineProps({
 	onCreateCard: {
 		type: Function,
 		required: true,
+	},
+	/**
+	 * Async fn (stackId) → Promise — called when the user deletes this stack.
+	 * Returns the stack id so the parent can show an undo toast.
+	 */
+	onDeleteStack: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Async fn (stackId) → Promise — called when the user undoes a stack delete.
+	 */
+	onRestoreStack: {
+		type: Function,
+		default: null,
 	},
 	/** Map<labelId, label> from the board payload — passed down from BoardView */
 	labelsById: {
@@ -275,6 +309,21 @@ function scrollToIndex(index) {
  */
 function focusComposer() {
 	composerInputRef.value?.focus()
+}
+
+async function handleDeleteStack() {
+	if (!props.onDeleteStack) return
+	const stackId = props.stack.id
+	try {
+		await props.onDeleteStack(stackId)
+		showUndo(t('kanso', 'Column deleted'), () => {
+			if (props.onRestoreStack) {
+				props.onRestoreStack(stackId)
+			}
+		})
+	} catch {
+		// Parent is responsible for surfacing deletion errors
+	}
 }
 
 defineExpose({ scrollToIndex, focusComposer })

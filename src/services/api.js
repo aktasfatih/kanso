@@ -149,6 +149,9 @@ export const fetchTrash = (boardId) =>
 export const restoreCard = (cardId) =>
 	axios.post(url(`/api/cards/${cardId}/restore`)).then((r) => r.data)
 
+export const restoreStack = (stackId) =>
+	axios.post(url(`/api/stacks/${stackId}/restore`)).then((r) => r.data)
+
 export const purgeCard = (cardId) =>
 	axios.delete(url(`/api/cards/${cardId}/purge`)).then((r) => r.data)
 
