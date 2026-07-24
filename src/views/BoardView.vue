@@ -186,6 +186,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-create-card="handleCreateCard"
 					:on-delete-stack="handleDeleteStack"
 					:on-restore-stack="handleRestoreStack"
+					:on-rename-stack="handleRenameStack"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }" />
 
 				<!-- Add stack inline input -->
@@ -309,7 +310,7 @@ const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
-const { data: boardData, isLoading, isError, createStack, createCard, deleteStack, restoreStack } = useBoard(boardId)
+const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 const { participants } = useAssignees(boardId)
 
@@ -899,6 +900,10 @@ async function handleDeleteStack(stackId) {
 async function handleRestoreStack(stackId) {
 	await restoreStack.mutateAsync(stackId)
 }
+
+async function handleRenameStack(stackId, title) {
+	await updateStack.mutateAsync({ stackId, data: { title } })
+}
 </script>
 
 <style scoped>
@@ -913,7 +918,10 @@ async function handleRestoreStack(stackId) {
 	display: flex;
 	align-items: center;
 	gap: 16px;
-	padding: 12px 24px;
+	/* Extra left padding reserves room for the NcAppNavigation toggle, which is
+	   pinned to the top-left of the app content area and would otherwise overlap
+	   the "All boards" button. */
+	padding: 12px 24px 12px 52px;
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
 	flex-shrink: 0;

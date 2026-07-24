@@ -10,7 +10,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Column header — drag handle for stack reordering -->
 		<div ref="headerRef" class="stack-column__header">
-			<span class="stack-column__title">{{ stack.title }}</span>
+			<input
+				v-if="editingTitle"
+				ref="titleInputRef"
+				v-model="titleDraft"
+				class="stack-column__title-input"
+				:aria-label="t('kanso', 'Column name')"
+				@keydown.enter.prevent="saveTitle"
+				@keydown.esc.prevent="cancelEditTitle"
+				@blur="saveTitle">
+			<span
+				v-else
+				class="stack-column__title"
+				:class="{ 'stack-column__title--editable': !!onRenameStack }"
+				:role="onRenameStack ? 'button' : null"
+				:tabindex="onRenameStack ? 0 : null"
+				:title="onRenameStack ? t('kanso', 'Rename column') : null"
+				@click="startEditTitle"
+				@keydown.enter="startEditTitle">{{ stack.title }}</span>
 			<span
 				v-if="stack.role > 0"
 				class="stack-column__role-chip"
@@ -104,7 +121,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { showUndo } from '@nextcloud/dialogs'
@@ -147,6 +164,14 @@ const props = defineProps({
 		type: Function,
 		default: null,
 	},
+	/**
+	 * Async fn (stackId, title) → Promise — renames the column. When provided,
+	 * the title becomes click-to-edit; omit it to render a read-only title.
+	 */
+	onRenameStack: {
+		type: Function,
+		default: null,
+	},
 	/** Map<labelId, label> from the board payload — passed down from BoardView */
 	labelsById: {
 		type: Map,
@@ -164,6 +189,37 @@ const props = defineProps({
 
 const router = useRouter()
 const route = useRoute()
+
+// ── Inline column-title editing ─────────────────────────────────────────────
+const editingTitle = ref(false)
+const titleDraft = ref('')
+const titleInputRef = ref(null)
+
+function startEditTitle() {
+	if (!props.onRenameStack) return
+	titleDraft.value = props.stack.title
+	editingTitle.value = true
+	nextTick(() => {
+		titleInputRef.value?.focus()
+		titleInputRef.value?.select()
+	})
+}
+
+function cancelEditTitle() {
+	editingTitle.value = false
+}
+
+async function saveTitle() {
+	if (!editingTitle.value) return
+	editingTitle.value = false
+	const next = titleDraft.value.trim()
+	if (next === '' || next === props.stack.title) return
+	try {
+		await props.onRenameStack(props.stack.id, next)
+	} catch (e) {
+		// The parent surfaces failures; nothing to recover locally.
+	}
+}
 
 // ── Role + WIP helpers ────────────────────────────────────────────────────────
 const ROLE_LABELS = {
@@ -404,6 +460,30 @@ async function submitCard() {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	min-width: 0;
+}
+
+.stack-column__title--editable {
+	cursor: text;
+	border-radius: 4px;
+	padding: 2px 4px;
+	margin: -2px -4px;
+}
+
+.stack-column__title--editable:hover {
+	background: var(--color-background-hover);
+}
+
+.stack-column__title-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	font-size: 0.95rem;
+	color: var(--color-main-text);
+	background: var(--color-main-background);
+	border: 2px solid var(--color-primary-element);
+	border-radius: 4px;
+	padding: 2px 4px;
+	margin: 0;
 }
 
 .stack-column__badge {
