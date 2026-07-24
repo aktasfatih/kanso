@@ -829,6 +829,111 @@ class CardServiceTest extends TestCase {
 		self::assertSame(6, $moved->getStackId());
 	}
 
+	// ---- auto-complete parent (all children done) -------------------------
+
+	public function testUpdatingLastChildToDoneStampsParentDone(): void {
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$doneA = $this->card(9, 5, 1, 'I');
+		$doneA->setDoneAt(1000);
+		$doneB = $this->card(11, 5, 1, 'J');
+		$doneB->setDoneAt(1000);
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$doneA, $doneB]);
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertContains(100, $updated, 'parent should be stamped done');
+		self::assertGreaterThan(0, $parent->getDoneAt());
+	}
+
+	public function testUpdatingChildToDoneWithOpenSiblingLeavesParent(): void {
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$doneChild = $this->card(9, 5, 1, 'I');
+		$doneChild->setDoneAt(1000);
+		$openSibling = $this->card(11, 5, 1, 'J');
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$doneChild, $openSibling]);
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertNotContains(100, $updated, 'parent must stay open');
+		self::assertSame(0, $parent->getDoneAt());
+	}
+
+	public function testArchivedSiblingCountsAsResolvedForParentCompletion(): void {
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$doneChild = $this->card(9, 5, 1, 'I');
+		$doneChild->setDoneAt(1000);
+		$archivedSibling = $this->card(11, 5, 1, 'J');
+		$archivedSibling->setArchived(true);
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$doneChild, $archivedSibling]);
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertContains(100, $updated, 'archived sibling counts as resolved');
+	}
+
+	public function testParentAlreadyDoneIsNotReStamped(): void {
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$parent->setDoneAt(500);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('findChildren');
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertNotContains(100, $updated, 'a human-done parent is never re-stamped');
+		self::assertSame(500, $parent->getDoneAt());
+	}
+
 	// ---- move done-automation --------------------------------------------
 
 	public function testMoveIntoDoneStackStampsDoneAtInsideTransaction(): void {

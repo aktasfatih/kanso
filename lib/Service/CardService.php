@@ -181,6 +181,9 @@ class CardService {
 			$uid
 		);
 
+		// Completing (or archiving) the last open child auto-completes the parent.
+		$this->maybeCompleteParent($card, $uid);
+
 		return $card;
 	}
 
@@ -270,7 +273,11 @@ class CardService {
 				? null
 				: $this->loadAfterCard($afterCardId, $targetStackId, $id);
 			try {
-				return $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
+				$moved = $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
+				// Moving the last open child into a done-role stack (which stamps
+				// it done) auto-completes the parent.
+				$this->maybeCompleteParent($moved, $uid);
+				return $moved;
 			} catch (\OCP\DB\Exception $e) {
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
@@ -429,6 +436,49 @@ class CardService {
 		} elseif ($sourceDone) {
 			$card->setDoneAt(0);
 		}
+	}
+
+	/**
+	 * Auto-completes a parent card once ALL of its children are resolved (done
+	 * or archived) — the "all children done → parent done" workflow. Called from
+	 * a CHILD's update()/move() after it persists; a card with no parent is a
+	 * fast no-op (the common case). Forward-only for v1: it never RE-OPENS a
+	 * parent (a parent a human marked done is left alone), and since the
+	 * hierarchy is one level (a parent has no parent) stamping it done cannot
+	 * cascade — no loop guard needed.
+	 */
+	private function maybeCompleteParent(Card $child, string $uid): void {
+		$parentId = $child->getParentCardId();
+		if ($parentId === null) {
+			return;
+		}
+		try {
+			$parent = $this->cardMapper->find($parentId);
+		} catch (DoesNotExistException) {
+			return;
+		}
+		if ($parent->getDeletedAt() > 0 || $parent->getDoneAt() > 0) {
+			return;
+		}
+
+		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
+			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
+				return; // an unresolved child remains
+			}
+		}
+
+		$now = time();
+		$parent->setDoneAt($now);
+		$parent->setLastModified($now);
+		$this->cardMapper->update($parent);
+
+		$this->changeNotifier->notify(
+			$parent->getBoardId(),
+			Change::ENTITY_CARD,
+			$parentId,
+			Change::ACTION_UPDATE,
+			$uid
+		);
 	}
 
 	/**
