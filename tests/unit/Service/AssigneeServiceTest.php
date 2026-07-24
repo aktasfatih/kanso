@@ -21,6 +21,7 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IGroupManager;
 use OCP\IUser;
@@ -35,6 +36,7 @@ class AssigneeServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private NotificationService&MockObject $notificationService;
+	private SubscriptionService&MockObject $subscriptionService;
 	private AssigneeService $service;
 
 	protected function setUp(): void {
@@ -45,13 +47,15 @@ class AssigneeServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->service = new AssigneeService(
 			$this->cardAssigneeMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->notificationService
+			$this->notificationService,
+			$this->subscriptionService
 		);
 	}
 
@@ -103,6 +107,9 @@ class AssigneeServiceTest extends TestCase {
 		$this->notificationService->expects(self::once())
 			->method('notifyCardAssigned')
 			->with(9, 'bob', 'alice');
+		$this->subscriptionService->expects(self::once())
+			->method('autoSubscribe')
+			->with(9, 0, 'bob');
 
 		$this->service->assign(9, 'bob', 'alice');
 	}
@@ -198,7 +205,8 @@ class AssigneeServiceTest extends TestCase {
 			$this->boardMapper,
 			$this->changeNotifier,
 			new PermissionService($aclMapper, $groupManager, $userManager),
-			$this->notificationService
+			$this->notificationService,
+			$this->subscriptionService
 		);
 
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());

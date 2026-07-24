@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -43,6 +44,7 @@ class TrashService {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
+		private SubscriptionMapper $subscriptionMapper,
 	) {
 	}
 
@@ -106,6 +108,7 @@ class TrashService {
 		$this->cardAssigneeMapper->deleteByCard($cardId);
 		$this->checklistItemMapper->deleteByCard($cardId);
 		$this->commentMapper->deleteByCard($cardId);
+		$this->subscriptionMapper->deleteByCard($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(

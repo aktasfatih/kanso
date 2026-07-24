@@ -43,6 +43,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</template>
 
+					<!-- Watch toggle -->
+					<div class="card-modal__watch-wrap">
+						<button
+							class="card-modal__watch-btn"
+							:class="{ 'card-modal__watch-btn--active': isWatching }"
+							:aria-pressed="isWatching"
+							:disabled="toggleSubscription.isPending.value"
+							:title="isWatching ? t('kanso', 'Stop watching this card') : t('kanso', 'Watch this card')"
+							@click="handleWatchToggle">
+							<EyeOffOutlineIcon v-if="isWatching" :size="16" />
+							<EyeOutlineIcon v-else :size="16" />
+							<span class="card-modal__watch-label">
+								{{ isWatching ? t('kanso', 'Watching') : t('kanso', 'Watch') }}
+							</span>
+							<span v-if="watcherCount > 0" class="card-modal__watch-count">
+								{{ watcherCount }}
+							</span>
+						</button>
+						<!-- Avatar stack (visible when there are watchers) -->
+						<div v-if="visibleWatchers.length > 0" class="card-modal__watch-avatars" aria-hidden="true">
+							<NcAvatar
+								v-for="uid in visibleWatchers"
+								:key="uid"
+								:user="uid"
+								:size="20"
+								class="card-modal__watch-avatar" />
+							<span v-if="extraWatchers > 0" class="card-modal__watch-avatar-extra">
+								+{{ extraWatchers }}
+							</span>
+						</div>
+						<span v-if="subscriptionError" class="card-modal__save-error card-modal__watch-error">
+							{{ subscriptionError }}
+						</span>
+					</div>
+
 					<!-- ⋯ Actions menu -->
 					<NcActions class="card-modal__actions-menu" :force-menu="true">
 						<!-- Archive / Unarchive -->
@@ -673,6 +708,8 @@ import DragIcon from 'vue-material-design-icons/Drag.vue'
 import FlagIcon from 'vue-material-design-icons/Flag.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
+import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
+import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
@@ -682,6 +719,7 @@ import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
+import { useSubscription } from '../composables/useSubscription.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -1329,6 +1367,32 @@ async function handleAddChild() {
 	// Keep focus for rapid entry
 	await nextTick()
 	addChildInputRef.value?.focus()
+}
+
+// ── Subscription (Watch / Unwatch) ───────────────────────────────────────────
+const { toggle: toggleSubscription } = useSubscription(computed(() => props.cardId))
+
+const subscription = computed(() => cardData.value?.subscription ?? { subscribed: false, subscribers: [], count: 0 })
+const isWatching = computed(() => subscription.value.subscribed === true)
+const watcherCount = computed(() => Number(subscription.value.count) || 0)
+const watcherSubscribers = computed(() => {
+	const subs = subscription.value.subscribers
+	return Array.isArray(subs) ? subs : []
+})
+// Cap avatars at 3; the rest show as "+N"
+const visibleWatchers = computed(() => watcherSubscribers.value.slice(0, 3))
+const extraWatchers = computed(() => Math.max(0, watcherSubscribers.value.length - 3))
+
+const subscriptionError = ref('')
+
+async function handleWatchToggle() {
+	subscriptionError.value = ''
+	const next = !isWatching.value
+	try {
+		await toggleSubscription.mutateAsync({ subscribed: next })
+	} catch (err) {
+		subscriptionError.value = err?.response?.data?.error || t('kanso', 'Failed to update watch status.')
+	}
 }
 </script>
 
@@ -2711,5 +2775,92 @@ async function handleAddChild() {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+}
+
+/* Watch / Unwatch toggle */
+.card-modal__watch-wrap {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.card-modal__watch-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8rem;
+	font-family: inherit;
+	cursor: pointer;
+	transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+	white-space: nowrap;
+}
+
+.card-modal__watch-btn:hover:not(:disabled) {
+	border-color: var(--color-primary);
+	color: var(--color-primary);
+}
+
+.card-modal__watch-btn--active {
+	border-color: var(--color-primary);
+	color: var(--color-primary);
+	background: var(--color-primary-light);
+}
+
+.card-modal__watch-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.card-modal__watch-label {
+	line-height: 1;
+}
+
+.card-modal__watch-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 4px;
+	border-radius: 9px;
+	background: var(--color-primary);
+	color: var(--color-primary-text);
+	font-size: 0.7rem;
+	font-weight: 600;
+	line-height: 1;
+}
+
+.card-modal__watch-avatars {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.card-modal__watch-avatar {
+	border: 2px solid var(--color-main-background);
+	border-radius: 50%;
+	margin-left: -6px;
+}
+
+.card-modal__watch-avatar:first-child {
+	margin-left: 0;
+}
+
+.card-modal__watch-avatar-extra {
+	margin-left: 4px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.card-modal__watch-error {
+	margin-left: 4px;
 }
 </style>

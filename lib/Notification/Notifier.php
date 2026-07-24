@@ -54,40 +54,44 @@ class Notifier implements INotifier {
 		}
 
 		$l = $this->l10nFactory->get('kanso', $languageCode);
-
-		switch ($notification->getSubject()) {
-			case NotificationService::SUBJECT_CARD_ASSIGNED:
-				$params = $notification->getSubjectParameters();
-				$actorUid = (string)($params['actor'] ?? '');
-				$cardId = (int)$notification->getObjectId();
-
-				try {
-					$card = $this->cardMapper->find($cardId);
-				} catch (DoesNotExistException) {
-					// The card was purged after the notification was queued.
-					throw new UnknownNotificationException();
-				}
-
-				$actor = $this->userManager->get($actorUid);
-				$actorName = $actor !== null ? $actor->getDisplayName() : $actorUid;
-				$cardTitle = (string)$card->getTitle();
-
-				$notification
-					->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
-					->setLink($this->cardLink($card->getBoardId(), $cardId))
-					->setParsedSubject($l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]))
-					->setRichSubject(
-						$l->t('{actor} assigned you to {card}'),
-						[
-							'actor' => ['type' => 'user', 'id' => $actorUid, 'name' => $actorName],
-							'card' => ['type' => 'highlight', 'id' => (string)$cardId, 'name' => $cardTitle],
-						]
-					);
-
-				return $notification;
-			default:
-				throw new UnknownNotificationException();
+		$subject = $notification->getSubject();
+		if ($subject !== NotificationService::SUBJECT_CARD_ASSIGNED
+			&& $subject !== NotificationService::SUBJECT_CARD_COMMENT) {
+			throw new UnknownNotificationException();
 		}
+
+		$params = $notification->getSubjectParameters();
+		$actorUid = (string)($params['actor'] ?? '');
+		$cardId = (int)$notification->getObjectId();
+
+		try {
+			$card = $this->cardMapper->find($cardId);
+		} catch (DoesNotExistException) {
+			// The card was purged after the notification was queued.
+			throw new UnknownNotificationException();
+		}
+
+		$actor = $this->userManager->get($actorUid);
+		$actorName = $actor !== null ? $actor->getDisplayName() : $actorUid;
+		$cardTitle = (string)$card->getTitle();
+
+		[$plain, $rich] = $subject === NotificationService::SUBJECT_CARD_ASSIGNED
+			? [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')]
+			: [$l->t('%1$s commented on %2$s', [$actorName, $cardTitle]), $l->t('{actor} commented on {card}')];
+
+		$notification
+			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+			->setLink($this->cardLink($card->getBoardId(), $cardId))
+			->setParsedSubject($plain)
+			->setRichSubject(
+				$rich,
+				[
+					'actor' => ['type' => 'user', 'id' => $actorUid, 'name' => $actorName],
+					'card' => ['type' => 'highlight', 'id' => (string)$cardId, 'name' => $cardTitle],
+				]
+			);
+
+		return $notification;
 	}
 
 	/**

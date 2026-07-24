@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -34,6 +35,7 @@ class TrashServiceTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
+	private SubscriptionMapper&MockObject $subscriptionMapper;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -46,6 +48,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
+		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -55,6 +58,7 @@ class TrashServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->checklistItemMapper,
 			$this->commentMapper,
+			$this->subscriptionMapper,
 		);
 	}
 
@@ -161,6 +165,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardAssigneeMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->checklistItemMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->commentMapper->expects(self::once())->method('deleteByCard')->with(9);
+		$this->subscriptionMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->cardMapper->expects(self::once())->method('delete')->with($card);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')

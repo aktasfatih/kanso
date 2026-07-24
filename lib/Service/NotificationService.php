@@ -21,6 +21,7 @@ use OCP\Notification\IManager;
  */
 class NotificationService {
 	public const SUBJECT_CARD_ASSIGNED = 'card_assigned';
+	public const SUBJECT_CARD_COMMENT = 'card_comment';
 	public const OBJECT_CARD = 'card';
 
 	public function __construct(
@@ -43,6 +44,26 @@ class NotificationService {
 			->setDateTime((new \DateTime())->setTimestamp(time()))
 			->setObject(self::OBJECT_CARD, (string)$cardId)
 			->setSubject(self::SUBJECT_CARD_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Notifies $targetUid that $actorUid commented on a card they watch. No-op
+	 * when the commenter is the target (you don't get notified of your own
+	 * comment even though commenting auto-subscribes you).
+	 */
+	public function notifyCardComment(int $cardId, string $targetUid, string $actorUid): void {
+		if ($targetUid === $actorUid) {
+			return;
+		}
+
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject(self::SUBJECT_CARD_COMMENT, ['actor' => $actorUid, 'cardId' => $cardId]);
 
 		$this->manager->notify($notification);
 	}

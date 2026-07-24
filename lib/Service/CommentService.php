@@ -38,6 +38,7 @@ class CommentService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		private SubscriptionService $subscriptionService,
 	) {
 	}
 
@@ -91,6 +92,8 @@ class CommentService {
 		$saved = $this->commentMapper->insert($comment);
 
 		$this->notifyCard($card, $actorUid);
+		// Auto-subscribe the commenter and fan out to the card's watchers.
+		$this->subscriptionService->handleNewComment($cardId, $parentCommentId, $actorUid);
 
 		return $saved;
 	}

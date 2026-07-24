@@ -18,6 +18,7 @@ use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -45,6 +46,7 @@ class CardController extends Controller {
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
+		private SubscriptionService $subscriptionService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -61,8 +63,9 @@ class CardController extends Controller {
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
-			$card = $this->cardService->find($id, $this->currentUserId());
-			return new JSONResponse($this->detailPayload($card));
+			$uid = $this->currentUserId();
+			$card = $this->cardService->find($id, $uid);
+			return new JSONResponse($this->detailPayload($card, $uid));
 		});
 	}
 
@@ -74,7 +77,7 @@ class CardController extends Controller {
 	 *
 	 * @return array<string, mixed>
 	 */
-	private function detailPayload(Card $card): array {
+	private function detailPayload(Card $card, string $uid): array {
 		$id = $card->getId();
 		$checklistItems = $this->checklistItemMapper->findByCard($id);
 		$checklistDone = count(array_filter(
@@ -106,7 +109,8 @@ class CardController extends Controller {
 			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
 			+ ['parent' => $parent]
 			+ ['children' => $children]
-			+ ['commentCount' => $this->commentMapper->countByCard($id)];
+			+ ['commentCount' => $this->commentMapper->countByCard($id)]
+			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)];
 	}
 
 	/**
@@ -117,8 +121,9 @@ class CardController extends Controller {
 	#[NoAdminRequired]
 	public function setParent(int $id, ?int $parentCardId = null): JSONResponse {
 		return $this->respond(function () use ($id, $parentCardId): JSONResponse {
-			$card = $this->cardService->setParent($id, $parentCardId, $this->currentUserId());
-			return new JSONResponse($this->detailPayload($card));
+			$uid = $this->currentUserId();
+			$card = $this->cardService->setParent($id, $parentCardId, $uid);
+			return new JSONResponse($this->detailPayload($card, $uid));
 		});
 	}
 

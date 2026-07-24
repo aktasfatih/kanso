@@ -19,6 +19,7 @@ use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
@@ -36,6 +37,7 @@ class CardControllerTest extends TestCase {
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CardMapper&MockObject $cardMapper;
 	private CommentMapper&MockObject $commentMapper;
+	private SubscriptionService&MockObject $subscriptionService;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -50,6 +52,9 @@ class CardControllerTest extends TestCase {
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
+		$this->subscriptionService = $this->createMock(SubscriptionService::class);
+		$this->subscriptionService->method('buildCardSubscription')
+			->willReturn(['subscribed' => false, 'subscribers' => [], 'count' => 0]);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -66,7 +71,8 @@ class CardControllerTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->checklistItemMapper,
 			$this->cardMapper,
-			$this->commentMapper
+			$this->commentMapper,
+			$this->subscriptionService
 		);
 	}
 

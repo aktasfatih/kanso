@@ -19,6 +19,7 @@ use OCA\Kanso\Service\CommentService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -29,6 +30,7 @@ class CommentServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private SubscriptionService&MockObject $subscriptionService;
 	private CommentService $service;
 
 	protected function setUp(): void {
@@ -38,12 +40,14 @@ class CommentServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->service = new CommentService(
 			$this->commentMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
+			$this->subscriptionService,
 		);
 	}
 
@@ -119,6 +123,9 @@ class CommentServiceTest extends TestCase {
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob')
 			->willReturn(new Change());
+		$this->subscriptionService->expects(self::once())
+			->method('handleNewComment')
+			->with(9, null, 'bob');
 
 		$this->service->addComment(9, '  Hello world  ', null, 'bob');
 	}

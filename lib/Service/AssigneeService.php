@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -31,6 +32,7 @@ class AssigneeService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
+		private SubscriptionService $subscriptionService,
 	) {
 	}
 
@@ -78,6 +80,8 @@ class AssigneeService {
 
 		// Targeted bell notification to the assignee (not the board fan-out).
 		$this->notificationService->notifyCardAssigned($cardId, $participantUid, $actorUid);
+		// Being assigned auto-subscribes you to the card (unless you opted out).
+		$this->subscriptionService->autoSubscribe($cardId, SubscriptionMapper::THREAD_CARD, $participantUid);
 	}
 
 	/**
