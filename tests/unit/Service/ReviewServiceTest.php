@@ -14,6 +14,8 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReview;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ReviewType;
+use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotificationService;
@@ -31,6 +33,7 @@ class ReviewServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private NotificationService&MockObject $notificationService;
+	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private ReviewService $service;
 
 	protected function setUp(): void {
@@ -41,13 +44,15 @@ class ReviewServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->service = new ReviewService(
 			$this->cardReviewMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->notificationService
+			$this->notificationService,
+			$this->reviewTypeMapper
 		);
 	}
 
@@ -177,6 +182,58 @@ class ReviewServiceTest extends TestCase {
 
 		$this->expectException(DoesNotExistException::class);
 		$this->service->requestReview(9, 'bob', 'alice');
+	}
+
+	private function reviewType(int $id = 3, int $boardId = 1): ReviewType {
+		$type = new ReviewType();
+		$type->setId($id);
+		$type->setBoardId($boardId);
+		$type->setTitle('QA');
+		return $type;
+	}
+
+	public function testRequestWithValidTypePersistsIt(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->reviewType(3, 1));
+		$this->cardReviewMapper->method('exists')->with(9, 'bob')->willReturn(false);
+		$this->cardReviewMapper->expects(self::once())
+			->method('insertRequest')
+			->with(9, 'bob', 'alice', 3);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->requestReview(9, 'bob', 'alice', 3);
+	}
+
+	public function testRequestRejectsTypeFromAnotherBoard(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		// Type 3 belongs to board 2, not the card's board 1.
+		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->reviewType(3, 2));
+		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->requestReview(9, 'bob', 'alice', 3);
+	}
+
+	public function testRequestRejectsUnknownType(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->reviewTypeMapper->method('find')->with(3)
+			->willThrowException(new DoesNotExistException('no type'));
+		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->requestReview(9, 'bob', 'alice', 3);
 	}
 
 	// ---- withdrawReview ---------------------------------------------------

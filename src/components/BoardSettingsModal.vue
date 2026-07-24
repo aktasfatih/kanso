@@ -33,6 +33,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Labels') }}
 				</button>
 				<button
+					class="board-settings__tab"
+					:class="{ 'board-settings__tab--active': activeTab === 'review-types' }"
+					role="tab"
+					:aria-selected="activeTab === 'review-types'"
+					@click="activeTab = 'review-types'">
+					{{ t('kanso', 'Review types') }}
+				</button>
+				<button
 					v-if="canShare"
 					class="board-settings__tab"
 					:class="{ 'board-settings__tab--active': activeTab === 'sharing' }"
@@ -226,6 +234,176 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</div>
 					<span v-if="createError" class="label-settings__error">{{ createError }}</span>
+				</form>
+			</div>
+
+			<!-- Review types tab -->
+			<div v-show="activeTab === 'review-types'" class="board-settings__panel" role="tabpanel">
+				<ul class="rt-settings__list" role="list">
+					<li v-if="reviewTypes.length === 0" class="label-settings__empty">
+						{{ t('kanso', 'No review types yet. Create one below.') }}
+					</li>
+
+					<li
+						v-for="rt in reviewTypes"
+						:key="rt.id"
+						class="label-settings__item">
+						<!-- Color swatch / picker trigger -->
+						<button
+							class="label-settings__swatch"
+							:style="rt.color ? { background: cssColor(rt.color) } : {}"
+							:class="{ 'label-settings__swatch--no-color': !rt.color }"
+							:title="t('kanso', 'Change color')"
+							:aria-label="t('kanso', 'Change color of review type {title}', { title: rt.title })"
+							:disabled="!canManage"
+							@click="openRtColorPicker(rt)">
+							<span v-if="!rt.color" class="label-settings__swatch-icon">?</span>
+						</button>
+
+						<!-- Color picker popover for this review type -->
+						<div
+							v-if="rtColorPickerFor === rt.id"
+							class="label-settings__color-popover"
+							role="dialog"
+							:aria-label="t('kanso', 'Pick a color')">
+							<div class="label-settings__color-grid">
+								<button
+									v-for="preset in COLOR_PRESETS"
+									:key="preset"
+									class="label-settings__color-option"
+									:style="{ background: cssColor(preset) }"
+									:class="{ 'label-settings__color-option--active': rt.color === preset }"
+									:title="preset"
+									:aria-pressed="rt.color === preset"
+									@click="applyRtColor(rt, preset)" />
+								<button
+									class="label-settings__color-option label-settings__color-option--clear"
+									:title="t('kanso', 'No color')"
+									:aria-pressed="!rt.color"
+									@click="applyRtColor(rt, '')">
+									×
+								</button>
+							</div>
+						</div>
+
+						<!-- Inline rename input -->
+						<template v-if="editingRtId === rt.id">
+							<input
+								:ref="(el) => setRtEditRef(rt.id, el)"
+								v-model="editingRtTitle"
+								class="label-settings__rename-input"
+								type="text"
+								:aria-label="t('kanso', 'Rename review type')"
+								@keydown.enter.prevent="saveRtRename(rt)"
+								@keydown.escape="cancelRtRename"
+								@blur="saveRtRename(rt)" />
+						</template>
+						<template v-else>
+							<span
+								class="label-settings__name"
+								:class="{ 'label-settings__name--readonly': !canManage }"
+								@click="canManage && startRtRename(rt)">
+								{{ rt.title }}
+							</span>
+						</template>
+
+						<!-- Actions (only when canManage) -->
+						<div v-if="canManage" class="label-settings__actions">
+							<button
+								class="label-settings__action-btn"
+								:title="t('kanso', 'Rename')"
+								:aria-label="t('kanso', 'Rename review type {title}', { title: rt.title })"
+								@click="startRtRename(rt)">
+								<PencilIcon :size="14" />
+							</button>
+							<button
+								class="label-settings__action-btn label-settings__action-btn--danger"
+								:title="t('kanso', 'Delete')"
+								:aria-label="t('kanso', 'Delete review type {title}', { title: rt.title })"
+								:disabled="confirmDeleteRtId === rt.id && isDeletingRt"
+								@click="confirmDeleteRt(rt)">
+								<DeleteIcon :size="14" />
+							</button>
+						</div>
+
+						<!-- Inline delete confirm -->
+						<div v-if="confirmDeleteRtId === rt.id" class="label-settings__confirm">
+							<span>{{ t('kanso', 'Delete "{title}"?', { title: rt.title }) }}</span>
+							<button class="label-settings__confirm-yes" :disabled="isDeletingRt" @click="doDeleteRt(rt)">
+								{{ t('kanso', 'Delete') }}
+							</button>
+							<button class="label-settings__confirm-no" @click="confirmDeleteRtId = null">
+								{{ t('kanso', 'Cancel') }}
+							</button>
+							<span v-if="deleteRtError" class="label-settings__error">{{ deleteRtError }}</span>
+						</div>
+
+						<!-- Rename/color error -->
+						<span v-if="rtError[rt.id]" class="label-settings__error">
+							{{ rtError[rt.id] }}
+						</span>
+					</li>
+				</ul>
+
+				<!-- Create new review type form (only when canManage) -->
+				<form v-if="canManage" class="label-settings__create" @submit.prevent="submitCreateRt">
+					<h4 class="label-settings__create-heading">{{ t('kanso', 'Add review type') }}</h4>
+					<div class="label-settings__create-row">
+						<button
+							type="button"
+							class="label-settings__swatch"
+							:style="newRtColor ? { background: cssColor(newRtColor) } : {}"
+							:class="{ 'label-settings__swatch--no-color': !newRtColor }"
+							:title="t('kanso', 'Pick color')"
+							:aria-label="t('kanso', 'Pick color for new review type')"
+							@click="showNewRtColorPicker = !showNewRtColorPicker">
+							<span v-if="!newRtColor" class="label-settings__swatch-icon">+</span>
+						</button>
+
+						<div
+							v-if="showNewRtColorPicker"
+							class="label-settings__color-popover label-settings__color-popover--create"
+							role="dialog"
+							:aria-label="t('kanso', 'Pick a color')">
+							<div class="label-settings__color-grid">
+								<button
+									v-for="preset in COLOR_PRESETS"
+									:key="preset"
+									type="button"
+									class="label-settings__color-option"
+									:style="{ background: cssColor(preset) }"
+									:class="{ 'label-settings__color-option--active': newRtColor === preset }"
+									:title="preset"
+									:aria-pressed="newRtColor === preset"
+									@click="newRtColor = preset; showNewRtColorPicker = false" />
+								<button
+									type="button"
+									class="label-settings__color-option label-settings__color-option--clear"
+									:title="t('kanso', 'No color')"
+									:aria-pressed="!newRtColor"
+									@click="newRtColor = ''; showNewRtColorPicker = false">
+									×
+								</button>
+							</div>
+						</div>
+
+						<input
+							v-model="newRtTitle"
+							class="label-settings__create-input"
+							type="text"
+							:placeholder="t('kanso', 'Review type name…')"
+							:disabled="isCreatingRt"
+							:aria-label="t('kanso', 'New review type name')"
+							@keydown.enter.prevent="submitCreateRt" />
+						<button
+							class="label-settings__create-btn"
+							type="submit"
+							:disabled="!newRtTitle.trim() || isCreatingRt"
+							:aria-label="t('kanso', 'Create review type')">
+							{{ t('kanso', 'Add') }}
+						</button>
+					</div>
+					<span v-if="createRtError" class="label-settings__error">{{ createRtError }}</span>
 				</form>
 			</div>
 
@@ -955,6 +1133,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
 import { useLabels } from '../composables/useLabels.js'
+import { useReviewTypes } from '../composables/useReviewTypes.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
@@ -967,6 +1146,10 @@ const props = defineProps({
 		required: true,
 	},
 	labels: {
+		type: Array,
+		default: () => [],
+	},
+	reviewTypes: {
 		type: Array,
 		default: () => [],
 	},
@@ -1042,6 +1225,9 @@ const activeTab = ref('labels')
 
 // ── Labels composable ─────────────────────────────────────────────────────────
 const { createLabel, updateLabel, deleteLabel } = useLabels(() => props.boardId)
+
+// ── Review types composable ───────────────────────────────────────────────────
+const { createReviewType, updateReviewType, deleteReviewType } = useReviewTypes(() => props.boardId)
 
 // ── ACL composable ────────────────────────────────────────────────────────────
 const {
@@ -1260,6 +1446,115 @@ async function doDeleteLabel(label) {
 		deleteLabelError.value = err?.response?.data?.error || t('kanso', 'Failed to delete label.')
 	} finally {
 		isDeletingLabel.value = false
+	}
+}
+
+// ── Review types: create state ────────────────────────────────────────────────
+const newRtTitle = ref('')
+const newRtColor = ref('')
+const isCreatingRt = ref(false)
+const createRtError = ref('')
+const showNewRtColorPicker = ref(false)
+
+async function submitCreateRt() {
+	const title = newRtTitle.value.trim()
+	if (!title) return
+	isCreatingRt.value = true
+	createRtError.value = ''
+	showNewRtColorPicker.value = false
+	try {
+		await createReviewType.mutateAsync({ title, color: newRtColor.value || null })
+		newRtTitle.value = ''
+		newRtColor.value = ''
+	} catch (err) {
+		createRtError.value = err?.response?.data?.error || t('kanso', 'Failed to create review type.')
+	} finally {
+		isCreatingRt.value = false
+	}
+}
+
+// ── Review types: rename state ────────────────────────────────────────────────
+const editingRtId = ref(null)
+const editingRtTitle = ref('')
+const rtError = ref({})
+const rtEditRefs = {}
+
+function setRtEditRef(id, el) {
+	if (el) {
+		rtEditRefs[id] = el
+	} else {
+		delete rtEditRefs[id]
+	}
+}
+
+async function startRtRename(rt) {
+	rtColorPickerFor.value = null
+	editingRtId.value = rt.id
+	editingRtTitle.value = rt.title
+	rtError.value = { ...rtError.value, [rt.id]: '' }
+	await nextTick()
+	rtEditRefs[rt.id]?.focus()
+	rtEditRefs[rt.id]?.select()
+}
+
+function cancelRtRename() {
+	editingRtId.value = null
+}
+
+async function saveRtRename(rt) {
+	const title = editingRtTitle.value.trim()
+	editingRtId.value = null
+	if (!title || title === rt.title) return
+	try {
+		await updateReviewType.mutateAsync({ typeId: rt.id, title })
+	} catch (err) {
+		rtError.value = {
+			...rtError.value,
+			[rt.id]: err?.response?.data?.error || t('kanso', 'Failed to rename review type.'),
+		}
+	}
+}
+
+// ── Review types: color picker state ─────────────────────────────────────────
+const rtColorPickerFor = ref(null)
+
+function openRtColorPicker(rt) {
+	rtColorPickerFor.value = rtColorPickerFor.value === rt.id ? null : rt.id
+}
+
+async function applyRtColor(rt, color) {
+	rtColorPickerFor.value = null
+	if (color === rt.color) return
+	try {
+		await updateReviewType.mutateAsync({ typeId: rt.id, color })
+	} catch (err) {
+		rtError.value = {
+			...rtError.value,
+			[rt.id]: err?.response?.data?.error || t('kanso', 'Failed to update color.'),
+		}
+	}
+}
+
+// ── Review types: delete state ────────────────────────────────────────────────
+const confirmDeleteRtId = ref(null)
+const isDeletingRt = ref(false)
+const deleteRtError = ref('')
+
+function confirmDeleteRt(rt) {
+	confirmDeleteRtId.value = rt.id
+	deleteRtError.value = ''
+}
+
+async function doDeleteRt(rt) {
+	isDeletingRt.value = true
+	deleteRtError.value = ''
+	try {
+		await deleteReviewType.mutateAsync({ typeId: rt.id })
+		confirmDeleteRtId.value = null
+	} catch (err) {
+		deleteRtError.value = err?.response?.data?.error || t('kanso', 'Failed to delete review type.')
+	} finally {
+		isDeletingRt.value = false
 	}
 }
 

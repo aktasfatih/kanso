@@ -69,6 +69,10 @@ return [
 		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],
 		['name' => 'label#destroy', 'url' => '/api/labels/{id}', 'verb' => 'DELETE'],
 
+		['name' => 'reviewType#create', 'url' => '/api/review-types', 'verb' => 'POST'],
+		['name' => 'reviewType#update', 'url' => '/api/review-types/{id}', 'verb' => 'PATCH'],
+		['name' => 'reviewType#destroy', 'url' => '/api/review-types/{id}', 'verb' => 'DELETE'],
+
 		['name' => 'archiveRule#index', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'GET'],
 		['name' => 'archiveRule#create', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'POST'],
 		['name' => 'archiveRule#update', 'url' => '/api/archive-rules/{id}', 'verb' => 'PATCH'],

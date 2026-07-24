@@ -59,9 +59,9 @@ export function useReviews(boardId) {
 
 	// ── Request a review from a user ────────────────────────────────────────────
 	const requestReview = useMutation({
-		mutationFn: ({ cardId, userId }) => apiRequestReview(cardId, userId),
+		mutationFn: ({ cardId, userId, reviewTypeId }) => apiRequestReview(cardId, userId, reviewTypeId ?? null),
 
-		onMutate: async ({ cardId, userId }) => {
+		onMutate: async ({ cardId, userId, reviewTypeId }) => {
 			const boardKey = getBoardKey()
 			const cardKey = ['card', String(cardId)]
 			await queryClient.cancelQueries({ queryKey: boardKey })
@@ -82,6 +82,7 @@ export function useReviews(boardId) {
 					state: 'pending',
 					requestedBy: null,
 					createdAt: Math.floor(Date.now() / 1000),
+					reviewTypeId: reviewTypeId ?? null,
 				}
 				const updated = [...existing, newReview]
 				return { ...old, reviews: updated }

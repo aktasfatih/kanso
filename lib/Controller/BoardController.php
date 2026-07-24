@@ -17,6 +17,7 @@ use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -45,6 +46,7 @@ class BoardController extends Controller {
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardReviewMapper $cardReviewMapper,
+		private ReviewTypeMapper $reviewTypeMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
 		private AclMapper $aclMapper,
@@ -110,6 +112,7 @@ class BoardController extends Controller {
 					$this->cardMapper->findSummariesByBoard($id)
 				),
 				'labels' => $this->labelMapper->findByBoard($id),
+				'reviewTypes' => $this->reviewTypeMapper->findByBoard($id),
 				'acl' => $this->aclMapper->findByBoard($id),
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.

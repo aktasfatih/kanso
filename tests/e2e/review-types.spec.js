@@ -1,0 +1,200 @@
+// SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+import { test, expect } from '@playwright/test'
+
+const BASE = 'http://localhost:8891'
+const USER = 'admin'
+const PASS = 'admin'
+const API = BASE + '/index.php/apps/kanso/api'
+const HEADERS = {
+	'OCS-APIREQUEST': 'true',
+	'Content-Type': 'application/json',
+}
+const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
+
+async function apiGet(path) {
+	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
+	if (!r.ok) throw new Error(`GET ${path} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
+
+async function apiPost(path, body) {
+	const r = await fetch(API + path, {
+		method: 'POST',
+		headers: { ...HEADERS, Authorization: AUTH },
+		body: JSON.stringify(body),
+	})
+	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
+
+async function apiDelete(path) {
+	const r = await fetch(API + path, {
+		method: 'DELETE',
+		headers: { ...HEADERS, Authorization: AUTH },
+	})
+	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
+}
+
+async function ncLogin(page) {
+	await page.goto(BASE + '/index.php/login')
+	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
+
+	const userInput = page.locator('#user')
+	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
+	if (!isLoginPage) return // Already logged in
+
+	await page.fill('#user', USER)
+	await page.fill('#password', PASS)
+	await page.click('button[type=submit]')
+	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
+	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+}
+
+test.describe('Review types', () => {
+	const state = {
+		boardId: 0,
+		stackId: 0,
+		cardId: 0,
+		reviewTypeId: 0,
+		cardUrl: '',
+		boardUrl: '',
+		settingsUrl: '',
+	}
+
+	test.beforeAll(async () => {
+		// Clean up any stale board from a previous run
+		const boards = await apiGet('/boards')
+		for (const b of boards) {
+			if (b.title === 'Review Types E2E Board') {
+				await apiDelete(`/boards/${b.id}`)
+			}
+		}
+
+		// Create board + stack + card via API
+		const board = await apiPost('/boards', { title: 'Review Types E2E Board' })
+		state.boardId = board.id
+		const stack = await apiPost('/stacks', { boardId: board.id, title: 'Backlog' })
+		state.stackId = stack.id
+		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card for Type Review' })
+		state.cardId = card.id
+
+		// Create a review type via the backend API
+		const rt = await apiPost('/review-types', {
+			boardId: board.id,
+			title: 'QA',
+			color: '3498db', // bare hex — no leading #
+		})
+		state.reviewTypeId = rt.id
+
+		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) {
+			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		}
+	})
+
+	// ── Settings panel: Review types tab renders the created type ───────────────
+
+	test('review types tab in board settings shows the QA type', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		// Open board settings
+		await page.getByRole('button', { name: /board settings/i }).click()
+
+		// Click the Review types tab
+		await page.getByRole('tab', { name: /review types/i }).click()
+
+		// The QA type should appear in the list
+		const item = page.locator('.rt-settings__list .label-settings__item', { hasText: 'QA' })
+		await expect(item).toHaveCount(1, { timeout: 8_000 })
+
+		// Its swatch should be colored blue (3498db = rgb(52,152,219))
+		const swatchBg = await item.locator('.label-settings__swatch')
+			.evaluate((el) => getComputedStyle(el).backgroundColor)
+		expect(swatchBg).toBe('rgb(52, 152, 219)')
+	})
+
+	// ── Settings panel: create a new review type via the UI form ────────────────
+
+	test('can create a new review type via the settings panel', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		await page.getByRole('button', { name: /board settings/i }).click()
+		await page.getByRole('tab', { name: /review types/i }).click()
+
+		// Pick a color for the new type
+		await page.getByRole('button', { name: /pick color for new review type/i }).click()
+		// Pick the second preset (orange e67e22)
+		await page.locator('.label-settings__color-option').nth(1).click()
+
+		// Fill the name
+		await page.getByLabel(/new review type name/i).fill('Legal')
+		await page.getByRole('button', { name: /create review type/i }).click()
+
+		// The new type should appear in the list without error
+		const item = page.locator('.rt-settings__list .label-settings__item', { hasText: 'Legal' })
+		await expect(item).toHaveCount(1, { timeout: 8_000 })
+		await expect(page.locator('.label-settings__error')).toHaveCount(0)
+
+		// Verify the server stored bare hex (no leading #)
+		const boardPayload = await apiGet(`/boards/${state.boardId}`)
+		const savedType = boardPayload.reviewTypes.find((rt) => rt.title === 'Legal')
+		expect(savedType?.color).toBe('e67e22')
+	})
+
+	// ── Card modal: requesting a review shows the type selector when types exist ─
+
+	test('type selector appears in the request-review popover', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 12_000 })
+
+		// Open the request-review popover (scope to the reviews section — the
+		// assignee section reuses the same toggle class).
+		await page.locator('.card-modal__reviews-section .card-modal__assign-toggle').click()
+
+		// The type selector row should be visible with at least the QA type
+		const selector = page.locator('.card-modal__review-type-selector')
+		await expect(selector).toBeVisible({ timeout: 6_000 })
+		await expect(selector.locator('.card-modal__review-type-option', { hasText: 'QA' })).toHaveCount(1)
+		// "Review" (no-type) option should also be present
+		await expect(selector.locator('.card-modal__review-type-option', { hasText: 'Review' })).toHaveCount(1)
+	})
+
+	// ── Card modal: requesting a review with a type shows the type badge on the chip
+
+	test('review chip shows the type name when reviewTypeId is set', async ({ page }) => {
+		await ncLogin(page)
+
+		// Pre-create a typed review via API so we can verify the chip without
+		// needing to interact with the popover (avoids participant-picker complexity).
+		await fetch(API + `/cards/${state.cardId}/reviews/${USER}`, {
+			method: 'PUT',
+			headers: { ...HEADERS, Authorization: AUTH },
+			body: JSON.stringify({ reviewTypeId: state.reviewTypeId }),
+		})
+
+		await page.goto(state.cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 12_000 })
+
+		// A pending review chip should be present
+		const chip = page.locator('.card-modal__review-chip--pending')
+		await expect(chip).toBeVisible({ timeout: 8_000 })
+
+		// And the type badge with the "QA" label should appear inside it
+		const typeBadge = chip.locator('.card-modal__review-type-badge')
+		await expect(typeBadge).toBeVisible({ timeout: 6_000 })
+		await expect(typeBadge).toContainText('QA')
+	})
+})

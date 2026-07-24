@@ -28,6 +28,8 @@ use OCP\DB\Types;
  * @method void setRequestedBy(string $requestedBy)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method int|null getReviewTypeId()
+ * @method void setReviewTypeId(?int $reviewTypeId)
  */
 class CardReview extends Entity implements \JsonSerializable {
 	public const STATE_PENDING = 'pending';
@@ -42,6 +44,7 @@ class CardReview extends Entity implements \JsonSerializable {
 	protected ?string $state = null;
 	protected ?string $requestedBy = null;
 	protected ?int $createdAt = null;
+	protected ?int $reviewTypeId = null;
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
@@ -49,10 +52,11 @@ class CardReview extends Entity implements \JsonSerializable {
 		$this->addType('state', Types::STRING);
 		$this->addType('requestedBy', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
+		$this->addType('reviewTypeId', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int}
+	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int, reviewTypeId: ?int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -63,6 +67,7 @@ class CardReview extends Entity implements \JsonSerializable {
 			'state' => (string)$this->getState(),
 			'requestedBy' => (string)$this->getRequestedBy(),
 			'createdAt' => (int)$this->getCreatedAt(),
+			'reviewTypeId' => $this->getReviewTypeId() !== null ? (int)$this->getReviewTypeId() : null,
 		];
 	}
 

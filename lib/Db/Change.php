@@ -35,6 +35,7 @@ class Change extends Entity {
 	public const ENTITY_CARD = 2;
 	public const ENTITY_LABEL = 3;
 	public const ENTITY_ACL = 4;
+	public const ENTITY_REVIEW_TYPE = 5;
 
 	public const ACTION_CREATE = 0;
 	public const ACTION_UPDATE = 1;

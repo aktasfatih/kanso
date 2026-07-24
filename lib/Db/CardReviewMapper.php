@@ -127,15 +127,32 @@ class CardReviewMapper extends QBMapper {
 	/**
 	 * @throws Exception
 	 */
-	public function insertRequest(int $cardId, string $reviewer, string $requestedBy): CardReview {
+	public function insertRequest(int $cardId, string $reviewer, string $requestedBy, ?int $reviewTypeId = null): CardReview {
 		$review = new CardReview();
 		$review->setCardId($cardId);
 		$review->setReviewer($reviewer);
 		$review->setState(CardReview::STATE_PENDING);
 		$review->setRequestedBy($requestedBy);
 		$review->setCreatedAt(time());
+		$review->setReviewTypeId($reviewTypeId);
 
 		return $this->insert($review);
+	}
+
+	/**
+	 * Clears a review type from every review that used it (the review survives,
+	 * untyped) — the set-null cascade when a review type is deleted.
+	 *
+	 * @return int number of rows updated
+	 * @throws Exception
+	 */
+	public function clearType(int $reviewTypeId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('review_type_id', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('review_type_id', $qb->createNamedParameter($reviewTypeId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
 	}
 
 	/**

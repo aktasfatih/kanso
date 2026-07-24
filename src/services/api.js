@@ -180,11 +180,21 @@ export const search = ({ q, boardId, limit = 25, offset = 0 }) =>
 	axios.get(url('/api/search'), { params: { q, boardId, limit, offset } }).then((r) => r.data)
 
 // Reviews
-export const requestReview = (cardId, userId) =>
-	axios.put(url(`/api/cards/${cardId}/reviews/${userId}`)).then((r) => r.data)
+export const requestReview = (cardId, userId, reviewTypeId) =>
+	axios.put(url(`/api/cards/${cardId}/reviews/${userId}`), reviewTypeId != null ? { reviewTypeId } : undefined).then((r) => r.data)
 
 export const withdrawReview = (cardId, userId) =>
 	axios.delete(url(`/api/cards/${cardId}/reviews/${userId}`)).then((r) => r.data)
 
 export const setReviewState = (cardId, userId, state) =>
 	axios.patch(url(`/api/cards/${cardId}/reviews/${userId}`), { state }).then((r) => r.data)
+
+// Review types
+export const createReviewType = (boardId, title, color) =>
+	axios.post(url('/api/review-types'), { boardId, title, color: color || null }).then((r) => r.data)
+
+export const updateReviewType = (id, data) =>
+	axios.patch(url(`/api/review-types/${id}`), data).then((r) => r.data)
+
+export const deleteReviewType = (id) =>
+	axios.delete(url(`/api/review-types/${id}`)).then((r) => r.data)

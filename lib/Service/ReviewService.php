@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReview;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ReviewTypeMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -33,18 +34,22 @@ class ReviewService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
+		private ReviewTypeMapper $reviewTypeMapper,
 	) {
 	}
 
 	/**
 	 * Requests a review from $reviewerUid. Idempotent: re-requesting an existing
 	 * reviewer is a no-op (their current state is kept) and writes no change row.
+	 * $reviewTypeId is applied only on the INITIAL request — a re-request of an
+	 * existing review ignores it (withdraw + re-request to change the type). An
+	 * invalid type is still rejected, even on a re-request.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the reviewer cannot read the board (or does not exist)
+	 * @throws InvalidInputException if the reviewer cannot read the board, or the review type is invalid
 	 */
-	public function requestReview(int $cardId, string $reviewerUid, string $actorUid): void {
+	public function requestReview(int $cardId, string $reviewerUid, string $actorUid, ?int $reviewTypeId = null): void {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
@@ -54,12 +59,24 @@ class ReviewService {
 			throw new InvalidInputException('User has no access to this board');
 		}
 
+		// A typed request must reference a review type of this card's board.
+		if ($reviewTypeId !== null) {
+			try {
+				$type = $this->reviewTypeMapper->find($reviewTypeId);
+			} catch (DoesNotExistException) {
+				throw new InvalidInputException('Review type does not exist');
+			}
+			if ($type->getBoardId() !== $card->getBoardId()) {
+				throw new InvalidInputException('Review type belongs to another board');
+			}
+		}
+
 		if ($this->cardReviewMapper->exists($cardId, $reviewerUid)) {
 			return;
 		}
 
 		try {
-			$this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid);
+			$this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				// Concurrent PUT lost the check-then-insert race — the request

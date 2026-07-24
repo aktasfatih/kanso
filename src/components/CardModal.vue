@@ -514,6 +514,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:show-user-status="false"
 									:disable-tooltip="false" />
 								<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
+								<!-- Review type badge — shown only when reviewTypeId is set -->
+								<span
+									v-if="reviewTypeById(review.reviewTypeId)"
+									class="card-modal__review-type-badge"
+									:style="reviewTypeById(review.reviewTypeId).color
+										? { background: cssColor(reviewTypeById(review.reviewTypeId).color), color: '#fff' }
+										: {}">
+									{{ reviewTypeById(review.reviewTypeId).title }}
+								</span>
 								<span class="card-modal__review-state-badge" :class="`card-modal__review-state-badge--${review.state}`">
 									<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
 									<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
@@ -544,6 +553,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Request review…') }}
 							</button>
 							<div v-if="reviewPickerOpen" class="card-modal__assign-popover">
+								<!-- Review type selector — only shown when the board has types defined -->
+								<div v-if="boardReviewTypes.length > 0" class="card-modal__review-type-selector">
+									<span class="card-modal__review-type-label">{{ t('kanso', 'Type:') }}</span>
+									<button
+										class="card-modal__review-type-option"
+										:class="{ 'card-modal__review-type-option--active': selectedReviewTypeId === null }"
+										@click.stop="selectedReviewTypeId = null">
+										{{ t('kanso', 'Review') }}
+									</button>
+									<button
+										v-for="rt in boardReviewTypes"
+										:key="rt.id"
+										class="card-modal__review-type-option"
+										:class="{ 'card-modal__review-type-option--active': selectedReviewTypeId === rt.id }"
+										:style="rt.color && selectedReviewTypeId === rt.id
+											? { background: cssColor(rt.color), color: '#fff', borderColor: cssColor(rt.color) }
+											: rt.color
+												? { borderColor: cssColor(rt.color), color: cssColor(rt.color) }
+												: {}"
+										@click.stop="selectedReviewTypeId = rt.id">
+										{{ rt.title }}
+									</button>
+								</div>
 								<button
 									v-for="p in unrequestedParticipants"
 									:key="p.uid"
@@ -838,6 +870,7 @@ const { data: cardData, isLoading, isError, updateCard } = useCard(
 // Read board data from cache (same queryKey as BoardView — no extra request).
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
+const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
 
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
 const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
@@ -943,6 +976,15 @@ const { requestReview, withdrawReview, setReviewState } = useReviews(boardId)
 const reviewError = ref('')
 const reviewPickerOpen = ref(false)
 
+// Selected review type id for the next request-review action (null = no type)
+const selectedReviewTypeId = ref(null)
+
+// Resolve a reviewTypeId to its type object (for name + color display)
+function reviewTypeById(typeId) {
+	if (typeId == null) return null
+	return boardReviewTypes.value.find((rt) => rt.id === typeId) ?? null
+}
+
 const cardReviews = computed(() =>
 	Array.isArray(cardData.value?.reviews) ? cardData.value.reviews : [],
 )
@@ -967,10 +1009,14 @@ const myReviewNeedsVerdict = computed(() =>
 async function handleRequestReview(uid) {
 	reviewError.value = ''
 	reviewPickerOpen.value = false
+	const typeId = selectedReviewTypeId.value
+	// Reset type selection after request so the next picker opens fresh
+	selectedReviewTypeId.value = null
 	try {
 		await requestReview.mutateAsync({
 			cardId: Number(props.cardId),
 			userId: uid,
+			reviewTypeId: typeId ?? null,
 		})
 	} catch (err) {
 		reviewError.value = err?.response?.data?.error || t('kanso', 'Failed to request review.')
@@ -1968,6 +2014,63 @@ async function handleWatchToggle() {
 .card-modal__review-remove:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+
+/* Review type badge inside a chip — shown when reviewTypeId is set */
+.card-modal__review-type-badge {
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.65rem;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 8px;
+	background: var(--color-background-darker, #d8d8d8);
+	color: var(--color-main-text);
+	white-space: nowrap;
+	letter-spacing: 0.02em;
+}
+
+/* Review type selector row inside the assign popover */
+.card-modal__review-type-selector {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 8px 14px 6px;
+	border-bottom: 1px solid var(--color-border);
+	margin-bottom: 2px;
+}
+
+.card-modal__review-type-label {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	font-weight: 600;
+	margin-right: 4px;
+	flex-shrink: 0;
+}
+
+.card-modal__review-type-option {
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.75rem;
+	padding: 2px 8px;
+	border-radius: 10px;
+	border: 1px solid var(--color-border);
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+	transition: background 0.1s ease, border-color 0.1s ease;
+	white-space: nowrap;
+}
+
+.card-modal__review-type-option:hover {
+	background: var(--color-background-hover);
+}
+
+.card-modal__review-type-option--active {
+	background: var(--color-primary-element-light, rgba(0, 130, 201, 0.12));
+	border-color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element, #0082c9);
 }
 
 .card-modal__reviews-empty {

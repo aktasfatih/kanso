@@ -38,9 +38,9 @@ class ReviewController extends Controller {
 	 * of an already-requested reviewer succeeds without writing anything.
 	 */
 	#[NoAdminRequired]
-	public function request(int $id, string $userId): JSONResponse {
-		return $this->respond(function () use ($id, $userId): JSONResponse {
-			$this->reviewService->requestReview($id, $userId, $this->currentUserId());
+	public function request(int $id, string $userId, ?int $reviewTypeId = null): JSONResponse {
+		return $this->respond(function () use ($id, $userId, $reviewTypeId): JSONResponse {
+			$this->reviewService->requestReview($id, $userId, $this->currentUserId(), $reviewTypeId);
 			return new JSONResponse([]);
 		});
 	}

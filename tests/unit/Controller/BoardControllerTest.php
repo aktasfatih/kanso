@@ -21,6 +21,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
@@ -48,6 +49,7 @@ class BoardControllerTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
+	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
 	private AclMapper&MockObject $aclMapper;
@@ -67,6 +69,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
+		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->aclMapper = $this->createMock(AclMapper::class);
@@ -89,6 +92,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
 			$this->cardReviewMapper,
+			$this->reviewTypeMapper,
 			$this->checklistItemMapper,
 			$this->commentMapper,
 			$this->aclMapper,
