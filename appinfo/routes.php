@@ -28,6 +28,10 @@ return [
 		['name' => 'stack#destroy', 'url' => '/api/stacks/{id}', 'verb' => 'DELETE'],
 		['name' => 'stack#move', 'url' => '/api/stacks/{id}/move', 'verb' => 'POST'],
 
+		['name' => 'trash#index', 'url' => '/api/boards/{id}/trash', 'verb' => 'GET'],
+		['name' => 'trash#restore', 'url' => '/api/cards/{id}/restore', 'verb' => 'POST'],
+		['name' => 'trash#purge', 'url' => '/api/cards/{id}/purge', 'verb' => 'DELETE'],
+
 		['name' => 'card#create', 'url' => '/api/cards', 'verb' => 'POST'],
 		['name' => 'card#show', 'url' => '/api/cards/{id}', 'verb' => 'GET'],
 		['name' => 'card#update', 'url' => '/api/cards/{id}', 'verb' => 'PATCH'],

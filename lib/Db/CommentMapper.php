@@ -144,4 +144,19 @@ class CommentMapper extends QBMapper {
 
 		return $count;
 	}
+
+	/**
+	 * Hard-deletes every comment of a card (all threads) — cascade for a card
+	 * purge.
+	 *
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteByCard(int $cardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
 }

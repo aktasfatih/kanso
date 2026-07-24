@@ -114,6 +114,20 @@ class CardLabelMapper extends QBMapper {
 	}
 
 	/**
+	 * Removes every label assignment of a card — cascade for a card purge.
+	 *
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteByCard(int $cardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Removes every assignment of a label — the cascade for label deletion.
 	 *
 	 * @return int number of deleted rows

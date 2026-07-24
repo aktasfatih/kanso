@@ -88,6 +88,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ archivedCards.length }}
 			</NcButton>
 
+			<!-- Trash button — always visible when board is loaded; panel fetches on open -->
+			<NcButton
+				v-if="boardData"
+				class="board-view__trash-btn"
+				:title="t('kanso', 'View deleted cards')"
+				:aria-label="t('kanso', 'View deleted cards')"
+				@click="showTrash = true">
+				<template #icon>
+					<DeleteIcon :size="20" />
+				</template>
+			</NcButton>
+
 			<!-- Settings (gear) button -->
 			<NcButton
 				v-if="boardData"
@@ -122,6 +134,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:stacks="sortedStacks"
 			:archived-cards="archivedCards"
 			@close="showArchived = false" />
+
+		<!-- Trash panel (soft-deleted cards) -->
+		<TrashPanel
+			v-if="showTrash && boardData"
+			:board-id="props.id"
+			:stacks="sortedStacks"
+			:permissions="boardData.permissions ?? 0"
+			@close="showTrash = false" />
 
 		<!-- DnD / shortcut error banner -->
 		<div v-if="moveError || shortcutError" class="board-view__move-error">
@@ -230,12 +250,14 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
 import StackColumn from '../components/StackColumn.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ArchivedPanel from '../components/ArchivedPanel.vue'
+import TrashPanel from '../components/TrashPanel.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
@@ -283,6 +305,9 @@ const showSettings = ref(false)
 
 // Archived cards panel visibility
 const showArchived = ref(false)
+
+// Trash panel visibility
+const showTrash = ref(false)
 
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
@@ -1087,6 +1112,11 @@ async function handleCreateCard(stackId, title) {
 
 /* Archived cards badge button */
 .board-view__archived-btn {
+	flex-shrink: 0;
+}
+
+/* Trash button */
+.board-view__trash-btn {
 	flex-shrink: 0;
 }
 </style>

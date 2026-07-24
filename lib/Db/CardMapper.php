@@ -162,6 +162,25 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Summaries (no description) of the SOFT-DELETED cards of a board — the
+	 * trash listing, most-recently-deleted first.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findDeletedByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('deleted_at', 'DESC')
+			->addOrderBy('id', 'DESC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Summaries (no description) of the non-deleted children of a card, in
 	 * display order (by stack, then sort key).
 	 *
