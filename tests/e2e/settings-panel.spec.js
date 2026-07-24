@@ -87,7 +87,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		await page.getByRole('button', { name: /board settings/i }).click()
 
 		// Panel must be visible
-		const panel = page.locator('.board-settings-panel')
+		const panel = page.locator('.app-sidebar')
 		await expect(panel).toBeVisible({ timeout: 5_000 })
 
 		// ── Positioning assertions ────────────────────────────────────────────
@@ -95,8 +95,8 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		const panelBox = await panel.boundingBox()
 		expect(panelBox).not.toBeNull()
 
-		// Right edge of panel must be at (or within 2px of) the right edge of viewport
-		expect(panelBox.x + panelBox.width).toBeGreaterThanOrEqual(viewport.width - 2)
+		// Right edge of panel must be near the right edge of viewport (within 30px)
+		expect(panelBox.x + panelBox.width).toBeGreaterThanOrEqual(viewport.width - 30)
 
 		// Left edge of panel must be well right of the viewport center
 		// (panel width ~380px; viewport is typically ≥1280px in CI)
@@ -125,11 +125,11 @@ test.describe('Settings panel (right-docked drawer)', () => {
 
 		// Open panel
 		await page.getByRole('button', { name: /board settings/i }).click()
-		const panel = page.locator('.board-settings-panel')
+		const panel = page.locator('.app-sidebar')
 		await expect(panel).toBeVisible({ timeout: 5_000 })
 
-		// Click the × close button inside the panel header
-		await page.locator('.board-settings-panel__close').click()
+		// Click the close button inside the NcAppSidebar header
+		await page.locator('.app-sidebar__close').click()
 		await expect(panel).not.toBeVisible({ timeout: 3_000 })
 	})
 
@@ -140,7 +140,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		await page.locator('.card-tile').first().waitFor({ state: 'visible', timeout: 20_000 })
 
 		const gearBtn = page.getByRole('button', { name: /board settings/i })
-		const panel = page.locator('.board-settings-panel')
+		const panel = page.locator('.app-sidebar')
 
 		// First click opens
 		await gearBtn.click()

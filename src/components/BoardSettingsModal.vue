@@ -3,72 +3,17 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<Transition name="settings-panel">
-		<aside
-			class="board-settings-panel"
-			role="complementary"
-			:aria-label="t('kanso', 'Board settings')">
-			<!-- Panel header with title + close button -->
-			<div class="board-settings-panel__header">
-				<h2 class="board-settings-panel__title">
-					{{ t('kanso', 'Board settings') }}
-				</h2>
-				<button
-					class="board-settings-panel__close"
-					:aria-label="t('kanso', 'Close settings')"
-					@click="$emit('close')">
-					×
-				</button>
-			</div>
+	<Teleport to="#content-vue">
+		<NcAppSidebar
+			:name="t('kanso', 'Board settings')"
+			:active="activeTab"
+			@update:active="activeTab = $event"
+			@close="$emit('close')">
 
-			<div class="board-settings">
-				<!-- Tab bar -->
-				<div class="board-settings__tabs" role="tablist">
-				<button
-					class="board-settings__tab"
-					:class="{ 'board-settings__tab--active': activeTab === 'labels' }"
-					role="tab"
-					:aria-selected="activeTab === 'labels'"
-					@click="activeTab = 'labels'">
-					{{ t('kanso', 'Labels') }}
-				</button>
-				<button
-					class="board-settings__tab"
-					:class="{ 'board-settings__tab--active': activeTab === 'review-types' }"
-					role="tab"
-					:aria-selected="activeTab === 'review-types'"
-					@click="activeTab = 'review-types'">
-					{{ t('kanso', 'Review types') }}
-				</button>
-				<button
-					v-if="canShare"
-					class="board-settings__tab"
-					:class="{ 'board-settings__tab--active': activeTab === 'sharing' }"
-					role="tab"
-					:aria-selected="activeTab === 'sharing'"
-					@click="activeTab = 'sharing'">
-					{{ t('kanso', 'Sharing') }}
-				</button>
-				<button
-					class="board-settings__tab"
-					:class="{ 'board-settings__tab--active': activeTab === 'workflow' }"
-					role="tab"
-					:aria-selected="activeTab === 'workflow'"
-					@click="activeTab = 'workflow'">
-					{{ t('kanso', 'Workflow') }}
-				</button>
-				<button
-					class="board-settings__tab"
-					:class="{ 'board-settings__tab--active': activeTab === 'automation' }"
-					role="tab"
-					:aria-selected="activeTab === 'automation'"
-					@click="activeTab = 'automation'">
-					{{ t('kanso', 'Automation') }}
-				</button>
-			</div>
-
-			<!-- Labels tab -->
-			<div v-show="activeTab === 'labels'" class="board-settings__panel" role="tabpanel">
+			<NcAppSidebarTab id="labels" :name="t('kanso', 'Labels')">
+				<template #icon>
+					<TagMultipleIcon :size="20" />
+				</template>
 				<ul class="label-settings__list" role="list">
 					<li v-if="labels.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No labels yet. Create one below.') }}
@@ -235,10 +180,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="createError" class="label-settings__error">{{ createError }}</span>
 				</form>
-			</div>
+			</NcAppSidebarTab>
 
-			<!-- Review types tab -->
-			<div v-show="activeTab === 'review-types'" class="board-settings__panel" role="tabpanel">
+			<NcAppSidebarTab id="review-types" :name="t('kanso', 'Review types')">
+				<template #icon>
+					<CheckDecagramIcon :size="20" />
+				</template>
 				<ul class="rt-settings__list" role="list">
 					<li v-if="reviewTypes.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No review types yet. Create one below.') }}
@@ -405,10 +352,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="createRtError" class="label-settings__error">{{ createRtError }}</span>
 				</form>
-			</div>
+			</NcAppSidebarTab>
 
-			<!-- Sharing tab -->
-			<div v-if="canShare" v-show="activeTab === 'sharing'" class="board-settings__panel" role="tabpanel">
+			<NcAppSidebarTab v-if="canShare" id="sharing" :name="t('kanso', 'Sharing')">
+				<template #icon>
+					<ShareVariantIcon :size="20" />
+				</template>
 				<!-- Sharee search -->
 				<div class="sharing__search-wrap">
 					<input
@@ -549,10 +498,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="leaveError" class="label-settings__error">{{ leaveError }}</span>
 					</div>
 				</div>
-			</div>
+			</NcAppSidebarTab>
 
-			<!-- Workflow tab -->
-			<div v-show="activeTab === 'workflow'" class="board-settings__panel" role="tabpanel">
+			<NcAppSidebarTab id="workflow" :name="t('kanso', 'Workflow')">
+				<template #icon>
+					<SwapHorizontalIcon :size="20" />
+				</template>
 				<p v-if="!canEdit" class="workflow__readonly-notice">
 					{{ t('kanso', 'You need edit permission to configure workflows.') }}
 				</p>
@@ -621,10 +572,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<p v-else class="label-settings__empty">
 					{{ t('kanso', 'No stacks yet.') }}
 				</p>
-			</div>
+			</NcAppSidebarTab>
 
-			<!-- Automation tab -->
-			<div v-show="activeTab === 'automation'" class="board-settings__panel" role="tabpanel">
+			<NcAppSidebarTab id="automation" :name="t('kanso', 'Automation')">
+				<template #icon>
+					<RobotIcon :size="20" />
+				</template>
 
 				<!-- Auto-archive section -->
 				<h3 class="automation__section-heading">{{ t('kanso', 'Auto-archive') }}</h3>
@@ -1117,10 +1070,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="createRecurRuleError" class="label-settings__error">{{ createRecurRuleError }}</span>
 					</form>
 				</template>
-			</div>
-		</div>
-		</aside>
-	</Transition>
+			</NcAppSidebarTab>
+
+		</NcAppSidebar>
+	</Teleport>
 </template>
 
 <script setup>
@@ -1128,10 +1081,17 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
+import NcAppSidebarTab from '@nextcloud/vue/components/NcAppSidebarTab'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
+import TagMultipleIcon from 'vue-material-design-icons/TagMultiple.vue'
+import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
+import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
+import SwapHorizontalIcon from 'vue-material-design-icons/SwapHorizontal.vue'
+import RobotIcon from 'vue-material-design-icons/Robot.vue'
 import { useLabels } from '../composables/useLabels.js'
 import { useReviewTypes } from '../composables/useReviewTypes.js'
 import { useAcl } from '../composables/useAcl.js'
@@ -2080,130 +2040,6 @@ function toggleWeekday(day) {
 </script>
 
 <style scoped>
-/* ── Right-docked panel shell ─────────────────────────────────────────────── */
-
-.board-settings-panel {
-	position: fixed;
-	/* NC top bar (--header-height) plus the board's own ~60px toolbar row, so
-	   the panel sits BELOW the board header — its close button clears the
-	   toolbar and the gear/trash/archived buttons stay clickable. */
-	top: calc(var(--header-height, 50px) + 60px);
-	right: 0;
-	bottom: 0;
-	width: 380px;
-	max-width: 100vw;
-	display: flex;
-	flex-direction: column;
-	background: var(--color-main-background);
-	border-left: 1px solid var(--color-border);
-	box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
-	z-index: 1800;
-	overflow: hidden;
-}
-
-@media (max-width: 700px) {
-	.board-settings-panel {
-		width: 100vw;
-		border-left: none;
-	}
-}
-
-/* Slide-in transition */
-.settings-panel-enter-active,
-.settings-panel-leave-active {
-	transition: transform 0.22s ease, opacity 0.22s ease;
-}
-
-.settings-panel-enter-from,
-.settings-panel-leave-to {
-	transform: translateX(100%);
-	opacity: 0;
-}
-
-/* Panel header */
-.board-settings-panel__header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 12px 16px 12px 24px;
-	border-bottom: 1px solid var(--color-border);
-	flex-shrink: 0;
-	background: var(--color-main-background);
-}
-
-.board-settings-panel__title {
-	font-size: 1rem;
-	font-weight: 600;
-	color: var(--color-main-text);
-	margin: 0;
-}
-
-.board-settings-panel__close {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	border: none;
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 1.4rem;
-	line-height: 1;
-	cursor: pointer;
-	flex-shrink: 0;
-	transition: background 0.15s ease, color 0.15s ease;
-}
-
-.board-settings-panel__close:hover {
-	background: var(--color-background-hover);
-	color: var(--color-main-text);
-}
-
-/* Inner scrollable content area */
-.board-settings {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	min-height: 0;
-	overflow-y: auto;
-}
-
-/* Tab bar */
-.board-settings__tabs {
-	display: flex;
-	border-bottom: 1px solid var(--color-border);
-	padding: 0 24px;
-	gap: 0;
-}
-
-.board-settings__tab {
-	padding: 12px 16px;
-	background: none;
-	border: none;
-	border-bottom: 2px solid transparent;
-	margin-bottom: -1px;
-	font-size: 0.875rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.board-settings__tab:hover {
-	color: var(--color-main-text);
-}
-
-.board-settings__tab--active {
-	color: var(--color-primary);
-	border-bottom-color: var(--color-primary);
-}
-
-/* Panel */
-.board-settings__panel {
-	padding: 20px 24px 24px;
-}
-
 /* ── Reused label styles (same as original LabelSettingsPanel) ─────────────── */
 
 .label-settings__list {
