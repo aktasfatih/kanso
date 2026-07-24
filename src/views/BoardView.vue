@@ -241,10 +241,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<td class="shortcuts-modal__key"><kbd>/</kbd></td>
 							<td>{{ t('kanso', 'Focus search') }}</td>
 						</tr>
+						<tr>
+							<td class="shortcuts-modal__key"><kbd>Ctrl</kbd>+<kbd>K</kbd></td>
+							<td>{{ t('kanso', 'Open command palette') }}</td>
+						</tr>
 					</tbody>
 				</table>
 			</div>
 		</NcModal>
+
+		<!-- Command palette (Ctrl/Cmd+K) -->
+		<CommandPalette
+			:open="showCommandPalette"
+			@close="showCommandPalette = false" />
 
 		<!-- Child route: CardModal renders over this view -->
 		<router-view />
@@ -272,6 +281,7 @@ import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ArchivedPanel from '../components/ArchivedPanel.vue'
 import TrashPanel from '../components/TrashPanel.vue'
+import CommandPalette from '../components/CommandPalette.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
@@ -322,6 +332,9 @@ const showArchived = ref(false)
 
 // Trash panel visibility
 const showTrash = ref(false)
+
+// ── Command palette visibility ────────────────────────────────────────────────
+const showCommandPalette = ref(false)
 
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
@@ -488,6 +501,19 @@ watch(cardsByStack, () => {
 function handleKeydown(e) {
 	// Guard: composing (IME)
 	if (e.isComposing) return
+	// Cmd/Ctrl+K → open command palette.
+	// Handled BEFORE the modifier-key early-return guard (same technique as '?'
+	// and '/' which are handled before the overlay-open guard).
+	// Respects the same typing-context guard: don't trigger while the user is
+	// typing in an input/textarea/contenteditable.
+	if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.altKey) {
+		const target = e.target
+		if (!target.closest('input, textarea, [contenteditable]')) {
+			e.preventDefault()
+			showCommandPalette.value = !showCommandPalette.value
+			return
+		}
+	}
 	// Guard: modifier keys held (but allow Shift for '?')
 	if (e.ctrlKey || e.metaKey || e.altKey) return
 	// Guard: typing context
