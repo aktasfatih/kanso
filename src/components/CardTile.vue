@@ -52,6 +52,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<SitemapIcon :size="12" />
 				{{ card.childProgress.done }}/{{ card.childProgress.total }}
 			</span>
+			<!-- Comment count badge — only when there are comments -->
+			<span
+				v-if="card.commentCount > 0"
+				class="card-tile__comments"
+				:aria-label="t('kanso', 'Comments')">
+				<CommentMultipleOutlineIcon :size="12" />
+				{{ card.commentCount }}
+			</span>
 			<!-- Priority indicator — only when priority > 0 -->
 			<span
 				v-if="card.priority > 0"
@@ -90,6 +98,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
+import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
 import ArrowUpBoldIcon from 'vue-material-design-icons/ArrowUpBold.vue'
@@ -373,6 +382,18 @@ const extraAssigneeCount = computed(() => {
 	color: var(--color-success, #46ba61);
 	border-color: var(--color-success, #46ba61);
 	background: rgba(70, 186, 97, 0.1);
+}
+
+/* Comment count badge */
+.card-tile__comments {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	padding: 1px 7px;
 }
 
 /* Priority indicator badge */

@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
@@ -43,6 +44,7 @@ class BoardController extends Controller {
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private ChecklistItemMapper $checklistItemMapper,
+		private CommentMapper $commentMapper,
 		private AclMapper $aclMapper,
 		private PermissionService $permissionService,
 	) {
@@ -90,6 +92,7 @@ class BoardController extends Controller {
 			$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($id);
 			$checklistByCard = $this->checklistItemMapper->progressByBoard($id);
 			$childProgressByCard = $this->cardMapper->childProgressByBoard($id);
+			$commentCountByCard = $this->commentMapper->countsByBoard($id);
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
@@ -98,7 +101,8 @@ class BoardController extends Controller {
 						+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
 						+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
 						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
-						+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]],
+						+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+						+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0],
 					$this->cardMapper->findSummariesByBoard($id)
 				),
 				'labels' => $this->labelMapper->findByBoard($id),

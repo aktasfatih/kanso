@@ -444,6 +444,205 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
 				</div>
+
+				<!-- Discussion section -->
+				<div class="card-modal__discussion-section">
+					<div class="card-modal__discussion-header">
+						<CommentMultipleOutlineIcon :size="16" class="card-modal__discussion-header-icon" />
+						<label class="card-modal__label">{{ t('kanso', 'Discussion') }}</label>
+						<span v-if="commentCount > 0" class="card-modal__discussion-count">
+							{{ commentCount }}
+						</span>
+					</div>
+
+					<!-- Thread list -->
+					<div v-if="commentThread.length > 0" class="card-modal__discussion-thread">
+						<div
+							v-for="{ comment: topComment, replies } in commentThread"
+							:key="topComment.id"
+							class="card-modal__comment-group">
+							<!-- Top-level comment -->
+							<div class="card-modal__comment card-modal__comment--top">
+								<div class="card-modal__comment-meta">
+									<span class="card-modal__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+									<span class="card-modal__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
+									<span v-if="topComment.editedAt > 0" class="card-modal__comment-edited">
+										{{ t('kanso', 'edited') }}
+									</span>
+								</div>
+
+								<!-- Body: edit mode -->
+								<template v-if="editingCommentId === topComment.id">
+									<textarea
+										:ref="(el) => setCommentEditRef(topComment.id, el)"
+										v-model="editingCommentBody"
+										class="card-modal__comment-edit-textarea"
+										rows="3"
+										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.escape="cancelCommentEdit" />
+									<div class="card-modal__comment-edit-actions">
+										<NcButton
+											type="primary"
+											:disabled="editComment.isPending.value"
+											@click="saveCommentEdit(topComment)">
+											{{ t('kanso', 'Save') }}
+										</NcButton>
+										<NcButton @click="cancelCommentEdit">
+											{{ t('kanso', 'Cancel') }}
+										</NcButton>
+									</div>
+								</template>
+
+								<!-- Body: display mode (sanitized markdown via v-html) -->
+								<div
+									v-else
+									class="card-modal__comment-body"
+									v-html="renderMarkdown(topComment.body)" />
+
+								<!-- Author controls (edit + delete) — gated on canEdit AND being the author -->
+								<div
+									v-if="canEdit && currentUserId === topComment.author"
+									class="card-modal__comment-controls">
+									<button
+										class="card-modal__comment-control-btn"
+										:title="t('kanso', 'Edit comment')"
+										@click="startCommentEdit(topComment)">
+										<PencilIcon :size="14" />
+									</button>
+									<button
+										class="card-modal__comment-control-btn card-modal__comment-control-btn--danger"
+										:title="t('kanso', 'Delete comment')"
+										:disabled="deleteComment.isPending.value"
+										@click="handleDeleteComment(topComment)">
+										<TrashCanIcon :size="14" />
+									</button>
+								</div>
+
+								<!-- Reply affordance — gated on canEdit -->
+								<button
+									v-if="canEdit && editingCommentId !== topComment.id"
+									class="card-modal__comment-reply-btn"
+									@click="openReplyBox(topComment.id)">
+									{{ t('kanso', 'Reply') }}
+								</button>
+							</div>
+
+							<!-- Inline reply box for this top-level comment -->
+							<div
+								v-if="replyingToId === topComment.id && canEdit"
+								class="card-modal__reply-compose card-modal__reply-compose--indent">
+								<textarea
+									:ref="(el) => setReplyRef(topComment.id, el)"
+									v-model="replyBody"
+									class="card-modal__comment-compose-textarea"
+									:placeholder="t('kanso', 'Write a reply…')"
+									rows="2"
+									@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
+									@keydown.meta.enter.prevent="submitReply(topComment.id)"
+									@keydown.escape="closeReplyBox" />
+								<div class="card-modal__comment-compose-actions">
+									<NcButton
+										type="primary"
+										:disabled="addComment.isPending.value || !replyBody.trim()"
+										@click="submitReply(topComment.id)">
+										{{ t('kanso', 'Post reply') }}
+									</NcButton>
+									<NcButton @click="closeReplyBox">
+										{{ t('kanso', 'Cancel') }}
+									</NcButton>
+								</div>
+							</div>
+
+							<!-- Replies (indented) -->
+							<div
+								v-if="replies.length > 0"
+								class="card-modal__replies">
+								<div
+									v-for="reply in replies"
+									:key="reply.id"
+									class="card-modal__comment card-modal__comment--reply">
+									<div class="card-modal__comment-meta">
+										<span class="card-modal__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
+										<span class="card-modal__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
+										<span v-if="reply.editedAt > 0" class="card-modal__comment-edited">
+											{{ t('kanso', 'edited') }}
+										</span>
+									</div>
+
+									<!-- Reply body: edit mode -->
+									<template v-if="editingCommentId === reply.id">
+										<textarea
+											:ref="(el) => setCommentEditRef(reply.id, el)"
+											v-model="editingCommentBody"
+											class="card-modal__comment-edit-textarea"
+											rows="3"
+											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
+											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+											@keydown.escape="cancelCommentEdit" />
+										<div class="card-modal__comment-edit-actions">
+											<NcButton
+												type="primary"
+												:disabled="editComment.isPending.value"
+												@click="saveCommentEdit(reply)">
+												{{ t('kanso', 'Save') }}
+											</NcButton>
+											<NcButton @click="cancelCommentEdit">
+												{{ t('kanso', 'Cancel') }}
+											</NcButton>
+										</div>
+									</template>
+
+									<!-- Reply body: display mode -->
+									<div
+										v-else
+										class="card-modal__comment-body"
+										v-html="renderMarkdown(reply.body)" />
+
+									<!-- Author controls -->
+									<div
+										v-if="canEdit && currentUserId === reply.author"
+										class="card-modal__comment-controls">
+										<button
+											class="card-modal__comment-control-btn"
+											:title="t('kanso', 'Edit comment')"
+											@click="startCommentEdit(reply)">
+											<PencilIcon :size="14" />
+										</button>
+										<button
+											class="card-modal__comment-control-btn card-modal__comment-control-btn--danger"
+											:title="t('kanso', 'Delete comment')"
+											:disabled="deleteComment.isPending.value"
+											@click="handleDeleteComment(reply)">
+											<TrashCanIcon :size="14" />
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Top-level compose box — only when EDIT permission -->
+					<div v-if="canEdit" class="card-modal__comment-compose">
+						<textarea
+							v-model="newCommentBody"
+							class="card-modal__comment-compose-textarea"
+							:placeholder="t('kanso', 'Write a comment… (Ctrl+Enter to post)')"
+							rows="3"
+							:disabled="addComment.isPending.value"
+							@keydown.ctrl.enter.prevent="submitNewComment"
+							@keydown.meta.enter.prevent="submitNewComment" />
+						<div class="card-modal__comment-compose-actions">
+							<NcButton
+								type="primary"
+								:disabled="addComment.isPending.value || !newCommentBody.trim()"
+								@click="submitNewComment">
+								{{ t('kanso', 'Post') }}
+							</NcButton>
+						</div>
+						<span v-if="commentError" class="card-modal__save-error">{{ commentError }}</span>
+					</div>
+				</div>
 			</template>
 		</div>
 	</NcModal>
@@ -452,6 +651,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { getCurrentUser } from '@nextcloud/auth'
 import { translate as t } from '@nextcloud/l10n'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -465,13 +665,14 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
+import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOutline.vue'
 import DragIcon from 'vue-material-design-icons/Drag.vue'
-import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
-import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import FlagIcon from 'vue-material-design-icons/Flag.vue'
+import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
+import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
@@ -479,6 +680,7 @@ import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
+import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
@@ -915,6 +1117,142 @@ async function onItemDrop(event, targetItem) {
 	} catch (err) {
 		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to reorder item.')
 	}
+}
+
+// ── Comments / Discussion ────────────────────────────────────────────────────
+const {
+	comments: commentsQuery,
+	addComment,
+	editComment,
+	deleteComment,
+} = useComments(computed(() => props.cardId), boardId)
+
+// Current user uid — used to gate edit/delete controls to the comment author
+const currentUserId = getCurrentUser()?.uid ?? ''
+
+// EDIT permission bit (bit 1, value 2) from board payload
+const canEdit = computed(() => {
+	const perms = boardData.value?.permissions ?? 0
+	return (perms & 2) !== 0
+})
+
+const flatComments = computed(() => commentsQuery.data.value ?? [])
+const commentThread = computed(() => buildCommentTree(flatComments.value))
+const commentCount = computed(() => flatComments.value.length)
+
+const commentError = ref('')
+const newCommentBody = ref('')
+
+async function submitNewComment() {
+	const body = newCommentBody.value.trim()
+	if (!body) return
+	commentError.value = ''
+	newCommentBody.value = ''
+	try {
+		await addComment.mutateAsync({ body, parentCommentId: null })
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post comment.')
+	}
+}
+
+// Reply state
+const replyingToId = ref(null)
+const replyBody = ref('')
+const replyRefs = {}
+
+function setReplyRef(id, el) {
+	if (el) replyRefs[id] = el
+	else delete replyRefs[id]
+}
+
+async function openReplyBox(parentId) {
+	replyingToId.value = parentId
+	replyBody.value = ''
+	await nextTick()
+	replyRefs[parentId]?.focus()
+}
+
+function closeReplyBox() {
+	replyingToId.value = null
+	replyBody.value = ''
+}
+
+async function submitReply(parentCommentId) {
+	const body = replyBody.value.trim()
+	if (!body) return
+	commentError.value = ''
+	replyBody.value = ''
+	replyingToId.value = null
+	try {
+		await addComment.mutateAsync({ body, parentCommentId })
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
+	}
+}
+
+// Inline comment edit state
+const editingCommentId = ref(null)
+const editingCommentBody = ref('')
+const commentEditRefs = {}
+
+function setCommentEditRef(id, el) {
+	if (el) commentEditRefs[id] = el
+	else delete commentEditRefs[id]
+}
+
+async function startCommentEdit(comment) {
+	editingCommentId.value = comment.id
+	editingCommentBody.value = comment.body
+	await nextTick()
+	commentEditRefs[comment.id]?.focus()
+}
+
+function cancelCommentEdit() {
+	editingCommentId.value = null
+	editingCommentBody.value = ''
+}
+
+async function saveCommentEdit(comment) {
+	const body = editingCommentBody.value.trim()
+	if (!body || body === comment.body) {
+		cancelCommentEdit()
+		return
+	}
+	commentError.value = ''
+	try {
+		await editComment.mutateAsync({ comment, body })
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to edit comment.')
+	} finally {
+		cancelCommentEdit()
+	}
+}
+
+async function handleDeleteComment(comment) {
+	commentError.value = ''
+	try {
+		await deleteComment.mutateAsync({ comment })
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to delete comment.')
+	}
+}
+
+/**
+ * Format a unix timestamp as a relative time string (e.g. "2 hours ago").
+ * Falls back to a locale date string for older timestamps.
+ * @param {number} unixTs
+ * @returns {string}
+ */
+function formatCommentTime(unixTs) {
+	if (!unixTs) return ''
+	const now = Date.now()
+	const ms = unixTs * 1000
+	const diffSec = Math.floor((now - ms) / 1000)
+	if (diffSec < 60) return t('kanso', 'just now')
+	if (diffSec < 3600) return t('kanso', '{n} min ago', { n: Math.floor(diffSec / 60) })
+	if (diffSec < 86400) return t('kanso', '{n} hr ago', { n: Math.floor(diffSec / 3600) })
+	if (diffSec < 86400 * 7) return t('kanso', '{n} days ago', { n: Math.floor(diffSec / 86400) })
+	return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function closeModal() {
@@ -2071,5 +2409,305 @@ async function handleAddChild() {
 
 .card-modal__add-child-input:disabled {
 	opacity: 0.5;
+}
+
+/* ── Discussion / Comments ─────────────────────────────────────────────────── */
+.card-modal__discussion-section {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-top: 28px;
+}
+
+.card-modal__discussion-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.card-modal__discussion-header-icon {
+	color: var(--color-text-maxcontrast);
+	flex-shrink: 0;
+}
+
+.card-modal__discussion-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background: var(--color-background-dark);
+	border: 1px solid var(--color-border);
+	font-size: 0.7rem;
+	font-weight: 700;
+	color: var(--color-text-maxcontrast);
+	margin-left: auto;
+}
+
+/* Thread container */
+.card-modal__discussion-thread {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.card-modal__comment-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+/* Individual comment bubble */
+.card-modal__comment {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+}
+
+.card-modal__comment--top {
+	border-left: 3px solid var(--color-primary-element, #0082c9);
+}
+
+/* Replies: indented */
+.card-modal__replies {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-left: 20px;
+}
+
+.card-modal__comment--reply {
+	border-left: 3px solid var(--color-border);
+}
+
+/* Comment meta row */
+.card-modal__comment-meta {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.card-modal__comment-author {
+	font-weight: 600;
+	font-size: 0.8rem;
+	color: var(--color-main-text);
+}
+
+.card-modal__comment-time {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__comment-edited {
+	font-size: 0.7rem;
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
+}
+
+/* Comment body — sanitized markdown */
+.card-modal__comment-body {
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	line-height: 1.5;
+	word-break: break-word;
+}
+
+/* Reuse description rendered styles for comment body */
+.card-modal__comment-body :deep(code) {
+	background: var(--color-background-dark);
+	border-radius: 3px;
+	padding: 2px 5px;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.875em;
+}
+
+.card-modal__comment-body :deep(pre) {
+	background: var(--color-background-dark);
+	border-radius: 3px;
+	padding: 10px 14px;
+	overflow-x: auto;
+}
+
+.card-modal__comment-body :deep(pre code) {
+	background: transparent;
+	padding: 0;
+	border-radius: 0;
+}
+
+.card-modal__comment-body :deep(a) {
+	color: var(--color-primary-element);
+	text-decoration: underline;
+}
+
+.card-modal__comment-body :deep(ul),
+.card-modal__comment-body :deep(ol) {
+	padding-left: 1.5em;
+	margin: 0.25em 0;
+}
+
+.card-modal__comment-body :deep(blockquote) {
+	border-left: 3px solid var(--color-border);
+	margin-left: 0;
+	padding-left: 1em;
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__comment-body :deep(p) {
+	margin: 0.25em 0;
+}
+
+.card-modal__comment-body :deep(p:first-child) {
+	margin-top: 0;
+}
+
+.card-modal__comment-body :deep(p:last-child) {
+	margin-bottom: 0;
+}
+
+.card-modal__comment-body :deep(strong) {
+	font-weight: 700;
+}
+
+/* Comment author controls (edit + delete) */
+.card-modal__comment-controls {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.card-modal__comment-control-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	padding: 0;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.card-modal__comment-control-btn:hover:not(:disabled) {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+.card-modal__comment-control-btn--danger:hover:not(:disabled) {
+	background: var(--color-error);
+	color: #fff;
+}
+
+.card-modal__comment-control-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Reply button */
+.card-modal__comment-reply-btn {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	cursor: pointer;
+	transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.card-modal__comment-reply-btn:hover {
+	border-color: var(--color-primary);
+	color: var(--color-primary);
+}
+
+/* Inline edit textarea for an existing comment */
+.card-modal__comment-edit-textarea {
+	width: 100%;
+	padding: 8px 10px;
+	border: 2px solid var(--color-primary);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	line-height: 1.5;
+	resize: vertical;
+	font-family: inherit;
+}
+
+.card-modal__comment-edit-textarea:focus {
+	outline: none;
+}
+
+.card-modal__comment-edit-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Reply compose box */
+.card-modal__reply-compose {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.card-modal__reply-compose--indent {
+	padding-left: 20px;
+}
+
+/* Top-level compose box */
+.card-modal__comment-compose {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.card-modal__comment-compose-textarea {
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px dashed var(--color-border);
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	line-height: 1.5;
+	resize: vertical;
+	font-family: inherit;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card-modal__comment-compose-textarea::placeholder {
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__comment-compose-textarea:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	border-style: solid;
+	background: var(--color-main-background);
+}
+
+.card-modal__comment-compose-textarea:disabled {
+	opacity: 0.5;
+}
+
+.card-modal__comment-compose-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 </style>

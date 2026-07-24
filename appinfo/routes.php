@@ -39,6 +39,11 @@ return [
 		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'DELETE'],
 
+		['name' => 'comment#index', 'url' => '/api/cards/{cardId}/comments', 'verb' => 'GET'],
+		['name' => 'comment#create', 'url' => '/api/cards/{cardId}/comments', 'verb' => 'POST'],
+		['name' => 'comment#update', 'url' => '/api/comments/{commentId}', 'verb' => 'PATCH'],
+		['name' => 'comment#destroy', 'url' => '/api/comments/{commentId}', 'verb' => 'DELETE'],
+
 		['name' => 'checklist#index', 'url' => '/api/cards/{cardId}/checklist', 'verb' => 'GET'],
 		['name' => 'checklist#create', 'url' => '/api/cards/{cardId}/checklist', 'verb' => 'POST'],
 		['name' => 'checklist#update', 'url' => '/api/checklist/{itemId}', 'verb' => 'PATCH'],

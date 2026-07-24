@@ -13,6 +13,7 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\LabelService;
@@ -43,6 +44,7 @@ class CardController extends Controller {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardMapper $cardMapper,
+		private CommentMapper $commentMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -103,7 +105,8 @@ class CardController extends Controller {
 			+ ['checklistItems' => $checklistItems]
 			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
 			+ ['parent' => $parent]
-			+ ['children' => $children];
+			+ ['children' => $children]
+			+ ['commentCount' => $this->commentMapper->countByCard($id)];
 	}
 
 	/**

@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
@@ -46,6 +47,7 @@ class BoardControllerTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
+	private CommentMapper&MockObject $commentMapper;
 	private AclMapper&MockObject $aclMapper;
 	private PermissionService&MockObject $permissionService;
 	private BoardController $controller;
@@ -63,6 +65,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
+		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->aclMapper = $this->createMock(AclMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 
@@ -83,6 +86,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
 			$this->checklistItemMapper,
+			$this->commentMapper,
 			$this->aclMapper,
 			$this->permissionService
 		);
@@ -159,6 +163,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardAssigneeMapper->method('findUserIdsByBoard')->with(1)->willReturn([3 => ['bob']]);
 		$this->checklistItemMapper->method('progressByBoard')->with(1)->willReturn([3 => ['total' => 4, 'done' => 1]]);
 		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
+		$this->commentMapper->method('countsByBoard')->with(1)->willReturn([3 => 5]);
 
 		$acl = new Acl();
 		$acl->setId(40);
@@ -192,6 +197,8 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['checklist']);
 		self::assertSame(['total' => 2, 'done' => 1], $data['cards'][0]['childProgress']);
 		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['childProgress']);
+		self::assertSame(5, $data['cards'][0]['commentCount']);
+		self::assertSame(0, $data['cards'][1]['commentCount']);
 		self::assertNull($data['cards'][0]['parentCardId']);
 		self::assertArrayNotHasKey('description', $data['cards'][0]);
 	}

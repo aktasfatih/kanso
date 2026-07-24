@@ -141,3 +141,16 @@ export const moveChecklistItem = (itemId, afterItemId) =>
 
 export const deleteChecklistItem = (itemId) =>
 	axios.delete(url(`/api/checklist/${itemId}`)).then((r) => r.data)
+
+// Comments
+export const fetchComments = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/comments`)).then((r) => r.data)
+
+export const createComment = (cardId, data) =>
+	axios.post(url(`/api/cards/${cardId}/comments`), data).then((r) => r.data)
+
+export const updateComment = (commentId, data) =>
+	axios.patch(url(`/api/comments/${commentId}`), data).then((r) => r.data)
+
+export const deleteComment = (commentId) =>
+	axios.delete(url(`/api/comments/${commentId}`)).then((r) => r.data)
