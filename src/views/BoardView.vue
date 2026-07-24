@@ -108,13 +108,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
-			<!-- Settings (gear) button -->
+			<!-- Settings (gear) button — toggles the right-docked settings panel -->
 			<NcButton
 				v-if="boardData"
 				class="board-view__settings-btn"
 				:title="t('kanso', 'Board settings')"
 				:aria-label="t('kanso', 'Board settings')"
-				@click="showSettings = true">
+				:aria-expanded="showSettings ? 'true' : 'false'"
+				@click="showSettings = !showSettings">
 				<template #icon>
 					<CogIcon :size="20" />
 				</template>
@@ -879,6 +880,11 @@ async function handleCreateCard(stackId, title) {
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
 	flex-shrink: 0;
+	/* Sit above the right-docked settings panel (z-index 1800) so the toolbar
+	   buttons (incl. the gear that toggles the panel) stay clickable and the
+	   opaque header visually caps the panel below it. */
+	position: relative;
+	z-index: 1801;
 }
 
 .board-view__back {

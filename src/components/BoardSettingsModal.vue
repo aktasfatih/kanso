@@ -3,14 +3,27 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<NcModal
-		:show="true"
-		:name="t('kanso', 'Board settings')"
-		size="small"
-		@close="$emit('close')">
-		<div class="board-settings">
-			<!-- Tab bar -->
-			<div class="board-settings__tabs" role="tablist">
+	<Transition name="settings-panel">
+		<aside
+			class="board-settings-panel"
+			role="complementary"
+			:aria-label="t('kanso', 'Board settings')">
+			<!-- Panel header with title + close button -->
+			<div class="board-settings-panel__header">
+				<h2 class="board-settings-panel__title">
+					{{ t('kanso', 'Board settings') }}
+				</h2>
+				<button
+					class="board-settings-panel__close"
+					:aria-label="t('kanso', 'Close settings')"
+					@click="$emit('close')">
+					×
+				</button>
+			</div>
+
+			<div class="board-settings">
+				<!-- Tab bar -->
+				<div class="board-settings__tabs" role="tablist">
 				<button
 					class="board-settings__tab"
 					:class="{ 'board-settings__tab--active': activeTab === 'labels' }"
@@ -928,14 +941,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</div>
 		</div>
-	</NcModal>
+		</aside>
+	</Transition>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
-import NcModal from '@nextcloud/vue/components/NcModal'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -990,6 +1003,15 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'leave'])
+
+// ── Escape key dismissal ──────────────────────────────────────────────────────
+function onKeydown(e) {
+	if (e.key === 'Escape') {
+		emit('close')
+	}
+}
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 // ── Permission constants ──────────────────────────────────────────────────────
 const PERM_READ = 1
@@ -1763,10 +1785,93 @@ function toggleWeekday(day) {
 </script>
 
 <style scoped>
+/* ── Right-docked panel shell ─────────────────────────────────────────────── */
+
+.board-settings-panel {
+	position: fixed;
+	/* NC top bar (--header-height) plus the board's own ~60px toolbar row, so
+	   the panel sits BELOW the board header — its close button clears the
+	   toolbar and the gear/trash/archived buttons stay clickable. */
+	top: calc(var(--header-height, 50px) + 60px);
+	right: 0;
+	bottom: 0;
+	width: 380px;
+	max-width: 100vw;
+	display: flex;
+	flex-direction: column;
+	background: var(--color-main-background);
+	border-left: 1px solid var(--color-border);
+	box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
+	z-index: 1800;
+	overflow: hidden;
+}
+
+@media (max-width: 700px) {
+	.board-settings-panel {
+		width: 100vw;
+		border-left: none;
+	}
+}
+
+/* Slide-in transition */
+.settings-panel-enter-active,
+.settings-panel-leave-active {
+	transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.settings-panel-enter-from,
+.settings-panel-leave-to {
+	transform: translateX(100%);
+	opacity: 0;
+}
+
+/* Panel header */
+.board-settings-panel__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px 12px 24px;
+	border-bottom: 1px solid var(--color-border);
+	flex-shrink: 0;
+	background: var(--color-main-background);
+}
+
+.board-settings-panel__title {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--color-main-text);
+	margin: 0;
+}
+
+.board-settings-panel__close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 1.4rem;
+	line-height: 1;
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.board-settings-panel__close:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+/* Inner scrollable content area */
 .board-settings {
 	display: flex;
 	flex-direction: column;
-	min-height: 200px;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
 }
 
 /* Tab bar */
