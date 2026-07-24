@@ -247,6 +247,23 @@ class CardServiceTest extends TestCase {
 		$this->service->create(5, 'A card', 'alice');
 	}
 
+	public function testCreateInDoneRoleStackStampsDone(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 1, Stack::ROLE_DONE));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				// Created directly in a done-role stack → stamped done on create.
+				self::assertGreaterThan(0, $card->getDoneAt());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
 	// ---- find -------------------------------------------------------------
 
 	public function testFindAssertsReadPermissionAndReturnsCard(): void {

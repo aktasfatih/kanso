@@ -84,7 +84,9 @@ class CardService {
 			$card->setStackId($stackId);
 			$card->setTitle($title);
 			$card->setSortKey($sortKey);
-			$card->setDoneAt(0);
+			// Creating a card directly in a done-role stack stamps it done, to
+			// match dragging the same card in (move()'s done-automation).
+			$card->setDoneAt($stack->getRole() === Stack::ROLE_DONE ? $now : 0);
 			$card->setArchived(false);
 			$card->setOwner($uid);
 			$card->setCreatedAt($now);
