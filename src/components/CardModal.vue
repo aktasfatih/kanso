@@ -512,6 +512,97 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
 					</div>
 
+					<!-- Reviews section -->
+					<div class="card-modal__reviews-section">
+						<label class="card-modal__label">{{ t('kanso', 'Reviews') }}</label>
+
+						<!-- Current reviewers as chips with state -->
+						<div class="card-modal__review-chips">
+							<span
+								v-for="review in cardReviews"
+								:key="review.reviewer"
+								class="card-modal__review-chip"
+								:class="`card-modal__review-chip--${review.state}`">
+								<NcAvatar
+									:user="review.reviewer"
+									:display-name="participantName(review.reviewer)"
+									:size="24"
+									:show-user-status="false"
+									:disable-tooltip="false" />
+								<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
+								<span class="card-modal__review-state-badge" :class="`card-modal__review-state-badge--${review.state}`">
+									<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
+									<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
+									<CheckDecagramOutlineIcon v-else :size="12" />
+									{{ reviewStateLabel(review.state) }}
+								</span>
+								<button
+									v-if="canEdit"
+									class="card-modal__review-remove"
+									:title="t('kanso', 'Withdraw review request')"
+									:disabled="withdrawReview.isPending.value"
+									@click="handleWithdrawReview(review.reviewer)">
+									<CloseIcon :size="12" />
+								</button>
+							</span>
+							<span v-if="cardReviews.length === 0" class="card-modal__reviews-empty">
+								{{ t('kanso', 'No reviews requested.') }}
+							</span>
+						</div>
+
+						<!-- Request review from a participant -->
+						<div v-if="canEdit && unrequestedParticipants.length > 0" class="card-modal__assign-wrap">
+							<button
+								class="card-modal__assign-toggle"
+								:aria-expanded="reviewPickerOpen"
+								@click="reviewPickerOpen = !reviewPickerOpen">
+								<AccountPlusIcon :size="16" />
+								{{ t('kanso', 'Request review…') }}
+							</button>
+							<div v-if="reviewPickerOpen" class="card-modal__assign-popover">
+								<button
+									v-for="p in unrequestedParticipants"
+									:key="p.uid"
+									class="card-modal__assign-option"
+									:disabled="requestReview.isPending.value"
+									@click="handleRequestReview(p.uid)">
+									<NcAvatar
+										:user="p.uid"
+										:display-name="p.displayName"
+										:size="24"
+										:show-user-status="false"
+										:disable-tooltip="true" />
+									<span>{{ p.displayName }}</span>
+								</button>
+							</div>
+						</div>
+
+						<!-- Verdict buttons for the current user when they have an actionable review -->
+						<div v-if="myReviewNeedsVerdict" class="card-modal__review-verdict">
+							<span class="card-modal__review-verdict-label">{{ t('kanso', 'Your verdict:') }}</span>
+							<NcButton
+								type="success"
+								:disabled="setReviewState.isPending.value"
+								@click="handleSetReviewState('approved')">
+								<template #icon>
+									<CheckDecagramIcon :size="16" />
+								</template>
+								{{ t('kanso', 'Approve') }}
+							</NcButton>
+							<NcButton
+								type="error"
+								:disabled="setReviewState.isPending.value"
+								@click="handleSetReviewState('changes_requested')">
+								<template #icon>
+									<AlertDecagramIcon :size="16" />
+								</template>
+								{{ t('kanso', 'Request changes') }}
+							</NcButton>
+						</div>
+
+						<span v-if="reviewError" class="card-modal__save-error">{{ reviewError }}</span>
+					</div>
+
 					<!-- Hierarchy section: parent OR children (mutually exclusive per one-level rule) -->
 					<!-- Case 1: this card HAS a parent — show parent link + detach button -->
 					<div v-if="cardData.parentCardId" class="card-modal__hierarchy-section">
@@ -722,11 +813,15 @@ import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
+import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
+import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
+import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
+import { useReviews } from '../composables/useReviews.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree } from '../composables/useComments.js'
@@ -851,6 +946,76 @@ async function handleToggleAssignee(uid, assign) {
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
 	}
+}
+
+// ── Reviews ──────────────────────────────────────────────────────────────────
+const { requestReview, withdrawReview, setReviewState } = useReviews(boardId)
+const reviewError = ref('')
+const reviewPickerOpen = ref(false)
+
+const cardReviews = computed(() =>
+	Array.isArray(cardData.value?.reviews) ? cardData.value.reviews : [],
+)
+
+// Participants not yet requested for review on this card
+const unrequestedParticipants = computed(() => {
+	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const requested = new Set(cardReviews.value.map((r) => r.reviewer))
+	return list.filter((p) => !requested.has(p.uid))
+})
+
+// Whether the current user has a pending or changes_requested review on this card
+const myReview = computed(() =>
+	cardReviews.value.find((r) => r.reviewer === currentUserId) ?? null,
+)
+
+const myReviewNeedsVerdict = computed(() =>
+	myReview.value !== null
+	&& (myReview.value.state === 'pending' || myReview.value.state === 'changes_requested'),
+)
+
+async function handleRequestReview(uid) {
+	reviewError.value = ''
+	reviewPickerOpen.value = false
+	try {
+		await requestReview.mutateAsync({
+			cardId: Number(props.cardId),
+			userId: uid,
+		})
+	} catch (err) {
+		reviewError.value = err?.response?.data?.error || t('kanso', 'Failed to request review.')
+	}
+}
+
+async function handleWithdrawReview(uid) {
+	reviewError.value = ''
+	try {
+		await withdrawReview.mutateAsync({
+			cardId: Number(props.cardId),
+			userId: uid,
+		})
+	} catch (err) {
+		reviewError.value = err?.response?.data?.error || t('kanso', 'Failed to withdraw review request.')
+	}
+}
+
+async function handleSetReviewState(state) {
+	reviewError.value = ''
+	try {
+		await setReviewState.mutateAsync({
+			cardId: Number(props.cardId),
+			userId: currentUserId,
+			state,
+		})
+	} catch (err) {
+		reviewError.value = err?.response?.data?.error || t('kanso', 'Failed to submit review.')
+	}
+}
+
+function reviewStateLabel(state) {
+	if (state === 'approved') return t('kanso', 'Approved')
+	if (state === 'changes_requested') return t('kanso', 'Changes requested')
+	return t('kanso', 'Pending')
 }
 
 // ── Done toggle ──────────────────────────────────────────────────────────────
@@ -1711,6 +1876,137 @@ async function handleWatchToggle() {
 	font-size: 0.875rem;
 	color: var(--color-text-maxcontrast);
 	font-style: italic;
+}
+
+/* Reviews */
+.card-modal__reviews-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 20px;
+}
+
+.card-modal__review-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.card-modal__review-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 8px 0 4px;
+	border-radius: 16px;
+	background: var(--color-background-dark);
+	border: 1px solid var(--color-border);
+	font-size: 0.8rem;
+	color: var(--color-main-text);
+}
+
+.card-modal__review-chip--approved {
+	border-color: var(--color-success, #46ba61);
+	background: rgba(70, 186, 97, 0.08);
+}
+
+.card-modal__review-chip--changes_requested {
+	border-color: var(--color-error, #e30000);
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.06);
+}
+
+.card-modal__review-name {
+	font-size: 0.8rem;
+	max-width: 100px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.card-modal__review-state-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 8px;
+	border: 1px solid currentColor;
+	white-space: nowrap;
+}
+
+.card-modal__review-state-badge--pending {
+	color: var(--color-warning, #f0a844);
+	border-color: var(--color-warning, #f0a844);
+	background: rgba(240, 168, 68, 0.08);
+}
+
+.card-modal__review-state-badge--approved {
+	color: var(--color-success, #46ba61);
+	border-color: var(--color-success, #46ba61);
+	background: rgba(70, 186, 97, 0.1);
+}
+
+.card-modal__review-state-badge--changes_requested {
+	color: var(--color-error, #e30000);
+	border-color: var(--color-error, #e30000);
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+}
+
+.card-modal__review-remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	padding: 0;
+	transition: background 0.15s ease, color 0.15s ease;
+	flex-shrink: 0;
+}
+
+.card-modal__review-remove:hover:not(:disabled) {
+	background: var(--color-error);
+	color: #fff;
+}
+
+.card-modal__review-remove:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.card-modal__reviews-empty {
+	font-size: 0.875rem;
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
+}
+
+.card-modal__review-verdict {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 4px;
+	padding: 8px 10px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-background-hover);
+}
+
+.card-modal__review-verdict-label {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.card-modal__sidebar .card-modal__reviews-section {
+	margin-bottom: 12px;
 }
 
 /* Assign picker */

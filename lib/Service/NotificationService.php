@@ -22,6 +22,7 @@ use OCP\Notification\IManager;
 class NotificationService {
 	public const SUBJECT_CARD_ASSIGNED = 'card_assigned';
 	public const SUBJECT_CARD_COMMENT = 'card_comment';
+	public const SUBJECT_CARD_REVIEW_REQUESTED = 'card_review_requested';
 	public const OBJECT_CARD = 'card';
 
 	public function __construct(
@@ -69,6 +70,25 @@ class NotificationService {
 	}
 
 	/**
+	 * Notifies $targetUid that $actorUid requested a review from them. No-op
+	 * when the actor requests a review from themselves.
+	 */
+	public function notifyReviewRequested(int $cardId, string $targetUid, string $actorUid): void {
+		if ($targetUid === $actorUid) {
+			return;
+		}
+
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED, ['actor' => $actorUid, 'cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
 	 * Dismisses a previously-sent "assigned to you" notification for the card
 	 * (e.g. after the user is unassigned). Idempotent — dismissing an absent
 	 * notification is a no-op at the manager level.
@@ -79,6 +99,21 @@ class NotificationService {
 			->setUser($targetUid)
 			->setObject(self::OBJECT_CARD, (string)$cardId)
 			->setSubject(self::SUBJECT_CARD_ASSIGNED);
+
+		$this->manager->markProcessed($notification);
+	}
+
+	/**
+	 * Dismisses a previously-sent "review requested" notification for the card
+	 * (e.g. after the request is withdrawn or the reviewer has acted).
+	 * Idempotent — dismissing an absent notification is a no-op.
+	 */
+	public function dismissReviewRequested(int $cardId, string $targetUid): void {
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED);
 
 		$this->manager->markProcessed($notification);
 	}

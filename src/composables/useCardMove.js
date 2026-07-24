@@ -107,11 +107,13 @@ export function useCardMove(boardId) {
 				})
 				reconcileFromServer(updated)
 			} catch (err) {
-				// 409 = rebalance_required; anything else is a generic error
+				// 409 = rebalance_required; 403 = review gate; anything else is a generic error
 				const status = err?.response?.status
 				const serverError = err?.response?.data?.error
 				if (status === 409 && serverError === 'rebalance_required') {
 					lastError.value = t('kanso', 'Board ordering needs a refresh.')
+				} else if (status === 403 && serverError) {
+					lastError.value = serverError
 				} else {
 					lastError.value = t('kanso', 'Failed to move card. Please try again.')
 				}

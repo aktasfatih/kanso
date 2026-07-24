@@ -29,7 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length)"
+				v-if="card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState"
 				class="card-tile__meta">
 				<!-- Priority indicator — only when priority > 0 -->
 				<span
@@ -77,6 +77,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CommentMultipleOutlineIcon :size="12" />
 					{{ card.commentCount }}
 				</span>
+				<!-- Review state chip — only when card.reviewState is non-null -->
+				<span
+					v-if="card.reviewState"
+					class="card-tile__review"
+					:class="`card-tile__review--${card.reviewState}`"
+					:aria-label="t('kanso', 'Review: {state}', { state: card.reviewState })">
+					<CheckDecagramIcon v-if="card.reviewState === 'approved'" :size="12" />
+					<AlertDecagramIcon v-else-if="card.reviewState === 'changes_requested'" :size="12" />
+					<CheckDecagramOutlineIcon v-else :size="12" />
+				</span>
 				<!-- Assignee avatar stack — pushed to the right via margin-left:auto -->
 				<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
 					<NcAvatar
@@ -109,6 +119,9 @@ import AlertIcon from 'vue-material-design-icons/Alert.vue'
 import ArrowUpBoldIcon from 'vue-material-design-icons/ArrowUpBold.vue'
 import SignalCellular2Icon from 'vue-material-design-icons/SignalCellular2.vue'
 import SignalCellular1Icon from 'vue-material-design-icons/SignalCellular1.vue'
+import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
+import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
+import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
@@ -450,6 +463,36 @@ const extraAssigneeCount = computed(() => {
 
 /* Urgent: red */
 .card-tile__priority--4 {
+	color: var(--color-error, #e30000);
+	border-color: var(--color-error, #e30000);
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+}
+
+/* Review state chip */
+.card-tile__review {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.75rem;
+	border-radius: 10px;
+	padding: 1px 5px;
+	border: 1px solid currentColor;
+	line-height: 1;
+}
+
+.card-tile__review--pending {
+	color: var(--color-warning, #f0a844);
+	border-color: var(--color-warning, #f0a844);
+	background: rgba(240, 168, 68, 0.08);
+}
+
+.card-tile__review--approved {
+	color: var(--color-success, #46ba61);
+	border-color: var(--color-success, #46ba61);
+	background: rgba(70, 186, 97, 0.1);
+}
+
+.card-tile__review--changes_requested {
 	color: var(--color-error, #e30000);
 	border-color: var(--color-error, #e30000);
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);

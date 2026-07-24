@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
@@ -33,6 +34,7 @@ class CardService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
+		private CardReviewMapper $cardReviewMapper,
 		private IDBConnection $db,
 	) {
 	}
@@ -230,7 +232,7 @@ class CardService {
 	 * is surfaced rather than persisting a duplicate key.
 	 *
 	 * @throws DoesNotExistException if the card, its board or the target stack does not exist or is deleted
-	 * @throws NotPermittedException if the user may not edit the board
+	 * @throws NotPermittedException if the user may not edit the board, or the review gate blocks a review-role → done-role move with unapproved reviews
 	 * @throws InvalidInputException if the target stack is on another board or $afterCardId is unusable
 	 * @throws \OverflowException if the new sort key would overflow (stack needs a rebalance) or keeps colliding after one retry
 	 */
@@ -249,6 +251,17 @@ class CardService {
 		$sourceStack = $targetStackId === $card->getStackId()
 			? $targetStack
 			: $this->stackMapper->find($card->getStackId());
+
+		// Review gate: a card leaving a review-role stack for a done-role stack
+		// may not be marked done while any requested review is still unapproved.
+		// A board with no review-role stack never trips this — the gate is
+		// naturally opt-in via stack roles. Pure precondition, checked once
+		// before the write/retry loop so it fails fast without a DB write.
+		if ($sourceStack->getRole() === Stack::ROLE_REVIEW
+			&& $targetStack->getRole() === Stack::ROLE_DONE
+			&& $this->cardReviewMapper->hasUnapprovedReviews($id)) {
+			throw new NotPermittedException('All requested reviews must be approved before this card can be marked done');
+		}
 
 		for ($attempt = 0; ; $attempt++) {
 			$afterCard = $afterCardId === null

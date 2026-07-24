@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -43,6 +44,7 @@ class CardController extends Controller {
 		private AssigneeService $assigneeService,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private CardReviewMapper $cardReviewMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
@@ -105,6 +107,7 @@ class CardController extends Controller {
 		return $card->jsonSerialize()
 			+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
 			+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
+			+ ['reviews' => $this->cardReviewMapper->findByCard($id)]
 			+ ['checklistItems' => $checklistItems]
 			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
 			+ ['parent' => $parent]

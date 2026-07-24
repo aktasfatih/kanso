@@ -45,6 +45,10 @@ return [
 		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'DELETE'],
 
+		['name' => 'review#request', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'PUT'],
+		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'DELETE'],
+		['name' => 'review#setState', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'PATCH'],
+
 		['name' => 'subscription#index', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'GET'],
 		['name' => 'subscription#subscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'PUT'],
 		['name' => 'subscription#unsubscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'DELETE'],

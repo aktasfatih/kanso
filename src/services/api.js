@@ -175,3 +175,13 @@ export const unsubscribeCard = (cardId) =>
 // Search
 export const search = ({ q, boardId, limit = 25, offset = 0 }) =>
 	axios.get(url('/api/search'), { params: { q, boardId, limit, offset } }).then((r) => r.data)
+
+// Reviews
+export const requestReview = (cardId, userId) =>
+	axios.put(url(`/api/cards/${cardId}/reviews/${userId}`)).then((r) => r.data)
+
+export const withdrawReview = (cardId, userId) =>
+	axios.delete(url(`/api/cards/${cardId}/reviews/${userId}`)).then((r) => r.data)
+
+export const setReviewState = (cardId, userId, state) =>
+	axios.patch(url(`/api/cards/${cardId}/reviews/${userId}`), { state }).then((r) => r.data)

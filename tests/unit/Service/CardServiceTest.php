@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
@@ -31,6 +32,7 @@ class CardServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private CardReviewMapper&MockObject $cardReviewMapper;
 	private IDBConnection&MockObject $db;
 	private CardService $service;
 
@@ -41,6 +43,7 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new CardService(
 			$this->cardMapper,
@@ -49,6 +52,7 @@ class CardServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			new SortKeyService(),
+			$this->cardReviewMapper,
 			$this->db
 		);
 	}
@@ -753,6 +757,59 @@ class CardServiceTest extends TestCase {
 
 		$this->expectException(\OCP\DB\Exception::class);
 		$this->service->move(9, 6, null, 'alice');
+	}
+
+	// ---- move review gate -------------------------------------------------
+
+	public function testMoveFromReviewToDoneBlockedByUnapprovedReviews(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_REVIEW),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	public function testMoveFromReviewToDoneAllowedWhenAllApproved(): void {
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_REVIEW),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(false);
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(6, $moved->getStackId());
+		// Into a done-role stack, done-automation still stamps done_at.
+		self::assertGreaterThan(0, $moved->getDoneAt());
+	}
+
+	public function testMoveIntoDoneFromNonReviewStackIgnoresReviews(): void {
+		// The gate only fires when leaving a review-role stack — unapproved
+		// reviews do not block a move from any other role.
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_IN_PROGRESS),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(true);
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(6, $moved->getStackId());
 	}
 
 	// ---- move done-automation --------------------------------------------

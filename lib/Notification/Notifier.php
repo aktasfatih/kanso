@@ -56,7 +56,8 @@ class Notifier implements INotifier {
 		$l = $this->l10nFactory->get('kanso', $languageCode);
 		$subject = $notification->getSubject();
 		if ($subject !== NotificationService::SUBJECT_CARD_ASSIGNED
-			&& $subject !== NotificationService::SUBJECT_CARD_COMMENT) {
+			&& $subject !== NotificationService::SUBJECT_CARD_COMMENT
+			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED) {
 			throw new UnknownNotificationException();
 		}
 
@@ -75,9 +76,14 @@ class Notifier implements INotifier {
 		$actorName = $actor !== null ? $actor->getDisplayName() : $actorUid;
 		$cardTitle = (string)$card->getTitle();
 
-		[$plain, $rich] = $subject === NotificationService::SUBJECT_CARD_ASSIGNED
-			? [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')]
-			: [$l->t('%1$s commented on %2$s', [$actorName, $cardTitle]), $l->t('{actor} commented on {card}')];
+		[$plain, $rich] = match ($subject) {
+			NotificationService::SUBJECT_CARD_ASSIGNED
+				=> [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')],
+			NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
+				=> [$l->t('%1$s requested your review on %2$s', [$actorName, $cardTitle]), $l->t('{actor} requested your review on {card}')],
+			default
+			=> [$l->t('%1$s commented on %2$s', [$actorName, $cardTitle]), $l->t('{actor} commented on {card}')],
+		};
 
 		$notification
 			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))

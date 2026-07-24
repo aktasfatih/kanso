@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -28,7 +29,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   - listTrash needs READ on the board;
  *   - restore needs EDIT (it puts a card back into play);
  *   - purge needs MANAGE — it is the one irreversible, hard delete in the app,
- *     cascading to the card's labels, assignees, checklist items and comments.
+ *     cascading to the card's labels, assignees, reviews, checklist items and
+ *     comments.
  *
  * Restore/purge only ever act on an ALREADY-trashed card (deleted_at > 0); a
  * live card is rejected as invalid input. Both append a card-targeted row to
@@ -42,6 +44,7 @@ class TrashService {
 		private PermissionService $permissionService,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private CardReviewMapper $cardReviewMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
 		private SubscriptionMapper $subscriptionMapper,
@@ -106,6 +109,7 @@ class TrashService {
 
 		$this->cardLabelMapper->deleteByCard($cardId);
 		$this->cardAssigneeMapper->deleteByCard($cardId);
+		$this->cardReviewMapper->deleteByCard($cardId);
 		$this->checklistItemMapper->deleteByCard($cardId);
 		$this->commentMapper->deleteByCard($cardId);
 		$this->subscriptionMapper->deleteByCard($cardId);
