@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:aria-label="t('kanso', 'Column name')"
 				@keydown.enter.prevent="saveTitle"
 				@keydown.esc.prevent="cancelEditTitle"
-				@blur="saveTitle">
+				@blur="onTitleBlur">
 			<span
 				v-else
 				class="stack-column__title"
@@ -40,20 +40,66 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:class="{ 'stack-column__badge--over-limit': isOverLimit }">
 				{{ wipBadgeText }}
 			</span>
-			<!-- Stack actions menu -->
+			<!-- Stack actions menu — rendered whenever at least one edit action is wired -->
 			<NcActions
-				v-if="onDeleteStack"
+				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip"
 				class="stack-column__actions"
 				:force-menu="true"
 				:aria-label="t('kanso', 'Column actions')">
+				<!-- Rename -->
 				<NcActionButton
+					v-if="onRenameStack"
 					:close-after-click="true"
-					@click="handleDeleteStack">
+					@click="startEditTitle">
 					<template #icon>
-						<DeleteIcon :size="20" />
+						<PencilIcon :size="20" />
 					</template>
-					{{ t('kanso', 'Delete column') }}
+					{{ t('kanso', 'Rename column') }}
 				</NcActionButton>
+
+				<!-- Set status / role -->
+				<template v-if="onSetRole">
+					<NcActionSeparator />
+					<NcActionRadio
+						v-for="[roleVal, roleText] in roleEntries"
+						:key="roleVal"
+						name="stack-role"
+						:value="roleVal"
+						:model-value="stack.role ?? 0"
+						@update:model-value="handleSetRole(roleVal)">
+						{{ roleText }}
+					</NcActionRadio>
+				</template>
+
+				<!-- Set WIP limit -->
+				<template v-if="onSetWip">
+					<NcActionSeparator />
+					<NcActionInput
+						v-model="wipDraft"
+						type="number"
+						:placeholder="t('kanso', 'WIP limit (0 = none)')"
+						:label="t('kanso', 'WIP limit')"
+						:label-outside="false"
+						@submit="handleSetWip">
+						<template #icon>
+							<ChevronRightIcon :size="20" />
+						</template>
+						{{ t('kanso', 'WIP limit') }}
+					</NcActionInput>
+				</template>
+
+				<!-- Delete -->
+				<template v-if="onDeleteStack">
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip" />
+					<NcActionButton
+						:close-after-click="true"
+						@click="handleDeleteStack">
+						<template #icon>
+							<DeleteIcon :size="20" />
+						</template>
+						{{ t('kanso', 'Delete column') }}
+					</NcActionButton>
+				</template>
 			</NcActions>
 		</div>
 
@@ -127,7 +173,12 @@ import { translate as t } from '@nextcloud/l10n'
 import { showUndo } from '@nextcloud/dialogs'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
+import NcActionInput from '@nextcloud/vue/components/NcActionInput'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CardTile from './CardTile.vue'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -178,6 +229,22 @@ const props = defineProps({
 		default: () => new Map(),
 	},
 	/**
+	 * Async fn (stackId, role) → Promise — sets the column status/role.
+	 * When provided, a role picker appears in the ⋯ menu.
+	 */
+	onSetRole: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Async fn (stackId, wipLimit) → Promise — sets the WIP limit (0 clears).
+	 * When provided, a WIP limit input appears in the ⋯ menu.
+	 */
+	onSetWip: {
+		type: Function,
+		default: null,
+	},
+	/**
 	 * Optional callback (cardId: number) → void — called when a card tile is
 	 * clicked so BoardView can keep focusedCardId in sync with mouse navigation.
 	 */
@@ -194,18 +261,34 @@ const route = useRoute()
 const editingTitle = ref(false)
 const titleDraft = ref('')
 const titleInputRef = ref(null)
+const titleEditReady = ref(false)
 
 function startEditTitle() {
 	if (!props.onRenameStack) return
 	titleDraft.value = props.stack.title
 	editingTitle.value = true
+	// Blur-to-save is armed only after the field settles. When rename is opened
+	// from the closing ⋯ menu, the menu's focus-trap returns focus and blurs the
+	// just-focused input; without this guard that spurious blur would immediately
+	// saveTitle() and hide the field. A blur inside the window re-focuses instead.
+	titleEditReady.value = false
 	nextTick(() => {
 		titleInputRef.value?.focus()
 		titleInputRef.value?.select()
+		setTimeout(() => { titleEditReady.value = true }, 200)
 	})
 }
 
+function onTitleBlur() {
+	if (!titleEditReady.value) {
+		nextTick(() => titleInputRef.value?.focus())
+		return
+	}
+	saveTitle()
+}
+
 function cancelEditTitle() {
+	titleEditReady.value = true
 	editingTitle.value = false
 }
 
@@ -232,6 +315,37 @@ const ROLE_LABELS = {
 
 function roleLabel(role) {
 	return ROLE_LABELS[role] ?? ''
+}
+
+/** Ordered [value, label] pairs used to render the role radio group. */
+const roleEntries = Object.entries(ROLE_LABELS).map(([k, v]) => [Number(k), v])
+
+/** Draft WIP limit — kept in sync with the current stack value. */
+const wipDraft = ref(props.stack.wipLimit > 0 ? String(props.stack.wipLimit) : '')
+
+// Keep wipDraft in sync when the stack prop updates (e.g. after optimistic settle).
+watch(() => props.stack.wipLimit, (val) => {
+	wipDraft.value = val > 0 ? String(val) : ''
+})
+
+async function handleSetRole(role) {
+	if (!props.onSetRole) return
+	try {
+		await props.onSetRole(props.stack.id, role)
+	} catch {
+		// Parent surfaces errors
+	}
+}
+
+async function handleSetWip() {
+	if (!props.onSetWip) return
+	const n = parseInt(wipDraft.value, 10)
+	const limit = Number.isFinite(n) && n > 0 ? n : 0
+	try {
+		await props.onSetWip(props.stack.id, limit)
+	} catch {
+		// Parent surfaces errors
+	}
 }
 
 /**

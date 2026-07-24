@@ -187,6 +187,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-delete-stack="handleDeleteStack"
 					:on-restore-stack="handleRestoreStack"
 					:on-rename-stack="handleRenameStack"
+					:on-set-role="handleSetRole"
+					:on-set-wip="handleSetWip"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }" />
 
 				<!-- Add stack inline input -->
@@ -903,6 +905,14 @@ async function handleRestoreStack(stackId) {
 
 async function handleRenameStack(stackId, title) {
 	await updateStack.mutateAsync({ stackId, data: { title } })
+}
+
+async function handleSetRole(stackId, role) {
+	await updateStack.mutateAsync({ stackId, data: { role } })
+}
+
+async function handleSetWip(stackId, wipLimit) {
+	await updateStack.mutateAsync({ stackId, data: { wipLimit } })
 }
 </script>
 
