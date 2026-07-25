@@ -130,6 +130,15 @@ class GithubWebhookServiceTest extends TestCase {
 		self::assertFalse($result['handled']);
 	}
 
+	public function testValidSignatureNonArrayBodyIsNoop(): void {
+		// A correctly-signed body that is a bare JSON scalar must not 500 (#3477).
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$body = '"just a string"';
+		$this->cardService->expects(self::never())->method('move');
+
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
 	public function testUnknownBranchIsNoop(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$body = $this->prBody('opened', 'feature/not-a-kanso-branch');

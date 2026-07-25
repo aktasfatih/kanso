@@ -368,6 +368,21 @@ class ReviewServiceTest extends TestCase {
 		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', 'please fix the tests');
 	}
 
+	public function testSetStateVerdictStandsWhenReviewerCannotComment(): void {
+		// A READ-only reviewer's verdict must land even though the reason comment
+		// (EDIT-gated) fails (#3476) — the comment is best-effort, after the write.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		$this->cardReviewMapper->expects(self::once())->method('update');
+		$this->commentService->method('addComment')->willThrowException(new NotPermittedException());
+
+		// Must NOT throw — the verdict is recorded regardless of the comment.
+		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', 'please fix');
+	}
+
 	public function testSetStateChangesRequestedWithoutReasonPostsNoComment(): void {
 		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')

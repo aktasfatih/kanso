@@ -162,22 +162,27 @@ class ReviewService {
 
 		$reason = $reason !== null ? trim($reason) : null;
 
-		// A "request changes" reason becomes a comment by the reviewer, even if
-		// the state itself is unchanged (they can add further reasons).
+		// Record the verdict FIRST so it always lands — a reviewer only needs READ
+		// to review, so the verdict must not depend on the (EDIT-gated) comment.
+		if ($review->getState() !== $state) {
+			$review->setState($state);
+			$this->cardReviewMapper->update($review);
+
+			$this->notify($card, $actorUid);
+			// The reviewer has acted — clear their pending "review requested" bell.
+			$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
+		}
+
+		// A "request changes" reason becomes a comment by the reviewer (even if the
+		// state was unchanged — they can add further reasons). Best-effort: a
+		// READ-only reviewer who can't comment still keeps their verdict.
 		if ($state === CardReview::STATE_CHANGES_REQUESTED && $reason !== null && $reason !== '') {
-			$this->commentService->addComment($cardId, '**Requested changes:** ' . $reason, null, $actorUid);
+			try {
+				$this->commentService->addComment($cardId, '**Requested changes:** ' . $reason, null, $actorUid);
+			} catch (\Throwable) {
+				// Reviewer lacks EDIT to comment — the verdict still stands.
+			}
 		}
-
-		if ($review->getState() === $state) {
-			return;
-		}
-
-		$review->setState($state);
-		$this->cardReviewMapper->update($review);
-
-		$this->notify($card, $actorUid);
-		// The reviewer has acted — clear their pending "review requested" bell.
-		$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
 	}
 
 	private function notify(Card $card, string $actorUid): void {

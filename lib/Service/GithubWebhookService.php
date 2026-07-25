@@ -109,8 +109,11 @@ class GithubWebhookService {
 		$board = $this->loadBoard($boardId);
 		$this->verifySignature($board, $signatureHeader, $rawBody);
 
-		/** @var array<string, mixed> $payload */
-		$payload = json_decode($rawBody, true) ?? [];
+		$payload = json_decode($rawBody, true);
+		if (!is_array($payload)) {
+			// A bare JSON scalar / null / malformed body — accepted, nothing to do.
+			return ['handled' => false];
+		}
 		$pr = $payload['pull_request'] ?? null;
 		if (!is_array($pr)) {
 			// Not a pull_request event (e.g. a ping) — accepted, nothing to do.

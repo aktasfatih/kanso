@@ -36,6 +36,7 @@ class DeckImportServiceTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private IUserManager&MockObject $userManager;
+	private \OCP\IDBConnection&MockObject $db;
 	private DeckImportService $service;
 
 	protected function setUp(): void {
@@ -48,6 +49,7 @@ class DeckImportServiceTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->db = $this->createMock(\OCP\IDBConnection::class);
 		$this->service = new DeckImportService(
 			$this->deckReader,
 			$this->boardService,
@@ -58,6 +60,7 @@ class DeckImportServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			new SortKeyService(),
 			$this->userManager,
+			$this->db,
 		);
 	}
 
@@ -160,5 +163,43 @@ class DeckImportServiceTest extends TestCase {
 	public function testListImportableEmptyWhenDeckUnavailable(): void {
 		$this->deckReader->method('isAvailable')->willReturn(false);
 		self::assertSame([], $this->service->listImportableBoards('alice'));
+	}
+
+	// ---- transaction (#3478) ----------------------------------------------
+
+	private function stubReadableBoard(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => 'B', 'color' => null, 'owner' => 'carol']);
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('B');
+		$this->boardService->method('create')->willReturn($board);
+	}
+
+	public function testImportCommitsOnSuccess(): void {
+		$this->stubReadableBoard();
+		$this->deckReader->method('readLabels')->willReturn([]);
+		$this->deckReader->method('readStacks')->willReturn([]);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$this->service->importBoard(2, 'alice');
+	}
+
+	public function testImportRollsBackAndRethrowsOnFailure(): void {
+		$this->stubReadableBoard();
+		$this->deckReader->method('readLabels')->willReturn([['id' => 6, 'title' => 'X', 'color' => null]]);
+		$this->labelMapper->method('insert')->willThrowException(new \RuntimeException('boom'));
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->importBoard(2, 'alice');
 	}
 }

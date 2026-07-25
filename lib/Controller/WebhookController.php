@@ -12,6 +12,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\BruteForceProtection;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
@@ -45,14 +46,19 @@ class WebhookController extends Controller {
 
 	#[PublicPage]
 	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'kansoWebhook')]
 	public function github(int $id): JSONResponse {
 		try {
 			$signature = $this->request->getHeader('X-Hub-Signature-256');
 			$result = $this->webhookService->handleWebhook($id, $signature, $this->rawBody);
 			return new JSONResponse($result);
 		} catch (NotPermittedException $e) {
-			// Missing/invalid signature or a disabled webhook.
-			return new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
+			// Missing/invalid signature or a disabled webhook — a throttled failure
+			// so repeated bad-signature deliveries to this public endpoint are
+			// rate-limited (valid deliveries above are never throttled).
+			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
+			$response->throttle(['action' => 'kansoWebhook']);
+			return $response;
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
 		}

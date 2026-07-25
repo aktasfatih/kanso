@@ -16,6 +16,7 @@ use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 use OCP\IUserManager;
 
 /**
@@ -41,6 +42,7 @@ class DeckImportService {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private SortKeyService $sortKeyService,
 		private IUserManager $userManager,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -82,74 +84,83 @@ class DeckImportService {
 			throw new DoesNotExistException('Deck board ' . $deckBoardId . ' does not exist');
 		}
 
-		$board = $this->boardService->create($deckBoard['title'], $deckBoard['color'], $actorUid);
-		$boardId = $board->getId();
-		$now = time();
+		// All-or-nothing: a failure mid-import must leave no orphan half-board.
+		$this->db->beginTransaction();
+		try {
+			$board = $this->boardService->create($deckBoard['title'], $deckBoard['color'], $actorUid);
+			$boardId = $board->getId();
+			$now = time();
 
-		// Labels first, so card assignments can reference the new ids.
-		$labelIdMap = [];
-		foreach ($this->deckReader->readLabels($deckBoardId) as $dl) {
-			$label = new Label();
-			$label->setBoardId($boardId);
-			$label->setTitle($dl['title']);
-			$label->setColor($dl['color']);
-			$labelIdMap[$dl['id']] = $this->labelMapper->insert($label)->getId();
-		}
-
-		// Stacks (order preserved via sequential sort keys), then their cards.
-		$cardIdMap = [];
-		$deckCardIds = [];
-		$stackCount = 0;
-		$cardCount = 0;
-		$stackKey = null;
-		foreach ($this->deckReader->readStacks($deckBoardId) as $ds) {
-			$stack = new Stack();
-			$stack->setBoardId($boardId);
-			$stack->setTitle($ds['title']);
-			$stackKey = $stackKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($stackKey);
-			$stack->setSortKey($stackKey);
-			$stack->setArchived(false);
-			$stack->setRole(Stack::ROLE_NONE);
-			$stack->setWipLimit(null);
-			$stack->setDeletedAt(0);
-			$newStackId = $this->stackMapper->insert($stack)->getId();
-			$stackCount++;
-
-			$cardKey = null;
-			foreach ($this->deckReader->readCards($ds['id']) as $dc) {
-				$card = new Card();
-				$card->setBoardId($boardId);
-				$card->setStackId($newStackId);
-				$card->setTitle($dc['title']);
-				$card->setDescription($dc['description']);
-				$cardKey = $cardKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($cardKey);
-				$card->setSortKey($cardKey);
-				$card->setDuedate($dc['duedate'] !== null ? (new \DateTime())->setTimestamp($dc['duedate']) : null);
-				$card->setDoneAt($dc['doneAt']);
-				$card->setArchived($dc['archived']);
-				$card->setOwner($actorUid);
-				$card->setCreatedAt($dc['createdAt'] > 0 ? $dc['createdAt'] : $now);
-				$card->setLastModified($now);
-				$card->setDeletedAt(0);
-				$card->setParentCardId(null);
-				$card->setPriority(0);
-				$newCardId = $this->cardMapper->insert($card)->getId();
-				$cardIdMap[$dc['id']] = $newCardId;
-				$deckCardIds[] = $dc['id'];
-				$cardCount++;
+			// Labels first, so card assignments can reference the new ids.
+			$labelIdMap = [];
+			foreach ($this->deckReader->readLabels($deckBoardId) as $dl) {
+				$label = new Label();
+				$label->setBoardId($boardId);
+				$label->setTitle($dl['title']);
+				$label->setColor($dl['color']);
+				$labelIdMap[$dl['id']] = $this->labelMapper->insert($label)->getId();
 			}
+
+			// Stacks (order preserved via sequential sort keys), then their cards.
+			$cardIdMap = [];
+			$deckCardIds = [];
+			$stackCount = 0;
+			$cardCount = 0;
+			$stackKey = null;
+			foreach ($this->deckReader->readStacks($deckBoardId) as $ds) {
+				$stack = new Stack();
+				$stack->setBoardId($boardId);
+				$stack->setTitle($ds['title']);
+				$stackKey = $stackKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($stackKey);
+				$stack->setSortKey($stackKey);
+				$stack->setArchived(false);
+				$stack->setRole(Stack::ROLE_NONE);
+				$stack->setWipLimit(null);
+				$stack->setDeletedAt(0);
+				$newStackId = $this->stackMapper->insert($stack)->getId();
+				$stackCount++;
+
+				$cardKey = null;
+				foreach ($this->deckReader->readCards($ds['id']) as $dc) {
+					$card = new Card();
+					$card->setBoardId($boardId);
+					$card->setStackId($newStackId);
+					$card->setTitle($dc['title']);
+					$card->setDescription($dc['description']);
+					$cardKey = $cardKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($cardKey);
+					$card->setSortKey($cardKey);
+					$card->setDuedate($dc['duedate'] !== null ? (new \DateTime())->setTimestamp($dc['duedate']) : null);
+					$card->setDoneAt($dc['doneAt']);
+					$card->setArchived($dc['archived']);
+					$card->setOwner($actorUid);
+					$card->setCreatedAt($dc['createdAt'] > 0 ? $dc['createdAt'] : $now);
+					$card->setLastModified($now);
+					$card->setDeletedAt(0);
+					$card->setParentCardId(null);
+					$card->setPriority(0);
+					$newCardId = $this->cardMapper->insert($card)->getId();
+					$cardIdMap[$dc['id']] = $newCardId;
+					$deckCardIds[] = $dc['id'];
+					$cardCount++;
+				}
+			}
+
+			$this->importLabelAssignments($deckCardIds, $cardIdMap, $labelIdMap);
+			$this->importUserAssignees($deckCardIds, $cardIdMap);
+
+			$result = [
+				'boardId' => $boardId,
+				'title' => $board->getTitle(),
+				'stacks' => $stackCount,
+				'cards' => $cardCount,
+				'labels' => count($labelIdMap),
+			];
+			$this->db->commit();
+			return $result;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
 		}
-
-		$this->importLabelAssignments($deckCardIds, $cardIdMap, $labelIdMap);
-		$this->importUserAssignees($deckCardIds, $cardIdMap);
-
-		return [
-			'boardId' => $boardId,
-			'title' => $board->getTitle(),
-			'stacks' => $stackCount,
-			'cards' => $cardCount,
-			'labels' => count($labelIdMap),
-		];
 	}
 
 	/**

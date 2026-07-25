@@ -284,10 +284,20 @@ class DeckReader {
 		return $ts === false ? null : $ts;
 	}
 
+	/**
+	 * Normalizes a Deck colour to a bare 6-hex string, or null. Deck values that
+	 * aren't 6-hex (empty, named, malformed) become null rather than reaching
+	 * Kanso's strict ColorValidator and aborting the whole import; 3-hex
+	 * shorthand is expanded.
+	 */
 	private function bareColor(mixed $color): ?string {
 		if ($color === null || $color === '') {
 			return null;
 		}
-		return ltrim((string)$color, '#') ?: null;
+		$hex = ltrim((string)$color, '#');
+		if (preg_match('/^[0-9A-Fa-f]{3}$/', $hex) === 1) {
+			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+		}
+		return preg_match('/^[0-9A-Fa-f]{6}$/', $hex) === 1 ? $hex : null;
 	}
 }
