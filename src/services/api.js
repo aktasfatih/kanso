@@ -185,6 +185,16 @@ export const addCardLink = (cardId, linkUrl) =>
 export const deleteCardLink = (cardId, linkId) =>
 	axios.delete(url(`/api/cards/${cardId}/links/${linkId}`)).then((r) => r.data)
 
+// GitHub webhook config (board-level, MANAGE)
+export const fetchWebhookConfig = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)
+
+export const rotateWebhookSecret = (boardId) =>
+	axios.post(url(`/api/boards/${boardId}/webhook/rotate`)).then((r) => r.data)
+
+export const disableWebhook = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)
+
 // Subscriptions (board watchers)
 export const subscribeBoard = (boardId) =>
 	axios.put(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)

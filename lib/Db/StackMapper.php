@@ -54,4 +54,25 @@ class StackMapper extends QBMapper {
 
 		return $this->findEntities($qb);
 	}
+
+	/**
+	 * The first non-deleted stack of a board carrying the given workflow role
+	 * (in display order), or null. Used to resolve auto-move targets (e.g. the
+	 * "In review" or "Done" column) without a separate config surface.
+	 *
+	 * @throws Exception
+	 */
+	public function findByBoardAndRole(int $boardId, int $role): ?Stack {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('role', $qb->createNamedParameter($role, IQueryBuilder::PARAM_INT)))
+			->orderBy('sort_key', 'ASC')
+			->setMaxResults(1);
+
+		$stacks = $this->findEntities($qb);
+		return $stacks[0] ?? null;
+	}
 }

@@ -579,6 +579,50 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<RobotIcon :size="20" />
 				</template>
 
+				<!-- GitHub webhook section -->
+				<h3 class="automation__section-heading">{{ t('kanso', 'GitHub') }}</h3>
+				<p v-if="!canManage" class="workflow__readonly-notice">
+					{{ t('kanso', 'You need manage permission to configure the GitHub webhook.') }}
+				</p>
+				<template v-else>
+					<p class="github-webhook__hint">
+						{{ t('kanso', 'Add a GitHub "pull_request" webhook pointing at the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done.') }}
+					</p>
+
+					<label class="github-webhook__label">{{ t('kanso', 'Payload URL') }}</label>
+					<div class="github-webhook__row">
+						<input
+							class="github-webhook__input"
+							type="text"
+							readonly
+							:value="webhook.payloadUrl">
+						<NcButton :disabled="!webhook.payloadUrl" @click="copyText(webhook.payloadUrl)">
+							{{ t('kanso', 'Copy') }}
+						</NcButton>
+					</div>
+
+					<template v-if="revealedSecret">
+						<label class="github-webhook__label">{{ t('kanso', 'Secret — copy it now, it is shown only once') }}</label>
+						<div class="github-webhook__row">
+							<input class="github-webhook__input" type="text" readonly :value="revealedSecret">
+							<NcButton @click="copyText(revealedSecret)">{{ t('kanso', 'Copy') }}</NcButton>
+						</div>
+					</template>
+
+					<div class="github-webhook__actions">
+						<NcButton type="primary" :disabled="webhookBusy" @click="handleRotateSecret">
+							{{ webhook.enabled ? t('kanso', 'Regenerate secret') : t('kanso', 'Enable & generate secret') }}
+						</NcButton>
+						<NcButton v-if="webhook.enabled" :disabled="webhookBusy" @click="handleDisableWebhook">
+							{{ t('kanso', 'Disable') }}
+						</NcButton>
+						<span v-if="webhook.enabled" class="github-webhook__status">{{ t('kanso', 'Enabled') }}</span>
+					</div>
+					<span v-if="webhookError" class="label-settings__error">{{ webhookError }}</span>
+				</template>
+
+				<hr class="github-webhook__divider">
+
 				<!-- Auto-archive section -->
 				<h3 class="automation__section-heading">{{ t('kanso', 'Auto-archive') }}</h3>
 
@@ -1081,6 +1125,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
 import NcAppSidebarTab from '@nextcloud/vue/components/NcAppSidebarTab'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -1099,6 +1144,11 @@ import { useBoard } from '../composables/useBoard.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { cssColor } from '../services/color.js'
+import {
+	fetchWebhookConfig,
+	rotateWebhookSecret as apiRotateWebhookSecret,
+	disableWebhook as apiDisableWebhook,
+} from '../services/api.js'
 
 const props = defineProps({
 	boardId: {
@@ -1165,6 +1215,59 @@ const PERM_MANAGE = 8
 const canManage = computed(() => (props.permissions & PERM_MANAGE) !== 0)
 const canShare = computed(() => (props.permissions & PERM_SHARE) !== 0)
 const canEdit = computed(() => (props.permissions & PERM_EDIT) !== 0)
+
+// ── GitHub webhook config (MANAGE) ───────────────────────────────────────────
+const webhook = ref({ enabled: false, payloadUrl: '' })
+const revealedSecret = ref('')
+const webhookError = ref('')
+const webhookBusy = ref(false)
+
+async function loadWebhookConfig() {
+	if (!canManage.value) return
+	try {
+		webhook.value = await fetchWebhookConfig(props.boardId)
+	} catch (e) {
+		webhookError.value = t('kanso', 'Failed to load the GitHub webhook config.')
+	}
+}
+
+async function handleRotateSecret() {
+	webhookError.value = ''
+	webhookBusy.value = true
+	try {
+		const res = await apiRotateWebhookSecret(props.boardId)
+		revealedSecret.value = res.secret
+		webhook.value = { enabled: true, payloadUrl: res.payloadUrl }
+	} catch (e) {
+		webhookError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
+	} finally {
+		webhookBusy.value = false
+	}
+}
+
+async function handleDisableWebhook() {
+	webhookError.value = ''
+	webhookBusy.value = true
+	try {
+		await apiDisableWebhook(props.boardId)
+		webhook.value = { ...webhook.value, enabled: false }
+		revealedSecret.value = ''
+	} catch (e) {
+		webhookError.value = e?.response?.data?.error || t('kanso', 'Could not disable the webhook.')
+	} finally {
+		webhookBusy.value = false
+	}
+}
+
+async function copyText(text) {
+	try {
+		await navigator.clipboard.writeText(text)
+	} catch (e) {
+		webhookError.value = t('kanso', 'Could not copy to clipboard.')
+	}
+}
+
+onMounted(loadWebhookConfig)
 
 function hasBit(mask, bit) {
 	return (mask & bit) !== 0
@@ -2951,5 +3054,48 @@ function toggleWeekday(day) {
 
 .automation__form-row--top {
 	align-items: flex-start;
+}
+
+/* ── GitHub webhook config ─────────────────────────────────────────────────── */
+.github-webhook__hint {
+	color: var(--color-text-maxcontrast);
+	margin-bottom: 12px;
+}
+
+.github-webhook__label {
+	display: block;
+	font-weight: 600;
+	margin: 8px 0 4px;
+}
+
+.github-webhook__row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.github-webhook__input {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-face-monospace, monospace);
+}
+
+.github-webhook__actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-top: 8px;
+}
+
+.github-webhook__status {
+	color: var(--color-success, #2fb344);
+	font-weight: 600;
+}
+
+.github-webhook__divider {
+	border: none;
+	border-top: 1px solid var(--color-border);
+	margin: 20px 0;
 }
 </style>

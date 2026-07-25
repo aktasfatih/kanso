@@ -25,6 +25,8 @@ use OCP\DB\Types;
  * @method void setLastModified(int $lastModified)
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
+ * @method string|null getWebhookSecret()
+ * @method void setWebhookSecret(?string $webhookSecret)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -36,6 +38,8 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?bool $archived = null;
 	protected ?int $lastModified = null;
 	protected ?int $deletedAt = null;
+	// MANAGE-only; deliberately NEVER emitted by jsonSerialize().
+	protected ?string $webhookSecret = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -44,6 +48,7 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('archived', Types::BOOLEAN);
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
+		$this->addType('webhookSecret', Types::STRING);
 	}
 
 	/**
