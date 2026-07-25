@@ -185,6 +185,13 @@ export const addCardLink = (cardId, linkUrl) =>
 export const deleteCardLink = (cardId, linkId) =>
 	axios.delete(url(`/api/cards/${cardId}/links/${linkId}`)).then((r) => r.data)
 
+// Deck import
+export const fetchDeckImportBoards = () =>
+	axios.get(url('/api/deck-import/boards')).then((r) => r.data)
+
+export const importDeckBoard = (deckBoardId) =>
+	axios.post(url(`/api/deck-import/boards/${deckBoardId}`)).then((r) => r.data)
+
 // GitHub webhook config (board-level, MANAGE)
 export const fetchWebhookConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)

@@ -41,7 +41,9 @@ your work, on your own Nextcloud, laid out plainly.
 
 ### 👥 Collaboration
 - **Board sharing** with per-user and per-group access control.
-- **Watchers** — subscribe to cards and comment threads and get notified.
+- **Watchers** — subscribe to cards, comment threads, or a **whole board** and
+  get notified of new activity.
+- **Parent/child cards** — a parent auto-completes when all its children are done.
 
 ### ✅ Review workflow
 - Request a review, then **Approve** / **Request changes**.
@@ -55,6 +57,14 @@ your work, on your own Nextcloud, laid out plainly.
   it done automatically.
 - **Recurring cards** on RRULE schedules, and **auto-archive** rules for done
   cards.
+
+### 🔗 Integrations & migration
+- **Import from Deck** — one click copies a Deck board (stacks, cards, labels,
+  assignees) into a new Kanso board you own. Your Deck boards are left untouched.
+- **GitHub links** — attach PRs/issues to a card with live open/merged/closed
+  badges, and copy a ready-made `kanso-<id>` branch name.
+- **GitHub webhook** — an HMAC-verified webhook moves a card to your Review
+  column when its PR opens and to Done when it merges. No credentials, no OAuth.
 
 ### ⌨️ Power-user UX
 - **Command palette** (`Ctrl`/`Cmd`+`K`) and full-text **search** across cards
