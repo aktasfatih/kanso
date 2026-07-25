@@ -36,6 +36,7 @@ class ReviewService {
 		private NotificationService $notificationService,
 		private ReviewTypeMapper $reviewTypeMapper,
 		private BoardService $boardService,
+		private CommentService $commentService,
 	) {
 	}
 
@@ -55,11 +56,11 @@ class ReviewService {
 	}
 
 	/**
-	 * Requests a review from $reviewerUid. Idempotent: re-requesting an existing
-	 * reviewer is a no-op (their current state is kept) and writes no change row.
-	 * $reviewTypeId is applied only on the INITIAL request — a re-request of an
-	 * existing review ignores it (withdraw + re-request to change the type). An
-	 * invalid type is still rejected, even on a re-request.
+	 * Requests a review from $reviewerUid. A card may hold several reviews per
+	 * reviewer as long as they are of different types (untyped counts as one
+	 * type) — so a person can carry, e.g., a QA and a Code review at once.
+	 * Idempotent per (card, reviewer, type): re-requesting the SAME type is a
+	 * no-op; a different type creates a new review.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
@@ -87,7 +88,7 @@ class ReviewService {
 			}
 		}
 
-		if ($this->cardReviewMapper->exists($cardId, $reviewerUid)) {
+		if ($this->cardReviewMapper->existsForType($cardId, $reviewerUid, $reviewTypeId ?? 0)) {
 			return;
 		}
 
@@ -107,52 +108,66 @@ class ReviewService {
 	}
 
 	/**
-	 * Withdraws the review request from $reviewerUid. Idempotent: withdrawing an
-	 * absent request is a no-op and writes no change row.
+	 * Withdraws a single review by its row id. Idempotent: an unknown id, or one
+	 * belonging to another card, is a no-op.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
-	public function withdrawReview(int $cardId, string $reviewerUid, string $actorUid): void {
+	public function withdrawReview(int $cardId, int $reviewId, string $actorUid): void {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 
-		if ($this->cardReviewMapper->deleteReview($cardId, $reviewerUid) === 0) {
+		$review = $this->cardReviewMapper->findById($reviewId);
+		if ($review === null || $review->getCardId() !== $cardId) {
 			return;
 		}
+		$reviewerUid = $review->getReviewer();
+		$this->cardReviewMapper->delete($review);
 
 		$this->notify($card, $actorUid);
 		$this->notificationService->dismissReviewRequested($cardId, $reviewerUid);
 	}
 
 	/**
-	 * The reviewer records their verdict on their OWN review. Only the reviewer
-	 * may set their state, and only to approved / changes_requested.
+	 * The reviewer records their verdict on their OWN review (targeted by row
+	 * id), and only to approved / changes_requested. When requesting changes
+	 * with a $reason, the reason is posted as a card comment by the reviewer so
+	 * subscribers are notified and it lands in the discussion.
 	 *
 	 * @throws DoesNotExistException if the card, its board, or the review does not exist
 	 * @throws NotPermittedException if the actor is not the reviewer or cannot read the board
 	 * @throws InvalidInputException if $state is not a settable verdict
 	 */
-	public function setState(int $cardId, string $reviewerUid, string $state, string $actorUid): void {
-		if ($actorUid !== $reviewerUid) {
-			throw new NotPermittedException('Only the reviewer may set their review state');
-		}
+	public function setState(int $cardId, int $reviewId, string $state, string $actorUid, ?string $reason = null): void {
 		if (!in_array($state, CardReview::settableStates(), true)) {
 			throw new InvalidInputException('Invalid review state');
 		}
 
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
+
+		$review = $this->cardReviewMapper->findById($reviewId);
+		if ($review === null || $review->getCardId() !== $cardId) {
+			throw new DoesNotExistException('Review ' . $reviewId . ' does not exist on card ' . $cardId);
+		}
+		if ($actorUid !== $review->getReviewer()) {
+			throw new NotPermittedException('Only the reviewer may set their review state');
+		}
 		// The reviewer must still be able to read the board to act on the review.
 		if (($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_READ) === 0) {
 			throw new NotPermittedException('User has no access to this board');
 		}
 
-		$review = $this->cardReviewMapper->findReview($cardId, $reviewerUid);
-		if ($review === null) {
-			throw new DoesNotExistException('No review requested from this user on card ' . $cardId);
+		$reason = $reason !== null ? trim($reason) : null;
+
+		// A "request changes" reason becomes a comment by the reviewer, even if
+		// the state itself is unchanged (they can add further reasons).
+		if ($state === CardReview::STATE_CHANGES_REQUESTED && $reason !== null && $reason !== '') {
+			$this->commentService->addComment($cardId, '**Requested changes:** ' . $reason, null, $actorUid);
 		}
+
 		if ($review->getState() === $state) {
 			return;
 		}
@@ -162,7 +177,7 @@ class ReviewService {
 
 		$this->notify($card, $actorUid);
 		// The reviewer has acted — clear their pending "review requested" bell.
-		$this->notificationService->dismissReviewRequested($cardId, $reviewerUid);
+		$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
 	}
 
 	private function notify(Card $card, string $actorUid): void {

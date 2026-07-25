@@ -123,7 +123,7 @@ function openCard(review) {
 async function setVerdict(review, state) {
 	mutatingCardId.value = review.cardId
 	try {
-		await setState.mutateAsync({ cardId: review.cardId, boardId: review.boardId, state })
+		await setState.mutateAsync({ cardId: review.cardId, reviewId: review.id, boardId: review.boardId, state })
 	} finally {
 		mutatingCardId.value = null
 	}

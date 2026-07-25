@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { getCurrentUser } from '@nextcloud/auth'
 import { getMyReviews as apiGetMyReviews, setReviewState as apiSetReviewState } from '../services/api.js'
 
 /**
@@ -23,18 +22,15 @@ export function useMyReviews() {
 	 * Also invalidates the relevant card + board caches so those views stay fresh.
 	 */
 	const setState = useMutation({
-		mutationFn: ({ cardId, state }) => {
-			const uid = getCurrentUser()?.uid ?? ''
-			return apiSetReviewState(cardId, uid, state)
-		},
+		mutationFn: ({ cardId, reviewId, state, reason }) => apiSetReviewState(cardId, reviewId, state, reason ?? null),
 
-		onMutate: async ({ cardId, state }) => {
+		onMutate: async ({ reviewId, state }) => {
 			await queryClient.cancelQueries({ queryKey: ['my-reviews'] })
 			const previous = queryClient.getQueryData(['my-reviews'])
 
 			queryClient.setQueryData(['my-reviews'], (old) => {
 				if (!Array.isArray(old)) return old
-				return old.map((r) => r.cardId === cardId ? { ...r, state } : r)
+				return old.map((r) => r.id === reviewId ? { ...r, state } : r)
 			})
 
 			return { previous }

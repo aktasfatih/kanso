@@ -18,6 +18,7 @@ use OCA\Kanso\Db\ReviewType;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ChangeNotifier;
+use OCA\Kanso\Service\CommentService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -36,6 +37,7 @@ class ReviewServiceTest extends TestCase {
 	private NotificationService&MockObject $notificationService;
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private BoardService&MockObject $boardService;
+	private CommentService&MockObject $commentService;
 	private ReviewService $service;
 
 	protected function setUp(): void {
@@ -48,6 +50,7 @@ class ReviewServiceTest extends TestCase {
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->boardService = $this->createMock(BoardService::class);
+		$this->commentService = $this->createMock(CommentService::class);
 		$this->service = new ReviewService(
 			$this->cardReviewMapper,
 			$this->cardMapper,
@@ -56,7 +59,8 @@ class ReviewServiceTest extends TestCase {
 			$this->permissionService,
 			$this->notificationService,
 			$this->reviewTypeMapper,
-			$this->boardService
+			$this->boardService,
+			$this->commentService,
 		);
 	}
 
@@ -79,10 +83,10 @@ class ReviewServiceTest extends TestCase {
 		return $card;
 	}
 
-	private function review(string $reviewer = 'bob', string $state = CardReview::STATE_PENDING): CardReview {
+	private function review(string $reviewer = 'bob', string $state = CardReview::STATE_PENDING, int $id = 1, int $cardId = 9): CardReview {
 		$review = new CardReview();
-		$review->setId(1);
-		$review->setCardId(9);
+		$review->setId($id);
+		$review->setCardId($cardId);
 		$review->setReviewer($reviewer);
 		$review->setState($state);
 		$review->setRequestedBy('alice');
@@ -90,22 +94,27 @@ class ReviewServiceTest extends TestCase {
 		return $review;
 	}
 
-	// ---- requestReview ----------------------------------------------------
-
-	public function testRequestInsertsRowWritesChangeAndNotifies(): void {
+	private function loadCardAndBoard(): Board {
 		$board = $this->board();
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		return $board;
+	}
+
+	// ---- requestReview ----------------------------------------------------
+
+	public function testRequestInsertsRowWritesChangeAndNotifies(): void {
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_EDIT);
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('exists')->with(9, 'bob')->willReturn(false);
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 0)->willReturn(false);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
-			->with(9, 'bob', 'alice');
+			->with(9, 'bob', 'alice', null);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
@@ -117,14 +126,25 @@ class ReviewServiceTest extends TestCase {
 		$this->service->requestReview(9, 'bob', 'alice');
 	}
 
-	public function testRequestIsIdempotentWhenAlreadyRequested(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+	public function testRequestSameReviewerDifferentTypeIsAllowed(): void {
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$this->reviewTypeMapper->method('find')->with(5)->willReturn($this->reviewType(5, 1));
+		// bob already has an untyped review (type 0) but not a type-5 one.
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 5)->willReturn(false);
+		$this->cardReviewMapper->expects(self::once())->method('insertRequest')->with(9, 'bob', 'alice', 5);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->requestReview(9, 'bob', 'alice', 5);
+	}
+
+	public function testRequestIsIdempotentWhenSameTypeAlreadyRequested(): void {
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('exists')->with(9, 'bob')->willReturn(true);
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 0)->willReturn(true);
 		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
 		$this->changeNotifier->expects(self::never())->method('notify');
 		$this->notificationService->expects(self::never())->method('notifyReviewRequested');
@@ -133,13 +153,11 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testRequestTreatsLostInsertRaceAsIdempotentSuccess(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('exists')->with(9, 'bob')->willReturn(false);
+		$this->cardReviewMapper->method('existsForType')->willReturn(false);
 		$uniqueViolation = $this->createMock(\OCP\DB\Exception::class);
 		$uniqueViolation->method('getReason')
 			->willReturn(\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION);
@@ -150,9 +168,7 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testRequestAssertsActorEditPermission(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
 			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
@@ -164,13 +180,11 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testRequestRejectsReviewerWithoutBoardAccess(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'stranger')
 			->willReturn(0);
-		$this->cardReviewMapper->expects(self::never())->method('exists');
+		$this->cardReviewMapper->expects(self::never())->method('existsForType');
 		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
 
 		$this->expectException(InvalidInputException::class);
@@ -197,13 +211,11 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testRequestWithValidTypePersistsIt(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
 		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->reviewType(3, 1));
-		$this->cardReviewMapper->method('exists')->with(9, 'bob')->willReturn(false);
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 3)->willReturn(false);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
 			->with(9, 'bob', 'alice', 3);
@@ -213,12 +225,9 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testRequestRejectsTypeFromAnotherBoard(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
-		// Type 3 belongs to board 2, not the card's board 1.
 		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->reviewType(3, 2));
 		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
 
@@ -227,9 +236,7 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testRequestRejectsUnknownType(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
 		$this->reviewTypeMapper->method('find')->with(3)
@@ -240,47 +247,49 @@ class ReviewServiceTest extends TestCase {
 		$this->service->requestReview(9, 'bob', 'alice', 3);
 	}
 
-	// ---- withdrawReview ---------------------------------------------------
+	// ---- withdrawReview (by review id) ------------------------------------
 
 	public function testWithdrawDeletesRowWritesChangeAndDismisses(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_EDIT);
-		$this->cardReviewMapper->expects(self::once())
-			->method('deleteReview')
-			->with(9, 'bob')
-			->willReturn(1);
+		$review = $this->review('bob');
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($review);
+		$this->cardReviewMapper->expects(self::once())->method('delete')->with($review);
 		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 		$this->notificationService->expects(self::once())
 			->method('dismissReviewRequested')
 			->with(9, 'bob');
 
-		$this->service->withdrawReview(9, 'bob', 'alice');
+		$this->service->withdrawReview(9, 1, 'alice');
 	}
 
 	public function testWithdrawIsIdempotentWhenAbsent(): void {
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->cardReviewMapper->method('deleteReview')->with(9, 'bob')->willReturn(0);
+		$this->loadCardAndBoard();
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn(null);
+		$this->cardReviewMapper->expects(self::never())->method('delete');
 		$this->changeNotifier->expects(self::never())->method('notify');
-		$this->notificationService->expects(self::never())->method('dismissReviewRequested');
 
-		$this->service->withdrawReview(9, 'bob', 'alice');
+		$this->service->withdrawReview(9, 1, 'alice');
 	}
 
-	// ---- setState ---------------------------------------------------------
+	public function testWithdrawIgnoresReviewFromAnotherCard(): void {
+		$this->loadCardAndBoard();
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob', CardReview::STATE_PENDING, 1, 42));
+		$this->cardReviewMapper->expects(self::never())->method('delete');
+
+		$this->service->withdrawReview(9, 1, 'alice');
+	}
+
+	// ---- setState (by review id) ------------------------------------------
 
 	public function testSetStateApprovesOwnReview(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('findReview')->with(9, 'bob')->willReturn($this->review('bob'));
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
 		$this->cardReviewMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static function (CardReview $r): CardReview {
@@ -292,71 +301,87 @@ class ReviewServiceTest extends TestCase {
 			->method('dismissReviewRequested')
 			->with(9, 'bob');
 
-		$this->service->setState(9, 'bob', CardReview::STATE_APPROVED, 'bob');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 
 	public function testSetStateRejectsActorWhoIsNotTheReviewer(): void {
-		$this->cardReviewMapper->expects(self::never())->method('findReview');
+		$this->loadCardAndBoard();
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
-		$this->service->setState(9, 'bob', CardReview::STATE_APPROVED, 'mallory');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'mallory');
 	}
 
 	public function testSetStateRejectsInvalidState(): void {
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(InvalidInputException::class);
-		$this->service->setState(9, 'bob', 'pending', 'bob');
+		$this->service->setState(9, 1, 'pending', 'bob');
 	}
 
-	public function testSetStateThrowsWhenNoReviewRequested(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->permissionService->method('getPermissions')
-			->with($board, 'bob')
-			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('findReview')->with(9, 'bob')->willReturn(null);
+	public function testSetStateThrowsWhenReviewMissing(): void {
+		$this->loadCardAndBoard();
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn(null);
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(DoesNotExistException::class);
-		$this->service->setState(9, 'bob', CardReview::STATE_APPROVED, 'bob');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 
 	public function testSetStateIsNoOpWhenUnchanged(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('findReview')->with(9, 'bob')
+		$this->cardReviewMapper->method('findById')->with(1)
 			->willReturn($this->review('bob', CardReview::STATE_APPROVED));
 		$this->cardReviewMapper->expects(self::never())->method('update');
 		$this->changeNotifier->expects(self::never())->method('notify');
 
-		$this->service->setState(9, 'bob', CardReview::STATE_APPROVED, 'bob');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 
 	public function testSetStateRejectsReviewerWhoLostBoardAccess(): void {
-		$board = $this->board();
-		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(0);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
-		$this->service->setState(9, 'bob', CardReview::STATE_APPROVED, 'bob');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+	}
+
+	public function testSetStateChangesRequestedWithReasonPostsComment(): void {
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		$this->cardReviewMapper->expects(self::once())->method('update');
+		$this->commentService->expects(self::once())
+			->method('addComment')
+			->with(9, '**Requested changes:** please fix the tests', null, 'bob');
+
+		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', 'please fix the tests');
+	}
+
+	public function testSetStateChangesRequestedWithoutReasonPostsNoComment(): void {
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		$this->commentService->expects(self::never())->method('addComment');
+
+		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', '   ');
 	}
 
 	// ---- findMine ---------------------------------------------------------
 
 	public function testFindMineQueriesTheReadableBoardSet(): void {
-		// findAll returns the ACL-filtered readable boards; findMine passes their
-		// ids to the cross-board query.
 		$this->boardService->method('findAll')->with('bob')->willReturn([
 			$this->board(1),
 			$this->board(2),

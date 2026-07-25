@@ -61,21 +61,23 @@ class ReviewController extends Controller {
 	 * succeeds without writing anything.
 	 */
 	#[NoAdminRequired]
-	public function withdraw(int $id, string $userId): JSONResponse {
-		return $this->respond(function () use ($id, $userId): JSONResponse {
-			$this->reviewService->withdrawReview($id, $userId, $this->currentUserId());
+	public function withdraw(int $id, int $reviewId): JSONResponse {
+		return $this->respond(function () use ($id, $reviewId): JSONResponse {
+			$this->reviewService->withdrawReview($id, $reviewId, $this->currentUserId());
 			return new JSONResponse([]);
 		});
 	}
 
 	/**
 	 * Records the reviewer's verdict (approved / changes_requested) on their own
-	 * review. Only the reviewer may call this; anyone else gets a 403.
+	 * review, targeted by review id. Only the reviewer may call this; anyone else
+	 * gets a 403. A `reason` on a changes-requested verdict is posted as a card
+	 * comment by the reviewer.
 	 */
 	#[NoAdminRequired]
-	public function setState(int $id, string $userId, string $state = ''): JSONResponse {
-		return $this->respond(function () use ($id, $userId, $state): JSONResponse {
-			$this->reviewService->setState($id, $userId, $state, $this->currentUserId());
+	public function setState(int $id, int $reviewId, string $state = '', ?string $reason = null): JSONResponse {
+		return $this->respond(function () use ($id, $reviewId, $state, $reason): JSONResponse {
+			$this->reviewService->setState($id, $reviewId, $state, $this->currentUserId(), $reason);
 			return new JSONResponse([]);
 		});
 	}

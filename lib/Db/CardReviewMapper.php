@@ -133,7 +133,7 @@ class CardReviewMapper extends QBMapper {
 				'boardId' => (int)$row['board_id'],
 				'boardTitle' => (string)$row['board_title'],
 				'state' => (string)$row['state'],
-				'reviewTypeId' => $row['review_type_id'] !== null ? (int)$row['review_type_id'] : null,
+				'reviewTypeId' => ((int)($row['review_type_id'] ?? 0)) ?: null,
 				'reviewTypeTitle' => $row['type_title'] !== null ? (string)$row['type_title'] : null,
 				'reviewTypeColor' => $row['type_color'] !== null ? (string)$row['type_color'] : null,
 				'requestedBy' => (string)$row['requested_by'],
@@ -146,14 +146,19 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * Whether the reviewer already holds a review of this exact type on the card
+	 * (untyped = 0). Same reviewer + different type is allowed, so uniqueness is
+	 * per (card, reviewer, type).
+	 *
 	 * @throws Exception
 	 */
-	public function exists(int $cardId, string $reviewer): bool {
+	public function existsForType(int $cardId, string $reviewer, int $reviewTypeId): bool {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('id')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('reviewer', $qb->createNamedParameter($reviewer)))
+			->andWhere($qb->expr()->eq('review_type_id', $qb->createNamedParameter($reviewTypeId, IQueryBuilder::PARAM_INT)))
 			->setMaxResults(1);
 
 		$result = $qb->executeQuery();
@@ -164,16 +169,16 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
-	 * Loads a single review row, or null when the reviewer holds none on the card.
+	 * A single review row by id, or null. A card may now hold several reviews per
+	 * reviewer, so per-review actions (withdraw / verdict) target the row id.
 	 *
 	 * @throws Exception
 	 */
-	public function findReview(int $cardId, string $reviewer): ?CardReview {
+	public function findById(int $id): ?CardReview {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('reviewer', $qb->createNamedParameter($reviewer)))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
 			->setMaxResults(1);
 
 		$rows = $this->findEntities($qb);
@@ -190,7 +195,8 @@ class CardReviewMapper extends QBMapper {
 		$review->setState(CardReview::STATE_PENDING);
 		$review->setRequestedBy($requestedBy);
 		$review->setCreatedAt(time());
-		$review->setReviewTypeId($reviewTypeId);
+		// 0 = untyped (the column is NOT NULL); a real type id otherwise.
+		$review->setReviewTypeId($reviewTypeId ?? 0);
 
 		return $this->insert($review);
 	}
@@ -205,7 +211,7 @@ class CardReviewMapper extends QBMapper {
 	public function clearType(int $reviewTypeId): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update($this->getTableName())
-			->set('review_type_id', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->set('review_type_id', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT))
 			->where($qb->expr()->eq('review_type_id', $qb->createNamedParameter($reviewTypeId, IQueryBuilder::PARAM_INT)));
 
 		return $qb->executeStatement();

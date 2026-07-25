@@ -220,11 +220,13 @@ export const getMyReviews = () =>
 export const requestReview = (cardId, userId, reviewTypeId) =>
 	axios.put(url(`/api/cards/${cardId}/reviews/${userId}`), reviewTypeId != null ? { reviewTypeId } : undefined).then((r) => r.data)
 
-export const withdrawReview = (cardId, userId) =>
-	axios.delete(url(`/api/cards/${cardId}/reviews/${userId}`)).then((r) => r.data)
+export const withdrawReview = (cardId, reviewId) =>
+	axios.delete(url(`/api/cards/${cardId}/reviews/${reviewId}`)).then((r) => r.data)
 
-export const setReviewState = (cardId, userId, state) =>
-	axios.patch(url(`/api/cards/${cardId}/reviews/${userId}`), { state }).then((r) => r.data)
+export const setReviewState = (cardId, reviewId, state, reason = null) =>
+	axios.patch(url(`/api/cards/${cardId}/reviews/${reviewId}`),
+		reason != null && reason !== '' ? { state, reason } : { state },
+	).then((r) => r.data)
 
 // Inbox (activity feed — comments on watched cards by others)
 export const getInbox = () =>

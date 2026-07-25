@@ -74,15 +74,18 @@ export function useReviews(boardId) {
 			queryClient.setQueryData(cardKey, (old) => {
 				if (!old) return old
 				const existing = Array.isArray(old.reviews) ? old.reviews : []
-				if (existing.some((r) => r.reviewer === userId)) return old
+				const type = reviewTypeId ?? 0
+				// A card may hold several reviews per reviewer, one per type — only
+				// skip when this exact (reviewer, type) pair already exists.
+				if (existing.some((r) => r.reviewer === userId && (r.reviewTypeId ?? 0) === type)) return old
 				const newReview = {
-					id: `optimistic-${userId}`,
+					id: `optimistic-${userId}-${type}`,
 					cardId,
 					reviewer: userId,
 					state: 'pending',
 					requestedBy: null,
 					createdAt: Math.floor(Date.now() / 1000),
-					reviewTypeId: reviewTypeId ?? null,
+					reviewTypeId: reviewTypeId ?? 0,
 				}
 				const updated = [...existing, newReview]
 				return { ...old, reviews: updated }
@@ -122,9 +125,9 @@ export function useReviews(boardId) {
 
 	// ── Withdraw a review request ────────────────────────────────────────────────
 	const withdrawReview = useMutation({
-		mutationFn: ({ cardId, userId }) => apiWithdrawReview(cardId, userId),
+		mutationFn: ({ cardId, reviewId }) => apiWithdrawReview(cardId, reviewId),
 
-		onMutate: async ({ cardId, userId }) => {
+		onMutate: async ({ cardId, reviewId }) => {
 			const boardKey = getBoardKey()
 			const cardKey = ['card', String(cardId)]
 			await queryClient.cancelQueries({ queryKey: boardKey })
@@ -133,11 +136,11 @@ export function useReviews(boardId) {
 			const previousBoard = queryClient.getQueryData(boardKey)
 			const previousCard = queryClient.getQueryData(cardKey)
 
-			// Patch card detail: remove the review for this user
+			// Patch card detail: remove the single review by id
 			queryClient.setQueryData(cardKey, (old) => {
 				if (!old) return old
 				const updated = Array.isArray(old.reviews)
-					? old.reviews.filter((r) => r.reviewer !== userId)
+					? old.reviews.filter((r) => r.id !== reviewId)
 					: []
 				return { ...old, reviews: updated }
 			})
@@ -166,9 +169,9 @@ export function useReviews(boardId) {
 
 	// ── Set review verdict (approve / request changes) ──────────────────────────
 	const setReviewState = useMutation({
-		mutationFn: ({ cardId, userId, state }) => apiSetReviewState(cardId, userId, state),
+		mutationFn: ({ cardId, reviewId, state, reason }) => apiSetReviewState(cardId, reviewId, state, reason ?? null),
 
-		onMutate: async ({ cardId, userId, state }) => {
+		onMutate: async ({ cardId, reviewId, state }) => {
 			const boardKey = getBoardKey()
 			const cardKey = ['card', String(cardId)]
 			await queryClient.cancelQueries({ queryKey: boardKey })
@@ -177,11 +180,11 @@ export function useReviews(boardId) {
 			const previousBoard = queryClient.getQueryData(boardKey)
 			const previousCard = queryClient.getQueryData(cardKey)
 
-			// Patch card detail: update the reviewer's state
+			// Patch card detail: update the single review by id
 			queryClient.setQueryData(cardKey, (old) => {
 				if (!old) return old
 				const updated = Array.isArray(old.reviews)
-					? old.reviews.map((r) => r.reviewer === userId ? { ...r, state } : r)
+					? old.reviews.map((r) => r.id === reviewId ? { ...r, state } : r)
 					: []
 				return { ...old, reviews: updated }
 			})

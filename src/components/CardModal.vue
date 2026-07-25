@@ -564,7 +564,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<div class="card-modal__review-chips">
 							<span
 								v-for="review in cardReviews"
-								:key="review.reviewer"
+								:key="review.id"
 								class="card-modal__review-chip"
 								:class="`card-modal__review-chip--${review.state}`">
 								<NcAvatar
@@ -594,7 +594,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									class="card-modal__review-remove"
 									:title="t('kanso', 'Withdraw review request')"
 									:disabled="withdrawReview.isPending.value"
-									@click="handleWithdrawReview(review.reviewer)">
+									@click="handleWithdrawReview(review.id)">
 									<CloseIcon :size="12" />
 								</button>
 							</span>
@@ -653,27 +653,53 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 						</div>
 
-						<!-- Verdict buttons for the current user when they have an actionable review -->
-						<div v-if="myReviewNeedsVerdict" class="card-modal__review-verdict">
-							<span class="card-modal__review-verdict-label">{{ t('kanso', 'Your verdict:') }}</span>
-							<NcButton
-								type="success"
-								:disabled="setReviewState.isPending.value"
-								@click="handleSetReviewState('approved')">
-								<template #icon>
-									<CheckDecagramIcon :size="16" />
-								</template>
-								{{ t('kanso', 'Approve') }}
-							</NcButton>
-							<NcButton
-								type="error"
-								:disabled="setReviewState.isPending.value"
-								@click="handleSetReviewState('changes_requested')">
-								<template #icon>
-									<AlertDecagramIcon :size="16" />
-								</template>
-								{{ t('kanso', 'Request changes') }}
-							</NcButton>
+						<!-- Verdict controls — one block per review of mine still awaiting a verdict -->
+						<div
+							v-for="review in myPendingReviews"
+							:key="`verdict-${review.id}`"
+							class="card-modal__review-verdict">
+							<span class="card-modal__review-verdict-label">
+								{{ t('kanso', 'Your verdict') }}<template v-if="reviewTypeById(review.reviewTypeId)"> · {{ reviewTypeById(review.reviewTypeId).title }}</template>:
+							</span>
+
+							<!-- Reason prompt when requesting changes on THIS review (#3469) -->
+							<template v-if="changesReasonFor === review.id">
+								<textarea
+									v-model="changesReasonText"
+									class="card-modal__review-reason"
+									:placeholder="t('kanso', 'What changes are needed? (posted as a comment)')"
+									rows="2" />
+								<NcButton
+									type="error"
+									:disabled="setReviewState.isPending.value || !changesReasonText.trim()"
+									@click="submitChangesRequested(review.id)">
+									{{ t('kanso', 'Submit') }}
+								</NcButton>
+								<NcButton :disabled="setReviewState.isPending.value" @click="cancelChangesRequested">
+									{{ t('kanso', 'Cancel') }}
+								</NcButton>
+							</template>
+
+							<template v-else>
+								<NcButton
+									type="success"
+									:disabled="setReviewState.isPending.value"
+									@click="handleReviewVerdict(review, 'approved')">
+									<template #icon>
+										<CheckDecagramIcon :size="16" />
+									</template>
+									{{ t('kanso', 'Approve') }}
+								</NcButton>
+								<NcButton
+									type="error"
+									:disabled="setReviewState.isPending.value"
+									@click="handleReviewVerdict(review, 'changes_requested')">
+									<template #icon>
+										<AlertDecagramIcon :size="16" />
+									</template>
+									{{ t('kanso', 'Request changes') }}
+								</NcButton>
+							</template>
 						</div>
 
 						<span v-if="reviewError" class="card-modal__save-error">{{ reviewError }}</span>
@@ -1042,9 +1068,10 @@ const reviewPickerOpen = ref(false)
 // Selected review type id for the next request-review action (null = no type)
 const selectedReviewTypeId = ref(null)
 
-// Resolve a reviewTypeId to its type object (for name + color display)
+// Resolve a reviewTypeId to its type object (for name + color display).
+// 0 (or null) = untyped → no badge.
 function reviewTypeById(typeId) {
-	if (typeId == null) return null
+	if (typeId == null || typeId === 0) return null
 	return boardReviewTypes.value.find((rt) => rt.id === typeId) ?? null
 }
 
@@ -1052,29 +1079,36 @@ const cardReviews = computed(() =>
 	Array.isArray(cardData.value?.reviews) ? cardData.value.reviews : [],
 )
 
-// Participants not yet requested for review on this card
+// Participants offerable for the CURRENTLY-SELECTED review type. A card may hold
+// several reviews per person (one per type), so we only exclude a participant
+// who already holds a review of the selected type — switching the type re-opens
+// them, which is how you add multiple reviews to one card.
 const unrequestedParticipants = computed(() => {
 	const list = Array.isArray(participants.data.value) ? participants.data.value : []
-	const requested = new Set(cardReviews.value.map((r) => r.reviewer))
+	const type = selectedReviewTypeId.value ?? 0
+	const requested = new Set(
+		cardReviews.value.filter((r) => (r.reviewTypeId ?? 0) === type).map((r) => r.reviewer),
+	)
 	return list.filter((p) => !requested.has(p.uid))
 })
 
-// Whether the current user has a pending or changes_requested review on this card
-const myReview = computed(() =>
-	cardReviews.value.find((r) => r.reviewer === currentUserId) ?? null,
+// Every review of the current user that still needs their verdict — a person may
+// have more than one (different types), each gets its own verdict controls.
+const myPendingReviews = computed(() =>
+	cardReviews.value.filter((r) =>
+		r.reviewer === currentUserId
+		&& (r.state === 'pending' || r.state === 'changes_requested'),
+	),
 )
 
-const myReviewNeedsVerdict = computed(() =>
-	myReview.value !== null
-	&& (myReview.value.state === 'pending' || myReview.value.state === 'changes_requested'),
-)
+// Reject-reason prompt state (#3469): the review id being rejected + its text.
+const changesReasonFor = ref(null)
+const changesReasonText = ref('')
 
 async function handleRequestReview(uid) {
 	reviewError.value = ''
 	reviewPickerOpen.value = false
 	const typeId = selectedReviewTypeId.value
-	// Reset type selection after request so the next picker opens fresh
-	selectedReviewTypeId.value = null
 	try {
 		await requestReview.mutateAsync({
 			cardId: Number(props.cardId),
@@ -1086,26 +1120,40 @@ async function handleRequestReview(uid) {
 	}
 }
 
-async function handleWithdrawReview(uid) {
+async function handleWithdrawReview(reviewId) {
 	reviewError.value = ''
 	try {
-		await withdrawReview.mutateAsync({
-			cardId: Number(props.cardId),
-			userId: uid,
-		})
+		await withdrawReview.mutateAsync({ cardId: Number(props.cardId), reviewId })
 	} catch (err) {
 		reviewError.value = err?.response?.data?.error || t('kanso', 'Failed to withdraw review request.')
 	}
 }
 
-async function handleSetReviewState(state) {
+// Approve applies immediately; requesting changes opens the reason prompt first.
+async function handleReviewVerdict(review, state) {
+	if (state === 'changes_requested') {
+		changesReasonFor.value = review.id
+		changesReasonText.value = ''
+		return
+	}
+	await submitReviewState(review.id, state, null)
+}
+
+async function submitChangesRequested(reviewId) {
+	await submitReviewState(reviewId, 'changes_requested', changesReasonText.value)
+	changesReasonFor.value = null
+	changesReasonText.value = ''
+}
+
+function cancelChangesRequested() {
+	changesReasonFor.value = null
+	changesReasonText.value = ''
+}
+
+async function submitReviewState(reviewId, state, reason) {
 	reviewError.value = ''
 	try {
-		await setReviewState.mutateAsync({
-			cardId: Number(props.cardId),
-			userId: currentUserId,
-			state,
-		})
+		await setReviewState.mutateAsync({ cardId: Number(props.cardId), reviewId, state, reason })
 	} catch (err) {
 		reviewError.value = err?.response?.data?.error || t('kanso', 'Failed to submit review.')
 	}
@@ -2184,6 +2232,12 @@ async function handleWatchToggle() {
 	font-size: 0.875rem;
 	color: var(--color-text-maxcontrast);
 	font-style: italic;
+}
+
+.card-modal__review-reason {
+	flex: 1 1 100%;
+	min-width: 0;
+	resize: vertical;
 }
 
 .card-modal__review-verdict {
