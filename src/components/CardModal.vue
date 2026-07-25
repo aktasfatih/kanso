@@ -151,6 +151,66 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 						</div>
 
+						<!-- GitHub links section -->
+						<div class="card-modal__links-section">
+							<div class="card-modal__links-header">
+								<GithubIcon :size="16" class="card-modal__links-header-icon" />
+								<label class="card-modal__label">{{ t('kanso', 'GitHub links') }}</label>
+								<NcButton
+									type="tertiary"
+									class="card-modal__branch-btn"
+									:title="t('kanso', 'Copy the git branch name for this card')"
+									@click="copyBranchName">
+									<template #icon>
+										<ContentCopyIcon :size="16" />
+									</template>
+									{{ branchCopied ? t('kanso', 'Copied!') : t('kanso', 'Copy branch name') }}
+								</NcButton>
+							</div>
+
+							<ul v-if="cardLinks.length > 0" class="card-modal__links-list">
+								<li v-for="link in cardLinks" :key="link.id" class="card-modal__link-row">
+									<a
+										:href="link.url"
+										target="_blank"
+										rel="noopener noreferrer"
+										class="card-modal__link-chip">
+										<span
+											class="card-modal__link-badge"
+											:class="`card-modal__link-badge--${link.state}`">
+											{{ linkStateLabel(link.state) }}
+										</span>
+										<span class="card-modal__link-text">{{ link.title || link.url }}</span>
+									</a>
+									<NcButton
+										v-if="canEdit"
+										type="tertiary-no-background"
+										:aria-label="t('kanso', 'Remove link')"
+										:title="t('kanso', 'Remove link')"
+										@click="handleRemoveLink(link.id)">
+										<template #icon>
+											<CloseIcon :size="16" />
+										</template>
+									</NcButton>
+								</li>
+							</ul>
+
+							<form v-if="canEdit" class="card-modal__link-add" @submit.prevent="handleAddLink">
+								<input
+									v-model="newLinkUrl"
+									type="url"
+									class="card-modal__link-input"
+									:placeholder="t('kanso', 'Paste a GitHub PR or issue URL…')">
+								<NcButton
+									type="secondary"
+									native-type="submit"
+									:disabled="!newLinkUrl || addLink.isPending.value">
+									{{ t('kanso', 'Attach') }}
+								</NcButton>
+							</form>
+							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
+						</div>
+
 						<!-- Discussion section -->
 						<div class="card-modal__discussion-section">
 					<div class="card-modal__discussion-header">
@@ -817,6 +877,8 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
+import GithubIcon from 'vue-material-design-icons/Github.vue'
+import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
@@ -844,6 +906,7 @@ import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
+import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -1580,6 +1643,50 @@ async function handleAddChild() {
 	// Keep focus for rapid entry
 	await nextTick()
 	addChildInputRef.value?.focus()
+}
+
+// ── GitHub links ─────────────────────────────────────────────────────────────
+const { links: cardLinksData, addLink, removeLink } = useCardLinks(computed(() => props.cardId))
+const cardLinks = computed(() => cardLinksData.value ?? [])
+const newLinkUrl = ref('')
+const linkError = ref('')
+const branchCopied = ref(false)
+
+function linkStateLabel(state) {
+	switch (state) {
+	case 'open': return t('kanso', 'Open')
+	case 'merged': return t('kanso', 'Merged')
+	case 'closed': return t('kanso', 'Closed')
+	default: return t('kanso', 'Link')
+	}
+}
+
+async function handleAddLink() {
+	const value = newLinkUrl.value.trim()
+	if (!value) return
+	linkError.value = ''
+	try {
+		await addLink.mutateAsync(value)
+		newLinkUrl.value = ''
+	} catch (e) {
+		linkError.value = e?.response?.data?.error || t('kanso', 'Only https://github.com links are supported')
+	}
+}
+
+function handleRemoveLink(linkId) {
+	linkError.value = ''
+	removeLink.mutate(linkId)
+}
+
+async function copyBranchName() {
+	const name = branchName(props.cardId, cardData.value?.title || '')
+	try {
+		await navigator.clipboard.writeText(name)
+		branchCopied.value = true
+		setTimeout(() => { branchCopied.value = false }, 1500)
+	} catch (e) {
+		linkError.value = t('kanso', 'Could not copy to clipboard')
+	}
 }
 
 // ── Subscription (Watch / Unwatch) ───────────────────────────────────────────
@@ -3318,5 +3425,96 @@ async function handleWatchToggle() {
 	.card-modal__sidebar {
 		order: -1;
 	}
+}
+
+/* ── GitHub links section ─────────────────────────────────────────────────── */
+.card-modal__links-section {
+	margin-top: 20px;
+}
+
+.card-modal__links-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.card-modal__links-header-icon {
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__branch-btn {
+	margin-inline-start: auto;
+}
+
+.card-modal__links-list {
+	list-style: none;
+	padding: 0;
+	margin: 0 0 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.card-modal__link-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.card-modal__link-chip {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1;
+	padding: 4px 8px;
+	border-radius: var(--border-radius);
+	color: var(--color-main-text);
+	text-decoration: none;
+}
+
+.card-modal__link-chip:hover {
+	background: var(--color-background-hover);
+}
+
+.card-modal__link-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.card-modal__link-badge {
+	flex: 0 0 auto;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+	padding: 3px 7px;
+	border-radius: 10px;
+	color: #fff;
+	background: var(--color-text-maxcontrast);
+	text-transform: uppercase;
+}
+
+.card-modal__link-badge--open {
+	background: var(--color-success, #2fb344);
+}
+
+.card-modal__link-badge--merged {
+	background: #8250df;
+}
+
+.card-modal__link-badge--closed {
+	background: var(--color-error, #e9322d);
+}
+
+.card-modal__link-add {
+	display: flex;
+	gap: 8px;
+}
+
+.card-modal__link-input {
+	flex: 1;
+	min-width: 0;
 }
 </style>

@@ -175,6 +175,16 @@ export const subscribeCard = (cardId) =>
 export const unsubscribeCard = (cardId) =>
 	axios.delete(url(`/api/cards/${cardId}/subscription`)).then((r) => r.data)
 
+// Card links (GitHub PR/issue attachments)
+export const fetchCardLinks = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/links`)).then((r) => r.data)
+
+export const addCardLink = (cardId, linkUrl) =>
+	axios.post(url(`/api/cards/${cardId}/links`), { url: linkUrl }).then((r) => r.data)
+
+export const deleteCardLink = (cardId, linkId) =>
+	axios.delete(url(`/api/cards/${cardId}/links/${linkId}`)).then((r) => r.data)
+
 // Subscriptions (board watchers)
 export const subscribeBoard = (boardId) =>
 	axios.put(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)

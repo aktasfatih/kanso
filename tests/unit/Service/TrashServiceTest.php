@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
@@ -38,6 +39,7 @@ class TrashServiceTest extends TestCase {
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
 	private SubscriptionMapper&MockObject $subscriptionMapper;
+	private CardLinkMapper&MockObject $cardLinkMapper;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -52,6 +54,7 @@ class TrashServiceTest extends TestCase {
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
+		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -63,6 +66,7 @@ class TrashServiceTest extends TestCase {
 			$this->checklistItemMapper,
 			$this->commentMapper,
 			$this->subscriptionMapper,
+			$this->cardLinkMapper,
 		);
 	}
 
