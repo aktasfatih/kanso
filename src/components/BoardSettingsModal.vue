@@ -2170,9 +2170,17 @@ function toggleWeekday(day) {
 }
 
 .label-settings__swatch {
+	box-sizing: border-box;
 	flex-shrink: 0;
 	width: 24px;
 	height: 24px;
+	/* Defeat the UA <button> box (min-size/padding/line-height) that otherwise
+	   inflates the height and turns the round swatch into an oval. Matches the
+	   treatment on .label-settings__color-option. */
+	min-width: 24px;
+	min-height: 24px;
+	padding: 0;
+	aspect-ratio: 1;
 	border-radius: 50%;
 	border: 2px solid var(--color-border);
 	cursor: pointer;
@@ -2181,6 +2189,7 @@ function toggleWeekday(day) {
 	justify-content: center;
 	font-size: 0.8rem;
 	font-weight: 700;
+	line-height: 1;
 	transition: transform 0.1s ease, border-color 0.1s ease;
 }
 
