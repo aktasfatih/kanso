@@ -14,10 +14,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div
 				v-for="vRow in virtualizer.getVirtualItems()"
 				:key="rows[vRow.index].id"
-				:ref="(el) => measure(el)"
 				:data-index="vRow.index"
 				class="board-list-table__vrow"
-				:style="{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vRow.start}px)` }">
+				:style="{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${vRow.size}px`, transform: `translateY(${vRow.start}px)` }">
 
 				<!-- Stack group header -->
 				<div v-if="rows[vRow.index].type === 'header'" class="board-list-group">
@@ -146,17 +145,17 @@ const rows = computed(() => {
 	return out
 })
 
+// Fixed row heights (a table is uniform) — no per-row measureElement, so the
+// virtualizer's positions never thrash on a data refresh.
+const HEADER_H = 38
+const ROW_H = 48
 const virtualizer = useVirtualizer(computed(() => ({
 	count: rows.value.length,
 	getScrollElement: () => scrollRef.value,
-	estimateSize: (i) => (rows.value[i]?.type === 'header' ? 38 : 48),
+	estimateSize: (i) => (rows.value[i]?.type === 'header' ? HEADER_H : ROW_H),
 	overscan: 10,
 	getItemKey: (i) => rows.value[i]?.id ?? i,
 })))
-
-function measure(el) {
-	if (el) virtualizer.value.measureElement(el)
-}
 
 function openCard(cardId) {
 	router.push({ name: 'card-modal', params: { id: String(props.boardId), cardId: String(cardId) } })
@@ -212,11 +211,16 @@ function isOverdue(card) {
 	padding: 24px 0;
 }
 
+.board-list-table__vrow {
+	overflow: hidden;
+}
+
 .board-list-group {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	height: 30px;
+	box-sizing: border-box;
+	height: 100%;
 	font-weight: 700;
 	color: var(--color-text-maxcontrast);
 	border-bottom: 1px solid var(--color-border);
@@ -242,8 +246,9 @@ function isOverdue(card) {
 	display: flex;
 	align-items: center;
 	gap: 12px;
+	box-sizing: border-box;
 	width: 100%;
-	min-height: 44px;
+	height: 100%;
 	padding: 6px 8px;
 	background: transparent;
 	border: none;

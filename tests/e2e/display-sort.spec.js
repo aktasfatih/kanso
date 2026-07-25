@@ -31,47 +31,51 @@ async function ncLogin(page) {
 	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
-test.describe('Board List view (#3444)', () => {
-	const state = { boardId: 0, title: 'List View ' + Math.floor(Date.now() / 1000), cardTitle: 'List row card' }
+test.describe('Display sort (#3442)', () => {
+	const state = { boardId: 0 }
+	// Created in this order → manual (fractional) order is Charlie, Alpha, Bravo.
+	const created = ['Charlie', 'Alpha', 'Bravo']
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: state.title })
+		const board = await api('POST', '/boards', { title: 'Sort ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
 		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
-		await api('POST', '/cards', { stackId: stack.id, title: state.cardTitle })
+		for (const title of created) {
+			await api('POST', '/cards', { stackId: stack.id, title })
+		}
 	})
 
 	test.afterAll(async () => {
 		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('switches to List, renders card rows, opens a card, and switches back', async ({ page }) => {
+	test('sorting by Title reorders the rows; Manual restores fractional order', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		const setView = async (name) => {
-			await page.locator('.board-view__view-menu button').first().click()
-			await page.getByText(name, { exact: true }).click()
-		}
+		// Switch to List view for a deterministic row order.
+		await page.locator('.board-view__view-menu button').first().click()
+		await page.getByText('List', { exact: true }).click()
+		await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
 
-		// Switch to List → card renders as a row, Board columns hidden.
-		await setView('List')
-		const row = page.locator('.board-list-row', { hasText: state.cardTitle })
-		await expect(row).toBeVisible({ timeout: 8_000 })
-		await expect(page.locator('.board-view__stacks-wrap')).toBeHidden()
+		const titles = () => page.locator('.board-list-row__title').allTextContents()
 
-		// Toggle back to Board → columns visible again (round-trip, no modal open).
-		await setView('Board')
-		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible({ timeout: 8_000 })
+		// Manual order = creation (fractional) order.
+		expect((await titles()).map((s) => s.trim())).toEqual(created)
 
-		// Back to List, then open a card. dispatchEvent fires the handler directly:
-		// the row is a virtualized item on a list that refreshes on the board poll,
-		// so a coordinate click can race the re-render.
-		await setView('List')
-		await expect(row).toBeVisible({ timeout: 8_000 })
-		await row.dispatchEvent('click')
-		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		// Sort by Title → alphabetical.
+		await page.locator('.board-view__sort-menu button').first().click()
+		await page.getByText('Title', { exact: true }).click()
+		await expect
+			.poll(async () => (await titles()).map((s) => s.trim()))
+			.toEqual(['Alpha', 'Bravo', 'Charlie'])
+
+		// Back to Manual → fractional order restored (view-only sort, keys intact).
+		await page.locator('.board-view__sort-menu button').first().click()
+		await page.getByText('Manual', { exact: true }).click()
+		await expect
+			.poll(async () => (await titles()).map((s) => s.trim()))
+			.toEqual(created)
 	})
 })

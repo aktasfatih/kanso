@@ -52,6 +52,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
+			<!-- Display sort — a view-only reorder within each stack (Board + List). -->
+			<NcActions
+				v-if="boardData"
+				class="board-view__sort-menu"
+				:menu-name="t('kanso', 'Sort: {mode}', { mode: sortModeLabel })">
+				<template #icon>
+					<SortIcon :size="20" />
+				</template>
+				<NcActionRadio :model-value="sortMode === 'manual'" name="kanso-sort" @change="setSortMode('manual')">
+					{{ t('kanso', 'Manual') }}
+				</NcActionRadio>
+				<NcActionRadio :model-value="sortMode === 'priority'" name="kanso-sort" @change="setSortMode('priority')">
+					{{ t('kanso', 'Priority') }}
+				</NcActionRadio>
+				<NcActionRadio :model-value="sortMode === 'due'" name="kanso-sort" @change="setSortMode('due')">
+					{{ t('kanso', 'Due date') }}
+				</NcActionRadio>
+				<NcActionRadio :model-value="sortMode === 'title'" name="kanso-sort" @change="setSortMode('title')">
+					{{ t('kanso', 'Title') }}
+				</NcActionRadio>
+			</NcActions>
+
 			<!-- Filter dropdown — compact NcActions menu replacing the old chip row.
 			     Only rendered when the board has at least one label OR always when
 			     priority filtering is desired (priority filter is always available).
@@ -337,6 +359,7 @@ import BellIcon from 'vue-material-design-icons/Bell.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
+import SortIcon from 'vue-material-design-icons/Sort.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BoardListView from '../components/BoardListView.vue'
 import SearchBox from '../components/SearchBox.vue'
@@ -382,6 +405,52 @@ function setViewMode(mode) {
 	try {
 		localStorage.setItem(`kanso.viewMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
+}
+
+// Display sort — a VIEW-ONLY reorder of how cards render within each stack. Never
+// rewrites sort keys; 'manual' is the persisted fractional order. Persisted per
+// board per user. While a non-manual sort is active, card drag-reorder is
+// suppressed (see the card onDrop guard) so manual order is preserved.
+const SORT_MODES = ['manual', 'priority', 'due', 'title']
+const sortMode = ref('manual')
+try {
+	const saved = localStorage.getItem(`kanso.sortMode.${props.id}`)
+	if (saved && SORT_MODES.includes(saved)) sortMode.value = saved
+} catch (e) { /* default to manual */ }
+function setSortMode(mode) {
+	sortMode.value = mode
+	try {
+		localStorage.setItem(`kanso.sortMode.${props.id}`, mode)
+	} catch (e) { /* ignore persistence failure */ }
+}
+const sortModeLabel = computed(() => ({
+	manual: t('kanso', 'Manual'),
+	priority: t('kanso', 'Priority'),
+	due: t('kanso', 'Due date'),
+	title: t('kanso', 'Title'),
+}[sortMode.value] ?? t('kanso', 'Manual')))
+
+/**
+ * View-only comparator for the active display sort. Every non-manual mode falls
+ * back to the fractional sort key as a stable tiebreaker.
+ */
+function sortCards(cards) {
+	const arr = [...cards]
+	if (sortMode.value === 'priority') {
+		return arr.sort((a, b) => (Number(b.priority ?? 0) - Number(a.priority ?? 0)) || bySortKey(a, b))
+	}
+	if (sortMode.value === 'due') {
+		const due = (c) => {
+			if (!c.duedate) return Infinity
+			const t2 = new Date(c.duedate).getTime()
+			return Number.isNaN(t2) ? Infinity : t2
+		}
+		return arr.sort((a, b) => (due(a) - due(b)) || bySortKey(a, b))
+	}
+	if (sortMode.value === 'title') {
+		return arr.sort((a, b) => String(a.title).localeCompare(String(b.title)) || bySortKey(a, b))
+	}
+	return arr.sort(bySortKey)
 }
 const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
@@ -516,7 +585,7 @@ const cardsByStack = computed(() => {
 		if (!map.has(card.stackId)) map.set(card.stackId, [])
 		map.get(card.stackId).push(card)
 	}
-	for (const cards of map.values()) cards.sort(bySortKey)
+	for (const [stackId, cards] of map) map.set(stackId, sortCards(cards))
 	return map
 })
 
@@ -743,6 +812,9 @@ onMounted(() => {
 		monitorForElements({
 			canMonitor: ({ source }) => source.data.type === 'card',
 			onDrop({ source, location }) {
+				// A non-manual display sort is view-only — dropping must not rewrite
+				// the fractional order, so ignore card drops until Manual is active.
+				if (sortMode.value !== 'manual') return
 				const { cardId, stackId: sourceStackId } = source.data
 
 				// Walk drop targets innermost-first to find what we landed on
