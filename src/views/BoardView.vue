@@ -29,6 +29,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="board-view__search"
 				:board-id="props.id" />
 
+			<!-- View switch — Board (columns) vs List (table). Persisted per board. -->
+			<NcActions
+				v-if="boardData"
+				class="board-view__view-menu"
+				:menu-name="viewMode === 'list' ? t('kanso', 'List') : t('kanso', 'Board')">
+				<template #icon>
+					<FormatListBulletedIcon v-if="viewMode === 'list'" :size="20" />
+					<ViewColumnIcon v-else :size="20" />
+				</template>
+				<NcActionRadio
+					:model-value="viewMode === 'board'"
+					name="kanso-viewmode"
+					@change="setViewMode('board')">
+					{{ t('kanso', 'Board') }}
+				</NcActionRadio>
+				<NcActionRadio
+					:model-value="viewMode === 'list'"
+					name="kanso-viewmode"
+					@change="setViewMode('list')">
+					{{ t('kanso', 'List') }}
+				</NcActionRadio>
+			</NcActions>
+
 			<!-- Filter dropdown — compact NcActions menu replacing the old chip row.
 			     Only rendered when the board has at least one label OR always when
 			     priority filtering is desired (priority filter is always available).
@@ -182,8 +205,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			{{ t('kanso', 'Failed to load board.') }}
 		</div>
 
-		<!-- Stacks row -->
-		<div ref="stacksWrapRef" class="board-view__stacks-wrap">
+		<!-- Stacks row (Board view). Kept mounted under v-show so its drag-and-drop
+		     monitors stay attached when the List view is showing. -->
+		<div v-show="viewMode === 'board'" ref="stacksWrapRef" class="board-view__stacks-wrap">
 			<!-- Skeleton stacks on cold load -->
 			<template v-if="isLoading">
 				<div v-for="n in 3" :key="n" class="stack-skeleton">
@@ -224,6 +248,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</template>
 		</div>
+
+		<!-- List view — a virtualized, stack-grouped table over the same filtered
+		     cards. Read-oriented: rows open the card modal. -->
+		<BoardListView
+			v-if="viewMode === 'list' && boardData"
+			:stacks="sortedStacks"
+			:cards-by-stack="cardsByStack"
+			:labels-by-id="labelsById"
+			:board-id="props.id" />
 
 		<!-- Keyboard shortcuts overlay -->
 		<NcModal
@@ -293,6 +326,7 @@ import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
@@ -301,7 +335,10 @@ import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
+import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
+import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import StackColumn from '../components/StackColumn.vue'
+import BoardListView from '../components/BoardListView.vue'
 import SearchBox from '../components/SearchBox.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
@@ -333,6 +370,19 @@ const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
+
+// View mode (Board columns vs List table), persisted per board per user.
+const viewMode = ref('board')
+try {
+	const saved = localStorage.getItem(`kanso.viewMode.${props.id}`)
+	if (saved === 'list' || saved === 'board') viewMode.value = saved
+} catch (e) { /* localStorage unavailable — default to board */ }
+function setViewMode(mode) {
+	viewMode.value = mode
+	try {
+		localStorage.setItem(`kanso.viewMode.${props.id}`, mode)
+	} catch (e) { /* ignore persistence failure */ }
+}
 const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
