@@ -34,6 +34,7 @@ class CardMapper extends QBMapper {
 		'title',
 		'sort_key',
 		'duedate',
+		'start_date',
 		'done_at',
 		'archived',
 		'owner',

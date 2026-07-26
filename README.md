@@ -66,6 +66,13 @@ your work, on your own Nextcloud, laid out plainly.
 - **GitHub webhook** — an HMAC-verified webhook moves a card to your Review
   column when its PR opens and to Done when it merges. No credentials, no OAuth.
 
+### 📊 Views
+- **Board, List and Timeline** views — switch per board (remembered per user).
+  The list is a dense, scannable table; the **Timeline (Gantt)** plots cards on a
+  date axis by **start → due**, with due-only cards as milestones.
+- **Display sort** — order cards by priority, due date or title. View-only: your
+  manual drag order is always preserved.
+
 ### ⌨️ Power-user UX
 - **Command palette** (`Ctrl`/`Cmd`+`K`) and full-text **search** across cards
   and comments.

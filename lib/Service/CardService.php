@@ -146,6 +146,7 @@ class CardService {
 		?bool $archived,
 		string $uid,
 		?int $priority = null,
+		?string $startDate = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -165,6 +166,10 @@ class CardService {
 		}
 		if ($duedate !== null) {
 			$card->setDuedate($this->parseDuedate($duedate));
+		}
+		if ($startDate !== null) {
+			// Same wire format + parsing as duedate; '' clears it.
+			$card->setStartDate($this->parseDuedate($startDate));
 		}
 		if ($done !== null) {
 			if ($done) {

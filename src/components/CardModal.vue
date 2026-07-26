@@ -428,6 +428,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 
 					<!-- Due date — editable via datetime-local input -->
+					<div class="card-modal__meta card-modal__meta--start">
+						<CalendarStartIcon :size="16" />
+						<span class="card-modal__meta-label">{{ t('kanso', 'Start date') }}</span>
+						<input
+							class="card-modal__due-input"
+							type="datetime-local"
+							:value="startDateInputValue"
+							@change="handleStartDateChange">
+						<button
+							v-if="cardData.startDate"
+							class="card-modal__due-clear"
+							:title="t('kanso', 'Clear start date')"
+							@click="clearStartDate">
+							<CloseIcon :size="14" />
+						</button>
+					</div>
+
 					<div class="card-modal__meta card-modal__meta--due">
 						<CalendarIcon :size="16" />
 						<span class="card-modal__meta-label">{{ t('kanso', 'Due date') }}</span>
@@ -902,6 +919,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import CalendarStartIcon from 'vue-material-design-icons/CalendarStart.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -1228,6 +1246,33 @@ async function clearDueDate() {
 		await updateCard.mutateAsync({ data: { duedate: '' } })
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear due date.')
+	}
+}
+
+// ── Start date (editable) ────────────────────────────────────────────────────
+const startDateInputValue = computed(() => {
+	if (!cardData.value?.startDate) return ''
+	const d = new Date(cardData.value.startDate)
+	const pad = (n) => String(n).padStart(2, '0')
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+})
+
+async function handleStartDateChange(event) {
+	const val = event.target.value
+	if (!val) return
+	const iso = new Date(val).toISOString()
+	try {
+		await updateCard.mutateAsync({ data: { startDate: iso } })
+	} catch (err) {
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update start date.')
+	}
+}
+
+async function clearStartDate() {
+	try {
+		await updateCard.mutateAsync({ data: { startDate: '' } })
+	} catch (err) {
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear start date.')
 	}
 }
 

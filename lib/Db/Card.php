@@ -31,6 +31,8 @@ use OCP\DB\Types;
  * @method void setSortKey(string $sortKey)
  * @method \DateTime|null getDuedate()
  * @method void setDuedate(?\DateTime $duedate)
+ * @method \DateTime|null getStartDate()
+ * @method void setStartDate(?\DateTime $startDate)
  * @method int getDoneAt()
  * @method void setDoneAt(int $doneAt)
  * @method bool getArchived()
@@ -61,6 +63,7 @@ class Card extends Entity implements \JsonSerializable {
 	protected ?string $description = null;
 	protected ?string $sortKey = null;
 	protected ?\DateTime $duedate = null;
+	protected ?\DateTime $startDate = null;
 	protected ?int $doneAt = null;
 	protected ?bool $archived = null;
 	protected ?string $owner = null;
@@ -77,6 +80,7 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('description', Types::STRING);
 		$this->addType('sortKey', Types::STRING);
 		$this->addType('duedate', Types::DATETIME);
+		$this->addType('startDate', Types::DATETIME);
 		$this->addType('doneAt', Types::INTEGER);
 		$this->addType('archived', Types::BOOLEAN);
 		$this->addType('owner', Types::STRING);
@@ -91,7 +95,7 @@ class Card extends Entity implements \JsonSerializable {
 	 * Summary payload for board/stack listings — deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -101,6 +105,7 @@ class Card extends Entity implements \JsonSerializable {
 			'title' => $this->title,
 			'sortKey' => $this->sortKey,
 			'duedate' => $this->duedate?->format(\DateTimeInterface::ATOM),
+			'startDate' => $this->startDate?->format(\DateTimeInterface::ATOM),
 			'doneAt' => $this->doneAt ?? 0,
 			'archived' => $this->archived ?? false,
 			'owner' => $this->owner,

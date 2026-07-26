@@ -345,6 +345,22 @@ class CardServiceTest extends TestCase {
 		self::assertNull($updated->getDuedate());
 	}
 
+	public function testUpdateSetsAndClearsStartDate(): void {
+		$card = $this->card();
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Set (positional: …, uid, priority, startDate).
+		$set = $this->service->update(9, null, null, null, null, null, 'alice', null, '2026-08-01T00:00:00+00:00');
+		self::assertInstanceOf(\DateTime::class, $set->getStartDate());
+
+		// Clear with an empty string.
+		$cleared = $this->service->update(9, null, null, null, null, null, 'alice', null, '');
+		self::assertNull($cleared->getStartDate());
+	}
+
 	public function testUpdateParsesAtomDuedateAndNormalizesToUtc(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());

@@ -33,9 +33,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<NcActions
 				v-if="boardData"
 				class="board-view__view-menu"
-				:menu-name="viewMode === 'list' ? t('kanso', 'List') : t('kanso', 'Board')">
+				:menu-name="viewModeLabel">
 				<template #icon>
-					<FormatListBulletedIcon v-if="viewMode === 'list'" :size="20" />
+					<ChartTimelineIcon v-if="viewMode === 'timeline'" :size="20" />
+					<FormatListBulletedIcon v-else-if="viewMode === 'list'" :size="20" />
 					<ViewColumnIcon v-else :size="20" />
 				</template>
 				<NcActionRadio
@@ -49,6 +50,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					name="kanso-viewmode"
 					@change="setViewMode('list')">
 					{{ t('kanso', 'List') }}
+				</NcActionRadio>
+				<NcActionRadio
+					:model-value="viewMode === 'timeline'"
+					name="kanso-viewmode"
+					@change="setViewMode('timeline')">
+					{{ t('kanso', 'Timeline') }}
 				</NcActionRadio>
 			</NcActions>
 
@@ -280,6 +287,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:labels-by-id="labelsById"
 			:board-id="props.id" />
 
+		<!-- Timeline (Gantt) view — cards on a date axis by start→due. -->
+		<BoardTimelineView
+			v-if="viewMode === 'timeline' && boardData"
+			:cards="allVisibleCards"
+			:board-id="props.id" />
+
 		<!-- Keyboard shortcuts overlay -->
 		<NcModal
 			v-if="showShortcuts"
@@ -360,8 +373,10 @@ import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import SortIcon from 'vue-material-design-icons/Sort.vue'
+import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BoardListView from '../components/BoardListView.vue'
+import BoardTimelineView from '../components/BoardTimelineView.vue'
 import SearchBox from '../components/SearchBox.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
@@ -394,11 +409,12 @@ const route = useRoute()
 const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
 
-// View mode (Board columns vs List table), persisted per board per user.
+// View mode (Board columns / List table / Timeline), persisted per board per user.
+const VIEW_MODES = ['board', 'list', 'timeline']
 const viewMode = ref('board')
 try {
 	const saved = localStorage.getItem(`kanso.viewMode.${props.id}`)
-	if (saved === 'list' || saved === 'board') viewMode.value = saved
+	if (saved && VIEW_MODES.includes(saved)) viewMode.value = saved
 } catch (e) { /* localStorage unavailable — default to board */ }
 function setViewMode(mode) {
 	viewMode.value = mode
@@ -406,6 +422,11 @@ function setViewMode(mode) {
 		localStorage.setItem(`kanso.viewMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
 }
+const viewModeLabel = computed(() => ({
+	board: t('kanso', 'Board'),
+	list: t('kanso', 'List'),
+	timeline: t('kanso', 'Timeline'),
+}[viewMode.value] ?? t('kanso', 'Board')))
 
 // Display sort — a VIEW-ONLY reorder of how cards render within each stack. Never
 // rewrites sort keys; 'manual' is the persisted fractional order. Persisted per
@@ -587,6 +608,13 @@ const cardsByStack = computed(() => {
 	}
 	for (const [stackId, cards] of map) map.set(stackId, sortCards(cards))
 	return map
+})
+
+// All filtered, non-archived cards flattened — the Timeline view's input.
+const allVisibleCards = computed(() => {
+	const out = []
+	for (const cards of cardsByStack.value.values()) out.push(...cards)
+	return out
 })
 
 function cardsForStack(stackId) {
