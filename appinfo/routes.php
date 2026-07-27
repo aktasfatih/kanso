@@ -70,6 +70,10 @@ return [
 		['name' => 'cardLink#create', 'url' => '/api/cards/{cardId}/links', 'verb' => 'POST'],
 		['name' => 'cardLink#destroy', 'url' => '/api/cards/{cardId}/links/{linkId}', 'verb' => 'DELETE'],
 
+		['name' => 'cardRelation#index', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'GET'],
+		['name' => 'cardRelation#create', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'POST'],
+		['name' => 'cardRelation#destroy', 'url' => '/api/cards/{cardId}/relations/{relationId}', 'verb' => 'DELETE'],
+
 		['name' => 'subscription#boardIndex', 'url' => '/api/boards/{boardId}/subscription', 'verb' => 'GET'],
 		['name' => 'subscription#boardSubscribe', 'url' => '/api/boards/{boardId}/subscription', 'verb' => 'PUT'],
 		['name' => 'subscription#boardUnsubscribe', 'url' => '/api/boards/{boardId}/subscription', 'verb' => 'DELETE'],

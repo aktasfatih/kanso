@@ -16,6 +16,7 @@ use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Service\AssigneeService;
+use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -49,6 +50,7 @@ class CardController extends Controller {
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
 		private SubscriptionService $subscriptionService,
+		private CardRelationService $relationService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -113,7 +115,8 @@ class CardController extends Controller {
 			+ ['parent' => $parent]
 			+ ['children' => $children]
 			+ ['commentCount' => $this->commentMapper->countByCard($id)]
-			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)];
+			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
+			+ ['relations' => $this->relationService->groupedForCard($id)];
 	}
 
 	/**

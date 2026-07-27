@@ -139,6 +139,13 @@ export const deleteAutomationRule = (id) =>
 export const setCardParent = (cardId, parentCardId) =>
 	axios.put(url(`/api/cards/${cardId}/parent`), { parentCardId: parentCardId ?? null }).then((r) => r.data)
 
+// Card relations (blocks / blocked-by / duplicates / relates)
+export const addCardRelation = (cardId, otherCardId, kind) =>
+	axios.post(url(`/api/cards/${cardId}/relations`), { otherCardId, kind }).then((r) => r.data)
+
+export const removeCardRelation = (cardId, relationId) =>
+	axios.delete(url(`/api/cards/${cardId}/relations/${relationId}`)).then((r) => r.data)
+
 // Checklist
 export const fetchChecklist = (cardId) =>
 	axios.get(url(`/api/cards/${cardId}/checklist`)).then((r) => r.data)

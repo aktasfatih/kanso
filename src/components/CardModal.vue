@@ -838,6 +838,143 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
 					</div>
 
+					<!-- Relations section: blocks / blocked-by / duplicates / relates -->
+					<div class="card-modal__relations">
+						<div class="card-modal__hierarchy-header">
+							<label class="card-modal__label">{{ t('kanso', 'Relations') }}</label>
+						</div>
+
+						<!-- Blocks group -->
+						<template v-if="relations.blocks && relations.blocks.length > 0">
+							<span class="card-modal__relation-group-label">{{ t('kanso', 'Blocks') }}</span>
+							<ul class="card-modal__relation-group">
+								<li
+									v-for="rel in relations.blocks"
+									:key="rel.id"
+									class="card-modal__relation-row">
+									<span
+										class="card-modal__relation-title"
+										:class="{ 'card-modal__relation-title--done': rel.done }">
+										{{ rel.title }}
+									</span>
+									<button
+										v-if="canEdit"
+										class="card-modal__relation-remove"
+										:title="t('kanso', 'Remove relation')"
+										:disabled="removeRelation.isPending.value"
+										@click="handleRemoveRelation(rel.id)">
+										<CloseIcon :size="12" />
+									</button>
+								</li>
+							</ul>
+						</template>
+
+						<!-- Blocked by group -->
+						<template v-if="relations.blockedBy && relations.blockedBy.length > 0">
+							<span class="card-modal__relation-group-label">{{ t('kanso', 'Blocked by') }}</span>
+							<ul class="card-modal__relation-group">
+								<li
+									v-for="rel in relations.blockedBy"
+									:key="rel.id"
+									class="card-modal__relation-row">
+									<span
+										class="card-modal__relation-title"
+										:class="{ 'card-modal__relation-title--done': rel.done }">
+										{{ rel.title }}
+									</span>
+									<button
+										v-if="canEdit"
+										class="card-modal__relation-remove"
+										:title="t('kanso', 'Remove relation')"
+										:disabled="removeRelation.isPending.value"
+										@click="handleRemoveRelation(rel.id)">
+										<CloseIcon :size="12" />
+									</button>
+								</li>
+							</ul>
+						</template>
+
+						<!-- Duplicates group -->
+						<template v-if="relations.duplicates && relations.duplicates.length > 0">
+							<span class="card-modal__relation-group-label">{{ t('kanso', 'Duplicates') }}</span>
+							<ul class="card-modal__relation-group">
+								<li
+									v-for="rel in relations.duplicates"
+									:key="rel.id"
+									class="card-modal__relation-row">
+									<span
+										class="card-modal__relation-title"
+										:class="{ 'card-modal__relation-title--done': rel.done }">
+										{{ rel.title }}
+									</span>
+									<button
+										v-if="canEdit"
+										class="card-modal__relation-remove"
+										:title="t('kanso', 'Remove relation')"
+										:disabled="removeRelation.isPending.value"
+										@click="handleRemoveRelation(rel.id)">
+										<CloseIcon :size="12" />
+									</button>
+								</li>
+							</ul>
+						</template>
+
+						<!-- Relates to group -->
+						<template v-if="relations.relates && relations.relates.length > 0">
+							<span class="card-modal__relation-group-label">{{ t('kanso', 'Relates to') }}</span>
+							<ul class="card-modal__relation-group">
+								<li
+									v-for="rel in relations.relates"
+									:key="rel.id"
+									class="card-modal__relation-row">
+									<span
+										class="card-modal__relation-title"
+										:class="{ 'card-modal__relation-title--done': rel.done }">
+										{{ rel.title }}
+									</span>
+									<button
+										v-if="canEdit"
+										class="card-modal__relation-remove"
+										:title="t('kanso', 'Remove relation')"
+										:disabled="removeRelation.isPending.value"
+										@click="handleRemoveRelation(rel.id)">
+										<CloseIcon :size="12" />
+									</button>
+								</li>
+							</ul>
+						</template>
+
+						<!-- Add relation controls (edit permission required) -->
+						<div v-if="canEdit" class="card-modal__relation-add-row">
+							<select
+								v-model="newRelationKind"
+								class="card-modal__relation-kind">
+								<option value="blocks">{{ t('kanso', 'Blocks') }}</option>
+								<option value="blocked_by">{{ t('kanso', 'Blocked by') }}</option>
+								<option value="duplicates">{{ t('kanso', 'Duplicates') }}</option>
+								<option value="relates">{{ t('kanso', 'Relates to') }}</option>
+							</select>
+							<select
+								v-model="newRelationTargetId"
+								class="card-modal__relation-target">
+								<option value="">{{ t('kanso', 'Pick a card…') }}</option>
+								<option
+									v-for="c in boardCardsForRelation"
+									:key="c.id"
+									:value="c.id">
+									{{ c.title }}
+								</option>
+							</select>
+							<button
+								class="card-modal__relation-add"
+								:disabled="!newRelationTargetId || addRelation.isPending.value"
+								@click="handleAddRelation">
+								{{ t('kanso', 'Add') }}
+							</button>
+						</div>
+						<span v-if="relationError" class="card-modal__save-error">{{ relationError }}</span>
+					</div>
+
 					<!-- Checklist section -->
 					<div class="card-modal__checklist-section">
 						<div class="card-modal__checklist-header">
@@ -944,6 +1081,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
 import { translate as t } from '@nextcloud/l10n'
@@ -989,6 +1127,7 @@ import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation } from '../services/api.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -1874,6 +2013,62 @@ async function handleWatchToggle() {
 		await toggleSubscription.mutateAsync({ subscribed: next })
 	} catch (err) {
 		subscriptionError.value = err?.response?.data?.error || t('kanso', 'Failed to update watch status.')
+	}
+}
+
+// ── Card relations (blocks / blocked-by / duplicates / relates) ──────────────
+const queryClient = useQueryClient()
+
+// The four relation groups from card detail
+const relations = computed(() => cardData.value?.relations ?? { blocks: [], blockedBy: [], duplicates: [], relates: [] })
+
+// Add-relation form state
+const newRelationKind = ref('blocks')
+const newRelationTargetId = ref('')
+const relationError = ref('')
+
+// Cards on this board available for selection (excluding the current card)
+const boardCardsForRelation = computed(() => {
+	const cards = boardData.value?.cards ?? []
+	return cards.filter((c) => c.id !== Number(props.cardId) && !c.archived)
+})
+
+const addRelation = useMutation({
+	mutationFn: ({ otherCardId, kind }) =>
+		apiAddCardRelation(Number(props.cardId), otherCardId, kind),
+	onSettled: () => {
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		queryClient.invalidateQueries({ queryKey: ['board', boardId.value] })
+	},
+})
+
+const removeRelation = useMutation({
+	mutationFn: ({ relationId }) =>
+		apiRemoveCardRelation(Number(props.cardId), relationId),
+	onSettled: () => {
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		queryClient.invalidateQueries({ queryKey: ['board', boardId.value] })
+	},
+})
+
+async function handleAddRelation() {
+	const targetId = Number(newRelationTargetId.value)
+	if (!targetId) return
+	relationError.value = ''
+	try {
+		await addRelation.mutateAsync({ otherCardId: targetId, kind: newRelationKind.value })
+		newRelationTargetId.value = ''
+	} catch (err) {
+		relationError.value = err?.response?.data?.error || t('kanso', 'Failed to add relation.')
+	}
+}
+
+async function handleRemoveRelation(relationId) {
+	relationError.value = ''
+	try {
+		await removeRelation.mutateAsync({ relationId })
+	} catch (err) {
+		relationError.value = err?.response?.data?.error || t('kanso', 'Failed to remove relation.')
 	}
 }
 </script>
@@ -3216,6 +3411,157 @@ async function handleWatchToggle() {
 
 .card-modal__add-child-input:disabled {
 	opacity: 0.5;
+}
+
+/* ── Relations section ────────────────────────────────────────────────────── */
+.card-modal__relations {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 16px;
+	margin-bottom: 8px;
+}
+
+.card-modal__sidebar .card-modal__relations {
+	margin-top: 0;
+	margin-bottom: 12px;
+}
+
+.card-modal__relation-group-label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-maxcontrast);
+	margin-top: 6px;
+}
+
+.card-modal__relation-group {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.card-modal__relation-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 6px;
+	border-radius: var(--border-radius);
+	transition: background 0.1s ease;
+}
+
+.card-modal__relation-row:hover {
+	background: var(--color-background-hover);
+}
+
+.card-modal__relation-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.card-modal__relation-title--done {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__relation-remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	padding: 0;
+	opacity: 0;
+	transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.card-modal__relation-row:hover .card-modal__relation-remove {
+	opacity: 1;
+}
+
+.card-modal__relation-remove:hover:not(:disabled) {
+	background: var(--color-error);
+	color: #fff;
+}
+
+.card-modal__relation-remove:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Add-relation controls row */
+.card-modal__relation-add-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 6px;
+	flex-wrap: wrap;
+}
+
+.card-modal__relation-kind,
+.card-modal__relation-target {
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	padding: 3px 6px;
+	font-size: 0.8rem;
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.card-modal__relation-kind {
+	flex-shrink: 0;
+}
+
+.card-modal__relation-target {
+	flex: 1;
+	min-width: 0;
+}
+
+.card-modal__relation-kind:focus,
+.card-modal__relation-target:focus {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 1px;
+}
+
+.card-modal__relation-add {
+	flex-shrink: 0;
+	height: 28px;
+	padding: 0 12px;
+	border: 1px solid var(--color-primary-element);
+	border-radius: var(--border-radius);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text, #fff);
+	font-size: 0.8rem;
+	font-family: inherit;
+	cursor: pointer;
+	transition: opacity 0.15s ease;
+	white-space: nowrap;
+}
+
+.card-modal__relation-add:hover:not(:disabled) {
+	opacity: 0.85;
+}
+
+.card-modal__relation-add:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 /* ── Discussion / Comments ─────────────────────────────────────────────────── */

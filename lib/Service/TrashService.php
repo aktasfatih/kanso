@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -50,6 +51,7 @@ class TrashService {
 		private CommentMapper $commentMapper,
 		private SubscriptionMapper $subscriptionMapper,
 		private CardLinkMapper $cardLinkMapper,
+		private CardRelationMapper $cardRelationMapper,
 	) {
 	}
 
@@ -116,6 +118,7 @@ class TrashService {
 		$this->commentMapper->deleteByCard($cardId);
 		$this->subscriptionMapper->deleteByCard($cardId);
 		$this->cardLinkMapper->deleteByCard($cardId);
+		$this->cardRelationMapper->deleteByCard($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(

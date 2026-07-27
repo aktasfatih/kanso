@@ -15,6 +15,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -56,6 +57,7 @@ class BoardControllerTest extends TestCase {
 	private AclMapper&MockObject $aclMapper;
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
+	private CardRelationMapper&MockObject $cardRelationMapper;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -77,6 +79,7 @@ class BoardControllerTest extends TestCase {
 		$this->aclMapper = $this->createMock(AclMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
+		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -100,7 +103,8 @@ class BoardControllerTest extends TestCase {
 			$this->commentMapper,
 			$this->aclMapper,
 			$this->permissionService,
-			$this->subscriptionService
+			$this->subscriptionService,
+			$this->cardRelationMapper
 		);
 	}
 

@@ -29,7 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
+				v-if="isInProgress || card.blocked || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -38,6 +38,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:aria-label="t('kanso', 'In progress')">
 					<ProgressClockIcon :size="12" />
 					{{ t('kanso', 'In progress') }}
+				</span>
+				<!-- Blocked badge — shown when the card has an unresolved blocker -->
+				<span
+					v-if="card.blocked"
+					class="card-tile__blocked"
+					:aria-label="t('kanso', 'Blocked by another card')">
+					<CancelIcon :size="12" />
+					{{ t('kanso', 'Blocked') }}
 				</span>
 				<!-- Priority indicator — only when priority > 0 -->
 				<span
@@ -138,6 +146,7 @@ import SignalCellular1Icon from 'vue-material-design-icons/SignalCellular1.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
+import CancelIcon from 'vue-material-design-icons/Cancel.vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
@@ -525,6 +534,20 @@ const extraAssigneeCount = computed(() => {
 	color: var(--color-error, #e30000);
 	border-color: var(--color-error, #e30000);
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+}
+
+/* Blocked badge — muted red attention chip */
+.card-tile__blocked {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: var(--color-error, #e30000);
+	border: 1px solid var(--color-error, #e30000);
+	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
 }
 
 /* Estimate chip */

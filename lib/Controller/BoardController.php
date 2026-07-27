@@ -12,6 +12,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -53,6 +54,7 @@ class BoardController extends Controller {
 		private AclMapper $aclMapper,
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
+		private CardRelationMapper $cardRelationMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -100,6 +102,8 @@ class BoardController extends Controller {
 			$childProgressByCard = $this->cardMapper->childProgressByBoard($id);
 			$commentCountByCard = $this->commentMapper->countsByBoard($id);
 			$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($id);
+			// Card ids blocked by a not-done card — drives the tile "blocked" badge.
+			$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($id));
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
@@ -110,7 +114,8 @@ class BoardController extends Controller {
 						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 						+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 						+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
-						+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null],
+						+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
+						+ ['blocked' => isset($blockedIds[$card->getId()])],
 					$this->cardMapper->findSummariesByBoard($id)
 				),
 				'labels' => $this->labelMapper->findByBoard($id),
