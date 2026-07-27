@@ -55,14 +55,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div
 						v-if="row.isMilestone"
 						class="timeline__milestone"
-						:class="{ 'timeline__bar--done': row.done }"
+						:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started }"
 						:style="{ left: `${row.left}px` }">
 						<span class="timeline__label timeline__label--after">{{ row.card.title }}</span>
 					</div>
 					<div
 						v-else
 						class="timeline__bar"
-						:class="{ 'timeline__bar--done': row.done, 'timeline__bar--overdue': row.overdue }"
+						:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
 						:style="{ left: `${row.left}px`, width: `${row.width}px` }">
 						<span class="timeline__label">{{ row.card.title }}</span>
 					</div>
@@ -130,7 +130,8 @@ const scheduledRaw = computed(() => {
 		// A range needs both ends; otherwise it's a single-day milestone.
 		const s = start ?? due
 		const e = due ?? start
-		out.push({ card, startMs: Math.min(s, e), endMs: Math.max(s, e), done: Number(card.doneAt) > 0 })
+		const done = Number(card.doneAt) > 0
+		out.push({ card, startMs: Math.min(s, e), endMs: Math.max(s, e), done, started: !done && Number(card.startedAt) > 0 })
 	}
 	out.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs)
 	return { scheduled: out, unscheduled: unsched }
@@ -313,8 +314,9 @@ function openCard(cardId) {
 	top: 5px;
 	height: 24px;
 	border-radius: 6px;
-	background: var(--color-primary-element);
-	color: var(--color-primary-element-text);
+	/* Default = scheduled but not started (muted). */
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
 	display: flex;
 	align-items: center;
 	padding: 0 8px;
@@ -322,8 +324,14 @@ function openCard(cardId) {
 	box-sizing: border-box;
 }
 
+.timeline__bar--started {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+}
+
 .timeline__bar--done {
 	background: var(--color-success, #2fb344);
+	color: #fff;
 }
 
 .timeline__bar--overdue {
@@ -337,8 +345,12 @@ function openCard(cardId) {
 	width: 16px;
 	height: 16px;
 	transform: translateX(-8px) rotate(45deg);
-	background: var(--color-primary-element);
+	background: var(--color-text-maxcontrast);
 	border-radius: 3px;
+}
+
+.timeline__milestone.timeline__bar--started {
+	background: var(--color-primary-element);
 }
 
 .timeline__milestone.timeline__bar--done {

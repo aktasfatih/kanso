@@ -29,8 +29,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState"
+				v-if="isInProgress || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState"
 				class="card-tile__meta">
+				<!-- In-progress status chip -->
+				<span
+					v-if="isInProgress"
+					class="card-tile__inprogress"
+					:aria-label="t('kanso', 'In progress')">
+					<ProgressClockIcon :size="12" />
+					{{ t('kanso', 'In progress') }}
+				</span>
 				<!-- Priority indicator — only when priority > 0 -->
 				<span
 					v-if="card.priority > 0"
@@ -112,6 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import ProgressClockIcon from 'vue-material-design-icons/ProgressClock.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
@@ -205,6 +214,7 @@ const cardLabels = computed(() => {
 
 // Done: doneAt > 0
 const isDone = computed(() => Number(props.card.doneAt) > 0)
+const isInProgress = computed(() => !isDone.value && Number(props.card.startedAt) > 0)
 
 const dueDateClass = computed(() => {
 	if (!props.card.duedate) return ''
@@ -316,6 +326,18 @@ const extraAssigneeCount = computed(() => {
 	gap: 4px;
 	width: 100%;
 	margin-top: 2px;
+}
+
+.card-tile__inprogress {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: var(--color-primary-element-text);
+	background: var(--color-primary-element);
 }
 
 .card-tile__due {

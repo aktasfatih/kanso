@@ -33,6 +33,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					class="board-list-row"
 					@click="openCard(rows[vRow.index].card.id)">
 					<span
+						class="board-list-row__status"
+						:class="`board-list-row__status--${statusOf(rows[vRow.index].card)}`"
+						:title="statusLabel(rows[vRow.index].card)" />
+					<span
 						class="board-list-row__title"
 						:class="{ 'board-list-row__title--done': isDone(rows[vRow.index].card) }">
 						{{ rows[vRow.index].card.title }}
@@ -165,6 +169,16 @@ function isDone(card) {
 	return Number(card.doneAt) > 0
 }
 
+function statusOf(card) {
+	if (Number(card.doneAt) > 0) return 'done'
+	if (Number(card.startedAt) > 0) return 'in_progress'
+	return 'not_started'
+}
+
+function statusLabel(card) {
+	return { done: t('kanso', 'Done'), in_progress: t('kanso', 'In progress'), not_started: t('kanso', 'Not started') }[statusOf(card)]
+}
+
 function labelColor(labelId) {
 	const l = props.labelsById.get(labelId)
 	return l && l.color ? cssColor(l.color) : 'var(--color-border-dark)'
@@ -262,6 +276,18 @@ function isOverdue(card) {
 .board-list-row:hover {
 	background: var(--color-background-hover);
 }
+
+.board-list-row__status {
+	flex: 0 0 auto;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border-dark);
+}
+
+.board-list-row__status--not_started { background: transparent; }
+.board-list-row__status--in_progress { background: var(--color-primary-element); border-color: var(--color-primary-element); }
+.board-list-row__status--done { background: var(--color-success, #2fb344); border-color: var(--color-success, #2fb344); }
 
 .board-list-row__title {
 	flex: 1;

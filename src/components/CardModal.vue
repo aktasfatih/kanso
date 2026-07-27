@@ -414,14 +414,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 				<!-- RIGHT column: attributes sidebar -->
 				<div class="card-modal__sidebar">
-					<!-- Done toggle -->
-					<div class="card-modal__meta card-modal__meta--done">
-						<NcCheckboxRadioSwitch
-							:model-value="isDone"
-							type="checkbox"
-							@update:model-value="handleDoneToggle">
-							{{ t('kanso', 'Done') }}
-						</NcCheckboxRadioSwitch>
+					<!-- Status — Not started / In progress / Done. Derived from the
+					     started_at + done_at timestamps; also driven by stack-role
+					     automation when the card is moved between columns. -->
+					<div class="card-modal__meta card-modal__meta--status">
+						<span class="card-modal__meta-label">{{ t('kanso', 'Status') }}</span>
+						<div class="card-modal__status" role="group" :aria-label="t('kanso', 'Card status')">
+							<button
+								v-for="opt in STATUS_OPTIONS"
+								:key="opt.key"
+								class="card-modal__status-btn"
+								:class="[`card-modal__status-btn--${opt.key}`, { 'card-modal__status-btn--active': currentStatus === opt.key }]"
+								:disabled="updateCard.isPending.value"
+								:aria-pressed="currentStatus === opt.key ? 'true' : 'false'"
+								@click="setStatus(opt.key)">
+								{{ opt.label }}
+							</button>
+						</div>
 						<span v-if="isDone && cardData.doneAt" class="card-modal__done-at">
 							{{ formatDoneAt(cardData.doneAt) }}
 						</span>
@@ -1186,11 +1195,25 @@ function reviewStateLabel(state) {
 // ── Done toggle ──────────────────────────────────────────────────────────────
 const isDone = computed(() => Number(cardData.value?.doneAt) > 0)
 
-async function handleDoneToggle(checked) {
+// Derived status (done_at / started_at) — the card-view control + the board's
+// stack-role automation both drive it.
+const STATUS_OPTIONS = [
+	{ key: 'not_started', label: t('kanso', 'Not started') },
+	{ key: 'in_progress', label: t('kanso', 'In progress') },
+	{ key: 'done', label: t('kanso', 'Done') },
+]
+const currentStatus = computed(() => {
+	if (Number(cardData.value?.doneAt) > 0) return 'done'
+	if (Number(cardData.value?.startedAt) > 0) return 'in_progress'
+	return 'not_started'
+})
+
+async function setStatus(status) {
+	if (status === currentStatus.value) return
 	try {
-		await updateCard.mutateAsync({ data: { done: checked } })
+		await updateCard.mutateAsync({ data: { status } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update done status.')
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
 	}
 }
 
@@ -1982,6 +2005,49 @@ async function handleWatchToggle() {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
 	font-style: italic;
+}
+
+.card-modal__status {
+	display: inline-flex;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	overflow: hidden;
+}
+
+.card-modal__status-btn {
+	border: none;
+	border-inline-start: 1px solid var(--color-border);
+	background: transparent;
+	padding: 4px 10px;
+	cursor: pointer;
+	color: var(--color-main-text);
+	font-size: 0.85rem;
+	white-space: nowrap;
+}
+
+.card-modal__status-btn:first-child {
+	border-inline-start: none;
+}
+
+.card-modal__status-btn:hover:not(:disabled) {
+	background: var(--color-background-hover);
+}
+
+.card-modal__status-btn--active {
+	color: #fff;
+}
+
+.card-modal__status-btn--not_started.card-modal__status-btn--active {
+	background: var(--color-text-maxcontrast);
+}
+
+.card-modal__status-btn--in_progress.card-modal__status-btn--active {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+}
+
+.card-modal__status-btn--done.card-modal__status-btn--active {
+	background: var(--color-success, #2fb344);
 }
 
 /* Labels */

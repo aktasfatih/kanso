@@ -85,9 +85,11 @@ class CardService {
 			$card->setStackId($stackId);
 			$card->setTitle($title);
 			$card->setSortKey($sortKey);
-			// Creating a card directly in a done-role stack stamps it done, to
-			// match dragging the same card in (move()'s done-automation).
+			// Creating a card directly in a done-role stack stamps it done, and in
+			// an in-progress-role stack stamps it started — matching move()'s
+			// status-automation for a dragged-in card.
 			$card->setDoneAt($stack->getRole() === Stack::ROLE_DONE ? $now : 0);
+			$card->setStartedAt($stack->getRole() === Stack::ROLE_IN_PROGRESS ? $now : 0);
 			$card->setArchived(false);
 			$card->setOwner($uid);
 			$card->setCreatedAt($now);
@@ -147,6 +149,7 @@ class CardService {
 		string $uid,
 		?int $priority = null,
 		?string $startDate = null,
+		?string $status = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -182,6 +185,9 @@ class CardService {
 		}
 		if ($archived !== null) {
 			$card->setArchived($archived);
+		}
+		if ($status !== null) {
+			$this->applyStatus($card, $status);
 		}
 
 		$now = time();
@@ -450,6 +456,46 @@ class CardService {
 			}
 		} elseif ($sourceDone) {
 			$card->setDoneAt(0);
+		}
+
+		// Started-automation: entering an in-progress-role stack stamps the card
+		// "started" (status → In progress). Forward-only — never unset on leaving
+		// — and never over a done card. Rides the same UPDATE as the move.
+		if ($targetStack->getRole() === Stack::ROLE_IN_PROGRESS
+			&& ($card->getStartedAt() ?? 0) === 0
+			&& ($card->getDoneAt() ?? 0) === 0) {
+			$card->setStartedAt($now);
+		}
+	}
+
+	/**
+	 * Sets the card's derived status directly (the card-view control). Status is
+	 * two timestamps: done_at (Done) and started_at (In progress) — this is the
+	 * one place a card can be moved BACKWARD (e.g. Done → In progress), unlike
+	 * the forward-only move automation.
+	 *
+	 * @throws InvalidInputException on an unknown status
+	 */
+	private function applyStatus(Card $card, string $status): void {
+		$now = time();
+		switch ($status) {
+			case 'done':
+				if ($card->getDoneAt() === 0) {
+					$card->setDoneAt($now);
+				}
+				break;
+			case 'in_progress':
+				$card->setDoneAt(0);
+				if (($card->getStartedAt() ?? 0) === 0) {
+					$card->setStartedAt($now);
+				}
+				break;
+			case 'not_started':
+				$card->setDoneAt(0);
+				$card->setStartedAt(0);
+				break;
+			default:
+				throw new InvalidInputException('Unknown status: ' . $status);
 		}
 	}
 

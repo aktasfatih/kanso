@@ -53,8 +53,9 @@ your work, on your own Nextcloud, laid out plainly.
 - A cross-board **My Reviews** page so nothing waiting on you slips through.
 
 ### 🔁 Automation & workflows
-- **Stack roles** and **WIP limits**; moving a card into a "done" column stamps
-  it done automatically.
+- **Stack roles** and **WIP limits**; moving a card into an "in progress" column
+  auto-**starts** it and a "done" column stamps it **done** — or set the status
+  (Not started / In progress / Done) directly from the card.
 - **Recurring cards** on RRULE schedules, and **auto-archive** rules for done
   cards.
 

@@ -88,6 +88,7 @@ class CardServiceTest extends TestCase {
 		$card->setTitle('Existing card');
 		$card->setSortKey($sortKey);
 		$card->setDoneAt(0);
+		$card->setStartedAt(0);
 		$card->setArchived(false);
 		$card->setOwner('alice');
 		$card->setDeletedAt(0);
@@ -1020,6 +1021,71 @@ class CardServiceTest extends TestCase {
 
 		$moved = $this->service->move(9, 6, null, 'alice');
 		self::assertSame(0, $moved->getDoneAt());
+	}
+
+	// ---- status (started) automation + direct set -------------------------
+
+	public function testMoveIntoInProgressStackStampsStarted(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6, 1, Stack::ROLE_IN_PROGRESS),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertGreaterThan(0, $moved->getStartedAt());
+		self::assertSame(0, $moved->getDoneAt());
+	}
+
+	public function testMoveIntoInProgressDoesNotRestartADoneCard(): void {
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(12345);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6, 1, Stack::ROLE_IN_PROGRESS),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(0, $moved->getStartedAt());
+	}
+
+	public function testUpdateStatusTransitions(): void {
+		$card = $this->card();
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// in_progress → started stamped, not done.
+		$r = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'in_progress');
+		self::assertGreaterThan(0, $r->getStartedAt());
+		self::assertSame(0, $r->getDoneAt());
+
+		// done → done stamped.
+		$r = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');
+		self::assertGreaterThan(0, $r->getDoneAt());
+
+		// not_started → both cleared (moves the card BACKWARD).
+		$r = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'not_started');
+		self::assertSame(0, $r->getStartedAt());
+		self::assertSame(0, $r->getDoneAt());
+	}
+
+	public function testUpdateStatusRejectsUnknown(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'bogus');
 	}
 
 	public function testMoveBetweenNonDoneStacksLeavesDoneAtUntouched(): void {
