@@ -245,6 +245,10 @@ export const setReviewState = (cardId, reviewId, state, reason = null) =>
 export const getInbox = () =>
 	axios.get(url('/api/inbox')).then((r) => r.data)
 
+// My tasks (open cards assigned to me, across every board I can read)
+export const getMyCards = () =>
+	axios.get(url('/api/my-cards')).then((r) => r.data)
+
 // Review types
 export const createReviewType = (boardId, title, color) =>
 	axios.post(url('/api/review-types'), { boardId, title, color: color || null }).then((r) => r.data)

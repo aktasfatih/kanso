@@ -345,4 +345,69 @@ class CardMapper extends QBMapper {
 
 		return $this->findEntities($qb);
 	}
+
+	/**
+	 * The current user's open, assigned cards across a set of boards — powers
+	 * the cross-board "My tasks" panel. ACL is enforced by the caller passing
+	 * only the boards the user can read (mirrors {@see CardReviewMapper::findByReviewerInBoards}).
+	 * Excludes done, archived and deleted cards (a task list shows open work).
+	 * Ordered undated-last, then by due date, then priority — so the soonest
+	 * actionable work floats to the top. Capped at $limit rows.
+	 *
+	 * @param string[] $uids the assignee identities to match (a user's uid plus any group ids they belong to)
+	 * @param int[] $boardIds the readable board set; an empty set yields no rows
+	 * @return list<array<string, mixed>>
+	 * @throws Exception
+	 */
+	public function findAssignedInBoards(array $uids, array $boardIds, int $limit = 200): array {
+		if ($uids === [] || $boardIds === []) {
+			return [];
+		}
+
+		// No DISTINCT needed: the type=user filter plus a per-(card,participant)
+		// unique assignment means each card matches at most once — and DISTINCT
+		// would collide with the CASE-based ORDER BY on Postgres anyway.
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.id')
+			->addSelect('c.board_id', 'c.title', 'c.duedate', 'c.priority', 'c.done_at', 'c.started_at', 'c.parent_card_id')
+			->selectAlias('b.title', 'board_title')
+			->selectAlias('s.title', 'stack_title')
+			->from($this->getTableName(), 'c')
+			->innerJoin('c', 'kanso_card_assignees', 'ca', $qb->expr()->eq('ca.card_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->leftJoin('c', 'kanso_stacks', 's', $qb->expr()->eq('c.stack_id', 's.id'))
+			->where($qb->expr()->in('ca.participant', $qb->createNamedParameter($uids, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('c.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			// Undated cards last: a card with no due date sorts after any dated one.
+			->addOrderBy($qb->createFunction('CASE WHEN c.duedate IS NULL THEN 1 ELSE 0 END'), 'ASC')
+			->addOrderBy('c.duedate', 'ASC')
+			->addOrderBy('c.priority', 'DESC')
+			->addOrderBy('c.id', 'ASC')
+			->setMaxResults($limit);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$due = $row['duedate'] !== null ? (new \DateTime((string)$row['duedate']))->format(\DateTimeInterface::ATOM) : null;
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'boardId' => (int)$row['board_id'],
+				'boardTitle' => (string)$row['board_title'],
+				'stackTitle' => $row['stack_title'] !== null ? (string)$row['stack_title'] : null,
+				'title' => (string)$row['title'],
+				'duedate' => $due,
+				'priority' => (int)$row['priority'],
+				'doneAt' => (int)$row['done_at'],
+				'startedAt' => (int)$row['started_at'],
+				'parentCardId' => ((int)($row['parent_card_id'] ?? 0)) ?: null,
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
 }

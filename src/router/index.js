@@ -24,6 +24,11 @@ const routes = [
 		],
 	},
 	{
+		path: '/my-tasks',
+		name: 'my-cards',
+		component: () => import('../views/MyCardsView.vue'),
+	},
+	{
 		path: '/reviews',
 		name: 'my-reviews',
 		component: () => import('../views/MyReviewsView.vue'),
