@@ -495,6 +495,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
 					</div>
 
+					<!-- Estimate selector — only when the board's estimateScale is not 'none' -->
+					<div
+						v-if="boardEstimateScale !== 'none'"
+						class="card-modal__meta card-modal__meta--estimate card-modal__estimate">
+						<span class="card-modal__meta-label">{{ t('kanso', 'Estimate') }}</span>
+						<div class="card-modal__estimate-buttons" role="group" :aria-label="t('kanso', 'Select estimate')">
+							<button
+								v-for="token in estimateTokens"
+								:key="token"
+								class="card-modal__estimate-btn"
+								:class="{ 'card-modal__estimate-btn--active': currentEstimate === token }"
+								:aria-pressed="currentEstimate === token"
+								:disabled="updateCard.isPending.value"
+								@click="handleSetEstimate(token)">
+								{{ token }}
+							</button>
+							<button
+								v-if="currentEstimate"
+								class="card-modal__estimate-btn card-modal__estimate-btn--clear"
+								:disabled="updateCard.isPending.value"
+								:title="t('kanso', 'Clear estimate')"
+								@click="handleSetEstimate('')">
+								{{ t('kanso', 'None') }}
+							</button>
+						</div>
+						<span v-if="estimateError" class="card-modal__save-error">{{ estimateError }}</span>
+					</div>
+
 					<!-- Labels section -->
 					<div class="card-modal__labels-section">
 						<label class="card-modal__label">{{ t('kanso', 'Labels') }}</label>
@@ -951,6 +979,7 @@ import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
+import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useReviews } from '../composables/useReviews.js'
@@ -1241,6 +1270,23 @@ async function handleSetPriority(priority) {
 		await setPriority.mutateAsync({ priority })
 	} catch (err) {
 		priorityError.value = err?.response?.data?.error || t('kanso', 'Failed to update priority.')
+	}
+}
+
+// ── Estimate ─────────────────────────────────────────────────────────────────
+const boardEstimateScale = computed(() => boardData.value?.board?.estimateScale ?? 'none')
+const estimateTokens = computed(() => scaleTokens(boardEstimateScale.value))
+const currentEstimate = computed(() => cardData.value?.estimate ?? '')
+const estimateError = ref('')
+
+async function handleSetEstimate(token) {
+	// Toggle: clicking the active token clears it; clicking a new one sets it.
+	const newToken = token !== '' && token === currentEstimate.value ? '' : token
+	estimateError.value = ''
+	try {
+		await updateCard.mutateAsync({ data: { estimate: newToken } })
+	} catch (err) {
+		estimateError.value = err?.response?.data?.error || t('kanso', 'Failed to update estimate.')
 	}
 }
 
@@ -2909,6 +2955,49 @@ async function handleWatchToggle() {
 	background: var(--color-error, #e30000);
 	border-color: var(--color-error, #e30000);
 	color: #fff;
+}
+
+/* ── Estimate ──────────────────────────────────────────────────────────────── */
+.card-modal__estimate-buttons {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.card-modal__estimate-btn {
+	display: inline-flex;
+	align-items: center;
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 13px;
+	border: 1px solid var(--color-border);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+	white-space: nowrap;
+}
+
+.card-modal__estimate-btn:hover:not(:disabled) {
+	background: var(--color-background-hover);
+}
+
+.card-modal__estimate-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.card-modal__estimate-btn--active {
+	background: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #fff);
+}
+
+.card-modal__estimate-btn--clear {
+	color: var(--color-text-maxcontrast);
+	border-style: dashed;
 }
 
 /* ── Hierarchy (parent / sub-cards) ───────────────────────────────────────── */

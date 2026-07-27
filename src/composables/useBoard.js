@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
 	fetchBoard,
+	updateBoard as apiUpdateBoard,
 	createStack as apiCreateStack,
 	updateStack as apiUpdateStack,
 	deleteStack as apiDeleteStack,
@@ -58,6 +59,11 @@ export function useBoard(id) {
 		onSettled: () => queryClient.invalidateQueries({ queryKey: ['board', id] }),
 	})
 
+	const updateBoard = useMutation({
+		mutationFn: (data) => apiUpdateBoard(typeof id === 'object' ? id.value : id, data),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: ['board', id] }),
+	})
+
 	return {
 		...query,
 		createStack,
@@ -65,5 +71,6 @@ export function useBoard(id) {
 		deleteStack,
 		restoreStack,
 		createCard,
+		updateBoard,
 	}
 }

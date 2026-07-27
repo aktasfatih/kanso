@@ -27,6 +27,8 @@ use OCP\DB\Types;
  * @method void setDeletedAt(int $deletedAt)
  * @method string|null getWebhookSecret()
  * @method void setWebhookSecret(?string $webhookSecret)
+ * @method string getEstimateScale()
+ * @method void setEstimateScale(string $estimateScale)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -40,6 +42,7 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?int $deletedAt = null;
 	// MANAGE-only; deliberately NEVER emitted by jsonSerialize().
 	protected ?string $webhookSecret = null;
+	protected ?string $estimateScale = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -49,10 +52,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
 		$this->addType('webhookSecret', Types::STRING);
+		$this->addType('estimateScale', Types::STRING);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int, estimateScale: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -63,6 +67,7 @@ class Board extends Entity implements \JsonSerializable {
 			'color' => $this->color,
 			'archived' => $this->archived ?? false,
 			'lastModified' => $this->lastModified ?? 0,
+			'estimateScale' => $this->estimateScale ?? EstimateScale::NONE,
 		];
 	}
 }

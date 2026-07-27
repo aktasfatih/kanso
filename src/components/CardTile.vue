@@ -29,7 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState"
+				v-if="isInProgress || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -50,6 +50,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<SignalCellular2Icon v-else-if="card.priority === 2" :size="12" />
 					<SignalCellular1Icon v-else :size="12" />
 					{{ priorityLabel }}
+				</span>
+				<!-- Estimate chip — shown only when card.estimate is truthy -->
+				<span
+					v-if="card.estimate"
+					class="card-tile__estimate"
+					:aria-label="t('kanso', 'Estimate: {value}', { value: card.estimate })">
+					{{ card.estimate }}
 				</span>
 				<!-- Due date chip — suppress overdue/soon when done -->
 				<span
@@ -518,6 +525,20 @@ const extraAssigneeCount = computed(() => {
 	color: var(--color-error, #e30000);
 	border-color: var(--color-error, #e30000);
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+}
+
+/* Estimate chip */
+.card-tile__estimate {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	border-radius: 10px;
+	padding: 1px 7px;
+	color: var(--color-text-maxcontrast);
+	background: var(--color-background-dark);
+	border: 1px solid var(--color-border);
 }
 
 /* Assignee avatar stack — inside .card-tile__meta, pushed to the right */

@@ -366,6 +366,54 @@ class CardServiceTest extends TestCase {
 		self::assertNull($cleared->getStartDate());
 	}
 
+	public function testUpdateSetsEstimateFromBoardScale(): void {
+		$board = $this->board();
+		$board->setEstimateScale('fibonacci');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// positional: …, uid, priority, startDate, status, estimate
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, null, '8');
+		self::assertSame('8', $updated->getEstimate());
+	}
+
+	public function testUpdateRejectsOffScaleEstimate(): void {
+		$board = $this->board();
+		$board->setEstimateScale('fibonacci');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+
+		$this->expectException(InvalidInputException::class);
+		// 4 is not a fibonacci token.
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, null, '4');
+	}
+
+	public function testUpdateRejectsAnyEstimateWhenScaleIsNone(): void {
+		$board = $this->board();
+		$board->setEstimateScale('none');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, null, '3');
+	}
+
+	public function testUpdateClearsEstimateOnEmptyString(): void {
+		$card = $this->card();
+		$card->setEstimate('5');
+		$board = $this->board();
+		$board->setEstimateScale('fibonacci');
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, null, '');
+		self::assertNull($updated->getEstimate());
+	}
+
 	public function testUpdateParsesAtomDuedateAndNormalizesToUtc(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());

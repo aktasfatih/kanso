@@ -126,6 +126,25 @@ class BoardServiceTest extends TestCase {
 		self::assertGreaterThan(0, $updated->getLastModified());
 	}
 
+	public function testUpdateSetsValidEstimateScale(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', 'tshirt');
+		self::assertSame('tshirt', $updated->getEstimateScale());
+	}
+
+	public function testUpdateRejectsUnknownEstimateScale(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, null, null, null, 'alice', 'made-up-scale');
+	}
+
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);

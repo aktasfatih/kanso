@@ -10,6 +10,7 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\EstimateScale;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -84,9 +85,9 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title or color
+	 * @throws InvalidInputException on invalid title, color or estimate scale
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -98,6 +99,12 @@ class BoardService {
 		}
 		if ($archived !== null) {
 			$board->setArchived($archived);
+		}
+		if ($estimateScale !== null) {
+			if (!EstimateScale::isValidScale($estimateScale)) {
+				throw new InvalidInputException('Unknown estimate scale');
+			}
+			$board->setEstimateScale($estimateScale);
 		}
 
 		$now = time();

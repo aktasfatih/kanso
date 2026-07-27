@@ -140,10 +140,10 @@ class BoardController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $color, $archived): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale): JSONResponse {
 			return new JSONResponse(
-				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId())
+				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale)
 			);
 		});
 	}

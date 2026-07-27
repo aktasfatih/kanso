@@ -508,6 +508,37 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'You need edit permission to configure workflows.') }}
 				</p>
 
+				<!-- Estimation scale selector (MANAGE only) -->
+				<div class="workflow__item workflow__item--estimation">
+					<span class="workflow__stack-name">{{ t('kanso', 'Estimation') }}</span>
+					<div class="workflow__field">
+						<label
+							:for="`estimate-scale-${boardId}`"
+							class="workflow__label">
+							{{ t('kanso', 'Scale') }}
+						</label>
+						<select
+							:id="`estimate-scale-${boardId}`"
+							class="workflow__select"
+							:disabled="!canManage || estimateScaleSaving"
+							:value="currentEstimateScale"
+							@change="onEstimateScaleChange($event.target.value)">
+							<option
+								v-for="opt in ESTIMATE_SCALE_OPTIONS"
+								:key="opt.value"
+								:value="opt.value">
+								{{ opt.label }}
+							</option>
+						</select>
+					</div>
+					<span v-if="estimateScaleSaving" class="workflow__saving" aria-live="polite">
+						{{ t('kanso', 'Saving…') }}
+					</span>
+					<span v-if="estimateScaleError" class="label-settings__error">
+						{{ estimateScaleError }}
+					</span>
+				</div>
+
 				<ul v-if="sortedStacks.length > 0" class="workflow__list" role="list">
 					<li
 						v-for="stack in sortedStacks"
@@ -1308,6 +1339,7 @@ import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { cssColor } from '../services/color.js'
+import { getScaleOptions } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
@@ -1469,7 +1501,7 @@ const {
 } = useAcl(() => props.boardId)
 
 // ── Workflow composable ───────────────────────────────────────────────────────
-const { updateStack } = useBoard(computed(() => props.boardId))
+const { data: boardQueryData, updateStack, updateBoard } = useBoard(computed(() => props.boardId))
 
 const ROLE_OPTIONS = [
 	{ value: 0, label: t('kanso', 'None') },
@@ -1479,6 +1511,28 @@ const ROLE_OPTIONS = [
 	{ value: 4, label: t('kanso', 'Review') },
 	{ value: 5, label: t('kanso', 'Done') },
 ]
+
+// ── Estimation scale ──────────────────────────────────────────────────────────
+const ESTIMATE_SCALE_OPTIONS = getScaleOptions()
+
+const currentEstimateScale = computed(
+	() => boardQueryData.value?.board?.estimateScale ?? 'none',
+)
+
+const estimateScaleSaving = ref(false)
+const estimateScaleError = ref('')
+
+async function onEstimateScaleChange(newScale) {
+	estimateScaleError.value = ''
+	estimateScaleSaving.value = true
+	try {
+		await updateBoard.mutateAsync({ estimateScale: newScale })
+	} catch (err) {
+		estimateScaleError.value = err?.response?.data?.error || t('kanso', 'Failed to update estimation scale.')
+	} finally {
+		estimateScaleSaving.value = false
+	}
+}
 
 /**
  * Sorted active (non-archived) stacks for the Workflow tab.

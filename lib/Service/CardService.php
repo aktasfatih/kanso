@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\EstimateScale;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -151,6 +152,7 @@ class CardService {
 		?int $priority = null,
 		?string $startDate = null,
 		?string $status = null,
+		?string $estimate = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -158,6 +160,17 @@ class CardService {
 
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
+		}
+		if ($estimate !== null) {
+			// '' clears the estimate; any other value must belong to the board's
+			// scale (which rejects everything when the scale is 'none').
+			if ($estimate === '') {
+				$card->setEstimate(null);
+			} elseif (EstimateScale::allows($board->getEstimateScale(), $estimate)) {
+				$card->setEstimate($estimate);
+			} else {
+				throw new InvalidInputException('Estimate is not valid for this board\'s scale');
+			}
 		}
 		if ($priority !== null) {
 			if ($priority < Card::PRIORITY_NONE || $priority > Card::PRIORITY_URGENT) {
