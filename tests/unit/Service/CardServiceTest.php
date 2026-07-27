@@ -15,6 +15,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\AutomationService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
@@ -36,6 +37,7 @@ class CardServiceTest extends TestCase {
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private IDBConnection&MockObject $db;
 	private SubscriptionService&MockObject $subscriptionService;
+	private AutomationService&MockObject $automationService;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -48,6 +50,7 @@ class CardServiceTest extends TestCase {
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
+		$this->automationService = $this->createMock(AutomationService::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -57,7 +60,8 @@ class CardServiceTest extends TestCase {
 			new SortKeyService(),
 			$this->cardReviewMapper,
 			$this->db,
-			$this->subscriptionService
+			$this->subscriptionService,
+			$this->automationService
 		);
 	}
 

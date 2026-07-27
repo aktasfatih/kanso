@@ -1114,6 +1114,169 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="createRecurRuleError" class="label-settings__error">{{ createRecurRuleError }}</span>
 					</form>
 				</template>
+
+				<!-- Card rules section (trigger → action) -->
+				<h3 class="automation__section-heading automation__section-heading--spaced">
+					{{ t('kanso', 'Card rules') }}
+				</h3>
+				<p class="automation__section-hint">
+					{{ t('kanso', 'Run an action when a card enters a stack with a given role.') }}
+				</p>
+
+				<p v-if="autoRulesQuery.isLoading.value" class="automation__loading">
+					{{ t('kanso', 'Loading…') }}
+				</p>
+				<p v-else-if="autoRulesQuery.isError.value" class="label-settings__error">
+					{{ t('kanso', 'Failed to load card rules.') }}
+				</p>
+
+				<template v-else>
+					<ul class="automation__rules-list" role="list">
+						<li v-if="!autoRules.length" class="label-settings__empty">
+							{{ t('kanso', 'No card rules yet.') }}
+						</li>
+
+						<li
+							v-for="rule in autoRules"
+							:key="rule.id"
+							class="automation__rule-item">
+
+							<div class="automation__rule-main">
+								<span class="automation__rule-desc">{{ describeAutoRule(rule) }}</span>
+
+								<!-- Enable/disable toggle -->
+								<label
+									v-if="canManage"
+									class="automation__toggle-label"
+									:title="rule.enabled ? t('kanso', 'Disable rule') : t('kanso', 'Enable rule')">
+									<input
+										type="checkbox"
+										:checked="rule.enabled"
+										:disabled="togglingAutoRuleId === rule.id"
+										class="automation__toggle-input"
+										@change="toggleAutoRuleEnabled(rule, $event.target.checked)" />
+									<span class="automation__toggle-track" aria-hidden="true" />
+									<span class="automation__toggle-sr">
+										{{ rule.enabled ? t('kanso', 'Enabled') : t('kanso', 'Disabled') }}
+									</span>
+								</label>
+								<span v-else class="automation__rule-status">
+									{{ rule.enabled ? t('kanso', 'Enabled') : t('kanso', 'Disabled') }}
+								</span>
+							</div>
+
+							<div v-if="canManage" class="automation__rule-actions">
+								<button
+									class="label-settings__action-btn label-settings__action-btn--danger"
+									:title="t('kanso', 'Delete rule')"
+									:aria-label="t('kanso', 'Delete rule')"
+									:disabled="confirmDeleteAutoRuleId === rule.id && isDeletingAutoRule"
+									@click="confirmDeleteAutoRule(rule)">
+									<DeleteIcon :size="14" />
+								</button>
+							</div>
+
+							<div v-if="confirmDeleteAutoRuleId === rule.id" class="label-settings__confirm">
+								<span>{{ t('kanso', 'Delete this rule?') }}</span>
+								<button class="label-settings__confirm-yes" :disabled="isDeletingAutoRule" @click="doDeleteAutoRule(rule)">
+									{{ t('kanso', 'Delete') }}
+								</button>
+								<button class="label-settings__confirm-no" @click="confirmDeleteAutoRuleId = null">
+									{{ t('kanso', 'Cancel') }}
+								</button>
+								<span v-if="deleteAutoRuleError" class="label-settings__error">{{ deleteAutoRuleError }}</span>
+							</div>
+
+							<span v-if="toggleAutoRuleErrors[rule.id]" class="label-settings__error">
+								{{ toggleAutoRuleErrors[rule.id] }}
+							</span>
+						</li>
+					</ul>
+
+					<!-- Add card rule form (MANAGE only) -->
+					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateAutoRule">
+						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+
+						<!-- Trigger role -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`auto-role-${boardId}`">
+								{{ t('kanso', 'When a card enters role') }}
+							</label>
+							<select
+								:id="`auto-role-${boardId}`"
+								v-model.number="newAutoRole"
+								class="workflow__select automation__form-select">
+								<option
+									v-for="opt in AUTO_ROLE_OPTIONS"
+									:key="opt.value"
+									:value="opt.value">
+									{{ opt.label }}
+								</option>
+							</select>
+						</div>
+
+						<!-- Action -->
+						<div class="automation__form-row">
+							<label class="automation__form-label" :for="`auto-action-${boardId}`">
+								{{ t('kanso', 'Do') }}
+							</label>
+							<select
+								:id="`auto-action-${boardId}`"
+								v-model="newAutoAction"
+								class="workflow__select automation__form-select">
+								<option value="request_review">{{ t('kanso', 'Request a review') }}</option>
+								<option value="add_label">{{ t('kanso', 'Add a label') }}</option>
+							</select>
+						</div>
+
+						<!-- Reviewer (request_review) -->
+						<div v-if="newAutoAction === 'request_review'" class="automation__form-row">
+							<label class="automation__form-label" :for="`auto-reviewer-${boardId}`">
+								{{ t('kanso', 'Reviewer') }}
+							</label>
+							<select
+								:id="`auto-reviewer-${boardId}`"
+								v-model="newAutoReviewer"
+								class="workflow__select automation__form-select">
+								<option :value="''" disabled>{{ t('kanso', 'Select a person…') }}</option>
+								<option
+									v-for="p in reviewerOptions"
+									:key="p.uid"
+									:value="p.uid">
+									{{ p.name }}
+								</option>
+							</select>
+						</div>
+
+						<!-- Label (add_label) -->
+						<div v-if="newAutoAction === 'add_label'" class="automation__form-row">
+							<label class="automation__form-label" :for="`auto-label-${boardId}`">
+								{{ t('kanso', 'Label') }}
+							</label>
+							<select
+								:id="`auto-label-${boardId}`"
+								v-model.number="newAutoLabel"
+								class="workflow__select automation__form-select">
+								<option :value="null" disabled>{{ t('kanso', 'Select a label…') }}</option>
+								<option
+									v-for="label in labels"
+									:key="label.id"
+									:value="label.id">
+									{{ label.title }}
+								</option>
+							</select>
+						</div>
+
+						<button
+							class="label-settings__create-btn automation__create-btn"
+							type="submit"
+							:disabled="isCreatingAutoRule || !canSubmitAutoRule">
+							{{ isCreatingAutoRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+						</button>
+
+						<span v-if="createAutoRuleError" class="label-settings__error">{{ createAutoRuleError }}</span>
+					</form>
+				</template>
 			</NcAppSidebarTab>
 
 		</NcAppSidebar>
@@ -1143,6 +1306,7 @@ import { useAcl } from '../composables/useAcl.js'
 import { useBoard } from '../composables/useBoard.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
+import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { cssColor } from '../services/color.js'
 import {
 	fetchWebhookConfig,
@@ -2140,6 +2304,137 @@ function toggleWeekday(day) {
 		newRecurWeekdays.value = newRecurWeekdays.value.filter((d) => d !== day)
 	}
 }
+
+// ── Automation tab: card rules (trigger → action) ────────────────────────────
+
+const {
+	data: autoRulesData,
+	isLoading: autoRulesLoading,
+	isError: autoRulesError,
+	createRule: createAutoRule,
+	setEnabled: setAutoRuleEnabled,
+	deleteRule: deleteAutoRule,
+} = useAutomationRules(computed(() => props.boardId))
+
+const autoRulesQuery = { isLoading: autoRulesLoading, isError: autoRulesError }
+const autoRules = computed(() => autoRulesData.value ?? [])
+
+// Trigger role choices — exclude "None" (a roleless stack never fires a rule).
+const AUTO_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 0)
+
+/** Reviewer candidates: board participants (user ACL entries) plus the current user. */
+const reviewerOptions = computed(() => {
+	const seen = new Map()
+	for (const entry of props.acl) {
+		if (entry.participantType === 'user' && !seen.has(entry.participant)) {
+			seen.set(entry.participant, resolveDisplayName(entry))
+		}
+	}
+	if (props.currentUserId && !seen.has(props.currentUserId)) {
+		seen.set(props.currentUserId, props.currentUserId)
+	}
+	return [...seen.entries()].map(([uid, name]) => ({ uid, name }))
+})
+
+function roleLabelFor(role) {
+	return ROLE_OPTIONS.find((o) => o.value === role)?.label ?? String(role)
+}
+
+/** Human-readable "When a card enters <role> → <action>" summary. */
+function describeAutoRule(rule) {
+	const when = t('kanso', 'When a card enters {role}', { role: roleLabelFor(rule.params?.role) })
+	if (rule.action === 'request_review') {
+		const name = reviewerOptions.value.find((p) => p.uid === rule.params?.reviewer)?.name ?? rule.params?.reviewer
+		return t('kanso', '{when} → request a review from {name}', { when, name })
+	}
+	if (rule.action === 'add_label') {
+		const label = props.labels.find((l) => l.id === rule.params?.label)?.title ?? String(rule.params?.label)
+		return t('kanso', '{when} → add label "{label}"', { when, label })
+	}
+	return when
+}
+
+// Create form state
+const newAutoRole = ref(AUTO_ROLE_OPTIONS[0].value)
+const newAutoAction = ref('request_review')
+const newAutoReviewer = ref('')
+const newAutoLabel = ref(null)
+const isCreatingAutoRule = ref(false)
+const createAutoRuleError = ref('')
+
+const canSubmitAutoRule = computed(() => {
+	if (newAutoAction.value === 'request_review') return !!newAutoReviewer.value
+	if (newAutoAction.value === 'add_label') return newAutoLabel.value !== null
+	return false
+})
+
+async function submitCreateAutoRule() {
+	if (!canSubmitAutoRule.value) return
+	isCreatingAutoRule.value = true
+	createAutoRuleError.value = ''
+	try {
+		const params = { role: newAutoRole.value }
+		if (newAutoAction.value === 'request_review') {
+			params.reviewer = newAutoReviewer.value
+		} else {
+			params.label = newAutoLabel.value
+		}
+		await createAutoRule.mutateAsync({
+			trigger: 'card_entered_role',
+			action: newAutoAction.value,
+			params,
+		})
+		// Reset the value-carrying fields; keep role/action selections.
+		newAutoReviewer.value = ''
+		newAutoLabel.value = null
+	} catch (err) {
+		createAutoRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+	} finally {
+		isCreatingAutoRule.value = false
+	}
+}
+
+// Enable/disable toggle
+const togglingAutoRuleId = ref(null)
+const toggleAutoRuleErrors = ref({})
+
+async function toggleAutoRuleEnabled(rule, enabled) {
+	togglingAutoRuleId.value = rule.id
+	toggleAutoRuleErrors.value = { ...toggleAutoRuleErrors.value, [rule.id]: '' }
+	try {
+		await setAutoRuleEnabled.mutateAsync({ id: rule.id, enabled })
+	} catch (err) {
+		toggleAutoRuleErrors.value = {
+			...toggleAutoRuleErrors.value,
+			[rule.id]: err?.response?.data?.error || t('kanso', 'Failed to update rule.'),
+		}
+	} finally {
+		togglingAutoRuleId.value = null
+	}
+}
+
+// Delete
+const confirmDeleteAutoRuleId = ref(null)
+const isDeletingAutoRule = ref(false)
+const deleteAutoRuleError = ref('')
+
+function confirmDeleteAutoRule(rule) {
+	confirmDeleteAutoRuleId.value = rule.id
+	deleteAutoRuleError.value = ''
+}
+
+async function doDeleteAutoRule(rule) {
+	isDeletingAutoRule.value = true
+	deleteAutoRuleError.value = ''
+	try {
+		await deleteAutoRule.mutateAsync(rule.id)
+		confirmDeleteAutoRuleId.value = null
+	} catch (err) {
+		deleteAutoRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
+	} finally {
+		isDeletingAutoRule.value = false
+	}
+}
 </script>
 
 <style scoped>
@@ -2984,6 +3279,12 @@ function toggleWeekday(day) {
 	margin-top: 28px;
 	padding-top: 20px;
 	border-top: 1px solid var(--color-border);
+}
+
+.automation__section-hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85rem;
+	margin: 0 0 12px;
 }
 
 .automation__rule-mode {

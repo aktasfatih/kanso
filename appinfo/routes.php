@@ -102,5 +102,10 @@ return [
 		['name' => 'recurRule#update', 'url' => '/api/recur-rules/{id}', 'verb' => 'PATCH'],
 		['name' => 'recurRule#destroy', 'url' => '/api/recur-rules/{id}', 'verb' => 'DELETE'],
 		['name' => 'recurRule#createNow', 'url' => '/api/recur-rules/{id}/create-now', 'verb' => 'POST'],
+
+		['name' => 'automation#index', 'url' => '/api/boards/{id}/automation-rules', 'verb' => 'GET'],
+		['name' => 'automation#create', 'url' => '/api/boards/{id}/automation-rules', 'verb' => 'POST'],
+		['name' => 'automation#setEnabled', 'url' => '/api/automation-rules/{ruleId}', 'verb' => 'PATCH'],
+		['name' => 'automation#destroy', 'url' => '/api/automation-rules/{ruleId}', 'verb' => 'DELETE'],
 	],
 ];

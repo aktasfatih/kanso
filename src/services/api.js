@@ -122,6 +122,19 @@ export const deleteRecurRule = (id) =>
 export const createNowRecurRule = (id) =>
 	axios.post(url(`/api/recur-rules/${id}/create-now`)).then((r) => r.data)
 
+// Automation rules
+export const fetchAutomationRules = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/automation-rules`)).then((r) => r.data)
+
+export const createAutomationRule = (boardId, data) =>
+	axios.post(url(`/api/boards/${boardId}/automation-rules`), data).then((r) => r.data)
+
+export const setAutomationRuleEnabled = (id, enabled) =>
+	axios.patch(url(`/api/automation-rules/${id}`), { enabled }).then((r) => r.data)
+
+export const deleteAutomationRule = (id) =>
+	axios.delete(url(`/api/automation-rules/${id}`)).then((r) => r.data)
+
 // Parent / child hierarchy
 export const setCardParent = (cardId, parentCardId) =>
 	axios.put(url(`/api/cards/${cardId}/parent`), { parentCardId: parentCardId ?? null }).then((r) => r.data)

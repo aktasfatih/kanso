@@ -37,6 +37,7 @@ class CardService {
 		private CardReviewMapper $cardReviewMapper,
 		private IDBConnection $db,
 		private SubscriptionService $subscriptionService,
+		private AutomationService $automationService,
 	) {
 	}
 
@@ -298,6 +299,11 @@ class CardService {
 				// Moving the last open child into a done-role stack (which stamps
 				// it done) auto-completes the parent.
 				$this->maybeCompleteParent($moved, $uid);
+				// A move into a DIFFERENT stack fires the board's card_entered_role
+				// automation rules (best-effort; runs after the move is committed).
+				if ($targetStackId !== $sourceStack->getId()) {
+					$this->automationService->runCardEnteredRole($moved, $targetStack->getRole(), $uid);
+				}
 				return $moved;
 			} catch (\OCP\DB\Exception $e) {
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
