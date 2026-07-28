@@ -132,6 +132,9 @@ export function useMentionAutocomplete({ getText, setText, textareaRef, getParti
 
 		if (event.key === 'Escape') {
 			event.preventDefault()
+			// Stop the Escape from bubbling to the modal's own @keydown.escape
+			// (which would close the whole card and discard the in-progress edit).
+			event.stopPropagation()
 			close()
 			return
 		}

@@ -74,6 +74,36 @@ test.describe('Description formatting toolbar', () => {
 		await expect(page.locator('.card-modal__desc-rendered strong')).toHaveText('hello world', { timeout: 8000 })
 	})
 
+	test('Escape closes only the @mention dropdown, not the whole modal (keeps the edit)', async ({ page }) => {
+		// Dedicated card so this test is independent of the others' saved state.
+		const stack = await api('POST', '/stacks', { boardId: state.boardId, title: 'Esc' })
+		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Escape card' })
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+
+		await ncLogin(page)
+		await page.goto(cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		await page.locator('.card-modal__desc-placeholder').click()
+		const textarea = page.locator('.card-modal__desc-textarea')
+		await textarea.click()
+		await textarea.fill('draft text ')
+		await textarea.press('@') // opens the mention dropdown (admin is a participant)
+		await expect(page.locator('.card-modal__mention-dropdown')).toBeVisible({ timeout: 4000 })
+
+		// Escape must dismiss ONLY the dropdown — the modal stays open, draft intact.
+		await textarea.press('Escape')
+		await expect(page.locator('.card-modal__mention-dropdown')).toBeHidden()
+		await expect(page.locator('.card-modal')).toBeVisible()
+		await expect(textarea).toHaveValue('draft text @')
+
+		// A second Escape (dropdown now closed) cancels the edit without closing the modal.
+		await textarea.press('Escape')
+		await expect(page.locator('.card-modal__desc-textarea')).toBeHidden()
+		await expect(page.locator('.card-modal')).toBeVisible()
+	})
+
 	test('list button prefixes each selected line', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
