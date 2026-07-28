@@ -47,12 +47,12 @@ test.describe('Auto-complete parent when all children are done', () => {
 	test('parent stays open until the last child is done, then auto-completes', async () => {
 		const { parent, c1, c2 } = await setup()
 
-		// Done one child — parent must stay open.
+		// Done one child - parent must stay open.
 		await api('PATCH', `/cards/${c1.id}`, { done: true })
 		let p = await api('GET', `/cards/${parent.id}`)
 		expect(Number(p.doneAt)).toBe(0)
 
-		// Done the last child — parent auto-completes.
+		// Done the last child - parent auto-completes.
 		await api('PATCH', `/cards/${c2.id}`, { done: true })
 		p = await api('GET', `/cards/${parent.id}`)
 		expect(Number(p.doneAt)).toBeGreaterThan(0)

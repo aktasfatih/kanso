@@ -208,7 +208,7 @@ test.describe('Parent / Child cards', () => {
 		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
 	})
 
-	test('open a child card from parent modal — child shows its Parent row', async ({ page }) => {
+	test('open a child card from parent modal - child shows its Parent row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
@@ -242,7 +242,7 @@ test.describe('Parent / Child cards', () => {
 		await expect(page.getByPlaceholder('Add a sub-card…')).toHaveCount(0)
 	})
 
-	test('detach a child — parent progress drops to 0/1', async ({ page }) => {
+	test('detach a child - parent progress drops to 0/1', async ({ page }) => {
 		await ncLogin(page)
 
 		// Fetch fresh parent detail to find the undone child

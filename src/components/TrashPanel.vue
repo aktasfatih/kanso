@@ -132,7 +132,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-// Permission gates — board owner always has MANAGE (8); editors have EDIT (2).
+// Permission gates - board owner always has MANAGE (8); editors have EDIT (2).
 const canEdit = computed(() => (props.permissions & 2) !== 0 || (props.permissions & 8) !== 0)
 const canManage = computed(() => (props.permissions & 8) !== 0)
 

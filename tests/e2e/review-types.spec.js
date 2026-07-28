@@ -84,7 +84,7 @@ test.describe('Review types', () => {
 		const rt = await apiPost('/review-types', {
 			boardId: board.id,
 			title: 'QA',
-			color: '3498db', // bare hex — no leading #
+			color: '3498db', // bare hex - no leading #
 		})
 		state.reviewTypeId = rt.id
 
@@ -159,7 +159,7 @@ test.describe('Review types', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
-		// Open the request-review popover — the "Request" pill lives in the
+		// Open the request-review popover - the "Request" pill lives in the
 		// reviews cluster (.card-modal__attr-right) at the end of the attribute bar.
 		await page.locator('.card-modal__attr-right button.card-modal__pill', { hasText: 'Request' }).click()
 

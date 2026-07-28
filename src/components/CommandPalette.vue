@@ -228,7 +228,7 @@ const sections = computed(() => {
 		})
 	}
 
-	// Card/comment section (only when query ≥ 2 chars — mirrors SearchBox)
+	// Card/comment section (only when query ≥ 2 chars - mirrors SearchBox)
 	if (debouncedTerm.value.length >= 2 && cardResults.value.length > 0) {
 		result.push({
 			label: t('kanso', 'Cards'),
@@ -306,7 +306,7 @@ function selectItem(item) {
 	if (item.type === 'board') {
 		router.push({ name: 'board', params: { id: String(item.boardId) } })
 	} else {
-		// card or comment — mirror SearchBox.selectResult exactly
+		// card or comment - mirror SearchBox.selectResult exactly
 		router.push({
 			name: 'card-modal',
 			params: { id: String(item.boardId), cardId: String(item.cardId) },
@@ -317,7 +317,7 @@ function selectItem(item) {
 </script>
 
 <style scoped>
-/* Palette content — sits inside NcModal's content area */
+/* Palette content - sits inside NcModal's content area */
 .command-palette {
 	display: flex;
 	flex-direction: column;

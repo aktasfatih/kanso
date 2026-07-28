@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</h1>
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
-			<!-- In-board search — scoped to the current board; only rendered once
+			<!-- In-board search - scoped to the current board; only rendered once
 			     the board payload is available so boardId is valid. -->
 			<SearchBox
 				v-if="boardData"
@@ -29,7 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="board-view__search"
 				:board-id="props.id" />
 
-			<!-- View switch — Board (columns) vs List (table). Persisted per board. -->
+			<!-- View switch - Board (columns) vs List (table). Persisted per board. -->
 			<NcActions
 				v-if="boardData"
 				class="board-view__view-menu"
@@ -59,7 +59,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
-			<!-- Display sort — a view-only reorder within each stack (Board + List). -->
+			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
 			<NcActions
 				v-if="boardData"
 				class="board-view__sort-menu"
@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
-			<!-- Filter dropdown — compact NcActions menu replacing the old chip row.
+			<!-- Filter dropdown - compact NcActions menu replacing the old chip row.
 			     Only rendered when the board has at least one label OR always when
 			     priority filtering is desired (priority filter is always available).
 			     Filter dimensions: labels (OR within), priority levels (OR within).
@@ -135,7 +135,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionButton>
 			</NcActions>
 
-			<!-- Archived cards badge button — only shown when ≥1 archived card -->
+			<!-- Archived cards badge button - only shown when ≥1 archived card -->
 			<NcButton
 				v-if="boardData && archivedCards.length > 0"
 				class="board-view__archived-btn"
@@ -148,14 +148,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ archivedCards.length }}
 			</NcButton>
 
-			<!-- Watch / unwatch this board — subscribes to a "new card created"
+			<!-- Watch / unwatch this board - subscribes to a "new card created"
 			     notification. A filled bell means you're watching. -->
 			<NcButton
 				v-if="boardData"
 				class="board-view__watch-btn"
 				:type="isBoardSubscribed ? 'secondary' : 'tertiary'"
 				:title="isBoardSubscribed
-					? t('kanso', 'Watching this board — click to stop')
+					? t('kanso', 'Watching this board (click to stop)')
 					: t('kanso', 'Watch this board for new cards')"
 				:aria-label="isBoardSubscribed ? t('kanso', 'Unwatch board') : t('kanso', 'Watch board')"
 				:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
@@ -166,7 +166,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
-			<!-- Trash button — always visible when board is loaded; panel fetches on open -->
+			<!-- Trash button - always visible when board is loaded; panel fetches on open -->
 			<NcButton
 				v-if="boardData"
 				class="board-view__trash-btn"
@@ -178,7 +178,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
-			<!-- Settings (gear) button — toggles the right-docked settings panel -->
+			<!-- Settings (gear) button - toggles the right-docked settings panel -->
 			<NcButton
 				v-if="boardData"
 				class="board-view__settings-btn"
@@ -278,7 +278,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 		</div>
 
-		<!-- List view — a virtualized, stack-grouped table over the same filtered
+		<!-- List view - a virtualized, stack-grouped table over the same filtered
 		     cards. Read-oriented: rows open the card modal. -->
 		<BoardListView
 			v-if="viewMode === 'list' && boardData"
@@ -287,7 +287,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:labels-by-id="labelsById"
 			:board-id="props.id" />
 
-		<!-- Timeline (Gantt) view — cards on a date axis by start→due. -->
+		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->
 		<BoardTimelineView
 			v-if="viewMode === 'timeline' && boardData"
 			:cards="allVisibleCards"
@@ -415,7 +415,7 @@ const viewMode = ref('board')
 try {
 	const saved = localStorage.getItem(`kanso.viewMode.${props.id}`)
 	if (saved && VIEW_MODES.includes(saved)) viewMode.value = saved
-} catch (e) { /* localStorage unavailable — default to board */ }
+} catch (e) { /* localStorage unavailable - default to board */ }
 function setViewMode(mode) {
 	viewMode.value = mode
 	try {
@@ -428,7 +428,7 @@ const viewModeLabel = computed(() => ({
 	timeline: t('kanso', 'Timeline'),
 }[viewMode.value] ?? t('kanso', 'Board')))
 
-// Display sort — a VIEW-ONLY reorder of how cards render within each stack. Never
+// Display sort - a VIEW-ONLY reorder of how cards render within each stack. Never
 // rewrites sort keys; 'manual' is the persisted fractional order. Persisted per
 // board per user. While a non-manual sort is active, card drag-reorder is
 // suppressed (see the card onDrop guard) so manual order is preserved.
@@ -482,7 +482,7 @@ function toggleBoardWatch() {
 }
 const { participants } = useAssignees(boardId)
 
-// Resolve current Nextcloud user id — OC.getCurrentUser() is always available in NC apps
+// Resolve current Nextcloud user id - OC.getCurrentUser() is always available in NC apps
 const currentUserId = (() => {
 	try {
 		return window.OC?.getCurrentUser?.()?.uid ?? ''
@@ -524,7 +524,7 @@ function dismissActionError() {
 /** Currently keyboard-focused card id (number | null). */
 const focusedCardId = ref(null)
 
-/** Map<stackId, StackColumn component instance> — populated by function refs. */
+/** Map<stackId, StackColumn component instance> - populated by function refs. */
 const columnRefs = new Map()
 
 function registerColumnRef(stackId, el) {
@@ -540,7 +540,7 @@ function registerColumnRef(stackId, el) {
 /** All board-level labels from the board payload. */
 const boardLabels = computed(() => boardData.value?.labels ?? [])
 
-/** Map<id, label> for O(1) lookup by id — passed to StackColumn → CardTile. */
+/** Map<id, label> for O(1) lookup by id - passed to StackColumn → CardTile. */
 const labelsById = computed(() => {
 	const map = new Map()
 	for (const label of boardLabels.value) {
@@ -551,7 +551,7 @@ const labelsById = computed(() => {
 
 // ── Label filter state ────────────────────────────────────────────────────────
 // ANY-of semantics: a card passes if it carries at least one of the active
-// filter labels. This matches Deck's behaviour — "show me cards with any of
+// filter labels. This matches Deck's behaviour - "show me cards with any of
 // these selected tags". If no filter is active, all cards are visible.
 // Uses a reactive Set so individual .has() calls remain reactive.
 const activeFilterIds = reactive(new Set())
@@ -561,7 +561,7 @@ const activeFilterIds = reactive(new Set())
 // selected set. AND is applied across label and priority filters.
 const activePriorityLevels = reactive(new Set())
 
-// Total active filter count — used for the filter button badge.
+// Total active filter count - used for the filter button badge.
 const totalActiveFilters = computed(
 	() => activeFilterIds.size + activePriorityLevels.size,
 )
@@ -577,7 +577,7 @@ const sortedStacks = computed(() => {
 
 /**
  * Archived (but not deleted) cards sourced from the board payload.
- * The board GET already returns archived cards in the cards array — we just
+ * The board GET already returns archived cards in the cards array - we just
  * need to surface them here. No additional API call is required.
  */
 const archivedCards = computed(() =>
@@ -610,7 +610,7 @@ const cardsByStack = computed(() => {
 	return map
 })
 
-// All filtered, non-archived cards flattened — the Timeline view's input.
+// All filtered, non-archived cards flattened - the Timeline view's input.
 const allVisibleCards = computed(() => {
 	const out = []
 	for (const cards of cardsByStack.value.values()) out.push(...cards)
@@ -707,7 +707,7 @@ function handleKeydown(e) {
 		showShortcuts.value = !showShortcuts.value
 		return
 	}
-	// '/' focuses the search box — handled before the overlay-open guard so it
+	// '/' focuses the search box - handled before the overlay-open guard so it
 	// always works as long as no input-like element is already focused.
 	if (e.key === '/') {
 		e.preventDefault()
@@ -840,7 +840,7 @@ onMounted(() => {
 		monitorForElements({
 			canMonitor: ({ source }) => source.data.type === 'card',
 			onDrop({ source, location }) {
-				// A non-manual display sort is view-only — dropping must not rewrite
+				// A non-manual display sort is view-only - dropping must not rewrite
 				// the fractional order, so ignore card drops until Manual is active.
 				if (sortMode.value !== 'manual') return
 				const { cardId, stackId: sourceStackId } = source.data
@@ -864,7 +864,7 @@ onMounted(() => {
 					targetStackId = targetStackId2
 
 					// Resolve neighbors as if the dragged card were already
-					// removed — otherwise dropping on the top edge of the card
+					// removed - otherwise dropping on the top edge of the card
 					// below yields the dragged card as its own anchor (400).
 					const stackCards = (cardsByStack.value.get(targetStackId2) ?? [])
 						.filter((c) => c.id !== cardId)
@@ -927,7 +927,7 @@ onMounted(() => {
 			},
 		}),
 		// Stack reordering: header-dragged columns dropped on another column's
-		// left/right edge. Single-flight plain optimistic patch (no queue) —
+		// left/right edge. Single-flight plain optimistic patch (no queue) -
 		// stack moves are rare compared to card moves.
 		monitorForElements({
 			canMonitor: ({ source }) => source.data.type === 'stack',
@@ -940,7 +940,7 @@ onMounted(() => {
 				const edge = extractClosestEdge(stackTarget.data)
 				const targetStackId = stackTarget.data.stackId
 
-				// Resolve neighbours as if the dragged stack were already removed —
+				// Resolve neighbours as if the dragged stack were already removed -
 				// otherwise dropping on the near edge of an adjacent column yields
 				// the dragged stack as its own anchor (400).
 				const stacks = sortedStacks.value.filter((s) => s.id !== draggedStackId)
@@ -1149,13 +1149,13 @@ async function handleSetWip(stackId, wipLimit) {
 	border-radius: 4px;
 }
 
-/* Search box — pushed to the right edge of the title area via margin-left: auto */
+/* Search box - pushed to the right edge of the title area via margin-left: auto */
 .board-view__search {
 	margin-left: auto;
 	flex-shrink: 0;
 }
 
-/* Filter dropdown button — sits after the search box */
+/* Filter dropdown button - sits after the search box */
 .board-view__filter-menu {
 	flex-shrink: 0;
 }
@@ -1181,7 +1181,7 @@ async function handleSetWip(stackId, wipLimit) {
 	flex-shrink: 0;
 }
 
-/* Priority filter items — color-coded dot via ::before, mirroring label dot pattern */
+/* Priority filter items - color-coded dot via ::before, mirroring label dot pattern */
 .board-view__filter-priority-item--1:deep(.action-checkbox__text)::before {
 	content: '';
 	display: inline-block;

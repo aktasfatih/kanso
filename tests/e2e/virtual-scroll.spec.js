@@ -54,7 +54,7 @@ async function ncLogin(page) {
 
 /**
  * Drag from source element toward a target position using incremental mouse
- * steps — same pattern as dnd.spec.js dragWithMouse.
+ * steps - same pattern as dnd.spec.js dragWithMouse.
  */
 async function dragWithMouse(page, sourceLocator, targetLocator, targetPosition = 'top') {
 	const srcBox = await sourceLocator.boundingBox()
@@ -205,7 +205,7 @@ test.describe('Virtualized card list', () => {
 		console.log(`DOM tiles after scroll: ${afterScrollCount}`)
 
 		// The last visible tile after scrolling should be a card that was NOT
-		// in the initial render window — confirming virtualization scrolled correctly.
+		// in the initial render window - confirming virtualization scrolled correctly.
 		const lastVisibleCard = column.locator('.card-tile-wrap .card-tile').last()
 		await expect(lastVisibleCard).toBeVisible({ timeout: 5000 })
 		const lastCardTitle = await lastVisibleCard.innerText()

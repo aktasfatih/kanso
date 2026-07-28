@@ -108,7 +108,7 @@ import CommentIcon from 'vue-material-design-icons/CommentOutline.vue'
 import { useSearch } from '../composables/useSearch.js'
 
 const props = defineProps({
-	/** Numeric or string board id — scopes the search. */
+	/** Numeric or string board id - scopes the search. */
 	boardId: {
 		type: [String, Number],
 		required: true,
@@ -157,7 +157,7 @@ function truncate(str, max) {
 /**
  * Wrap occurrences of debouncedTerm in the title with <mark> for visual
  * highlighting. DOMPurify is already a dep but the input here is the server-
- * returned card title — we only inject the search term substring, never raw
+ * returned card title - we only inject the search term substring, never raw
  * HTML, so we escape the title manually before wrapping.
  */
 function highlightTitle(rawTitle) {

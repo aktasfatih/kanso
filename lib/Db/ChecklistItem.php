@@ -11,7 +11,7 @@ use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
 /**
- * One checklist item — a flat todo line on a card (table
+ * One checklist item - a flat todo line on a card (table
  * `kanso_checklist_items`). Items are ordered inside their card by the
  * fractional `sortKey` string (see \OCA\Kanso\Service\SortKeyService); a
  * reorder is a single-row UPDATE.

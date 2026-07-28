@@ -71,7 +71,7 @@ class SubscriptionMapper extends QBMapper {
 
 	/**
 	 * Card ids the user actively watches at the card level (thread 0, subscribed
-	 * state) — the "followed cards" set for the Inbox feed.
+	 * state) - the "followed cards" set for the Inbox feed.
 	 *
 	 * @return int[]
 	 * @throws Exception
@@ -121,7 +121,7 @@ class SubscriptionMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every subscription of a card — cascade for a card purge.
+	 * Removes every subscription of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

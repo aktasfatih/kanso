@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/colors.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/typography.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/radius.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/elevation.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/tokens/base.css">
+<link rel="stylesheet" href="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/styles.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<script src="_ds/kanso-design-system-2c11f209-67ce-45c2-889a-92484d5f2c6b/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#e9eef2;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Oxygen-Sans,Cantarell,Ubuntu,"Helvetica Neue",Arial,sans-serif;font-size:15px;line-height:1.5;color:#222}
+a{color:#0082c9;text-decoration:none}
+a:hover{color:#0082c9;text-decoration:underline}
+button,input,textarea{font-family:inherit}
+@keyframes kshim{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.kskel{background:linear-gradient(90deg,#ededed 25%,#f5f5f5 50%,#ededed 75%);background-size:400px 100%;animation:kshim 1.4s infinite linear;border-radius:4px}
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:28px;padding:48px 56px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h1 style="margin:0;font-size:1.5rem;font-weight:700;color:var(--color-main-text)">Card view — redesign</h1>
+    <span style="font-size:.875rem;color:var(--color-text-maxcontrast);max-width:900px;text-wrap:pretty">Wider modal · every attribute on one scannable bar instead of a stacked sidebar · checklist promoted next to the description · discussion becomes its own threaded pane with a pinned composer. States: <a href="#1a">1a</a> rich · <a href="#1b">1b</a> sparse · <a href="#1c">1c</a> review requested · <a href="#1d">1d</a> editing · <a href="#1e">1e</a> mobile · <a href="#1f">1f</a> loading.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+    <div id="1a" data-screen-label="1a rich" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.04em">1a</span>
+        <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">Rich card — everything filled</span>
+      </div>
+
+      <div style="width:1180px;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:18px 20px 14px 24px;border-bottom:1px solid var(--color-border)">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--color-text-maxcontrast)">
+              <span>Kanso v0.1</span>
+              <span class="mdi mdi-chevron-right" style="font-size:14px"></span>
+              <span style="display:inline-flex;align-items:center;height:18px;padding:0 8px;border-radius:10px;background:var(--color-background-hover);border:1px solid var(--color-border);font-size:.68rem;font-weight:700;letter-spacing:.04em;color:var(--color-text-maxcontrast)">IN PROGRESS</span>
+              <span style="color:var(--color-border-dark)">·</span>
+              <span>#128</span>
+            </div>
+            <h2 style="margin:0 0 0 -4px;font-size:1.5rem;line-height:1.25;font-weight:700;color:var(--color-main-text);text-wrap:pretty;cursor:text;border-radius:3px;padding:1px 4px" style-hover="background:var(--color-background-hover)">Virtualize the checklist list in CardModal</h2>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <button style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid var(--color-border);border-radius:100px;background:#fff;color:var(--color-main-text);font-size:.875rem;font-weight:600;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)">
+              <span class="mdi mdi-check-circle-outline" style="font-size:18px"></span>Mark done
+            </button>
+            <button title="Watching · 3 watchers" style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--color-primary-element);border-radius:100px;background:var(--color-primary-light);color:var(--color-primary-element);font-size:.875rem;cursor:pointer">
+              <span class="mdi mdi-eye-outline" style="font-size:18px"></span>3
+            </button>
+            <button style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer" style-hover="background:var(--color-background-hover)"><span class="mdi mdi-dots-horizontal" style="font-size:20px"></span></button>
+            <button style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer" style-hover="background:var(--color-background-hover)"><span class="mdi mdi-close" style="font-size:20px"></span></button>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 24px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+          <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid #e07b00;border-radius:10px;background:#fff;color:#e07b00;font-size:.8125rem;font-weight:600;cursor:pointer"><span class="mdi mdi-flag" style="font-size:14px"></span>High</button>
+          <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid var(--color-border);border-radius:10px;background:#fff;color:var(--color-main-text);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element)"><span class="mdi mdi-calendar" style="font-size:14px;color:var(--color-text-maxcontrast)"></span>Tue 28 Jul, 17:00</button>
+          <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px 0 4px;border:1px solid var(--color-border);border-radius:10px;background:#fff;color:var(--color-main-text);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element)"><span style="width:24px;height:24px;border-radius:50%;background:#8e44ad;color:#fff;font-size:.65rem;display:inline-flex;align-items:center;justify-content:center">FA</span>Fatih Aktas</button>
+          <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-account-plus" style="font-size:14px"></span>Assign</button>
+          <span style="width:1px;height:20px;background:var(--color-border-dark);margin:0 4px"></span>
+          <span style="display:inline-flex;align-items:center;height:20px;padding:0 10px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:600">performance</span>
+          <span style="display:inline-flex;align-items:center;height:20px;padding:0 10px;border-radius:10px;background:var(--color-error);color:#fff;font-size:.7rem;font-weight:600">bug</span>
+          <button style="display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.7rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-plus" style="font-size:12px"></span>Label</button>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="font-size:.75rem;color:var(--color-text-maxcontrast)">Review</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 3px;border-radius:10px;border:1px solid var(--color-warning);background:rgba(236,167,0,.08);font-size:.75rem;color:var(--color-main-text)">
+              <span style="width:22px;height:22px;border-radius:50%;background:#16a085;color:#fff;font-size:.6rem;display:inline-flex;align-items:center;justify-content:center">MK</span>
+              Mira · Code
+              <span style="display:inline-flex;align-items:center;gap:3px;color:var(--color-warning);font-weight:600"><span class="mdi mdi-check-decagram-outline" style="font-size:12px"></span>Pending</span>
+            </span>
+            <button style="display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-plus" style="font-size:12px"></span>Request</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 420px;align-items:stretch;height:620px">
+
+          <div style="display:flex;flex-direction:column;gap:28px;padding:24px 28px 32px;min-width:0;overflow:auto;min-height:0">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">Description</span>
+                <button style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border:none;border-radius:100px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer" style-hover="background:var(--color-background-hover);color:var(--color-main-text)"><span class="mdi mdi-pencil" style="font-size:14px"></span>Edit</button>
+              </div>
+              <div style="font-size:.9375rem;line-height:1.65;color:var(--color-main-text);text-wrap:pretty;cursor:text;border-radius:3px;padding:2px 4px;margin-left:-4px" style-hover="background:var(--color-background-hover)">
+                <p style="margin:0 0 .7em">Long checklists (200+ items) drop frames on open because every item mounts at once. Reuse the TanStack Virtual setup from <code style="background:var(--color-border);border-radius:3px;padding:2px 5px;font-size:.875em">StackColumn</code> and cap the rendered window at ~30 rows.</p>
+                <p style="margin:0">Drag-to-reorder must keep working against the virtualized window — the drop target resolves by <code style="background:var(--color-border);border-radius:3px;padding:2px 5px;font-size:.875em">data-item-id</code>, not by index.</p>
+              </div>
+            </div>
+
+            <div style="border:1px solid var(--color-border);border-radius:10px;overflow:hidden;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+                <span class="mdi mdi-checkbox-marked-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span>
+                <span style="font-size:.8125rem;font-weight:600;color:var(--color-main-text)">Checklist</span>
+                <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">2 / 5</span>
+                <div style="flex:1;height:4px;background:var(--color-border-dark);border-radius:2px;overflow:hidden;max-width:220px;margin-left:8px"><div style="height:100%;width:40%;background:var(--color-primary-element);border-radius:2px"></div></div>
+              </div>
+              <ul style="list-style:none;margin:0;padding:6px">
+                <li style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:3px" style-hover="background:var(--color-background-hover)">
+                  <span class="mdi mdi-drag" style="font-size:16px;color:var(--color-border-dark);cursor:grab"></span>
+                  <input type="checkbox" defaultChecked="checked" style="width:16px;height:16px;accent-color:var(--color-primary-element);cursor:pointer">
+                  <span style="flex:1;font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Measure open cost with 200 items</span>
+                </li>
+                <li style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:3px" style-hover="background:var(--color-background-hover)">
+                  <span class="mdi mdi-drag" style="font-size:16px;color:var(--color-border-dark);cursor:grab"></span>
+                  <input type="checkbox" defaultChecked="checked" style="width:16px;height:16px;accent-color:var(--color-primary-element);cursor:pointer">
+                  <span style="flex:1;font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Pick a window size</span>
+                </li>
+                <li style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:3px;background:var(--color-background-hover)">
+                  <span class="mdi mdi-drag" style="font-size:16px;color:var(--color-text-maxcontrast);cursor:grab"></span>
+                  <input type="checkbox" style="width:16px;height:16px;accent-color:var(--color-primary-element);cursor:pointer">
+                  <span style="flex:1;font-size:.875rem;color:var(--color-main-text)">Wire TanStack Virtual into the list</span>
+                  <button style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:50%;background:transparent;color:var(--color-text-maxcontrast);cursor:pointer" style-hover="background:var(--color-error);color:#fff"><span class="mdi mdi-close" style="font-size:14px"></span></button>
+                </li>
+                <li style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:3px" style-hover="background:var(--color-background-hover)">
+                  <span class="mdi mdi-drag" style="font-size:16px;color:var(--color-border-dark);cursor:grab"></span>
+                  <input type="checkbox" style="width:16px;height:16px;accent-color:var(--color-primary-element);cursor:pointer">
+                  <span style="flex:1;font-size:.875rem;color:var(--color-main-text)">Keep drag-to-reorder working</span>
+                </li>
+                <li style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:3px" style-hover="background:var(--color-background-hover)">
+                  <span class="mdi mdi-drag" style="font-size:16px;color:var(--color-border-dark);cursor:grab"></span>
+                  <input type="checkbox" style="width:16px;height:16px;accent-color:var(--color-primary-element);cursor:pointer">
+                  <span style="flex:1;font-size:.875rem;color:var(--color-main-text)">Playwright smoke test</span>
+                </li>
+                <li style="display:flex;align-items:center;gap:10px;padding:4px 8px 6px">
+                  <span style="width:16px"></span>
+                  <input type="text" placeholder="Add an item…" style="flex:1;height:34px;font-size:.875rem;color:var(--color-main-text);border:1px solid transparent;border-radius:3px;padding:0 8px;background:transparent" style-focus="outline:none;border-color:var(--color-primary-element);background:#fff">
+                </li>
+              </ul>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="mdi mdi-sitemap" style="font-size:16px;color:var(--color-text-maxcontrast)"></span>
+                <span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">Sub-cards</span>
+                <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">1 / 2</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <a href="#1a" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--color-border);border-radius:3px;background:#fff;color:var(--color-main-text);min-width:0" style-hover="border-color:var(--color-primary-element);box-shadow:0 1px 4px rgba(0,0,0,.06);text-decoration:none">
+                  <span style="flex-shrink:0;width:10px;height:10px;border-radius:50%;background:var(--color-success)"></span>
+                  <span style="flex:1;font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Extract useVirtualList composable</span>
+                </a>
+                <a href="#1a" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--color-border);border-radius:3px;background:#fff;color:var(--color-main-text);min-width:0" style-hover="border-color:var(--color-primary-element);box-shadow:0 1px 4px rgba(0,0,0,.06);text-decoration:none">
+                  <span style="flex-shrink:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--color-border-dark)"></span>
+                  <span style="flex:1;font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Benchmark a 500-item checklist</span>
+                </a>
+              </div>
+              <input type="text" placeholder="Add a sub-card…" style="height:34px;font-size:.875rem;color:var(--color-main-text);border:1px dashed var(--color-border-dark);border-radius:3px;padding:0 12px;background:transparent" style-focus="outline:none;border-color:var(--color-primary-element);border-style:solid;background:#fff">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="mdi mdi-github" style="font-size:16px;color:var(--color-text-maxcontrast)"></span>
+                <span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">GitHub</span>
+                <button style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border:none;border-radius:100px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer" style-hover="background:var(--color-background-hover);color:var(--color-main-text)"><span class="mdi mdi-content-copy" style="font-size:14px"></span>kanso-128</button>
+              </div>
+              <a href="#1a" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:3px;color:var(--color-main-text)" style-hover="background:var(--color-background-hover);text-decoration:none">
+                <span style="flex:0 0 auto;font-size:11px;font-weight:600;line-height:1;padding:3px 7px;border-radius:10px;color:#fff;background:var(--color-success);text-transform:uppercase">Open</span>
+                <span style="font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">feat(checklist): virtualize item list #128</span>
+                <span class="mdi mdi-open-in-new" style="margin-left:auto;font-size:14px;color:var(--color-text-maxcontrast)"></span>
+              </a>
+              <input type="url" placeholder="Paste a GitHub PR or issue URL…" style="height:34px;font-size:.875rem;color:var(--color-main-text);border:1px dashed var(--color-border-dark);border-radius:3px;padding:0 12px;background:transparent" style-focus="outline:none;border-color:var(--color-primary-element);border-style:solid;background:#fff">
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;border-left:1px solid var(--color-border);background:var(--color-background-hover);min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--color-border)">
+              <span class="mdi mdi-comment-multiple-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span>
+              <span style="font-size:.8125rem;font-weight:600;color:var(--color-main-text)">Discussion</span>
+              <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">2 threads</span>
+              <button style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border:none;border-radius:100px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer" style-hover="background:var(--color-border);color:var(--color-main-text)"><span class="mdi mdi-history" style="font-size:14px"></span>Activity</button>
+            </div>
+
+            <div style="flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+
+              <div style="background:#fff;border:1px solid var(--color-border);border-radius:10px;overflow:hidden">
+                <div style="display:flex;gap:10px;padding:12px 14px">
+                  <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#16a085;color:#fff;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center">MK</span>
+                  <div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1">
+                    <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:.8125rem;font-weight:600">Mira Kovac</span><span style="font-size:.75rem;color:var(--color-text-maxcontrast)">3 hr ago</span></div>
+                    <div style="font-size:.875rem;line-height:1.55;color:var(--color-main-text);text-wrap:pretty">Profiled it — 210 items costs 140 ms on open. Windowing should take it under 20 ms.</div>
+                  </div>
+                </div>
+                <div style="border-top:1px solid var(--color-border);background:#fbfbfb;padding:6px 14px 10px 52px;display:flex;flex-direction:column;gap:10px">
+                  <button style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;margin-left:-8px;border:none;border-radius:3px;background:transparent;color:var(--color-primary-element);font-size:.75rem;font-weight:600;cursor:pointer" style-hover="background:var(--color-primary-light)"><span class="mdi mdi-chevron-down" style="font-size:14px"></span>2 replies</button>
+                  <div style="display:flex;gap:10px">
+                    <span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#8e44ad;color:#fff;font-size:.65rem;display:inline-flex;align-items:center;justify-content:center">FA</span>
+                    <div style="min-width:0;display:flex;flex-direction:column;gap:2px">
+                      <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:.8rem;font-weight:600">Fatih Aktas</span><span style="font-size:.75rem;color:var(--color-text-maxcontrast)">12 min ago</span><span style="font-size:.7rem;color:var(--color-text-maxcontrast);font-style:italic">edited</span></div>
+                      <div style="font-size:.875rem;line-height:1.55;color:var(--color-main-text);text-wrap:pretty">Reuse the composable rather than standing up a second virtualizer instance.</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:10px">
+                    <span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#16a085;color:#fff;font-size:.65rem;display:inline-flex;align-items:center;justify-content:center">MK</span>
+                    <div style="min-width:0;display:flex;flex-direction:column;gap:2px">
+                      <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:.8rem;font-weight:600">Mira Kovac</span><span style="font-size:.75rem;color:var(--color-text-maxcontrast)">just now</span></div>
+                      <div style="font-size:.875rem;line-height:1.55;color:var(--color-main-text);text-wrap:pretty">Agreed. I'll rebase once #128 lands.</div>
+                    </div>
+                  </div>
+                  <input type="text" placeholder="Write a reply…" style="height:32px;font-size:.8125rem;border:1px solid var(--color-border);border-radius:100px;padding:0 12px;background:#fff" style-focus="outline:none;border-color:var(--color-primary-element)">
+                </div>
+              </div>
+
+              <div style="background:#fff;border:1px solid var(--color-border);border-radius:10px;overflow:hidden">
+                <div style="display:flex;gap:10px;padding:12px 14px">
+                  <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#c0392b;color:#fff;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center">JD</span>
+                  <div style="min-width:0;display:flex;flex-direction:column;gap:6px;flex:1">
+                    <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:.8125rem;font-weight:600">Jonas Dahl</span><span style="font-size:.75rem;color:var(--color-text-maxcontrast)">1 hr ago</span></div>
+                    <div style="font-size:.875rem;line-height:1.55;color:var(--color-main-text);text-wrap:pretty">Watch the drop indicator when the list is scrolled — that regressed last time.</div>
+                    <button style="align-self:flex-start;height:24px;padding:0 8px;margin-left:-8px;border:none;border-radius:3px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer" style-hover="background:var(--color-background-hover);color:var(--color-main-text)">Reply</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:10px;color:var(--color-text-maxcontrast);font-size:.75rem;padding:0 4px">
+                <span class="mdi mdi-arrow-right-bold" style="font-size:14px"></span>
+                <span>Fatih moved this card to <strong style="color:var(--color-main-text);font-weight:600">In Progress</strong> · 2 hr ago</span>
+              </div>
+            </div>
+
+            <div style="border-top:1px solid var(--color-border);background:#fff;padding:12px 16px;display:flex;gap:10px;align-items:flex-start">
+              <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#8e44ad;color:#fff;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center">FA</span>
+              <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+                <textarea rows="2" placeholder="Start a new thread…" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--color-border);border-radius:10px;background:#fff;color:var(--color-main-text);font-size:.875rem;line-height:1.5;resize:vertical" style-focus="outline:none;border-color:var(--color-primary-element)"></textarea>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <button style="height:32px;padding:0 16px;border:none;border-radius:100px;background:var(--color-primary-element);color:#fff;font-size:.8125rem;font-weight:600;cursor:pointer">Post</button>
+                  <span style="font-size:.7rem;color:var(--color-text-maxcontrast)">Ctrl+Enter to post</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" data-screen-label="1b sparse" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.04em">1b</span>
+        <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">Sparse card — nothing set yet</span>
+      </div>
+      <div style="width:1180px;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:18px 20px 14px 24px;border-bottom:1px solid var(--color-border)">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--color-text-maxcontrast)">
+              <span>Kanso v0.1</span><span class="mdi mdi-chevron-right" style="font-size:14px"></span>
+              <span style="display:inline-flex;align-items:center;height:18px;padding:0 8px;border-radius:10px;background:var(--color-background-hover);border:1px solid var(--color-border);font-size:.68rem;font-weight:700;letter-spacing:.04em;color:var(--color-text-maxcontrast)">BACKLOG</span>
+              <span style="color:var(--color-border-dark)">·</span><span>#204</span>
+            </div>
+            <h2 style="margin:0 0 0 -4px;font-size:1.5rem;line-height:1.25;font-weight:700;color:var(--color-main-text);padding:1px 4px">Audit ETag coverage on board reads</h2>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <button style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid var(--color-border);border-radius:100px;background:#fff;color:var(--color-main-text);font-size:.875rem;font-weight:600;cursor:pointer"><span class="mdi mdi-check-circle-outline" style="font-size:18px"></span>Mark done</button>
+            <button style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--color-border);border-radius:100px;background:#fff;color:var(--color-text-maxcontrast);font-size:.875rem;cursor:pointer"><span class="mdi mdi-eye-outline" style="font-size:18px"></span>Watch</button>
+            <button style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer"><span class="mdi mdi-dots-horizontal" style="font-size:20px"></span></button>
+            <button style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer"><span class="mdi mdi-close" style="font-size:20px"></span></button>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 24px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+          <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-flag-outline" style="font-size:14px"></span>Priority</button>
+          <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-calendar" style="font-size:14px"></span>Due date</button>
+          <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-account-plus" style="font-size:14px"></span>Assign</button>
+          <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-tag-outline" style="font-size:14px"></span>Label</button>
+          <button style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.8125rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-primary-element)"><span class="mdi mdi-check-decagram-outline" style="font-size:14px"></span>Request review</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 420px;align-items:stretch;min-height:380px">
+          <div style="display:flex;flex-direction:column;gap:24px;padding:24px 28px 32px;min-width:0">
+            <button style="text-align:left;padding:16px;border:1px dashed var(--color-border-dark);border-radius:10px;background:transparent;color:var(--color-text-maxcontrast);font-size:.9375rem;cursor:pointer" style-hover="border-color:var(--color-primary-element);color:var(--color-main-text)">Add a description…</button>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px"><span class="mdi mdi-checkbox-marked-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">Checklist</span></div>
+              <input type="text" placeholder="Add an item…" style="height:34px;font-size:.875rem;border:1px dashed var(--color-border-dark);border-radius:3px;padding:0 12px;background:transparent" style-focus="outline:none;border-color:var(--color-primary-element);border-style:solid;background:#fff">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px"><span class="mdi mdi-sitemap" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">Sub-cards</span></div>
+              <input type="text" placeholder="Add a sub-card…" style="height:34px;font-size:.875rem;border:1px dashed var(--color-border-dark);border-radius:3px;padding:0 12px;background:transparent" style-focus="outline:none;border-color:var(--color-primary-element);border-style:solid;background:#fff">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px"><span class="mdi mdi-github" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">GitHub</span><button style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border:none;border-radius:100px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer"><span class="mdi mdi-content-copy" style="font-size:14px"></span>kanso-204</button></div>
+              <input type="url" placeholder="Paste a GitHub PR or issue URL…" style="height:34px;font-size:.875rem;border:1px dashed var(--color-border-dark);border-radius:3px;padding:0 12px;background:transparent" style-focus="outline:none;border-color:var(--color-primary-element);border-style:solid;background:#fff">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;border-left:1px solid var(--color-border);background:var(--color-background-hover)">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--color-border)"><span class="mdi mdi-comment-multiple-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.8125rem;font-weight:600;color:var(--color-main-text)">Discussion</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;text-align:center">
+              <span class="mdi mdi-comment-outline" style="font-size:64px;color:var(--color-border-dark);line-height:1"></span>
+              <span style="font-size:.875rem;color:var(--color-text-maxcontrast);max-width:220px;text-wrap:pretty">No threads yet. Everyone watching this card is notified when you start one.</span>
+            </div>
+            <div style="border-top:1px solid var(--color-border);background:#fff;padding:12px 16px;display:flex;gap:10px;align-items:flex-start">
+              <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#8e44ad;color:#fff;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center">FA</span>
+              <textarea rows="2" placeholder="Start a new thread…" style="flex:1;box-sizing:border-box;padding:8px 10px;border:1px solid var(--color-border);border-radius:10px;font-size:.875rem;resize:vertical" style-focus="outline:none;border-color:var(--color-primary-element)"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" data-screen-label="1c review" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.04em">1c</span>
+        <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">Your review is requested — verdict bar on top</span>
+      </div>
+      <div style="width:1180px;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--color-primary-light);border-bottom:1px solid var(--color-primary-element)">
+          <span class="mdi mdi-check-decagram-outline" style="font-size:20px;color:var(--color-primary-element)"></span>
+          <div style="display:flex;flex-direction:column">
+            <span style="font-size:.875rem;font-weight:600;color:var(--color-main-text)">Mira asked you for a Code review</span>
+            <span style="font-size:.75rem;color:var(--color-text-maxcontrast)">This column is done-gated — the card can't move to Done until every review is approved.</span>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 16px;border:none;border-radius:100px;background:var(--color-success);color:#fff;font-size:.875rem;font-weight:600;cursor:pointer"><span class="mdi mdi-check-decagram" style="font-size:16px"></span>Approve</button>
+            <button style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 16px;border:1px solid var(--color-error);border-radius:100px;background:#fff;color:var(--color-error);font-size:.875rem;font-weight:600;cursor:pointer"><span class="mdi mdi-alert-decagram" style="font-size:16px"></span>Request changes</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:18px 20px 14px 24px;border-bottom:1px solid var(--color-border)">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--color-text-maxcontrast)">
+              <span>Kanso v0.1</span><span class="mdi mdi-chevron-right" style="font-size:14px"></span>
+              <span style="display:inline-flex;align-items:center;height:18px;padding:0 8px;border-radius:10px;background:var(--color-background-hover);border:1px solid var(--color-border);font-size:.68rem;font-weight:700;letter-spacing:.04em;color:var(--color-text-maxcontrast)">IN REVIEW</span>
+              <span style="color:var(--color-border-dark)">·</span><span>#131</span>
+            </div>
+            <h2 style="margin:0 0 0 -4px;font-size:1.5rem;line-height:1.25;font-weight:700;color:var(--color-main-text);padding:1px 4px">Delta sync drops changes when the tab sleeps</h2>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <button style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--color-primary-element);border-radius:100px;background:var(--color-primary-light);color:var(--color-primary-element);font-size:.875rem;cursor:pointer"><span class="mdi mdi-eye-outline" style="font-size:18px"></span>2</button>
+            <button style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer"><span class="mdi mdi-dots-horizontal" style="font-size:20px"></span></button>
+            <button style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer"><span class="mdi mdi-close" style="font-size:20px"></span></button>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 24px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+          <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid var(--color-error);border-radius:10px;background:#fff;color:var(--color-error);font-size:.8125rem;font-weight:600;cursor:pointer"><span class="mdi mdi-flag" style="font-size:14px"></span>Urgent</button>
+          <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid var(--color-error);border-radius:10px;background:#fff;color:var(--color-error);font-size:.8125rem;cursor:pointer"><span class="mdi mdi-calendar" style="font-size:14px"></span>Overdue · Fri 24 Jul</button>
+          <button style="display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px 0 4px;border:1px solid var(--color-border);border-radius:10px;background:#fff;color:var(--color-main-text);font-size:.8125rem;cursor:pointer"><span style="width:24px;height:24px;border-radius:50%;background:#16a085;color:#fff;font-size:.65rem;display:inline-flex;align-items:center;justify-content:center">MK</span>Mira Kovac</button>
+          <span style="width:1px;height:20px;background:var(--color-border-dark);margin:0 4px"></span>
+          <span style="display:inline-flex;align-items:center;height:20px;padding:0 10px;border-radius:10px;background:var(--color-error);color:#fff;font-size:.7rem;font-weight:600">bug</span>
+          <span style="display:inline-flex;align-items:center;height:20px;padding:0 10px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:600">realtime</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 3px;border-radius:10px;border:1px solid var(--color-success);background:rgba(70,186,97,.08);font-size:.75rem;color:var(--color-main-text)">
+              <span style="width:22px;height:22px;border-radius:50%;background:#c0392b;color:#fff;font-size:.6rem;display:inline-flex;align-items:center;justify-content:center">JD</span>Jonas · QA
+              <span style="display:inline-flex;align-items:center;gap:3px;color:var(--color-success);font-weight:600"><span class="mdi mdi-check-decagram" style="font-size:12px"></span>Approved</span>
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 3px;border-radius:10px;border:1px solid var(--color-primary-element);background:var(--color-primary-light);font-size:.75rem;color:var(--color-main-text)">
+              <span style="width:22px;height:22px;border-radius:50%;background:#8e44ad;color:#fff;font-size:.6rem;display:inline-flex;align-items:center;justify-content:center">FA</span>You · Code
+              <span style="display:inline-flex;align-items:center;gap:3px;color:var(--color-primary-element);font-weight:600">Waiting</span>
+            </span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 420px;align-items:stretch;min-height:340px">
+          <div style="padding:24px 28px 28px;display:flex;flex-direction:column;gap:20px">
+            <div style="font-size:.9375rem;line-height:1.65;color:var(--color-main-text);text-wrap:pretty">When the tab is backgrounded for more than five minutes the poll interval is throttled and the <code style="background:var(--color-border);border-radius:3px;padding:2px 5px;font-size:.875em">since=&lt;changeId&gt;</code> cursor falls behind the change-log pruning window. On wake, refetch the whole board when the cursor is older than the oldest retained change.</div>
+            <div style="border:1px solid var(--color-border);border-radius:10px;overflow:hidden;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+                <span class="mdi mdi-checkbox-marked-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.8125rem;font-weight:600">Checklist</span><span style="font-size:.8rem;color:var(--color-text-maxcontrast)">3 / 3</span>
+                <div style="flex:1;height:4px;background:var(--color-border-dark);border-radius:2px;overflow:hidden;max-width:220px;margin-left:8px"><div style="height:100%;width:100%;background:var(--color-success);border-radius:2px"></div></div>
+              </div>
+              <ul style="list-style:none;margin:0;padding:6px">
+                <li style="display:flex;align-items:center;gap:10px;padding:8px"><input type="checkbox" defaultChecked="checked" style="width:16px;height:16px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Detect a stale cursor on wake</span></li>
+                <li style="display:flex;align-items:center;gap:10px;padding:8px"><input type="checkbox" defaultChecked="checked" style="width:16px;height:16px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Full refetch fallback</span></li>
+                <li style="display:flex;align-items:center;gap:10px;padding:8px"><input type="checkbox" defaultChecked="checked" style="width:16px;height:16px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Test with a 10-minute sleep</span></li>
+              </ul>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;border-left:1px solid var(--color-border);background:var(--color-background-hover)">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--color-border)"><span class="mdi mdi-comment-multiple-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.8125rem;font-weight:600;color:var(--color-main-text)">Discussion</span><span style="font-size:.8rem;color:var(--color-text-maxcontrast)">1 thread</span></div>
+            <div style="flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+              <div style="background:#fff;border:1px solid var(--color-border);border-radius:10px;padding:12px 14px;display:flex;gap:10px">
+                <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#16a085;color:#fff;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center">MK</span>
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:.8125rem;font-weight:600">Mira Kovac</span><span style="font-size:.75rem;color:var(--color-text-maxcontrast)">25 min ago</span></div>
+                  <div style="font-size:.875rem;line-height:1.55;text-wrap:pretty">Ready for you — the wake path is covered by the new Playwright case.</div>
+                  <button style="align-self:flex-start;height:24px;padding:0 8px;margin-left:-8px;border:none;border-radius:3px;background:transparent;color:var(--color-text-maxcontrast);font-size:.75rem;cursor:pointer" style-hover="background:var(--color-background-hover);color:var(--color-main-text)">Reply</button>
+                </div>
+              </div>
+            </div>
+            <div style="border-top:1px solid var(--color-border);background:#fff;padding:12px 16px;display:flex;gap:10px;align-items:flex-start">
+              <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#8e44ad;color:#fff;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center">FA</span>
+              <textarea rows="2" placeholder="Start a new thread…" style="flex:1;box-sizing:border-box;padding:8px 10px;border:1px solid var(--color-border);border-radius:10px;font-size:.875rem;resize:vertical" style-focus="outline:none;border-color:var(--color-primary-element)"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1d" data-screen-label="1d editing" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.04em">1d</span>
+        <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">Editing the description — left pane only</span>
+      </div>
+      <div style="width:720px;background:#fff;border:1px solid var(--color-border);border-radius:10px;padding:24px 28px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">Description</span>
+          <span style="font-size:.75rem;color:var(--color-text-maxcontrast)">Markdown</span>
+        </div>
+        <textarea rows="8" style="width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid var(--color-primary-element);border-radius:10px;background:#fff;color:var(--color-main-text);font-size:.9375rem;line-height:1.65;resize:vertical" style-focus="outline:none" defaultValue="Long checklists (200+ items) drop frames on open because every item mounts at once. Reuse the TanStack Virtual setup from `StackColumn` and cap the rendered window at ~30 rows."></textarea>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button style="height:36px;padding:0 18px;border:none;border-radius:100px;background:var(--color-primary-element);color:#fff;font-size:.875rem;font-weight:600;cursor:pointer">Save</button>
+          <button style="height:36px;padding:0 18px;border:1px solid var(--color-border);border-radius:100px;background:#fff;color:var(--color-main-text);font-size:.875rem;cursor:pointer">Cancel</button>
+          <span style="margin-left:auto;font-size:.75rem;color:var(--color-text-maxcontrast)">Esc cancel · Ctrl+Enter save</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="1e" data-screen-label="1e mobile" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.04em">1e</span>
+        <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">Mobile — 390px, panes stack, discussion behind a tab</span>
+      </div>
+      <div style="width:390px;height:760px;background:#fff;border:1px solid var(--color-border-dark);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--color-border)">
+          <button style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer"><span class="mdi mdi-arrow-left" style="font-size:20px"></span></button>
+          <span style="flex:1;font-size:.8rem;color:var(--color-text-maxcontrast);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Kanso v0.1 · #128</span>
+          <button style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border:none;border-radius:50%;background:transparent;color:var(--color-main-text);cursor:pointer"><span class="mdi mdi-dots-horizontal" style="font-size:20px"></span></button>
+        </div>
+        <div style="padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--color-border)">
+          <h2 style="margin:0;font-size:1.2rem;line-height:1.3;font-weight:700;text-wrap:pretty">Virtualize the checklist list in CardModal</h2>
+          <div style="display:flex;gap:8px">
+            <button style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;border:1px solid var(--color-border);border-radius:100px;background:#fff;color:var(--color-main-text);font-size:.875rem;font-weight:600;cursor:pointer"><span class="mdi mdi-check-circle-outline" style="font-size:18px"></span>Mark done</button>
+            <button style="width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--color-primary-element);border-radius:50%;background:var(--color-primary-light);color:var(--color-primary-element);cursor:pointer"><span class="mdi mdi-eye-outline" style="font-size:20px"></span></button>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;overflow-x:auto;padding:10px 16px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+          <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #e07b00;border-radius:10px;background:#fff;color:#e07b00;font-size:.8125rem;font-weight:600"><span class="mdi mdi-flag" style="font-size:14px"></span>High</span>
+          <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--color-border);border-radius:10px;background:#fff;font-size:.8125rem"><span class="mdi mdi-calendar" style="font-size:14px;color:var(--color-text-maxcontrast)"></span>28 Jul</span>
+          <span style="flex-shrink:0;display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.75rem;font-weight:600">performance</span>
+        </div>
+        <div style="display:flex;border-bottom:1px solid var(--color-border)">
+          <button style="flex:1;height:44px;border:none;border-bottom:2px solid var(--color-primary-element);background:transparent;color:var(--color-primary-element);font-size:.875rem;font-weight:600;cursor:pointer">Card</button>
+          <button style="flex:1;height:44px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--color-text-maxcontrast);font-size:.875rem;cursor:pointer">Discussion 2</button>
+        </div>
+        <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:20px;min-height:0">
+          <div style="font-size:.9375rem;line-height:1.6;text-wrap:pretty;flex-shrink:0">Long checklists (200+ items) drop frames on open because every item mounts at once. Cap the rendered window at ~30 rows.</div>
+          <div style="border:1px solid var(--color-border);border-radius:10px;overflow:hidden;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+              <span class="mdi mdi-checkbox-marked-outline" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.8125rem;font-weight:600">Checklist</span><span style="font-size:.8rem;color:var(--color-text-maxcontrast);margin-left:auto">2 / 5</span>
+            </div>
+            <ul style="list-style:none;margin:0;padding:6px">
+              <li style="display:flex;align-items:center;gap:12px;padding:10px 8px;min-height:44px;box-sizing:border-box"><input type="checkbox" defaultChecked="checked" style="width:18px;height:18px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Measure open cost with 200 items</span></li>
+              <li style="display:flex;align-items:center;gap:12px;padding:10px 8px;min-height:44px;box-sizing:border-box"><input type="checkbox" defaultChecked="checked" style="width:18px;height:18px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through">Pick a window size</span></li>
+              <li style="display:flex;align-items:center;gap:12px;padding:10px 8px;min-height:44px;box-sizing:border-box"><input type="checkbox" style="width:18px;height:18px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem">Wire TanStack Virtual into the list</span></li>
+              <li style="display:flex;align-items:center;gap:12px;padding:10px 8px;min-height:44px;box-sizing:border-box"><input type="checkbox" style="width:18px;height:18px;accent-color:var(--color-primary-element)"><span style="font-size:.875rem">Keep drag-to-reorder working</span></li>
+            </ul>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:8px"><span class="mdi mdi-sitemap" style="font-size:16px;color:var(--color-text-maxcontrast)"></span><span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;color:var(--color-text-maxcontrast);text-transform:uppercase">Sub-cards</span><span style="font-size:.8rem;color:var(--color-text-maxcontrast)">1 / 2</span></div>
+            <a href="#1e" style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--color-border);border-radius:3px;color:var(--color-main-text)"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-success)"></span><span style="font-size:.875rem;color:var(--color-text-maxcontrast);text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Extract useVirtualList composable</span></a>
+            <a href="#1e" style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--color-border);border-radius:3px;color:var(--color-main-text)"><span style="width:10px;height:10px;border-radius:50%;border:2px solid var(--color-border-dark)"></span><span style="font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Benchmark a 500-item checklist</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1f" data-screen-label="1f loading" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:10px;background:var(--color-primary-element);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.04em">1f</span>
+        <span style="font-size:.8rem;color:var(--color-text-maxcontrast)">Cold load — real layout, shimmer, never a spinner</span>
+      </div>
+      <div style="width:1180px;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:18px 24px 14px;border-bottom:1px solid var(--color-border)">
+          <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+            <div class="kskel" style="height:12px;width:180px"></div>
+            <div class="kskel" style="height:26px;width:52%"></div>
+          </div>
+          <div class="kskel" style="height:36px;width:120px;border-radius:100px"></div>
+          <div class="kskel" style="height:36px;width:64px;border-radius:100px"></div>
+        </div>
+        <div style="display:flex;gap:6px;padding:10px 24px;background:var(--color-background-hover);border-bottom:1px solid var(--color-border)">
+          <div class="kskel" style="height:32px;width:92px;border-radius:10px"></div>
+          <div class="kskel" style="height:32px;width:150px;border-radius:10px"></div>
+          <div class="kskel" style="height:32px;width:130px;border-radius:10px"></div>
+          <div class="kskel" style="height:32px;width:90px;border-radius:10px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 420px;min-height:340px">
+          <div style="padding:24px 28px;display:flex;flex-direction:column;gap:12px">
+            <div class="kskel" style="height:10px;width:90px"></div>
+            <div class="kskel" style="height:14px;width:100%"></div>
+            <div class="kskel" style="height:14px;width:92%"></div>
+            <div class="kskel" style="height:14px;width:64%"></div>
+            <div class="kskel" style="height:150px;width:100%;border-radius:10px;margin-top:14px"></div>
+          </div>
+          <div style="border-left:1px solid var(--color-border);background:var(--color-background-hover);padding:18px;display:flex;flex-direction:column;gap:12px">
+            <div class="kskel" style="height:78px;border-radius:10px"></div>
+            <div class="kskel" style="height:60px;border-radius:10px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1300,&quot;height&quot;:900}}"></script>
+</body>
+</html>

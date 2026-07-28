@@ -16,7 +16,7 @@ import { boardQueryKey } from './useBoard.js'
  *
  * Optimistic strategy for toggleLabel (assign / unassign):
  *   1. Cancel in-flight board queries to avoid clobbering the patch.
- *   2. setQueryData — patch ONLY the target card's labelIds array (add or remove).
+ *   2. setQueryData - patch ONLY the target card's labelIds array (add or remove).
  *      The functional updater form is used so the patch always operates on the
  *      latest snapshot in the cache (same pattern as applyOptimisticPatch in
  *      useCardMove).
@@ -113,7 +113,7 @@ export function useLabels(boardId) {
 				}
 			})
 
-			// ...and in the detail cache — the modal's chips read from here, so
+			// ...and in the detail cache - the modal's chips read from here, so
 			// without this patch they would lag until the settle invalidation.
 			queryClient.setQueryData(cardKey, (old) => {
 				if (!old) return old

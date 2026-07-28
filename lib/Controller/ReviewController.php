@@ -19,7 +19,7 @@ use OCP\IUserSession;
  * Card review-request endpoints. Requesting/withdrawing a review needs EDIT on
  * the board (like assigning); recording a verdict is limited to the reviewer
  * themselves (enforced in {@see ReviewService}). All are idempotent and return
- * an empty body — the client refetches the card/board over the realtime path.
+ * an empty body - the client refetches the card/board over the realtime path.
  */
 class ReviewController extends Controller {
 	use ApiErrorTrait;
@@ -34,11 +34,11 @@ class ReviewController extends Controller {
 	}
 
 	/**
-	 * Requests a review of the card from $userId. Idempotent — a repeat request
+	 * Requests a review of the card from $userId. Idempotent - a repeat request
 	 * of an already-requested reviewer succeeds without writing anything.
 	 */
 	/**
-	 * The current user's cross-board "My Reviews" feed — every review requested
+	 * The current user's cross-board "My Reviews" feed - every review requested
 	 * from them on a board they can read, newest first.
 	 */
 	#[NoAdminRequired]
@@ -57,7 +57,7 @@ class ReviewController extends Controller {
 	}
 
 	/**
-	 * Withdraws a review request. Idempotent — withdrawing an absent request
+	 * Withdraws a review request. Idempotent - withdrawing an absent request
 	 * succeeds without writing anything.
 	 */
 	#[NoAdminRequired]

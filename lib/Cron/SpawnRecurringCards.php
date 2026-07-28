@@ -15,7 +15,7 @@ use OCP\BackgroundJob\TimedJob;
  * 15-minute recurring-card spawner. Iterates every enabled rule whose cached
  * next fire time has passed ({@see \OCA\Kanso\Db\RecurRuleMapper::findDueEnabled})
  * and spawns each one. Per-rule error handling lives in
- * {@see RecurrenceService::runDueRules} — one broken rule (deleted template,
+ * {@see RecurrenceService::runDueRules} - one broken rule (deleted template,
  * lost board access) is logged and skipped so it cannot stall the job.
  */
 class SpawnRecurringCards extends TimedJob {

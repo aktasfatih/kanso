@@ -302,7 +302,7 @@ class StackServiceTest extends TestCase {
 	// ---- move -------------------------------------------------------------
 
 	public function testMoveBetweenNeighboursUsesMidpointKeyInsideTransaction(): void {
-		// Board order: 5(I), 6(J), 7(K) — move 7 directly after 5.
+		// Board order: 5(I), 6(J), 7(K) - move 7 directly after 5.
 		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 1, 'K'));
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->method('findByBoard')->with(1)->willReturn([

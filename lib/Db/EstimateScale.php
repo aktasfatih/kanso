@@ -9,7 +9,7 @@ namespace OCA\Kanso\Db;
 
 /**
  * The fixed set of card-estimation scales a board may choose from. Estimates
- * are a plain sizing attribute (field + scale + display) — deliberately NO
+ * are a plain sizing attribute (field + scale + display) - deliberately NO
  * burndown/velocity/reporting is derived from them (charter non-goal).
  *
  * A card's estimate is stored as the raw token from its board's scale, so a

@@ -23,7 +23,7 @@ createApp(App)
 	.use(VueQueryPlugin, { queryClient })
 	.mount(document.getElementById('kanso'))
 
-// Realtime: a push event means someone changed the board — refetch it,
+// Realtime: a push event means someone changed the board - refetch it,
 // unless our own moves are still in flight (the move queue's drain
 // invalidate syncs afterwards; refetching now would show pre-move state).
 // Board query keys are ['board', <route param>], hence String(boardId).

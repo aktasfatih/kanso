@@ -49,7 +49,7 @@ class Notifier implements INotifier {
 	#[\Override]
 	public function prepare(INotification $notification, string $languageCode): INotification {
 		if ($notification->getApp() !== 'kanso') {
-			// Not our notification — the manager will try the next notifier.
+			// Not our notification - the manager will try the next notifier.
 			throw new UnknownNotificationException();
 		}
 

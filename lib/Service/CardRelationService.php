@@ -18,7 +18,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
  * Card-to-card relations (#3404): blocks / blocked-by / duplicates / relates,
- * same-board only in v1. A flat, fixed set of relation kinds — no custom
+ * same-board only in v1. A flat, fixed set of relation kinds - no custom
  * relation-type config, no cross-board links, no dependency-graph view (the
  * charter trap boundary).
  *
@@ -60,7 +60,7 @@ class CardRelationService {
 	}
 
 	/**
-	 * Grouped relations WITHOUT a permission check — for callers that have
+	 * Grouped relations WITHOUT a permission check - for callers that have
 	 * already gated READ on the card (e.g. the card-detail payload).
 	 *
 	 * @return array{blocks: list<array<string,mixed>>, blockedBy: list<array<string,mixed>>, duplicates: list<array<string,mixed>>, relates: list<array<string,mixed>>}
@@ -121,7 +121,7 @@ class CardRelationService {
 		}
 
 		if ($this->relationMapper->exists($src, $dst, $type)) {
-			// Idempotent — return the existing row.
+			// Idempotent - return the existing row.
 			foreach ($this->relationMapper->findOutgoing($src) as $r) {
 				if ($r['otherCardId'] === $dst && $r['type'] === $type) {
 					return $this->relationMapper->find($r['id']);

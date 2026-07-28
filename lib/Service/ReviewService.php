@@ -23,7 +23,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * outsider can never see is meaningless); a reviewer acts on their OWN review
  * only. Every mutation appends a card-targeted `kanso_changes` row so the tile
  * chip updates over the existing realtime/ETag path (ENTITY_CARD/ACTION_UPDATE
- * — no new Change constant). The done-gate that consumes these rows lives in
+ * - no new Change constant). The done-gate that consumes these rows lives in
  * {@see CardService::move()}, not here.
  */
 class ReviewService {
@@ -41,7 +41,7 @@ class ReviewService {
 	}
 
 	/**
-	 * The current user's cross-board review feed — every review requested from
+	 * The current user's cross-board review feed - every review requested from
 	 * them, on a board they can still read, newest first. ACL is enforced by
 	 * restricting to the user's readable board set (mirrors SearchService).
 	 *
@@ -58,7 +58,7 @@ class ReviewService {
 	/**
 	 * Requests a review from $reviewerUid. A card may hold several reviews per
 	 * reviewer as long as they are of different types (untyped counts as one
-	 * type) — so a person can carry, e.g., a QA and a Code review at once.
+	 * type) - so a person can carry, e.g., a QA and a Code review at once.
 	 * Idempotent per (card, reviewer, type): re-requesting the SAME type is a
 	 * no-op; a different type creates a new review.
 	 *
@@ -96,7 +96,7 @@ class ReviewService {
 			$this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent PUT lost the check-then-insert race — the request
+				// Concurrent PUT lost the check-then-insert race - the request
 				// exists, which is the idempotent success case.
 				return;
 			}
@@ -162,25 +162,25 @@ class ReviewService {
 
 		$reason = $reason !== null ? trim($reason) : null;
 
-		// Record the verdict FIRST so it always lands — a reviewer only needs READ
+		// Record the verdict FIRST so it always lands - a reviewer only needs READ
 		// to review, so the verdict must not depend on the (EDIT-gated) comment.
 		if ($review->getState() !== $state) {
 			$review->setState($state);
 			$this->cardReviewMapper->update($review);
 
 			$this->notify($card, $actorUid);
-			// The reviewer has acted — clear their pending "review requested" bell.
+			// The reviewer has acted - clear their pending "review requested" bell.
 			$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
 		}
 
 		// A "request changes" reason becomes a comment by the reviewer (even if the
-		// state was unchanged — they can add further reasons). Best-effort: a
+		// state was unchanged - they can add further reasons). Best-effort: a
 		// READ-only reviewer who can't comment still keeps their verdict.
 		if ($state === CardReview::STATE_CHANGES_REQUESTED && $reason !== null && $reason !== '') {
 			try {
 				$this->commentService->addComment($cardId, '**Requested changes:** ' . $reason, null, $actorUid);
 			} catch (\Throwable) {
-				// Reviewer lacks EDIT to comment — the verdict still stands.
+				// Reviewer lacks EDIT to comment - the verdict still stands.
 			}
 		}
 	}

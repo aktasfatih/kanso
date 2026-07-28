@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * usePriority — optimistic priority update mutation for a single card.
+ * usePriority - optimistic priority update mutation for a single card.
  *
  * Mirrors the dual-cache pattern from useCardActions:
  *   1. Cancel in-flight board + card queries.
@@ -28,7 +28,7 @@ function resolve(v) {
 	return v
 }
 
-/** Priority level metadata — used in both CardModal and CardTile. */
+/** Priority level metadata - used in both CardModal and CardTile. */
 export const PRIORITY_LEVELS = [
 	{ value: 0, label: 'None', shortLabel: '' },
 	{ value: 1, label: 'Low', shortLabel: 'Low' },
@@ -66,10 +66,10 @@ export function usePriority(boardId, cardId) {
 			const previousBoard = queryClient.getQueryData(boardKey)
 			const previousCard = queryClient.getQueryData(cardKey)
 
-			// Patch board summary cache — update the card's priority. Board card
+			// Patch board summary cache - update the card's priority. Board card
 			// ids are numbers; the resolved cardId is the string route param, so
 			// coerce (a raw === would never match and the tile wouldn't update
-			// optimistically — matches useChecklist's Number() comparison).
+			// optimistically - matches useChecklist's Number() comparison).
 			const numericCardId = Number(resolve(cardId))
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old

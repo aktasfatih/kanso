@@ -25,7 +25,7 @@ use Psr\Log\LoggerInterface;
  *
  * The push emit is strictly best-effort: notify_push may not be installed
  * (its IQueue class then does not exist), Redis may be down, a recipient
- * lookup may fail — none of that may ever break the mutation that already
+ * lookup may fail - none of that may ever break the mutation that already
  * committed. Clients fall back to polling either way.
  */
 class ChangeNotifier {
@@ -73,7 +73,7 @@ class ChangeNotifier {
 	}
 
 	/**
-	 * Best-effort notify_push broadcast — never throws.
+	 * Best-effort notify_push broadcast - never throws.
 	 */
 	private function emitPush(int $boardId): void {
 		try {
@@ -98,12 +98,12 @@ class ChangeNotifier {
 
 	/**
 	 * Resolves the notify_push queue once per request. The class is
-	 * referenced by name only — when the notify_push app is not installed
+	 * referenced by name only - when the notify_push app is not installed
 	 * the container lookup throws and the result is cached as unavailable.
 	 */
 	private function getQueue(): ?object {
 		if (!$this->queueResolved) {
-			// Cached for this instance's lifetime — per-request under FPM.
+			// Cached for this instance's lifetime - per-request under FPM.
 			// Under a persistent runtime this memo would go stale (notify_push
 			// enabled mid-life stays unnoticed) and must become time-bounded.
 			$this->queueResolved = true;
@@ -113,7 +113,7 @@ class ChangeNotifier {
 					$this->queue = $queue;
 				}
 			} catch (\Throwable) {
-				// notify_push not installed — polling fallback covers this.
+				// notify_push not installed - polling fallback covers this.
 			}
 		}
 		return $this->queue;
@@ -121,7 +121,7 @@ class ChangeNotifier {
 
 	/**
 	 * Uids of everyone with access to the board: owner, user ACLs, members
-	 * of group ACLs — deduplicated. Mirrors ParticipantService, but returns
+	 * of group ACLs - deduplicated. Mirrors ParticipantService, but returns
 	 * bare uid strings and skips display-name resolution.
 	 *
 	 * @return list<string>

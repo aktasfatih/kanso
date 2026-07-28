@@ -114,7 +114,7 @@ test.describe('Undo toasts', () => {
 		await expect(actionsMenu).toBeVisible({ timeout: 5_000 })
 		await actionsMenu.click()
 
-		// Click Delete in the actions dropdown — no confirm banner, just immediate delete.
+		// Click Delete in the actions dropdown - no confirm banner, just immediate delete.
 		const deleteBtn = page.locator('[role="menuitem"]').filter({ hasText: 'Delete' })
 		await expect(deleteBtn).toBeVisible({ timeout: 5_000 })
 		await deleteBtn.click()
@@ -122,7 +122,7 @@ test.describe('Undo toasts', () => {
 		// Modal should have closed.
 		await expect(page.locator('.card-modal')).not.toBeVisible({ timeout: 8_000 })
 
-		// The undo toast should appear — @nextcloud/dialogs uses toastify-js which
+		// The undo toast should appear - @nextcloud/dialogs uses toastify-js which
 		// renders toasts with class .toast-undo (ToastType.UNDO).
 		const undoToast = page.locator('.toast-undo')
 		await expect(undoToast).toBeVisible({ timeout: 8_000 })

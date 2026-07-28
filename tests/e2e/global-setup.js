@@ -5,7 +5,7 @@
  * Global warmup: hit the app once (authenticated) before any spec runs so the
  * very first spec (alphabetically `checklist`) doesn't race PHP/APCu/route-cache
  * cold-start. A cold first request could otherwise 500/hang and flake whichever
- * spec runs first. Best-effort — never fails the run.
+ * spec runs first. Best-effort - never fails the run.
  */
 import { chromium, request } from '@playwright/test'
 

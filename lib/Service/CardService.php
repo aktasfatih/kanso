@@ -23,7 +23,7 @@ use OCP\IDBConnection;
  * Card CRUD and moves. Every mutation appends a row to the `kanso_changes`
  * log in the same flow (see BoardService). Ordering uses fractional sort
  * keys: creation appends to the bottom of the stack and a move rewrites a
- * single card row — no sibling renumbering, ever.
+ * single card row - no sibling renumbering, ever.
  */
 class CardService {
 	private const MAX_TITLE_LENGTH = 100;
@@ -88,7 +88,7 @@ class CardService {
 			$card->setTitle($title);
 			$card->setSortKey($sortKey);
 			// Creating a card directly in a role-bearing stack adopts that
-			// column's status — matching move()'s status-automation for a
+			// column's status - matching move()'s status-automation for a
 			// dragged-in card. Done-role → done; in-progress/review-role →
 			// started; backlog/to-do/none → not started (both left at 0).
 			$card->setDoneAt($stack->getRole() === Stack::ROLE_DONE ? $now : 0);
@@ -123,12 +123,12 @@ class CardService {
 		);
 
 		// Fan a "new card on a board you watch" notification out to board
-		// watchers. Best-effort — a notification hiccup must never fail the
+		// watchers. Best-effort - a notification hiccup must never fail the
 		// create (the card + its change row are already committed).
 		try {
 			$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card->getId(), $uid);
 		} catch (\Throwable) {
-			// Ignore — board-activity fan-out is a non-critical side effect.
+			// Ignore - board-activity fan-out is a non-critical side effect.
 		}
 
 		return $card;
@@ -228,7 +228,7 @@ class CardService {
 	/**
 	 * Soft-deletes the card (sets deleted_at). Any children are first detached
 	 * (parent_card_id cleared) so no live card is left pointing at a hidden
-	 * parent — the one-level hierarchy stays self-healing. The parent's DELETE
+	 * parent - the one-level hierarchy stays self-healing. The parent's DELETE
 	 * change row bumps the board ETag, so clients refetch and see the detached
 	 * children; the per-child clears ride along without their own change rows.
 	 *
@@ -290,14 +290,14 @@ class CardService {
 		}
 
 		// Source stack role for the done-automation. A move within the same
-		// stack keeps the target's role — done state then stays put.
+		// stack keeps the target's role - done state then stays put.
 		$sourceStack = $targetStackId === $card->getStackId()
 			? $targetStack
 			: $this->stackMapper->find($card->getStackId());
 
 		// Review gate: a card leaving a review-role stack for a done-role stack
 		// may not be marked done while any requested review is still unapproved.
-		// A board with no review-role stack never trips this — the gate is
+		// A board with no review-role stack never trips this - the gate is
 		// naturally opt-in via stack roles. Pure precondition, checked once
 		// before the write/retry loop so it fails fast without a DB write.
 		if ($sourceStack->getRole() === Stack::ROLE_REVIEW
@@ -341,7 +341,7 @@ class CardService {
 	 * propagates to {@see self::move()} for a re-derive/retry.
 	 *
 	 * @throws \OCP\DB\Exception on a DB error (including the unique-key race)
-	 * @throws \OverflowException if the derived key would overflow — rebalance needed
+	 * @throws \OverflowException if the derived key would overflow - rebalance needed
 	 */
 	private function persistMove(
 		Card $card,
@@ -391,7 +391,7 @@ class CardService {
 	 * The checks and the write are not serialized (like {@see self::move()}):
 	 * two concurrent setParent calls could interleave to build a 2-level chain
 	 * (set A's parent = B while B's parent is set = C, each seeing the other's
-	 * pre-state). Accepted for now — cosmetic, a subsequent edit repairs it, no
+	 * pre-state). Accepted for now - cosmetic, a subsequent edit repairs it, no
 	 * data loss; a DB-level guard is the planned mitigation.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
@@ -463,7 +463,7 @@ class CardService {
 
 	/**
 	 * Status-automation for a move: a column's role IS its status, so dragging a
-	 * card into a column adopts that column's lifecycle stage —
+	 * card into a column adopts that column's lifecycle stage -
 	 *   Backlog / To do → Not started (both timestamps cleared),
 	 *   In progress / Review → In progress (started stamped, done cleared),
 	 *   Done → Done (done stamped once, keeping an already-done card's time).
@@ -473,7 +473,7 @@ class CardService {
 	 * row is written.
 	 */
 	private function applyDoneAutomation(Card $card, Stack $sourceStack, Stack $targetStack, int $now): void {
-		// A reorder within the same column must never rewrite the card's status —
+		// A reorder within the same column must never rewrite the card's status -
 		// only entering a DIFFERENT column applies that column's role.
 		if ($sourceStack->getId() === $targetStack->getId()) {
 			return;
@@ -482,34 +482,34 @@ class CardService {
 		switch ($targetStack->getRole()) {
 			case Stack::ROLE_BACKLOG:
 			case Stack::ROLE_TODO:
-				// Not started — clear both timestamps.
+				// Not started - clear both timestamps.
 				$card->setStartedAt(0);
 				$card->setDoneAt(0);
 				break;
 			case Stack::ROLE_IN_PROGRESS:
 			case Stack::ROLE_REVIEW:
-				// In progress — started, not done.
+				// In progress - started, not done.
 				$card->setDoneAt(0);
 				if (($card->getStartedAt() ?? 0) === 0) {
 					$card->setStartedAt($now);
 				}
 				break;
 			case Stack::ROLE_DONE:
-				// Done — stamp once (an already-done card keeps its time).
+				// Done - stamp once (an already-done card keeps its time).
 				if ($card->getDoneAt() === 0) {
 					$card->setDoneAt($now);
 				}
 				break;
 			case Stack::ROLE_NONE:
 			default:
-				// No associated status — leave the card's status as-is.
+				// No associated status - leave the card's status as-is.
 				break;
 		}
 	}
 
 	/**
 	 * Sets the card's derived status directly (the card-view control). Status is
-	 * two timestamps: done_at (Done) and started_at (In progress) — this is the
+	 * two timestamps: done_at (Done) and started_at (In progress) - this is the
 	 * one place a card can be moved BACKWARD (e.g. Done → In progress), unlike
 	 * the forward-only move automation.
 	 *
@@ -540,12 +540,12 @@ class CardService {
 
 	/**
 	 * Auto-completes a parent card once ALL of its children are resolved (done
-	 * or archived) — the "all children done → parent done" workflow. Called from
+	 * or archived) - the "all children done → parent done" workflow. Called from
 	 * a CHILD's update()/move() after it persists; a card with no parent is a
 	 * fast no-op (the common case). Forward-only for v1: it never RE-OPENS a
 	 * parent (a parent a human marked done is left alone), and since the
 	 * hierarchy is one level (a parent has no parent) stamping it done cannot
-	 * cascade — no loop guard needed.
+	 * cascade - no loop guard needed.
 	 */
 	private function maybeCompleteParent(Card $child, string $uid): void {
 		$parentId = $child->getParentCardId();
@@ -584,10 +584,10 @@ class CardService {
 	/**
 	 * New sort key for a card landing in $targetStackId after $afterCard
 	 * (null = top of the stack). The moved card may itself be one of the
-	 * neighbours — its still-current key then bounds the result, which is
+	 * neighbours - its still-current key then bounds the result, which is
 	 * fine: the derived key remains strictly ordered.
 	 *
-	 * @throws \OverflowException if the key would overflow — rebalance needed
+	 * @throws \OverflowException if the key would overflow - rebalance needed
 	 */
 	private function deriveMoveKey(int $targetStackId, ?Card $afterCard): string {
 		if ($afterCard !== null) {
@@ -604,7 +604,7 @@ class CardService {
 
 	/**
 	 * Loads and validates the move anchor. Any unusable anchor (missing,
-	 * deleted, wrong stack, the moved card itself) is invalid input — the
+	 * deleted, wrong stack, the moved card itself) is invalid input - the
 	 * client's picture of the stack is stale, not the moved card's fault.
 	 *
 	 * @throws InvalidInputException
@@ -680,7 +680,7 @@ class CardService {
 	 * Strict ISO 8601 due dates, normalized to UTC. The empty string clears
 	 * the due date. Two accepted shapes: RFC 3339 without fractional seconds
 	 * (2026-07-22T12:00:00Z / +02:00) and with milliseconds
-	 * (2026-07-22T12:00:00.000Z) — the latter is what JS Date.toISOString()
+	 * (2026-07-22T12:00:00.000Z) - the latter is what JS Date.toISOString()
 	 * produces.
 	 *
 	 * @throws InvalidInputException on any other shape
@@ -692,7 +692,7 @@ class CardService {
 		$parsed = \DateTime::createFromFormat(\DateTimeInterface::ATOM, $duedate)
 			?: \DateTime::createFromFormat('Y-m-d\TH:i:s.vP', $duedate);
 		// createFromFormat rolls over out-of-range components (2026-02-30
-		// becomes March 2nd) and only records it in getLastErrors — reject
+		// becomes March 2nd) and only records it in getLastErrors - reject
 		// those too, or clients get a silently wrong date back.
 		$errors = \DateTime::getLastErrors();
 		if ($parsed === false

@@ -116,7 +116,7 @@ test.describe('Card drag and drop', () => {
 		state.cardBId = cardB.id
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
-		console.log('Setup complete — boardUrl:', state.boardUrl)
+		console.log('Setup complete - boardUrl:', state.boardUrl)
 	})
 
 	test('drag card A into S2 above card B, persists after reload', async ({ page }) => {
@@ -197,7 +197,7 @@ test.describe('Card drag and drop', () => {
 		}
 		await page.waitForTimeout(50)
 		await page.mouse.up()
-		await page.waitForTimeout(150) // intentionally rapid — don't wait for settle
+		await page.waitForTimeout(150) // intentionally rapid - don't wait for settle
 
 		// Immediately drag B to S1 as well
 		const bBox = await cardB.boundingBox()

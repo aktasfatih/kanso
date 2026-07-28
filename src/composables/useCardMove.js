@@ -13,8 +13,8 @@ import { boardQueryKey } from './queryKeys.js'
  * Queue drain strategy:
  * - Each enqueue chains onto the previous server call (FIFO).
  * - On success: reconcile ONLY {stackId, sortKey, lastModified} from response into summary cache
- *   (never splice the full card — it has description which isn't in summary cache).
- * - On failure / 409: rollback is DEFERRED to the drain — an invalidate fired
+ *   (never splice the full card - it has description which isn't in summary cache).
+ * - On failure / 409: rollback is DEFERRED to the drain - an invalidate fired
  *   mid-queue would refetch pre-move server state and clobber newer optimistic
  *   patches (visible jump-back).
  * - No invalidate ever runs while pendingCount > 0. When the queue drains, one
@@ -27,7 +27,7 @@ import { boardQueryKey } from './queryKeys.js'
  */
 // Module-level registry of boards with in-flight or queued moves, keyed by
 // String(boardId). Realtime consumers (push invalidation in main.js, the
-// poll interval in useBoard) check this to never refetch mid-drag — a
+// poll interval in useBoard) check this to never refetch mid-drag - a
 // refetch would clobber optimistic patches with pre-move server state.
 const pendingByBoard = new Map()
 
@@ -52,7 +52,7 @@ export function useCardMove(boardId) {
 
 	// pendingCount tracks in-flight + queued moves
 	let pendingCount = 0
-	// The FIFO promise chain — each enqueue appends to this
+	// The FIFO promise chain - each enqueue appends to this
 	let queue = Promise.resolve()
 
 	function getBoardQueryKey() {
@@ -94,7 +94,7 @@ export function useCardMove(boardId) {
 		// Apply optimistic patch synchronously
 		applyOptimisticPatch(cardId, targetStackId, optimisticKey)
 
-		// Capture the key now — boardId may be a ref that changes on navigation
+		// Capture the key now - boardId may be a ref that changes on navigation
 		const pendingKey = pendingKeyOf(boardId)
 		pendingCount++
 		pendingByBoard.set(pendingKey, (pendingByBoard.get(pendingKey) ?? 0) + 1)
@@ -117,7 +117,7 @@ export function useCardMove(boardId) {
 				} else {
 					lastError.value = t('kanso', 'Failed to move card. Please try again.')
 				}
-				// Rollback happens at drain time — invalidating here would
+				// Rollback happens at drain time - invalidating here would
 				// refetch pre-move state over newer optimistic patches.
 			} finally {
 				pendingCount--
@@ -128,7 +128,7 @@ export function useCardMove(boardId) {
 					pendingByBoard.delete(pendingKey)
 				}
 				if (pendingCount === 0) {
-					// Queue drained — one sync covers rollbacks and divergence.
+					// Queue drained - one sync covers rollbacks and divergence.
 					queryClient.invalidateQueries({ queryKey: getBoardQueryKey() })
 				}
 			}

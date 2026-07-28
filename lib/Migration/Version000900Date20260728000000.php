@@ -17,7 +17,7 @@ use OCP\Migration\SimpleMigrationStep;
  * Card / thread subscriptions (`kanso_subscriptions`): watchers. A row is a user
  * watching a card (comment_thread_id = 0) or one discussion thread under it
  * (comment_thread_id = the top-level comment id). `state` distinguishes an
- * active subscription (0) from an explicit opt-out tombstone (1) — the tombstone
+ * active subscription (0) from an explicit opt-out tombstone (1) - the tombstone
  * makes a manual unsubscribe stick, so later auto-subscribe (commenting /
  * assignment) never silently re-adds a watcher who opted out.
  *

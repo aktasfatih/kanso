@@ -13,7 +13,7 @@ use OCP\DB\Types;
 /**
  * A relation between two cards on the same board (table `kanso_card_relations`).
  *
- * `blocks` is directional — a row {card_id: A, other_card_id: B} means "A blocks
+ * `blocks` is directional - a row {card_id: A, other_card_id: B} means "A blocks
  * B" (equivalently "B is blocked by A"). `duplicates` and `relates` are symmetric
  * and stored once with card_id < other_card_id (see {@see CardRelation::SYMMETRIC}).
  *
@@ -36,7 +36,7 @@ class CardRelation extends Entity implements \JsonSerializable {
 	/** All valid relation types. */
 	public const TYPES = [self::TYPE_BLOCKS, self::TYPE_DUPLICATES, self::TYPE_RELATES];
 
-	/** Types with no direction — stored once in canonical (min, max) order. */
+	/** Types with no direction - stored once in canonical (min, max) order. */
 	public const SYMMETRIC = [self::TYPE_DUPLICATES, self::TYPE_RELATES];
 
 	protected ?int $cardId = null;

@@ -20,7 +20,7 @@ use OCP\Migration\SimpleMigrationStep;
  * is stored as a string so one column carries both numeric (fibonacci/linear/
  * hours) and textual (t-shirt) scales; see {@see \OCA\Kanso\Db\EstimateScale}.
  *
- * It is a plain sizing attribute — carried in the summary payload for the tile
+ * It is a plain sizing attribute - carried in the summary payload for the tile
  * chip, but it does NOT reorder cards, and no burndown/velocity is derived from
  * it (charter non-goal). Both column adds are guarded by hasColumn (idempotent).
  */

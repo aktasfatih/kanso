@@ -41,7 +41,7 @@ class CardReviewMapper extends QBMapper {
 	/**
 	 * Aggregate review state of every non-deleted card on a board that has any
 	 * review rows, as one query joining through `kanso_cards`. The aggregate
-	 * follows urgency precedence: changes_requested > pending > approved — so
+	 * follows urgency precedence: changes_requested > pending > approved - so
 	 * the tile chip shows the state that most needs attention.
 	 *
 	 * @return array<int, string> map of cardId => aggregate state
@@ -68,7 +68,7 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
-	 * Whether the card has any review that is not yet approved — the condition
+	 * Whether the card has any review that is not yet approved - the condition
 	 * the done-gate blocks on. A card with no review rows returns false (nothing
 	 * to wait for).
 	 *
@@ -91,7 +91,7 @@ class CardReviewMapper extends QBMapper {
 
 	/**
 	 * Every review requested from $reviewer across the given (readable) boards,
-	 * enriched with its card + board context — the cross-board "My Reviews"
+	 * enriched with its card + board context - the cross-board "My Reviews"
 	 * feed. One query joining through `kanso_cards` and `kanso_boards`; the
 	 * caller supplies the ACL-filtered board id set (see SearchService's
 	 * readable-boards discipline), so no per-row permission check is needed.
@@ -203,7 +203,7 @@ class CardReviewMapper extends QBMapper {
 
 	/**
 	 * Clears a review type from every review that used it (the review survives,
-	 * untyped) — the set-null cascade when a review type is deleted.
+	 * untyped) - the set-null cascade when a review type is deleted.
 	 *
 	 * @return int number of rows updated
 	 * @throws Exception
@@ -231,7 +231,7 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every review of a card — cascade for a card purge.
+	 * Removes every review of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

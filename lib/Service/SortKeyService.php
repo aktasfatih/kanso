@@ -15,21 +15,21 @@ use OverflowException;
  * Keys are non-empty base-36 strings over the alphabet 0-9 A-Z. The alphabet
  * is deliberately single-case: MySQL's default collations
  * (utf8mb4_general_ci / utf8mb4_0900_ai_ci) compare case-insensitively, which
- * would silently break a mixed-case (base-62) ordering — with digits and one
+ * would silently break a mixed-case (base-62) ordering - with digits and one
  * case only, byte comparison (strcmp / SQL ORDER BY) yields the same order
  * under every collation Nextcloud supports. Moving an item is a single-row
- * UPDATE of its key — no renumbering of siblings, ever.
+ * UPDATE of its key - no renumbering of siblings, ever.
  *
  * Algorithm choices:
  * - between(): digit-by-digit midpoint. When the two keys are adjacent at
  *   their current length (no midpoint digit exists), the result is extended by
  *   at most one character, so repeated bisection between the same neighbours
  *   grows key length only logarithmically.
- * - after(): increment with carry-truncation — bump the rightmost digit that
+ * - after(): increment with carry-truncation - bump the rightmost digit that
  *   is below 'Z' and drop everything after it; if the key is all 'Z',
  *   append the mid digit 'I'. Sequential appends therefore grow in VALUE,
  *   not length (~26 appends per extra character).
- * - before(): the symmetric decrement toward '0' — decrement the rightmost
+ * - before(): the symmetric decrement toward '0' - decrement the rightmost
  *   digit that is >= '2' and truncate; if the key contains only '0'/'1'
  *   digits, replace the final '1' with '0Z'.
  *
@@ -79,7 +79,7 @@ class SortKeyService {
 	}
 
 	/**
-	 * Returns a key k > $a — tail (append) insertion.
+	 * Returns a key k > $a - tail (append) insertion.
 	 *
 	 * Increment with carry-truncation keeps appended keys short: the rightmost
 	 * digit below 'Z' is bumped by one and the remainder dropped, so N
@@ -97,12 +97,12 @@ class SortKeyService {
 				return $this->guardLength(substr($a, 0, $i) . self::ALPHABET[$value + 1]);
 			}
 		}
-		// All digits are 'Z' — extend into the middle of the next level.
+		// All digits are 'Z' - extend into the middle of the next level.
 		return $this->guardLength($a . self::MID_DIGIT);
 	}
 
 	/**
-	 * Returns a key k < $b — head insertion.
+	 * Returns a key k < $b - head insertion.
 	 *
 	 * Symmetric to after(): the rightmost digit that is at least '2' is
 	 * decremented and the remainder truncated (decrementing '1' to '0' would
@@ -176,7 +176,7 @@ class SortKeyService {
 	}
 
 	/**
-	 * @throws OverflowException if the key exceeds MAX_KEY_LENGTH — the caller
+	 * @throws OverflowException if the key exceeds MAX_KEY_LENGTH - the caller
 	 *                           must rebalance the list
 	 */
 	private function guardLength(string $key): string {

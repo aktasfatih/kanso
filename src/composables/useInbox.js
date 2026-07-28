@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { getInbox as apiGetInbox } from '../services/api.js'
 
 /**
- * Composable for the Inbox feed — recent comments on cards the current user
+ * Composable for the Inbox feed - recent comments on cards the current user
  * watches, posted by other people.  Newest-first, server-filtered.
  *
  * Each item: { id, cardId, boardId, cardTitle, boardTitle, author,

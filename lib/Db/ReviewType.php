@@ -11,10 +11,10 @@ use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
 /**
- * A board-scoped review type (table `kanso_review_types`) — a customizable
+ * A board-scoped review type (table `kanso_review_types`) - a customizable
  * category (QA / Code / Legal / …) a review request can carry. Modelled on
  * {@see Label}: a named, optionally coloured, board-owned tag. It is JUST a
- * tag — no per-type workflow or gate.
+ * tag - no per-type workflow or gate.
  *
  * @method int getBoardId()
  * @method void setBoardId(int $boardId)

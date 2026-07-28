@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useCardHierarchy — parent/child card mutations (set parent, clear parent, add child).
+ * useCardHierarchy - parent/child card mutations (set parent, clear parent, add child).
  *
  * Optimistic strategy mirrors useChecklist / useCardActions (dual-cache pattern):
  *   1. Cancel in-flight queries for all affected keys.
@@ -228,7 +228,7 @@ export function useCardHierarchy(boardId) {
 	// ── addChild ──────────────────────────────────────────────────────────────
 	// Creates a new card in the parent's stack, then sets its parent. No
 	// optimistic patch for the create step (we don't have the new card's id
-	// yet); the create+setParent pair is made atomic — if setParent fails the
+	// yet); the create+setParent pair is made atomic - if setParent fails the
 	// just-created card is deleted so no orphan top-level card is left behind.
 	const addChildMutation = useMutation({
 		mutationFn: async ({ parentCard, title }) => {

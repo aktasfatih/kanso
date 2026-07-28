@@ -45,10 +45,10 @@ class ChangeMapper extends QBMapper {
 	}
 
 	/**
-	 * Highest change id of a board — the board's sync cursor and ETag
+	 * Highest change id of a board - the board's sync cursor and ETag
 	 * source. 0 for boards without any change rows (which regular flows
 	 * never produce: board creation itself writes the first row, and
-	 * pruning always retains each board's newest row — see
+	 * pruning always retains each board's newest row - see
 	 * {@see ChangeMapper::findPrunableIds()}).
 	 *
 	 * @throws Exception
@@ -68,7 +68,7 @@ class ChangeMapper extends QBMapper {
 
 	/**
 	 * Ids of change rows eligible for pruning: older than $olderThan, but
-	 * NEVER a board's newest row — deleting that would regress
+	 * NEVER a board's newest row - deleting that would regress
 	 * getLatestChangeId() to 0 for idle boards, flipping their ETag to "0"
 	 * and forcing a spurious full refetch on the next poll.
 	 *

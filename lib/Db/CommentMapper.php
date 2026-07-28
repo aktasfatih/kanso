@@ -39,7 +39,7 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
-	 * All non-deleted comments of a card, oldest first — the flat thread the
+	 * All non-deleted comments of a card, oldest first - the flat thread the
 	 * client nests by parent_comment_id.
 	 *
 	 * @return Comment[]
@@ -58,7 +58,7 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
-	 * The non-deleted direct replies of a top-level comment — used to cascade a
+	 * The non-deleted direct replies of a top-level comment - used to cascade a
 	 * delete over a whole thread.
 	 *
 	 * @return Comment[]
@@ -76,7 +76,7 @@ class CommentMapper extends QBMapper {
 
 	/**
 	 * Non-deleted comment count for every non-deleted card on a board that has
-	 * comments, as one grouped query joining through `kanso_cards` — the board
+	 * comments, as one grouped query joining through `kanso_cards` - the board
 	 * payload stays a constant number of queries. Cards without comments are
 	 * absent from the map (callers default to 0).
 	 *
@@ -106,7 +106,7 @@ class CommentMapper extends QBMapper {
 
 	/**
 	 * Soft-deletes every non-deleted reply of a top-level comment in one
-	 * set-based UPDATE — the cascade for a thread delete. Doing it as a single
+	 * set-based UPDATE - the cascade for a thread delete. Doing it as a single
 	 * statement (rather than read-then-update-each) closes the window where a
 	 * reply inserted concurrently with the parent's delete would survive as an
 	 * orphan, and avoids N round-trips.
@@ -238,7 +238,7 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
-	 * Hard-deletes every comment of a card (all threads) — cascade for a card
+	 * Hard-deletes every comment of a card (all threads) - cascade for a card
 	 * purge.
 	 *
 	 * @return int number of deleted rows

@@ -213,7 +213,7 @@ test.describe('Command Palette', () => {
 	test('Ctrl+K does NOT open palette when typing in a text input', async ({ page }) => {
 		await goToBoard(page)
 
-		// Focus the add-stack input (or search input) — any real text input
+		// Focus the add-stack input (or search input) - any real text input
 		const searchInput = page.locator('.search-box__input')
 		await expect(searchInput).toBeVisible({ timeout: 5000 })
 		await searchInput.focus()

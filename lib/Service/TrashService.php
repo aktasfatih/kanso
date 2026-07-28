@@ -30,7 +30,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *
  *   - listTrash needs READ on the board;
  *   - restore needs EDIT (it puts a card back into play);
- *   - purge needs MANAGE — it is the one irreversible, hard delete in the app,
+ *   - purge needs MANAGE - it is the one irreversible, hard delete in the app,
  *     cascading to the card's labels, assignees, reviews, checklist items and
  *     comments.
  *

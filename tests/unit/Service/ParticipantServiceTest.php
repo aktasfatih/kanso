@@ -81,7 +81,7 @@ class ParticipantServiceTest extends TestCase {
 
 	public function testReturnsOwnerUserAclsAndExpandedGroupsSortedAndDeduped(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		// bob is shared with directly AND a member of 'devs' — must appear once.
+		// bob is shared with directly AND a member of 'devs' - must appear once.
 		$this->aclMapper->method('findByBoard')->with(1)
 			->willReturn([$this->userAcl('bob'), $this->groupAcl('devs')]);
 
@@ -107,7 +107,7 @@ class ParticipantServiceTest extends TestCase {
 
 	public function testFallsBackToUidWhenUserIsUnresolvable(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		// An ACL row can outlive its user — the ghost stays listed by uid.
+		// An ACL row can outlive its user - the ghost stays listed by uid.
 		$this->aclMapper->method('findByBoard')->with(1)
 			->willReturn([$this->userAcl('deleted-user')]);
 		$this->userManager->method('get')->willReturnMap([

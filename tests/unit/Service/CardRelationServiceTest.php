@@ -128,7 +128,7 @@ class CardRelationServiceTest extends TestCase {
 			return $r;
 		});
 
-		// Adding from the higher id — still stored min→max.
+		// Adding from the higher id - still stored min→max.
 		$this->service->addRelation(20, 10, 'duplicates', 'alice');
 		self::assertSame(10, $captured->getCardId());
 		self::assertSame(20, $captured->getOtherCardId());

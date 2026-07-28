@@ -16,7 +16,7 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * Checklist items (`kanso_checklist_items`): lightweight, FLAT todo lines on a
  * single card (the user-requested "todo items"). Distinct from parent/child
- * cards — these are throwaway sub-tasks, not real cards on the board, so there
+ * cards - these are throwaway sub-tasks, not real cards on the board, so there
  * is deliberately no nesting (no parent_item_id).
  *
  * Items are ordered inside their card by the same fractional `sort_key` string

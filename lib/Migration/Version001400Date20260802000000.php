@@ -17,7 +17,7 @@ use OCP\Migration\SimpleMigrationStep;
  * Card links (`kanso_card_links`): manual GitHub PR/issue URLs attached to a
  * card, rendered as rich chips with a best-effort state badge. `state` is
  * refreshed by an unauthenticated GitHub API poll (throttled via `last_polled`)
- * — private/rate-limited stays `unknown`. No credentials are stored.
+ * - private/rate-limited stays `unknown`. No credentials are stored.
  *
  * Guarded (hasTable) so the step is idempotent.
  */
@@ -73,7 +73,7 @@ class Version001400Date20260802000000 extends SimpleMigrationStep {
 			]);
 			$table->setPrimaryKey(['id']);
 			$table->addIndex(['card_id'], 'kanso_card_links_card');
-			// One row per (card, url) — a re-paste of the same URL is idempotent.
+			// One row per (card, url) - a re-paste of the same URL is idempotent.
 			$table->addUniqueIndex(['card_id', 'url'], 'kanso_card_links_uniq');
 		}
 

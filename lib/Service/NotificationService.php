@@ -10,7 +10,7 @@ namespace OCA\Kanso\Service;
 use OCP\Notification\IManager;
 
 /**
- * Targeted (single-user) Nextcloud notifications — the delivery leg that the
+ * Targeted (single-user) Nextcloud notifications - the delivery leg that the
  * board-scoped {@see ChangeNotifier} (realtime fan-out to everyone) cannot
  * provide. Thin wrapper over the NC notification manager, keyed by a small set
  * of string subjects parsed back by {@see \OCA\Kanso\Notification\Notifier}.
@@ -112,7 +112,7 @@ class NotificationService {
 
 	/**
 	 * Dismisses a previously-sent "assigned to you" notification for the card
-	 * (e.g. after the user is unassigned). Idempotent — dismissing an absent
+	 * (e.g. after the user is unassigned). Idempotent - dismissing an absent
 	 * notification is a no-op at the manager level.
 	 */
 	public function dismissCardAssigned(int $cardId, string $targetUid): void {
@@ -128,7 +128,7 @@ class NotificationService {
 	/**
 	 * Dismisses a previously-sent "review requested" notification for the card
 	 * (e.g. after the request is withdrawn or the reviewer has acted).
-	 * Idempotent — dismissing an absent notification is a no-op.
+	 * Idempotent - dismissing an absent notification is a no-op.
 	 */
 	public function dismissReviewRequested(int $cardId, string $targetUid): void {
 		$notification = $this->manager->createNotification();

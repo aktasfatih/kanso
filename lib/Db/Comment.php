@@ -13,9 +13,9 @@ use OCP\DB\Types;
 /**
  * One card comment (table `kanso_comments`). A top-level comment has a null
  * `parentCommentId`; a reply carries the id of the top-level comment it answers
- * (one level only — enforced in {@see \OCA\Kanso\Service\CommentService}).
+ * (one level only - enforced in {@see \OCA\Kanso\Service\CommentService}).
  *
- * The body is raw markdown — rendered through the client-side DOMPurify
+ * The body is raw markdown - rendered through the client-side DOMPurify
  * sanitizer, never trusted as HTML. The author display name is NOT stored; the
  * controller resolves it from the uid at serialize time.
  *

@@ -62,7 +62,7 @@ test.describe('Card review flow', () => {
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 
-		// The board owner requests a review from themselves — a valid single-user
+		// The board owner requests a review from themselves - a valid single-user
 		// path (owner holds READ). Gives the card one pending review to drive the UI.
 		await apiSend('PUT', `/cards/${card.id}/reviews/${USER}`)
 	})

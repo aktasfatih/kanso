@@ -57,9 +57,9 @@ class BoardMapper extends QBMapper {
 	}
 
 	/**
-	 * All non-deleted boards visible to the given user — owned boards plus
+	 * All non-deleted boards visible to the given user - owned boards plus
 	 * boards shared with the user (or one of their groups) via
-	 * `kanso_board_acl` — most recently modified first.
+	 * `kanso_board_acl` - most recently modified first.
 	 *
 	 * @param string[] $groupIds ids of the groups the user is a member of
 	 * @return Board[]
@@ -84,7 +84,7 @@ class BoardMapper extends QBMapper {
 
 	/**
 	 * All non-deleted boards shared with the user directly or via one of
-	 * their groups. May contain a board twice-joined only once per row —
+	 * their groups. May contain a board twice-joined only once per row -
 	 * callers dedupe by id.
 	 *
 	 * @param string[] $groupIds

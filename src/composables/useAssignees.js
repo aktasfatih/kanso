@@ -23,7 +23,7 @@ function resolveBoardId(boardId) {
  * Assignee queries and mutations for a given board.
  *
  * Optimistic strategy for toggleAssignee (assign / unassign):
- *   Mirrors useLabels' onMutate EXACTLY — patch assigneeIds in BOTH the board
+ *   Mirrors useLabels' onMutate EXACTLY - patch assigneeIds in BOTH the board
  *   summary cache (via boardQueryKey) and the ['card', String(cardId)] detail
  *   cache; rollback both on error; invalidate both on settled.
  */
@@ -35,7 +35,7 @@ export function useAssignees(boardId) {
 	}
 
 	// ── Participants query ──────────────────────────────────────────────────────
-	// staleTime: 3 minutes — participants list changes rarely
+	// staleTime: 3 minutes - participants list changes rarely
 	const participants = useQuery({
 		queryKey: ['participants', resolveBoardId(boardId)],
 		queryFn: () => apiFetchParticipants(resolveBoardId(boardId)),

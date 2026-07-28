@@ -16,7 +16,7 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * The Inbox feed endpoint — activity (comments) on the cards the current user
+ * The Inbox feed endpoint - activity (comments) on the cards the current user
  * follows, across every board they can read.
  */
 class InboxController extends Controller {

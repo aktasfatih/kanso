@@ -32,7 +32,7 @@ async function ncLogin(page) {
 }
 
 // #3467: the label-settings colour-pick swatch must be a perfect circle, not an
-// oval — assert the rendered button is geometrically square.
+// oval - assert the rendered button is geometrically square.
 test.describe('Colour-pick swatch shape', () => {
 	const state = { boardId: 0 }
 

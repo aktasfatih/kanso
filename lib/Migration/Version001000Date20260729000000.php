@@ -24,18 +24,18 @@ use OCP\Migration\SimpleMigrationStep;
  * persisting a duplicate key; CardService catches that, re-derives once, and
  * surfaces a retryable 409 if it still collides.
  *
- * deleted_at (non-null, default 0) is part of the key so soft-deleted rows —
- * which keep their sort_key — never collide with a live row that later reuses
+ * deleted_at (non-null, default 0) is part of the key so soft-deleted rows -
+ * which keep their sort_key - never collide with a live row that later reuses
  * the freed key: live rows all share deleted_at=0, while each soft-deleted row
  * carries a distinct deletion timestamp. This is portable across
- * Postgres/MySQL/SQLite (a plain composite unique index — no partial index,
+ * Postgres/MySQL/SQLite (a plain composite unique index - no partial index,
  * no per-dialect SQL).
  *
  * Because the duplicate-key race existed before this index, an upgraded DB may
  * already carry colliding live rows that would make CREATE UNIQUE INDEX fail.
  * preSchemaChange() de-duplicates them first (self-healing): each loser gets a
  * disambiguated, still-valid key, and a later move re-derives a clean one.
- * Both steps are idempotent — a second run finds no duplicates and the index
+ * Both steps are idempotent - a second run finds no duplicates and the index
  * already present.
  */
 class Version001000Date20260729000000 extends SimpleMigrationStep {
@@ -57,8 +57,8 @@ class Version001000Date20260729000000 extends SimpleMigrationStep {
 		}
 
 		// Pass 1: seed the FULL set of live (stack_id, sort_key) pairs currently
-		// in use. Seeding every key up front — not just the rows already scanned
-		// — guarantees a re-keyed loser can never land on an as-yet-unvisited
+		// in use. Seeding every key up front - not just the rows already scanned
+		// - guarantees a re-keyed loser can never land on an as-yet-unvisited
 		// row's key and defeat the unique index the schema step then creates.
 		/** @var array<string, true> $occupied composite "stackId\0sortKey" in use */
 		$occupied = [];

@@ -180,7 +180,7 @@ class AssigneeServiceTest extends TestCase {
 
 	public function testAssignAcceptsParticipantWithReadViaGroupAcl(): void {
 		// A real PermissionService: carol is neither the owner nor a user ACL
-		// target, but her group 'devs' holds READ — that must satisfy the
+		// target, but her group 'devs' holds READ - that must satisfy the
 		// assignee membership check.
 		$board = $this->board();
 

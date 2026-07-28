@@ -17,7 +17,7 @@ use OCP\Migration\SimpleMigrationStep;
  * Card start date (`kanso_cards.start_date`): a nullable schedule start that
  * pairs with the existing due date to draw a start→due bar on the timeline
  * (Gantt) view. Due-only cards render as a milestone; cards with neither are
- * "unscheduled". Purely additive and nullable — no backfill needed.
+ * "unscheduled". Purely additive and nullable - no backfill needed.
  *
  * Guarded (hasColumn) so the step is idempotent.
  */

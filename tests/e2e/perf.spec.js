@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// @perf — excluded from the default `npm run test:e2e` run.
+// @perf - excluded from the default `npm run test:e2e` run.
 // Run explicitly: npx playwright test --grep @perf
 //
 // This spec requires the 'Perf Test Board' seeded by scripts/seed-board.mjs
@@ -145,7 +145,7 @@ test.describe('@perf 2000-card board performance', () => {
 		const domTilesAfterScroll = await page.locator('.card-tile-wrap').count()
 		console.log(`[PERF] DOM tile count after scroll: ${domTilesAfterScroll}`)
 
-		// Sanity assertions — not strict perf budgets, just ensure things work
+		// Sanity assertions - not strict perf budgets, just ensure things work
 		expect(initialRenderMs).toBeLessThan(10_000) // under 10s
 		expect(domTilesAfterScroll).toBeGreaterThan(0)
 		expect(Number(avgFps)).toBeGreaterThan(10) // at least 10 fps (headless baseline)

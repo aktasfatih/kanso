@@ -16,7 +16,7 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * The cross-board "My tasks" feed — open cards assigned to the current user
+ * The cross-board "My tasks" feed - open cards assigned to the current user
  * across every board they can read (ACL enforced in {@see MyCardsService}).
  */
 class MyCardsController extends Controller {

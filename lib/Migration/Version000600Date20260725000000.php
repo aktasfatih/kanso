@@ -16,7 +16,7 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * Parent/child cards: a nullable `parent_card_id` on `kanso_cards`. A card may
  * have one parent card on the same board; children are ordinary cards that also
- * live in their own stack. The hierarchy is deliberately ONE level — the parent
+ * live in their own stack. The hierarchy is deliberately ONE level - the parent
  * has no parent and a child has no children (enforced in
  * {@see \OCA\Kanso\Service\CardService::setParent}); the column alone would
  * allow deeper trees, but the deep-tree UI is out of scope (the sub-issue-tree

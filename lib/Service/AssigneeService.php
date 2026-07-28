@@ -21,7 +21,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * LabelService: assigning needs EDIT on the card's board, mutations append a
  * card-targeted row to the `kanso_changes` log, and both operations are
  * idempotent (no-op writes no change row). The assignee additionally must
- * hold READ on the board — assigning an outsider would create a reference
+ * hold READ on the board - assigning an outsider would create a reference
  * the board payload can never resolve for them.
  */
 class AssigneeService {
@@ -63,7 +63,7 @@ class AssigneeService {
 			$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent PUT lost the check-then-insert race — the
+				// Concurrent PUT lost the check-then-insert race - the
 				// assignment exists, which is the idempotent success case.
 				return;
 			}

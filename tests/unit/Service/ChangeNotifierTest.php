@@ -91,7 +91,7 @@ class ChangeNotifierTest extends TestCase {
 				self::greaterThan(0)
 			)
 			->willReturn($change);
-		// notify_push unavailable — the change row must land regardless.
+		// notify_push unavailable - the change row must land regardless.
 		$this->container->method('get')->willThrowException(new \Exception('no such service'));
 
 		self::assertSame($change, $this->notifier->notify(1, Change::ENTITY_CARD, 7, Change::ACTION_UPDATE, 'alice'));
@@ -104,7 +104,7 @@ class ChangeNotifierTest extends TestCase {
 			$this->userAcl('bob'),
 			$this->groupAcl('devs'),
 		]);
-		// 'bob' is reachable both directly and via the group — deduplicated.
+		// 'bob' is reachable both directly and via the group - deduplicated.
 		$group = $this->createMock(IGroup::class);
 		$group->method('getUsers')->willReturn([$this->user('bob'), $this->user('carol')]);
 		$this->groupManager->method('get')->with('devs')->willReturn($group);

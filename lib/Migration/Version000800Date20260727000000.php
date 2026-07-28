@@ -17,7 +17,7 @@ use OCP\Migration\SimpleMigrationStep;
  * Card comments / discussions (`kanso_comments`): threaded, ONE level deep.
  * A comment belongs to a card and optionally replies to a TOP-LEVEL comment
  * (parent_comment_id); a reply-to-a-reply is rejected at the service layer, so
- * the thread is always exactly two levels (comment + its replies) — the
+ * the thread is always exactly two levels (comment + its replies) - the
  * deep-tree trap is avoided by construction.
  *
  * Bodies are markdown, rendered through the same DOMPurify sanitizer as card

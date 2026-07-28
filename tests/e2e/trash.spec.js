@@ -107,7 +107,7 @@ test.describe('Trash', () => {
 	})
 
 	test.afterAll(async () => {
-		// Best-effort cleanup — ignore errors so a failed board creation does not
+		// Best-effort cleanup - ignore errors so a failed board creation does not
 		// leave the teardown in a broken state for the next run.
 		try {
 			if (state.boardId) {

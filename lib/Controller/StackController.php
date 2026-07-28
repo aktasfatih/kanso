@@ -61,7 +61,7 @@ class StackController extends Controller {
 	}
 
 	/**
-	 * Restores a soft-deleted stack — the undo for destroy(). A live (or
+	 * Restores a soft-deleted stack - the undo for destroy(). A live (or
 	 * unknown) stack surfaces as 404 via ApiErrorTrait.
 	 */
 	#[NoAdminRequired]

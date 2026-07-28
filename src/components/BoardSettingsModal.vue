@@ -633,7 +633,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 
 					<template v-if="revealedSecret">
-						<label class="github-webhook__label">{{ t('kanso', 'Secret — copy it now, it is shown only once') }}</label>
+						<label class="github-webhook__label">{{ t('kanso', 'Secret (copy it now, it is shown only once)') }}</label>
 						<div class="github-webhook__row">
 							<input class="github-webhook__input" type="text" readonly :value="revealedSecret">
 							<NcButton @click="copyText(revealedSecret)">{{ t('kanso', 'Copy') }}</NcButton>
@@ -692,10 +692,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										{{ t('kanso', 'Archive cards done AND created more than {n} days ago', { n: secondsToDays(rule.thresholdSeconds) }) }}
 									</template>
 									<span v-if="rule.stackId" class="automation__rule-scope">
-										— {{ t('kanso', 'stack: {name}', { name: resolveStackName(rule.stackId) }) }}
+										({{ t('kanso', 'stack: {name}', { name: resolveStackName(rule.stackId) }) }})
 									</span>
 									<span v-else class="automation__rule-scope">
-										— {{ t('kanso', 'whole board') }}
+										({{ t('kanso', 'whole board') }})
 									</span>
 								</span>
 
@@ -1379,12 +1379,12 @@ const props = defineProps({
 		type: String,
 		default: '',
 	},
-	/** stacks array from board payload — used in Workflow tab */
+	/** stacks array from board payload - used in Workflow tab */
 	stacks: {
 		type: Array,
 		default: () => [],
 	},
-	/** cards array from board payload — used in Recurring cards tab */
+	/** cards array from board payload - used in Recurring cards tab */
 	cards: {
 		type: Array,
 		default: () => [],
@@ -1912,7 +1912,7 @@ const leaveError = ref('')
 
 /**
  * The current user's own ACL entry (user-type, participant === currentUserId).
- * Shown only when such an entry exists — i.e., the user is a sharee, not the owner.
+ * Shown only when such an entry exists - i.e., the user is a sharee, not the owner.
  */
 const ownEntry = computed(() =>
 	props.acl.find(
@@ -1938,7 +1938,7 @@ async function doLeave() {
 /**
  * Try to resolve a human display name for an ACL entry.
  * For users: look up in the participants list first; fall back to uid.
- * For groups: use the participant value (gid) — no richer source available.
+ * For groups: use the participant value (gid) - no richer source available.
  */
 function resolveDisplayName(entry) {
 	if (entry.participantType === 'user') {
@@ -1999,7 +1999,7 @@ const createRuleError = ref('')
 
 async function submitCreateRule() {
 	// Reject a blank field ('' * 86400 === 0) so a rule that archives every
-	// done card immediately can't be created by accident — 0 must be explicit.
+	// done card immediately can't be created by accident - 0 must be explicit.
 	if (newRuleDays.value === '' || newRuleDays.value === null || newRuleDays.value < 0) return
 	isCreatingRule.value = true
 	createRuleError.value = ''
@@ -2174,7 +2174,7 @@ function humanRrule(rrule) {
 	if (count !== null) {
 		endPhrase = t('kanso', '· {n} times', { n: count })
 	} else if (until) {
-		// UNTIL is YYYYMMDDTHHMMSSZ — parse to a readable date
+		// UNTIL is YYYYMMDDTHHMMSSZ - parse to a readable date
 		const y = until.slice(0, 4)
 		const m = until.slice(4, 6)
 		const d = until.slice(6, 8)
@@ -2210,7 +2210,7 @@ async function toggleRecurRuleEnabled(rule, enabled) {
 
 // ── Recur rule: create now ────────────────────────────────────────────────────
 const creatingNowRuleId = ref(null)
-const createNowResults = ref({})   // Map<ruleId, true> — show "Created" flash
+const createNowResults = ref({})   // Map<ruleId, true> - show "Created" flash
 const createNowErrors = ref({})
 
 async function doCreateNow(rule) {
@@ -2373,7 +2373,7 @@ const {
 const autoRulesQuery = { isLoading: autoRulesLoading, isError: autoRulesError }
 const autoRules = computed(() => autoRulesData.value ?? [])
 
-// Trigger role choices — exclude "None" (a roleless stack never fires a rule).
+// Trigger role choices - exclude "None" (a roleless stack never fires a rule).
 const AUTO_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 0)
 
 /** Reviewer candidates: board participants (user ACL entries) plus the current user. */
@@ -3130,7 +3130,7 @@ async function doDeleteAutoRule(rule) {
 	cursor: default;
 }
 
-/* Remove browser spin buttons — they are tiny and touch-unfriendly */
+/* Remove browser spin buttons - they are tiny and touch-unfriendly */
 .workflow__wip-input::-webkit-inner-spin-button,
 .workflow__wip-input::-webkit-outer-spin-button {
 	opacity: 0.5;

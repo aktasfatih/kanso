@@ -17,7 +17,7 @@ use OCP\IUserSession;
 
 /**
  * Per-board automation-rule endpoints. All require MANAGE (enforced in
- * {@see AutomationService}) — automation is board configuration.
+ * {@see AutomationService}) - automation is board configuration.
  */
 class AutomationController extends Controller {
 	use ApiErrorTrait;

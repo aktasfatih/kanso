@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useCardActions — archive/unarchive and delete mutations for a single card.
+ * useCardActions - archive/unarchive and delete mutations for a single card.
  *
  * Optimistic strategy (mirrors useLabels.toggleLabel dual-cache pattern):
  *   1. Cancel in-flight board + card queries.
@@ -60,7 +60,7 @@ export function useCardActions(boardId, cardId) {
 			const previousBoard = queryClient.getQueryData(boardKey)
 			const previousCard = queryClient.getQueryData(cardKey)
 
-			// Patch board summary cache — flip the card's archived flag
+			// Patch board summary cache - flip the card's archived flag
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old
 				return {
@@ -137,7 +137,7 @@ export function useCardActions(boardId, cardId) {
 
 	// ── Restore (undo delete) ───────────────────────────────────────────────────
 	// Note: restore does NOT re-attach sub-cards that were detached when the card
-	// was deleted — this is documented self-healing behaviour.
+	// was deleted - this is documented self-healing behaviour.
 	const restoreCard = useMutation({
 		mutationFn: () => apiRestoreCard(resolve(cardId)),
 		onSettled: () => {

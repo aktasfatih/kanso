@@ -39,7 +39,7 @@ class AutomationRuleMapper extends QBMapper {
 	}
 
 	/**
-	 * A board's ENABLED rules for one trigger — the fire path.
+	 * A board's ENABLED rules for one trigger - the fire path.
 	 *
 	 * @return AutomationRule[]
 	 * @throws Exception
@@ -73,7 +73,7 @@ class AutomationRuleMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every rule of a board — cascade for a board purge.
+	 * Removes every rule of a board - cascade for a board purge.
 	 *
 	 * @return int
 	 * @throws Exception

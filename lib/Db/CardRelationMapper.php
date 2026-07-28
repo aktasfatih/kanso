@@ -64,7 +64,7 @@ class CardRelationMapper extends QBMapper {
 
 	/**
 	 * Relations where $cardId is the target (other_card_id), joined to the
-	 * source card — this is where "blocked by" comes from.
+	 * source card - this is where "blocked by" comes from.
 	 *
 	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool}>
 	 * @throws Exception
@@ -108,7 +108,7 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Every `blocks` edge on the board as [from, to] pairs — feeds the cycle
+	 * Every `blocks` edge on the board as [from, to] pairs - feeds the cycle
 	 * check when a new blocks relation is proposed.
 	 *
 	 * @return list<array{from: int, to: int}>
@@ -131,7 +131,7 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Card ids on the board that are blocked by at least one NOT-done card —
+	 * Card ids on the board that are blocked by at least one NOT-done card -
 	 * powers the tile "blocked" badge in one board-scoped query.
 	 *
 	 * @return int[]
@@ -157,7 +157,7 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every relation touching a card (either side) — cascade for a card
+	 * Removes every relation touching a card (either side) - cascade for a card
 	 * purge.
 	 *
 	 * @throws Exception

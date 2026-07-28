@@ -16,7 +16,7 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * Per-board GitHub webhook secret (`kanso_boards.webhook_secret`): an HMAC key
  * used to verify inbound `X-Hub-Signature-256` on the board's webhook endpoint.
- * Nullable — no secret means the webhook is disabled for that board. The value
+ * Nullable - no secret means the webhook is disabled for that board. The value
  * is MANAGE-only and is never included in the board payload (Board::jsonSerialize
  * deliberately omits it).
  *

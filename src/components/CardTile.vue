@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:class="{ 'card-tile--done': isDone }"
 			:data-card-id="card.id"
 			@click="$emit('click')">
-			<!-- Label chips row — only rendered when the card has assigned labels -->
+			<!-- Label chips row - only rendered when the card has assigned labels -->
 			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
 				<span
 					v-for="label in cardLabels"
@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
-			<!-- Card title — max 2 lines with ellipsis overflow -->
+			<!-- Card title - max 2 lines with ellipsis overflow -->
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
@@ -39,7 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<ProgressClockIcon :size="12" />
 					{{ t('kanso', 'In progress') }}
 				</span>
-				<!-- Blocked badge — shown when the card has an unresolved blocker -->
+				<!-- Blocked badge - shown when the card has an unresolved blocker -->
 				<span
 					v-if="card.blocked"
 					class="card-tile__blocked"
@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CancelIcon :size="12" />
 					{{ t('kanso', 'Blocked') }}
 				</span>
-				<!-- Priority indicator — only when priority > 0 -->
+				<!-- Priority indicator - only when priority > 0 -->
 				<span
 					v-if="card.priority > 0"
 					class="card-tile__priority"
@@ -59,14 +59,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<SignalCellular1Icon v-else :size="12" />
 					{{ priorityLabel }}
 				</span>
-				<!-- Estimate chip — shown only when card.estimate is truthy -->
+				<!-- Estimate chip - shown only when card.estimate is truthy -->
 				<span
 					v-if="card.estimate"
 					class="card-tile__estimate"
 					:aria-label="t('kanso', 'Estimate: {value}', { value: card.estimate })">
 					{{ card.estimate }}
 				</span>
-				<!-- Due date chip — suppress overdue/soon when done -->
+				<!-- Due date chip - suppress overdue/soon when done -->
 				<span
 					v-if="card.duedate"
 					class="card-tile__due"
@@ -74,7 +74,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CalendarIcon :size="14" />
 					{{ formatDue(card.duedate) }}
 				</span>
-				<!-- Checklist progress badge — only when the card has checklist items -->
+				<!-- Checklist progress badge - only when the card has checklist items -->
 				<span
 					v-if="card.checklist && card.checklist.total > 0"
 					class="card-tile__checklist"
@@ -83,7 +83,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CheckboxMarkedOutlineIcon :size="12" />
 					{{ card.checklist.done }}/{{ card.checklist.total }}
 				</span>
-				<!-- Child-progress badge — only when the card has children -->
+				<!-- Child-progress badge - only when the card has children -->
 				<span
 					v-if="card.childProgress && card.childProgress.total > 0"
 					class="card-tile__children"
@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<SitemapIcon :size="12" />
 					{{ card.childProgress.done }}/{{ card.childProgress.total }}
 				</span>
-				<!-- Comment count badge — only when there are comments -->
+				<!-- Comment count badge - only when there are comments -->
 				<span
 					v-if="card.commentCount > 0"
 					class="card-tile__comments"
@@ -100,7 +100,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CommentMultipleOutlineIcon :size="12" />
 					{{ card.commentCount }}
 				</span>
-				<!-- Review state chip — only when card.reviewState is non-null -->
+				<!-- Review state chip - only when card.reviewState is non-null -->
 				<span
 					v-if="card.reviewState"
 					class="card-tile__review"
@@ -110,7 +110,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<AlertDecagramIcon v-else-if="card.reviewState === 'changes_requested'" :size="12" />
 					<CheckDecagramOutlineIcon v-else :size="12" />
 				</span>
-				<!-- Assignee avatar stack — pushed to the right via margin-left:auto -->
+				<!-- Assignee avatar stack - pushed to the right via margin-left:auto -->
 				<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
 					<NcAvatar
 						v-for="uid in visibleAssigneeIds"
@@ -234,7 +234,7 @@ const isInProgress = computed(() => !isDone.value && Number(props.card.startedAt
 
 const dueDateClass = computed(() => {
 	if (!props.card.duedate) return ''
-	// When done, suppress overdue/soon coloring — show chip neutrally
+	// When done, suppress overdue/soon coloring - show chip neutrally
 	if (isDone.value) return ''
 	const due = new Date(props.card.duedate)
 	const now = new Date()
@@ -334,7 +334,7 @@ const extraAssigneeCount = computed(() => {
 	overflow: hidden;
 }
 
-/* Meta row — all badges on a single flex line; assignees pushed right */
+/* Meta row - all badges on a single flex line; assignees pushed right */
 .card-tile__meta {
 	display: flex;
 	flex-wrap: wrap;
@@ -536,7 +536,7 @@ const extraAssigneeCount = computed(() => {
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
 }
 
-/* Blocked badge — muted red attention chip */
+/* Blocked badge - muted red attention chip */
 .card-tile__blocked {
 	display: inline-flex;
 	align-items: center;
@@ -564,7 +564,7 @@ const extraAssigneeCount = computed(() => {
 	border: 1px solid var(--color-border);
 }
 
-/* Assignee avatar stack — inside .card-tile__meta, pushed to the right */
+/* Assignee avatar stack - inside .card-tile__meta, pushed to the right */
 .card-tile__assignees {
 	display: flex;
 	align-items: center;

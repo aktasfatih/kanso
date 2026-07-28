@@ -64,9 +64,9 @@ async function ncLogin(page) {
 
 // ── Hermetic test state ────────────────────────────────────────────────────────
 // Three cards on one board:
-//   1. "Alpha widget"       — card title match
-//   2. "Beta gadget"        — card description contains "photosynthesis"
-//   3. "Gamma fixture"      — has a comment containing "xylorimba"
+//   1. "Alpha widget"       - card title match
+//   2. "Beta gadget"        - card description contains "photosynthesis"
+//   3. "Gamma fixture"      - has a comment containing "xylorimba"
 test.describe('Search', () => {
 	const state = {
 		boardId: 0,
@@ -90,14 +90,14 @@ test.describe('Search', () => {
 		state.boardId = board.id
 		const stack = await apiPost('/stacks', { boardId: board.id, title: 'Backlog' })
 
-		// Card 1 — unique title term "Alpha widget"
+		// Card 1 - unique title term "Alpha widget"
 		const cardAlpha = await apiPost('/cards', {
 			stackId: stack.id,
 			title: 'Alpha widget',
 		})
 		state.cardAlphaId = cardAlpha.id
 
-		// Card 2 — title "Beta gadget", description contains "photosynthesis".
+		// Card 2 - title "Beta gadget", description contains "photosynthesis".
 		// Description is set via PATCH (card create is title-only by design).
 		const cardBeta = await apiPost('/cards', {
 			stackId: stack.id,
@@ -108,7 +108,7 @@ test.describe('Search', () => {
 			description: 'This card explains photosynthesis in plants.',
 		})
 
-		// Card 3 — title "Gamma fixture", comment contains "xylorimba"
+		// Card 3 - title "Gamma fixture", comment contains "xylorimba"
 		const cardGamma = await apiPost('/cards', {
 			stackId: stack.id,
 			title: 'Gamma fixture',
@@ -138,7 +138,7 @@ test.describe('Search', () => {
 		const searchInput = page.locator('.search-box__input')
 		await expect(searchInput).toBeVisible({ timeout: 5000 })
 
-		// Type "Alpha" — unique enough to match only "Alpha widget"
+		// Type "Alpha" - unique enough to match only "Alpha widget"
 		await searchInput.fill('Alpha')
 
 		// Dropdown should appear with the result

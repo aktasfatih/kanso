@@ -26,7 +26,7 @@ export function useCard(id, enabled) {
 		onSettled: (data, _error, variables) => {
 			const cardId = typeof id === 'object' ? id.value : id
 			queryClient.invalidateQueries({ queryKey: ['card', cardId] })
-			// Also invalidate the parent board — we don't know which board the card
+			// Also invalidate the parent board - we don't know which board the card
 			// belongs to here, but we have the result data or can invalidate all boards.
 			if (data?.boardId) {
 				// The board query key holds the route param, which is a string.

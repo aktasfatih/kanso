@@ -21,7 +21,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * reading needs READ on the card's board, every mutation needs EDIT and appends
  * a card-targeted row to the `kanso_changes` log (so the board ETag bumps and
  * realtime clients refetch the card and its progress count). Items are ordered
- * by a fractional sort key, so a reorder is a single-row UPDATE — a sort-key
+ * by a fractional sort key, so a reorder is a single-row UPDATE - a sort-key
  * overflow surfaces as 409 rebalance_required via the controller trait, exactly
  * like a card move.
  */

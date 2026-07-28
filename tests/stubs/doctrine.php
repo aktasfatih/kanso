@@ -10,8 +10,8 @@ declare(strict_types=1);
  *
  * The nextcloud/ocp dev package references Doctrine symbols (e.g. the
  * IQueryBuilder::PARAM_* constants and IDBConnection method defaults) that
- * only exist inside a real Nextcloud server. Reflecting those interfaces —
- * which PHPUnit's mock generator does for IDBConnection — evaluates the
+ * only exist inside a real Nextcloud server. Reflecting those interfaces -
+ * which PHPUnit's mock generator does for IDBConnection - evaluates the
  * constants and would fatal without these definitions. Shapes mirror
  * doctrine/dbal 4 as bundled with Nextcloud 32.
  */

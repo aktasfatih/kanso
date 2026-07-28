@@ -14,7 +14,7 @@ import { search as apiSearch } from '../services/api.js'
  * @returns {{ results, total, isFetching, debouncedTerm }}
  */
 export function useSearch(term, boardId, debounceMs = 250) {
-	// Manual debounce — @vueuse/core is not in the dependency tree
+	// Manual debounce - @vueuse/core is not in the dependency tree
 	const debouncedTerm = ref(term.value ?? '')
 	let debounceTimer = null
 
@@ -44,7 +44,7 @@ export function useSearch(term, boardId, debounceMs = 250) {
 				boardId: typeof boardId === 'object' ? boardId.value : boardId,
 			}),
 		enabled: isEnabled,
-		// Search results should never be served stale — always refetch on focus
+		// Search results should never be served stale - always refetch on focus
 		staleTime: 0,
 	})
 

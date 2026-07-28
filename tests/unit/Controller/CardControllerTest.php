@@ -234,7 +234,7 @@ class CardControllerTest extends TestCase {
 
 	public function testMoveMapsStaleSortKeyInputTo400(): void {
 		// Defensive: SortKeyService rejects malformed/misordered keys (built from
-		// stale client state) with InvalidInputException — must map to 400, not 500.
+		// stale client state) with InvalidInputException - must map to 400, not 500.
 		$this->cardService->method('move')
 			->willThrowException(new InvalidInputException('between() requires a < b'));
 
@@ -245,7 +245,7 @@ class CardControllerTest extends TestCase {
 
 	public function testMoveMapsSortKeyConflictTo409(): void {
 		// A concurrent move that keeps colliding after a retry surfaces as an
-		// \OverflowException — mapped to 409 (rebalance_required) so the client retries.
+		// \OverflowException - mapped to 409 (rebalance_required) so the client retries.
 		$this->cardService->method('move')
 			->willThrowException(new \OverflowException('sort key conflict on move after retry'));
 

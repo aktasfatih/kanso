@@ -113,7 +113,7 @@ test.describe('Keyboard navigation', () => {
 		const secondCard = s1.locator('.card-tile').nth(1)
 		await expect(secondCard).toBeFocused({ timeout: 3000 })
 
-		// ArrowDown at bottom clamps — still second card
+		// ArrowDown at bottom clamps - still second card
 		await page.keyboard.press('ArrowDown')
 		await page.waitForTimeout(200)
 		await expect(secondCard).toBeFocused({ timeout: 3000 })
@@ -148,7 +148,7 @@ test.describe('Keyboard navigation', () => {
 		await page.keyboard.press('ArrowDown')
 		await page.waitForTimeout(200)
 
-		// 'e' should open the card modal — URL should include /card/<id>
+		// 'e' should open the card modal - URL should include /card/<id>
 		await page.keyboard.press('e')
 		await page.waitForTimeout(500)
 
@@ -181,7 +181,7 @@ test.describe('Keyboard navigation', () => {
 		// Toggle done
 		await page.keyboard.press('d')
 
-		// Wait for done styling to appear (poll — the update is async)
+		// Wait for done styling to appear (poll - the update is async)
 		await expect(firstTile).toHaveClass(/card-tile--done/, { timeout: 8000 })
 
 		// Toggle done back
@@ -229,7 +229,7 @@ test.describe('Keyboard navigation', () => {
 		await page.keyboard.press('?')
 		await page.waitForTimeout(300)
 
-		// NcModal should be visible — look for the modal with keyboard shortcuts heading
+		// NcModal should be visible - look for the modal with keyboard shortcuts heading
 		const modal = page.locator('.modal-container, [role="dialog"]').filter({ hasText: 'Keyboard shortcuts' })
 		await expect(modal).toBeVisible({ timeout: 3000 })
 

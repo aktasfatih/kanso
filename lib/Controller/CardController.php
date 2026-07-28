@@ -30,7 +30,7 @@ use OCP\IUserSession;
 
 /**
  * Single-card endpoints. All responses serialize the full card payload
- * (including the description) — only the board/stack listings use the
+ * (including the description) - only the board/stack listings use the
  * summary shape.
  */
 class CardController extends Controller {
@@ -121,7 +121,7 @@ class CardController extends Controller {
 
 	/**
 	 * Sets ($parentCardId given) or clears ($parentCardId null) the card's
-	 * parent. One level, same board — invalid requests surface as 400 via
+	 * parent. One level, same board - invalid requests surface as 400 via
 	 * ApiErrorTrait. Returns the updated full card detail.
 	 */
 	#[NoAdminRequired]
@@ -176,7 +176,7 @@ class CardController extends Controller {
 	}
 
 	/**
-	 * Assigns a label of the card's board to the card. Idempotent — PUT of
+	 * Assigns a label of the card's board to the card. Idempotent - PUT of
 	 * an already assigned label succeeds without writing anything.
 	 */
 	#[NoAdminRequired]
@@ -188,7 +188,7 @@ class CardController extends Controller {
 	}
 
 	/**
-	 * Removes a label from the card. Idempotent — DELETE of an absent
+	 * Removes a label from the card. Idempotent - DELETE of an absent
 	 * assignment succeeds without writing anything.
 	 */
 	#[NoAdminRequired]
@@ -200,7 +200,7 @@ class CardController extends Controller {
 	}
 
 	/**
-	 * Assigns a user of the card's board to the card. Idempotent — PUT of
+	 * Assigns a user of the card's board to the card. Idempotent - PUT of
 	 * an already assigned user succeeds without writing anything.
 	 */
 	#[NoAdminRequired]
@@ -212,7 +212,7 @@ class CardController extends Controller {
 	}
 
 	/**
-	 * Removes an assigned user from the card. Idempotent — DELETE of an
+	 * Removes an assigned user from the card. Idempotent - DELETE of an
 	 * absent assignment succeeds without writing anything.
 	 */
 	#[NoAdminRequired]

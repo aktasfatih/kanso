@@ -66,7 +66,7 @@ class RecurrenceService {
 	/**
 	 * First occurrence strictly after $afterTs (unix seconds), honoring any
 	 * COUNT/UNTIL embedded in the RRULE. Returns 0 when the rule is exhausted
-	 * (no further occurrence) — the caller treats 0 as "self-disable".
+	 * (no further occurrence) - the caller treats 0 as "self-disable".
 	 *
 	 * The RRULE is anchored at $dtstartTs (the rule's creation time), so the
 	 * iterator only ever emits occurrences at or after that anchor.
@@ -117,7 +117,7 @@ class RecurrenceService {
 	/**
 	 * Creates a rule. The template card and the target stack must both belong
 	 * to $boardId; the RRULE must parse. The rule's owner is the creating user
-	 * — spawns run as them, so revoked board access naturally disables spawning.
+	 * - spawns run as them, so revoked board access naturally disables spawning.
 	 * `next_occurrence_at` is computed and stored on creation.
 	 *
 	 * @throws DoesNotExistException if the board, template card or target stack does not exist or is deleted
@@ -230,12 +230,12 @@ class RecurrenceService {
 	/**
 	 * Spawns a rule once immediately, ignoring its schedule, then persists the
 	 * usual bookkeeping (occurrences_spawned, last_spawned_at, recomputed
-	 * next_occurrence_at). Manual creation still honors skip_while_open? No —
+	 * next_occurrence_at). Manual creation still honors skip_while_open? No -
 	 * create-now is an explicit user action, so it always spawns.
 	 *
 	 * Schedule-advance decision: create-now does NOT bring the schedule forward
 	 * on its own. After the manual spawn we recompute next_occurrence_at as the
-	 * next occurrence at or after now, exactly as a scheduled spawn would — so a
+	 * next occurrence at or after now, exactly as a scheduled spawn would - so a
 	 * missed/early manual spawn never skips the upcoming scheduled fire, it just
 	 * stamps an extra card now. (Matches deck-recurrence "create now": it stamps
 	 * a card and leaves the cadence intact.)
@@ -264,7 +264,7 @@ class RecurrenceService {
 	 *
 	 * Bookkeeping always runs (except on a skip): occurrences_spawned and
 	 * last_spawned_at are bumped, and next_occurrence_at is recomputed from now
-	 * — 0 (COUNT/UNTIL exhausted) self-disables the rule.
+	 * - 0 (COUNT/UNTIL exhausted) self-disables the rule.
 	 *
 	 * @throws DoesNotExistException if the template card or target stack is gone
 	 * @throws NotPermittedException if the owner lost board access
@@ -304,13 +304,13 @@ class RecurrenceService {
 	 * CLONE: a new card at the bottom of the target stack (CardService handles
 	 * the EDIT check, the sort key and the CREATE change), then the template's
 	 * description, due date, labels and assignees copied over. The description
-	 * and due date ride the CREATE — no extra UPDATE change row.
+	 * and due date ride the CREATE - no extra UPDATE change row.
 	 */
 	private function spawnClone(RecurRule $rule, int $occurrenceTs): Card {
 		$template = $this->cardMapper->find($rule->getTemplateCardId());
 
 		// CardService::create runs as the owner: EDIT check, bottom-of-stack
-		// sort key, CREATE change — all in one place.
+		// sort key, CREATE change - all in one place.
 		$card = $this->cardService->create($rule->getTargetStackId(), $template->getTitle(), $rule->getOwner());
 
 		$card->setDescription($template->getDescription());
@@ -336,7 +336,7 @@ class RecurrenceService {
 	 * RESET: the template card is the one working card. Move it back to the
 	 * target stack (CardService::move handles the EDIT check, the sort key and
 	 * the MOVE change), then clear its done/archived state and re-arm the due
-	 * date per policy. The done/duedate reset rides a plain card UPDATE — no
+	 * date per policy. The done/duedate reset rides a plain card UPDATE - no
 	 * extra change row beyond the move.
 	 */
 	private function spawnReset(RecurRule $rule, int $occurrenceTs): Card {
@@ -418,7 +418,7 @@ class RecurrenceService {
 	// ---- cron entry -------------------------------------------------------
 
 	/**
-	 * Spawns every due rule — the cron entry point. Each rule runs in its own
+	 * Spawns every due rule - the cron entry point. Each rule runs in its own
 	 * try/catch so one broken rule (deleted template, lost board access) cannot
 	 * stall the rest; failures are logged and skipped.
 	 *
@@ -467,7 +467,7 @@ class RecurrenceService {
 		}
 		// Parse-validate the RRULE (throws InvalidInputException on garbage).
 		// We anchor at "now" purely to construct the iterator; the result is
-		// discarded here — the point is to reject unparseable rules.
+		// discarded here - the point is to reject unparseable rules.
 		$this->computeNextOccurrence($rrule, $this->time->getTime(), $this->time->getTime());
 
 		$card = $this->loadCard($templateCardId);

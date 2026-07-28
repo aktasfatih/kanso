@@ -20,13 +20,13 @@ use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
  * Per-board automation: a deliberately small, FIXED trigger→action menu (no
- * scripting, no DSL — the charter's Jira trap). Rules are configured by a MANAGE
+ * scripting, no DSL - the charter's Jira trap). Rules are configured by a MANAGE
  * user and evaluated server-side at the card-move choke point.
  *
- * v1 trigger: `card_entered_role` — a card moved into a stack carrying role R.
+ * v1 trigger: `card_entered_role` - a card moved into a stack carrying role R.
  * v1 actions: `request_review` (from a reviewer) and `add_label`. Neither action
  * moves the card or changes its role/done state, so an automated action can
- * never re-trigger a rule — no loop is possible in v1 (a guard becomes necessary
+ * never re-trigger a rule - no loop is possible in v1 (a guard becomes necessary
  * only when a card-moving action like move-to-role is added).
  */
 class AutomationService {
@@ -114,7 +114,7 @@ class AutomationService {
 	/**
 	 * Fire path: a card just entered a stack with role $role. Applies every
 	 * enabled `card_entered_role` rule of the board whose configured role matches.
-	 * Best-effort — a failing rule (e.g. a reviewer who lost access) is skipped,
+	 * Best-effort - a failing rule (e.g. a reviewer who lost access) is skipped,
 	 * never blocking the move that triggered it. No permission check: the caller
 	 * (CardService::move) has already gated the move with EDIT.
 	 */
@@ -135,7 +135,7 @@ class AutomationService {
 			try {
 				$this->applyAction($rule->getAction(), $params, $card, $actorUid);
 			} catch (\Throwable) {
-				// Best-effort — a broken rule never blocks the triggering move.
+				// Best-effort - a broken rule never blocks the triggering move.
 			}
 		}
 	}
@@ -187,7 +187,7 @@ class AutomationService {
 			return ['role' => $role, 'reviewer' => $reviewer];
 		}
 
-		// add_label — the label must belong to this board.
+		// add_label - the label must belong to this board.
 		$labelId = (int)($params['label'] ?? 0);
 		try {
 			$label = $this->labelMapper->find($labelId);

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useBoardSubscription — watch / unwatch a whole board.
+ * useBoardSubscription - watch / unwatch a whole board.
  *
  * Optimistic strategy mirrors useSubscription, but patches the board query
  * cache's top-level `subscription` block ({subscribed, subscribers, count}):

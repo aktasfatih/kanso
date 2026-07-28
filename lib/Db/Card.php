@@ -17,7 +17,7 @@ use OCP\DB\Types;
  * \OCA\Kanso\Service\SortKeyService); a move is a single-row UPDATE.
  *
  * Note: entities hydrated by the summary queries in {@see CardMapper} do not
- * carry the description (it stays null) — only CardMapper::find() loads it.
+ * carry the description (it stays null) - only CardMapper::find() loads it.
  *
  * @method int getBoardId()
  * @method void setBoardId(int $boardId)
@@ -100,7 +100,7 @@ class Card extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * Summary payload for board/stack listings — deliberately without the
+	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
 	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string}
@@ -127,7 +127,7 @@ class Card extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * Full payload including the description — only meaningful for entities
+	 * Full payload including the description - only meaningful for entities
 	 * hydrated by {@see CardMapper::find()} (summary queries leave the
 	 * description null).
 	 *

@@ -106,7 +106,7 @@ test.describe('Card priorities', () => {
 
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// The priority pill lives in the attribute bar — it's the first pill.
+		// The priority pill lives in the attribute bar - it's the first pill.
 		const attrbar = page.locator('.card-modal__attrbar')
 		const priorityPill = attrbar.locator('button.card-modal__pill').first()
 		await expect(priorityPill).toBeVisible({ timeout: 5000 })
@@ -127,7 +127,7 @@ test.describe('Card priorities', () => {
 			.filter({ hasText: 'High Priority Card' })
 			.locator('.card-tile__priority')
 		await expect(priorityBadge).toBeVisible({ timeout: 5000 })
-		// High is priority level 3 — badge should carry the --3 class
+		// High is priority level 3 - badge should carry the --3 class
 		await expect(priorityBadge).toHaveClass(/card-tile__priority--3/, { timeout: 3000 })
 	})
 
@@ -163,7 +163,7 @@ test.describe('Card priorities', () => {
 		await expect(urgentBadge).toBeVisible({ timeout: 5000 })
 	})
 
-	test('filter to Urgent only — High card is hidden; clear filter restores it', async ({ page }) => {
+	test('filter to Urgent only - High card is hidden; clear filter restores it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
@@ -195,7 +195,7 @@ test.describe('Card priorities', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'High Priority Card' }))
 			.not.toBeVisible({ timeout: 5000 })
 
-		// Clear the filter by reopening the menu and unchecking Urgent (robust —
+		// Clear the filter by reopening the menu and unchecking Urgent (robust -
 		// avoids the teleported "Clear filters" NcActionButton).
 		await filterMenu.click()
 		const urgentAgain = page.locator('.board-view__filter-priority-item--4')

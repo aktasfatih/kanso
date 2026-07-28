@@ -29,7 +29,7 @@ class WebhookController extends Controller {
 
 	/**
 	 * The exact request body bytes, captured in the constructor BEFORE NC's
-	 * argument resolution reads (and thus consumes) php://input — HMAC must run
+	 * argument resolution reads (and thus consumes) php://input - HMAC must run
 	 * over these exact bytes, not a re-encoding of the parsed params.
 	 */
 	private string $rawBody;
@@ -53,7 +53,7 @@ class WebhookController extends Controller {
 			$result = $this->webhookService->handleWebhook($id, $signature, $this->rawBody);
 			return new JSONResponse($result);
 		} catch (NotPermittedException $e) {
-			// Missing/invalid signature or a disabled webhook — a throttled failure
+			// Missing/invalid signature or a disabled webhook - a throttled failure
 			// so repeated bad-signature deliveries to this public endpoint are
 			// rate-limited (valid deliveries above are never throttled).
 			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);

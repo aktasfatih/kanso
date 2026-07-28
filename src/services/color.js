@@ -4,7 +4,7 @@
 /**
  * Colors are stored and transferred as bare 6-hex strings (the server's
  * ColorValidator rejects anything else, including a leading '#'). The '#'
- * exists only at the CSS boundary — always go through this helper when
+ * exists only at the CSS boundary - always go through this helper when
  * binding a color into a style.
  */
 export function cssColor(color) {

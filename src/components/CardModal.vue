@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			class="card-modal"
 			:class="`card-modal--tab-${viewMode}`"
 			@keydown.escape="closeModal">
-			<!-- Loading state — real layout, shimmer, never a spinner -->
+			<!-- Loading state - real layout, shimmer, never a spinner -->
 			<div v-if="isLoading" class="card-modal__skeleton">
 				<div class="card-modal__sk-header">
 					<div class="card-modal__sk-col">
@@ -51,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Card content -->
 			<template v-else-if="cardData">
-				<!-- Verdict banner — shown when the current user owes a verdict on this card -->
+				<!-- Verdict banner - shown when the current user owes a verdict on this card -->
 				<div
 					v-for="review in myPendingReviews"
 					:key="`verdict-${review.id}`"
@@ -497,7 +497,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
-				<!-- Mobile tab bar — visible only on narrow viewports, sits under the attribute bar -->
+				<!-- Mobile tab bar - visible only on narrow viewports, sits under the attribute bar -->
 				<div class="card-modal__tabbar">
 					<button
 						class="card-modal__tab"
@@ -567,7 +567,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 						</section>
 
-						<!-- Checklist — promoted next to the description -->
+						<!-- Checklist - promoted next to the description -->
 						<section v-if="checklistTotal > 0 || canEdit" class="card-modal__checklist">
 							<div class="card-modal__checklist-head">
 								<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-head-icon" />
@@ -790,7 +790,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
 						</section>
 
-						<!-- Relations — shown only when the card has relations, or the
+						<!-- Relations - shown only when the card has relations, or the
 						     editor was opened from the ⋯ menu -->
 						<section
 							v-if="hasAnyRelation || showRelationEditor"
@@ -1112,17 +1112,17 @@ const props = defineProps({
 const router = useRouter()
 const route = useRoute()
 
-// Board id from route params — modal is a child route of /boards/:id
+// Board id from route params - modal is a child route of /boards/:id
 const boardId = computed(() => route.params.id)
 
-// Modal is open when this component is mounted — enabled is always true here
+// Modal is open when this component is mounted - enabled is always true here
 const isOpen = ref(true)
 const { data: cardData, isLoading, isError, updateCard } = useCard(
 	computed(() => props.cardId),
 	isOpen,
 )
 
-// Read board data from cache (same queryKey as BoardView — no extra request).
+// Read board data from cache (same queryKey as BoardView - no extra request).
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
@@ -1154,7 +1154,7 @@ async function handleDelete() {
 	try {
 		await deleteCard.mutateAsync()
 		closeModal()
-		// Note: restore does NOT re-attach sub-cards that were detached on delete —
+		// Note: restore does NOT re-attach sub-cards that were detached on delete -
 		// this is documented self-healing behaviour acceptable for this MVP.
 		showUndo(t('kanso', 'Card deleted'), () => {
 			restoreCard.mutate()
@@ -1245,7 +1245,7 @@ const cardReviews = computed(() =>
 
 // Participants offerable for the CURRENTLY-SELECTED review type. A card may hold
 // several reviews per person (one per type), so we only exclude a participant
-// who already holds a review of the selected type — switching the type re-opens
+// who already holds a review of the selected type - switching the type re-opens
 // them, which is how you add multiple reviews to one card.
 const unrequestedParticipants = computed(() => {
 	const list = Array.isArray(participants.data.value) ? participants.data.value : []
@@ -1256,7 +1256,7 @@ const unrequestedParticipants = computed(() => {
 	return list.filter((p) => !requested.has(p.uid))
 })
 
-// Every review of the current user that still needs their verdict — a person may
+// Every review of the current user that still needs their verdict - a person may
 // have more than one (different types), each gets its own verdict controls.
 const myPendingReviews = computed(() =>
 	cardReviews.value.filter((r) =>
@@ -1332,7 +1332,7 @@ function reviewStateLabel(state) {
 // ── Done toggle ──────────────────────────────────────────────────────────────
 const isDone = computed(() => Number(cardData.value?.doneAt) > 0)
 
-// Derived status (done_at / started_at) — the card-view control + the board's
+// Derived status (done_at / started_at) - the card-view control + the board's
 // stack-role automation both drive it.
 const STATUS_OPTIONS = [
 	{ key: 'not_started', label: t('kanso', 'Not started') },
@@ -1662,7 +1662,7 @@ async function onItemDrop(event, targetItem) {
 
 	// Closest-edge: dropping on the TOP half of the target inserts the item
 	// before it, on the bottom half after it. This makes "move to the very top"
-	// reachable — a top-half drop on the first row resolves to afterItemId=null.
+	// reachable - a top-half drop on the first row resolves to afterItemId=null.
 	const rect = event.currentTarget.getBoundingClientRect()
 	const dropBefore = event.clientY - rect.top < rect.height / 2
 
@@ -1700,7 +1700,7 @@ const {
 	deleteComment,
 } = useComments(computed(() => props.cardId), boardId)
 
-// Current user uid — used to gate edit/delete controls to the comment author
+// Current user uid - used to gate edit/delete controls to the comment author
 const currentUserId = getCurrentUser()?.uid ?? ''
 
 // EDIT permission bit (bit 1, value 2) from board payload
@@ -1921,7 +1921,7 @@ const availableChildCards = computed(() => {
 	)
 })
 
-// Cards eligible to be THIS card's parent — any top-level card (no parent) other
+// Cards eligible to be THIS card's parent - any top-level card (no parent) other
 // than itself. Only offered when this card has no children of its own.
 const availableParentCards = computed(() => {
 	const cards = boardData.value?.cards ?? []
@@ -2901,7 +2901,7 @@ const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelI
 	border-radius: 10px;
 	overflow: hidden;
 	/* overflow:hidden zeroes min-height:auto for a flex item, so the column
-	   scroll container would otherwise shrink this box to nothing — pin it. */
+	   scroll container would otherwise shrink this box to nothing - pin it. */
 	flex-shrink: 0;
 }
 .card-modal__checklist-head {

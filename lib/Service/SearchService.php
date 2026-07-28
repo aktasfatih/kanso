@@ -13,7 +13,7 @@ use OCA\Kanso\Db\CommentMapper;
 
 /**
  * In-app search over card titles/descriptions and comment bodies. Portable v1:
- * a case-insensitive LIKE across the readable set (no per-dialect full-text —
+ * a case-insensitive LIKE across the readable set (no per-dialect full-text -
  * that stays a measurement-gated bet). Results are ALWAYS constrained to the
  * boards the user can READ (derived from BoardService, never the client) so a
  * hit can never leak a card from an inaccessible board. There is deliberately
@@ -24,7 +24,7 @@ use OCA\Kanso\Db\CommentMapper;
  * merge so one noisy source cannot crowd out the others.
  */
 class SearchService {
-	/** Per-source row cap before merge/rank — bounds the LIKE scan. */
+	/** Per-source row cap before merge/rank - bounds the LIKE scan. */
 	private const SOURCE_CAP = 100;
 
 	private const RANK_CARD_TITLE = 3;
@@ -102,7 +102,7 @@ class SearchService {
 	/**
 	 * The readable board ids for the user, optionally narrowed to a single
 	 * requested board. Requesting a board the user cannot read yields an empty
-	 * set (no results) rather than an error — the ACL is enforced by omission.
+	 * set (no results) rather than an error - the ACL is enforced by omission.
 	 *
 	 * @return int[]
 	 */

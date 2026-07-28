@@ -112,7 +112,7 @@ function fullDate(createdAt) {
 }
 
 /**
- * Human-readable relative time — mirrors the logic in ReviewRow.vue.
+ * Human-readable relative time - mirrors the logic in ReviewRow.vue.
  * @param {number} createdAt - Unix timestamp in seconds
  */
 function relativeTime(createdAt) {

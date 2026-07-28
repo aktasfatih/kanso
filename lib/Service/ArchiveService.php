@@ -26,8 +26,8 @@ use OCP\AppFramework\Utility\ITimeFactory;
  *
  * The sweep itself is a plain query + per-card UPDATE, driven both by the
  * {@see \OCA\Kanso\Cron\ArchiveDoneCards} cron and the manual archive-now
- * endpoint. It is idempotent — the eligibility query excludes anything
- * already archived, deleted or not done — and capped at MAX_PER_SWEEP so a
+ * endpoint. It is idempotent - the eligibility query excludes anything
+ * already archived, deleted or not done - and capped at MAX_PER_SWEEP so a
  * board with years of done cards cannot stall the cron in one pass.
  */
 class ArchiveService {
@@ -159,7 +159,7 @@ class ArchiveService {
 	// ---- sweep ------------------------------------------------------------
 
 	/**
-	 * Sweeps every enabled rule across all boards — the cron entry point.
+	 * Sweeps every enabled rule across all boards - the cron entry point.
 	 * Each rule is capped at MAX_PER_SWEEP per pass so a huge board cannot
 	 * stall the job; a rule that throws (e.g. its board was hard-deleted out
 	 * from under it) is skipped so it cannot block the others.
@@ -181,7 +181,7 @@ class ArchiveService {
 
 	/**
 	 * Cards eligible for archive under this rule right now (capped at
-	 * MAX_PER_SWEEP). Delegates the predicate to the mapper — see
+	 * MAX_PER_SWEEP). Delegates the predicate to the mapper - see
 	 * {@see CardMapper::findEligibleForArchive()}.
 	 *
 	 * @return Card[]
@@ -210,7 +210,7 @@ class ArchiveService {
 		foreach ($this->findEligibleCards($rule) as $card) {
 			$card->setArchived(true);
 			$this->cardMapper->update($card);
-			// System actor (null) — the sweep is not attributed to a user.
+			// System actor (null) - the sweep is not attributed to a user.
 			$this->changeNotifier->notify(
 				$rule->getBoardId(),
 				Change::ENTITY_CARD,

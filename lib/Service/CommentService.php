@@ -17,17 +17,17 @@ use OCA\Kanso\Db\CommentMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
- * Card comments / discussions — a ONE-level thread (top-level comments + their
+ * Card comments / discussions - a ONE-level thread (top-level comments + their
  * replies, no deeper nesting). Reading needs READ on the card's board; posting
  * and replying need EDIT; a comment may be edited only by its author, and
  * deleted by its author or a board MANAGE-holder. Deleting a top-level comment
  * cascades a soft-delete over its replies so no reply is orphaned. Every
  * mutation appends a card-targeted row to the `kanso_changes` log (reusing
- * ENTITY_CARD/ACTION_UPDATE — a comment change is a card change for sync) so the
+ * ENTITY_CARD/ACTION_UPDATE - a comment change is a card change for sync) so the
  * board ETag bumps and realtime clients refetch.
  *
  * Bodies are stored raw (markdown) and MUST be rendered through the client
- * DOMPurify sanitizer — never trusted as HTML.
+ * DOMPurify sanitizer - never trusted as HTML.
  */
 class CommentService {
 	private const MAX_BODY_LENGTH = 10000;
@@ -63,7 +63,7 @@ class CommentService {
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the body is empty/too long, or the parent is invalid (missing, other card, deleted, or itself a reply — one level only)
+	 * @throws InvalidInputException if the body is empty/too long, or the parent is invalid (missing, other card, deleted, or itself a reply - one level only)
 	 */
 	public function addComment(int $cardId, string $body, ?int $parentCommentId, string $actorUid): Comment {
 		$body = $this->normalizeBody($body);

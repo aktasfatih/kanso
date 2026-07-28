@@ -18,7 +18,7 @@ use OCP\IDBConnection;
 /**
  * Stack CRUD. Every mutation appends a row to the `kanso_changes` log in
  * the same flow (see BoardService). New stacks are appended to the end of
- * the board via fractional sort keys — no sibling renumbering.
+ * the board via fractional sort keys - no sibling renumbering.
  */
 class StackService {
 	private const MAX_TITLE_LENGTH = 100;
@@ -72,8 +72,8 @@ class StackService {
 	/**
 	 * Updates the given fields (null = leave unchanged). `role` is one of the
 	 * Stack::ROLE_* constants (moving a card into a done-role stack stamps its
-	 * done_at — see CardService::move); `wipLimit` is a non-negative soft cap
-	 * (null clears it — no server-side enforcement, the client warns).
+	 * done_at - see CardService::move); `wipLimit` is a non-negative soft cap
+	 * (null clears it - no server-side enforcement, the client warns).
 	 *
 	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
@@ -144,7 +144,7 @@ class StackService {
 	}
 
 	/**
-	 * Restores a soft-deleted stack (clears deleted_at) — the undo for
+	 * Restores a soft-deleted stack (clears deleted_at) - the undo for
 	 * {@see self::delete()}. The stack's cards were never touched by the delete,
 	 * so they reappear with it. Emits an ACTION_CREATE change so clients re-add
 	 * the column. Rejects a live stack so a stale undo can't resurrect one that
@@ -179,10 +179,10 @@ class StackService {
 	 * Moves the stack inside its board: directly after $afterStackId, or to
 	 * the front of the board when $afterStackId is null. Neighbours are
 	 * resolved in-memory from the board's stack list with the moved stack
-	 * excluded — otherwise dropping on the left edge of the stack to the
+	 * excluded - otherwise dropping on the left edge of the stack to the
 	 * right would yield the moved stack as its own predecessor. The
 	 * transaction makes the stack update and its change row atomic (rollback
-	 * on failure), mirroring CardService::move — including its accepted
+	 * on failure), mirroring CardService::move - including its accepted
 	 * concurrent-move caveat (duplicate keys possible under READ COMMITTED;
 	 * cosmetic, next move repairs it).
 	 *
@@ -231,7 +231,7 @@ class StackService {
 	 * excluded.
 	 *
 	 * @param list<Stack> $siblings
-	 * @throws \OverflowException if the key would overflow — rebalance needed
+	 * @throws \OverflowException if the key would overflow - rebalance needed
 	 */
 	private function deriveMoveKey(array $siblings, ?Stack $anchor): string {
 		if ($anchor === null) {
@@ -255,7 +255,7 @@ class StackService {
 	/**
 	 * Validates the move anchor against the in-memory sibling list. Any
 	 * unusable anchor (the moved stack itself, or not among the board's
-	 * live stacks) is invalid input — the client's picture of the board is
+	 * live stacks) is invalid input - the client's picture of the board is
 	 * stale, not the moved stack's fault.
 	 *
 	 * @param list<Stack> $siblings

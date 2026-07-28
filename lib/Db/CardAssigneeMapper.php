@@ -16,7 +16,7 @@ use OCP\IDBConnection;
  * Mapper for `kanso_card_assignees`, the card/assignee assignment rows.
  *
  * Only user assignees exist for now, so every query filters on
- * `type = TYPE_USER` — group rows (if they ever appear) stay invisible
+ * `type = TYPE_USER` - group rows (if they ever appear) stay invisible
  * until group assignment ships.
  *
  * @template-extends QBMapper<CardAssignee>
@@ -28,7 +28,7 @@ class CardAssigneeMapper extends QBMapper {
 
 	/**
 	 * Assignee uids of every non-deleted card on a board, as one query
-	 * joining through `kanso_cards` — the board payload stays a fixed number
+	 * joining through `kanso_cards` - the board payload stays a fixed number
 	 * of queries no matter how many cards carry assignees.
 	 *
 	 * @return array<int, string[]> map of cardId => uids in assignment order
@@ -112,7 +112,7 @@ class CardAssigneeMapper extends QBMapper {
 	 * Removes the user's assignments from every card of the board (stale-
 	 * assignee cleanup after an unshare). DELETE cannot join in the NC query
 	 * builder, so the board's card ids arrive via an uncorrelated subquery
-	 * spliced in with createFunction — same pattern as
+	 * spliced in with createFunction - same pattern as
 	 * {@see ChangeMapper::findPrunableIds()}. The subquery's parameter is
 	 * registered on the outer builder, which is the one that executes.
 	 *
@@ -135,7 +135,7 @@ class CardAssigneeMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every assignee of a card — cascade for a card purge.
+	 * Removes every assignee of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

@@ -24,7 +24,7 @@ class CardLabelMapper extends QBMapper {
 
 	/**
 	 * Label ids of every non-deleted card on a board, as one query joining
-	 * through `kanso_cards` — the board payload stays a fixed number of
+	 * through `kanso_cards` - the board payload stays a fixed number of
 	 * queries no matter how many cards carry labels.
 	 *
 	 * @return array<int, int[]> map of cardId => labelIds in assignment order
@@ -114,7 +114,7 @@ class CardLabelMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every label assignment of a card — cascade for a card purge.
+	 * Removes every label assignment of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception
@@ -128,7 +128,7 @@ class CardLabelMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every assignment of a label — the cascade for label deletion.
+	 * Removes every assignment of a label - the cascade for label deletion.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

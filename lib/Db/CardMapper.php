@@ -22,7 +22,7 @@ use OCP\IDBConnection;
 class CardMapper extends QBMapper {
 	/**
 	 * Every column EXCEPT `description`. The description is deliberately
-	 * excluded from board/stack listings — this is the charter's
+	 * excluded from board/stack listings - this is the charter's
 	 * summary-payload performance bet: board endpoints stay small no matter
 	 * how long card descriptions get. The description is loaded only by
 	 * {@see CardMapper::find()} when a single card is opened.
@@ -52,7 +52,7 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Full row including the description — single-card detail fetch.
+	 * Full row including the description - single-card detail fetch.
 	 *
 	 * @throws DoesNotExistException if the card does not exist
 	 * @throws MultipleObjectsReturnedException
@@ -106,7 +106,7 @@ class CardMapper extends QBMapper {
 
 	/**
 	 * Summary (no description) of the non-deleted card directly after the
-	 * given sort key in a stack — the lower neighbour of a move target
+	 * given sort key in a stack - the lower neighbour of a move target
 	 * position. Null when the position is at the end of the stack.
 	 *
 	 * @throws Exception
@@ -146,7 +146,7 @@ class CardMapper extends QBMapper {
 
 	/**
 	 * Summary (no description) of the last non-deleted card of a stack in
-	 * display order, or null for an empty stack — the append anchor for
+	 * display order, or null for an empty stack - the append anchor for
 	 * card creation and move-to-end.
 	 *
 	 * @throws Exception
@@ -167,7 +167,7 @@ class CardMapper extends QBMapper {
 	/**
 	 * Cards (with description) matching a LIKE pattern in their title or
 	 * description, restricted to the given readable boards and non-deleted.
-	 * Portable case-insensitive LIKE (no per-dialect full-text) — the pattern is
+	 * Portable case-insensitive LIKE (no per-dialect full-text) - the pattern is
 	 * pre-escaped and wrapped by the caller. Title matches sort first, then most
 	 * recent. $boardIds must be non-empty (the caller returns early otherwise).
 	 *
@@ -192,7 +192,7 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Summaries (no description) of the SOFT-DELETED cards of a board — the
+	 * Summaries (no description) of the SOFT-DELETED cards of a board - the
 	 * trash listing, most-recently-deleted first.
 	 *
 	 * @return Card[]
@@ -230,7 +230,7 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Whether the card has at least one non-deleted child — the one-level guard
+	 * Whether the card has at least one non-deleted child - the one-level guard
 	 * for {@see \OCA\Kanso\Service\CardService::setParent} (a card that is
 	 * already a parent may not itself become a child).
 	 *
@@ -253,7 +253,7 @@ class CardMapper extends QBMapper {
 
 	/**
 	 * Per-parent child progress for every non-deleted card on a board that has
-	 * children, as a fixed two-query self-scan — the board payload stays a
+	 * children, as a fixed two-query self-scan - the board payload stays a
 	 * constant number of queries. "done" counts children whose `done_at > 0`.
 	 * Parents with no children are absent from the map (callers default to 0/0).
 	 *
@@ -308,7 +308,7 @@ class CardMapper extends QBMapper {
 	 * rule's scope and condition, oldest done first, capped at $limit.
 	 *
 	 * All timestamp columns (`done_at`, `created_at`) are plain unix ints, so
-	 * the age test is a direct integer comparison — no PARAM_DATE dance. A
+	 * the age test is a direct integer comparison - no PARAM_DATE dance. A
 	 * card qualifies when it is done (`done_at > 0`), not yet archived, not
 	 * soft-deleted, in scope (board, and stack when $stackId is set), and:
 	 *   - condition 0 (done-for): it has been done for at least the threshold
@@ -348,11 +348,11 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * The current user's open, assigned cards across a set of boards — powers
+	 * The current user's open, assigned cards across a set of boards - powers
 	 * the cross-board "My tasks" panel. ACL is enforced by the caller passing
 	 * only the boards the user can read (mirrors {@see CardReviewMapper::findByReviewerInBoards}).
 	 * Excludes done, archived and deleted cards (a task list shows open work).
-	 * Ordered undated-last, then by due date, then priority — so the soonest
+	 * Ordered undated-last, then by due date, then priority - so the soonest
 	 * actionable work floats to the top. Capped at $limit rows.
 	 *
 	 * @param string[] $uids the assignee identities to match (a user's uid plus any group ids they belong to)
@@ -366,7 +366,7 @@ class CardMapper extends QBMapper {
 		}
 
 		// No DISTINCT needed: the type=user filter plus a per-(card,participant)
-		// unique assignment means each card matches at most once — and DISTINCT
+		// unique assignment means each card matches at most once - and DISTINCT
 		// would collide with the CASE-based ORDER BY on Postgres anyway.
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('c.id')

@@ -32,7 +32,7 @@ trait ApiErrorTrait {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		} catch (\OverflowException) {
 			// A derived fractional sort key would exceed the column width, or a
-			// concurrent move kept colliding after a retry (CardService) — the
+			// concurrent move kept colliding after a retry (CardService) - the
 			// affected list needs a rebalance / the client should retry. Both
 			// are transient conflicts, surfaced as 409.
 			return new JSONResponse(['error' => 'rebalance_required'], Http::STATUS_CONFLICT);

@@ -8,7 +8,7 @@
 Kanso is a kanban board app built for speed. Boards, stacks and cards with
 instant drag & drop, optimistic updates and payloads sized for large boards.
 
-Early development — not feature complete yet.
+Early development, not feature complete yet.
 	]]></description>
 	<version>0.1.25</version>
 	<licence>agpl</licence>

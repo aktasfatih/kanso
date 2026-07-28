@@ -165,7 +165,7 @@ test.describe('Checklist', () => {
 		await expect(doneItem.locator('.card-modal__checklist-checkbox')).toBeChecked()
 	})
 
-	test('complete all items — badge turns success color, progress bar turns green', async ({ page }) => {
+	test('complete all items - badge turns success color, progress bar turns green', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})

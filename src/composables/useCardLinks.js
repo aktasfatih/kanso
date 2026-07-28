@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useCardLinks — a card's GitHub PR/issue links.
+ * useCardLinks - a card's GitHub PR/issue links.
  *
  * Loaded separately from the card detail (like comments): the GET triggers a
  * throttled server-side state refresh, so keep it off the hot card-open path.

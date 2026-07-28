@@ -25,7 +25,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * notification to the other watchers via {@see NotificationService} (in-app
  * realtime already rides the board's existing push).
  *
- * A subscribe/unsubscribe is deliberately NOT a board change row — it is
+ * A subscribe/unsubscribe is deliberately NOT a board change row - it is
  * personal state, so it doesn't churn the board ETag for everyone; the client
  * reconciles its own card cache.
  */
@@ -93,7 +93,7 @@ class SubscriptionService {
 
 	/**
 	 * Auto-subscribes a user to a card/thread scope IF they have not explicitly
-	 * opted out. No permission check (the caller — assign/comment — has already
+	 * opted out. No permission check (the caller - assign/comment - has already
 	 * gated). Idempotent.
 	 */
 	public function autoSubscribe(int $cardId, int $threadId, string $uid): void {
@@ -129,7 +129,7 @@ class SubscriptionService {
 	}
 
 	/**
-	 * The card-level watch block for a user WITHOUT a permission check — the
+	 * The card-level watch block for a user WITHOUT a permission check - the
 	 * caller (e.g. the card-detail payload) has already established READ.
 	 *
 	 * @return array{subscribed: bool, subscribers: string[], count: int}
@@ -150,7 +150,7 @@ class SubscriptionService {
 	// Watching a whole board is a presence model (a row means subscribed) in a
 	// separate table, NOT the card-keyed subscription store: there is no
 	// auto-subscribe to a board, so no opt-out tombstone is needed. Watchers get
-	// a fixed signal — a new card was created on the board — nothing else (the
+	// a fixed signal - a new card was created on the board - nothing else (the
 	// noise trap from #3426).
 
 	/**
@@ -187,7 +187,7 @@ class SubscriptionService {
 			try {
 				$this->boardSubscriptionMapper->insert($sub);
 			} catch (\OCP\DB\Exception $e) {
-				// Concurrent subscribe lost the unique race — the row exists now,
+				// Concurrent subscribe lost the unique race - the row exists now,
 				// which is the idempotent success case.
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
@@ -219,7 +219,7 @@ class SubscriptionService {
 	}
 
 	/**
-	 * The board-level watch block for a user WITHOUT a permission check — the
+	 * The board-level watch block for a user WITHOUT a permission check - the
 	 * caller (e.g. the board payload) has already established READ.
 	 *
 	 * @return array{subscribed: bool, subscribers: string[], count: int}
@@ -237,7 +237,7 @@ class SubscriptionService {
 	/**
 	 * A card was created on a board: fan a "board activity" notification out to
 	 * the board's watchers (never the creator, never a watcher who has since
-	 * lost READ). No permission check on the caller — CardService::create has
+	 * lost READ). No permission check on the caller - CardService::create has
 	 * already gated the create with EDIT.
 	 */
 	public function notifyBoardCardCreated(int $boardId, int $cardId, string $actorUid): void {
@@ -285,7 +285,7 @@ class SubscriptionService {
 		try {
 			$this->subscriptionMapper->insert($sub);
 		} catch (\OCP\DB\Exception $e) {
-			// Concurrent insert lost the unique race — the row now exists, which
+			// Concurrent insert lost the unique race - the row now exists, which
 			// is the idempotent success case for a subscribe/auto-subscribe.
 			if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				throw $e;

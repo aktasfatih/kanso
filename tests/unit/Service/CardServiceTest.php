@@ -885,7 +885,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testMoveIntoDoneFromNonReviewStackIgnoresReviews(): void {
-		// The gate only fires when leaving a review-role stack — unapproved
+		// The gate only fires when leaving a review-role stack - unapproved
 		// reviews do not block a move from any other role.
 		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 5, 1, 'V'));
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -1053,7 +1053,7 @@ class CardServiceTest extends TestCase {
 
 	public function testMoveIntoBacklogStackClearsStatus(): void {
 		// A column's role IS its status: a done card dragged into a backlog-role
-		// column (5, done) → (6, backlog) is reset to "not started" — both
+		// column (5, done) → (6, backlog) is reset to "not started" - both
 		// timestamps cleared.
 		$card = $this->card(9, 5, 1, 'V');
 		$card->setDoneAt(12345);
@@ -1117,7 +1117,7 @@ class CardServiceTest extends TestCase {
 
 	public function testMoveIntoInProgressStackReopensADoneCard(): void {
 		// The column's role is its status: dragging a done card into an
-		// in-progress column reopens it — done cleared, started stamped.
+		// in-progress column reopens it - done cleared, started stamped.
 		$card = $this->card(9, 5, 1, 'V');
 		$card->setDoneAt(12345);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);

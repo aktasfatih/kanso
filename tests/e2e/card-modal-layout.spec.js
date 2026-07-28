@@ -138,7 +138,7 @@ test.describe('Card modal two-column layout', () => {
 
 		const attrbar = page.locator('.card-modal__attrbar')
 
-		// Priority is set to High (3) via API in beforeAll — the pill carries the modifier
+		// Priority is set to High (3) via API in beforeAll - the pill carries the modifier
 		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible()
 
 		// The due-date pill is the second pill in the attribute bar (priority, then
@@ -187,7 +187,7 @@ test.describe('Card modal two-column layout', () => {
 		await popover.locator('.card-modal__popover-opt', { hasText: /^None$/ }).click()
 		await expect(attrbar.locator('.card-modal__pill--priority-3')).toHaveCount(0, { timeout: 5_000 })
 
-		// Now set High — the pill picks up the --priority-3 modifier
+		// Now set High - the pill picks up the --priority-3 modifier
 		await priorityPill.click()
 		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^High$/ }).click()
 		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible({ timeout: 5_000 })

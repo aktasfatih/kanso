@@ -12,7 +12,7 @@ use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\IUserManager;
 
 /**
- * The Inbox feed — a durable, browsable activity feed of the cards the user
+ * The Inbox feed - a durable, browsable activity feed of the cards the user
  * follows, distinct from the Nextcloud bell (which is ephemeral targeted pings).
  * v1 surfaces recent comments on the cards the user watches (subscribed at the
  * card level), newest first, excluding their own. ACL is enforced by

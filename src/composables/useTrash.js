@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useTrash — fetch / restore / purge soft-deleted cards for a board.
+ * useTrash - fetch / restore / purge soft-deleted cards for a board.
  *
- * The trash list is NOT part of the board payload — it is fetched separately
+ * The trash list is NOT part of the board payload - it is fetched separately
  * from GET /api/boards/{id}/trash only when the TrashPanel is open (enabled).
  *
  * Mutation strategy:
- *   restore — POST /api/cards/{id}/restore → card reappears on the board.
+ *   restore - POST /api/cards/{id}/restore → card reappears on the board.
  *             On settled: invalidate trash query + board query so the card
  *             shows up in the stack column and is removed from the panel.
- *   purge   — DELETE /api/cards/{id}/purge → permanent destruction.
+ *   purge   - DELETE /api/cards/{id}/purge → permanent destruction.
  *             On settled: invalidate trash query only (card never returns).
  *
  * Optimistic removal from the trash list is wired for restore so the item
@@ -24,8 +24,8 @@ import { fetchTrash, restoreCard, purgeCard } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
 
 /**
- * @param {import('vue').Ref<string|number>} boardId  — reactive board id
- * @param {import('vue').Ref<boolean>}       enabled  — only fetch when true (panel open)
+ * @param {import('vue').Ref<string|number>} boardId  - reactive board id
+ * @param {import('vue').Ref<boolean>}       enabled  - only fetch when true (panel open)
  */
 export function useTrash(boardId, enabled) {
 	const queryClient = useQueryClient()
@@ -37,7 +37,7 @@ export function useTrash(boardId, enabled) {
 	const trashQuery = useQuery({
 		queryKey: trashKey,
 		queryFn: () => fetchTrash(boardId.value),
-		// Only run when the panel is open — avoids a cold fetch on every board load.
+		// Only run when the panel is open - avoids a cold fetch on every board load.
 		enabled,
 		staleTime: 0,
 	})

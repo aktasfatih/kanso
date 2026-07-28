@@ -78,7 +78,7 @@ class BoardController extends Controller {
 	/**
 	 * Full board payload: the board, its stacks, its labels, its sharing
 	 * rules (`acl`), the requesting user's own permission bits and card
-	 * SUMMARIES (no descriptions — those load on card open; each summary
+	 * SUMMARIES (no descriptions - those load on card open; each summary
 	 * carries its labelIds and assigneeIds). The board's latest change id
 	 * doubles as ETag: on an If-None-Match hit we return 304 before touching
 	 * the stack/card/label/assignee/acl tables at all.
@@ -102,7 +102,7 @@ class BoardController extends Controller {
 			$childProgressByCard = $this->cardMapper->childProgressByBoard($id);
 			$commentCountByCard = $this->commentMapper->countsByBoard($id);
 			$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($id);
-			// Card ids blocked by a not-done card — drives the tile "blocked" badge.
+			// Card ids blocked by a not-done card - drives the tile "blocked" badge.
 			$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($id));
 			$response = new JSONResponse([
 				'board' => $board,
@@ -133,7 +133,7 @@ class BoardController extends Controller {
 	}
 
 	/**
-	 * All users with access to the board — the assignee-picker data source.
+	 * All users with access to the board - the assignee-picker data source.
 	 */
 	#[NoAdminRequired]
 	public function participants(int $id): JSONResponse {

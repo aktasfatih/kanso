@@ -22,13 +22,13 @@ use OCP\IUserManager;
 /**
  * One-click import of a Deck board into Kanso. Reads the source via
  * {@see DeckReader} (read-only) and writes a fresh Kanso board owned by the
- * importing user — a copy, never a link, so the two stay independent.
+ * importing user - a copy, never a link, so the two stay independent.
  *
  * v1 imports the structure that maps cleanly: board (title/color), stacks
  * (order preserved), cards (title/description/archived/due date/done state),
  * labels + their card assignments, and user assignees that still exist. Board
  * SHARING/ACL, comments and attachments are deliberately out of scope for v1
- * (they need participant/actor remapping and the core comments/files APIs) —
+ * (they need participant/actor remapping and the core comments/files APIs) -
  * tracked as follow-ups.
  */
 class DeckImportService {

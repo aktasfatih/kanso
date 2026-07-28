@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useSubscription — card watcher (subscribe / unsubscribe) mutation.
+ * useSubscription - card watcher (subscribe / unsubscribe) mutation.
  *
  * Optimistic strategy mirrors useComments (dual-cache pattern):
  *   1. Cancel in-flight queries for the card detail key.

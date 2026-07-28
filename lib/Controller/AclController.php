@@ -16,7 +16,7 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * Board sharing endpoints. `{id}` is the board id — every ACL operation is
+ * Board sharing endpoints. `{id}` is the board id - every ACL operation is
  * scoped to its board, and AclService rejects rules of other boards.
  */
 class AclController extends Controller {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * Port of lib/Service/SortKeyService.php — keep in sync.
+ * Port of lib/Service/SortKeyService.php - keep in sync.
  *
  * Stateless generator of fractional (lexorank-style) sort keys.
  * Base-36 alphabet: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'

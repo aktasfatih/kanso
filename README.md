@@ -8,7 +8,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Nextcloud 30–32](https://img.shields.io/badge/Nextcloud-30–32-0082c9)
 
-Instant drag & drop, payloads sized for large boards, realtime sync — a
+Instant drag & drop, payloads sized for large boards, realtime sync: a
 from-scratch alternative to Deck that stays out of your way.
 
 <img src="docs/kanso-board.png" alt="A Kanso board with Backlog / In Progress / In Review / Done columns" width="900">
@@ -18,19 +18,19 @@ from-scratch alternative to Deck that stays out of your way.
 ## Why "Kanso"?
 
 **Kanso** (簡素) is one of the seven principles of Japanese Zen aesthetics. It
-means *simplicity* — the deliberate elimination of clutter so that only what
+means *simplicity*: the deliberate elimination of clutter so that only what
 matters remains. That is the whole idea behind this app: a kanban board that is
-fast, uncluttered, and free. No lock-in, no bloat, no per-seat pricing — just
+fast, uncluttered, and free. No lock-in, no bloat, no per-seat pricing. Just
 your work, on your own Nextcloud, laid out plainly.
 
 ## Features
 
 ### ⚡ Fast by design
-- **Instant, optimistic drag & drop** — a card move is a single-row update
+- **Instant, optimistic drag & drop**: a card move is a single-row update
   (fractional sort keys), never a bulk renumber.
-- **Built for large boards** — summary-only payloads, `ETag`/`If-None-Match`
+- **Built for large boards**: summary-only payloads, `ETag`/`If-None-Match`
   caching, and virtualized columns that stay smooth past **2,000+ cards**.
-- **Realtime** — live updates via `notify_push` when available, with a light
+- **Realtime**: live updates via `notify_push` when available, with a light
   polling fallback everywhere else. Delta sync keeps clients in step.
 
 ### 🗂️ Rich cards
@@ -41,37 +41,37 @@ your work, on your own Nextcloud, laid out plainly.
 
 ### 👥 Collaboration
 - **Board sharing** with per-user and per-group access control.
-- **Watchers** — subscribe to cards, comment threads, or a **whole board** and
+- **Watchers**: subscribe to cards, comment threads, or a **whole board** and
   get notified of new activity.
-- **Parent/child cards** — a parent auto-completes when all its children are done.
+- **Parent/child cards**: a parent auto-completes when all its children are done.
 
 ### ✅ Review workflow
 - Request a review, then **Approve** / **Request changes**.
 - An optional **Done-gate**: a card can't leave a review column until every
   requested review is approved.
-- **Customizable review types** — QA, Code, Legal, or whatever your team needs.
+- **Customizable review types**: QA, Code, Legal, or whatever your team needs.
 - A cross-board **My Reviews** page so nothing waiting on you slips through.
 
 ### 🔁 Automation & workflows
 - **Stack roles** and **WIP limits**; moving a card into an "in progress" column
-  auto-**starts** it and a "done" column stamps it **done** — or set the status
-  (Not started / In progress / Done) directly from the card.
+  auto-**starts** it and a "done" column stamps it **done**. You can also set
+  the status (Not started / In progress / Done) directly from the card.
 - **Recurring cards** on RRULE schedules, and **auto-archive** rules for done
   cards.
 
 ### 🔗 Integrations & migration
-- **Import from Deck** — one click copies a Deck board (stacks, cards, labels,
+- **Import from Deck**: one click copies a Deck board (stacks, cards, labels,
   assignees) into a new Kanso board you own. Your Deck boards are left untouched.
-- **GitHub links** — attach PRs/issues to a card with live open/merged/closed
+- **GitHub links**: attach PRs/issues to a card with live open/merged/closed
   badges, and copy a ready-made `kanso-<id>` branch name.
-- **GitHub webhook** — an HMAC-verified webhook moves a card to your Review
+- **GitHub webhook**: an HMAC-verified webhook moves a card to your Review
   column when its PR opens and to Done when it merges. No credentials, no OAuth.
 
 ### 📊 Views
-- **Board, List and Timeline** views — switch per board (remembered per user).
+- **Board, List and Timeline** views: switch per board (remembered per user).
   The list is a dense, scannable table; the **Timeline (Gantt)** plots cards on a
   date axis by **start → due**, with due-only cards as milestones.
-- **Display sort** — order cards by priority, due date or title. View-only: your
+- **Display sort**: order cards by priority, due date or title. View-only: your
   manual drag order is always preserved.
 
 ### ⌨️ Power-user UX
@@ -104,12 +104,12 @@ sudo -u www-data php occ app:enable kanso
 Open **Kanso** from the Nextcloud app menu and create your first board.
 
 - **Background jobs** (recurring cards, auto-archive, change-log pruning) run
-  through Nextcloud's cron — make sure [system cron](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html)
+  through Nextcloud's cron. Make sure [system cron](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html)
   is configured.
 - **Realtime updates** use the [High Performance Backend (`notify_push`)](https://github.com/nextcloud/notify_push)
   when it's installed; otherwise Kanso falls back to polling automatically.
 
-### Try it locally — no Nextcloud required
+### Try it locally (no Nextcloud required)
 
 The repo ships a throwaway Docker dev stack:
 
@@ -150,13 +150,13 @@ docker run --rm -v "$PWD":/app -w /app php:8.2-cli-alpine \
 
 PHP (Nextcloud App Framework, own `kanso_*` tables) · Vue 3 + `@nextcloud/vue` +
 Vite · TanStack Query · Pragmatic drag-and-drop · TanStack Virtual · Postgres /
-MySQL / SQLite. Kanso is independent — it does **not** depend on Deck and stores
+MySQL / SQLite. Kanso is independent. It does **not** depend on Deck and stores
 its own data.
 
 ## Status & contributing
 
 Early development, but already usable day-to-day. Bug reports and pull requests
-are welcome — see the [issues](https://github.com/aktasfatih/kanso/issues).
+are welcome. See the [issues](https://github.com/aktasfatih/kanso/issues).
 
 ## License
 

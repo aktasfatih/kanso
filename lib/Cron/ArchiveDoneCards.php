@@ -17,7 +17,7 @@ use OCP\BackgroundJob\TimedJob;
  * rule's age threshold. Each rule is capped at
  * {@see ArchiveService::MAX_PER_SWEEP} cards per pass (mirroring
  * PruneChanges' batch discipline), so a board with years of done cards
- * cannot stall the job — the remainder is picked up next hour.
+ * cannot stall the job - the remainder is picked up next hour.
  */
 class ArchiveDoneCards extends TimedJob {
 	public function __construct(

@@ -56,7 +56,7 @@ class ArchiveRuleMapper extends QBMapper {
 	}
 
 	/**
-	 * Every enabled rule across all boards — the cron's work list.
+	 * Every enabled rule across all boards - the cron's work list.
 	 *
 	 * @return ArchiveRule[]
 	 * @throws Exception

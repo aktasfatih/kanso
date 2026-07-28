@@ -181,7 +181,7 @@ test.describe('Card Subscriptions / Watchers', () => {
 		const freshCard = await apiPost('/cards', { stackId: state.stackId, title: 'Fresh Watch Card' })
 		const freshUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${freshCard.id}`
 
-		// Post a comment as admin via the API — server should auto-subscribe admin
+		// Post a comment as admin via the API - server should auto-subscribe admin
 		await apiPost(`/cards/${freshCard.id}/comments`, { body: 'API comment auto-subscribes me' })
 
 		await ncLogin(page)
@@ -192,7 +192,7 @@ test.describe('Card Subscriptions / Watchers', () => {
 		const watchBtn = page.locator('.card-modal__watch-btn')
 		await expect(watchBtn).toBeVisible({ timeout: 5000 })
 
-		// Admin should now be auto-subscribed — Watching state expected
+		// Admin should now be auto-subscribed - Watching state expected
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 8000 })
 		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 3000 })
 

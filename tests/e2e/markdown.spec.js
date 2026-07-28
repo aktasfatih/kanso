@@ -62,7 +62,7 @@ async function ncLogin(page) {
 	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
-test.describe('Markdown card descriptions — render and XSS safety', () => {
+test.describe('Markdown card descriptions - render and XSS safety', () => {
 	const state = {
 		boardId: 0,
 		stackId: 0,
@@ -97,7 +97,7 @@ test.describe('Markdown card descriptions — render and XSS safety', () => {
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
-		console.log('Setup complete — cardUrl:', state.cardUrl)
+		console.log('Setup complete - cardUrl:', state.cardUrl)
 	})
 
 	test.afterAll(async () => {
@@ -107,7 +107,7 @@ test.describe('Markdown card descriptions — render and XSS safety', () => {
 	})
 
 	test('renders markdown (bold, link) and strips XSS payload', async ({ page }) => {
-		// Track any alert dialogs — XSS would fire one
+		// Track any alert dialogs - XSS would fire one
 		let alertFired = false
 		page.on('dialog', async (dialog) => {
 			alertFired = true

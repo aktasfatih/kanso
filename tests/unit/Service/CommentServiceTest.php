@@ -162,7 +162,7 @@ class CommentServiceTest extends TestCase {
 
 	public function testAddReplyToAReplyIsRejected(): void {
 		$this->expectCardLoaded();
-		// The chosen parent is itself a reply (has a parent) — one level only.
+		// The chosen parent is itself a reply (has a parent) - one level only.
 		$this->commentMapper->method('find')->with(50)->willReturn($this->comment(50, 9, 40));
 		$this->commentMapper->expects(self::never())->method('insert');
 

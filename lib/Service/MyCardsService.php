@@ -10,7 +10,7 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\CardMapper;
 
 /**
- * The cross-board "My tasks" feed — every open card assigned to the current
+ * The cross-board "My tasks" feed - every open card assigned to the current
  * user, across all boards they can read. ACL is enforced by restricting the
  * query to the user's readable board set (mirrors {@see ReviewService::findMine}
  * and SearchService); a card on a board the user cannot read is never returned.

@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div class="deck-import">
 				<h2 class="deck-import__title">{{ t('kanso', 'Import from Deck') }}</h2>
 				<p class="deck-import__hint">
-					{{ t('kanso', 'Each Deck board is copied into a new Kanso board you own — stacks, cards, labels and assignees. Your Deck boards are left untouched.') }}
+					{{ t('kanso', 'Each Deck board is copied into a new Kanso board you own: stacks, cards, labels and assignees. Your Deck boards are left untouched.') }}
 				</p>
 
 				<p v-if="importLoading" class="deck-import__state">{{ t('kanso', 'Loading your Deck boards…') }}</p>

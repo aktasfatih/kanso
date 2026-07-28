@@ -56,7 +56,7 @@ class RecurRuleMapper extends QBMapper {
 	}
 
 	/**
-	 * Every enabled rule due to fire now — the cron's work list. A rule is due
+	 * Every enabled rule due to fire now - the cron's work list. A rule is due
 	 * when it is enabled, has a cached next fire time (`next_occurrence_at > 0`,
 	 * so exhausted/never rules are excluded) and that time has passed. Hits the
 	 * (enabled, next_occurrence_at) index.

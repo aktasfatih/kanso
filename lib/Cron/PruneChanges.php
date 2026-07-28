@@ -18,10 +18,10 @@ use OCP\BackgroundJob\TimedJob;
  * not regress to 0 for idle boards.
  */
 class PruneChanges extends TimedJob {
-	/** 30 days — generous overlap for any future delta-sync polling. */
+	/** 30 days - generous overlap for any future delta-sync polling. */
 	public const RETENTION_SECONDS = 30 * 24 * 3600;
 
-	/** Rows deleted per batch — keeps individual DELETEs short. */
+	/** Rows deleted per batch - keeps individual DELETEs short. */
 	public const BATCH_SIZE = 1000;
 
 	/** Upper bound on batches per run so a huge backlog cannot stall cron. */

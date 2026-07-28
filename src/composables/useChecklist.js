@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useChecklist — checklist query and mutations for a single card.
+ * useChecklist - checklist query and mutations for a single card.
  *
  * Optimistic strategy mirrors useLabels / useCardActions (dual-cache pattern):
  *   1. Cancel in-flight queries for both the checklist key and the card detail key.
@@ -146,9 +146,9 @@ export function useChecklist(cardId, boardId) {
 			const previousCard = queryClient.getQueryData(cardKey)
 			const previousBoard = queryClient.getQueryData(boardKey)
 
-			// Optimistic item — use a temporary negative id to avoid collision
+			// Optimistic item - use a temporary negative id to avoid collision
 			const tempId = -(Date.now())
-			// Append after the last item (highest sortKey) — use a placeholder
+			// Append after the last item (highest sortKey) - use a placeholder
 			const currentItems = Array.isArray(previousChecklist) ? previousChecklist : []
 			const lastSortKey = currentItems.length > 0
 				? currentItems.reduce((max, i) => (i.sortKey > max ? i.sortKey : max), currentItems[0].sortKey)

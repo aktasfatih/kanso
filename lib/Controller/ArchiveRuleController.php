@@ -52,7 +52,7 @@ class ArchiveRuleController extends Controller {
 
 	/**
 	 * Updates a rule. `stackId` is only touched when the client actually sent
-	 * the key — that lets a rule be re-scoped to the whole board (stackId:
+	 * the key - that lets a rule be re-scoped to the whole board (stackId:
 	 * null) without an omitted key silently clearing it.
 	 */
 	#[NoAdminRequired]

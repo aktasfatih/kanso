@@ -13,7 +13,7 @@ use OCP\DB\Types;
 /**
  * One card/assignee assignment (table `kanso_card_assignees`).
  *
- * A plain join row — (card_id, participant, type) is unique. Only user
+ * A plain join row - (card_id, participant, type) is unique. Only user
  * assignees (TYPE_USER) are supported for now; the `type` column stays for
  * future group support and every query filters on it. Assignments are never
  * serialized directly; board and card payloads carry plain assigneeId (uid)

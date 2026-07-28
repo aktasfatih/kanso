@@ -19,14 +19,14 @@ use OCP\Security\ISecureRandom;
  * Inbound GitHub webhooks (slice 2 of the GitHub integration). A board opts in
  * by generating a per-board secret (MANAGE) and pointing a GitHub `pull_request`
  * webhook at its endpoint. Each delivery is verified by HMAC-SHA256 against that
- * secret — the endpoint is the ONLY unauthenticated write path, so every field
+ * secret - the endpoint is the ONLY unauthenticated write path, so every field
  * is treated as untrusted and the signature is checked in constant time before
  * anything is parsed.
  *
  * Auto-move reuses stack ROLES, not a config surface: a PR opened moves its card
  * to the board's ROLE_REVIEW stack; a PR merged moves it to the ROLE_DONE stack
  * (which stamps it done via the existing move automation). A board with no such
- * stack simply doesn't move — it still records the PR link. The move goes through
+ * stack simply doesn't move - it still records the PR link. The move goes through
  * CardService::move so sort keys, the transaction and the change row all fire.
  */
 class GithubWebhookService {
@@ -96,7 +96,7 @@ class GithubWebhookService {
 	/**
 	 * Verifies and processes an inbound GitHub delivery. Returns a small summary
 	 * of what happened (for the 200 response body). NEVER throws for
-	 * business-level no-ops (unknown branch, no target stack) — only for a failed
+	 * business-level no-ops (unknown branch, no target stack) - only for a failed
 	 * signature check, which the controller maps to 401.
 	 *
 	 * @param string $signatureHeader the raw `X-Hub-Signature-256` value
@@ -111,12 +111,12 @@ class GithubWebhookService {
 
 		$payload = json_decode($rawBody, true);
 		if (!is_array($payload)) {
-			// A bare JSON scalar / null / malformed body — accepted, nothing to do.
+			// A bare JSON scalar / null / malformed body - accepted, nothing to do.
 			return ['handled' => false];
 		}
 		$pr = $payload['pull_request'] ?? null;
 		if (!is_array($pr)) {
-			// Not a pull_request event (e.g. a ping) — accepted, nothing to do.
+			// Not a pull_request event (e.g. a ping) - accepted, nothing to do.
 			return ['handled' => false];
 		}
 
@@ -130,7 +130,7 @@ class GithubWebhookService {
 			return ['handled' => false];
 		}
 
-		// The branch names a card — it must live on THIS board and be alive.
+		// The branch names a card - it must live on THIS board and be alive.
 		try {
 			$card = $this->cardService->find($cardId, $board->getOwner());
 		} catch (\Throwable) {
@@ -146,7 +146,7 @@ class GithubWebhookService {
 			try {
 				$this->cardLinkService->addLink($cardId, $prUrl, $board->getOwner());
 			} catch (\Throwable) {
-				// Non-critical — a bad/duplicate URL must not fail the webhook.
+				// Non-critical - a bad/duplicate URL must not fail the webhook.
 			}
 		}
 
@@ -182,7 +182,7 @@ class GithubWebhookService {
 			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
 			return true;
 		} catch (\Throwable) {
-			// e.g. the review gate blocks a merge while reviews are unapproved —
+			// e.g. the review gate blocks a merge while reviews are unapproved -
 			// the link is still recorded; the move is simply skipped.
 			return false;
 		}

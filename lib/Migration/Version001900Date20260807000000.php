@@ -15,7 +15,7 @@ use OCP\Migration\SimpleMigrationStep;
 
 /**
  * Per-board automation rules (`kanso_automation_rules`): a deliberately small,
- * FIXED trigger→action menu (no scripting, no DSL — the charter's Jira trap).
+ * FIXED trigger→action menu (no scripting, no DSL - the charter's Jira trap).
  * v1: trigger `card_entered_role` (a card moved into a stack with role R) →
  * action `request_review` (from a reviewer) or `add_label`. `params` is a small
  * JSON blob ({role, reviewer|label}). Enabled by default. Guarded (hasTable).

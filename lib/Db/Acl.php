@@ -46,7 +46,7 @@ class Acl extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * `participantType` serializes as 'user'/'group' — the API never leaks
+	 * `participantType` serializes as 'user'/'group' - the API never leaks
 	 * the numeric storage constants.
 	 *
 	 * @return array{id: int, boardId: ?int, participant: ?string, participantType: string, permission: ?int}

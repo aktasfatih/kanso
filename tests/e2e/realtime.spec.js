@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Two-browser realtime sync: admin mutates a shared board, tester must see
-// the change WITHOUT any interaction — via notify_push when the dev stack
+// the change WITHOUT any interaction - via notify_push when the dev stack
 // has it configured (dev/setup.sh does), via the 5s delta poll otherwise.
 // The fallback test toggles the notify_push app off through occ in the dev
 // container, so this suite assumes the dev/ docker stack.
@@ -90,7 +90,7 @@ test.describe('Realtime sync', () => {
 		try {
 			occ('app:enable notify_push')
 		} catch {
-			// dev container not running — nothing to restore
+			// dev container not running - nothing to restore
 		}
 	})
 

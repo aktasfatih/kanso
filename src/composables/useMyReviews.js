@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { getMyReviews as apiGetMyReviews, setReviewState as apiSetReviewState } from '../services/api.js'
 
 /**
- * Composable for the "My Reviews" feed — all review requests assigned to the
+ * Composable for the "My Reviews" feed - all review requests assigned to the
  * current user, across all boards they can read.
  */
 export function useMyReviews() {

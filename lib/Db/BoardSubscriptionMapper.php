@@ -65,7 +65,7 @@ class BoardSubscriptionMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every subscription of a board — cascade for a board purge.
+	 * Removes every subscription of a board - cascade for a board purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

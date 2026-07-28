@@ -4,11 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div ref="columnRef" class="stack-column" :class="{ 'stack-column--dragging': isStackDragging }">
-		<!-- Left / right stack drop indicators — same visual language as the card tile drop line -->
+		<!-- Left / right stack drop indicators - same visual language as the card tile drop line -->
 		<div v-if="stackDropEdge === 'left'" class="stack-column__drop-line stack-column__drop-line--left" />
 		<div v-if="stackDropEdge === 'right'" class="stack-column__drop-line stack-column__drop-line--right" />
 
-		<!-- Column header — drag handle for stack reordering -->
+		<!-- Column header - drag handle for stack reordering -->
 		<div ref="headerRef" class="stack-column__header">
 			<input
 				v-if="editingTitle"
@@ -40,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:class="{ 'stack-column__badge--over-limit': isOverLimit }">
 				{{ wipBadgeText }}
 			</span>
-			<!-- Stack actions menu — rendered whenever at least one edit action is wired -->
+			<!-- Stack actions menu - rendered whenever at least one edit action is wired -->
 			<NcActions
 				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip"
 				class="stack-column__actions"
@@ -103,7 +103,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcActions>
 		</div>
 
-		<!-- Inline card composer at TOP — signature rapid-entry UX -->
+		<!-- Inline card composer at TOP - signature rapid-entry UX -->
 		<form class="card-composer" @submit.prevent="submitCard">
 			<input
 				ref="composerInputRef"
@@ -117,7 +117,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</form>
 
 		<!--
-			Card list — own scrollable element.
+			Card list - own scrollable element.
 			This element is both the scroll container for TanStack Virtual and the
 			column-level drop target / auto-scroll target.
 		-->
@@ -127,7 +127,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:class="{ 'stack-column__cards--drop-over': isDropOver && cards.length === 0 }">
 
 			<!--
-				Empty stack placeholder — always present when there are no cards.
+				Empty stack placeholder - always present when there are no cards.
 				Rendered ALONGSIDE (not instead of) the virtual-host so the scroll
 				container keeps its height during the 0→1 card transition and the
 				virtualizer never loses its scrollRect.
@@ -138,7 +138,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				Virtualized list: always in the DOM (no v-if guard) so that the
 				virtualizer's ResizeObserver is never detached and reattached during
 				the 0→1 card transition. When count=0 the virtual-host has height 0
-				and renders no items — the placeholder above fills the space.
+				and renders no items - the placeholder above fills the space.
 			-->
 			<div
 				class="stack-column__virtual-host"
@@ -195,13 +195,13 @@ const props = defineProps({
 		type: Array,
 		default: () => [],
 	},
-	/** Async fn (stackId, title) → Promise — provided by parent BoardView */
+	/** Async fn (stackId, title) → Promise - provided by parent BoardView */
 	onCreateCard: {
 		type: Function,
 		required: true,
 	},
 	/**
-	 * Async fn (stackId) → Promise — called when the user deletes this stack.
+	 * Async fn (stackId) → Promise - called when the user deletes this stack.
 	 * Returns the stack id so the parent can show an undo toast.
 	 */
 	onDeleteStack: {
@@ -209,27 +209,27 @@ const props = defineProps({
 		default: null,
 	},
 	/**
-	 * Async fn (stackId) → Promise — called when the user undoes a stack delete.
+	 * Async fn (stackId) → Promise - called when the user undoes a stack delete.
 	 */
 	onRestoreStack: {
 		type: Function,
 		default: null,
 	},
 	/**
-	 * Async fn (stackId, title) → Promise — renames the column. When provided,
+	 * Async fn (stackId, title) → Promise - renames the column. When provided,
 	 * the title becomes click-to-edit; omit it to render a read-only title.
 	 */
 	onRenameStack: {
 		type: Function,
 		default: null,
 	},
-	/** Map<labelId, label> from the board payload — passed down from BoardView */
+	/** Map<labelId, label> from the board payload - passed down from BoardView */
 	labelsById: {
 		type: Map,
 		default: () => new Map(),
 	},
 	/**
-	 * Async fn (stackId, role) → Promise — sets the column status/role.
+	 * Async fn (stackId, role) → Promise - sets the column status/role.
 	 * When provided, a role picker appears in the ⋯ menu.
 	 */
 	onSetRole: {
@@ -237,7 +237,7 @@ const props = defineProps({
 		default: null,
 	},
 	/**
-	 * Async fn (stackId, wipLimit) → Promise — sets the WIP limit (0 clears).
+	 * Async fn (stackId, wipLimit) → Promise - sets the WIP limit (0 clears).
 	 * When provided, a WIP limit input appears in the ⋯ menu.
 	 */
 	onSetWip: {
@@ -245,7 +245,7 @@ const props = defineProps({
 		default: null,
 	},
 	/**
-	 * Optional callback (cardId: number) → void — called when a card tile is
+	 * Optional callback (cardId: number) → void - called when a card tile is
 	 * clicked so BoardView can keep focusedCardId in sync with mouse navigation.
 	 */
 	onCardFocus: {
@@ -320,7 +320,7 @@ function roleLabel(role) {
 /** Ordered [value, label] pairs used to render the role radio group. */
 const roleEntries = Object.entries(ROLE_LABELS).map(([k, v]) => [Number(k), v])
 
-/** Draft WIP limit — kept in sync with the current stack value. */
+/** Draft WIP limit - kept in sync with the current stack value. */
 const wipDraft = ref(props.stack.wipLimit > 0 ? String(props.stack.wipLimit) : '')
 
 // Keep wipDraft in sync when the stack prop updates (e.g. after optimistic settle).
@@ -374,7 +374,7 @@ let cleanup = () => {}
 
 // ── TanStack Virtual ──────────────────────────────────────────────────────────
 // Pass options as a computed so that cardListRef.value is in the reactive
-// dependency graph — when the scroll element mounts, the virtualizer's internal
+// dependency graph - when the scroll element mounts, the virtualizer's internal
 // watch sees the change and calls _willUpdate() to initialize scroll tracking.
 const virtualizerOptions = computed(() => ({
 	count: props.cards.length,
@@ -506,7 +506,7 @@ async function submitCard() {
 	try {
 		await props.onCreateCard(props.stack.id, title)
 		newCardTitle.value = ''
-		// Re-focus for rapid entry — the signature UX
+		// Re-focus for rapid entry - the signature UX
 		composerInputRef.value?.focus()
 	} catch (err) {
 		composerError.value =
@@ -536,7 +536,7 @@ async function submitCard() {
 	opacity: 0.4;
 }
 
-/* Stack drop indicators — same visual language as .card-tile__drop-line */
+/* Stack drop indicators - same visual language as .card-tile__drop-line */
 .stack-column__drop-line {
 	position: absolute;
 	top: 0;
@@ -645,13 +645,13 @@ async function submitCard() {
 	margin: 0;
 }
 
-/* Card list — own scrollable element */
+/* Card list - own scrollable element */
 .stack-column__cards {
 	overflow-y: auto;
 	flex: 1;
 	min-height: 0;
 	transition: background 0.15s ease;
-	/* No flex gap here — gap is handled by the virtualizer's gap option so the
+	/* No flex gap here - gap is handled by the virtualizer's gap option so the
 	   measurer sees the true inter-item spacing. */
 }
 
@@ -668,7 +668,7 @@ async function submitCard() {
 
 /* Each absolutely-positioned virtual row wrapper */
 .stack-column__virtual-item {
-	/* height is dynamic — measured by TanStack Virtual per item */
+	/* height is dynamic - measured by TanStack Virtual per item */
 }
 
 .stack-column__empty-placeholder {
@@ -689,36 +689,36 @@ async function submitCard() {
 	letter-spacing: 0.02em;
 	text-transform: uppercase;
 	white-space: nowrap;
-	/* default neutral style — overridden per-role below */
+	/* default neutral style - overridden per-role below */
 	background: var(--color-background-dark);
 	color: var(--color-text-maxcontrast);
 }
 
-/* Backlog — muted */
+/* Backlog - muted */
 .stack-column__role-chip--1 {
 	background: color-mix(in srgb, var(--color-text-maxcontrast) 12%, transparent);
 	color: var(--color-text-maxcontrast);
 }
 
-/* To do — blue tint */
+/* To do - blue tint */
 .stack-column__role-chip--2 {
 	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 15%, transparent);
 	color: var(--color-primary-element, #0082c9);
 }
 
-/* In progress — info/primary */
+/* In progress - info/primary */
 .stack-column__role-chip--3 {
 	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 22%, transparent);
 	color: var(--color-primary-element, #0082c9);
 }
 
-/* Review — warning */
+/* Review - warning */
 .stack-column__role-chip--4 {
 	background: color-mix(in srgb, var(--color-warning, #eca700) 18%, transparent);
 	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
 }
 
-/* Done — success */
+/* Done - success */
 .stack-column__role-chip--5 {
 	background: color-mix(in srgb, var(--color-success, #46ba61) 18%, transparent);
 	color: color-mix(in srgb, var(--color-success, #46ba61) 85%, var(--color-main-text));

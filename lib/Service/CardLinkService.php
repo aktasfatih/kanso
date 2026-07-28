@@ -24,7 +24,7 @@ use OCP\Http\Client\IClientService;
  *
  * SSRF posture: the only accepted host is github.com, and the poll always hits
  * a URL RECONSTRUCTED from validated path segments against the fixed
- * api.github.com host — user input never selects the request host. Private or
+ * api.github.com host - user input never selects the request host. Private or
  * rate-limited repos simply stay `unknown`; the chip still renders.
  *
  * A link add/remove reuses the card's ENTITY_CARD / ACTION_UPDATE change row so
@@ -99,7 +99,7 @@ class CardLinkService {
 			if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				throw $e;
 			}
-			// Same URL already attached — return the existing row (idempotent).
+			// Same URL already attached - return the existing row (idempotent).
 			foreach ($this->cardLinkMapper->findByCard($cardId) as $existing) {
 				if ($existing->getUrl() === $url) {
 					return $existing;
@@ -152,7 +152,7 @@ class CardLinkService {
 
 	/**
 	 * The deterministic git branch name for a card: `kanso-{id}-{slug}` (slug of
-	 * the title). Pure — no persistence. Exposed so the client and any server
+	 * the title). Pure - no persistence. Exposed so the client and any server
 	 * caller derive the identical name.
 	 */
 	public static function branchName(int $cardId, string $title): string {
@@ -197,7 +197,7 @@ class CardLinkService {
 
 	/**
 	 * Best-effort refresh of a PR/issue link's state + title from the GitHub
-	 * API. Never throws — a failure leaves the state as-is (or unknown) and
+	 * API. Never throws - a failure leaves the state as-is (or unknown) and
 	 * stamps last_polled so we don't hammer the API.
 	 */
 	private function refreshState(CardLink $link, int $now): void {
@@ -227,7 +227,7 @@ class CardLinkService {
 			}
 			$link->setState($this->deriveState($kind, $data));
 		} catch (\Throwable) {
-			// Private/rate-limited/offline — leave state as-is (unknown).
+			// Private/rate-limited/offline - leave state as-is (unknown).
 			if ($link->getState() === '') {
 				$link->setState(CardLink::STATE_UNKNOWN);
 			}

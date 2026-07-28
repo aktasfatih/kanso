@@ -13,7 +13,7 @@ use OCP\DB\Types;
 /**
  * One card/label assignment (table `kanso_card_labels`).
  *
- * A plain join row — (card_id, label_id) is unique. Assignments are never
+ * A plain join row - (card_id, label_id) is unique. Assignments are never
  * serialized directly; board and card payloads carry plain labelId arrays
  * instead (see {@see CardLabelMapper}).
  *

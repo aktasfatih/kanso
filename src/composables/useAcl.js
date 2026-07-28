@@ -14,7 +14,7 @@ import { boardQueryKey } from './useBoard.js'
 /**
  * ACL mutations and a debounced sharee search helper for a given board.
  *
- * All mutations invalidate the board query on settled — same low-frequency,
+ * All mutations invalidate the board query on settled - same low-frequency,
  * server-authoritative pattern as useLabels.
  */
 export function useAcl(boardId) {

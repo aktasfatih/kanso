@@ -15,8 +15,8 @@ use OCP\Migration\SimpleMigrationStep;
 
 /**
  * Review types (`kanso_review_types`): per-board, user-customizable review
- * categories (QA / Code / Legal / …). Modelled exactly on `kanso_labels` — a
- * board-scoped named+coloured tag — and attached to a review request via a
+ * categories (QA / Code / Legal / …). Modelled exactly on `kanso_labels` - a
+ * board-scoped named+coloured tag - and attached to a review request via a
  * nullable `review_type_id` on `kanso_card_reviews` (an untyped review keeps
  * the plain "Review" meaning). Ordered by id, like labels.
  *

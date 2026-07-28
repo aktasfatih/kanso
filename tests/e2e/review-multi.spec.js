@@ -66,7 +66,7 @@ test.describe('Multiple reviews + request-changes reason', () => {
 		expect(reasonComment.body).toContain('Requested changes')
 		expect(reasonComment.author).toBe('admin')
 
-		// Withdraw one review by id — the other remains.
+		// Withdraw one review by id - the other remains.
 		await api('DELETE', `/cards/${cardId}/reviews/${untyped.id}`)
 		card = await api('GET', `/cards/${cardId}`)
 		expect(card.reviews.filter((r) => r.reviewer === 'admin')).toHaveLength(1)

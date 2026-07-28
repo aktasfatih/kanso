@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useComments — threaded comment query and mutations for a single card.
+ * useComments - threaded comment query and mutations for a single card.
  *
  * Optimistic strategy mirrors useChecklist (dual-cache pattern):
  *   1. Cancel in-flight queries for the comments key, the card detail key,
@@ -51,7 +51,7 @@ function resolve(v) {
  * Top-level comments (parentCommentId === null) are returned in order,
  * each with a `replies` array of its direct children (also in order).
  *
- * The server contract allows only one level of nesting — replies always
+ * The server contract allows only one level of nesting - replies always
  * point to a top-level comment, never to another reply.
  *
  * @param {Array} flat

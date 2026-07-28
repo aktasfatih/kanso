@@ -61,7 +61,7 @@ test.describe('My Reviews page', () => {
 		const card = await apiSend('POST', '/cards', { stackId: stack.id, title: 'Review Me Please' })
 		state.cardId = card.id
 
-		// The board owner (admin) requests a review from themselves — produces a
+		// The board owner (admin) requests a review from themselves - produces a
 		// pending review row that appears on the My Reviews page.
 		await apiSend('PUT', `/cards/${card.id}/reviews/${USER}`)
 
@@ -133,7 +133,7 @@ test.describe('My Reviews page', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.my-reviews-view', { timeout: 10_000 })
 
-		// After previous test the card is approved — click the approved row
+		// After previous test the card is approved - click the approved row
 		const approvedSection = page.locator('.my-reviews-view__section').filter({
 			has: page.locator('.my-reviews-view__section-title', { hasText: 'Approved' }),
 		})

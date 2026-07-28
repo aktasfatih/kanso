@@ -18,7 +18,7 @@ use OCP\IUserManager;
 /**
  * Resolves who can participate on a board: the owner plus everyone the ACL
  * grants access to, with group rows expanded to their members. This is the
- * assignee-picker data source — a read-only view, kept out of BoardService
+ * assignee-picker data source - a read-only view, kept out of BoardService
  * so the user/group directory dependencies stay local to this one concern.
  */
 class ParticipantService {
@@ -34,7 +34,7 @@ class ParticipantService {
 	/**
 	 * All users with access to the board (owner, user ACLs, members of group
 	 * ACLs), deduplicated by uid and sorted by display name. Unresolvable
-	 * uids fall back to the uid as display name rather than disappearing —
+	 * uids fall back to the uid as display name rather than disappearing -
 	 * ACL rows can outlive their users.
 	 *
 	 * @return list<array{uid: string, displayName: string}>

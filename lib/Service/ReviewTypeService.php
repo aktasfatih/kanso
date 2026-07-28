@@ -17,12 +17,12 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IDBConnection;
 
 /**
- * Review-type CRUD — per-board, customizable review categories (QA / Code /
+ * Review-type CRUD - per-board, customizable review categories (QA / Code /
  * Legal / …). Mirrors {@see LabelService}: managing the type list is a
  * board-management concern (MANAGE), and every mutation appends a
  * `kanso_changes` row (ENTITY_REVIEW_TYPE) so the board ETag bumps and clients
  * refetch the type list. Deleting a type clears it from any review that used
- * it — the review survives, untyped.
+ * it - the review survives, untyped.
  */
 class ReviewTypeService {
 	private const MAX_TITLE_LENGTH = 100;

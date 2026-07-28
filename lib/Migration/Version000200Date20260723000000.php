@@ -15,7 +15,7 @@ use OCP\Migration\SimpleMigrationStep;
 
 /**
  * Workflow columns on `kanso_stacks`: a stack `role` (its function in the
- * board pipeline — 0=none, 1=backlog, 2=todo, 3=in_progress, 4=review,
+ * board pipeline - 0=none, 1=backlog, 2=todo, 3=in_progress, 4=review,
  * 5=done; see {@see \OCA\Kanso\Db\Stack} ROLE_* constants) and an optional
  * `wip_limit` (null = no limit). The done-role is the one the card-move
  * automation reacts to; the rest are advisory client metadata.

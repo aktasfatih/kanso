@@ -29,7 +29,7 @@ const REVIEW_URGENCY = { approved: 1, pending: 2, changes_requested: 3 }
  * the per-reviewer rows, so a correct aggregate cannot be recomputed on the
  * client. We therefore only ever optimistically UPGRADE the tile chip's urgency
  * (e.g. a new request → at least pending; a changes-requested verdict → red) and
- * never downgrade it — a downgrade would wrongly hide another reviewer's still-
+ * never downgrade it - a downgrade would wrongly hide another reviewer's still-
  * outstanding state. onSettled invalidation + realtime refetch set the exact
  * aggregate a moment later.
  *
@@ -46,7 +46,7 @@ function moreUrgentState(current, incoming) {
  * Review queries and mutations for a given board.
  *
  * Optimistic strategy:
- *   Mirrors useAssignees' onMutate EXACTLY — patch BOTH the board summary cache
+ *   Mirrors useAssignees' onMutate EXACTLY - patch BOTH the board summary cache
  *   (via boardQueryKey, updating reviewState aggregate) and the ['card', String(cardId)]
  *   detail cache (updating reviews array); rollback both on error; invalidate both on settled.
  */
@@ -75,7 +75,7 @@ export function useReviews(boardId) {
 				if (!old) return old
 				const existing = Array.isArray(old.reviews) ? old.reviews : []
 				const type = reviewTypeId ?? 0
-				// A card may hold several reviews per reviewer, one per type — only
+				// A card may hold several reviews per reviewer, one per type - only
 				// skip when this exact (reviewer, type) pair already exists.
 				if (existing.some((r) => r.reviewer === userId && (r.reviewTypeId ?? 0) === type)) return old
 				const newReview = {
@@ -92,7 +92,7 @@ export function useReviews(boardId) {
 			})
 
 			// Patch board summary: a request means the chip is at least "pending".
-			// Upgrade-only (see moreUrgentState) — never downgrade from summary data.
+			// Upgrade-only (see moreUrgentState) - never downgrade from summary data.
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old
 				return {
@@ -222,7 +222,7 @@ export function useReviews(boardId) {
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
 			// A "request changes" verdict posts its reason as a comment server-side,
-			// so refresh the discussion thread too — otherwise it only appears after
+			// so refresh the discussion thread too - otherwise it only appears after
 			// a full reload.
 			queryClient.invalidateQueries({ queryKey: ['comments', String(cardId)] })
 		},

@@ -13,13 +13,13 @@ use OCP\IDBConnection;
 
 /**
  * READ-ONLY access to the Deck app's tables for the one-click importer. We query
- * `deck_*` directly (same database) rather than coupling to Deck's PHP classes —
+ * `deck_*` directly (same database) rather than coupling to Deck's PHP classes -
  * the importer only reads a stable, well-known core schema and never writes to
  * Deck. Rows are returned as plain arrays; all mapping to Kanso lives in
  * {@see DeckImportService}.
  *
  * Reserved-word note: Deck's ordering column is `order`, so every read uses
- * `SELECT *` and sorts in PHP — no unquoted `ORDER BY "order"` in the SQL.
+ * `SELECT *` and sorts in PHP - no unquoted `ORDER BY "order"` in the SQL.
  */
 class DeckReader {
 	public function __construct(

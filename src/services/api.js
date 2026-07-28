@@ -248,7 +248,7 @@ export const setReviewState = (cardId, reviewId, state, reason = null) =>
 		reason != null && reason !== '' ? { state, reason } : { state },
 	).then((r) => r.data)
 
-// Inbox (activity feed — comments on watched cards by others)
+// Inbox (activity feed - comments on watched cards by others)
 export const getInbox = () =>
 	axios.get(url('/api/inbox')).then((r) => r.data)
 

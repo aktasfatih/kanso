@@ -163,7 +163,7 @@ test.describe('Comments / Discussion', () => {
 		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
 		await expect(topComment).toBeVisible({ timeout: 8000 })
 
-		// Click the edit button (pencil icon) — the first non-danger icon button
+		// Click the edit button (pencil icon) - the first non-danger icon button
 		const editBtn = topComment.locator('.card-modal__comment-icon-btn:not(.card-modal__comment-icon-btn--danger)').first()
 		await expect(editBtn).toBeVisible({ timeout: 5000 })
 		await editBtn.click()
@@ -212,8 +212,8 @@ test.describe('Comments / Discussion', () => {
 		await expect(page.locator('.card-modal__comment')).toHaveCount(0, { timeout: 8000 })
 	})
 
-	test('XSS payload in comment body is rendered inert — no alert fires', async ({ page }) => {
-		// Track any alert dialogs — XSS would fire one
+	test('XSS payload in comment body is rendered inert - no alert fires', async ({ page }) => {
+		// Track any alert dialogs - XSS would fire one
 		let alertFired = false
 		page.on('dialog', async (dialog) => {
 			alertFired = true
@@ -238,7 +238,7 @@ test.describe('Comments / Discussion', () => {
 		// No alert should have fired
 		expect(alertFired).toBe(false)
 
-		// No <img> element at all should be produced — markdown-it (html:false)
+		// No <img> element at all should be produced - markdown-it (html:false)
 		// escapes the raw tag to inert text, so the payload never becomes markup.
 		expect(await commentBody.locator('img').count()).toBe(0)
 

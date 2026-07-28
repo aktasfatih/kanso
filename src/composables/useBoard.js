@@ -25,7 +25,7 @@ export function useBoard(id) {
 		queryFn: () => fetchBoard(typeof id === 'object' ? id.value : id),
 		// Delta polling: the fallback realtime channel (5s, cheap thanks to
 		// ETag/304) or a slow safety net when push covers realtime (60s).
-		// Never fires mid-drag — a refetch would clobber optimistic patches.
+		// Never fires mid-drag - a refetch would clobber optimistic patches.
 		refetchInterval: () => {
 			if (isBoardMovePending(id)) {
 				return false

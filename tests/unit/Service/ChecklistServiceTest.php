@@ -39,7 +39,7 @@ class ChecklistServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
-		// A real SortKeyService — the fractional-key maths is deterministic and
+		// A real SortKeyService - the fractional-key maths is deterministic and
 		// central to reorder behaviour, so exercise it rather than mock it.
 		$this->service = new ChecklistService(
 			$this->itemMapper,

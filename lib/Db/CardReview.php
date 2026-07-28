@@ -13,7 +13,7 @@ use OCP\DB\Types;
 /**
  * One review request on a card (table `kanso_card_reviews`).
  *
- * A FLAT row — (card_id, reviewer) is unique. `state` is the reviewer's
+ * A FLAT row - (card_id, reviewer) is unique. `state` is the reviewer's
  * verdict: pending until they act, then approved or changes_requested. There
  * is deliberately no round/stage column (multi-stage review chains are a
  * non-goal). `requested_by` records who asked, for display and notifications.

@@ -104,7 +104,7 @@ test.describe('Inbox feed', () => {
 		state.cardId = card.id
 
 		// Share board with tester (READ|EDIT = permission 3)
-		// If tester user doesn't exist this will fail gracefully — we fall back
+		// If tester user doesn't exist this will fail gracefully - we fall back
 		let shareOk = false
 		try {
 			await apiPost(`/boards/${board.id}/acl`, {
@@ -114,7 +114,7 @@ test.describe('Inbox feed', () => {
 			})
 			shareOk = true
 		} catch {
-			// tester user not present in this environment — fall back mode
+			// tester user not present in this environment - fall back mode
 		}
 
 		// Admin subscribes to the card
@@ -127,11 +127,11 @@ test.describe('Inbox feed', () => {
 		// Tester posts a comment (only if share succeeded)
 		if (shareOk) {
 			try {
-				state.commentBody = 'Hello from tester — inbox smoke test'
+				state.commentBody = 'Hello from tester - inbox smoke test'
 				await apiPost(`/cards/${card.id}/comments`, { body: state.commentBody }, TESTER_AUTH)
 				state.setupOk = true
 			} catch {
-				// tester auth failed — still run fallback assertion
+				// tester auth failed - still run fallback assertion
 			}
 		}
 	})
@@ -208,14 +208,14 @@ test.describe('Inbox feed', () => {
 
 		// Create a separate session as a second admin context isn't easy here,
 		// so we just navigate to #/inbox and verify the structure is correct.
-		// The feed may or may not be empty depending on prior data — we simply
+		// The feed may or may not be empty depending on prior data - we simply
 		// assert the page renders consistently (no crash, correct DOM present).
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
 		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 		await page.waitForSelector('.inbox-view', { timeout: 15_000 })
 
-		// Either the list or the empty-content must be visible — never both
+		// Either the list or the empty-content must be visible - never both
 		const listVisible = await page.locator('.inbox-view__list').isVisible({ timeout: 3000 }).catch(() => false)
 		const emptyVisible = await page.locator('.empty-content').isVisible({ timeout: 3000 }).catch(() => false)
 		expect(listVisible || emptyVisible).toBe(true)

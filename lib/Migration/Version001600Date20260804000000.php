@@ -18,7 +18,7 @@ use OCP\Migration\SimpleMigrationStep;
  * review AND a Code review on the same card. The review identity becomes
  * (card_id, reviewer, review_type_id). `review_type_id` becomes NOT NULL with 0
  * meaning "untyped" (previously NULL) so the composite unique index treats
- * untyped reviews as a single row per reviewer — a nullable column can't (NULLs
+ * untyped reviews as a single row per reviewer - a nullable column can't (NULLs
  * are distinct in a unique index).
  *
  * preSchemaChange backfills NULL → 0 before the NOT NULL alter.

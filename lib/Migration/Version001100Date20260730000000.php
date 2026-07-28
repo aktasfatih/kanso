@@ -14,7 +14,7 @@ use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
 
 /**
- * Card review requests (`kanso_card_reviews`): a FLAT approval model — one row
+ * Card review requests (`kanso_card_reviews`): a FLAT approval model - one row
  * per (card, reviewer). A reviewer is asked to sign off; their `state` moves
  * pending → approved | changes_requested. Deliberately flat: NO review round /
  * stage columns (multi-stage review chains are an explicit non-goal). The

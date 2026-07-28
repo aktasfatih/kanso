@@ -153,7 +153,7 @@ class LabelServiceTest extends TestCase {
 	public function testEditOnlyUserCannotCreateLabels(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		// bob holds EDIT but not MANAGE: only the MANAGE assertion throws —
+		// bob holds EDIT but not MANAGE: only the MANAGE assertion throws -
 		// label CRUD is a board-management concern.
 		$this->permissionService->method('assertPermission')
 			->willReturnCallback(static function (Board $b, string $uid, int $permission): void {

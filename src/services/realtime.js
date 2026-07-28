@@ -37,7 +37,7 @@ export function initRealtime(onBoardChanged) {
 }
 
 /**
- * Whether push is available — polling consumers use this to stretch their
+ * Whether push is available - polling consumers use this to stretch their
  * interval from fallback (5s) to safety-net (60s).
  *
  * @return {boolean}

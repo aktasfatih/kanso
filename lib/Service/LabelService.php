@@ -22,7 +22,7 @@ use OCP\IDBConnection;
  * Label CRUD and card assignments. Every mutation appends a row to the
  * `kanso_changes` log in the same flow (see BoardService). Label CRUD is a
  * board-management concern (MANAGE, like editing the board itself); assigning
- * or unassigning a label on a card only needs EDIT — for delta sync those are
+ * or unassigning a label on a card only needs EDIT - for delta sync those are
  * card updates, so their change rows target the card.
  */
 class LabelService {
@@ -102,7 +102,7 @@ class LabelService {
 
 	/**
 	 * Hard-deletes the label and all of its card assignments (labels have no
-	 * soft-delete — a deleted label simply disappears from every card).
+	 * soft-delete - a deleted label simply disappears from every card).
 	 *
 	 * @throws DoesNotExistException if the label or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board

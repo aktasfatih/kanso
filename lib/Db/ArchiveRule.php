@@ -12,7 +12,7 @@ use OCP\DB\Types;
 
 /**
  * An auto-archive rule (table `kanso_archive_rules`): archive done cards on a
- * board — or in a single stack — once they cross an age threshold.
+ * board - or in a single stack - once they cross an age threshold.
  *
  * `stackId` null means the rule covers the whole board; otherwise it is
  * scoped to that one stack. `condition` selects which age the threshold

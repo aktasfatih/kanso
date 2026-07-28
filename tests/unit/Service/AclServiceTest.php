@@ -167,7 +167,7 @@ class AclServiceTest extends TestCase {
 			});
 		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 
-		// EDIT only — READ must be forced into the stored mask.
+		// EDIT only - READ must be forced into the stored mask.
 		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_EDIT, 'alice');
 	}
 
@@ -188,7 +188,7 @@ class AclServiceTest extends TestCase {
 	public function testCreateRejectsEscalationBeyondActorBitsWithoutManage(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		// carol holds SHARE but not MANAGE — granting MANAGE would escalate.
+		// carol holds SHARE but not MANAGE - granting MANAGE would escalate.
 		$this->permissionService->method('getPermissions')
 			->with($board, 'carol')
 			->willReturn(
@@ -455,7 +455,7 @@ class AclServiceTest extends TestCase {
 	public function testUpdateAllowsResendingUnchangedMaskWithBitsBeyondActor(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		// The existing rule already carries MANAGE, which carol lacks — but
+		// The existing rule already carries MANAGE, which carol lacks - but
 		// re-sending the identical mask changes no bits, so the cap passes.
 		$existingMask = PermissionService::PERMISSION_READ | PermissionService::PERMISSION_MANAGE;
 		$this->permissionService->method('getPermissions')
@@ -487,7 +487,7 @@ class AclServiceTest extends TestCase {
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_MANAGE);
-		// bob keeps nothing after the delete — his assignments get cleaned up.
+		// bob keeps nothing after the delete - his assignments get cleaned up.
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(0);
@@ -573,7 +573,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('find')->with(40)->willReturn($acl);
 		// After the user rule is gone, bob still holds READ through a group
-		// rule — his assignments stay valid.
+		// rule - his assignments stay valid.
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);

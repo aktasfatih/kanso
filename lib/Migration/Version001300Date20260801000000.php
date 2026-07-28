@@ -17,7 +17,7 @@ use OCP\Migration\SimpleMigrationStep;
  * Board subscriptions (`kanso_board_subscriptions`): a user watches a whole
  * board to get a "something new to look at" signal. Deliberately a separate
  * table from `kanso_subscriptions` (which is card-keyed and cascade-deleted per
- * card) — a board watch is presence-only: a row means subscribed, no row means
+ * card) - a board watch is presence-only: a row means subscribed, no row means
  * not. There is no auto-subscribe to a board, so no opt-out tombstone is needed.
  *
  * Guarded (hasTable) so the step is idempotent.

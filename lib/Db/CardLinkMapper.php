@@ -55,7 +55,7 @@ class CardLinkMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every link of a card — cascade for a card purge.
+	 * Removes every link of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

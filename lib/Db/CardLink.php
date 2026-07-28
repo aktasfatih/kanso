@@ -14,7 +14,7 @@ use OCP\DB\Types;
  * A GitHub link attached to a card (table `kanso_card_links`). `kind` is
  * pr|issue|other; `state` is open|closed|merged|unknown (best-effort, refreshed
  * by a throttled unauthenticated GitHub poll). `title` and `state` may be stale
- * or unknown — the chip always renders regardless.
+ * or unknown - the chip always renders regardless.
  *
  * @method int getCardId()
  * @method void setCardId(int $cardId)

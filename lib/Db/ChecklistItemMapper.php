@@ -56,7 +56,7 @@ class ChecklistItemMapper extends QBMapper {
 
 	/**
 	 * The last item of a card in display order, or null for an empty
-	 * checklist — the append anchor for item creation.
+	 * checklist - the append anchor for item creation.
 	 *
 	 * @throws Exception
 	 */
@@ -74,7 +74,7 @@ class ChecklistItemMapper extends QBMapper {
 
 	/**
 	 * Per-card checklist progress for every non-deleted card on a board, as a
-	 * fixed two-query join through `kanso_cards` — the board payload stays a
+	 * fixed two-query join through `kanso_cards` - the board payload stays a
 	 * constant number of queries no matter how many items exist. Cards with no
 	 * items are simply absent from the map (callers default to 0/0).
 	 *
@@ -128,7 +128,7 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
-	 * Hard-deletes every checklist item of a card — cascade for a card purge.
+	 * Hard-deletes every checklist item of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows
 	 * @throws Exception

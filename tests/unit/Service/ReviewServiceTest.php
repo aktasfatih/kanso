@@ -370,7 +370,7 @@ class ReviewServiceTest extends TestCase {
 
 	public function testSetStateVerdictStandsWhenReviewerCannotComment(): void {
 		// A READ-only reviewer's verdict must land even though the reason comment
-		// (EDIT-gated) fails (#3476) — the comment is best-effort, after the write.
+		// (EDIT-gated) fails (#3476) - the comment is best-effort, after the write.
 		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
@@ -379,7 +379,7 @@ class ReviewServiceTest extends TestCase {
 		$this->cardReviewMapper->expects(self::once())->method('update');
 		$this->commentService->method('addComment')->willThrowException(new NotPermittedException());
 
-		// Must NOT throw — the verdict is recorded regardless of the comment.
+		// Must NOT throw - the verdict is recorded regardless of the comment.
 		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', 'please fix');
 	}
 

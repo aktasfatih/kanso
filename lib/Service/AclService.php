@@ -20,7 +20,7 @@ use OCP\IUserManager;
 /**
  * Board sharing (ACL) management. SHARE lets a user hand out or adjust
  * sharing rules, but never with more permission bits than they hold
- * themselves — only MANAGE may grant beyond the actor's own bits (the
+ * themselves - only MANAGE may grant beyond the actor's own bits (the
  * escalation cap). Revoking needs MANAGE, except for self-removal (leaving
  * a board). Every mutation appends an ENTITY_ACL row to the `kanso_changes`
  * log so shared boards delta-sync their member lists like any other entity.
@@ -41,7 +41,7 @@ class AclService {
 
 	/**
 	 * Shares the board with a user or group. READ is always included in the
-	 * stored mask — a share nobody can see is never valid.
+	 * stored mask - a share nobody can see is never valid.
 	 *
 	 * @param string $participantType 'user' or 'group'
 	 * @param int $permission bitmask of PermissionService::PERMISSION_* bits
@@ -85,7 +85,7 @@ class AclService {
 			$acl = $this->aclMapper->insert($acl);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent POST lost the check-then-insert race — unlike the
+				// Concurrent POST lost the check-then-insert race - unlike the
 				// idempotent assignment PUTs, POST reports the duplicate.
 				throw new InvalidInputException('Already shared with this participant');
 			}
@@ -107,7 +107,7 @@ class AclService {
 	 * Replaces the permission mask of a sharing rule. The escalation cap
 	 * applies to the CHANGED bits only, so an actor without MANAGE may
 	 * re-submit an existing mask untouched even when it contains bits they
-	 * do not hold — they just cannot flip such bits.
+	 * do not hold - they just cannot flip such bits.
 	 *
 	 * @param int $permission bitmask of PermissionService::PERMISSION_* bits
 	 * @throws DoesNotExistException if the board or the sharing rule does not exist
@@ -142,7 +142,7 @@ class AclService {
 	 * always remove their own user-type rule (leaving a board they were
 	 * shared on). Afterwards, if a removed user no longer holds READ through
 	 * any remaining path, their card assignments on the board are cleaned up
-	 * — the board payload could never resolve them again.
+	 * - the board payload could never resolve them again.
 	 *
 	 * @throws DoesNotExistException if the board or the sharing rule does not exist
 	 * @throws NotPermittedException if the actor may not manage the board (and it is not self-removal)
@@ -179,12 +179,12 @@ class AclService {
 		// Group rules skip the cleanup: expanding the membership and
 		// recomputing every member's access here is unbounded work, and
 		// members may retain access through other paths. Stale assignees
-		// from group unshares are deferred — Backlog #3393.
+		// from group unshares are deferred - Backlog #3393.
 	}
 
 	/**
 	 * Share-dialog search: users and groups matching $q that the board is
-	 * not already shared with. The owner is excluded too — sharing with
+	 * not already shared with. The owner is excluded too - sharing with
 	 * them is rejected by create().
 	 *
 	 * @return list<array{id: string, displayName: string, type: string}>
@@ -256,7 +256,7 @@ class AclService {
 
 	/**
 	 * The escalation cap: an actor without MANAGE may only hand out (or
-	 * flip, for updates — pass the XOR of old and new mask) bits they hold
+	 * flip, for updates - pass the XOR of old and new mask) bits they hold
 	 * themselves.
 	 *
 	 * @param int $bits the granted bits (create) or the changed bits (update)

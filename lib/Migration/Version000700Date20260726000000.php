@@ -18,7 +18,7 @@ use OCP\Migration\SimpleMigrationStep;
  * (0=none, 1=low, 2=medium, 3=high, 4=urgent; see {@see \OCA\Kanso\Db\Card}
  * PRIORITY_* constants). Carried in the summary payload so tiles render the
  * priority indicator and the board filter can select by level; it is a plain
- * attribute — it does NOT reorder cards (sort keys stay the ordering source).
+ * attribute - it does NOT reorder cards (sort keys stay the ordering source).
  *
  * The column add is guarded by hasColumn so the step is idempotent.
  */

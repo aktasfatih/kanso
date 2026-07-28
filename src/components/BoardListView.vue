@@ -125,7 +125,7 @@ import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 const props = defineProps({
 	/** Non-archived stacks in display order (already filtered by BoardView). */
 	stacks: { type: Array, default: () => [] },
-	/** Map<stackId, card[]> — already filter+sort applied by BoardView. */
+	/** Map<stackId, card[]> - already filter+sort applied by BoardView. */
 	cardsByStack: { type: Object, required: true },
 	/** Map<labelId, label>. */
 	labelsById: { type: Object, required: true },
@@ -149,7 +149,7 @@ const rows = computed(() => {
 	return out
 })
 
-// Fixed row heights (a table is uniform) — no per-row measureElement, so the
+// Fixed row heights (a table is uniform) - no per-row measureElement, so the
 // virtualizer's positions never thrash on a data refresh.
 const HEADER_H = 38
 const ROW_H = 48
