@@ -35,10 +35,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-for="item in items"
 				:key="item.id"
 				class="inbox-view__item"
-				role="listitem"
+				role="button"
 				tabindex="0"
 				@click="openCard(item)"
-				@keydown.enter.space.prevent="openCard(item)">
+				@keydown.enter.prevent="openCard(item)"
+				@keydown.space.prevent="openCard(item)">
 				<!-- Main content -->
 				<div class="inbox-view__item-content">
 					<!-- Summary line: "{author} commented on {cardTitle}" -->

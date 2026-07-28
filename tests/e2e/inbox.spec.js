@@ -199,6 +199,29 @@ test.describe('Inbox feed', () => {
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
 	})
 
+	test('pressing Enter on a focused inbox item opens the card (#3511)', async ({ page }) => {
+		test.skip(!state.setupOk, 'skipping keyboard test: tester setup was not available')
+
+		await ncLogin(page)
+		await page.goto(state.inboxUrl)
+		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
+
+		const item = page.locator('.inbox-view__item').filter({ has: page.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }) }).first()
+		await expect(item).toBeVisible({ timeout: 8000 })
+
+		// Focus the row and activate it by keyboard (was broken: the enter+space
+		// modifier chain required both keys at once, so Enter alone did nothing).
+		await item.focus()
+		await item.press('Enter')
+
+		await page.waitForURL(
+			(url) => url.hash.includes(`/board/${state.boardId}`) && url.hash.includes(`/card/${state.cardId}`),
+			{ timeout: 10_000 },
+		)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+	})
+
 	test('empty state renders when inbox is empty', async ({ page }) => {
 		// Create a fresh board+card without sharing/subscribing so the inbox is
 		// guaranteed empty for this user, then navigate directly to #/inbox.
