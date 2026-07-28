@@ -16,13 +16,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 				<div class="board-settings__general">
 					<NcCheckboxRadioSwitch
-						:checked="isDefaultBoard"
+						:model-value="isDefaultBoard"
 						:disabled="settingsBusy"
-						@update:checked="setDefaultBoard">
+						@update:model-value="setDefaultBoard">
 						{{ t('kanso', 'Open this board when Kanso starts') }}
 					</NcCheckboxRadioSwitch>
 					<p class="board-settings__general-hint">
 						{{ t('kanso', 'Kanso opens the board list by default. Turn this on to open this board instead.') }}
+					</p>
+					<NcCheckboxRadioSwitch
+						v-if="canManage"
+						:model-value="newCardsOnTop"
+						:disabled="newCardsOnTopSaving"
+						@update:model-value="onNewCardsOnTopChange">
+						{{ t('kanso', 'Add new cards to the top of a column') }}
+					</NcCheckboxRadioSwitch>
+					<p v-if="canManage" class="board-settings__general-hint">
+						{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
 					</p>
 				</div>
 			</NcAppSidebarTab>
@@ -1581,6 +1591,18 @@ async function onEstimateScaleChange(newScale) {
 		estimateScaleError.value = err?.response?.data?.error || t('kanso', 'Failed to update estimation scale.')
 	} finally {
 		estimateScaleSaving.value = false
+	}
+}
+
+// ── New-cards-on-top (per-board) ─────────────────────────────────────────────
+const newCardsOnTop = computed(() => boardQueryData.value?.board?.newCardsOnTop === true)
+const newCardsOnTopSaving = ref(false)
+async function onNewCardsOnTopChange(checked) {
+	newCardsOnTopSaving.value = true
+	try {
+		await updateBoard.mutateAsync({ newCardsOnTop: checked })
+	} finally {
+		newCardsOnTopSaving.value = false
 	}
 }
 

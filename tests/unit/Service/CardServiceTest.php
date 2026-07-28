@@ -168,6 +168,26 @@ class CardServiceTest extends TestCase {
 		$this->service->create(5, 'A card', 'alice');
 	}
 
+	public function testCreatePlacesOnTopWhenBoardOptsIn(): void {
+		$board = $this->board();
+		$board->setNewCardsOnTop(true);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findFirstInStack')->with(5)
+			->willReturn($this->card(8, 5, 1, 'J'));
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				// before('J') === 'I' — the new card sorts above the current head.
+				self::assertSame('I', $card->getSortKey());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
 	public function testCreateRejectsEmptyTitle(): void {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());

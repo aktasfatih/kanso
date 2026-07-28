@@ -87,7 +87,7 @@ class BoardService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 * @throws InvalidInputException on invalid title, color or estimate scale
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -105,6 +105,9 @@ class BoardService {
 				throw new InvalidInputException('Unknown estimate scale');
 			}
 			$board->setEstimateScale($estimateScale);
+		}
+		if ($newCardsOnTop !== null) {
+			$board->setNewCardsOnTop($newCardsOnTop);
 		}
 
 		$now = time();

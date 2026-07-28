@@ -73,15 +73,25 @@ class CardService {
 		$title = $this->validateTitle($title);
 		$now = time();
 
-		// Append to the bottom of the stack. A concurrent create into the same
-		// stack can derive the same append key; the (stack_id, sort_key,
-		// deleted_at) unique index rejects the loser, so re-read the now-current
-		// last card and re-derive once before giving up with a retryable 409.
+		// Default: append to the bottom of the stack. When the board opts in,
+		// place the new card at the TOP instead (before the current head). A
+		// concurrent create into the same stack can derive the same key; the
+		// (stack_id, sort_key, deleted_at) unique index rejects the loser, so
+		// re-read the now-current neighbour and re-derive once before giving up
+		// with a retryable 409.
+		$onTop = $board->getNewCardsOnTop() === true;
 		for ($attempt = 0; ; $attempt++) {
-			$lastCard = $this->cardMapper->findLastInStack($stackId);
-			$sortKey = $lastCard === null
-				? $this->sortKeyService->initial()
-				: $this->sortKeyService->after($lastCard->getSortKey());
+			if ($onTop) {
+				$firstCard = $this->cardMapper->findFirstInStack($stackId);
+				$sortKey = $firstCard === null
+					? $this->sortKeyService->initial()
+					: $this->sortKeyService->before($firstCard->getSortKey());
+			} else {
+				$lastCard = $this->cardMapper->findLastInStack($stackId);
+				$sortKey = $lastCard === null
+					? $this->sortKeyService->initial()
+					: $this->sortKeyService->after($lastCard->getSortKey());
+			}
 
 			$card = new Card();
 			$card->setBoardId($stack->getBoardId());

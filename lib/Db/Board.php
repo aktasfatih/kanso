@@ -29,6 +29,8 @@ use OCP\DB\Types;
  * @method void setWebhookSecret(?string $webhookSecret)
  * @method string getEstimateScale()
  * @method void setEstimateScale(string $estimateScale)
+ * @method bool|null getNewCardsOnTop()
+ * @method void setNewCardsOnTop(?bool $newCardsOnTop)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -43,6 +45,7 @@ class Board extends Entity implements \JsonSerializable {
 	// MANAGE-only; deliberately NEVER emitted by jsonSerialize().
 	protected ?string $webhookSecret = null;
 	protected ?string $estimateScale = null;
+	protected ?bool $newCardsOnTop = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -53,10 +56,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('deletedAt', Types::INTEGER);
 		$this->addType('webhookSecret', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);
+		$this->addType('newCardsOnTop', Types::BOOLEAN);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int, estimateScale: string}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -68,6 +72,7 @@ class Board extends Entity implements \JsonSerializable {
 			'archived' => $this->archived ?? false,
 			'lastModified' => $this->lastModified ?? 0,
 			'estimateScale' => $this->estimateScale ?? EstimateScale::NONE,
+			'newCardsOnTop' => $this->newCardsOnTop ?? false,
 		];
 	}
 }
