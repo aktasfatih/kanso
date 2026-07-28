@@ -214,6 +214,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Make this a sub-card of…') }}
 							</NcActionButton>
 							<NcActionSeparator v-if="canEdit" />
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
+								@click="moveToEdge(true)">
+								<template #icon>
+									<ChevronDoubleUpIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Move to top') }}
+							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
+								@click="moveToEdge(false)">
+								<template #icon>
+									<ChevronDoubleDownIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Move to bottom') }}
+							</NcActionButton>
+							<NcActionSeparator v-if="canEdit" />
 							<NcActionButton :close-after-click="true" @click="handleArchiveToggle">
 								<template #icon>
 									<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
@@ -1239,6 +1258,8 @@ import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOut
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronDoubleUpIcon from 'vue-material-design-icons/ChevronDoubleUp.vue'
+import ChevronDoubleDownIcon from 'vue-material-design-icons/ChevronDoubleDown.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import VectorLinkIcon from 'vue-material-design-icons/VectorLink.vue'
 import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline.vue'
@@ -1267,7 +1288,7 @@ import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard } from '../services/api.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -2327,6 +2348,34 @@ async function handleToggleWatcher(uid, subscribe) {
 
 // ── Card relations (blocks / blocked-by / duplicates / relates) ──────────────
 const queryClient = useQueryClient()
+
+// ── Move to top / bottom of the current column (⋯ menu) ──────────────────────
+// Reuses the existing move endpoint: afterCardId=null → top; afterCardId=last
+// card in the stack → bottom. A menu action (not a drag), so we just refetch the
+// board rather than run the DnD optimistic machinery.
+const moveError = ref('')
+async function moveToEdge(toTop) {
+	moveError.value = ''
+	const stackId = cardData.value?.stackId
+	if (stackId == null) return
+	const selfId = Number(props.cardId)
+	let afterCardId = null
+	if (!toTop) {
+		// Bottom: land after the last non-archived card in this stack (by sortKey).
+		const inStack = (boardData.value?.cards ?? [])
+			.filter((c) => c.stackId === stackId && !c.archived && c.id !== selfId)
+			.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
+		if (inStack.length === 0) return // alone in the stack → already top and bottom
+		afterCardId = inStack[inStack.length - 1].id
+	}
+	try {
+		await apiMoveCard(selfId, { targetStackId: stackId, afterCardId })
+		queryClient.invalidateQueries({ queryKey: ['board', boardId.value] })
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+	} catch (err) {
+		moveError.value = err?.response?.data?.error || t('kanso', 'Failed to move card.')
+	}
+}
 
 // The four relation groups from card detail
 const relations = computed(() => cardData.value?.relations ?? { blocks: [], blockedBy: [], duplicates: [], relates: [] })
