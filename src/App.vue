@@ -65,9 +65,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
+import { getSettings } from './services/api.js'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
@@ -79,6 +80,35 @@ import BellIcon from 'vue-material-design-icons/Bell.vue'
 import { useBoards } from './composables/useBoards.js'
 
 const route = useRoute()
+const router = useRouter()
+
+// Default-board-on-start: only when the app opened on the board list (never
+// override a deep link). On first load, if the user picked a default board and
+// it still exists (non-archived), redirect there once.
+onMounted(async () => {
+	// Wait for the router to resolve the initial route before reading its name.
+	await router.isReady()
+	if (route.name !== 'board-list') return
+	let defaultBoardId = null
+	try {
+		defaultBoardId = (await getSettings()).defaultBoardId
+	} catch {
+		return
+	}
+	if (!defaultBoardId) return
+	const stop = watch(
+		boards,
+		(list) => {
+			if (route.name !== 'board-list') { stop(); return } // user navigated away
+			if (!Array.isArray(list) || list.length === 0) return // still loading
+			if (list.some((b) => Number(b.id) === Number(defaultBoardId))) {
+				router.replace({ name: 'board', params: { id: String(defaultBoardId) } })
+			}
+			stop()
+		},
+		{ immediate: true },
+	)
+})
 
 const { data: boardsData } = useBoards()
 // Non-archived boards, listed under the Boards nav entry so the user can jump

@@ -10,6 +10,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@update:active="activeTab = $event"
 			@close="$emit('close')">
 
+			<NcAppSidebarTab id="general" :name="t('kanso', 'General')">
+				<template #icon>
+					<CogIcon :size="20" />
+				</template>
+				<div class="board-settings__general">
+					<NcCheckboxRadioSwitch
+						:checked="isDefaultBoard"
+						:disabled="settingsBusy"
+						@update:checked="setDefaultBoard">
+						{{ t('kanso', 'Open this board when Kanso starts') }}
+					</NcCheckboxRadioSwitch>
+					<p class="board-settings__general-hint">
+						{{ t('kanso', 'Kanso opens the board list by default. Turn this on to open this board instead.') }}
+					</p>
+				</div>
+			</NcAppSidebarTab>
+
 			<NcAppSidebarTab id="labels" :name="t('kanso', 'Labels')">
 				<template #icon>
 					<TagMultipleIcon :size="20" />
@@ -1326,6 +1343,8 @@ import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import CogIcon from 'vue-material-design-icons/Cog.vue'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
 import NcAppSidebarTab from '@nextcloud/vue/components/NcAppSidebarTab'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -1350,6 +1369,8 @@ import {
 	fetchWebhookConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
+	getSettings,
+	updateSettings,
 } from '../services/api.js'
 
 const props = defineProps({
@@ -1487,6 +1508,29 @@ function canToggleBit(entry, bit) {
 
 // ── Tab state ─────────────────────────────────────────────────────────────────
 const activeTab = ref('labels')
+
+// ── General: default-board-on-start preference ───────────────────────────────
+const isDefaultBoard = ref(false)
+const settingsBusy = ref(false)
+onMounted(async () => {
+	try {
+		const s = await getSettings()
+		isDefaultBoard.value = Number(s.defaultBoardId) === Number(props.boardId)
+	} catch {
+		// Non-fatal: leave the toggle off.
+	}
+})
+async function setDefaultBoard(checked) {
+	settingsBusy.value = true
+	try {
+		const res = await updateSettings({ defaultBoardId: checked ? Number(props.boardId) : null })
+		isDefaultBoard.value = Number(res.defaultBoardId) === Number(props.boardId)
+	} catch {
+		isDefaultBoard.value = !checked // revert on failure
+	} finally {
+		settingsBusy.value = false
+	}
+}
 
 // ── Labels composable ─────────────────────────────────────────────────────────
 const { createLabel, updateLabel, deleteLabel } = useLabels(() => props.boardId)

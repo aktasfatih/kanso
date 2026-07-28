@@ -11,6 +11,9 @@ return [
 
 		['name' => 'search#index', 'url' => '/api/search', 'verb' => 'GET'],
 
+		['name' => 'settings#index', 'url' => '/api/settings', 'verb' => 'GET'],
+		['name' => 'settings#update', 'url' => '/api/settings', 'verb' => 'PUT'],
+
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],

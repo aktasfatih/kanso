@@ -272,3 +272,10 @@ export const updateReviewType = (id, data) =>
 
 export const deleteReviewType = (id) =>
 	axios.delete(url(`/api/review-types/${id}`)).then((r) => r.data)
+
+// Per-user settings (default board on start, …)
+export const getSettings = () =>
+	axios.get(url('/api/settings')).then((r) => r.data)
+
+export const updateSettings = (data) =>
+	axios.put(url('/api/settings'), data).then((r) => r.data)
