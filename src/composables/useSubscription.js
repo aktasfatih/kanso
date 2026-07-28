@@ -9,8 +9,9 @@
  *   2. Snapshot previous value for rollback on error.
  *   3. Optimistically patch the card detail cache's `subscription` block:
  *      - flip `subscribed`
- *      - adjust `count` by ±1
- *      - add or remove the current user's uid from `subscribers`
+ *      - add or remove the target uid from `subscribers`
+ *      - set `count` to `subscribers.length` (the server's watch block always
+ *        returns the full list, so count === subscribers.length)
  *   4. On error: rollback to snapshot.
  *   5. On settled: invalidate the card detail query so server truth wins.
  *
