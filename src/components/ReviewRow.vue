@@ -3,7 +3,14 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="review-row" @click="emit('open')" role="listitem">
+	<div
+		class="review-row"
+		role="button"
+		tabindex="0"
+		:aria-label="review.cardTitle"
+		@click="emit('open')"
+		@keydown.enter.prevent="emit('open')"
+		@keydown.space.prevent="emit('open')">
 		<!-- Main content area -->
 		<div class="review-row__content">
 			<!-- Card title + board title -->

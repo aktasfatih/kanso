@@ -51,8 +51,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-for="row in scheduled"
 					:key="row.card.id"
 					class="timeline__lane"
+					role="button"
+					tabindex="0"
 					:title="row.card.title"
-					@click="openCard(row.card.id)">
+					:aria-label="row.card.title"
+					@click="openCard(row.card.id)"
+					@keydown.enter.prevent="openCard(row.card.id)"
+					@keydown.space.prevent="openCard(row.card.id)">
 					<div
 						v-if="row.isMilestone"
 						class="timeline__milestone"

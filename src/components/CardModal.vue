@@ -149,7 +149,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@keydown.enter.prevent="saveTitle"
 							@keydown.escape.stop="cancelTitleEdit"
 							@blur="saveTitle">
-						<h2 v-else class="card-modal__title" @click="startTitleEdit">
+						<h2
+							v-else
+							class="card-modal__title"
+							role="button"
+							tabindex="0"
+							:aria-label="t('kanso', 'Edit title')"
+							@click="startTitleEdit"
+							@keydown.enter.prevent="startTitleEdit"
+							@keydown.space.prevent="startTitleEdit">
 							{{ cardData.title }}
 						</h2>
 					</div>
@@ -763,7 +771,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										v-else
 										class="card-modal__checklist-item-title"
 										:class="{ 'card-modal__checklist-item-title--done': item.done }"
-										@click="startItemEdit(item)">
+										role="button"
+										tabindex="0"
+										:aria-label="t('kanso', 'Edit item')"
+										@click="startItemEdit(item)"
+										@keydown.enter.prevent="startItemEdit(item)"
+										@keydown.space.prevent="startItemEdit(item)">
 										{{ item.title }}
 									</span>
 									<button

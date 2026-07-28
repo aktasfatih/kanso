@@ -82,4 +82,20 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
 	})
+
+	test('a lane is keyboard-openable: focus + Enter opens the card (#3512)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__view-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+
+		const lane = page.locator('.timeline__lane', { hasText: 'Ranged task' })
+		await expect(lane).toBeVisible({ timeout: 8_000 })
+		// The lane is a focusable button now — focus it and activate with Enter.
+		await lane.focus()
+		await lane.press('Enter')
+		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+	})
 })
