@@ -87,11 +87,14 @@ class CardService {
 			$card->setStackId($stackId);
 			$card->setTitle($title);
 			$card->setSortKey($sortKey);
-			// Creating a card directly in a done-role stack stamps it done, and in
-			// an in-progress-role stack stamps it started — matching move()'s
-			// status-automation for a dragged-in card.
+			// Creating a card directly in a role-bearing stack adopts that
+			// column's status — matching move()'s status-automation for a
+			// dragged-in card. Done-role → done; in-progress/review-role →
+			// started; backlog/to-do/none → not started (both left at 0).
 			$card->setDoneAt($stack->getRole() === Stack::ROLE_DONE ? $now : 0);
-			$card->setStartedAt($stack->getRole() === Stack::ROLE_IN_PROGRESS ? $now : 0);
+			$card->setStartedAt(
+				in_array($stack->getRole(), [Stack::ROLE_IN_PROGRESS, Stack::ROLE_REVIEW], true) ? $now : 0,
+			);
 			$card->setArchived(false);
 			$card->setOwner($uid);
 			$card->setCreatedAt($now);
@@ -459,31 +462,48 @@ class CardService {
 	}
 
 	/**
-	 * Done-automation for a move: entering a done-role stack stamps the card
-	 * done (once — an already-done card is left alone); leaving a done-role
-	 * stack for a non-done one clears it. The done_at change rides the same
-	 * card UPDATE as the move, so no extra change row is written. Unconditional
-	 * for v1 — a done-role stack stamping done is the expected default.
+	 * Status-automation for a move: a column's role IS its status, so dragging a
+	 * card into a column adopts that column's lifecycle stage —
+	 *   Backlog / To do → Not started (both timestamps cleared),
+	 *   In progress / Review → In progress (started stamped, done cleared),
+	 *   Done → Done (done stamped once, keeping an already-done card's time).
+	 * A role-less column (ROLE_NONE) carries no status and leaves the card as-is,
+	 * and a reorder within the same column never rewrites the status. The
+	 * timestamp changes ride the same card UPDATE as the move, so no extra change
+	 * row is written.
 	 */
 	private function applyDoneAutomation(Card $card, Stack $sourceStack, Stack $targetStack, int $now): void {
-		$sourceDone = $sourceStack->getRole() === Stack::ROLE_DONE;
-		$targetDone = $targetStack->getRole() === Stack::ROLE_DONE;
-
-		if ($targetDone) {
-			if ($card->getDoneAt() === 0) {
-				$card->setDoneAt($now);
-			}
-		} elseif ($sourceDone) {
-			$card->setDoneAt(0);
+		// A reorder within the same column must never rewrite the card's status —
+		// only entering a DIFFERENT column applies that column's role.
+		if ($sourceStack->getId() === $targetStack->getId()) {
+			return;
 		}
 
-		// Started-automation: entering an in-progress-role stack stamps the card
-		// "started" (status → In progress). Forward-only — never unset on leaving
-		// — and never over a done card. Rides the same UPDATE as the move.
-		if ($targetStack->getRole() === Stack::ROLE_IN_PROGRESS
-			&& ($card->getStartedAt() ?? 0) === 0
-			&& ($card->getDoneAt() ?? 0) === 0) {
-			$card->setStartedAt($now);
+		switch ($targetStack->getRole()) {
+			case Stack::ROLE_BACKLOG:
+			case Stack::ROLE_TODO:
+				// Not started — clear both timestamps.
+				$card->setStartedAt(0);
+				$card->setDoneAt(0);
+				break;
+			case Stack::ROLE_IN_PROGRESS:
+			case Stack::ROLE_REVIEW:
+				// In progress — started, not done.
+				$card->setDoneAt(0);
+				if (($card->getStartedAt() ?? 0) === 0) {
+					$card->setStartedAt($now);
+				}
+				break;
+			case Stack::ROLE_DONE:
+				// Done — stamp once (an already-done card keeps its time).
+				if ($card->getDoneAt() === 0) {
+					$card->setDoneAt($now);
+				}
+				break;
+			case Stack::ROLE_NONE:
+			default:
+				// No associated status — leave the card's status as-is.
+				break;
 		}
 	}
 

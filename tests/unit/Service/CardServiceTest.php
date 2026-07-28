@@ -1051,9 +1051,36 @@ class CardServiceTest extends TestCase {
 		self::assertSame(12345, $moved->getDoneAt());
 	}
 
-	public function testMoveOutOfDoneStackClearsDoneAt(): void {
-		// Card 9 sits done in the done-role source stack (5) and moves to a
-		// plain target stack (6).
+	public function testMoveIntoBacklogStackClearsStatus(): void {
+		// A column's role IS its status: a done card dragged into a backlog-role
+		// column (5, done) → (6, backlog) is reset to "not started" — both
+		// timestamps cleared.
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(12345);
+		$card->setStartedAt(500);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_DONE),
+			6 => $this->stack(6, 1, Stack::ROLE_BACKLOG),
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn (Card $c): bool => $c->getDoneAt() === 0 && $c->getStartedAt() === 0))
+			->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(0, $moved->getDoneAt());
+		self::assertSame(0, $moved->getStartedAt());
+	}
+
+	public function testMoveOutOfDoneToRolelessStackKeepsStatus(): void {
+		// A role-less column carries no status, so moving a done card into one
+		// leaves its done stamp untouched.
 		$card = $this->card(9, 5, 1, 'V');
 		$card->setDoneAt(12345);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
@@ -1063,16 +1090,11 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6),
 		});
 		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
-		$this->cardMapper->expects(self::once())
-			->method('update')
-			->with(self::callback(static fn (Card $c): bool => $c->getDoneAt() === 0))
-			->willReturnArgument(0);
+		$this->cardMapper->method('update')->willReturnArgument(0);
 		$this->changeNotifier->method('notify')->willReturn(new Change());
-		$this->db->expects(self::once())->method('beginTransaction');
-		$this->db->expects(self::once())->method('commit');
 
 		$moved = $this->service->move(9, 6, null, 'alice');
-		self::assertSame(0, $moved->getDoneAt());
+		self::assertSame(12345, $moved->getDoneAt());
 	}
 
 	// ---- status (started) automation + direct set -------------------------
@@ -1093,7 +1115,9 @@ class CardServiceTest extends TestCase {
 		self::assertSame(0, $moved->getDoneAt());
 	}
 
-	public function testMoveIntoInProgressDoesNotRestartADoneCard(): void {
+	public function testMoveIntoInProgressStackReopensADoneCard(): void {
+		// The column's role is its status: dragging a done card into an
+		// in-progress column reopens it — done cleared, started stamped.
 		$card = $this->card(9, 5, 1, 'V');
 		$card->setDoneAt(12345);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
@@ -1107,7 +1131,8 @@ class CardServiceTest extends TestCase {
 		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$moved = $this->service->move(9, 6, null, 'alice');
-		self::assertSame(0, $moved->getStartedAt());
+		self::assertGreaterThan(0, $moved->getStartedAt());
+		self::assertSame(0, $moved->getDoneAt());
 	}
 
 	public function testUpdateStatusTransitions(): void {
