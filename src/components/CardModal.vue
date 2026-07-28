@@ -1771,11 +1771,14 @@ async function handleAddItem() {
 	const title = newItemTitle.value.trim()
 	if (!title) return
 	checklistError.value = ''
+	// Clear immediately so rapid entry works; on failure restore the text, but
+	// only if the user hasn't already started typing the next item.
 	newItemTitle.value = ''
 	try {
 		await addItem.mutateAsync({ title })
 	} catch (err) {
 		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to add item.')
+		if (newItemTitle.value === '') newItemTitle.value = title
 	}
 	// Keep focus for rapid entry
 	await nextTick()
@@ -1950,9 +1953,10 @@ async function submitNewComment() {
 	const body = newCommentBody.value.trim()
 	if (!body) return
 	commentError.value = ''
-	newCommentBody.value = ''
 	try {
 		await addComment.mutateAsync({ body, parentCommentId: null })
+		// Clear only after success so a failed post keeps the user's text.
+		newCommentBody.value = ''
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post comment.')
 	}
@@ -1984,10 +1988,11 @@ async function submitReply(parentCommentId) {
 	const body = replyBody.value.trim()
 	if (!body) return
 	commentError.value = ''
-	replyBody.value = ''
-	replyingToId.value = null
 	try {
 		await addComment.mutateAsync({ body, parentCommentId })
+		// Clear + close the reply box only after success (keep text on failure).
+		replyBody.value = ''
+		replyingToId.value = null
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
 	}
@@ -2132,6 +2137,8 @@ async function handleAddChild() {
 	const title = newChildTitle.value.trim()
 	if (!title) return
 	hierarchyError.value = ''
+	// Clear immediately for rapid entry; restore on failure only if the field
+	// is still empty (the user hasn't started typing the next sub-card).
 	newChildTitle.value = ''
 	try {
 		await addChild(
@@ -2140,6 +2147,7 @@ async function handleAddChild() {
 		)
 	} catch (err) {
 		hierarchyError.value = err?.response?.data?.error || t('kanso', 'Failed to add sub-card.')
+		if (newChildTitle.value === '') newChildTitle.value = title
 	}
 	// Keep focus for rapid entry
 	await nextTick()

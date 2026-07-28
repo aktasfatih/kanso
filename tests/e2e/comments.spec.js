@@ -246,4 +246,30 @@ test.describe('Comments / Discussion', () => {
 		// parsed as HTML): the literal tag shows in the rendered text content.
 		await expect(commentBody).toContainText('<img src=x onerror=alert(1)>')
 	})
+
+	test('a failed comment post keeps the typed text (no data loss) (#3510)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// Force the comment POST to fail.
+		await page.route('**/apps/kanso/api/cards/*/comments', (route) => {
+			if (route.request().method() === 'POST') {
+				return route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ error: 'forced failure' }),
+				})
+			}
+			return route.continue()
+		})
+
+		const ta = page.locator('.card-modal__composer-textarea').first()
+		await ta.fill('this text must survive a failed post')
+		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
+
+		// The composer keeps the text so the user can retry (before the fix it was
+		// cleared before the await and lost).
+		await expect(ta).toHaveValue('this text must survive a failed post', { timeout: 5000 })
+	})
 })
