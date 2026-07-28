@@ -31,7 +31,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:title="t('kanso', 'Change color')"
 							:aria-label="t('kanso', 'Change color of label {title}', { title: label.title })"
 							:disabled="!canManage"
-							@click="openColorPicker(label)">
+							@click="openColorPicker(label)"
+							@keydown.escape="onColorPickerEscape">
 							<span v-if="!label.color" class="label-settings__swatch-icon">?</span>
 						</button>
 
@@ -40,7 +41,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="colorPickerFor === label.id"
 							class="label-settings__color-popover"
 							role="dialog"
-							:aria-label="t('kanso', 'Pick a color')">
+							:aria-label="t('kanso', 'Pick a color')"
+							@keydown.escape="onColorPickerEscape">
 							<div class="label-settings__color-grid">
 								<button
 									v-for="preset in COLOR_PRESETS"
@@ -131,7 +133,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:class="{ 'label-settings__swatch--no-color': !newColor }"
 							:title="t('kanso', 'Pick color')"
 							:aria-label="t('kanso', 'Pick color for new label')"
-							@click="showNewColorPicker = !showNewColorPicker">
+							@click="showNewColorPicker = !showNewColorPicker"
+							@keydown.escape="onColorPickerEscape">
 							<span v-if="!newColor" class="label-settings__swatch-icon">+</span>
 						</button>
 
@@ -139,7 +142,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="showNewColorPicker"
 							class="label-settings__color-popover label-settings__color-popover--create"
 							role="dialog"
-							:aria-label="t('kanso', 'Pick a color')">
+							:aria-label="t('kanso', 'Pick a color')"
+							@keydown.escape="onColorPickerEscape">
 							<div class="label-settings__color-grid">
 								<button
 									v-for="preset in COLOR_PRESETS"
@@ -203,7 +207,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:title="t('kanso', 'Change color')"
 							:aria-label="t('kanso', 'Change color of review type {title}', { title: rt.title })"
 							:disabled="!canManage"
-							@click="openRtColorPicker(rt)">
+							@click="openRtColorPicker(rt)"
+							@keydown.escape="onColorPickerEscape">
 							<span v-if="!rt.color" class="label-settings__swatch-icon">?</span>
 						</button>
 
@@ -212,7 +217,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="rtColorPickerFor === rt.id"
 							class="label-settings__color-popover"
 							role="dialog"
-							:aria-label="t('kanso', 'Pick a color')">
+							:aria-label="t('kanso', 'Pick a color')"
+							@keydown.escape="onColorPickerEscape">
 							<div class="label-settings__color-grid">
 								<button
 									v-for="preset in COLOR_PRESETS"
@@ -1683,6 +1689,18 @@ const colorPickerFor = ref(null)
 
 function openColorPicker(label) {
 	colorPickerFor.value = colorPickerFor.value === label.id ? null : label.id
+}
+
+// Escape while a colour popover is open closes just the popover — stop it from
+// bubbling to NcAppSidebar, which would otherwise close the whole settings
+// sidebar. When no popover is open, let Escape bubble (default close behaviour).
+function onColorPickerEscape(event) {
+	if (showNewColorPicker.value || colorPickerFor.value !== null || rtColorPickerFor.value !== null) {
+		event.stopPropagation()
+		showNewColorPicker.value = false
+		colorPickerFor.value = null
+		rtColorPickerFor.value = null
+	}
 }
 
 async function applyColor(label, color) {

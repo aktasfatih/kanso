@@ -229,4 +229,25 @@ test.describe('Card modal two-column layout', () => {
 		expect(box).not.toBeNull()
 		expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1)
 	})
+
+	test('Escape closes an open attribute popover without closing the modal (#3509)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+
+		// Open an attribute popover (the due-date pill).
+		await page.locator('.card-modal__attrbar button.card-modal__pill').nth(1).click()
+		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 5_000 })
+
+		// First Escape closes ONLY the popover — the modal stays open.
+		await page.locator('.card-modal').press('Escape')
+		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
+		await expect(page.locator('.card-modal')).toBeVisible()
+		await expect(page).toHaveURL(new RegExp(`/card/${state.cardId}`))
+
+		// Second Escape (no popover open) closes the modal.
+		await page.locator('.card-modal').press('Escape')
+		await expect(page).not.toHaveURL(new RegExp(`/card/${state.cardId}`), { timeout: 8_000 })
+	})
 })

@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div
 			class="card-modal"
 			:class="`card-modal--tab-${viewMode}`"
-			@keydown.escape="closeModal">
+			@keydown.escape="onModalEscape">
 			<!-- Loading state - real layout, shimmer, never a spinner -->
 			<div v-if="isLoading" class="card-modal__skeleton">
 				<div class="card-modal__sk-header">
@@ -2061,6 +2061,17 @@ function formatCommentTime(unixTs) {
 function closeModal() {
 	isOpen.value = false
 	router.push({ name: 'board', params: { id: route.params.id } })
+}
+
+// Escape at the modal root: an open attribute popover takes precedence — close
+// it, not the whole card (which would discard an in-progress edit). Inline edits
+// (title/description/comment) stop propagation themselves, so they never reach here.
+function onModalEscape() {
+	if (openPicker.value !== null) {
+		openPicker.value = null
+		return
+	}
+	closeModal()
 }
 
 // ── Card hierarchy (parent / sub-cards) ─────────────────────────────────────
