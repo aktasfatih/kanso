@@ -10,3 +10,4 @@ test-results/
 playwright-report/
 .php-cs-fixer.cache
 .claude/
+docs/design/
