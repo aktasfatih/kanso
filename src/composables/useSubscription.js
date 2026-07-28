@@ -77,19 +77,9 @@ export function useSubscription(cardId) {
 				const prev = old.subscription ?? { subscribed: false, subscribers: [], count: 0 }
 				const prevSubscribers = Array.isArray(prev.subscribers) ? prev.subscribers : []
 
-				let nextSubscribers
-				let nextCount
-				if (subscribed) {
-					// Add uid if not already present
-					nextSubscribers = prevSubscribers.includes(uid)
-						? prevSubscribers
-						: [...prevSubscribers, uid]
-					nextCount = Math.max(prev.count ?? 0, nextSubscribers.length)
-				} else {
-					// Remove uid
-					nextSubscribers = prevSubscribers.filter((u) => u !== uid)
-					nextCount = Math.max(0, (prev.count ?? 1) - 1)
-				}
+				const nextSubscribers = subscribed
+					? (prevSubscribers.includes(uid) ? prevSubscribers : [...prevSubscribers, uid])
+					: prevSubscribers.filter((u) => u !== uid)
 
 				return {
 					...old,
@@ -97,7 +87,9 @@ export function useSubscription(cardId) {
 						...prev,
 						subscribed,
 						subscribers: nextSubscribers,
-						count: nextCount,
+						// The server's watch block always returns the FULL subscriber
+						// list, so count === subscribers.length — same rule as toggleOther.
+						count: nextSubscribers.length,
 					},
 				}
 			})
