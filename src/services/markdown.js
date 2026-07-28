@@ -50,6 +50,8 @@ const ALLOWED_TAGS = [
 	'span', // only used for the mention chip (class="kanso-mention")
 ]
 
+// `class` is allowed through here so it can survive to the afterSanitizeAttributes
+// hook, which then strips it from everything except the mention chip (below).
 const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class']
 
 const FORBID_TAGS = ['style', 'script']
@@ -60,6 +62,13 @@ const FORBID_ATTR = ['style', 'onerror', 'onclick', 'onload', 'onmouseover']
 // currently the only DOMPurify consumer; if a second one is added, scope this
 // to a dedicated DOMPurify() instance so it doesn't inherit the link rewriting.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+	// Defence-in-depth: `class` is only ever legitimate on the mention chip.
+	// Strip it from every other element so the app-wide allowlist entry can't be
+	// (mis)used to carry class-based styling/selectors on arbitrary tags.
+	if (node.hasAttribute?.('class')
+		&& !(node.tagName === 'SPAN' && node.getAttribute('class') === 'kanso-mention')) {
+		node.removeAttribute('class')
+	}
 	if (node.tagName === 'A') {
 		const href = node.getAttribute('href') || ''
 		// Strip javascript: and data: hrefs
