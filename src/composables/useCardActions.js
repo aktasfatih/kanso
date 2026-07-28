@@ -60,13 +60,16 @@ export function useCardActions(boardId, cardId) {
 			const previousBoard = queryClient.getQueryData(boardKey)
 			const previousCard = queryClient.getQueryData(cardKey)
 
-			// Patch board summary cache - flip the card's archived flag
+			// Patch board summary cache - flip the card's archived flag. Board card
+			// ids are numeric; resolve(cardId) is the string route param, so coerce
+			// (matching usePriority/useChecklist) or the match never fires.
+			const numericCardId = Number(resolve(cardId))
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old
 				return {
 					...old,
 					cards: old.cards.map((c) =>
-						c.id === resolve(cardId) ? { ...c, archived } : c,
+						c.id === numericCardId ? { ...c, archived } : c,
 					),
 				}
 			})
@@ -108,12 +111,14 @@ export function useCardActions(boardId, cardId) {
 
 			const previousBoard = queryClient.getQueryData(boardKey)
 
-			// Remove the card from the board summary cache
+			// Remove the card from the board summary cache (numeric id vs the string
+			// route param — coerce or the filter removes nothing).
+			const numericCardId = Number(resolve(cardId))
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old
 				return {
 					...old,
-					cards: old.cards.filter((c) => c.id !== resolve(cardId)),
+					cards: old.cards.filter((c) => c.id !== numericCardId),
 				}
 			})
 
