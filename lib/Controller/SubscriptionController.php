@@ -59,6 +59,24 @@ class SubscriptionController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function subscribeOther(int $cardId, string $userId): JSONResponse {
+		return $this->respond(function () use ($cardId, $userId): JSONResponse {
+			return new JSONResponse(
+				$this->subscriptionService->subscribeOther($cardId, $userId, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function unsubscribeOther(int $cardId, string $userId): JSONResponse {
+		return $this->respond(function () use ($cardId, $userId): JSONResponse {
+			return new JSONResponse(
+				$this->subscriptionService->unsubscribeOther($cardId, $userId, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
 	public function boardIndex(int $boardId): JSONResponse {
 		return $this->respond(function () use ($boardId): JSONResponse {
 			return new JSONResponse(

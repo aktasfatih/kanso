@@ -37,6 +37,49 @@ async function apiDelete(path) {
 	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
 }
 
+async function apiPut(path) {
+	const r = await fetch(API + path, {
+		method: 'PUT',
+		headers: { ...HEADERS, Authorization: AUTH },
+	})
+	return r
+}
+
+// ---- OCS provisioning + as-other-user helpers (multi-user watcher tests) ----
+const OCS = BASE + '/ocs/v2.php/cloud'
+const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
+
+async function provisionUser(uid, password) {
+	// Hermetic: remove any prior user, then recreate with a known password.
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
+	const body = new URLSearchParams({ userid: uid, password })
+	const r = await fetch(`${OCS}/users`, {
+		method: 'POST',
+		headers: { ...OCS_HEADERS, Authorization: AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+		body,
+	})
+	if (!r.ok) throw new Error(`provision ${uid} → ${r.status}: ${await r.text()}`)
+}
+
+async function deleteUser(uid) {
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
+}
+
+function authHeader(user, pass) {
+	return 'Basic ' + Buffer.from(user + ':' + pass).toString('base64')
+}
+
+// Share a board with a user at the given permission mask (READ=1, EDIT=2, SHARE=4).
+async function shareBoardWith(boardId, uid, permission) {
+	const r = await fetch(`${API}/boards/${boardId}/acl`, {
+		method: 'POST',
+		headers: { ...HEADERS, Authorization: AUTH },
+		body: JSON.stringify({ participant: uid, participantType: 'user', permission }),
+	})
+	if (!r.ok) throw new Error(`share ${boardId}→${uid} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
+
 async function ncLogin(page) {
 	await page.goto(BASE + '/index.php/login')
 	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
@@ -112,12 +155,10 @@ test.describe('Card Subscriptions / Watchers', () => {
 		// Click Watch
 		await watchBtn.click()
 
-		// Should become "Watching" with active class
+		// Should become active. The compact button swaps the "Watch" label for a
+		// count badge once there is at least one watcher (no "Watching" text).
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
 		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 3000 })
-
-		const label = watchBtn.locator('.card-modal__watch-label')
-		await expect(label).toHaveText('Watching', { timeout: 3000 })
 
 		// Count badge should show 1
 		const countBadge = watchBtn.locator('.card-modal__watch-count')
@@ -135,12 +176,11 @@ test.describe('Card Subscriptions / Watchers', () => {
 		const watchBtn = page.locator('.card-modal__watch-btn')
 		await expect(watchBtn).toBeVisible({ timeout: 5000 })
 
-		// After prior test subscribed, this should still show Watching on fresh load
+		// After prior test subscribed, this should still be active on fresh load,
+		// with the count badge (not the "Watch" label) shown.
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
 		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 3000 })
-
-		const label = watchBtn.locator('.card-modal__watch-label')
-		await expect(label).toHaveText('Watching', { timeout: 3000 })
+		await expect(watchBtn.locator('.card-modal__watch-count')).toBeVisible({ timeout: 4000 })
 	})
 
 	test('clicking Watching again unsubscribes and shows count 0', async ({ page }) => {
@@ -201,5 +241,72 @@ test.describe('Card Subscriptions / Watchers', () => {
 		await expect(countBadge).toBeVisible({ timeout: 4000 })
 		const countText = await countBadge.innerText()
 		expect(Number(countText.trim())).toBeGreaterThanOrEqual(1)
+	})
+})
+
+test.describe('Watcher management — add / remove OTHER users', () => {
+	const BOB = 'kanso_watch_bob'
+	const BOB_PASS = 'Sub2Watcher#2026'
+	const STRANGER = 'kanso_watch_stranger'
+	const STRANGER_PASS = 'Sub2Stranger#2026'
+	const state = { boardId: 0, stackId: 0, cardId: 0 }
+
+	test.beforeAll(async () => {
+		// Second board participant (READ+EDIT) and a non-member.
+		await provisionUser(BOB, BOB_PASS)
+		await provisionUser(STRANGER, STRANGER_PASS)
+
+		for (const b of await apiGet('/boards')) {
+			if (b.title === 'Watcher Mgmt E2E Board') {
+				await apiDelete(`/boards/${b.id}`)
+			}
+		}
+		const board = await apiPost('/boards', { title: 'Watcher Mgmt E2E Board' })
+		state.boardId = board.id
+		await shareBoardWith(board.id, BOB, 3) // READ | EDIT
+		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		state.stackId = stack.id
+		const card = await apiPost('/cards', { stackId: stack.id, title: 'Managed Watchers' })
+		state.cardId = card.id
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		await deleteUser(BOB)
+		await deleteUser(STRANGER)
+	})
+
+	test('EDIT user adds another board participant as a watcher; target sees it', async () => {
+		// Admin (owner, EDIT) subscribes BOB.
+		const put = await apiPut(`/cards/${state.cardId}/subscription/${BOB}`)
+		expect(put.ok).toBeTruthy()
+		const block = await put.json()
+		expect(block.subscribers).toContain(BOB)
+
+		// BOB, querying as himself, sees he is now watching the card.
+		const asBob = await fetch(`${API}/cards/${state.cardId}/subscription`, {
+			headers: { ...HEADERS, Authorization: authHeader(BOB, BOB_PASS) },
+		})
+		expect(asBob.ok).toBeTruthy()
+		const bobBlock = await asBob.json()
+		expect(bobBlock.subscribed).toBe(true)
+	})
+
+	test('EDIT user removes the watcher again', async () => {
+		await apiPut(`/cards/${state.cardId}/subscription/${BOB}`) // ensure present
+		const del = await fetch(`${API}/cards/${state.cardId}/subscription/${BOB}`, {
+			method: 'DELETE',
+			headers: { ...HEADERS, Authorization: AUTH },
+		})
+		expect(del.ok).toBeTruthy()
+		const block = await del.json()
+		expect(block.subscribers).not.toContain(BOB)
+	})
+
+	test('cannot subscribe a user who cannot read the board (no card leak)', async () => {
+		const put = await apiPut(`/cards/${state.cardId}/subscription/${STRANGER}`)
+		// Server rejects: STRANGER is not a board participant.
+		expect(put.ok).toBeFalsy()
+		expect(put.status).toBeGreaterThanOrEqual(400)
 	})
 })

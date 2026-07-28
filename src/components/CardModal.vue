@@ -173,7 +173,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="handleWatchToggle">
 							<EyeOffOutlineIcon v-if="isWatching" :size="18" />
 							<EyeOutlineIcon v-else :size="18" />
-							<span v-if="watcherCount > 0">{{ watcherCount }}</span>
+							<span v-if="watcherCount > 0" class="card-modal__watch-count">{{ watcherCount }}</span>
 							<span v-else class="card-modal__watch-label">{{ t('kanso', 'Watch') }}</span>
 						</button>
 
@@ -367,6 +367,56 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
+
+						<span class="card-modal__attr-divider" />
+
+						<!-- Watchers -->
+						<span
+							v-for="uid in watcherIds"
+							:key="'watch-' + uid"
+							class="card-modal__assignee-pill">
+							<NcAvatar
+								:user="uid"
+								:display-name="participantName(uid)"
+								:size="22"
+								:show-user-status="false"
+								:disable-tooltip="false" />
+							<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
+							<button
+								v-if="canEdit"
+								class="card-modal__pill-x"
+								:title="t('kanso', 'Remove watcher')"
+								:disabled="toggleOtherSubscription.isPending.value"
+								@click="handleToggleWatcher(uid, false)">
+								<CloseIcon :size="12" />
+							</button>
+						</span>
+						<div v-if="canEdit && unwatchedParticipants.length > 0" class="card-modal__attr">
+							<button
+								class="card-modal__pill card-modal__pill--dashed"
+								:aria-expanded="openPicker === 'watch'"
+								@click="togglePicker('watch')">
+								<EyeOutlineIcon :size="14" />
+								{{ t('kanso', 'Add watcher') }}
+							</button>
+							<div v-if="openPicker === 'watch'" class="card-modal__popover">
+								<button
+									v-for="p in unwatchedParticipants"
+									:key="p.uid"
+									class="card-modal__assign-option"
+									:disabled="toggleOtherSubscription.isPending.value"
+									@click="handleToggleWatcher(p.uid, true)">
+									<NcAvatar
+										:user="p.uid"
+										:display-name="p.displayName"
+										:size="24"
+										:show-user-status="false"
+										:disable-tooltip="true" />
+									<span>{{ p.displayName }}</span>
+								</button>
+							</div>
+						</div>
+						<span v-if="watcherError" class="card-modal__save-error">{{ watcherError }}</span>
 
 					<span class="card-modal__attr-divider" />
 
@@ -2029,7 +2079,7 @@ async function copyBranchName() {
 }
 
 // ── Subscription (Watch / Unwatch) ───────────────────────────────────────────
-const { toggle: toggleSubscription } = useSubscription(computed(() => props.cardId))
+const { toggle: toggleSubscription, toggleOther: toggleOtherSubscription } = useSubscription(computed(() => props.cardId))
 
 const subscription = computed(() => cardData.value?.subscription ?? { subscribed: false, subscribers: [], count: 0 })
 const isWatching = computed(() => subscription.value.subscribed === true)
@@ -2044,6 +2094,28 @@ async function handleWatchToggle() {
 		await toggleSubscription.mutateAsync({ subscribed: next })
 	} catch (err) {
 		subscriptionError.value = err?.response?.data?.error || t('kanso', 'Failed to update watch status.')
+	}
+}
+
+// Watchers managed by an EDIT user: add/remove OTHER board participants.
+const watcherError = ref('')
+const watcherIds = computed(() =>
+	Array.isArray(subscription.value.subscribers) ? subscription.value.subscribers : [],
+)
+const unwatchedParticipants = computed(() => {
+	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const watching = new Set(watcherIds.value)
+	// The actor manages themselves via the header Watch toggle.
+	return list.filter((p) => !watching.has(p.uid) && p.uid !== currentUserId)
+})
+
+async function handleToggleWatcher(uid, subscribe) {
+	watcherError.value = ''
+	openPicker.value = null
+	try {
+		await toggleOtherSubscription.mutateAsync({ userId: uid, subscribed: subscribe })
+	} catch (err) {
+		watcherError.value = err?.response?.data?.error || t('kanso', 'Failed to update watchers.')
 	}
 }
 

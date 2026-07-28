@@ -195,6 +195,13 @@ export const subscribeCard = (cardId) =>
 export const unsubscribeCard = (cardId) =>
 	axios.delete(url(`/api/cards/${cardId}/subscription`)).then((r) => r.data)
 
+// Add / remove ANOTHER board participant as a watcher (EDIT-gated on the server).
+export const subscribeWatcher = (cardId, userId) =>
+	axios.put(url(`/api/cards/${cardId}/subscription/${userId}`)).then((r) => r.data)
+
+export const unsubscribeWatcher = (cardId, userId) =>
+	axios.delete(url(`/api/cards/${cardId}/subscription/${userId}`)).then((r) => r.data)
+
 // Card links (GitHub PR/issue attachments)
 export const fetchCardLinks = (cardId) =>
 	axios.get(url(`/api/cards/${cardId}/links`)).then((r) => r.data)

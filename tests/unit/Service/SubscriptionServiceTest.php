@@ -167,6 +167,125 @@ class SubscriptionServiceTest extends TestCase {
 		$this->service->subscribe(9, 'stranger');
 	}
 
+	// ---- subscribeOther / unsubscribeOther --------------------------------
+
+	public function testSubscribeOtherIsEditGatedAndSubscribesTarget(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'boss', PermissionService::PERMISSION_EDIT);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		// findOne is called by setState (target 'bob') and buildCardSubscription (actor 'boss'); both absent.
+		$this->subscriptionMapper->method('findOne')->willReturn(null);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn(['bob']);
+		$this->subscriptionMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(function (Subscription $s): Subscription {
+				self::assertSame('bob', $s->getSubscriber());
+				self::assertSame(0, $s->getCommentThreadId());
+				self::assertSame(Subscription::STATE_SUBSCRIBED, $s->getState());
+				return $s;
+			});
+
+		$result = $this->service->subscribeOther(9, 'bob', 'boss');
+		self::assertSame(['bob'], $result['subscribers']);
+		self::assertSame(1, $result['count']);
+	}
+
+	public function testSubscribeOtherRejectsActorWithoutEdit(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'peon', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->subscriptionMapper->expects(self::never())->method('insert');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->subscribeOther(9, 'bob', 'peon');
+	}
+
+	public function testSubscribeOtherRejectsTargetWithoutRead(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->method('assertPermission')
+			->with($board, 'boss', PermissionService::PERMISSION_EDIT);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'stranger')
+			->willReturn(0);
+		$this->subscriptionMapper->expects(self::never())->method('insert');
+		$this->subscriptionMapper->expects(self::never())->method('update');
+
+		$this->expectException(\OCA\Kanso\Service\InvalidInputException::class);
+		$this->service->subscribeOther(9, 'stranger', 'boss');
+	}
+
+	public function testSubscribeOtherClearsTargetTombstone(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->method('assertPermission')
+			->with($board, 'boss', PermissionService::PERMISSION_EDIT);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$existing = $this->sub('bob', 9, 0, Subscription::STATE_OPTED_OUT);
+		$this->subscriptionMapper->method('findOne')->willReturn($existing);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->willReturn(['bob']);
+		$this->subscriptionMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Subscription $s): Subscription {
+				self::assertSame(Subscription::STATE_SUBSCRIBED, $s->getState());
+				return $s;
+			});
+
+		$this->service->subscribeOther(9, 'bob', 'boss');
+	}
+
+	public function testUnsubscribeOtherIsEditGatedAndTombstonesTarget(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'boss', PermissionService::PERMISSION_EDIT);
+		$existing = $this->sub('bob', 9, 0, Subscription::STATE_SUBSCRIBED);
+		// findOne serves both setState (target) and buildCardSubscription (actor).
+		$this->subscriptionMapper->method('findOne')->willReturn($existing);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn([]);
+		$this->subscriptionMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Subscription $s): Subscription {
+				self::assertSame(Subscription::STATE_OPTED_OUT, $s->getState());
+				return $s;
+			});
+
+		$result = $this->service->unsubscribeOther(9, 'bob', 'boss');
+		self::assertSame([], $result['subscribers']);
+	}
+
+	public function testUnsubscribeOtherIsNoopForNonWatcher(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->method('assertPermission')
+			->with($board, 'boss', PermissionService::PERMISSION_EDIT);
+		// Target has no subscription row - do NOT plant a stale opt-out tombstone.
+		$this->subscriptionMapper->method('findOne')->willReturn(null);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->willReturn([]);
+		$this->subscriptionMapper->expects(self::never())->method('update');
+		$this->subscriptionMapper->expects(self::never())->method('insert');
+
+		$this->service->unsubscribeOther(9, 'newbie', 'boss');
+	}
+
+	public function testUnsubscribeOtherRejectsActorWithoutEdit(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'peon', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->subscriptionMapper->expects(self::never())->method('update');
+		$this->subscriptionMapper->expects(self::never())->method('insert');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->unsubscribeOther(9, 'bob', 'peon');
+	}
+
 	// ---- autoSubscribe ----------------------------------------------------
 
 	public function testAutoSubscribeInsertsWhenAbsent(): void {

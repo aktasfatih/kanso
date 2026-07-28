@@ -58,6 +58,8 @@ return [
 		['name' => 'subscription#index', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'GET'],
 		['name' => 'subscription#subscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'PUT'],
 		['name' => 'subscription#unsubscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'DELETE'],
+		['name' => 'subscription#subscribeOther', 'url' => '/api/cards/{cardId}/subscription/{userId}', 'verb' => 'PUT'],
+		['name' => 'subscription#unsubscribeOther', 'url' => '/api/cards/{cardId}/subscription/{userId}', 'verb' => 'DELETE'],
 		['name' => 'deckImport#index', 'url' => '/api/deck-import/boards', 'verb' => 'GET'],
 		['name' => 'deckImport#import', 'url' => '/api/deck-import/boards/{deckBoardId}', 'verb' => 'POST'],
 

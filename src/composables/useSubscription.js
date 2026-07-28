@@ -25,6 +25,8 @@ import { getCurrentUser } from '@nextcloud/auth'
 import {
 	subscribeCard as apiSubscribeCard,
 	unsubscribeCard as apiUnsubscribeCard,
+	subscribeWatcher as apiSubscribeWatcher,
+	unsubscribeWatcher as apiUnsubscribeWatcher,
 } from '../services/api.js'
 
 /**
@@ -114,5 +116,56 @@ export function useSubscription(cardId) {
 		},
 	})
 
-	return { toggle }
+	/**
+	 * Add or remove ANOTHER board participant as a watcher. Patches only the
+	 * subscribers list + count (the actor's own `subscribed` flag is unchanged);
+	 * server enforces EDIT on the actor and READ on the target.
+	 */
+	const toggleOther = useMutation({
+		mutationFn: ({ userId, subscribed }) =>
+			subscribed
+				? apiSubscribeWatcher(getCardId(), userId)
+				: apiUnsubscribeWatcher(getCardId(), userId),
+
+		onMutate: async ({ userId, subscribed }) => {
+			const cardKey = getCardKey()
+
+			await queryClient.cancelQueries({ queryKey: cardKey })
+
+			const previousCard = queryClient.getQueryData(cardKey)
+
+			queryClient.setQueryData(cardKey, (old) => {
+				if (!old) return old
+				const prev = old.subscription ?? { subscribed: false, subscribers: [], count: 0 }
+				const prevSubscribers = Array.isArray(prev.subscribers) ? prev.subscribers : []
+
+				const nextSubscribers = subscribed
+					? (prevSubscribers.includes(userId) ? prevSubscribers : [...prevSubscribers, userId])
+					: prevSubscribers.filter((u) => u !== userId)
+
+				return {
+					...old,
+					subscription: {
+						...prev,
+						subscribers: nextSubscribers,
+						count: nextSubscribers.length,
+					},
+				}
+			})
+
+			return { previousCard }
+		},
+
+		onError: (_err, _vars, context) => {
+			if (context?.previousCard !== undefined) {
+				queryClient.setQueryData(getCardKey(), context.previousCard)
+			}
+		},
+
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: getCardKey() })
+		},
+	})
+
+	return { toggle, toggleOther }
 }
