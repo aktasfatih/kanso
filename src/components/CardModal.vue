@@ -372,7 +372,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 						<!-- Watchers -->
 						<span
-							v-for="uid in watcherIds"
+							v-for="uid in displayedWatcherIds"
 							:key="'watch-' + uid"
 							class="card-modal__assignee-pill">
 							<NcAvatar
@@ -2282,6 +2282,10 @@ const watcherError = ref('')
 const watcherIds = computed(() =>
 	Array.isArray(subscription.value.subscribers) ? subscription.value.subscribers : [],
 )
+// Pills shown in the attribute bar exclude the current user — self-watch is
+// managed exclusively by the header Watch toggle (avoids a duplicate pill and a
+// header/pill state desync).
+const displayedWatcherIds = computed(() => watcherIds.value.filter((uid) => uid !== currentUserId))
 const unwatchedParticipants = computed(() => {
 	const list = Array.isArray(participants.data.value) ? participants.data.value : []
 	const watching = new Set(watcherIds.value)
