@@ -1338,7 +1338,7 @@ import { useBoard } from '../composables/useBoard.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
-import { cssColor } from '../services/color.js'
+import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { getScaleOptions } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
@@ -1609,17 +1609,8 @@ function wipLimitDisplay(stack) {
 	return String(wl)
 }
 
-// ── Color presets ─────────────────────────────────────────────────────────────
-const COLOR_PRESETS = [
-	'e74c3c',
-	'e67e22',
-	'f1c40f',
-	'2ecc71',
-	'1abc9c',
-	'3498db',
-	'9b59b6',
-	'34495e',
-]
+// ── Color presets (shared palette so every label creator matches) ──────────────
+const COLOR_PRESETS = LABEL_COLOR_PRESETS
 
 // ── Label: create state ───────────────────────────────────────────────────────
 const newTitle = ref('')

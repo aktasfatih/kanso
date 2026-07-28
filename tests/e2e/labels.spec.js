@@ -102,4 +102,39 @@ test.describe('Labels', () => {
 		await filterBtn.click()
 		await expect(page.locator('.board-view__filter-label-item .action-checkbox__text', { hasText: 'ColoredE2E' })).toHaveCount(1)
 	})
+
+	test('inline create from the card view: new label is assigned + present on the board', async ({ page }) => {
+		// Fresh card to work in.
+		const stack = await apiPost('/stacks', { boardId: state.boardId, title: 'Inline' })
+		const card = await apiPost('/cards', { stackId: stack.id, title: 'Inline Label Card' })
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+
+		await ncLogin(page)
+		await page.goto(cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// Open the label popover (admin owns the board → MANAGE, so the create row shows).
+		await page.locator('.card-modal__attr button', { hasText: 'Label' }).first().click()
+		const createRow = page.locator('.card-modal__label-create')
+		await expect(createRow).toBeVisible({ timeout: 4000 })
+
+		// Pick a colour preset, name it, create.
+		await createRow.locator('.card-modal__label-swatch').click()
+		await createRow.locator('.card-modal__label-color-option').first().click()
+		await createRow.locator('.card-modal__label-create-input').fill('InlineFromCard')
+		await createRow.locator('.card-modal__label-create-btn').click()
+
+		// The new label is assigned to the card (chip appears in the attribute bar).
+		await expect(
+			page.locator('.card-modal__label-chip', { hasText: 'InlineFromCard' }),
+		).toBeVisible({ timeout: 8000 })
+		await expect(page.locator('.card-modal__save-error')).toHaveCount(0)
+
+		// And it now exists on the board (visible in Board settings / everywhere).
+		const boardPayload = await apiGet(`/boards/${state.boardId}`)
+		const created = boardPayload.labels.find((l) => l.title === 'InlineFromCard')
+		expect(created).toBeTruthy()
+		expect(created.color).toBe('e74c3c') // first preset
+	})
 })

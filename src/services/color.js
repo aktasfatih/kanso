@@ -10,3 +10,13 @@
 export function cssColor(color) {
 	return color ? '#' + color : null
 }
+
+/**
+ * The shared label colour palette (bare 6-hex). Used by every label creator
+ * (Board settings and the inline card-modal creator) so the swatches stay
+ * identical everywhere.
+ */
+export const LABEL_COLOR_PRESETS = [
+	'e74c3c', 'e67e22', 'f1c40f', '2ecc71',
+	'1abc9c', '3498db', '9b59b6', '34495e',
+]

@@ -456,6 +456,54 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ label.title }}
 							</button>
 							<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
+
+							<!-- Inline create (label creation is board management → MANAGE-gated) -->
+							<div v-if="canManage" class="card-modal__label-create">
+								<button
+									type="button"
+									class="card-modal__label-swatch"
+									:style="newLabelColor ? { background: cssColor(newLabelColor) } : {}"
+									:class="{ 'card-modal__label-swatch--no-color': !newLabelColor }"
+									:title="t('kanso', 'Pick color')"
+									:aria-label="t('kanso', 'Pick color for new label')"
+									@click="showNewLabelColor = !showNewLabelColor">
+									<span v-if="!newLabelColor">+</span>
+								</button>
+								<div v-if="showNewLabelColor" class="card-modal__label-color-grid">
+									<button
+										v-for="preset in LABEL_COLOR_PRESETS"
+										:key="preset"
+										type="button"
+										class="card-modal__label-color-option"
+										:style="{ background: cssColor(preset) }"
+										:class="{ 'card-modal__label-color-option--active': newLabelColor === preset }"
+										:title="preset"
+										:aria-pressed="newLabelColor === preset"
+										@click="newLabelColor = preset; showNewLabelColor = false" />
+									<button
+										type="button"
+										class="card-modal__label-color-option card-modal__label-color-option--clear"
+										:title="t('kanso', 'No color')"
+										:aria-pressed="!newLabelColor"
+										@click="newLabelColor = ''; showNewLabelColor = false">×</button>
+								</div>
+								<input
+									v-model="newLabelTitle"
+									class="card-modal__label-create-input"
+									type="text"
+									:placeholder="t('kanso', 'New label…')"
+									:disabled="isCreatingLabel"
+									:aria-label="t('kanso', 'New label name')"
+									@keydown.enter.prevent="submitCreateLabel" />
+								<button
+									class="card-modal__label-create-btn"
+									type="button"
+									:disabled="isCreatingLabel || !newLabelTitle.trim()"
+									@click="submitCreateLabel">
+									{{ t('kanso', 'Create') }}
+								</button>
+							</div>
+							<span v-if="createLabelError" class="card-modal__save-error">{{ createLabelError }}</span>
 						</div>
 					</div>
 
@@ -1174,7 +1222,7 @@ import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation } from '../services/api.js'
-import { cssColor } from '../services/color.js'
+import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
 /**
@@ -1262,8 +1310,8 @@ const cardLabelIds = computed(() => {
 	return new Set(ids)
 })
 
-// Label toggle mutation
-const { toggleLabel } = useLabels(boardId)
+// Label toggle + create mutations (create is board-management → MANAGE-gated server-side)
+const { toggleLabel, createLabel } = useLabels(boardId)
 const labelToggleError = ref('')
 
 async function handleToggleLabel(label) {
@@ -1277,6 +1325,50 @@ async function handleToggleLabel(label) {
 		})
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
+	}
+}
+
+// ── Inline label creation (from the card's label popover) ────────────────────
+// Reuses the shared colour presets — no new colour engine.
+const newLabelTitle = ref('')
+const newLabelColor = ref('')
+const showNewLabelColor = ref(false)
+const isCreatingLabel = ref(false)
+const createLabelError = ref('')
+
+async function submitCreateLabel() {
+	const title = newLabelTitle.value.trim()
+	if (!title || isCreatingLabel.value) return
+	createLabelError.value = ''
+	isCreatingLabel.value = true
+	showNewLabelColor.value = false
+
+	// Step 1: create the board label. On failure, keep the inputs so the user
+	// can retry without re-typing.
+	let label
+	try {
+		label = await createLabel.mutateAsync({ title, color: newLabelColor.value || null })
+	} catch (err) {
+		createLabelError.value = err?.response?.data?.error || t('kanso', 'Failed to create label.')
+		isCreatingLabel.value = false
+		return
+	}
+
+	// The label now exists on the board — clear the inputs so a retry of the
+	// assign step below never creates a duplicate label.
+	newLabelTitle.value = ''
+	newLabelColor.value = ''
+
+	// Step 2: assign the freshly-created label to this card.
+	try {
+		if (label?.id != null) {
+			await toggleLabel.mutateAsync({ cardId: Number(props.cardId), labelId: label.id, assign: true })
+		}
+	} catch (err) {
+		createLabelError.value = err?.response?.data?.error
+			|| t('kanso', 'Label created, but could not assign it to this card.')
+	} finally {
+		isCreatingLabel.value = false
 	}
 }
 
@@ -1799,6 +1891,12 @@ const currentUserId = getCurrentUser()?.uid ?? ''
 const canEdit = computed(() => {
 	const perms = boardData.value?.permissions ?? 0
 	return (perms & 2) !== 0
+})
+
+// MANAGE permission bit (bit 3, value 8) - board management, e.g. creating labels
+const canManage = computed(() => {
+	const perms = boardData.value?.permissions ?? 0
+	return (perms & 8) !== 0
 })
 
 const flatComments = computed(() => commentsQuery.data.value ?? [])
@@ -2849,6 +2947,80 @@ function onCommentKeydown(event) {
 .card-modal__label-toggle--no-color.card-modal__label-toggle--active {
 	background: var(--color-primary-element);
 	border-color: var(--color-primary-element);
+}
+.card-modal__label-create {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--color-border);
+}
+.card-modal__label-swatch {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+	border: 1px solid var(--color-border);
+	border-radius: 6px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__label-swatch--no-color {
+	background: var(--color-background-hover);
+}
+.card-modal__label-color-grid {
+	flex: 1 1 100%;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	order: 3;
+}
+.card-modal__label-color-option {
+	width: 22px;
+	height: 22px;
+	border: 1px solid var(--color-border);
+	border-radius: 6px;
+	cursor: pointer;
+}
+.card-modal__label-color-option--active {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+.card-modal__label-color-option--clear {
+	background: var(--color-main-background);
+	color: var(--color-text-maxcontrast);
+	line-height: 1;
+}
+.card-modal__label-create-input {
+	flex: 1 1 auto;
+	min-width: 80px;
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: 6px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8rem;
+}
+.card-modal__label-create-btn {
+	flex: 0 0 auto;
+	height: 26px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 6px;
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+.card-modal__label-create-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 .card-modal__field-label {
 	font-size: 0.7rem;
