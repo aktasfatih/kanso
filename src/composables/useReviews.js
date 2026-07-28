@@ -221,6 +221,10 @@ export function useReviews(boardId) {
 		onSettled: (_data, _err, { cardId }) => {
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// A "request changes" verdict posts its reason as a comment server-side,
+			// so refresh the discussion thread too — otherwise it only appears after
+			// a full reload.
+			queryClient.invalidateQueries({ queryKey: ['comments', String(cardId)] })
 		},
 	})
 
