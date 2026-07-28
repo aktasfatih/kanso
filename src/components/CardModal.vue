@@ -3529,6 +3529,25 @@ const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelI
 	font-weight: 600;
 }
 
+/* Keep every round button/dot a perfect circle (#3492). Two forces turn them
+   into ovals: a flex row can shrink the width, and Nextcloud's global
+   `button { min-height: 34px }` stretches the height past the set size. Pin the
+   width (flex-shrink) and clear the inherited min-height/min-width so the equal
+   width/height wins. */
+.card-modal__pill-x,
+.card-modal__field-clear,
+.card-modal__checklist-item-delete,
+.card-modal__comment-icon-btn,
+.card-modal__child-remove,
+.card-modal__icon-btn,
+.card-modal__child-dot,
+.card-modal__avatar-overflow {
+	flex-shrink: 0;
+	min-width: 0;
+	min-height: 0;
+	aspect-ratio: 1;
+}
+
 /* ── Responsive: stack panes, switch via tabs ────────────────────────────── */
 @media (max-width: 680px) {
 	.card-modal__header { padding: 14px 16px 10px; }

@@ -210,4 +210,23 @@ test.describe('Card modal two-column layout', () => {
 		await page.locator('.card-modal__tab', { hasText: 'Discussion' }).click()
 		await expect(page.locator('.card-modal__discussion')).toBeVisible({ timeout: 5_000 })
 	})
+
+	test('round clear/× buttons are circles, not ovals (#3492)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+
+		// Open the due-date pill (2nd pill; the card has a due date set in beforeAll)
+		// to reveal its round clear (×) button.
+		await page.locator('.card-modal__attrbar button.card-modal__pill').nth(1).click()
+		const clearBtn = page.locator('.card-modal__field-clear').first()
+		await expect(clearBtn).toBeVisible({ timeout: 5_000 })
+
+		// A circle: width and height must be equal (±1px), never squished into an oval.
+		const box = await clearBtn.boundingBox()
+		expect(box).not.toBeNull()
+		expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1)
+	})
 })
