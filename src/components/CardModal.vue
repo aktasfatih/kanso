@@ -1268,7 +1268,7 @@ import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation } from '../services/api.js'
-import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
+import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
 /**
@@ -1277,16 +1277,6 @@ import { renderMarkdown } from '../services/markdown.js'
  * @param {string} hex background color
  * @return {string} readable foreground color
  */
-function readableColor(hex) {
-	if (!hex) return '#000'
-	const raw = hex.replace('#', '')
-	const [r, g, b] = raw.length === 3
-		? [parseInt(raw[0] + raw[0], 16), parseInt(raw[1] + raw[1], 16), parseInt(raw[2] + raw[2], 16)]
-		: [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)]
-	const toLinear = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4) }
-	const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
-	return L > 0.179 ? '#000000' : '#ffffff'
-}
 
 const props = defineProps({
 	cardId: {

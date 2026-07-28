@@ -151,23 +151,9 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 
-/**
- * Given a hex background color return '#000' or '#fff' for readable contrast.
- * Uses the W3C relative luminance formula (sRGB).
- */
-function readableColor(hex) {
-	if (!hex) return '#000'
-	const raw = hex.replace('#', '')
-	const [r, g, b] = raw.length === 3
-		? [parseInt(raw[0] + raw[0], 16), parseInt(raw[1] + raw[1], 16), parseInt(raw[2] + raw[2], 16)]
-		: [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)]
-	const toLinear = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4) }
-	const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
-	return L > 0.179 ? '#000000' : '#ffffff'
-}
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
-import { cssColor } from '../services/color.js'
+import { cssColor, readableColor } from '../services/color.js'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 
 const props = defineProps({
