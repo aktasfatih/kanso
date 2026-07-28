@@ -629,6 +629,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 
 							<template v-if="editingDescription">
+								<div class="card-modal__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="mdToolbar.bold()"><FormatBoldIcon :size="18" /></button>
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="mdToolbar.italic()"><FormatItalicIcon :size="18" /></button>
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Heading')" @mousedown.prevent @click="mdToolbar.heading()"><FormatHeaderPoundIcon :size="18" /></button>
+									<span class="card-modal__md-sep" />
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="mdToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Checklist')" @mousedown.prevent @click="mdToolbar.checklist()"><FormatListChecksIcon :size="18" /></button>
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="mdToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
+									<span class="card-modal__md-sep" />
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="mdToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
+									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="mdToolbar.link()"><LinkVariantIcon :size="18" /></button>
+									<span class="card-modal__md-toolbar-spacer" />
+									<button
+										type="button"
+										class="card-modal__md-btn"
+										:class="{ 'card-modal__md-btn--active': showDescPreview }"
+										:aria-pressed="showDescPreview"
+										:title="t('kanso', 'Toggle preview')"
+										@mousedown.prevent
+										@click="showDescPreview = !showDescPreview"><EyeOutlineIcon :size="18" /></button>
+								</div>
 								<div class="card-modal__mention-wrap">
 									<textarea
 										ref="descTextareaRef"
@@ -656,6 +677,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											<span>{{ p.displayName }}</span>
 										</li>
 									</ul>
+								</div>
+								<div v-if="showDescPreview" class="card-modal__desc-preview">
+									<span class="card-modal__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
+									<div class="card-modal__desc-rendered" v-html="draftPreview" />
 								</div>
 								<div class="card-modal__desc-actions">
 									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
@@ -1208,6 +1233,14 @@ import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
+import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
+import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
+import FormatItalicIcon from 'vue-material-design-icons/FormatItalic.vue'
+import FormatHeaderPoundIcon from 'vue-material-design-icons/FormatHeaderPound.vue'
+import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
+import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
+import FormatQuoteCloseIcon from 'vue-material-design-icons/FormatQuoteClose.vue'
+import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
@@ -1690,6 +1723,7 @@ function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
 	editingDescription.value = true
 	saveError.value = ''
+	showDescPreview.value = false
 }
 
 function cancelDescriptionEdit() {
@@ -2375,6 +2409,16 @@ const mentionDesc = useMentionAutocomplete({
 	textareaRef: descTextareaRef,
 	getParticipants,
 })
+
+// Markdown formatting toolbar over the description textarea (edits the markdown
+// string in place; live preview reuses the same renderMarkdown as the read view).
+const mdToolbar = useMarkdownToolbar({
+	getText: () => draftDescription.value,
+	setText: (v) => { draftDescription.value = v },
+	textareaRef: descTextareaRef,
+})
+const showDescPreview = ref(false)
+const draftPreview = computed(() => renderMarkdown(draftDescription.value))
 
 // New-comment composer
 const newCommentTextareaRef = ref(null)
@@ -3233,6 +3277,57 @@ function onCommentKeydown(event) {
 .card-modal__desc-placeholder:hover {
 	border-color: var(--color-primary-element);
 	color: var(--color-main-text);
+}
+.card-modal__md-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-bottom: 6px;
+	padding: 3px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	background: var(--color-background-hover);
+	flex-wrap: wrap;
+}
+.card-modal__md-toolbar-spacer { flex: 1 1 auto; }
+.card-modal__md-sep {
+	width: 1px;
+	align-self: stretch;
+	margin: 2px 4px;
+	background: var(--color-border);
+}
+.card-modal__md-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+.card-modal__md-btn:hover { background: var(--color-background-dark); }
+.card-modal__md-btn--active {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+}
+.card-modal__desc-preview {
+	margin: 8px 0 0;
+	padding: 10px 14px;
+	border: 1px dashed var(--color-border);
+	border-radius: 10px;
+	background: var(--color-main-background);
+}
+.card-modal__desc-preview-label {
+	display: block;
+	margin-bottom: 4px;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-maxcontrast);
 }
 .card-modal__desc-textarea {
 	width: 100%;
