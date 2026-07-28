@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\CommentService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\MentionService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SubscriptionService;
@@ -31,6 +32,7 @@ class CommentServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
+	private MentionService&MockObject $mentionService;
 	private CommentService $service;
 
 	protected function setUp(): void {
@@ -41,6 +43,7 @@ class CommentServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
+		$this->mentionService = $this->createMock(MentionService::class);
 		$this->service = new CommentService(
 			$this->commentMapper,
 			$this->cardMapper,
@@ -48,6 +51,7 @@ class CommentServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->subscriptionService,
+			$this->mentionService,
 		);
 	}
 

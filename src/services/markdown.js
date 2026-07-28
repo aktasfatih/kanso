@@ -10,6 +10,34 @@ const md = new MarkdownIt({
 	breaks: true,
 })
 
+// `@username` mentions → a display chip. This render is COSMETIC: the server
+// independently re-parses the raw body for who actually gets notified/subscribed
+// (see lib/Service/MentionService.php), so tampering with the rendered HTML
+// cannot cause a side effect. The accepted charset mirrors the server pattern.
+const MENTION_RE = /^@([a-zA-Z0-9_.-]+)/
+
+md.inline.ruler.push('kanso_mention', (state, silent) => {
+	const start = state.pos
+	if (state.src.charCodeAt(start) !== 0x40 /* @ */) return false
+	// Only at a boundary: a preceding word char (or @) means it's an email/handle,
+	// not a mention (matches the server's negative-lookbehind).
+	if (start > 0 && /[\w@]/.test(state.src[start - 1])) return false
+
+	const match = MENTION_RE.exec(state.src.slice(start))
+	if (!match) return false
+
+	if (!silent) {
+		const token = state.push('kanso_mention', '', 0)
+		token.content = match[1]
+		token.markup = match[0]
+	}
+	state.pos += match[0].length
+	return true
+})
+
+md.renderer.rules.kanso_mention = (tokens, idx) =>
+	`<span class="kanso-mention">@${md.utils.escapeHtml(tokens[idx].content)}</span>`
+
 const ALLOWED_TAGS = [
 	'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 	'p', 'strong', 'em',
@@ -19,9 +47,10 @@ const ALLOWED_TAGS = [
 	'blockquote',
 	'hr', 'br',
 	'del',
+	'span', // only used for the mention chip (class="kanso-mention")
 ]
 
-const ALLOWED_ATTR = ['href', 'title', 'rel', 'target']
+const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class']
 
 const FORBID_TAGS = ['style', 'script']
 

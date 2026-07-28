@@ -39,6 +39,7 @@ class CommentService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
+		private MentionService $mentionService,
 	) {
 	}
 
@@ -94,6 +95,8 @@ class CommentService {
 		$this->notifyCard($card, $actorUid);
 		// Auto-subscribe the commenter and fan out to the card's watchers.
 		$this->subscriptionService->handleNewComment($cardId, $parentCommentId, $actorUid);
+		// @mentioned readable-board participants are pinged + auto-subscribed.
+		$this->mentionService->handleMentions($cardId, $board, $body, $actorUid);
 
 		return $saved;
 	}
@@ -126,6 +129,9 @@ class CommentService {
 		$saved = $this->commentMapper->update($comment);
 
 		$this->notifyCard($card, $actorUid);
+		// Intentional MVP gap: editing a comment does NOT re-run mention handling.
+		// Notifying only NEWLY-added mentions needs an old-vs-new mention diff;
+		// mentions fire on the initial post (addComment) which covers the case.
 
 		return $saved;
 	}

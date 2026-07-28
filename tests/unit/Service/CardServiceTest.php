@@ -38,6 +38,7 @@ class CardServiceTest extends TestCase {
 	private IDBConnection&MockObject $db;
 	private SubscriptionService&MockObject $subscriptionService;
 	private AutomationService&MockObject $automationService;
+	private \OCA\Kanso\Service\MentionService&MockObject $mentionService;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -51,6 +52,7 @@ class CardServiceTest extends TestCase {
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->automationService = $this->createMock(AutomationService::class);
+		$this->mentionService = $this->createMock(\OCA\Kanso\Service\MentionService::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -61,7 +63,8 @@ class CardServiceTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->db,
 			$this->subscriptionService,
-			$this->automationService
+			$this->automationService,
+			$this->mentionService
 		);
 	}
 

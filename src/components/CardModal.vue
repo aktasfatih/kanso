@@ -581,14 +581,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 
 							<template v-if="editingDescription">
-								<textarea
-									v-model="draftDescription"
-									class="card-modal__desc-textarea"
-									:placeholder="t('kanso', 'Add a description…')"
-									rows="8"
-									@keydown.ctrl.enter.prevent="saveDescription"
-									@keydown.meta.enter.prevent="saveDescription"
-									@keydown.escape.stop="cancelDescriptionEdit" />
+								<div class="card-modal__mention-wrap">
+									<textarea
+										ref="descTextareaRef"
+										v-model="draftDescription"
+										class="card-modal__desc-textarea"
+										:placeholder="t('kanso', 'Add a description…')"
+										rows="8"
+										@keydown="onDescKeydown"
+										@input="mentionDesc.onInput()" />
+									<ul
+										v-if="mentionDesc.isOpen.value && mentionDesc.matches.value.length > 0"
+										class="card-modal__mention-dropdown">
+										<li
+											v-for="(p, idx) in mentionDesc.matches.value"
+											:key="p.uid"
+											class="card-modal__assign-option"
+											:class="{ 'card-modal__assign-option--highlighted': idx === mentionDesc.highlightedIndex.value }"
+											@mousedown.prevent="mentionDesc.select(p)">
+											<NcAvatar
+												:user="p.uid"
+												:display-name="p.displayName"
+												:size="24"
+												:show-user-status="false"
+												:disable-tooltip="true" />
+											<span>{{ p.displayName }}</span>
+										</li>
+									</ul>
+								</div>
 								<div class="card-modal__desc-actions">
 									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
 										{{ t('kanso', 'Save') }}
@@ -1050,14 +1070,35 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:show-user-status="false"
 								class="card-modal__composer-avatar" />
 							<div class="card-modal__composer-main">
-								<textarea
-									v-model="newCommentBody"
-									class="card-modal__composer-textarea"
-									:placeholder="t('kanso', 'Start a new thread…')"
-									rows="2"
-									:disabled="addComment.isPending.value"
-									@keydown.ctrl.enter.prevent="submitNewComment"
-									@keydown.meta.enter.prevent="submitNewComment" />
+								<div class="card-modal__mention-wrap">
+									<textarea
+										ref="newCommentTextareaRef"
+										v-model="newCommentBody"
+										class="card-modal__composer-textarea"
+										:placeholder="t('kanso', 'Start a new thread…')"
+										rows="2"
+										:disabled="addComment.isPending.value"
+										@keydown="onCommentKeydown"
+										@input="mentionComment.onInput()" />
+									<ul
+										v-if="mentionComment.isOpen.value && mentionComment.matches.value.length > 0"
+										class="card-modal__mention-dropdown">
+										<li
+											v-for="(p, idx) in mentionComment.matches.value"
+											:key="p.uid"
+											class="card-modal__assign-option"
+											:class="{ 'card-modal__assign-option--highlighted': idx === mentionComment.highlightedIndex.value }"
+											@mousedown.prevent="mentionComment.select(p)">
+											<NcAvatar
+												:user="p.uid"
+												:display-name="p.displayName"
+												:size="24"
+												:show-user-status="false"
+												:disable-tooltip="true" />
+											<span>{{ p.displayName }}</span>
+										</li>
+									</ul>
+								</div>
 								<div class="card-modal__composer-actions">
 									<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
 										{{ t('kanso', 'Post') }}
@@ -1118,6 +1159,7 @@ import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
+import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
@@ -2213,6 +2255,66 @@ const dueDateLabel = computed(() => {
 })
 // Labels actually assigned to this card (for the attribute-bar chips)
 const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelIds.value.has(l.id)))
+
+// ── @-mention autocomplete ────────────────────────────────────────────────────
+// Participant getter shared across composers — delegates to the already-loaded
+// participants query so no extra fetch is made.
+function getParticipants() {
+	return Array.isArray(participants.data.value) ? participants.data.value : []
+}
+
+// Description composer
+const descTextareaRef = ref(null)
+const mentionDesc = useMentionAutocomplete({
+	getText: () => draftDescription.value,
+	setText: (v) => { draftDescription.value = v },
+	textareaRef: descTextareaRef,
+	getParticipants,
+})
+
+// New-comment composer
+const newCommentTextareaRef = ref(null)
+const mentionComment = useMentionAutocomplete({
+	getText: () => newCommentBody.value,
+	setText: (v) => { newCommentBody.value = v },
+	textareaRef: newCommentTextareaRef,
+	getParticipants,
+})
+
+/**
+ * Unified keydown handler for the description textarea.
+ * Mention autocomplete intercepts Arrow/Enter/Tab/Escape when the dropdown is
+ * open; when it is closed the original key bindings are preserved exactly.
+ */
+function onDescKeydown(event) {
+	// The mention composable handles the event once. When the dropdown is open
+	// it preventDefaults the keys it consumes; when closed it is a no-op (just
+	// schedules @-query detection), so the original bindings still fire.
+	mentionDesc.onKeydown(event)
+	if (event.defaultPrevented) return
+	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+		event.preventDefault()
+		saveDescription()
+		return
+	}
+	if (event.key === 'Escape') {
+		event.stopPropagation()
+		cancelDescriptionEdit()
+	}
+}
+
+/**
+ * Unified keydown handler for the new-comment textarea.
+ * Same pattern as onDescKeydown.
+ */
+function onCommentKeydown(event) {
+	mentionComment.onKeydown(event)
+	if (event.defaultPrevented) return
+	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+		event.preventDefault()
+		submitNewComment()
+	}
+}
 </script>
 
 <style scoped>
@@ -3645,6 +3747,44 @@ const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelI
 	/* Larger touch targets on mobile */
 	.card-modal__checklist-item { min-height: 44px; }
 	.card-modal__checklist-checkbox { width: 18px; height: 18px; }
+}
+
+/* ── @-mention inline chip (rendered in markdown output) ─────────────────── */
+:deep(.kanso-mention) {
+	display: inline;
+	padding: 1px 5px;
+	border-radius: 4px;
+	background: var(--color-primary-element-light, rgba(0, 130, 201, 0.1));
+	color: var(--color-primary-element, #0082c9);
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+/* ── @-mention autocomplete dropdown ────────────────────────────────────── */
+.card-modal__mention-wrap {
+	position: relative;
+}
+.card-modal__mention-dropdown {
+	position: absolute;
+	bottom: calc(100% + 4px);
+	left: 0;
+	z-index: 40;
+	min-width: 220px;
+	max-height: 260px;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px;
+	margin: 0;
+	list-style: none;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+.card-modal__assign-option--highlighted {
+	background: var(--color-background-hover);
 }
 </style>
 

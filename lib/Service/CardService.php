@@ -39,6 +39,7 @@ class CardService {
 		private IDBConnection $db,
 		private SubscriptionService $subscriptionService,
 		private AutomationService $automationService,
+		private MentionService $mentionService,
 	) {
 	}
 
@@ -181,8 +182,10 @@ class CardService {
 			}
 			$card->setPriority($priority);
 		}
-		if ($description !== null) {
+		$descriptionChanged = false;
+		if ($description !== null && $description !== $card->getDescription()) {
 			$card->setDescription($description);
+			$descriptionChanged = true;
 		}
 		if ($duedate !== null) {
 			$card->setDuedate($this->parseDuedate($duedate));
@@ -218,6 +221,12 @@ class CardService {
 			Change::ACTION_UPDATE,
 			$uid
 		);
+
+		// A new @mention in the description pings + auto-subscribes readable-board
+		// participants (only when the description actually changed).
+		if ($descriptionChanged) {
+			$this->mentionService->handleMentions($id, $board, (string)$description, $uid);
+		}
 
 		// Completing (or archiving) the last open child auto-completes the parent.
 		$this->maybeCompleteParent($card, $uid);

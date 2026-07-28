@@ -22,6 +22,7 @@ use OCP\Notification\IManager;
 class NotificationService {
 	public const SUBJECT_CARD_ASSIGNED = 'card_assigned';
 	public const SUBJECT_CARD_COMMENT = 'card_comment';
+	public const SUBJECT_CARD_MENTIONED = 'card_mentioned';
 	public const SUBJECT_CARD_REVIEW_REQUESTED = 'card_review_requested';
 	public const SUBJECT_BOARD_ACTIVITY = 'board_activity';
 	public const OBJECT_CARD = 'card';
@@ -66,6 +67,27 @@ class NotificationService {
 			->setDateTime((new \DateTime())->setTimestamp(time()))
 			->setObject(self::OBJECT_CARD, (string)$cardId)
 			->setSubject(self::SUBJECT_CARD_COMMENT, ['actor' => $actorUid, 'cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Notifies $targetUid that $actorUid mentioned them in a card comment or
+	 * description. A targeted bell distinct from the comment fan-out, so a
+	 * mentioned user is pinged even when they weren't already watching the card.
+	 * No-op when a user mentions themselves.
+	 */
+	public function notifyCardMentioned(int $cardId, string $targetUid, string $actorUid): void {
+		if ($targetUid === $actorUid) {
+			return;
+		}
+
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject(self::SUBJECT_CARD_MENTIONED, ['actor' => $actorUid, 'cardId' => $cardId]);
 
 		$this->manager->notify($notification);
 	}

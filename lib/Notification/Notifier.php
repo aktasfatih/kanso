@@ -57,6 +57,7 @@ class Notifier implements INotifier {
 		$subject = $notification->getSubject();
 		if ($subject !== NotificationService::SUBJECT_CARD_ASSIGNED
 			&& $subject !== NotificationService::SUBJECT_CARD_COMMENT
+			&& $subject !== NotificationService::SUBJECT_CARD_MENTIONED
 			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
 			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY) {
 			throw new UnknownNotificationException();
@@ -80,6 +81,8 @@ class Notifier implements INotifier {
 		[$plain, $rich] = match ($subject) {
 			NotificationService::SUBJECT_CARD_ASSIGNED
 				=> [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')],
+			NotificationService::SUBJECT_CARD_MENTIONED
+				=> [$l->t('%1$s mentioned you in %2$s', [$actorName, $cardTitle]), $l->t('{actor} mentioned you in {card}')],
 			NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
 				=> [$l->t('%1$s requested your review on %2$s', [$actorName, $cardTitle]), $l->t('{actor} requested your review on {card}')],
 			NotificationService::SUBJECT_BOARD_ACTIVITY
