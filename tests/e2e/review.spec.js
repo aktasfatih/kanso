@@ -79,12 +79,12 @@ test.describe('Card review flow', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		const chip = page.locator('.card-modal__review-chip--pending')
+		const chip = page.locator('.card-modal__review-pill--pending')
 		await expect(chip).toBeVisible({ timeout: 6000 })
-		await expect(chip.locator('.card-modal__review-state-badge--pending')).toContainText('Pending')
+		await expect(chip.locator('.card-modal__review-state--pending')).toContainText('Pending')
 
-		// The current user is the pending reviewer, so the verdict prompt shows.
-		const verdict = page.locator('.card-modal__review-verdict')
+		// The current user is the pending reviewer, so the verdict banner shows.
+		const verdict = page.locator('.card-modal__verdict')
 		await expect(verdict).toBeVisible({ timeout: 4000 })
 		await expect(verdict.getByRole('button', { name: 'Approve' })).toBeVisible()
 		await expect(verdict.getByRole('button', { name: 'Request changes' })).toBeVisible()
@@ -96,11 +96,11 @@ test.describe('Card review flow', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		await page.locator('.card-modal__review-verdict').getByRole('button', { name: 'Approve' }).click()
+		await page.locator('.card-modal__verdict').getByRole('button', { name: 'Approve' }).click()
 
-		await expect(page.locator('.card-modal__review-chip--approved')).toBeVisible({ timeout: 6000 })
-		// Once approved, the "needs verdict" prompt is gone.
-		await expect(page.locator('.card-modal__review-verdict')).toHaveCount(0, { timeout: 4000 })
+		await expect(page.locator('.card-modal__review-pill--approved')).toBeVisible({ timeout: 6000 })
+		// Once approved, the "needs verdict" banner is gone.
+		await expect(page.locator('.card-modal__verdict')).toHaveCount(0, { timeout: 4000 })
 	})
 
 	test('board tile shows the review-state chip', async ({ page }) => {

@@ -88,7 +88,7 @@ test.describe('Checklist', () => {
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Checklist section should be visible
-		const checklistSection = page.locator('.card-modal__checklist-section')
+		const checklistSection = page.locator('.card-modal__checklist')
 		await expect(checklistSection).toBeVisible({ timeout: 5000 })
 
 		// Add first item "Buy groceries" via the add input
@@ -108,8 +108,8 @@ test.describe('Checklist', () => {
 			.toBeVisible({ timeout: 5000 })
 
 		// Assert progress shows 0/2 initially
-		await expect(page.locator('.card-modal__checklist-progress-text'))
-			.toHaveText('0/2', { timeout: 3000 })
+		await expect(page.locator('.card-modal__checklist-count'))
+			.toHaveText('0 / 2', { timeout: 3000 })
 
 		// Toggle "Buy groceries" done by clicking its checkbox
 		const buyGroceriesItem = page.locator('.card-modal__checklist-item').filter({ hasText: 'Buy groceries' })
@@ -117,11 +117,11 @@ test.describe('Checklist', () => {
 		await checkbox.check()
 
 		// Progress should update to 1/2
-		await expect(page.locator('.card-modal__checklist-progress-text'))
-			.toHaveText('1/2', { timeout: 5000 })
+		await expect(page.locator('.card-modal__checklist-count'))
+			.toHaveText('1 / 2', { timeout: 5000 })
 
 		// The progress bar should be visible and partially filled
-		await expect(page.locator('.card-modal__checklist-bar-wrap')).toBeVisible()
+		await expect(page.locator('.card-modal__checklist-bar')).toBeVisible()
 		await expect(page.locator('.card-modal__checklist-bar-fill')).toBeVisible()
 
 		// Close the modal by pressing Escape or clicking outside
@@ -151,8 +151,8 @@ test.describe('Checklist', () => {
 		// Open the card again and verify modal progress is also 1/2
 		await tileAfterReload.click()
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(page.locator('.card-modal__checklist-progress-text'))
-			.toHaveText('1/2', { timeout: 5000 })
+		await expect(page.locator('.card-modal__checklist-count'))
+			.toHaveText('1 / 2', { timeout: 5000 })
 
 		// Verify items are still present
 		await expect(page.locator('.card-modal__checklist-item').filter({ hasText: 'Buy groceries' }))
@@ -182,8 +182,8 @@ test.describe('Checklist', () => {
 		await checkbox.check()
 
 		// Progress should show 2/2
-		await expect(page.locator('.card-modal__checklist-progress-text'))
-			.toHaveText('2/2', { timeout: 5000 })
+		await expect(page.locator('.card-modal__checklist-count'))
+			.toHaveText('2 / 2', { timeout: 5000 })
 
 		// Progress bar should have the complete class (green)
 		await expect(page.locator('.card-modal__checklist-bar-fill--complete'))

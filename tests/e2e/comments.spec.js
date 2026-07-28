@@ -86,14 +86,14 @@ test.describe('Comments / Discussion', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// Discussion section should be visible
-		const discussionSection = page.locator('.card-modal__discussion-section')
+		// Discussion pane should be visible
+		const discussionSection = page.locator('.card-modal__discussion')
 		await expect(discussionSection).toBeVisible({ timeout: 5000 })
 
 		// Post a comment with markdown (bold text)
-		const composeTa = page.locator('.card-modal__comment-compose-textarea').first()
+		const composeTa = page.locator('.card-modal__composer-textarea').first()
 		await composeTa.fill('Hello **world** from test')
-		await page.locator('.card-modal__comment-compose .card-modal__comment-compose-actions button').first().click()
+		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
 
 		// The comment body should appear and markdown should be rendered
 		const commentBody = page.locator('.card-modal__comment-body').first()
@@ -114,13 +114,14 @@ test.describe('Comments / Discussion', () => {
 		// Wait for the first comment to appear
 		await page.waitForSelector('.card-modal__comment', { timeout: 8000 })
 
-		// Click the Reply button on the top-level comment
-		const replyBtn = page.locator('.card-modal__comment--top .card-modal__comment-reply-btn').first()
+		// Click the Reply button on the top-level comment (the top-level comment is
+		// the direct child of a comment-group; replies are nested under __replies).
+		const replyBtn = page.locator('.card-modal__comment-group > .card-modal__comment .card-modal__comment-link-btn').first()
 		await expect(replyBtn).toBeVisible({ timeout: 5000 })
 		await replyBtn.click()
 
 		// Reply compose box should appear
-		const replyTa = page.locator('.card-modal__reply-compose .card-modal__comment-compose-textarea').first()
+		const replyTa = page.locator('.card-modal__reply-compose .card-modal__comment-edit-textarea').first()
 		await expect(replyTa).toBeVisible({ timeout: 4000 })
 		await replyTa.fill('This is a **reply**')
 
@@ -159,11 +160,11 @@ test.describe('Comments / Discussion', () => {
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Wait for the top-level comment and its author controls
-		const topComment = page.locator('.card-modal__comment--top').first()
+		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
 		await expect(topComment).toBeVisible({ timeout: 8000 })
 
-		// Click the edit button (pencil icon)
-		const editBtn = topComment.locator('.card-modal__comment-control-btn').first()
+		// Click the edit button (pencil icon) — the first non-danger icon button
+		const editBtn = topComment.locator('.card-modal__comment-icon-btn:not(.card-modal__comment-icon-btn--danger)').first()
 		await expect(editBtn).toBeVisible({ timeout: 5000 })
 		await editBtn.click()
 
@@ -187,17 +188,17 @@ test.describe('Comments / Discussion', () => {
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Confirm the top-level comment and reply both exist
-		await expect(page.locator('.card-modal__comment--top')).toHaveCount(1, { timeout: 8000 })
+		await expect(page.locator('.card-modal__comment-group > .card-modal__comment')).toHaveCount(1, { timeout: 8000 })
 		await expect(page.locator('.card-modal__comment--reply')).toHaveCount(1, { timeout: 5000 })
 
 		// Click the delete button (trash icon) on the top-level comment
-		const topComment = page.locator('.card-modal__comment--top').first()
-		const deleteBtn = topComment.locator('.card-modal__comment-control-btn--danger')
+		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
+		const deleteBtn = topComment.locator('.card-modal__comment-icon-btn--danger')
 		await expect(deleteBtn).toBeVisible({ timeout: 5000 })
 		await deleteBtn.click()
 
 		// Both the comment and its reply should be gone
-		await expect(page.locator('.card-modal__comment--top')).toHaveCount(0, { timeout: 6000 })
+		await expect(page.locator('.card-modal__comment-group > .card-modal__comment')).toHaveCount(0, { timeout: 6000 })
 		await expect(page.locator('.card-modal__comment--reply')).toHaveCount(0, { timeout: 4000 })
 	})
 
@@ -226,9 +227,9 @@ test.describe('Comments / Discussion', () => {
 
 		// Post a comment containing an XSS payload
 		const xssPayload = 'Safe text <img src=x onerror=alert(1)> end'
-		const composeTa = page.locator('.card-modal__comment-compose-textarea').first()
+		const composeTa = page.locator('.card-modal__composer-textarea').first()
 		await composeTa.fill(xssPayload)
-		await page.locator('.card-modal__comment-compose .card-modal__comment-compose-actions button').first().click()
+		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
 
 		// Wait for the comment to appear
 		const commentBody = page.locator('.card-modal__comment-body').first()

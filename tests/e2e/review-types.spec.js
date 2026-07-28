@@ -159,9 +159,9 @@ test.describe('Review types', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
-		// Open the request-review popover (scope to the reviews section — the
-		// assignee section reuses the same toggle class).
-		await page.locator('.card-modal__reviews-section .card-modal__assign-toggle').click()
+		// Open the request-review popover — the "Request" pill lives in the
+		// reviews cluster (.card-modal__attr-right) at the end of the attribute bar.
+		await page.locator('.card-modal__attr-right button.card-modal__pill', { hasText: 'Request' }).click()
 
 		// The type selector row should be visible with at least the QA type
 		const selector = page.locator('.card-modal__review-type-selector')
@@ -189,7 +189,7 @@ test.describe('Review types', () => {
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
 		// A pending review chip should be present
-		const chip = page.locator('.card-modal__review-chip--pending')
+		const chip = page.locator('.card-modal__review-pill--pending')
 		await expect(chip).toBeVisible({ timeout: 8_000 })
 
 		// And the type badge with the "QA" label should appear inside it

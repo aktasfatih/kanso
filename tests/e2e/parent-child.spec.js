@@ -120,12 +120,8 @@ test.describe('Parent / Child cards', () => {
 
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// The sub-cards section should be visible (no parent on this card)
-		const hierarchySection = page.locator('.card-modal__hierarchy-section')
-		await expect(hierarchySection).toBeVisible({ timeout: 5000 })
-
-		// The add sub-card input should be present
-		const addChildInput = page.locator('.card-modal__add-child-input')
+		// The add sub-card input should be present (this card has no parent)
+		const addChildInput = page.getByPlaceholder('Add a sub-card…')
 		await expect(addChildInput).toBeVisible({ timeout: 5000 })
 
 		// Add first sub-card "Sub-task Alpha"
@@ -133,22 +129,22 @@ test.describe('Parent / Child cards', () => {
 		await addChildInput.press('Enter')
 
 		// Wait for the child to appear in the list
-		await expect(page.locator('.card-modal__child-item').filter({ hasText: 'Sub-task Alpha' }))
+		await expect(page.locator('.card-modal__child').filter({ hasText: 'Sub-task Alpha' }))
 			.toBeVisible({ timeout: 8000 })
 
 		// Add second sub-card "Sub-task Beta"
 		await addChildInput.fill('Sub-task Beta')
 		await addChildInput.press('Enter')
 
-		await expect(page.locator('.card-modal__child-item').filter({ hasText: 'Sub-task Beta' }))
+		await expect(page.locator('.card-modal__child').filter({ hasText: 'Sub-task Beta' }))
 			.toBeVisible({ timeout: 8000 })
 
 		// Assert Children section shows 2 items
-		await expect(page.locator('.card-modal__child-item')).toHaveCount(2, { timeout: 5000 })
+		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
 
-		// Assert progress shows 0/2
-		await expect(page.locator('.card-modal__hierarchy-progress-text'))
-			.toHaveText('0/2', { timeout: 5000 })
+		// Assert progress shows 0 / 2
+		await expect(page.locator('.card-modal__section-count'))
+			.toHaveText('0 / 2', { timeout: 5000 })
 	})
 
 	test('toggle one child done via API, reload parent modal, assert progress 1/2', async ({ page }) => {
@@ -173,13 +169,13 @@ test.describe('Parent / Child cards', () => {
 		await parentTile.click()
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// Progress should now show 1/2
-		await expect(page.locator('.card-modal__hierarchy-progress-text'))
-			.toHaveText('1/2', { timeout: 8000 })
+		// Progress should now show 1 / 2
+		await expect(page.locator('.card-modal__section-count'))
+			.toHaveText('1 / 2', { timeout: 8000 })
 
 		// The done child should have its done indicator active
-		const doneChildItem = page.locator('.card-modal__child-item').filter({ hasText: firstChild.title })
-		await expect(doneChildItem.locator('.card-modal__child-done-dot--done'))
+		const doneChildItem = page.locator('.card-modal__child').filter({ hasText: firstChild.title })
+		await expect(doneChildItem.locator('.card-modal__child-dot--done'))
 			.toBeVisible({ timeout: 5000 })
 
 		// Close the modal
@@ -207,9 +203,9 @@ test.describe('Parent / Child cards', () => {
 		// Open and re-verify modal progress
 		await parentTile.click()
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(page.locator('.card-modal__hierarchy-progress-text'))
-			.toHaveText('1/2', { timeout: 8000 })
-		await expect(page.locator('.card-modal__child-item')).toHaveCount(2, { timeout: 5000 })
+		await expect(page.locator('.card-modal__section-count'))
+			.toHaveText('1 / 2', { timeout: 8000 })
+		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
 	})
 
 	test('open a child card from parent modal — child shows its Parent row', async ({ page }) => {
@@ -241,8 +237,9 @@ test.describe('Parent / Child cards', () => {
 		await expect(parentSection).toBeVisible({ timeout: 8000 })
 		await expect(parentSection).toHaveText('Parent Card', { timeout: 5000 })
 
-		// The "Add sub-card" input should NOT be visible (one-level rule)
-		await expect(page.locator('.card-modal__add-child-input')).not.toBeVisible()
+		// The "Add sub-card" input should NOT be present (one-level rule: a card
+		// with a parent shows the Parent section instead of the Sub-cards editor).
+		await expect(page.getByPlaceholder('Add a sub-card…')).toHaveCount(0)
 	})
 
 	test('detach a child — parent progress drops to 0/1', async ({ page }) => {
@@ -265,19 +262,18 @@ test.describe('Parent / Child cards', () => {
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Hover the undone child item to reveal the remove button, then click it
-		const undoneChildItem = page.locator('.card-modal__child-item').filter({ hasText: undoneChild.title })
+		const undoneChildItem = page.locator('.card-modal__child').filter({ hasText: undoneChild.title })
 		await undoneChildItem.hover()
 		const removeBtn = undoneChildItem.locator('.card-modal__child-remove')
 		await expect(removeBtn).toBeVisible({ timeout: 3000 })
 		await removeBtn.click()
 
-		// Progress should now be 1/1 (only the done child remains) or 0/1 depending
-		// on which child we detached. Since we detached the undone one, 1 done out of 1
-		// total → progress text "1/1".
-		await expect(page.locator('.card-modal__hierarchy-progress-text'))
-			.toHaveText('1/1', { timeout: 8000 })
+		// Progress should now be 1 / 1 (only the done child remains). Since we
+		// detached the undone one, 1 done out of 1 total → progress text "1 / 1".
+		await expect(page.locator('.card-modal__section-count'))
+			.toHaveText('1 / 1', { timeout: 8000 })
 
 		// The list should now have 1 item
-		await expect(page.locator('.card-modal__child-item')).toHaveCount(1, { timeout: 5000 })
+		await expect(page.locator('.card-modal__child')).toHaveCount(1, { timeout: 5000 })
 	})
 })

@@ -106,19 +106,17 @@ test.describe('Card priorities', () => {
 
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// Priority selector should be visible
-		const priorityRow = page.locator('.card-modal__meta--priority')
-		await expect(priorityRow).toBeVisible({ timeout: 5000 })
+		// The priority pill lives in the attribute bar — it's the first pill.
+		const attrbar = page.locator('.card-modal__attrbar')
+		const priorityPill = attrbar.locator('button.card-modal__pill').first()
+		await expect(priorityPill).toBeVisible({ timeout: 5000 })
 
-		// The "High" button should be present
-		const highBtn = priorityRow.locator('.card-modal__priority-btn--3')
-		await expect(highBtn).toBeVisible({ timeout: 5000 })
+		// Open the priority popover and pick "High"
+		await priorityPill.click()
+		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^High$/ }).click()
 
-		// Click the High button
-		await highBtn.click()
-
-		// The button should become active (aria-pressed=true)
-		await expect(highBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 5000 })
+		// The pill should pick up the --priority-3 modifier
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible({ timeout: 5000 })
 
 		// Close the modal
 		await page.keyboard.press('Escape')
@@ -146,11 +144,13 @@ test.describe('Card priorities', () => {
 
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// Click the Urgent button (priority 4)
-		const urgentBtn = page.locator('.card-modal__priority-btn--4')
-		await expect(urgentBtn).toBeVisible({ timeout: 5000 })
-		await urgentBtn.click()
-		await expect(urgentBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 5000 })
+		// Open the priority popover and pick "Urgent" (level 4)
+		const attrbar = page.locator('.card-modal__attrbar')
+		const priorityPill = attrbar.locator('button.card-modal__pill').first()
+		await expect(priorityPill).toBeVisible({ timeout: 5000 })
+		await priorityPill.click()
+		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^Urgent$/ }).click()
+		await expect(attrbar.locator('.card-modal__pill--priority-4')).toBeVisible({ timeout: 5000 })
 
 		// Close the modal
 		await page.keyboard.press('Escape')
@@ -228,7 +228,8 @@ test.describe('Card priorities', () => {
 		await highTile.click()
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		const highBtn = page.locator('.card-modal__priority-btn--3')
-		await expect(highBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 5000 })
+		// The priority pill should still carry the --priority-3 modifier
+		await expect(page.locator('.card-modal__attrbar .card-modal__pill--priority-3'))
+			.toBeVisible({ timeout: 5000 })
 	})
 })

@@ -85,14 +85,19 @@ test.describe('Card estimations (#3443)', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 
-		// The estimate control renders because the board scale is not 'none'.
-		const estimate = page.locator('.card-modal__estimate')
-		await expect(estimate).toBeVisible({ timeout: 8_000 })
+		// The estimate pill renders because the board scale is not 'none'.
+		const estimatePill = page.locator('.card-modal__attrbar button.card-modal__pill', { hasText: 'Estimate' })
+		await expect(estimatePill).toBeVisible({ timeout: 8_000 })
 
-		// Click the "8" token (exact text so it doesn't match "13"/"21").
-		const btn8 = estimate.locator('.card-modal__estimate-btn', { hasText: /^8$/ })
+		// Open the estimate popover and click the "8" token (exact text so it
+		// doesn't match "13"/"21").
+		await estimatePill.click()
+		const btn8 = page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^8$/ })
 		await btn8.click()
-		await expect(btn8).toHaveClass(/card-modal__estimate-btn--active/, { timeout: 6_000 })
+
+		// The pill now reflects the chosen estimate.
+		await expect(page.locator('.card-modal__attrbar button.card-modal__pill', { hasText: 'Estimate: 8' }))
+			.toBeVisible({ timeout: 6_000 })
 
 		// Close the modal → the tile shows the estimate chip.
 		await page.keyboard.press('Escape')

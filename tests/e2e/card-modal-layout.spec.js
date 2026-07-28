@@ -111,97 +111,103 @@ test.describe('Card modal two-column layout', () => {
 		}
 	})
 
-	test('description and comment compose are in .card-modal__main (left)', async ({ page }) => {
-		// Use a wide viewport so two-column layout is active
+	test('description and composer are in .card-modal__content / .card-modal__discussion', async ({ page }) => {
+		// Use a wide viewport so the two-pane body layout is active
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 
-		// Wait for the card modal to be visible
-		await page.waitForSelector('.card-modal__main', { timeout: 15_000 })
+		// Wait for the card modal content pane to be visible
+		await page.waitForSelector('.card-modal__content', { timeout: 15_000 })
 
-		// Description section must be inside .card-modal__main
-		const mainLocator = page.locator('.card-modal__main')
-		await expect(mainLocator.locator('.card-modal__description-section')).toBeVisible()
+		// Description section lives in the left content pane
+		const contentLocator = page.locator('.card-modal__content')
+		await expect(contentLocator.locator('.card-modal__desc-view, .card-modal__desc-placeholder').first()).toBeVisible()
 
-		// Comment compose textarea must also be inside .card-modal__main
-		await expect(mainLocator.locator('.card-modal__comment-compose-textarea').first()).toBeVisible()
+		// The new-thread composer textarea lives in the right discussion pane
+		const discussion = page.locator('.card-modal__discussion')
+		await expect(discussion.locator('.card-modal__composer-textarea').first()).toBeVisible()
 	})
 
-	test('due-date input and priority buttons are in .card-modal__sidebar (right)', async ({ page }) => {
+	test('due-date pill and priority pill live in the attribute bar', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 
-		await page.waitForSelector('.card-modal__sidebar', { timeout: 15_000 })
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
-		const sidebar = page.locator('.card-modal__sidebar')
+		const attrbar = page.locator('.card-modal__attrbar')
 
-		// Due date input must be inside the sidebar
-		await expect(sidebar.locator('.card-modal__due-input')).toBeVisible()
+		// Priority is set to High (3) via API in beforeAll — the pill carries the modifier
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible()
 
-		// Priority buttons must be inside the sidebar
-		await expect(sidebar.locator('.card-modal__priority-btn--3')).toBeVisible()
+		// The due-date pill is the second pill in the attribute bar (priority, then
+		// due). Opening it reveals the padded date popover with the date input.
+		await attrbar.locator('button.card-modal__pill').nth(1).click()
+		await expect(page.locator('.card-modal__popover--pad .card-modal__date-input').first()).toBeVisible({ timeout: 5_000 })
 	})
 
-	test('.card-modal__main is to the LEFT of .card-modal__sidebar on wide viewport', async ({ page }) => {
+	test('.card-modal__content is to the LEFT of .card-modal__discussion on wide viewport', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 
-		await page.waitForSelector('.card-modal__columns', { timeout: 15_000 })
+		await page.waitForSelector('.card-modal__body', { timeout: 15_000 })
 
-		const mainBox = await page.locator('.card-modal__main').boundingBox()
-		const sidebarBox = await page.locator('.card-modal__sidebar').boundingBox()
+		const contentBox = await page.locator('.card-modal__content').boundingBox()
+		const discussionBox = await page.locator('.card-modal__discussion').boundingBox()
 
-		expect(mainBox).not.toBeNull()
-		expect(sidebarBox).not.toBeNull()
+		expect(contentBox).not.toBeNull()
+		expect(discussionBox).not.toBeNull()
 
-		// The main column's left edge must be strictly to the left of the sidebar's left edge
-		expect(mainBox.x).toBeLessThan(sidebarBox.x)
-		// And the main column's right edge must not exceed the sidebar's left edge
-		// (i.e. they do not overlap horizontally)
-		expect(mainBox.x + mainBox.width).toBeLessThanOrEqual(sidebarBox.x + 4) // 4px tolerance for rounding
+		// The content pane's left edge must be strictly to the left of the discussion pane
+		expect(contentBox.x).toBeLessThan(discussionBox.x)
+		// And they must not overlap horizontally
+		expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(discussionBox.x + 4) // 4px tolerance for rounding
 	})
 
-	test('priority High button (level 3) is clickable and toggles aria-pressed', async ({ page }) => {
+	test('priority pill opens a popover and selecting High marks the option active', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 
-		await page.waitForSelector('.card-modal__sidebar', { timeout: 15_000 })
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
-		const sidebar = page.locator('.card-modal__sidebar')
-		const highBtn = sidebar.locator('.card-modal__priority-btn--3')
+		const attrbar = page.locator('.card-modal__attrbar')
+		// The priority pill is the first pill in the attribute bar (has the flag icon).
+		const priorityPill = attrbar.locator('button.card-modal__pill').first()
+		await expect(priorityPill).toBeVisible()
 
-		// The button should exist and be visible
-		await expect(highBtn).toBeVisible()
+		// Open the priority popover
+		await priorityPill.click()
+		const popover = page.locator('.card-modal__popover')
+		await expect(popover.first()).toBeVisible({ timeout: 5_000 })
 
-		// Click None (level 0) to deactivate High first
-		const noneBtn = sidebar.locator('.card-modal__priority-btn--0')
-		await noneBtn.click()
-		await expect(noneBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 })
+		// Set None first
+		await popover.locator('.card-modal__popover-opt', { hasText: /^None$/ }).click()
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toHaveCount(0, { timeout: 5_000 })
 
-		// Now click High (level 3) — it should become active
-		await highBtn.click()
-		await expect(highBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 })
+		// Now set High — the pill picks up the --priority-3 modifier
+		await priorityPill.click()
+		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^High$/ }).click()
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible({ timeout: 5_000 })
 	})
 
-	test('layout collapses to single column on narrow viewport', async ({ page }) => {
+	test('body stacks to a single column on narrow viewport', async ({ page }) => {
 		await page.setViewportSize({ width: 500, height: 800 })
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 
-		await page.waitForSelector('.card-modal__columns', { timeout: 15_000 })
+		await page.waitForSelector('.card-modal__body', { timeout: 15_000 })
 
-		const mainBox = await page.locator('.card-modal__main').boundingBox()
-		const sidebarBox = await page.locator('.card-modal__sidebar').boundingBox()
+		// On narrow viewports the modal switches to a tabbed layout: only the
+		// active pane is shown. The "Card" tab is active by default → the content
+		// pane is visible and the discussion pane is hidden.
+		await expect(page.locator('.card-modal__content')).toBeVisible()
+		await expect(page.locator('.card-modal__tabbar')).toBeVisible()
 
-		expect(mainBox).not.toBeNull()
-		expect(sidebarBox).not.toBeNull()
-
-		// In single-column mode, they must overlap horizontally (same x start, similar widths)
-		// Both should start at roughly the same x position (within 16px)
-		expect(Math.abs(mainBox.x - sidebarBox.x)).toBeLessThan(16)
+		// Switching to the Discussion tab reveals the discussion pane.
+		await page.locator('.card-modal__tab', { hasText: 'Discussion' }).click()
+		await expect(page.locator('.card-modal__discussion')).toBeVisible({ timeout: 5_000 })
 	})
 })
