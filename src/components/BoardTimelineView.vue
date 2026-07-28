@@ -19,9 +19,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 		</div>
 
-		<p v-if="scheduled.length === 0" class="timeline__empty">
-			{{ t('kanso', 'No cards have a start or due date yet. Add dates on a card to place it on the timeline.') }}
-		</p>
+		<div v-if="scheduled.length === 0" class="timeline__empty">
+			<CalendarBlankOutlineIcon :size="40" />
+			<p>{{ t('kanso', 'No cards have a start or due date yet. Add dates on a card to place it on the timeline.') }}</p>
+		</div>
 
 		<!-- Scrollable timeline: sticky date axis + one lane per scheduled card. -->
 		<div v-else class="timeline__scroll">
@@ -59,13 +60,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:style="{ left: `${row.left}px` }">
 						<span class="timeline__label timeline__label--after">{{ row.card.title }}</span>
 					</div>
-					<div
-						v-else
-						class="timeline__bar"
-						:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
-						:style="{ left: `${row.left}px`, width: `${row.width}px` }">
-						<span class="timeline__label">{{ row.card.title }}</span>
-					</div>
+					<template v-else>
+						<div
+							class="timeline__bar"
+							:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
+							:style="{ left: `${row.left}px`, width: `${row.width}px` }">
+							<span v-if="row.labelInside" class="timeline__label">{{ row.card.title }}</span>
+						</div>
+						<!-- Short bars can't hold a legible label; render it beside the bar instead. -->
+						<span
+							v-if="!row.labelInside"
+							class="timeline__bar-outside-label"
+							:style="{ left: `${row.left + row.width + 6}px` }">{{ row.card.title }}</span>
+					</template>
 				</div>
 			</div>
 		</div>
@@ -86,6 +93,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
 
 const props = defineProps({
 	/** Filtered, non-archived cards (start_date/duedate carried in the summary). */
@@ -106,6 +114,8 @@ const zoomCfg = computed(() => ZOOMS.find((z) => z.key === zoom.value) ?? ZOOMS[
 const pxPerDay = computed(() => zoomCfg.value.pxPerDay)
 
 const LEFT_PAD = 8
+// Below this bar width the in-bar title clips to nothing, so it renders beside the bar.
+const LABEL_MIN_WIDTH = 60
 
 /** Midnight (local) of a date value, in ms, or null. */
 function dayFloor(value) {
@@ -168,7 +178,8 @@ const scheduled = computed(() => {
 		const isMilestone = r.startMs === r.endMs
 		const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
 		const overdue = !r.done && r.endMs < Date.now()
-		return { ...r, left, width, isMilestone, overdue }
+		const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
+		return { ...r, left, width, isMilestone, overdue, labelInside }
 	})
 })
 
@@ -244,9 +255,20 @@ function openCard(cardId) {
 }
 
 .timeline__empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
 	color: var(--color-text-maxcontrast);
-	padding: 24px 0;
-	max-width: 640px;
+	text-align: center;
+	padding: 24px;
+}
+
+.timeline__empty p {
+	margin: 0;
+	max-width: 420px;
 }
 
 .timeline__scroll {
@@ -298,6 +320,19 @@ function openCard(cardId) {
 	z-index: 1;
 }
 
+/* A small cap at the top of the today line makes it read as a clear marker. */
+.timeline__today::before {
+	content: '';
+	position: absolute;
+	top: -4px;
+	left: 50%;
+	width: 8px;
+	height: 8px;
+	transform: translateX(-50%);
+	border-radius: 50%;
+	background: var(--color-error);
+}
+
 .timeline__lane {
 	position: relative;
 	height: 34px;
@@ -330,13 +365,13 @@ function openCard(cardId) {
 }
 
 .timeline__bar--done {
-	background: var(--color-success, #2fb344);
-	color: #fff;
+	background: var(--color-success);
+	color: var(--color-primary-element-text);
 }
 
 .timeline__bar--overdue {
 	background: var(--color-error);
-	color: #fff;
+	color: var(--color-primary-element-text);
 }
 
 .timeline__milestone {
@@ -354,14 +389,29 @@ function openCard(cardId) {
 }
 
 .timeline__milestone.timeline__bar--done {
-	background: var(--color-success, #2fb344);
+	background: var(--color-success);
 }
 
 .timeline__label {
 	font-size: 0.8rem;
+	font-weight: 500;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* Title rendered beside a too-narrow bar (see LABEL_MIN_WIDTH). */
+.timeline__bar-outside-label {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	max-width: 240px;
+	font-size: 0.8rem;
+	color: var(--color-main-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
 }
 
 .timeline__label--after {

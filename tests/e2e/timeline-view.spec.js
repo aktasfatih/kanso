@@ -65,6 +65,13 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
 		await expect(page.locator('.timeline__milestone', { hasText: 'Milestone task' })).toBeVisible()
 
+		// Geometry: a 6-day range at week zoom (12px/day) is a visible bar, much
+		// wider than the zero-width milestone marker — sanity-checks the layout.
+		const barBox = await page.locator('.timeline__bar', { hasText: 'Ranged task' }).boundingBox()
+		expect(barBox.width).toBeGreaterThan(48)
+		const milestoneBox = await page.locator('.timeline__milestone', { hasText: 'Milestone task' }).boundingBox()
+		expect(barBox.width).toBeGreaterThan(milestoneBox.width)
+
 		// The dateless card is listed under "unscheduled".
 		await expect(page.locator('.timeline__unscheduled summary')).toContainText('unscheduled')
 		await expect(page.locator('.timeline__unscheduled')).toContainText('Someday task')
