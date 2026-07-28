@@ -558,9 +558,12 @@ class CardServiceTest extends TestCase {
 				Change::ENTITY_CARD,
 				9,
 				Change::ACTION_MOVE,
-				'alice'
+				'alice',
+				false, // push deferred until after commit
 			)
 			->willReturn(new Change());
+		// The realtime broadcast fires only after the transaction commits.
+		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
 
 		$moved = $this->service->move(9, 6, null, 'alice');
 		// before('I') === 'H'
@@ -796,6 +799,9 @@ class CardServiceTest extends TestCase {
 				return $card;
 			});
 		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+		// The push fires exactly once — after the SUCCESSFUL commit, never for the
+		// rolled-back first attempt.
+		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
 		$this->db->expects(self::exactly(2))->method('beginTransaction');
 		$this->db->expects(self::once())->method('rollBack');
 		$this->db->expects(self::once())->method('commit');
@@ -820,6 +826,8 @@ class CardServiceTest extends TestCase {
 			->method('update')
 			->willReturnCallback(fn (Card $card): Card => throw $this->uniqueViolation());
 		$this->changeNotifier->expects(self::never())->method('notify');
+		// Nothing committed → no realtime broadcast for a move that never landed.
+		$this->changeNotifier->expects(self::never())->method('emitPush');
 		$this->db->expects(self::exactly(2))->method('beginTransaction');
 		$this->db->expects(self::exactly(2))->method('rollBack');
 		$this->db->expects(self::never())->method('commit');
@@ -1027,8 +1035,10 @@ class CardServiceTest extends TestCase {
 			->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
-			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_MOVE, 'alice')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_MOVE, 'alice', false)
 			->willReturn(new Change());
+		// Push is emitted once, AFTER commit (not inside the transaction).
+		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
 		$this->db->expects(self::once())->method('beginTransaction');
 		$this->db->expects(self::once())->method('commit');
 		$this->db->expects(self::never())->method('rollBack');

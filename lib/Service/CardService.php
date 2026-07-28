@@ -371,12 +371,17 @@ class CardService {
 			$this->applyDoneAutomation($card, $sourceStack, $targetStack, $now);
 			$card = $this->cardMapper->update($card);
 
+			// Write the change row inside the transaction (delta-sync source of
+			// truth), but DEFER the realtime push until after commit - otherwise a
+			// client could refetch pre-commit state, or get an event for a move
+			// that the unique-key retry then rolls back.
 			$this->changeNotifier->notify(
 				$card->getBoardId(),
 				Change::ENTITY_CARD,
 				$card->getId(),
 				Change::ACTION_MOVE,
-				$uid
+				$uid,
+				false,
 			);
 
 			$this->db->commit();
@@ -384,6 +389,9 @@ class CardService {
 			$this->db->rollBack();
 			throw $e;
 		}
+
+		// Commit succeeded - now it is safe to broadcast the move.
+		$this->changeNotifier->emitPush($card->getBoardId());
 
 		return $card;
 	}

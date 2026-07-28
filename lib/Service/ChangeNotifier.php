@@ -54,10 +54,15 @@ class ChangeNotifier {
 	 * @param int $entityType one of the Change::ENTITY_* constants
 	 * @param int $action one of the Change::ACTION_* constants
 	 * @param string|null $actor uid of the acting user, null for system actions
+	 * @param bool $push whether to broadcast the push now. Pass false when the
+	 *                   change row is written INSIDE a transaction, and call
+	 *                   {@see self::emitPush()} yourself after commit - otherwise a client
+	 *                   could refetch pre-commit state, or (on rollback) get an event for a
+	 *                   change that never landed.
 	 * @return Change the inserted entry with its id set
 	 * @throws \OCP\DB\Exception if inserting the change row fails
 	 */
-	public function notify(int $boardId, int $entityType, int $entityId, int $action, ?string $actor): Change {
+	public function notify(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, bool $push = true): Change {
 		$change = $this->changeMapper->insertChange(
 			$boardId,
 			$entityType,
@@ -67,15 +72,19 @@ class ChangeNotifier {
 			time()
 		);
 
-		$this->emitPush($boardId);
+		if ($push) {
+			$this->emitPush($boardId);
+		}
 
 		return $change;
 	}
 
 	/**
-	 * Best-effort notify_push broadcast - never throws.
+	 * Best-effort notify_push broadcast for a board - never throws. Public so a
+	 * caller that wrote the change row inside a transaction can defer the push
+	 * until after commit (see {@see \OCA\Kanso\Service\CardService::persistMove}).
 	 */
-	private function emitPush(int $boardId): void {
+	public function emitPush(int $boardId): void {
 		try {
 			$queue = $this->getQueue();
 			if ($queue === null) {
