@@ -7,12 +7,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:show="true"
 		:name="cardTitle"
 		size="large"
+		class="card-modal-modal"
 		@close="closeModal">
-		<div class="card-modal" @keydown.escape="closeModal">
-			<!-- Loading state -->
-			<div v-if="isLoading" class="card-modal__loading">
-				<div class="skeleton-text card-modal__title-skeleton" />
-				<div class="skeleton-text card-modal__desc-skeleton" />
+		<div
+			class="card-modal"
+			:class="`card-modal--tab-${viewMode}`"
+			@keydown.escape="closeModal">
+			<!-- Loading state — real layout, shimmer, never a spinner -->
+			<div v-if="isLoading" class="card-modal__skeleton">
+				<div class="card-modal__sk-header">
+					<div class="card-modal__sk-col">
+						<div class="kskel" style="height:12px;width:180px" />
+						<div class="kskel" style="height:26px;width:52%" />
+					</div>
+					<div class="kskel" style="height:36px;width:120px;border-radius:100px" />
+					<div class="kskel" style="height:36px;width:64px;border-radius:100px" />
+				</div>
+				<div class="card-modal__sk-bar">
+					<div class="kskel" style="height:32px;width:92px;border-radius:10px" />
+					<div class="kskel" style="height:32px;width:150px;border-radius:10px" />
+					<div class="kskel" style="height:32px;width:130px;border-radius:10px" />
+					<div class="kskel" style="height:32px;width:90px;border-radius:10px" />
+				</div>
+				<div class="card-modal__sk-body">
+					<div class="card-modal__sk-main">
+						<div class="kskel" style="height:10px;width:90px" />
+						<div class="kskel" style="height:14px;width:100%" />
+						<div class="kskel" style="height:14px;width:92%" />
+						<div class="kskel" style="height:14px;width:64%" />
+						<div class="kskel" style="height:150px;width:100%;border-radius:10px;margin-top:14px" />
+					</div>
+					<div class="card-modal__sk-side">
+						<div class="kskel" style="height:78px;border-radius:10px" />
+						<div class="kskel" style="height:60px;border-radius:10px" />
+					</div>
+				</div>
 			</div>
 
 			<!-- Error state -->
@@ -22,29 +51,119 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Card content -->
 			<template v-else-if="cardData">
-				<!-- Title row — title + edit pencil + actions (⋯) menu -->
-				<div class="card-modal__title-row">
-					<template v-if="editingTitle">
+				<!-- Verdict banner — shown when the current user owes a verdict on this card -->
+				<div
+					v-for="review in myPendingReviews"
+					:key="`verdict-${review.id}`"
+					class="card-modal__verdict">
+					<CheckDecagramOutlineIcon :size="20" class="card-modal__verdict-icon" />
+					<div class="card-modal__verdict-copy">
+						<span class="card-modal__verdict-title">
+							{{ reviewTypeById(review.reviewTypeId)
+								? t('kanso', 'Your {type} review is requested', { type: reviewTypeById(review.reviewTypeId).title })
+								: t('kanso', 'Your review is requested on this card') }}
+						</span>
+						<span class="card-modal__verdict-sub">
+							{{ t('kanso', 'Done-gated columns block Done until every review is approved.') }}
+						</span>
+					</div>
+					<div class="card-modal__verdict-actions">
+						<template v-if="changesReasonFor === review.id">
+							<textarea
+								v-model="changesReasonText"
+								class="card-modal__verdict-reason"
+								:placeholder="t('kanso', 'What changes are needed? (posted as a comment)')"
+								rows="2" />
+							<NcButton
+								type="error"
+								:disabled="setReviewState.isPending.value || !changesReasonText.trim()"
+								@click="submitChangesRequested(review.id)">
+								{{ t('kanso', 'Submit') }}
+							</NcButton>
+							<NcButton :disabled="setReviewState.isPending.value" @click="cancelChangesRequested">
+								{{ t('kanso', 'Cancel') }}
+							</NcButton>
+						</template>
+						<template v-else>
+							<NcButton
+								type="success"
+								:disabled="setReviewState.isPending.value"
+								@click="handleReviewVerdict(review, 'approved')">
+								<template #icon>
+									<CheckDecagramIcon :size="16" />
+								</template>
+								{{ t('kanso', 'Approve') }}
+							</NcButton>
+							<NcButton
+								type="error"
+								:disabled="setReviewState.isPending.value"
+								@click="handleReviewVerdict(review, 'changes_requested')">
+								<template #icon>
+									<AlertDecagramIcon :size="16" />
+								</template>
+								{{ t('kanso', 'Request changes') }}
+							</NcButton>
+						</template>
+					</div>
+				</div>
+				<span v-if="reviewError" class="card-modal__save-error">{{ reviewError }}</span>
+
+				<!-- Header band: breadcrumb + title + action cluster -->
+				<header class="card-modal__header">
+					<div class="card-modal__header-main">
+						<div class="card-modal__breadcrumb">
+							<span class="card-modal__crumb">{{ boardName }}</span>
+							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
+							<span class="card-modal__attr card-modal__status-wrap">
+								<button
+									class="card-modal__status-chip card-modal__status-chip--btn"
+									:class="`card-modal__status-chip--${currentStatus}`"
+									:disabled="updateCard.isPending.value"
+									:aria-expanded="openPicker === 'status'"
+									:title="t('kanso', 'Change status')"
+									@click="togglePicker('status')">
+									{{ statusChipLabel }}
+									<ChevronDownIcon :size="12" />
+								</button>
+								<div v-if="openPicker === 'status'" class="card-modal__popover">
+									<button
+										v-for="opt in STATUS_OPTIONS"
+										:key="opt.key"
+										class="card-modal__popover-opt"
+										:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
+										:disabled="updateCard.isPending.value"
+										@click="setStatus(opt.key); openPicker = null">
+										{{ opt.label }}
+									</button>
+								</div>
+							</span>
+							<span class="card-modal__crumb-dot">·</span>
+							<span class="card-modal__crumb">#{{ cardData.id }}</span>
+						</div>
 						<input
+							v-if="editingTitle"
 							ref="titleInputRef"
 							v-model="draftTitle"
 							class="card-modal__title-input"
 							type="text"
 							@keydown.enter.prevent="saveTitle"
 							@keydown.escape.stop="cancelTitleEdit"
-							@blur="saveTitle" />
-					</template>
-					<template v-else>
-						<h2 class="card-modal__title" @click="startTitleEdit">
+							@blur="saveTitle">
+						<h2 v-else class="card-modal__title" @click="startTitleEdit">
 							{{ cardData.title }}
 						</h2>
-						<button class="card-modal__edit-btn" :title="t('kanso', 'Edit title')" @click="startTitleEdit">
-							<PencilIcon :size="16" />
-						</button>
-					</template>
+					</div>
 
-					<!-- Watch toggle -->
-					<div class="card-modal__watch-wrap">
+					<div class="card-modal__header-actions">
+						<button
+							class="card-modal__done-btn"
+							:class="{ 'card-modal__done-btn--done': isDone }"
+							:disabled="updateCard.isPending.value"
+							@click="setStatus(isDone ? 'in_progress' : 'done')">
+							<CheckCircleOutlineIcon :size="18" />
+							<span class="card-modal__done-label">{{ isDone ? t('kanso', 'Done') : t('kanso', 'Mark done') }}</span>
+						</button>
+
 						<button
 							class="card-modal__watch-btn"
 							:class="{ 'card-modal__watch-btn--active': isWatching }"
@@ -52,493 +171,233 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:disabled="toggleSubscription.isPending.value"
 							:title="isWatching ? t('kanso', 'Stop watching this card') : t('kanso', 'Watch this card')"
 							@click="handleWatchToggle">
-							<EyeOffOutlineIcon v-if="isWatching" :size="16" />
-							<EyeOutlineIcon v-else :size="16" />
-							<span class="card-modal__watch-label">
-								{{ isWatching ? t('kanso', 'Watching') : t('kanso', 'Watch') }}
-							</span>
-							<span v-if="watcherCount > 0" class="card-modal__watch-count">
-								{{ watcherCount }}
-							</span>
+							<EyeOffOutlineIcon v-if="isWatching" :size="18" />
+							<EyeOutlineIcon v-else :size="18" />
+							<span v-if="watcherCount > 0">{{ watcherCount }}</span>
+							<span v-else class="card-modal__watch-label">{{ t('kanso', 'Watch') }}</span>
 						</button>
-						<!-- Avatar stack (visible when there are watchers) -->
-						<div v-if="visibleWatchers.length > 0" class="card-modal__watch-avatars" aria-hidden="true">
-							<NcAvatar
-								v-for="uid in visibleWatchers"
-								:key="uid"
-								:user="uid"
-								:size="20"
-								class="card-modal__watch-avatar" />
-							<span v-if="extraWatchers > 0" class="card-modal__watch-avatar-extra">
-								+{{ extraWatchers }}
-							</span>
-						</div>
-						<span v-if="subscriptionError" class="card-modal__save-error card-modal__watch-error">
-							{{ subscriptionError }}
-						</span>
-					</div>
 
-					<!-- ⋯ Actions menu -->
-					<NcActions class="card-modal__actions-menu" :force-menu="true">
-						<!-- Archive / Unarchive -->
-						<NcActionButton
-							:close-after-click="true"
-							@click="handleArchiveToggle">
-							<template #icon>
-								<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
-								<ArchiveArrowUpIcon v-else :size="20" />
-							</template>
-							{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
-						</NcActionButton>
-
-						<!-- Delete -->
-						<NcActionButton
-							:close-after-click="true"
-							@click="handleDelete">
-							<template #icon>
-								<TrashCanIcon :size="20" />
-							</template>
-							{{ t('kanso', 'Delete') }}
-						</NcActionButton>
-
-						<!-- Future: Duplicate, Move-to (add items here) -->
-					</NcActions>
-				</div>
-
-				<!-- Action error (archive / delete) -->
-				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">
-					{{ actionError }}
-				</span>
-
-				<!-- Two-column layout: main (description + discussion) | sidebar (attributes) -->
-				<div class="card-modal__columns">
-					<!-- LEFT column: description + discussion -->
-					<div class="card-modal__main">
-						<!-- Description -->
-						<div class="card-modal__description-section">
-							<label class="card-modal__label">{{ t('kanso', 'Description') }}</label>
-
-							<template v-if="editingDescription">
-								<textarea
-									v-model="draftDescription"
-									class="card-modal__desc-textarea"
-									:placeholder="t('kanso', 'Add a description…')"
-									rows="8" />
-								<div class="card-modal__desc-actions">
-									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
-										{{ t('kanso', 'Save') }}
-									</NcButton>
-									<NcButton @click="cancelDescriptionEdit">
-										{{ t('kanso', 'Cancel') }}
-									</NcButton>
-									<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
-								</div>
-							</template>
-
-							<template v-else>
-								<div
-									v-if="cardData.description"
-									class="card-modal__desc-view"
-									@click="startDescriptionEdit">
-									<div class="card-modal__desc-rendered" v-html="renderedDescription" />
-								</div>
-								<button
-									v-else
-									class="card-modal__desc-placeholder"
-									@click="startDescriptionEdit">
-									{{ t('kanso', 'Add a description…') }}
-								</button>
-							</template>
-						</div>
-
-						<!-- GitHub links section -->
-						<div class="card-modal__links-section">
-							<div class="card-modal__links-header">
-								<GithubIcon :size="16" class="card-modal__links-header-icon" />
-								<label class="card-modal__label">{{ t('kanso', 'GitHub links') }}</label>
-								<NcButton
-									type="tertiary"
-									class="card-modal__branch-btn"
-									:title="t('kanso', 'Copy the git branch name for this card')"
-									@click="copyBranchName">
-									<template #icon>
-										<ContentCopyIcon :size="16" />
-									</template>
-									{{ branchCopied ? t('kanso', 'Copied!') : t('kanso', 'Copy branch name') }}
-								</NcButton>
-							</div>
-
-							<ul v-if="cardLinks.length > 0" class="card-modal__links-list">
-								<li v-for="link in cardLinks" :key="link.id" class="card-modal__link-row">
-									<a
-										:href="link.url"
-										target="_blank"
-										rel="noopener noreferrer"
-										class="card-modal__link-chip">
-										<span
-											class="card-modal__link-badge"
-											:class="`card-modal__link-badge--${link.state}`">
-											{{ linkStateLabel(link.state) }}
-										</span>
-										<span class="card-modal__link-text">{{ link.title || link.url }}</span>
-									</a>
-									<NcButton
-										v-if="canEdit"
-										type="tertiary-no-background"
-										:aria-label="t('kanso', 'Remove link')"
-										:title="t('kanso', 'Remove link')"
-										@click="handleRemoveLink(link.id)">
-										<template #icon>
-											<CloseIcon :size="16" />
-										</template>
-									</NcButton>
-								</li>
-							</ul>
-
-							<form v-if="canEdit" class="card-modal__link-add" @submit.prevent="handleAddLink">
-								<input
-									v-model="newLinkUrl"
-									type="url"
-									class="card-modal__link-input"
-									:placeholder="t('kanso', 'Paste a GitHub PR or issue URL…')">
-								<NcButton
-									type="secondary"
-									native-type="submit"
-									:disabled="!newLinkUrl || addLink.isPending.value">
-									{{ t('kanso', 'Attach') }}
-								</NcButton>
-							</form>
-							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
-						</div>
-
-						<!-- Discussion section -->
-						<div class="card-modal__discussion-section">
-					<div class="card-modal__discussion-header">
-						<CommentMultipleOutlineIcon :size="16" class="card-modal__discussion-header-icon" />
-						<label class="card-modal__label">{{ t('kanso', 'Discussion') }}</label>
-						<span v-if="commentCount > 0" class="card-modal__discussion-count">
-							{{ commentCount }}
-						</span>
-					</div>
-
-					<!-- Thread list -->
-					<div v-if="commentThread.length > 0" class="card-modal__discussion-thread">
-						<div
-							v-for="{ comment: topComment, replies } in commentThread"
-							:key="topComment.id"
-							class="card-modal__comment-group">
-							<!-- Top-level comment -->
-							<div class="card-modal__comment card-modal__comment--top">
-								<div class="card-modal__comment-meta">
-									<span class="card-modal__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
-									<span class="card-modal__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
-									<span v-if="topComment.editedAt > 0" class="card-modal__comment-edited">
-										{{ t('kanso', 'edited') }}
-									</span>
-								</div>
-
-								<!-- Body: edit mode -->
-								<template v-if="editingCommentId === topComment.id">
-									<textarea
-										:ref="(el) => setCommentEditRef(topComment.id, el)"
-										v-model="editingCommentBody"
-										class="card-modal__comment-edit-textarea"
-										rows="3"
-										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
-										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
-										@keydown.escape.stop="cancelCommentEdit" />
-									<div class="card-modal__comment-edit-actions">
-										<NcButton
-											type="primary"
-											:disabled="editComment.isPending.value"
-											@click="saveCommentEdit(topComment)">
-											{{ t('kanso', 'Save') }}
-										</NcButton>
-										<NcButton @click="cancelCommentEdit">
-											{{ t('kanso', 'Cancel') }}
-										</NcButton>
-									</div>
+						<NcActions class="card-modal__actions-menu" :force-menu="true">
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
+								@click="openRelationEditor">
+								<template #icon>
+									<VectorLinkIcon :size="20" />
 								</template>
-
-								<!-- Body: display mode (sanitized markdown via v-html) -->
-								<div
-									v-else
-									class="card-modal__comment-body"
-									v-html="renderMarkdown(topComment.body)" />
-
-								<!-- Author controls (edit + delete) — gated on canEdit AND being the author -->
-								<div
-									v-if="canEdit && currentUserId === topComment.author"
-									class="card-modal__comment-controls">
-									<button
-										class="card-modal__comment-control-btn"
-										:title="t('kanso', 'Edit comment')"
-										@click="startCommentEdit(topComment)">
-										<PencilIcon :size="14" />
-									</button>
-									<button
-										class="card-modal__comment-control-btn card-modal__comment-control-btn--danger"
-										:title="t('kanso', 'Delete comment')"
-										:disabled="deleteComment.isPending.value"
-										@click="handleDeleteComment(topComment)">
-										<TrashCanIcon :size="14" />
-									</button>
-								</div>
-
-								<!-- Reply affordance — gated on canEdit -->
-								<button
-									v-if="canEdit && editingCommentId !== topComment.id"
-									class="card-modal__comment-reply-btn"
-									@click="openReplyBox(topComment.id)">
-									{{ t('kanso', 'Reply') }}
-								</button>
-							</div>
-
-							<!-- Inline reply box for this top-level comment -->
-							<div
-								v-if="replyingToId === topComment.id && canEdit"
-								class="card-modal__reply-compose card-modal__reply-compose--indent">
-								<textarea
-									:ref="(el) => setReplyRef(topComment.id, el)"
-									v-model="replyBody"
-									class="card-modal__comment-compose-textarea"
-									:placeholder="t('kanso', 'Write a reply…')"
-									rows="2"
-									@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
-									@keydown.meta.enter.prevent="submitReply(topComment.id)"
-									@keydown.escape.stop="closeReplyBox" />
-								<div class="card-modal__comment-compose-actions">
-									<NcButton
-										type="primary"
-										:disabled="addComment.isPending.value || !replyBody.trim()"
-										@click="submitReply(topComment.id)">
-										{{ t('kanso', 'Post reply') }}
-									</NcButton>
-									<NcButton @click="closeReplyBox">
-										{{ t('kanso', 'Cancel') }}
-									</NcButton>
-								</div>
-							</div>
-
-							<!-- Replies (indented) -->
-							<div
-								v-if="replies.length > 0"
-								class="card-modal__replies">
-								<div
-									v-for="reply in replies"
-									:key="reply.id"
-									class="card-modal__comment card-modal__comment--reply">
-									<div class="card-modal__comment-meta">
-										<span class="card-modal__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
-										<span class="card-modal__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
-										<span v-if="reply.editedAt > 0" class="card-modal__comment-edited">
-											{{ t('kanso', 'edited') }}
-										</span>
-									</div>
-
-									<!-- Reply body: edit mode -->
-									<template v-if="editingCommentId === reply.id">
-										<textarea
-											:ref="(el) => setCommentEditRef(reply.id, el)"
-											v-model="editingCommentBody"
-											class="card-modal__comment-edit-textarea"
-											rows="3"
-											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
-											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
-											@keydown.escape.stop="cancelCommentEdit" />
-										<div class="card-modal__comment-edit-actions">
-											<NcButton
-												type="primary"
-												:disabled="editComment.isPending.value"
-												@click="saveCommentEdit(reply)">
-												{{ t('kanso', 'Save') }}
-											</NcButton>
-											<NcButton @click="cancelCommentEdit">
-												{{ t('kanso', 'Cancel') }}
-											</NcButton>
-										</div>
-									</template>
-
-									<!-- Reply body: display mode -->
-									<div
-										v-else
-										class="card-modal__comment-body"
-										v-html="renderMarkdown(reply.body)" />
-
-									<!-- Author controls -->
-									<div
-										v-if="canEdit && currentUserId === reply.author"
-										class="card-modal__comment-controls">
-										<button
-											class="card-modal__comment-control-btn"
-											:title="t('kanso', 'Edit comment')"
-											@click="startCommentEdit(reply)">
-											<PencilIcon :size="14" />
-										</button>
-										<button
-											class="card-modal__comment-control-btn card-modal__comment-control-btn--danger"
-											:title="t('kanso', 'Delete comment')"
-											:disabled="deleteComment.isPending.value"
-											@click="handleDeleteComment(reply)">
-											<TrashCanIcon :size="14" />
-										</button>
-									</div>
-								</div>
-							</div>
-						</div>
+								{{ t('kanso', 'Add relation') }}
+							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit && !cardData.parentCardId && availableChildCards.length > 0"
+								:close-after-click="true"
+								@click="openLinkChildEditor">
+								<template #icon>
+									<LinkVariantIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Link a sub-card') }}
+							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit && !cardData.parentCardId && children.length === 0 && availableParentCards.length > 0"
+								:close-after-click="true"
+								@click="openSetParentEditor">
+								<template #icon>
+									<SitemapIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Make this a sub-card of…') }}
+							</NcActionButton>
+							<NcActionSeparator v-if="canEdit" />
+							<NcActionButton :close-after-click="true" @click="handleArchiveToggle">
+								<template #icon>
+									<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
+									<ArchiveArrowUpIcon v-else :size="20" />
+								</template>
+								{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
+							</NcActionButton>
+							<NcActionButton :close-after-click="true" @click="handleDelete">
+								<template #icon>
+									<TrashCanIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Delete') }}
+							</NcActionButton>
+						</NcActions>
 					</div>
+				</header>
+				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">{{ actionError }}</span>
+				<span v-if="subscriptionError" class="card-modal__save-error">{{ subscriptionError }}</span>
 
-					<!-- Top-level compose box — only when EDIT permission -->
-					<div v-if="canEdit" class="card-modal__comment-compose">
-						<textarea
-							v-model="newCommentBody"
-							class="card-modal__comment-compose-textarea"
-							:placeholder="t('kanso', 'Write a comment… (Ctrl+Enter to post)')"
-							rows="3"
-							:disabled="addComment.isPending.value"
-							@keydown.ctrl.enter.prevent="submitNewComment"
-							@keydown.meta.enter.prevent="submitNewComment" />
-						<div class="card-modal__comment-compose-actions">
-							<NcButton
-								type="primary"
-								:disabled="addComment.isPending.value || !newCommentBody.trim()"
-								@click="submitNewComment">
-								{{ t('kanso', 'Post') }}
-							</NcButton>
-						</div>
-						<span v-if="commentError" class="card-modal__save-error">{{ commentError }}</span>
-					</div>
-				</div>
-				<!-- END .card-modal__main -->
-				</div>
-
-				<!-- RIGHT column: attributes sidebar -->
-				<div class="card-modal__sidebar">
-					<!-- Status — Not started / In progress / Done. Derived from the
-					     started_at + done_at timestamps; also driven by stack-role
-					     automation when the card is moved between columns. -->
-					<div class="card-modal__meta card-modal__meta--status">
-						<span class="card-modal__meta-label">{{ t('kanso', 'Status') }}</span>
-						<div class="card-modal__status" role="group" :aria-label="t('kanso', 'Card status')">
-							<button
-								v-for="opt in STATUS_OPTIONS"
-								:key="opt.key"
-								class="card-modal__status-btn"
-								:class="[`card-modal__status-btn--${opt.key}`, { 'card-modal__status-btn--active': currentStatus === opt.key }]"
-								:disabled="updateCard.isPending.value"
-								:aria-pressed="currentStatus === opt.key ? 'true' : 'false'"
-								@click="setStatus(opt.key)">
-								{{ opt.label }}
-							</button>
-						</div>
-						<span v-if="isDone && cardData.doneAt" class="card-modal__done-at">
-							{{ formatDoneAt(cardData.doneAt) }}
-						</span>
-					</div>
-
-					<!-- Due date — editable via datetime-local input -->
-					<div class="card-modal__meta card-modal__meta--start">
-						<CalendarStartIcon :size="16" />
-						<span class="card-modal__meta-label">{{ t('kanso', 'Start date') }}</span>
-						<input
-							class="card-modal__due-input"
-							type="datetime-local"
-							:value="startDateInputValue"
-							@change="handleStartDateChange">
+				<!-- Attribute bar: every card attribute on one scannable row -->
+				<div class="card-modal__attrbar">
+					<!-- Priority -->
+					<div class="card-modal__attr">
 						<button
-							v-if="cardData.startDate"
-							class="card-modal__due-clear"
-							:title="t('kanso', 'Clear start date')"
-							@click="clearStartDate">
-							<CloseIcon :size="14" />
+							class="card-modal__pill"
+							:class="currentPriority > 0 ? `card-modal__pill--priority-${currentPriority}` : 'card-modal__pill--dashed'"
+							:aria-expanded="openPicker === 'priority'"
+							@click="togglePicker('priority')">
+							<FlagIcon v-if="currentPriority > 0" :size="14" />
+							<FlagOutlineIcon v-else :size="14" />
+							{{ currentPriority > 0 ? t('kanso', currentPriorityLevel.label) : t('kanso', 'Priority') }}
 						</button>
-					</div>
-
-					<div class="card-modal__meta card-modal__meta--due">
-						<CalendarIcon :size="16" />
-						<span class="card-modal__meta-label">{{ t('kanso', 'Due date') }}</span>
-						<input
-							class="card-modal__due-input"
-							:class="dueDateClass"
-							type="datetime-local"
-							:value="dueDateInputValue"
-							@change="handleDueDateChange" />
-						<button
-							v-if="cardData.duedate"
-							class="card-modal__due-clear"
-							:title="t('kanso', 'Clear due date')"
-							@click="clearDueDate">
-							<CloseIcon :size="14" />
-						</button>
-					</div>
-
-					<!-- Priority selector -->
-					<div class="card-modal__meta card-modal__meta--priority">
-						<FlagIcon :size="16" />
-						<span class="card-modal__meta-label">{{ t('kanso', 'Priority') }}</span>
-						<div class="card-modal__priority-buttons" role="group" :aria-label="t('kanso', 'Select priority')">
+						<div v-if="openPicker === 'priority'" class="card-modal__popover">
 							<button
 								v-for="level in PRIORITY_LEVELS"
 								:key="level.value"
-								class="card-modal__priority-btn"
-								:class="[
-									`card-modal__priority-btn--${level.value}`,
-									{ 'card-modal__priority-btn--active': currentPriority === level.value },
-								]"
-								:title="t('kanso', level.label)"
-								:aria-pressed="currentPriority === level.value"
+								class="card-modal__popover-opt"
+								:class="{ 'card-modal__popover-opt--active': currentPriority === level.value }"
 								:disabled="setPriority.isPending.value"
-								@click="handleSetPriority(level.value)">
+								@click="handleSetPriority(level.value); openPicker = null">
 								{{ level.value === 0 ? t('kanso', 'None') : t('kanso', level.label) }}
 							</button>
+							<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
 						</div>
-						<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
 					</div>
 
-					<!-- Estimate selector — only when the board's estimateScale is not 'none' -->
-					<div
-						v-if="boardEstimateScale !== 'none'"
-						class="card-modal__meta card-modal__meta--estimate card-modal__estimate">
-						<span class="card-modal__meta-label">{{ t('kanso', 'Estimate') }}</span>
-						<div class="card-modal__estimate-buttons" role="group" :aria-label="t('kanso', 'Select estimate')">
-							<button
-								v-for="token in estimateTokens"
-								:key="token"
-								class="card-modal__estimate-btn"
-								:class="{ 'card-modal__estimate-btn--active': currentEstimate === token }"
-								:aria-pressed="currentEstimate === token"
-								:disabled="updateCard.isPending.value"
-								@click="handleSetEstimate(token)">
-								{{ token }}
-							</button>
-							<button
-								v-if="currentEstimate"
-								class="card-modal__estimate-btn card-modal__estimate-btn--clear"
-								:disabled="updateCard.isPending.value"
-								:title="t('kanso', 'Clear estimate')"
-								@click="handleSetEstimate('')">
-								{{ t('kanso', 'None') }}
-							</button>
+					<!-- Dates (due + start) -->
+					<div class="card-modal__attr">
+						<button
+							class="card-modal__pill"
+							:class="cardData.duedate ? dueDateClass : 'card-modal__pill--dashed'"
+							:aria-expanded="openPicker === 'due'"
+							@click="togglePicker('due')">
+							<CalendarIcon :size="14" />
+							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
+						</button>
+						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad">
+							<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}</label>
+							<div class="card-modal__field-row">
+								<input
+									class="card-modal__date-input"
+									type="datetime-local"
+									:value="dueDateInputValue"
+									@change="handleDueDateChange">
+								<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
+									<CloseIcon :size="14" />
+								</button>
+							</div>
+							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}</label>
+							<div class="card-modal__field-row">
+								<input
+									class="card-modal__date-input"
+									type="datetime-local"
+									:value="startDateInputValue"
+									@change="handleStartDateChange">
+								<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
+									<CloseIcon :size="14" />
+								</button>
+							</div>
 						</div>
-						<span v-if="estimateError" class="card-modal__save-error">{{ estimateError }}</span>
 					</div>
 
-					<!-- Labels section -->
-					<div class="card-modal__labels-section">
-						<label class="card-modal__label">{{ t('kanso', 'Labels') }}</label>
-						<div
-							v-if="boardLabels.length === 0"
-							class="card-modal__labels-empty">
-							{{ t('kanso', 'No labels on this board yet.') }}
+					<!-- Estimate -->
+					<div v-if="boardEstimateScale !== 'none'" class="card-modal__attr">
+						<button
+							class="card-modal__pill"
+							:class="currentEstimate ? '' : 'card-modal__pill--dashed'"
+							:aria-expanded="openPicker === 'estimate'"
+							@click="togglePicker('estimate')">
+							<TimerSandIcon :size="14" />
+							{{ currentEstimate ? t('kanso', 'Estimate: {value}', { value: currentEstimate }) : t('kanso', 'Estimate') }}
+						</button>
+						<div v-if="openPicker === 'estimate'" class="card-modal__popover">
+							<div class="card-modal__popover-tokens">
+								<button
+									v-for="token in estimateTokens"
+									:key="token"
+									class="card-modal__popover-opt"
+									:class="{ 'card-modal__popover-opt--active': currentEstimate === token }"
+									:disabled="updateCard.isPending.value"
+									@click="handleSetEstimate(token); openPicker = null">
+									{{ token }}
+								</button>
+								<button
+									v-if="currentEstimate"
+									class="card-modal__popover-opt"
+									:disabled="updateCard.isPending.value"
+									@click="handleSetEstimate(''); openPicker = null">
+									{{ t('kanso', 'None') }}
+								</button>
+							</div>
+							<span v-if="estimateError" class="card-modal__save-error">{{ estimateError }}</span>
 						</div>
-						<div v-else class="card-modal__label-chips" role="group" :aria-label="t('kanso', 'Toggle labels')">
+					</div>
+
+					<!-- Assignees -->
+					<span
+						v-for="uid in cardAssigneeIds"
+						:key="uid"
+						class="card-modal__assignee-pill">
+						<NcAvatar
+							:user="uid"
+							:display-name="participantName(uid)"
+							:size="22"
+							:show-user-status="false"
+							:disable-tooltip="false" />
+						<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
+						<button
+							class="card-modal__pill-x"
+							:title="t('kanso', 'Remove assignee')"
+							:disabled="toggleAssignee.isPending.value"
+							@click="handleToggleAssignee(uid, false)">
+							<CloseIcon :size="12" />
+						</button>
+					</span>
+					<div v-if="unassignedParticipants.length > 0" class="card-modal__attr">
+						<button
+							class="card-modal__pill card-modal__pill--dashed"
+							:aria-expanded="openPicker === 'assign'"
+							@click="togglePicker('assign')">
+							<AccountPlusIcon :size="14" />
+							{{ t('kanso', 'Assign') }}
+						</button>
+						<div v-if="openPicker === 'assign'" class="card-modal__popover">
+							<button
+								v-for="p in unassignedParticipants"
+								:key="p.uid"
+								class="card-modal__assign-option"
+								:disabled="toggleAssignee.isPending.value"
+								@click="handleToggleAssignee(p.uid, true)">
+								<NcAvatar
+									:user="p.uid"
+									:display-name="p.displayName"
+									:size="24"
+									:show-user-status="false"
+									:disable-tooltip="true" />
+								<span>{{ p.displayName }}</span>
+							</button>
+						</div>
+					</div>
+					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
+
+					<span class="card-modal__attr-divider" />
+
+					<!-- Labels -->
+					<span
+						v-for="label in assignedLabels"
+						:key="label.id"
+						class="card-modal__label-chip"
+						:class="{ 'card-modal__label-chip--no-color': !label.color }"
+						:style="label.color ? { background: cssColor(label.color), color: readableColor(label.color) } : {}">
+						{{ label.title }}
+					</span>
+					<div class="card-modal__attr">
+						<button
+							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							:aria-expanded="openPicker === 'label'"
+							@click="togglePicker('label')">
+							<PlusIcon :size="12" />
+							{{ t('kanso', 'Label') }}
+						</button>
+						<div v-if="openPicker === 'label'" class="card-modal__popover">
+							<div v-if="boardLabels.length === 0" class="card-modal__popover-empty">
+								{{ t('kanso', 'No labels on this board yet.') }}
+							</div>
 							<button
 								v-for="label in boardLabels"
 								:key="label.id"
-								class="card-modal__label-chip"
+								class="card-modal__label-toggle"
 								:class="{
-									'card-modal__label-chip--assigned': cardLabelIds.has(label.id),
-									'card-modal__label-chip--no-color': !label.color,
+									'card-modal__label-toggle--active': cardLabelIds.has(label.id),
+									'card-modal__label-toggle--no-color': !label.color,
 								}"
 								:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
 								:aria-pressed="cardLabelIds.has(label.id)"
@@ -546,130 +405,59 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								@click="handleToggleLabel(label)">
 								{{ label.title }}
 							</button>
+							<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
 						</div>
-						<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
 					</div>
 
-					<!-- Assignees section -->
-					<div class="card-modal__assignees-section">
-						<label class="card-modal__label">{{ t('kanso', 'Assignees') }}</label>
-
-						<!-- Current assignees as chips -->
-						<div class="card-modal__assignee-chips">
+					<!-- Reviews (pushed right) -->
+					<div class="card-modal__attr-right">
+						<span class="card-modal__attr-eyebrow">{{ t('kanso', 'Review') }}</span>
+						<span
+							v-for="review in cardReviews"
+							:key="review.id"
+							class="card-modal__review-pill"
+							:class="`card-modal__review-pill--${review.state}`">
+							<NcAvatar
+								:user="review.reviewer"
+								:display-name="participantName(review.reviewer)"
+								:size="22"
+								:show-user-status="false"
+								:disable-tooltip="false" />
+							<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
 							<span
-								v-for="uid in cardAssigneeIds"
-								:key="uid"
-								class="card-modal__assignee-chip">
-								<NcAvatar
-									:user="uid"
-									:display-name="participantName(uid)"
-									:size="24"
-									:show-user-status="false"
-									:disable-tooltip="false" />
-								<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
-								<button
-									class="card-modal__assignee-remove"
-									:title="t('kanso', 'Remove assignee')"
-									:disabled="toggleAssignee.isPending.value"
-									@click="handleToggleAssignee(uid, false)">
-									<CloseIcon :size="12" />
-								</button>
+								v-if="reviewTypeById(review.reviewTypeId)"
+								class="card-modal__review-type-badge"
+								:style="reviewTypeById(review.reviewTypeId).color
+									? { background: cssColor(reviewTypeById(review.reviewTypeId).color), color: '#fff' }
+									: {}">
+								{{ reviewTypeById(review.reviewTypeId).title }}
 							</span>
-							<span v-if="cardAssigneeIds.length === 0" class="card-modal__assignees-empty">
-								{{ t('kanso', 'No assignees yet.') }}
+							<span class="card-modal__review-state" :class="`card-modal__review-state--${review.state}`">
+								<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
+								<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
+								<CheckDecagramOutlineIcon v-else :size="12" />
+								{{ reviewStateLabel(review.state) }}
 							</span>
-						</div>
-
-						<!-- Assign dropdown: participants not yet assigned -->
-						<div v-if="unassignedParticipants.length > 0" class="card-modal__assign-wrap">
 							<button
-								class="card-modal__assign-toggle"
-								:aria-expanded="assignPickerOpen"
-								@click="assignPickerOpen = !assignPickerOpen">
-								<AccountPlusIcon :size="16" />
-								{{ t('kanso', 'Assign…') }}
+								v-if="canEdit"
+								class="card-modal__pill-x"
+								:title="t('kanso', 'Withdraw review request')"
+								:disabled="withdrawReview.isPending.value"
+								@click="handleWithdrawReview(review.id)">
+								<CloseIcon :size="12" />
 							</button>
-							<div v-if="assignPickerOpen" class="card-modal__assign-popover">
-								<button
-									v-for="p in unassignedParticipants"
-									:key="p.uid"
-									class="card-modal__assign-option"
-									:disabled="toggleAssignee.isPending.value"
-									@click="handleToggleAssignee(p.uid, true)">
-									<NcAvatar
-										:user="p.uid"
-										:display-name="p.displayName"
-										:size="24"
-										:show-user-status="false"
-										:disable-tooltip="true" />
-									<span>{{ p.displayName }}</span>
-								</button>
-							</div>
-						</div>
-
-						<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
-					</div>
-
-					<!-- Reviews section -->
-					<div class="card-modal__reviews-section">
-						<label class="card-modal__label">{{ t('kanso', 'Reviews') }}</label>
-
-						<!-- Current reviewers as chips with state -->
-						<div class="card-modal__review-chips">
-							<span
-								v-for="review in cardReviews"
-								:key="review.id"
-								class="card-modal__review-chip"
-								:class="`card-modal__review-chip--${review.state}`">
-								<NcAvatar
-									:user="review.reviewer"
-									:display-name="participantName(review.reviewer)"
-									:size="24"
-									:show-user-status="false"
-									:disable-tooltip="false" />
-								<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
-								<!-- Review type badge — shown only when reviewTypeId is set -->
-								<span
-									v-if="reviewTypeById(review.reviewTypeId)"
-									class="card-modal__review-type-badge"
-									:style="reviewTypeById(review.reviewTypeId).color
-										? { background: cssColor(reviewTypeById(review.reviewTypeId).color), color: '#fff' }
-										: {}">
-									{{ reviewTypeById(review.reviewTypeId).title }}
-								</span>
-								<span class="card-modal__review-state-badge" :class="`card-modal__review-state-badge--${review.state}`">
-									<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
-									<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
-									<CheckDecagramOutlineIcon v-else :size="12" />
-									{{ reviewStateLabel(review.state) }}
-								</span>
-								<button
-									v-if="canEdit"
-									class="card-modal__review-remove"
-									:title="t('kanso', 'Withdraw review request')"
-									:disabled="withdrawReview.isPending.value"
-									@click="handleWithdrawReview(review.id)">
-									<CloseIcon :size="12" />
-								</button>
-							</span>
-							<span v-if="cardReviews.length === 0" class="card-modal__reviews-empty">
-								{{ t('kanso', 'No reviews requested.') }}
-							</span>
-						</div>
-
-						<!-- Request review from a participant -->
-						<div v-if="canEdit && unrequestedParticipants.length > 0" class="card-modal__assign-wrap">
+						</span>
+						<div v-if="canEdit && unrequestedParticipants.length > 0" class="card-modal__attr">
 							<button
-								class="card-modal__assign-toggle"
-								:aria-expanded="reviewPickerOpen"
-								@click="reviewPickerOpen = !reviewPickerOpen">
-								<AccountPlusIcon :size="16" />
-								{{ t('kanso', 'Request review…') }}
+								class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+								:aria-expanded="openPicker === 'review'"
+								@click="togglePicker('review')">
+								<PlusIcon :size="12" />
+								{{ t('kanso', 'Request') }}
 							</button>
-							<div v-if="reviewPickerOpen" class="card-modal__assign-popover">
-								<!-- Review type selector — only shown when the board has types defined -->
+							<div v-if="openPicker === 'review'" class="card-modal__popover card-modal__popover--right">
 								<div v-if="boardReviewTypes.length > 0" class="card-modal__review-type-selector">
-									<span class="card-modal__review-type-label">{{ t('kanso', 'Type:') }}</span>
+									<span class="card-modal__field-label">{{ t('kanso', 'Type') }}</span>
 									<button
 										class="card-modal__review-type-option"
 										:class="{ 'card-modal__review-type-option--active': selectedReviewTypeId === null }"
@@ -706,373 +494,530 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</button>
 							</div>
 						</div>
+					</div>
+				</div>
 
-						<!-- Verdict controls — one block per review of mine still awaiting a verdict -->
-						<div
-							v-for="review in myPendingReviews"
-							:key="`verdict-${review.id}`"
-							class="card-modal__review-verdict">
-							<span class="card-modal__review-verdict-label">
-								{{ t('kanso', 'Your verdict') }}<template v-if="reviewTypeById(review.reviewTypeId)"> · {{ reviewTypeById(review.reviewTypeId).title }}</template>:
-							</span>
+				<!-- Mobile tab bar — visible only on narrow viewports, sits under the attribute bar -->
+				<div class="card-modal__tabbar">
+					<button
+						class="card-modal__tab"
+						:class="{ 'card-modal__tab--active': viewMode === 'card' }"
+						@click="viewMode = 'card'">
+						{{ t('kanso', 'Card') }}
+					</button>
+					<button
+						class="card-modal__tab"
+						:class="{ 'card-modal__tab--active': viewMode === 'discussion' }"
+						@click="viewMode = 'discussion'">
+						{{ t('kanso', 'Discussion') }}<span v-if="commentCount > 0"> {{ commentCount }}</span>
+					</button>
+				</div>
 
-							<!-- Reason prompt when requesting changes on THIS review (#3469) -->
-							<template v-if="changesReasonFor === review.id">
+				<!-- Body: content (left) | discussion (right) -->
+				<div class="card-modal__body">
+					<!-- LEFT: description · checklist · sub-cards · github · relations -->
+					<div class="card-modal__content">
+						<!-- Description -->
+						<section class="card-modal__section">
+							<div class="card-modal__section-head">
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Description') }}</span>
+								<button
+									v-if="!editingDescription && cardData.description"
+									class="card-modal__ghost-btn"
+									@click="startDescriptionEdit">
+									<PencilIcon :size="14" />
+									{{ t('kanso', 'Edit') }}
+								</button>
+							</div>
+
+							<template v-if="editingDescription">
 								<textarea
-									v-model="changesReasonText"
-									class="card-modal__review-reason"
-									:placeholder="t('kanso', 'What changes are needed? (posted as a comment)')"
-									rows="2" />
-								<NcButton
-									type="error"
-									:disabled="setReviewState.isPending.value || !changesReasonText.trim()"
-									@click="submitChangesRequested(review.id)">
-									{{ t('kanso', 'Submit') }}
-								</NcButton>
-								<NcButton :disabled="setReviewState.isPending.value" @click="cancelChangesRequested">
-									{{ t('kanso', 'Cancel') }}
-								</NcButton>
+									v-model="draftDescription"
+									class="card-modal__desc-textarea"
+									:placeholder="t('kanso', 'Add a description…')"
+									rows="8"
+									@keydown.ctrl.enter.prevent="saveDescription"
+									@keydown.meta.enter.prevent="saveDescription"
+									@keydown.escape.stop="cancelDescriptionEdit" />
+								<div class="card-modal__desc-actions">
+									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
+										{{ t('kanso', 'Save') }}
+									</NcButton>
+									<NcButton @click="cancelDescriptionEdit">
+										{{ t('kanso', 'Cancel') }}
+									</NcButton>
+									<span class="card-modal__hint">{{ t('kanso', 'Esc cancel · Ctrl+Enter save') }}</span>
+									<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
+								</div>
 							</template>
 
 							<template v-else>
-								<NcButton
-									type="success"
-									:disabled="setReviewState.isPending.value"
-									@click="handleReviewVerdict(review, 'approved')">
-									<template #icon>
-										<CheckDecagramIcon :size="16" />
-									</template>
-									{{ t('kanso', 'Approve') }}
-								</NcButton>
-								<NcButton
-									type="error"
-									:disabled="setReviewState.isPending.value"
-									@click="handleReviewVerdict(review, 'changes_requested')">
-									<template #icon>
-										<AlertDecagramIcon :size="16" />
-									</template>
-									{{ t('kanso', 'Request changes') }}
-								</NcButton>
-							</template>
-						</div>
-
-						<span v-if="reviewError" class="card-modal__save-error">{{ reviewError }}</span>
-					</div>
-
-					<!-- Hierarchy section: parent OR children (mutually exclusive per one-level rule) -->
-					<!-- Case 1: this card HAS a parent — show parent link + detach button -->
-					<div v-if="cardData.parentCardId" class="card-modal__hierarchy-section">
-						<div class="card-modal__hierarchy-header">
-							<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
-							<label class="card-modal__label">{{ t('kanso', 'Parent card') }}</label>
-						</div>
-						<div class="card-modal__parent-row">
-							<button
-								class="card-modal__parent-link"
-								@click="openCard(cardData.parentCardId)">
-								{{ parentTitle }}
-							</button>
-							<button
-								class="card-modal__hierarchy-detach"
-								:title="t('kanso', 'Detach from parent')"
-								:disabled="setParentMutation.isPending.value"
-								@click="handleClearParent">
-								<LinkOffIcon :size="14" />
-								{{ t('kanso', 'Detach') }}
-							</button>
-						</div>
-						<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
-					</div>
-
-					<!-- Case 2: this card has NO parent — show sub-cards section -->
-					<div v-else class="card-modal__hierarchy-section">
-						<div class="card-modal__hierarchy-header">
-							<SitemapIcon :size="16" class="card-modal__hierarchy-icon" />
-							<label class="card-modal__label">{{ t('kanso', 'Sub-cards') }}</label>
-							<span v-if="children.length > 0" class="card-modal__hierarchy-progress-text">
-								{{ childrenDone }}/{{ children.length }}
-							</span>
-						</div>
-
-						<!-- Children list -->
-						<ul v-if="children.length > 0" class="card-modal__children-list">
-							<li
-								v-for="child in children"
-								:key="child.id"
-								class="card-modal__child-item"
-								:class="{ 'card-modal__child-item--done': Number(child.doneAt) > 0 }">
-								<!-- Done indicator -->
-								<span
-									class="card-modal__child-done-dot"
-									:class="{ 'card-modal__child-done-dot--done': Number(child.doneAt) > 0 }"
-									:title="Number(child.doneAt) > 0 ? t('kanso', 'Done') : t('kanso', 'Not done')" />
-								<!-- Title link -->
+								<div
+									v-if="cardData.description"
+									class="card-modal__desc-view"
+									@click="startDescriptionEdit">
+									<div class="card-modal__desc-rendered" v-html="renderedDescription" />
+								</div>
 								<button
-									class="card-modal__child-link"
-									:class="{ 'card-modal__child-link--done': Number(child.doneAt) > 0 }"
-									@click="openCard(child.id)">
-									{{ child.title }}
-								</button>
-								<!-- Detach (remove) button -->
-								<button
-									class="card-modal__child-remove"
-									:title="t('kanso', 'Detach sub-card')"
-									:disabled="setParentMutation.isPending.value"
-									@click="handleDetachChild(child)">
-									<CloseIcon :size="12" />
-								</button>
-							</li>
-						</ul>
-
-						<!-- Add sub-card input -->
-						<div class="card-modal__add-child-row">
-							<input
-								ref="addChildInputRef"
-								v-model="newChildTitle"
-								class="card-modal__add-child-input"
-								type="text"
-								:placeholder="t('kanso', 'Add a sub-card…')"
-								:disabled="addChildMutation.isPending.value"
-								@keydown.enter.prevent="handleAddChild" />
-						</div>
-						<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
-					</div>
-
-					<!-- Relations section: blocks / blocked-by / duplicates / relates -->
-					<div class="card-modal__relations">
-						<div class="card-modal__hierarchy-header">
-							<label class="card-modal__label">{{ t('kanso', 'Relations') }}</label>
-						</div>
-
-						<!-- Blocks group -->
-						<template v-if="relations.blocks && relations.blocks.length > 0">
-							<span class="card-modal__relation-group-label">{{ t('kanso', 'Blocks') }}</span>
-							<ul class="card-modal__relation-group">
-								<li
-									v-for="rel in relations.blocks"
-									:key="rel.id"
-									class="card-modal__relation-row">
-									<span
-										class="card-modal__relation-title"
-										:class="{ 'card-modal__relation-title--done': rel.done }">
-										{{ rel.title }}
-									</span>
-									<button
-										v-if="canEdit"
-										class="card-modal__relation-remove"
-										:title="t('kanso', 'Remove relation')"
-										:disabled="removeRelation.isPending.value"
-										@click="handleRemoveRelation(rel.id)">
-										<CloseIcon :size="12" />
-									</button>
-								</li>
-							</ul>
-						</template>
-
-						<!-- Blocked by group -->
-						<template v-if="relations.blockedBy && relations.blockedBy.length > 0">
-							<span class="card-modal__relation-group-label">{{ t('kanso', 'Blocked by') }}</span>
-							<ul class="card-modal__relation-group">
-								<li
-									v-for="rel in relations.blockedBy"
-									:key="rel.id"
-									class="card-modal__relation-row">
-									<span
-										class="card-modal__relation-title"
-										:class="{ 'card-modal__relation-title--done': rel.done }">
-										{{ rel.title }}
-									</span>
-									<button
-										v-if="canEdit"
-										class="card-modal__relation-remove"
-										:title="t('kanso', 'Remove relation')"
-										:disabled="removeRelation.isPending.value"
-										@click="handleRemoveRelation(rel.id)">
-										<CloseIcon :size="12" />
-									</button>
-								</li>
-							</ul>
-						</template>
-
-						<!-- Duplicates group -->
-						<template v-if="relations.duplicates && relations.duplicates.length > 0">
-							<span class="card-modal__relation-group-label">{{ t('kanso', 'Duplicates') }}</span>
-							<ul class="card-modal__relation-group">
-								<li
-									v-for="rel in relations.duplicates"
-									:key="rel.id"
-									class="card-modal__relation-row">
-									<span
-										class="card-modal__relation-title"
-										:class="{ 'card-modal__relation-title--done': rel.done }">
-										{{ rel.title }}
-									</span>
-									<button
-										v-if="canEdit"
-										class="card-modal__relation-remove"
-										:title="t('kanso', 'Remove relation')"
-										:disabled="removeRelation.isPending.value"
-										@click="handleRemoveRelation(rel.id)">
-										<CloseIcon :size="12" />
-									</button>
-								</li>
-							</ul>
-						</template>
-
-						<!-- Relates to group -->
-						<template v-if="relations.relates && relations.relates.length > 0">
-							<span class="card-modal__relation-group-label">{{ t('kanso', 'Relates to') }}</span>
-							<ul class="card-modal__relation-group">
-								<li
-									v-for="rel in relations.relates"
-									:key="rel.id"
-									class="card-modal__relation-row">
-									<span
-										class="card-modal__relation-title"
-										:class="{ 'card-modal__relation-title--done': rel.done }">
-										{{ rel.title }}
-									</span>
-									<button
-										v-if="canEdit"
-										class="card-modal__relation-remove"
-										:title="t('kanso', 'Remove relation')"
-										:disabled="removeRelation.isPending.value"
-										@click="handleRemoveRelation(rel.id)">
-										<CloseIcon :size="12" />
-									</button>
-								</li>
-							</ul>
-						</template>
-
-						<!-- Add relation controls (edit permission required) -->
-						<div v-if="canEdit" class="card-modal__relation-add-row">
-							<select
-								v-model="newRelationKind"
-								class="card-modal__relation-kind">
-								<option value="blocks">{{ t('kanso', 'Blocks') }}</option>
-								<option value="blocked_by">{{ t('kanso', 'Blocked by') }}</option>
-								<option value="duplicates">{{ t('kanso', 'Duplicates') }}</option>
-								<option value="relates">{{ t('kanso', 'Relates to') }}</option>
-							</select>
-							<select
-								v-model="newRelationTargetId"
-								class="card-modal__relation-target">
-								<option value="">{{ t('kanso', 'Pick a card…') }}</option>
-								<option
-									v-for="c in boardCardsForRelation"
-									:key="c.id"
-									:value="c.id">
-									{{ c.title }}
-								</option>
-							</select>
-							<button
-								class="card-modal__relation-add"
-								:disabled="!newRelationTargetId || addRelation.isPending.value"
-								@click="handleAddRelation">
-								{{ t('kanso', 'Add') }}
-							</button>
-						</div>
-						<span v-if="relationError" class="card-modal__save-error">{{ relationError }}</span>
-					</div>
-
-					<!-- Checklist section -->
-					<div class="card-modal__checklist-section">
-						<div class="card-modal__checklist-header">
-							<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-header-icon" />
-							<label class="card-modal__label">{{ t('kanso', 'Checklist') }}</label>
-							<span v-if="checklistTotal > 0" class="card-modal__checklist-progress-text">
-								{{ checklistDone }}/{{ checklistTotal }}
-							</span>
-						</div>
-
-						<!-- Progress bar -->
-						<div v-if="checklistTotal > 0" class="card-modal__checklist-bar-wrap">
-							<div
-								class="card-modal__checklist-bar-fill"
-								:class="{ 'card-modal__checklist-bar-fill--complete': checklistDone === checklistTotal }"
-								:style="{ width: checklistProgressPct + '%' }" />
-						</div>
-
-						<!-- Items list -->
-						<ul class="card-modal__checklist-list">
-							<li
-								v-for="item in checklistItems"
-								:key="item.id"
-								class="card-modal__checklist-item"
-								:class="{ 'card-modal__checklist-item--done': item.done }"
-								:data-item-id="item.id"
-								:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
-								@dragover.prevent="onItemDragOver($event, item)"
-								@dragleave="onItemDragLeave($event, item)"
-								@drop.prevent="onItemDrop($event, item)">
-								<!-- Drag handle -->
-								<span
-									class="card-modal__checklist-drag-handle"
-									:draggable="true"
-									:title="t('kanso', 'Drag to reorder')"
-									@dragstart="onItemDragStart($event, item)"
-									@dragend="onItemDragEnd">
-									<DragIcon :size="14" />
-								</span>
-
-								<!-- Checkbox -->
-								<input
-									type="checkbox"
-									class="card-modal__checklist-checkbox"
-									:checked="item.done"
-									:disabled="toggleItem.isPending.value"
-									:aria-label="t('kanso', 'Toggle item done')"
-									@change="handleToggleItem(item)" />
-
-								<!-- Inline-editable title -->
-								<input
-									v-if="editingItemId === item.id"
-									:ref="(el) => setItemInputRef(item.id, el)"
-									v-model="editingItemTitle"
-									class="card-modal__checklist-item-input"
-									type="text"
-									@keydown.enter.prevent="saveItemTitle(item)"
-									@keydown.escape.stop="cancelItemEdit"
-									@blur="saveItemTitle(item)" />
-								<span
 									v-else
-									class="card-modal__checklist-item-title"
-									:class="{ 'card-modal__checklist-item-title--done': item.done }"
-									@click="startItemEdit(item)">
-									{{ item.title }}
-								</span>
-
-								<!-- Delete button -->
-								<button
-									class="card-modal__checklist-item-delete"
-									:title="t('kanso', 'Delete item')"
-									:disabled="deleteItem.isPending.value"
-									@click="handleDeleteItem(item)">
-									<CloseIcon :size="14" />
+									class="card-modal__desc-placeholder"
+									@click="startDescriptionEdit">
+									{{ t('kanso', 'Add a description…') }}
 								</button>
-							</li>
-						</ul>
+							</template>
+						</section>
 
-						<!-- Drag-over indicator between items is handled by item highlight;
-						     drop line shown via CSS on dragover target -->
+						<!-- Checklist — promoted next to the description -->
+						<section v-if="checklistTotal > 0 || canEdit" class="card-modal__checklist">
+							<div class="card-modal__checklist-head">
+								<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-head-icon" />
+								<span class="card-modal__checklist-title">{{ t('kanso', 'Checklist') }}</span>
+								<span v-if="checklistTotal > 0" class="card-modal__checklist-count">{{ checklistDone }} / {{ checklistTotal }}</span>
+								<div v-if="checklistTotal > 0" class="card-modal__checklist-bar">
+									<div
+										class="card-modal__checklist-bar-fill"
+										:class="{ 'card-modal__checklist-bar-fill--complete': checklistDone === checklistTotal }"
+										:style="{ width: checklistProgressPct + '%' }" />
+								</div>
+							</div>
 
-						<!-- Add item input -->
-						<div class="card-modal__checklist-add">
-							<CheckboxBlankOutlineIcon :size="16" class="card-modal__checklist-add-icon" />
-							<input
-								ref="addItemInputRef"
-								v-model="newItemTitle"
-								class="card-modal__checklist-add-input"
-								type="text"
-								:placeholder="t('kanso', 'Add an item…')"
-								:disabled="addItem.isPending.value"
-								@keydown.enter.prevent="handleAddItem" />
-						</div>
-						<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
+							<ul v-if="checklistTotal > 0" class="card-modal__checklist-list">
+								<li
+									v-for="item in checklistItems"
+									:key="item.id"
+									class="card-modal__checklist-item"
+									:class="{ 'card-modal__checklist-item--done': item.done }"
+									:data-item-id="item.id"
+									:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
+									@dragover.prevent="onItemDragOver($event, item)"
+									@dragleave="onItemDragLeave($event, item)"
+									@drop.prevent="onItemDrop($event, item)">
+									<span
+										class="card-modal__checklist-drag"
+										:draggable="true"
+										:title="t('kanso', 'Drag to reorder')"
+										@dragstart="onItemDragStart($event, item)"
+										@dragend="onItemDragEnd">
+										<DragIcon :size="16" />
+									</span>
+									<input
+										type="checkbox"
+										class="card-modal__checklist-checkbox"
+										:checked="item.done"
+										:disabled="toggleItem.isPending.value"
+										:aria-label="t('kanso', 'Toggle item done')"
+										@change="handleToggleItem(item)">
+									<input
+										v-if="editingItemId === item.id"
+										:ref="(el) => setItemInputRef(item.id, el)"
+										v-model="editingItemTitle"
+										class="card-modal__checklist-item-input"
+										type="text"
+										@keydown.enter.prevent="saveItemTitle(item)"
+										@keydown.escape.stop="cancelItemEdit"
+										@blur="saveItemTitle(item)">
+									<span
+										v-else
+										class="card-modal__checklist-item-title"
+										:class="{ 'card-modal__checklist-item-title--done': item.done }"
+										@click="startItemEdit(item)">
+										{{ item.title }}
+									</span>
+									<button
+										class="card-modal__checklist-item-delete"
+										:title="t('kanso', 'Delete item')"
+										:disabled="deleteItem.isPending.value"
+										@click="handleDeleteItem(item)">
+										<CloseIcon :size="14" />
+									</button>
+								</li>
+							</ul>
+
+							<div v-if="canEdit" class="card-modal__checklist-add">
+								<CheckboxBlankOutlineIcon :size="16" class="card-modal__checklist-add-icon" />
+								<input
+									ref="addItemInputRef"
+									v-model="newItemTitle"
+									class="card-modal__checklist-add-input"
+									type="text"
+									:placeholder="t('kanso', 'Add an item…')"
+									:disabled="addItem.isPending.value"
+									@keydown.enter.prevent="handleAddItem">
+							</div>
+							<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
+						</section>
+
+						<!-- Hierarchy: parent link OR sub-cards -->
+						<section v-if="cardData.parentCardId" class="card-modal__section">
+							<div class="card-modal__section-head">
+								<SitemapIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Parent card') }}</span>
+							</div>
+							<div class="card-modal__parent-row">
+								<button class="card-modal__parent-link" @click="openCard(cardData.parentCardId)">
+									{{ parentTitle }}
+								</button>
+								<button
+									class="card-modal__ghost-btn"
+									:title="t('kanso', 'Detach from parent')"
+									:disabled="setParentMutation.isPending.value"
+									@click="handleClearParent">
+									<LinkOffIcon :size="14" />
+									{{ t('kanso', 'Detach') }}
+								</button>
+							</div>
+							<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
+						</section>
+
+						<section v-else class="card-modal__section card-modal__section--tight">
+							<div class="card-modal__section-inline">
+								<SitemapIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Sub-cards') }}</span>
+								<span v-if="children.length > 0" class="card-modal__section-count">{{ childrenDone }} / {{ children.length }}</span>
+								<input
+									v-if="canEdit"
+									ref="addChildInputRef"
+									v-model="newChildTitle"
+									class="card-modal__dashed-input"
+									type="text"
+									:placeholder="t('kanso', 'Add a sub-card…')"
+									:disabled="addChildMutation.isPending.value"
+									@keydown.enter.prevent="handleAddChild">
+							</div>
+							<div v-if="children.length > 0" class="card-modal__children-grid">
+								<div
+									v-for="child in children"
+									:key="child.id"
+									class="card-modal__child"
+									:class="{ 'card-modal__child--done': Number(child.doneAt) > 0 }">
+									<span
+										class="card-modal__child-dot"
+										:class="{ 'card-modal__child-dot--done': Number(child.doneAt) > 0 }" />
+									<button
+										class="card-modal__child-link"
+										:class="{ 'card-modal__child-link--done': Number(child.doneAt) > 0 }"
+										@click="openCard(child.id)">
+										{{ child.title }}
+									</button>
+									<button
+										class="card-modal__child-remove"
+										:title="t('kanso', 'Detach sub-card')"
+										:disabled="setParentMutation.isPending.value"
+										@click="handleDetachChild(child)">
+										<CloseIcon :size="12" />
+									</button>
+								</div>
+							</div>
+
+							<!-- Inline editors, revealed from the ⋯ menu -->
+							<div v-if="showLinkChild && canEdit" class="card-modal__relation-add">
+								<select v-model="linkChildTargetId" class="card-modal__relation-target">
+									<option value="">{{ t('kanso', 'Pick a card to link…') }}</option>
+									<option v-for="c in availableChildCards" :key="c.id" :value="c.id">{{ c.title }}</option>
+								</select>
+								<button
+									class="card-modal__relation-add-btn"
+									:disabled="!linkChildTargetId || setParentMutation.isPending.value"
+									@click="confirmLinkChild">
+									{{ t('kanso', 'Link') }}
+								</button>
+								<button class="card-modal__relation-add-btn" @click="showLinkChild = false">
+									{{ t('kanso', 'Cancel') }}
+								</button>
+							</div>
+							<div v-if="showSetParent && canEdit && children.length === 0" class="card-modal__relation-add">
+								<select v-model="setParentTargetId" class="card-modal__relation-target">
+									<option value="">{{ t('kanso', 'Pick a parent card…') }}</option>
+									<option v-for="c in availableParentCards" :key="c.id" :value="c.id">{{ c.title }}</option>
+								</select>
+								<button
+									class="card-modal__relation-add-btn"
+									:disabled="!setParentTargetId || setParentMutation.isPending.value"
+									@click="confirmSetParent">
+									{{ t('kanso', 'Set parent') }}
+								</button>
+								<button class="card-modal__relation-add-btn" @click="showSetParent = false">
+									{{ t('kanso', 'Cancel') }}
+								</button>
+							</div>
+							<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
+						</section>
+
+						<!-- GitHub links -->
+						<section class="card-modal__section card-modal__section--tight">
+							<div class="card-modal__section-inline">
+								<GithubIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'GitHub') }}</span>
+								<form v-if="canEdit" class="card-modal__inline-form" @submit.prevent="handleAddLink">
+									<input
+										v-model="newLinkUrl"
+										type="url"
+										class="card-modal__dashed-input"
+										:placeholder="t('kanso', 'Paste a GitHub PR or issue URL…')">
+									<NcButton
+										type="secondary"
+										native-type="submit"
+										:disabled="!newLinkUrl || addLink.isPending.value">
+										{{ t('kanso', 'Attach') }}
+									</NcButton>
+								</form>
+								<button
+									class="card-modal__ghost-btn"
+									:title="t('kanso', 'Copy the git branch name for this card')"
+									@click="copyBranchName">
+									<ContentCopyIcon :size="14" />
+									{{ branchCopied ? t('kanso', 'Copied!') : t('kanso', 'Branch') }}
+								</button>
+							</div>
+							<ul v-if="cardLinks.length > 0" class="card-modal__links-list">
+								<li v-for="link in cardLinks" :key="link.id" class="card-modal__link-row">
+									<a :href="link.url" target="_blank" rel="noopener noreferrer" class="card-modal__link">
+										<span class="card-modal__link-badge" :class="`card-modal__link-badge--${link.state}`">
+											{{ linkStateLabel(link.state) }}
+										</span>
+										<span class="card-modal__link-text">{{ link.title || link.url }}</span>
+										<OpenInNewIcon :size="14" class="card-modal__link-ext" />
+									</a>
+									<button
+										v-if="canEdit"
+										class="card-modal__child-remove"
+										:title="t('kanso', 'Remove link')"
+										@click="handleRemoveLink(link.id)">
+										<CloseIcon :size="14" />
+									</button>
+								</li>
+							</ul>
+							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
+						</section>
+
+						<!-- Relations — shown only when the card has relations, or the
+						     editor was opened from the ⋯ menu -->
+						<section
+							v-if="hasAnyRelation || showRelationEditor"
+							class="card-modal__section">
+							<div class="card-modal__section-head">
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Relations') }}</span>
+							</div>
+
+							<template v-for="group in relationGroups" :key="group.key">
+								<template v-if="group.items.length > 0">
+									<span class="card-modal__relation-label">{{ group.label }}</span>
+									<ul class="card-modal__relation-group">
+										<li v-for="rel in group.items" :key="rel.id" class="card-modal__relation-row">
+											<span
+												class="card-modal__relation-title"
+												:class="{ 'card-modal__relation-title--done': rel.done }">
+												{{ rel.title }}
+											</span>
+											<button
+												v-if="canEdit"
+												class="card-modal__child-remove"
+												:title="t('kanso', 'Remove relation')"
+												:disabled="removeRelation.isPending.value"
+												@click="handleRemoveRelation(rel.id)">
+												<CloseIcon :size="12" />
+											</button>
+										</li>
+									</ul>
+								</template>
+							</template>
+
+							<div v-if="canEdit && showRelationEditor" class="card-modal__relation-add">
+								<select v-model="newRelationKind" class="card-modal__relation-kind">
+									<option value="blocks">{{ t('kanso', 'Blocks') }}</option>
+									<option value="blocked_by">{{ t('kanso', 'Blocked by') }}</option>
+									<option value="duplicates">{{ t('kanso', 'Duplicates') }}</option>
+									<option value="relates">{{ t('kanso', 'Relates to') }}</option>
+								</select>
+								<select v-model="newRelationTargetId" class="card-modal__relation-target">
+									<option value="">{{ t('kanso', 'Pick a card…') }}</option>
+									<option v-for="c in boardCardsForRelation" :key="c.id" :value="c.id">{{ c.title }}</option>
+								</select>
+								<button
+									class="card-modal__relation-add-btn"
+									:disabled="!newRelationTargetId || addRelation.isPending.value"
+									@click="handleAddRelation">
+									{{ t('kanso', 'Add') }}
+								</button>
+								<button class="card-modal__relation-add-btn" @click="showRelationEditor = false">
+									{{ t('kanso', 'Done') }}
+								</button>
+							</div>
+							<span v-if="relationError" class="card-modal__save-error">{{ relationError }}</span>
+						</section>
 					</div>
-					<!-- END .card-modal__sidebar -->
-				</div>
-				<!-- END .card-modal__columns -->
+
+					<!-- RIGHT: discussion pane -->
+					<aside class="card-modal__discussion">
+						<div class="card-modal__discussion-head">
+							<CommentMultipleOutlineIcon :size="16" class="card-modal__discussion-head-icon" />
+							<span class="card-modal__discussion-title">{{ t('kanso', 'Discussion') }}</span>
+							<span v-if="commentCount > 0" class="card-modal__discussion-count">{{ commentCount }}</span>
+						</div>
+
+						<div class="card-modal__thread-scroll">
+							<div v-if="commentThread.length > 0" class="card-modal__thread">
+								<div
+									v-for="{ comment: topComment, replies } in commentThread"
+									:key="topComment.id"
+									class="card-modal__comment-group">
+									<div class="card-modal__comment">
+										<NcAvatar
+											:user="topComment.author"
+											:display-name="topComment.authorDisplayName || topComment.author"
+											:size="28"
+											:show-user-status="false"
+											class="card-modal__comment-avatar" />
+										<div class="card-modal__comment-main">
+											<div class="card-modal__comment-meta">
+												<span class="card-modal__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+												<span class="card-modal__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
+												<span v-if="topComment.editedAt > 0" class="card-modal__comment-edited">{{ t('kanso', 'edited') }}</span>
+											</div>
+
+											<template v-if="editingCommentId === topComment.id">
+												<textarea
+													:ref="(el) => setCommentEditRef(topComment.id, el)"
+													v-model="editingCommentBody"
+													class="card-modal__comment-edit-textarea"
+													rows="3"
+													@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
+													@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+													@keydown.escape.stop="cancelCommentEdit" />
+												<div class="card-modal__comment-edit-actions">
+													<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">
+														{{ t('kanso', 'Save') }}
+													</NcButton>
+													<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
+												</div>
+											</template>
+											<div v-else class="card-modal__comment-body" v-html="renderMarkdown(topComment.body)" />
+
+											<div class="card-modal__comment-controls">
+												<button
+													v-if="canEdit && editingCommentId !== topComment.id"
+													class="card-modal__comment-link-btn"
+													@click="openReplyBox(topComment.id)">
+													{{ t('kanso', 'Reply') }}
+												</button>
+												<template v-if="canEdit && currentUserId === topComment.author">
+													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
+														<PencilIcon :size="14" />
+													</button>
+													<button
+														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+														:title="t('kanso', 'Delete comment')"
+														:disabled="deleteComment.isPending.value"
+														@click="handleDeleteComment(topComment)">
+														<TrashCanIcon :size="14" />
+													</button>
+												</template>
+											</div>
+										</div>
+									</div>
+
+									<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
+										<textarea
+											:ref="(el) => setReplyRef(topComment.id, el)"
+											v-model="replyBody"
+											class="card-modal__comment-edit-textarea"
+											:placeholder="t('kanso', 'Write a reply…')"
+											rows="2"
+											@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
+											@keydown.meta.enter.prevent="submitReply(topComment.id)"
+											@keydown.escape.stop="closeReplyBox" />
+										<div class="card-modal__comment-edit-actions">
+											<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">
+												{{ t('kanso', 'Post reply') }}
+											</NcButton>
+											<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
+										</div>
+									</div>
+
+									<div v-if="replies.length > 0" class="card-modal__replies">
+										<div v-for="reply in replies" :key="reply.id" class="card-modal__comment card-modal__comment--reply">
+											<NcAvatar
+												:user="reply.author"
+												:display-name="reply.authorDisplayName || reply.author"
+												:size="24"
+												:show-user-status="false"
+												class="card-modal__comment-avatar" />
+											<div class="card-modal__comment-main">
+												<div class="card-modal__comment-meta">
+													<span class="card-modal__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
+													<span class="card-modal__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
+													<span v-if="reply.editedAt > 0" class="card-modal__comment-edited">{{ t('kanso', 'edited') }}</span>
+												</div>
+
+												<template v-if="editingCommentId === reply.id">
+													<textarea
+														:ref="(el) => setCommentEditRef(reply.id, el)"
+														v-model="editingCommentBody"
+														class="card-modal__comment-edit-textarea"
+														rows="3"
+														@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
+														@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+														@keydown.escape.stop="cancelCommentEdit" />
+													<div class="card-modal__comment-edit-actions">
+														<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">
+															{{ t('kanso', 'Save') }}
+														</NcButton>
+														<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
+													</div>
+												</template>
+												<div v-else class="card-modal__comment-body" v-html="renderMarkdown(reply.body)" />
+
+												<div
+													v-if="canEdit && currentUserId === reply.author"
+													class="card-modal__comment-controls">
+													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
+														<PencilIcon :size="14" />
+													</button>
+													<button
+														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+														:title="t('kanso', 'Delete comment')"
+														:disabled="deleteComment.isPending.value"
+														@click="handleDeleteComment(reply)">
+														<TrashCanIcon :size="14" />
+													</button>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div v-else class="card-modal__discussion-empty">
+								<CommentOutlineIcon :size="64" class="card-modal__discussion-empty-icon" />
+								<span>{{ t('kanso', 'No threads yet. Everyone watching this card is notified when you start one.') }}</span>
+							</div>
+						</div>
+
+						<div v-if="canEdit" class="card-modal__composer">
+							<NcAvatar
+								:user="currentUserId"
+								:size="28"
+								:show-user-status="false"
+								class="card-modal__composer-avatar" />
+							<div class="card-modal__composer-main">
+								<textarea
+									v-model="newCommentBody"
+									class="card-modal__composer-textarea"
+									:placeholder="t('kanso', 'Start a new thread…')"
+									rows="2"
+									:disabled="addComment.isPending.value"
+									@keydown.ctrl.enter.prevent="submitNewComment"
+									@keydown.meta.enter.prevent="submitNewComment" />
+								<div class="card-modal__composer-actions">
+									<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
+										{{ t('kanso', 'Post') }}
+									</NcButton>
+									<span class="card-modal__hint">{{ t('kanso', 'Ctrl+Enter to post') }}</span>
+								</div>
+								<span v-if="commentError" class="card-modal__save-error">{{ commentError }}</span>
+							</div>
+						</div>
+					</aside>
 				</div>
 			</template>
 		</div>
@@ -1090,11 +1035,10 @@ import NcModal from '@nextcloud/vue/components/NcModal'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
-import CalendarStartIcon from 'vue-material-design-icons/CalendarStart.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -1102,11 +1046,13 @@ import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
+import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOutline.vue'
 import DragIcon from 'vue-material-design-icons/Drag.vue'
 import FlagIcon from 'vue-material-design-icons/Flag.vue'
+import FlagOutlineIcon from 'vue-material-design-icons/FlagOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
@@ -1114,6 +1060,14 @@ import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
+import VectorLinkIcon from 'vue-material-design-icons/VectorLink.vue'
+import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline.vue'
+import PlusIcon from 'vue-material-design-icons/Plus.vue'
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import { useCard } from '../composables/useCard.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
@@ -1130,6 +1084,23 @@ import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation } from '../services/api.js'
 import { cssColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
+
+/**
+ * Given a hex background color return '#000' or '#fff' for readable contrast.
+ * Uses the W3C relative luminance formula (sRGB).
+ * @param {string} hex background color
+ * @return {string} readable foreground color
+ */
+function readableColor(hex) {
+	if (!hex) return '#000'
+	const raw = hex.replace('#', '')
+	const [r, g, b] = raw.length === 3
+		? [parseInt(raw[0] + raw[0], 16), parseInt(raw[1] + raw[1], 16), parseInt(raw[2] + raw[2], 16)]
+		: [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)]
+	const toLinear = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4) }
+	const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
+	return L > 0.179 ? '#000000' : '#ffffff'
+}
 
 const props = defineProps({
 	cardId: {
@@ -1220,7 +1191,6 @@ async function handleToggleLabel(label) {
 // ── Assignees ────────────────────────────────────────────────────────────────
 const { participants, toggleAssignee } = useAssignees(boardId)
 const assigneeError = ref('')
-const assignPickerOpen = ref(false)
 
 const cardAssigneeIds = computed(() =>
 	Array.isArray(cardData.value?.assigneeIds) ? cardData.value.assigneeIds : [],
@@ -1243,7 +1213,7 @@ const unassignedParticipants = computed(() => {
 
 async function handleToggleAssignee(uid, assign) {
 	assigneeError.value = ''
-	assignPickerOpen.value = false
+	openPicker.value = null
 	try {
 		await toggleAssignee.mutateAsync({
 			cardId: Number(props.cardId),
@@ -1258,7 +1228,6 @@ async function handleToggleAssignee(uid, assign) {
 // ── Reviews ──────────────────────────────────────────────────────────────────
 const { requestReview, withdrawReview, setReviewState } = useReviews(boardId)
 const reviewError = ref('')
-const reviewPickerOpen = ref(false)
 
 // Selected review type id for the next request-review action (null = no type)
 const selectedReviewTypeId = ref(null)
@@ -1302,7 +1271,7 @@ const changesReasonText = ref('')
 
 async function handleRequestReview(uid) {
 	reviewError.value = ''
-	reviewPickerOpen.value = false
+	openPicker.value = null
 	const typeId = selectedReviewTypeId.value
 	try {
 		await requestReview.mutateAsync({
@@ -1383,17 +1352,6 @@ async function setStatus(status) {
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
 	}
-}
-
-function formatDoneAt(unixTs) {
-	return new Date(unixTs * 1000).toLocaleString(undefined, {
-		weekday: 'short',
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-	})
 }
 
 // ── Priority ─────────────────────────────────────────────────────────────────
@@ -1491,9 +1449,9 @@ const dueDateClass = computed(() => {
 	if (isDone.value) return ''
 	const due = new Date(cardData.value.duedate)
 	const now = new Date()
-	if (due < now) return 'card-modal__due--overdue'
+	if (due < now) return 'card-modal__pill--overdue'
 	const diff = due - now
-	if (diff / (1000 * 60 * 60) <= 24) return 'card-modal__due--soon'
+	if (diff / (1000 * 60 * 60) <= 24) return 'card-modal__pill--soon'
 	return ''
 })
 
@@ -1855,8 +1813,8 @@ async function handleDeleteComment(comment) {
 /**
  * Format a unix timestamp as a relative time string (e.g. "2 hours ago").
  * Falls back to a locale date string for older timestamps.
- * @param {number} unixTs
- * @returns {string}
+ * @param {number} unixTs seconds since epoch
+ * @return {string} relative time label
  */
 function formatCommentTime(unixTs) {
 	if (!unixTs) return ''
@@ -1904,6 +1862,7 @@ const parentTitle = computed(() => {
 
 /**
  * Navigate to another card modal within the same board.
+ * @param {number|string} cardId target card id
  */
 function openCard(cardId) {
 	router.push({ name: 'card-modal', params: { id: route.params.id, cardId: String(cardId) } })
@@ -1944,6 +1903,85 @@ async function handleAddChild() {
 	// Keep focus for rapid entry
 	await nextTick()
 	addChildInputRef.value?.focus()
+}
+
+// Cards eligible to link as a child of THIS card. One-level rule: a candidate
+// must be a top-level card (no parent) that is not itself a parent, not this
+// card, not archived, and not already one of its children.
+const availableChildCards = computed(() => {
+	const cards = boardData.value?.cards ?? []
+	const selfId = Number(props.cardId)
+	const existingChildIds = new Set(children.value.map((c) => Number(c.id)))
+	return cards.filter((c) =>
+		c.id !== selfId
+		&& !c.archived
+		&& !existingChildIds.has(Number(c.id))
+		&& c.parentCardId == null
+		&& !(c.childProgress && c.childProgress.total > 0),
+	)
+})
+
+// Cards eligible to be THIS card's parent — any top-level card (no parent) other
+// than itself. Only offered when this card has no children of its own.
+const availableParentCards = computed(() => {
+	const cards = boardData.value?.cards ?? []
+	const selfId = Number(props.cardId)
+	return cards.filter((c) =>
+		c.id !== selfId
+		&& !c.archived
+		&& c.parentCardId == null,
+	)
+})
+
+// Hierarchy + relation editors are revealed on demand from the ⋯ menu, not
+// shown inline by default (an empty "No eligible cards" box is noise).
+const showRelationEditor = ref(false)
+const showLinkChild = ref(false)
+const showSetParent = ref(false)
+const linkChildTargetId = ref('')
+const setParentTargetId = ref('')
+
+function openRelationEditor() {
+	showRelationEditor.value = true
+}
+function openLinkChildEditor() {
+	linkChildTargetId.value = ''
+	showLinkChild.value = true
+}
+function openSetParentEditor() {
+	setParentTargetId.value = ''
+	showSetParent.value = true
+}
+
+async function confirmLinkChild() {
+	const id = Number(linkChildTargetId.value)
+	if (!id) return
+	const card = availableChildCards.value.find((c) => Number(c.id) === id)
+	hierarchyError.value = ''
+	try {
+		await setParent(id, Number(props.cardId), card?.parentCardId != null ? Number(card.parentCardId) : null)
+		linkChildTargetId.value = ''
+		showLinkChild.value = false
+	} catch (err) {
+		hierarchyError.value = err?.response?.data?.error || t('kanso', 'Failed to link card.')
+	}
+}
+
+async function confirmSetParent() {
+	const id = Number(setParentTargetId.value)
+	if (!id) return
+	hierarchyError.value = ''
+	try {
+		await setParent(
+			Number(props.cardId),
+			id,
+			cardData.value?.parentCardId != null ? Number(cardData.value.parentCardId) : null,
+		)
+		setParentTargetId.value = ''
+		showSetParent.value = false
+	} catch (err) {
+		hierarchyError.value = err?.response?.data?.error || t('kanso', 'Failed to set parent.')
+	}
 }
 
 // ── GitHub links ─────────────────────────────────────────────────────────────
@@ -1996,13 +2034,6 @@ const { toggle: toggleSubscription } = useSubscription(computed(() => props.card
 const subscription = computed(() => cardData.value?.subscription ?? { subscribed: false, subscribers: [], count: 0 })
 const isWatching = computed(() => subscription.value.subscribed === true)
 const watcherCount = computed(() => Number(subscription.value.count) || 0)
-const watcherSubscribers = computed(() => {
-	const subs = subscription.value.subscribers
-	return Array.isArray(subs) ? subs : []
-})
-// Cap avatars at 3; the rest show as "+N"
-const visibleWatchers = computed(() => watcherSubscribers.value.slice(0, 3))
-const extraWatchers = computed(() => Math.max(0, watcherSubscribers.value.length - 3))
 
 const subscriptionError = ref('')
 
@@ -2021,6 +2052,15 @@ const queryClient = useQueryClient()
 
 // The four relation groups from card detail
 const relations = computed(() => cardData.value?.relations ?? { blocks: [], blockedBy: [], duplicates: [], relates: [] })
+
+// Relation groups shaped for the template loop
+const relationGroups = computed(() => [
+	{ key: 'blocks', label: t('kanso', 'Blocks'), items: relations.value.blocks ?? [] },
+	{ key: 'blockedBy', label: t('kanso', 'Blocked by'), items: relations.value.blockedBy ?? [] },
+	{ key: 'duplicates', label: t('kanso', 'Duplicates'), items: relations.value.duplicates ?? [] },
+	{ key: 'relates', label: t('kanso', 'Relates to'), items: relations.value.relates ?? [] },
+])
+const hasAnyRelation = computed(() => relationGroups.value.some((g) => g.items.length > 0))
 
 // Add-relation form state
 const newRelationKind = ref('blocks')
@@ -2071,932 +2111,998 @@ async function handleRemoveRelation(relationId) {
 		relationError.value = err?.response?.data?.error || t('kanso', 'Failed to remove relation.')
 	}
 }
+
+// ── Redesign view state: header breadcrumb + attribute bar + responsive panes ─
+// Mobile splits the card and discussion into tabs; desktop shows both panes.
+const viewMode = ref('card')
+
+// Breadcrumb board name + uppercase status chip
+const boardName = computed(() => boardData.value?.board?.title || t('kanso', 'Board'))
+const statusChipLabel = computed(() =>
+	(STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase(),
+)
+
+// One attribute-bar popover open at a time:
+// 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
+const openPicker = ref(null)
+function togglePicker(name) {
+	openPicker.value = openPicker.value === name ? null : name
+}
+
+// Attribute-bar display helpers
+const currentPriorityLevel = computed(() =>
+	PRIORITY_LEVELS.find((l) => l.value === currentPriority.value) || null,
+)
+const dueDateLabel = computed(() => {
+	if (!cardData.value?.duedate) return ''
+	return new Date(cardData.value.duedate).toLocaleString(undefined, {
+		weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+	})
+})
+// Labels actually assigned to this card (for the attribute-bar chips)
+const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelIds.value.has(l.id)))
 </script>
 
 <style scoped>
+/* ── Modal shell ─────────────────────────────────────────────────────────── */
 .card-modal {
-	padding: 24px;
-	min-height: 200px;
-}
-
-/* Loading skeletons */
-.card-modal__loading {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	min-height: 0;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 15px;
 }
 
-.card-modal__title-skeleton {
-	height: 28px;
-	width: 70%;
-	border-radius: 4px;
-}
-
-.card-modal__desc-skeleton {
-	height: 80px;
-	border-radius: 4px;
-}
-
-@keyframes shimmer {
+/* ── Loading skeleton (shimmer, real layout) ─────────────────────────────── */
+@keyframes kshim {
 	0% { background-position: -400px 0; }
 	100% { background-position: 400px 0; }
 }
-
-.skeleton-text {
-	background: linear-gradient(90deg, var(--color-border) 25%, var(--color-background-hover) 50%, var(--color-border) 75%);
+.kskel {
+	background: linear-gradient(90deg, var(--color-background-dark) 25%, var(--color-background-hover) 50%, var(--color-background-dark) 75%);
 	background-size: 400px 100%;
-	animation: shimmer 1.4s infinite linear;
+	animation: kshim 1.4s infinite linear;
+	border-radius: 4px;
+}
+.card-modal__sk-header {
+	display: flex;
+	align-items: flex-start;
+	gap: 16px;
+	padding: 18px 24px 14px;
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__sk-col {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.card-modal__sk-bar {
+	display: flex;
+	gap: 6px;
+	padding: 10px 24px;
+	background: var(--color-background-hover);
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__sk-body {
+	display: grid;
+	grid-template-columns: 1fr 400px;
+	min-height: 340px;
+}
+.card-modal__sk-main {
+	padding: 24px 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.card-modal__sk-side {
+	border-left: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
 }
 
-/* Error */
 .card-modal__error {
+	padding: 40px 24px;
+	text-align: center;
 	color: var(--color-error);
 }
 
-/* Title row */
-.card-modal__title-row {
+/* ── Verdict banner (review requested) ───────────────────────────────────── */
+.card-modal__verdict {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 12px 20px;
+	background: var(--color-primary-light);
+	border-bottom: 1px solid var(--color-primary-element);
+}
+.card-modal__verdict-icon {
+	color: var(--color-primary-element);
+	flex-shrink: 0;
+}
+.card-modal__verdict-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.card-modal__verdict-title {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+.card-modal__verdict-sub {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__verdict-actions {
+	margin-left: auto;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+.card-modal__verdict-reason {
+	min-width: 240px;
+	padding: 6px 8px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font: inherit;
+	resize: vertical;
+}
+
+/* ── Header band ─────────────────────────────────────────────────────────── */
+.card-modal__header {
+	display: flex;
+	align-items: flex-start;
+	gap: 16px;
+	padding: 18px 20px 14px 24px;
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__header-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.card-modal__breadcrumb {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-bottom: 12px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
 }
-
+.card-modal__crumb {
+	white-space: nowrap;
+}
+.card-modal__crumb-chevron,
+.card-modal__crumb-dot {
+	color: var(--color-border-dark);
+}
+.card-modal__status-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	height: 20px;
+	padding: 0 6px 0 8px;
+	border-radius: 10px;
+	background: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__status-chip--btn {
+	cursor: pointer;
+}
+.card-modal__status-chip--btn:hover {
+	border-color: var(--color-primary-element);
+}
+.card-modal__status-chip--in_progress {
+	background: var(--color-primary-light);
+	border-color: var(--color-primary-element);
+	color: var(--color-primary-light-text);
+}
+.card-modal__status-chip--done {
+	background: var(--color-success);
+	border-color: var(--color-success);
+	color: var(--color-success-text);
+}
+.card-modal__status-wrap {
+	align-items: center;
+}
 .card-modal__title {
-	flex: 1;
-	font-size: 1.25rem;
+	margin: 0 0 0 -4px;
+	font-size: 1.5rem;
+	line-height: 1.25;
 	font-weight: 700;
 	color: var(--color-main-text);
-	margin: 0;
-	cursor: pointer;
+	cursor: text;
+	border-radius: 3px;
+	padding: 1px 4px;
 	word-break: break-word;
 }
-
 .card-modal__title:hover {
-	color: var(--color-primary);
-}
-
-.card-modal__edit-btn {
-	flex-shrink: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 28px;
-	height: 28px;
-	border: none;
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	transition: background 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__edit-btn:hover {
 	background: var(--color-background-hover);
-	color: var(--color-main-text);
 }
-
 .card-modal__title-input {
-	flex: 1;
-	font-size: 1.25rem;
+	margin: 0 0 0 -4px;
+	font-size: 1.5rem;
+	line-height: 1.25;
 	font-weight: 700;
 	color: var(--color-main-text);
-	border: 2px solid var(--color-primary);
-	border-radius: var(--border-radius);
-	padding: 4px 8px;
-	background: var(--color-main-background);
+	border: 1px solid var(--color-primary-element);
+	border-radius: 3px;
+	padding: 1px 4px;
+	width: 100%;
+	box-sizing: border-box;
 }
-
 .card-modal__title-input:focus {
 	outline: none;
 }
-
-/* Meta rows (due date, done) */
-.card-modal__meta {
+.card-modal__header-actions {
 	display: flex;
 	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.card-modal__done-btn {
+	display: inline-flex;
+	align-items: center;
 	gap: 6px;
-	margin-bottom: 16px;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.875rem;
-}
-
-.card-modal__meta-label {
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-	white-space: nowrap;
-}
-
-/* Due date input */
-.card-modal__due-input {
+	height: 36px;
+	padding: 0 14px;
 	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
+	border-radius: 100px;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
-	padding: 3px 8px;
 	font-size: 0.875rem;
-	font-family: inherit;
+	font-weight: 600;
 	cursor: pointer;
 }
-
-.card-modal__due-input:focus {
-	outline: 2px solid var(--color-primary);
-	outline-offset: 1px;
+.card-modal__done-btn:hover {
+	border-color: var(--color-primary-element);
+	color: var(--color-primary-element);
 }
-
-.card-modal__due-input.card-modal__due--overdue {
-	color: var(--color-error);
-	border-color: var(--color-error);
+.card-modal__done-btn--done {
+	border-color: var(--color-success);
+	color: var(--color-success);
+	background: rgba(70, 186, 97, 0.08);
 }
-
-.card-modal__due-input.card-modal__due--soon {
-	color: var(--color-warning, #f0a844);
-	border-color: var(--color-warning, #f0a844);
+.card-modal__watch-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 36px;
+	padding: 0 12px;
+	border: 1px solid var(--color-border);
+	border-radius: 100px;
+	background: var(--color-main-background);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.875rem;
+	cursor: pointer;
 }
-
-.card-modal__due-clear {
+.card-modal__watch-btn--active {
+	border-color: var(--color-primary-element);
+	background: var(--color-primary-light);
+	color: var(--color-primary-element);
+}
+.card-modal__icon-btn {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
-	flex-shrink: 0;
-	aspect-ratio: 1;
+	width: 36px;
+	height: 36px;
 	border: none;
 	border-radius: 50%;
 	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	transition: background 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__due-clear:hover {
-	background: var(--color-background-hover);
 	color: var(--color-main-text);
-}
-
-/* Done section */
-.card-modal__meta--done {
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.card-modal__done-at {
-	font-size: 0.8rem;
-	color: var(--color-text-maxcontrast);
-	font-style: italic;
-}
-
-.card-modal__status {
-	display: inline-flex;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	overflow: hidden;
-}
-
-.card-modal__status-btn {
-	border: none;
-	border-inline-start: 1px solid var(--color-border);
-	background: transparent;
-	padding: 4px 10px;
 	cursor: pointer;
-	color: var(--color-main-text);
-	font-size: 0.85rem;
-	white-space: nowrap;
 }
-
-.card-modal__status-btn:first-child {
-	border-inline-start: none;
-}
-
-.card-modal__status-btn:hover:not(:disabled) {
+.card-modal__icon-btn:hover {
 	background: var(--color-background-hover);
 }
-
-.card-modal__status-btn--active {
-	color: #fff;
+.card-modal__actions-menu {
+	flex-shrink: 0;
 }
 
-.card-modal__status-btn--not_started.card-modal__status-btn--active {
-	background: var(--color-text-maxcontrast);
-}
-
-.card-modal__status-btn--in_progress.card-modal__status-btn--active {
-	background: var(--color-primary-element);
-	color: var(--color-primary-element-text);
-}
-
-.card-modal__status-btn--done.card-modal__status-btn--active {
-	background: var(--color-success, #2fb344);
-}
-
-/* Labels */
-.card-modal__labels-section {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-bottom: 20px;
-}
-
-.card-modal__labels-empty {
-	font-size: 0.875rem;
-	color: var(--color-text-maxcontrast);
-	font-style: italic;
-}
-
-.card-modal__label-chips {
+/* ── Attribute bar ───────────────────────────────────────────────────────── */
+.card-modal__attrbar {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 6px;
+	padding: 10px 24px;
+	background: var(--color-background-hover);
+	border-bottom: 1px solid var(--color-border);
 }
-
-.card-modal__label-chip {
+.card-modal__attr {
+	position: relative;
+	display: inline-flex;
+}
+.card-modal__attr-right {
+	position: relative;
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+.card-modal__attr-eyebrow {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__attr-divider {
+	width: 1px;
+	height: 20px;
+	background: var(--color-border-dark);
+	margin: 0 4px;
+}
+.card-modal__pill {
 	display: inline-flex;
 	align-items: center;
-	height: 28px;
+	gap: 7px;
+	height: 32px;
 	padding: 0 12px;
-	border-radius: 14px;
-	border: 2px solid var(--label-color, var(--color-border));
-	background: transparent;
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	background: var(--color-main-background);
 	color: var(--color-main-text);
-	font-size: 0.8rem;
-	font-weight: 600;
+	font-size: 0.8125rem;
 	cursor: pointer;
-	transition: background 0.15s ease, color 0.15s ease, opacity 0.1s ease;
 	white-space: nowrap;
 }
-
-.card-modal__label-chip:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--label-color, var(--color-primary)) 15%, transparent);
+.card-modal__pill:hover {
+	border-color: var(--color-primary-element);
 }
-
-.card-modal__label-chip--assigned {
-	background: var(--label-color, var(--color-primary));
-	border-color: var(--label-color, var(--color-primary));
-	color: #fff;
+.card-modal__pill--sm {
+	height: 24px;
+	padding: 0 10px;
+	font-size: 0.7rem;
+	gap: 5px;
 }
-
-.card-modal__label-chip--no-color {
-	border-color: var(--color-border);
-	color: var(--color-main-text);
+.card-modal__pill--dashed {
+	border-style: dashed;
+	border-color: var(--color-border-dark);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
 }
-
-.card-modal__label-chip--no-color.card-modal__label-chip--assigned {
-	background: var(--color-background-dark);
-	border-color: var(--color-border);
-	color: var(--color-main-text);
+.card-modal__pill--dashed:hover {
+	border-color: var(--color-primary-element);
+	color: var(--color-primary-element);
 }
+/* Priority pill colours (only colours Kanso invents) */
+.card-modal__pill--priority-1 { border-color: #888; color: #888; font-weight: 600; }
+.card-modal__pill--priority-2 { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
+.card-modal__pill--priority-3 { border-color: #e07b00; color: #e07b00; font-weight: 600; }
+.card-modal__pill--priority-4 { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
+.card-modal__pill--overdue { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
+.card-modal__pill--soon { border-color: var(--color-warning-text); color: var(--color-warning-text); font-weight: 600; }
 
-.card-modal__label-chip:disabled {
-	opacity: 0.6;
-	cursor: default;
-}
-
-/* Assignees */
-.card-modal__assignees-section {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-bottom: 20px;
-}
-
-.card-modal__assignee-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	align-items: center;
-}
-
-.card-modal__assignee-chip {
+.card-modal__assignee-pill {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	height: 32px;
 	padding: 0 8px 0 4px;
-	border-radius: 16px;
-	background: var(--color-background-dark);
 	border: 1px solid var(--color-border);
-	font-size: 0.8rem;
-	color: var(--color-main-text);
+	border-radius: 10px;
+	background: var(--color-main-background);
+	font-size: 0.8125rem;
 }
-
 .card-modal__assignee-name {
-	font-size: 0.8rem;
+	max-width: 130px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__pill-x {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__pill-x:hover {
+	background: var(--color-error);
+	color: #fff;
+}
+.card-modal__label-chip {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 10px;
+	border-radius: 10px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__label-chip--no-color {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
+}
+.card-modal__review-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 8px 0 3px;
+	border-radius: 10px;
+	border: 1px solid var(--color-border);
+	background: var(--color-main-background);
+	font-size: 0.75rem;
+}
+.card-modal__review-pill--pending { border-color: var(--color-warning-text); background: rgba(236, 167, 0, 0.08); }
+.card-modal__review-pill--approved { border-color: var(--color-success-text); background: rgba(70, 186, 97, 0.08); }
+.card-modal__review-pill--changes_requested { border-color: var(--color-error-text); background: rgba(233, 50, 45, 0.08); }
+.card-modal__review-name {
 	max-width: 120px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-
-.card-modal__assignee-remove {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	border: none;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	transition: background 0.15s ease, color 0.15s ease;
-	flex-shrink: 0;
-}
-
-.card-modal__assignee-remove:hover:not(:disabled) {
-	background: var(--color-error);
-	color: #fff;
-}
-
-.card-modal__assignee-remove:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-.card-modal__assignees-empty {
-	font-size: 0.875rem;
-	color: var(--color-text-maxcontrast);
-	font-style: italic;
-}
-
-/* Reviews */
-.card-modal__reviews-section {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-bottom: 20px;
-}
-
-.card-modal__review-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	align-items: center;
-}
-
-.card-modal__review-chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	height: 32px;
-	padding: 0 8px 0 4px;
-	border-radius: 16px;
-	background: var(--color-background-dark);
-	border: 1px solid var(--color-border);
-	font-size: 0.8rem;
-	color: var(--color-main-text);
-}
-
-.card-modal__review-chip--approved {
-	border-color: var(--color-success, #46ba61);
-	background: rgba(70, 186, 97, 0.08);
-}
-
-.card-modal__review-chip--changes_requested {
-	border-color: var(--color-error, #e30000);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.06);
-}
-
-.card-modal__review-name {
-	font-size: 0.8rem;
-	max-width: 100px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.card-modal__review-state-badge {
-	display: inline-flex;
-	align-items: center;
-	gap: 3px;
-	font-size: 0.7rem;
-	font-weight: 600;
-	padding: 2px 6px;
-	border-radius: 8px;
-	border: 1px solid currentColor;
-	white-space: nowrap;
-}
-
-.card-modal__review-state-badge--pending {
-	color: var(--color-warning, #f0a844);
-	border-color: var(--color-warning, #f0a844);
-	background: rgba(240, 168, 68, 0.08);
-}
-
-.card-modal__review-state-badge--approved {
-	color: var(--color-success, #46ba61);
-	border-color: var(--color-success, #46ba61);
-	background: rgba(70, 186, 97, 0.1);
-}
-
-.card-modal__review-state-badge--changes_requested {
-	color: var(--color-error, #e30000);
-	border-color: var(--color-error, #e30000);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
-}
-
-.card-modal__review-remove {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	border: none;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	transition: background 0.15s ease, color 0.15s ease;
-	flex-shrink: 0;
-}
-
-.card-modal__review-remove:hover:not(:disabled) {
-	background: var(--color-error);
-	color: #fff;
-}
-
-.card-modal__review-remove:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-/* Review type badge inside a chip — shown when reviewTypeId is set */
 .card-modal__review-type-badge {
 	display: inline-flex;
 	align-items: center;
+	height: 16px;
+	padding: 0 6px;
+	border-radius: 8px;
 	font-size: 0.65rem;
 	font-weight: 600;
-	padding: 2px 6px;
-	border-radius: 8px;
-	background: var(--color-background-darker, #d8d8d8);
-	color: var(--color-main-text);
-	white-space: nowrap;
-	letter-spacing: 0.02em;
+	background: var(--color-background-dark);
 }
-
-/* Review type selector row inside the assign popover */
-.card-modal__review-type-selector {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 8px 14px 6px;
-	border-bottom: 1px solid var(--color-border);
-	margin-bottom: 2px;
-}
-
-.card-modal__review-type-label {
-	font-size: 0.75rem;
-	color: var(--color-text-maxcontrast);
-	font-weight: 600;
-	margin-right: 4px;
-	flex-shrink: 0;
-}
-
-.card-modal__review-type-option {
+.card-modal__review-state {
 	display: inline-flex;
 	align-items: center;
-	font-size: 0.75rem;
-	padding: 2px 8px;
-	border-radius: 10px;
-	border: 1px solid var(--color-border);
-	background: transparent;
-	color: var(--color-main-text);
-	cursor: pointer;
-	transition: background 0.1s ease, border-color 0.1s ease;
-	white-space: nowrap;
-}
-
-.card-modal__review-type-option:hover {
-	background: var(--color-background-hover);
-}
-
-.card-modal__review-type-option--active {
-	background: var(--color-primary-element-light, rgba(0, 130, 201, 0.12));
-	border-color: var(--color-primary-element, #0082c9);
-	color: var(--color-primary-element, #0082c9);
-}
-
-.card-modal__reviews-empty {
-	font-size: 0.875rem;
-	color: var(--color-text-maxcontrast);
-	font-style: italic;
-}
-
-.card-modal__review-reason {
-	flex: 1 1 100%;
-	min-width: 0;
-	resize: vertical;
-}
-
-.card-modal__review-verdict {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
-	margin-top: 4px;
-	padding: 8px 10px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-background-hover);
-}
-
-.card-modal__review-verdict-label {
-	font-size: 0.8rem;
+	gap: 3px;
 	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-	white-space: nowrap;
 }
+.card-modal__review-state--pending { color: var(--color-warning-text); }
+.card-modal__review-state--approved { color: var(--color-success-text); }
+.card-modal__review-state--changes_requested { color: var(--color-error-text); }
 
-.card-modal__sidebar .card-modal__reviews-section {
-	margin-bottom: 12px;
-}
-
-/* Assign picker */
-.card-modal__assign-wrap {
-	position: relative;
-}
-
-.card-modal__assign-toggle {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	height: 30px;
-	padding: 0 12px;
-	border: 1px dashed var(--color-border);
-	border-radius: 15px;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.8rem;
-	cursor: pointer;
-	transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__assign-toggle:hover {
-	border-color: var(--color-primary);
-	color: var(--color-primary);
-}
-
-.card-modal__assign-popover {
+/* ── Popovers ────────────────────────────────────────────────────────────── */
+.card-modal__popover {
 	position: absolute;
-	top: calc(100% + 4px);
+	top: calc(100% + 6px);
 	left: 0;
-	z-index: 100;
+	z-index: 30;
+	min-width: 200px;
+	max-height: 320px;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px;
 	background: var(--color-main-background);
 	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large);
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-	min-width: 200px;
-	max-height: 240px;
-	overflow-y: auto;
-	padding: 4px 0;
+	border-radius: 10px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
-
+.card-modal__popover--right {
+	left: auto;
+	right: 0;
+}
+.card-modal__popover--pad {
+	padding: 10px 12px;
+	gap: 6px;
+}
+.card-modal__popover-tokens {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+.card-modal__popover-empty {
+	padding: 8px;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__popover-opt {
+	display: flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.8125rem;
+	text-align: left;
+	cursor: pointer;
+}
+.card-modal__popover-opt:hover {
+	background: var(--color-background-hover);
+}
+.card-modal__popover-opt--active {
+	background: var(--color-primary-light);
+	color: var(--color-primary-element);
+	font-weight: 600;
+}
 .card-modal__assign-option {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	width: 100%;
-	padding: 8px 14px;
+	gap: 8px;
+	min-height: 36px;
+	padding: 4px 8px;
 	border: none;
+	border-radius: 6px;
 	background: transparent;
 	color: var(--color-main-text);
-	font-size: 0.875rem;
-	cursor: pointer;
+	font-size: 0.8125rem;
 	text-align: left;
-	transition: background 0.1s ease;
+	cursor: pointer;
 }
-
-.card-modal__assign-option:hover:not(:disabled) {
+.card-modal__assign-option:hover {
 	background: var(--color-background-hover);
 }
-
-.card-modal__assign-option:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-/* Description */
-.card-modal__description-section {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.card-modal__label {
-	font-weight: 600;
-	font-size: 0.875rem;
-	color: var(--color-text-maxcontrast);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-}
-
-.card-modal__desc-view {
-	white-space: pre-wrap;
-	word-break: break-word;
-	color: var(--color-main-text);
-	font-size: 0.9rem;
-	line-height: 1.6;
-	padding: 10px 12px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	cursor: pointer;
-	background: var(--color-main-background);
-	transition: border-color 0.15s ease;
-	min-height: 60px;
-}
-
-.card-modal__desc-view:hover {
-	border-color: var(--color-primary);
-}
-
-.card-modal__desc-placeholder {
-	padding: 10px 12px;
-	border: 1px dashed var(--color-border);
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.9rem;
-	cursor: pointer;
-	text-align: left;
-	width: 100%;
-	transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__desc-placeholder:hover {
-	border-color: var(--color-primary);
-	color: var(--color-main-text);
-}
-
-.card-modal__desc-textarea {
-	width: 100%;
-	padding: 10px 12px;
-	border: 2px solid var(--color-primary);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	font-size: 0.9rem;
-	line-height: 1.6;
-	resize: vertical;
-	font-family: inherit;
-}
-
-.card-modal__desc-textarea:focus {
-	outline: none;
-}
-
-.card-modal__desc-actions {
-	display: flex;
+.card-modal__label-toggle {
+	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
-}
-
-.card-modal__save-error {
-	color: var(--color-error);
-	font-size: 0.8rem;
-}
-
-/* Rendered markdown description */
-.card-modal__desc-rendered {
-	max-width: 100%;
-	word-break: break-word;
-}
-
-.card-modal__desc-rendered :deep(code) {
-	background: var(--color-background-dark);
-	border-radius: 3px;
-	padding: 2px 5px;
-	font-family: var(--font-face-monospace, monospace);
-	font-size: 0.875em;
-}
-
-.card-modal__desc-rendered :deep(pre) {
-	background: var(--color-background-dark);
-	border-radius: 3px;
-	padding: 10px 14px;
-	overflow-x: auto;
-}
-
-.card-modal__desc-rendered :deep(pre code) {
+	height: 26px;
+	padding: 0 10px;
+	margin: 2px;
+	border: 1px solid var(--label-color, var(--color-border));
+	border-radius: 10px;
 	background: transparent;
-	padding: 0;
-	border-radius: 0;
+	color: var(--color-main-text);
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
 }
-
-.card-modal__desc-rendered :deep(a) {
-	color: var(--color-primary-element);
-	text-decoration: underline;
+.card-modal__label-toggle--active {
+	background: var(--label-color, var(--color-primary-element));
+	color: #fff;
+	border-color: var(--label-color, var(--color-primary-element));
 }
-
-.card-modal__desc-rendered :deep(ul),
-.card-modal__desc-rendered :deep(ol) {
-	padding-left: 1.5em;
-	margin: 0.5em 0;
+.card-modal__label-toggle--no-color.card-modal__label-toggle--active {
+	background: var(--color-primary-element);
+	border-color: var(--color-primary-element);
 }
-
-.card-modal__desc-rendered :deep(blockquote) {
-	border-left: 3px solid var(--color-border);
-	margin-left: 0;
-	padding-left: 1em;
-	color: var(--color-text-lighter);
-}
-
-.card-modal__desc-rendered :deep(p) {
-	margin: 0.5em 0;
-}
-
-.card-modal__desc-rendered :deep(p:first-child) {
-	margin-top: 0;
-}
-
-.card-modal__desc-rendered :deep(p:last-child) {
-	margin-bottom: 0;
-}
-
-.card-modal__desc-rendered :deep(h1),
-.card-modal__desc-rendered :deep(h2),
-.card-modal__desc-rendered :deep(h3),
-.card-modal__desc-rendered :deep(h4),
-.card-modal__desc-rendered :deep(h5),
-.card-modal__desc-rendered :deep(h6) {
+.card-modal__field-label {
+	font-size: 0.7rem;
 	font-weight: 700;
-	margin: 0.75em 0 0.25em;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-maxcontrast);
 }
-
-/* Actions menu (⋯) in the title row */
-.card-modal__actions-menu {
-	flex-shrink: 0;
-	margin-left: auto;
-}
-
-/* Standalone action error line (archive / delete errors) */
-.card-modal__action-error {
-	display: block;
-	margin-bottom: 12px;
-}
-
-/* ── Checklist ─────────────────────────────────────────────────────────────── */
-.card-modal__checklist-section {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 24px;
-}
-
-.card-modal__checklist-header {
+.card-modal__field-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 }
-
-.card-modal__checklist-header-icon {
+.card-modal__date-input {
+	flex: 1;
+	height: 34px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font: inherit;
+}
+.card-modal__field-clear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
 	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__field-clear:hover {
+	background: var(--color-background-dark);
+}
+.card-modal__review-type-selector {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 4px 6px;
+	border-bottom: 1px solid var(--color-border);
+	margin-bottom: 4px;
+}
+.card-modal__review-type-option {
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.7rem;
+	cursor: pointer;
+}
+.card-modal__review-type-option--active {
+	background: var(--color-primary-element);
+	color: #fff;
+	border-color: var(--color-primary-element);
+}
+
+/* ── Body grid ───────────────────────────────────────────────────────────── */
+.card-modal__body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 400px;
+	align-items: stretch;
+	min-height: 0;
+	flex: 1;
+}
+.card-modal__content {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	padding: 24px 28px 32px;
+	min-width: 0;
+	overflow: auto;
+	max-height: 64vh;
+}
+
+.card-modal__section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.card-modal__section-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+/* Compact one-row section header: eyebrow label + primary input inline */
+.card-modal__section--tight {
+	gap: 8px;
+}
+.card-modal__section-inline {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.card-modal__section-inline .card-modal__eyebrow,
+.card-modal__section-inline .card-modal__eyebrow-icon {
 	flex-shrink: 0;
 }
-
-.card-modal__checklist-progress-text {
+.card-modal__section-inline .card-modal__dashed-input {
+	flex: 1;
+	width: auto;
+	min-width: 160px;
+}
+.card-modal__inline-form {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 200px;
+}
+.card-modal__inline-form .card-modal__dashed-input {
+	flex: 1;
+	width: auto;
+}
+.card-modal__eyebrow {
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: var(--color-text-maxcontrast);
+	text-transform: uppercase;
+}
+.card-modal__eyebrow-icon {
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__section-count {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+.card-modal__ghost-btn {
 	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 26px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 100px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	cursor: pointer;
+}
+.card-modal__ghost-btn:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+.card-modal__hint {
+	font-size: 0.7rem;
+	color: var(--color-text-maxcontrast);
 }
 
-/* Progress bar */
-.card-modal__checklist-bar-wrap {
-	height: 4px;
+/* Description */
+.card-modal__desc-view {
+	font-size: 0.9375rem;
+	line-height: 1.65;
+	color: var(--color-main-text);
+	cursor: text;
+	border-radius: 3px;
+	padding: 2px 4px;
+	margin-left: -4px;
+}
+.card-modal__desc-view:hover {
+	background: var(--color-background-hover);
+}
+.card-modal__desc-rendered :deep(p) { margin: 0 0 0.7em; }
+.card-modal__desc-rendered :deep(p:last-child) { margin-bottom: 0; }
+.card-modal__desc-rendered :deep(code) {
 	background: var(--color-border);
+	border-radius: 3px;
+	padding: 2px 5px;
+	font-size: 0.875em;
+}
+.card-modal__desc-rendered :deep(pre) {
+	background: var(--color-background-dark);
+	border-radius: var(--border-radius);
+	padding: 10px 12px;
+	overflow: auto;
+}
+.card-modal__desc-placeholder {
+	text-align: left;
+	padding: 16px;
+	border: 1px dashed var(--color-border-dark);
+	border-radius: 10px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9375rem;
+	cursor: pointer;
+	width: 100%;
+}
+.card-modal__desc-placeholder:hover {
+	border-color: var(--color-primary-element);
+	color: var(--color-main-text);
+}
+.card-modal__desc-textarea {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 12px 14px;
+	border: 1px solid var(--color-primary-element);
+	border-radius: 10px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.9375rem;
+	line-height: 1.65;
+	resize: vertical;
+}
+.card-modal__desc-textarea:focus { outline: none; }
+.card-modal__desc-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+/* Checklist */
+.card-modal__checklist {
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	overflow: hidden;
+	/* overflow:hidden zeroes min-height:auto for a flex item, so the column
+	   scroll container would otherwise shrink this box to nothing — pin it. */
+	flex-shrink: 0;
+}
+.card-modal__checklist-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px;
+	background: var(--color-background-hover);
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__checklist-head-icon { color: var(--color-text-maxcontrast); }
+.card-modal__checklist-title {
+	font-size: 0.8125rem;
+	font-weight: 600;
+}
+.card-modal__checklist-count {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__checklist-bar {
+	flex: 1;
+	height: 4px;
+	max-width: 220px;
+	margin-left: 8px;
+	background: var(--color-border-dark);
 	border-radius: 2px;
 	overflow: hidden;
 }
-
 .card-modal__checklist-bar-fill {
 	height: 100%;
 	background: var(--color-primary-element);
 	border-radius: 2px;
-	transition: width 0.25s ease, background 0.2s ease;
+	transition: width 0.15s ease;
 }
-
 .card-modal__checklist-bar-fill--complete {
-	background: var(--color-success, #46ba61);
+	background: #46ba61;
 }
-
-/* Items list */
 .card-modal__checklist-list {
 	list-style: none;
 	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
+	padding: 6px;
 }
-
 .card-modal__checklist-item {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 6px;
-	border-radius: var(--border-radius);
-	background: transparent;
-	transition: background 0.1s ease;
-	border: 2px solid transparent;
-	cursor: default;
+	gap: 10px;
+	padding: 8px;
+	border-radius: 3px;
 }
-
 .card-modal__checklist-item:hover {
 	background: var(--color-background-hover);
 }
-
-.card-modal__checklist-item--done .card-modal__checklist-item-title {
-	text-decoration: line-through;
-	color: var(--color-text-maxcontrast);
-}
-
-/* Drag-over indicator */
 .card-modal__checklist-item[data-drag-over='true'] {
-	border-bottom-color: var(--color-primary-element);
+	box-shadow: inset 0 2px 0 var(--color-primary-element);
 }
-
-/* Drag handle */
-.card-modal__checklist-drag-handle {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-	color: var(--color-text-maxcontrast);
+.card-modal__checklist-drag {
+	display: inline-flex;
+	color: var(--color-border-dark);
 	cursor: grab;
-	opacity: 0;
-	transition: opacity 0.15s ease;
-	padding: 2px;
 }
-
-.card-modal__checklist-item:hover .card-modal__checklist-drag-handle {
-	opacity: 1;
-}
-
-.card-modal__checklist-drag-handle:active {
-	cursor: grabbing;
-}
-
-/* Checkbox */
 .card-modal__checklist-checkbox {
-	flex-shrink: 0;
 	width: 16px;
 	height: 16px;
 	accent-color: var(--color-primary-element);
 	cursor: pointer;
+	flex-shrink: 0;
 }
-
-.card-modal__checklist-checkbox:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-/* Item title (display) */
 .card-modal__checklist-item-title {
 	flex: 1;
 	font-size: 0.875rem;
 	color: var(--color-main-text);
-	line-height: 1.4;
-	word-break: break-word;
 	cursor: text;
-	border-radius: var(--border-radius);
-	padding: 2px 4px;
+	word-break: break-word;
 }
-
-.card-modal__checklist-item-title:hover {
-	background: var(--color-background-dark);
-}
-
 .card-modal__checklist-item-title--done {
-	text-decoration: line-through;
 	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
 }
-
-/* Item title (editing) */
 .card-modal__checklist-item-input {
 	flex: 1;
+	height: 30px;
 	font-size: 0.875rem;
-	color: var(--color-main-text);
-	border: 2px solid var(--color-primary);
-	border-radius: var(--border-radius);
-	padding: 2px 6px;
+	border: 1px solid var(--color-primary-element);
+	border-radius: 3px;
+	padding: 0 8px;
 	background: var(--color-main-background);
-	font-family: inherit;
+	color: var(--color-main-text);
 }
-
-.card-modal__checklist-item-input:focus {
-	outline: none;
-}
-
-/* Delete button */
+.card-modal__checklist-item-input:focus { outline: none; }
 .card-modal__checklist-item-delete {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__checklist-item-delete:hover {
+	background: var(--color-error);
+	color: #fff;
+}
+.card-modal__checklist-add {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px 12px 8px;
+}
+.card-modal__checklist-add-icon { color: var(--color-text-maxcontrast); }
+.card-modal__checklist-add-input {
+	flex: 1;
+	height: 34px;
+	font-size: 0.875rem;
+	color: var(--color-main-text);
+	border: 1px solid transparent;
+	border-radius: 3px;
+	padding: 0 8px;
+	background: transparent;
+}
+.card-modal__checklist-add-input:focus {
+	outline: none;
+	border-color: var(--color-primary-element);
+	background: var(--color-main-background);
+}
+
+/* Sub-cards / parent */
+.card-modal__parent-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.card-modal__parent-link {
+	flex: 1;
+	text-align: left;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: 3px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	cursor: pointer;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__parent-link:hover {
+	border-color: var(--color-primary-element);
+}
+.card-modal__children-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+.card-modal__child {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: 3px;
+	background: var(--color-main-background);
+	min-width: 0;
+}
+.card-modal__child:hover {
+	border-color: var(--color-primary-element);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.card-modal__child-dot {
 	flex-shrink: 0;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 2px solid var(--color-border-dark);
+}
+.card-modal__child-dot--done {
+	border: none;
+	background: #46ba61;
+}
+.card-modal__child-link {
+	flex: 1;
+	text-align: left;
+	border: none;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	cursor: pointer;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__child-link--done {
+	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
+}
+.card-modal__child-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	width: 22px;
 	height: 22px;
 	border: none;
@@ -3004,1086 +3110,78 @@ async function handleRemoveRelation(relationId) {
 	background: transparent;
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
-	padding: 0;
-	opacity: 0;
-	transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+	flex-shrink: 0;
 }
-
-.card-modal__checklist-item:hover .card-modal__checklist-item-delete {
-	opacity: 1;
-}
-
-.card-modal__checklist-item-delete:hover:not(:disabled) {
+.card-modal__child-remove:hover {
 	background: var(--color-error);
 	color: #fff;
 }
-
-.card-modal__checklist-item-delete:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-/* Add item row */
-.card-modal__checklist-add {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: 4px;
-	padding: 4px 6px;
-}
-
-.card-modal__checklist-add-icon {
-	flex-shrink: 0;
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__checklist-add-input {
-	flex: 1;
+.card-modal__dashed-input {
+	height: 34px;
 	font-size: 0.875rem;
 	color: var(--color-main-text);
-	border: 1px dashed var(--color-border);
-	border-radius: var(--border-radius);
-	padding: 5px 10px;
-	background: transparent;
-	font-family: inherit;
-	transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.card-modal__checklist-add-input::placeholder {
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__checklist-add-input:focus {
-	outline: none;
-	border-color: var(--color-primary);
-	background: var(--color-main-background);
-}
-
-.card-modal__checklist-add-input:disabled {
-	opacity: 0.5;
-}
-
-/* ── Priority selector ────────────────────────────────────────────────────── */
-.card-modal__meta--priority {
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 8px;
-}
-
-.card-modal__priority-buttons {
-	display: flex;
-	gap: 4px;
-	flex-wrap: wrap;
-}
-
-.card-modal__priority-btn {
-	display: inline-flex;
-	align-items: center;
-	height: 26px;
-	padding: 0 10px;
-	border-radius: 13px;
-	border: 1px solid var(--color-border);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.75rem;
-	font-weight: 500;
-	cursor: pointer;
-	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-	white-space: nowrap;
-}
-
-.card-modal__priority-btn:hover:not(:disabled) {
-	background: var(--color-background-hover);
-}
-
-.card-modal__priority-btn:disabled {
-	opacity: 0.6;
-	cursor: default;
-}
-
-/* None: active = dark background */
-.card-modal__priority-btn--0.card-modal__priority-btn--active {
-	background: var(--color-background-dark);
-	border-color: var(--color-text-maxcontrast);
-	color: var(--color-main-text);
-}
-
-/* Low: grey */
-.card-modal__priority-btn--1 {
-	color: var(--color-text-maxcontrast);
-	border-color: var(--color-border);
-}
-.card-modal__priority-btn--1.card-modal__priority-btn--active {
-	background: #888;
-	border-color: #888;
-	color: #fff;
-}
-
-/* Medium: blue */
-.card-modal__priority-btn--2 {
-	color: var(--color-primary-element, #0082c9);
-	border-color: var(--color-primary-element, #0082c9);
-}
-.card-modal__priority-btn--2.card-modal__priority-btn--active {
-	background: var(--color-primary-element, #0082c9);
-	border-color: var(--color-primary-element, #0082c9);
-	color: #fff;
-}
-
-/* High: orange */
-.card-modal__priority-btn--3 {
-	color: #e07b00;
-	border-color: #e07b00;
-}
-.card-modal__priority-btn--3.card-modal__priority-btn--active {
-	background: #e07b00;
-	border-color: #e07b00;
-	color: #fff;
-}
-
-/* Urgent: red */
-.card-modal__priority-btn--4 {
-	color: var(--color-error, #e30000);
-	border-color: var(--color-error, #e30000);
-}
-.card-modal__priority-btn--4.card-modal__priority-btn--active {
-	background: var(--color-error, #e30000);
-	border-color: var(--color-error, #e30000);
-	color: #fff;
-}
-
-/* ── Estimate ──────────────────────────────────────────────────────────────── */
-.card-modal__estimate-buttons {
-	display: flex;
-	gap: 4px;
-	flex-wrap: wrap;
-}
-
-.card-modal__estimate-btn {
-	display: inline-flex;
-	align-items: center;
-	height: 26px;
-	padding: 0 10px;
-	border-radius: 13px;
-	border: 1px solid var(--color-border);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.75rem;
-	font-weight: 500;
-	cursor: pointer;
-	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-	white-space: nowrap;
-}
-
-.card-modal__estimate-btn:hover:not(:disabled) {
-	background: var(--color-background-hover);
-}
-
-.card-modal__estimate-btn:disabled {
-	opacity: 0.6;
-	cursor: default;
-}
-
-.card-modal__estimate-btn--active {
-	background: var(--color-primary-element, #0082c9);
-	border-color: var(--color-primary-element, #0082c9);
-	color: var(--color-primary-element-text, #fff);
-}
-
-.card-modal__estimate-btn--clear {
-	color: var(--color-text-maxcontrast);
-	border-style: dashed;
-}
-
-/* ── Hierarchy (parent / sub-cards) ───────────────────────────────────────── */
-.card-modal__hierarchy-section {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 16px;
-	margin-bottom: 8px;
-}
-
-.card-modal__hierarchy-header {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.card-modal__hierarchy-icon {
-	color: var(--color-text-maxcontrast);
-	flex-shrink: 0;
-}
-
-.card-modal__hierarchy-progress-text {
-	font-size: 0.8rem;
-	color: var(--color-text-maxcontrast);
-	margin-left: auto;
-}
-
-/* Parent row */
-.card-modal__parent-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
-}
-
-.card-modal__parent-link {
-	flex: 1;
-	min-width: 0;
-	text-align: left;
-	background: var(--color-background-dark);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	padding: 5px 10px;
-	font-size: 0.875rem;
-	color: var(--color-primary-element);
-	cursor: pointer;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__parent-link:hover {
-	border-color: var(--color-primary);
-	color: var(--color-primary);
-}
-
-.card-modal__hierarchy-detach {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	flex-shrink: 0;
-	height: 30px;
-	padding: 0 10px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.8rem;
-	cursor: pointer;
-	transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-.card-modal__hierarchy-detach:hover:not(:disabled) {
-	border-color: var(--color-error);
-	color: var(--color-error);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.06);
-}
-
-.card-modal__hierarchy-detach:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-/* Children list */
-.card-modal__children-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.card-modal__child-item {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 4px 6px;
-	border-radius: var(--border-radius);
-	transition: background 0.1s ease;
-}
-
-.card-modal__child-item:hover {
-	background: var(--color-background-hover);
-}
-
-/* Done dot indicator */
-.card-modal__child-done-dot {
-	flex-shrink: 0;
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	border: 2px solid var(--color-border);
-	background: transparent;
-	transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.card-modal__child-done-dot--done {
-	background: var(--color-success, #46ba61);
-	border-color: var(--color-success, #46ba61);
-}
-
-.card-modal__child-link {
-	flex: 1;
-	min-width: 0;
-	text-align: left;
-	background: transparent;
-	border: none;
-	padding: 0;
-	font-size: 0.875rem;
-	color: var(--color-primary-element);
-	cursor: pointer;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	transition: color 0.15s ease;
-}
-
-.card-modal__child-link:hover {
-	color: var(--color-primary);
-	text-decoration: underline;
-}
-
-.card-modal__child-link--done {
-	text-decoration: line-through;
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__child-link--done:hover {
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__child-remove {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-	width: 20px;
-	height: 20px;
-	border: none;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	opacity: 0;
-	transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-}
-
-.card-modal__child-item:hover .card-modal__child-remove {
-	opacity: 1;
-}
-
-.card-modal__child-remove:hover:not(:disabled) {
-	background: var(--color-error);
-	color: #fff;
-}
-
-.card-modal__child-remove:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-/* Add sub-card input row */
-.card-modal__add-child-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: 2px;
-	padding: 2px 6px;
-}
-
-.card-modal__add-child-input {
-	flex: 1;
-	font-size: 0.875rem;
-	color: var(--color-main-text);
-	border: 1px dashed var(--color-border);
-	border-radius: var(--border-radius);
-	padding: 5px 10px;
-	background: transparent;
-	font-family: inherit;
-	transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.card-modal__add-child-input::placeholder {
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__add-child-input:focus {
-	outline: none;
-	border-color: var(--color-primary);
-	background: var(--color-main-background);
-}
-
-.card-modal__add-child-input:disabled {
-	opacity: 0.5;
-}
-
-/* ── Relations section ────────────────────────────────────────────────────── */
-.card-modal__relations {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	margin-top: 16px;
-	margin-bottom: 8px;
-}
-
-.card-modal__sidebar .card-modal__relations {
-	margin-top: 0;
-	margin-bottom: 12px;
-}
-
-.card-modal__relation-group-label {
-	font-size: 0.72rem;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	color: var(--color-text-maxcontrast);
-	margin-top: 6px;
-}
-
-.card-modal__relation-group {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-}
-
-.card-modal__relation-row {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 3px 6px;
-	border-radius: var(--border-radius);
-	transition: background 0.1s ease;
-}
-
-.card-modal__relation-row:hover {
-	background: var(--color-background-hover);
-}
-
-.card-modal__relation-title {
-	flex: 1;
-	min-width: 0;
-	font-size: 0.875rem;
-	color: var(--color-main-text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.card-modal__relation-title--done {
-	text-decoration: line-through;
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__relation-remove {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-	width: 20px;
-	height: 20px;
-	border: none;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	opacity: 0;
-	transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-}
-
-.card-modal__relation-row:hover .card-modal__relation-remove {
-	opacity: 1;
-}
-
-.card-modal__relation-remove:hover:not(:disabled) {
-	background: var(--color-error);
-	color: #fff;
-}
-
-.card-modal__relation-remove:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-/* Add-relation controls row */
-.card-modal__relation-add-row {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	margin-top: 6px;
-	flex-wrap: wrap;
-}
-
-.card-modal__relation-kind,
-.card-modal__relation-target {
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	padding: 3px 6px;
-	font-size: 0.8rem;
-	font-family: inherit;
-	cursor: pointer;
-}
-
-.card-modal__relation-kind {
-	flex-shrink: 0;
-}
-
-.card-modal__relation-target {
-	flex: 1;
-	min-width: 0;
-}
-
-.card-modal__relation-kind:focus,
-.card-modal__relation-target:focus {
-	outline: 2px solid var(--color-primary);
-	outline-offset: 1px;
-}
-
-.card-modal__relation-add {
-	flex-shrink: 0;
-	height: 28px;
+	border: 1px dashed var(--color-border-dark);
+	border-radius: 3px;
 	padding: 0 12px;
-	border: 1px solid var(--color-primary-element);
-	border-radius: var(--border-radius);
-	background: var(--color-primary-element);
-	color: var(--color-primary-element-text, #fff);
-	font-size: 0.8rem;
-	font-family: inherit;
-	cursor: pointer;
-	transition: opacity 0.15s ease;
-	white-space: nowrap;
-}
-
-.card-modal__relation-add:hover:not(:disabled) {
-	opacity: 0.85;
-}
-
-.card-modal__relation-add:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-/* ── Discussion / Comments ─────────────────────────────────────────────────── */
-.card-modal__discussion-section {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	margin-top: 28px;
-}
-
-.card-modal__discussion-header {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.card-modal__discussion-header-icon {
-	color: var(--color-text-maxcontrast);
-	flex-shrink: 0;
-}
-
-.card-modal__discussion-count {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 20px;
-	height: 18px;
-	padding: 0 5px;
-	border-radius: 9px;
-	background: var(--color-background-dark);
-	border: 1px solid var(--color-border);
-	font-size: 0.7rem;
-	font-weight: 700;
-	color: var(--color-text-maxcontrast);
-	margin-left: auto;
-}
-
-/* Thread container */
-.card-modal__discussion-thread {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.card-modal__comment-group {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-/* Individual comment bubble */
-.card-modal__comment {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 10px 12px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-}
-
-.card-modal__comment--top {
-	border-left: 3px solid var(--color-primary-element, #0082c9);
-}
-
-/* Replies: indented */
-.card-modal__replies {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding-left: 20px;
-}
-
-.card-modal__comment--reply {
-	border-left: 3px solid var(--color-border);
-}
-
-/* Comment meta row */
-.card-modal__comment-meta {
-	display: flex;
-	align-items: baseline;
-	gap: 6px;
-	flex-wrap: wrap;
-}
-
-.card-modal__comment-author {
-	font-weight: 600;
-	font-size: 0.8rem;
-	color: var(--color-main-text);
-}
-
-.card-modal__comment-time {
-	font-size: 0.75rem;
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__comment-edited {
-	font-size: 0.7rem;
-	color: var(--color-text-maxcontrast);
-	font-style: italic;
-}
-
-/* Comment body — sanitized markdown */
-.card-modal__comment-body {
-	font-size: 0.875rem;
-	color: var(--color-main-text);
-	line-height: 1.5;
-	word-break: break-word;
-}
-
-/* Reuse description rendered styles for comment body */
-.card-modal__comment-body :deep(code) {
-	background: var(--color-background-dark);
-	border-radius: 3px;
-	padding: 2px 5px;
-	font-family: var(--font-face-monospace, monospace);
-	font-size: 0.875em;
-}
-
-.card-modal__comment-body :deep(pre) {
-	background: var(--color-background-dark);
-	border-radius: 3px;
-	padding: 10px 14px;
-	overflow-x: auto;
-}
-
-.card-modal__comment-body :deep(pre code) {
 	background: transparent;
-	padding: 0;
-	border-radius: 0;
-}
-
-.card-modal__comment-body :deep(a) {
-	color: var(--color-primary-element);
-	text-decoration: underline;
-}
-
-.card-modal__comment-body :deep(ul),
-.card-modal__comment-body :deep(ol) {
-	padding-left: 1.5em;
-	margin: 0.25em 0;
-}
-
-.card-modal__comment-body :deep(blockquote) {
-	border-left: 3px solid var(--color-border);
-	margin-left: 0;
-	padding-left: 1em;
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__comment-body :deep(p) {
-	margin: 0.25em 0;
-}
-
-.card-modal__comment-body :deep(p:first-child) {
-	margin-top: 0;
-}
-
-.card-modal__comment-body :deep(p:last-child) {
-	margin-bottom: 0;
-}
-
-.card-modal__comment-body :deep(strong) {
-	font-weight: 700;
-}
-
-/* Comment author controls (edit + delete) */
-.card-modal__comment-controls {
-	display: flex;
-	gap: 4px;
-	align-items: center;
-}
-
-.card-modal__comment-control-btn {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 24px;
-	height: 24px;
-	border: none;
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	padding: 0;
-	transition: background 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__comment-control-btn:hover:not(:disabled) {
-	background: var(--color-background-hover);
-	color: var(--color-main-text);
-}
-
-.card-modal__comment-control-btn--danger:hover:not(:disabled) {
-	background: var(--color-error);
-	color: #fff;
-}
-
-.card-modal__comment-control-btn:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-/* Reply button */
-.card-modal__comment-reply-btn {
-	align-self: flex-start;
-	display: inline-flex;
-	align-items: center;
-	height: 24px;
-	padding: 0 8px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.75rem;
-	cursor: pointer;
-	transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.card-modal__comment-reply-btn:hover {
-	border-color: var(--color-primary);
-	color: var(--color-primary);
-}
-
-/* Inline edit textarea for an existing comment */
-.card-modal__comment-edit-textarea {
 	width: 100%;
-	padding: 8px 10px;
-	border: 2px solid var(--color-primary);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	font-size: 0.875rem;
-	line-height: 1.5;
-	resize: vertical;
-	font-family: inherit;
+	box-sizing: border-box;
 }
-
-.card-modal__comment-edit-textarea:focus {
+.card-modal__dashed-input:focus {
 	outline: none;
-}
-
-.card-modal__comment-edit-actions {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-/* Reply compose box */
-.card-modal__reply-compose {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.card-modal__reply-compose--indent {
-	padding-left: 20px;
-}
-
-/* Top-level compose box */
-.card-modal__comment-compose {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 4px;
-}
-
-.card-modal__comment-compose-textarea {
-	width: 100%;
-	padding: 10px 12px;
-	border: 1px dashed var(--color-border);
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-main-text);
-	font-size: 0.875rem;
-	line-height: 1.5;
-	resize: vertical;
-	font-family: inherit;
-	transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.card-modal__comment-compose-textarea::placeholder {
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__comment-compose-textarea:focus {
-	outline: none;
-	border-color: var(--color-primary);
+	border-color: var(--color-primary-element);
 	border-style: solid;
 	background: var(--color-main-background);
 }
-
-.card-modal__comment-compose-textarea:disabled {
-	opacity: 0.5;
-}
-
-.card-modal__comment-compose-actions {
+.card-modal__hierarchy-actions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 }
-
-/* Watch / Unwatch toggle */
-.card-modal__watch-wrap {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex-shrink: 0;
+.card-modal__hierarchy-actions .card-modal__dashed-input {
+	flex: 1;
+	width: auto;
 }
-
-.card-modal__watch-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	height: 28px;
-	padding: 0 10px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.8rem;
-	font-family: inherit;
-	cursor: pointer;
-	transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-	white-space: nowrap;
+.card-modal__set-parent {
+	margin-top: -2px;
 }
-
-.card-modal__watch-btn:hover:not(:disabled) {
-	border-color: var(--color-primary);
-	color: var(--color-primary);
-}
-
-.card-modal__watch-btn--active {
-	border-color: var(--color-primary);
-	color: var(--color-primary);
-	background: var(--color-primary-light);
-}
-
-.card-modal__watch-btn:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-.card-modal__watch-label {
-	line-height: 1;
-}
-
-.card-modal__watch-count {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 18px;
-	height: 18px;
-	padding: 0 4px;
-	border-radius: 9px;
-	background: var(--color-primary);
-	color: var(--color-primary-text);
-	font-size: 0.7rem;
-	font-weight: 600;
-	line-height: 1;
-}
-
-.card-modal__watch-avatars {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-
-.card-modal__watch-avatar {
-	border: 2px solid var(--color-main-background);
-	border-radius: 50%;
-	margin-left: -6px;
-}
-
-.card-modal__watch-avatar:first-child {
+.card-modal__ghost-btn--start {
 	margin-left: 0;
+	padding-left: 0;
+}
+.card-modal__ghost-btn--start:hover {
+	background: transparent;
+	color: var(--color-primary-element);
 }
 
-.card-modal__watch-avatar-extra {
-	margin-left: 4px;
-	font-size: 0.75rem;
-	color: var(--color-text-maxcontrast);
-	white-space: nowrap;
-}
-
-.card-modal__watch-error {
-	margin-left: 4px;
-}
-
-/* ── Two-column layout ─────────────────────────────────────────────────────── */
-.card-modal__columns {
-	display: grid;
-	grid-template-columns: 1fr 300px;
-	gap: 24px;
-	align-items: start;
-	margin-top: 4px;
-}
-
-/* Left column: description + discussion */
-.card-modal__main {
-	display: flex;
-	flex-direction: column;
-	gap: 0;
-	min-width: 0;
-}
-
-.card-modal__main .card-modal__description-section {
-	margin-bottom: 0;
-}
-
-.card-modal__main .card-modal__discussion-section {
-	margin-top: 28px;
-}
-
-/* Right column: attributes sidebar */
-.card-modal__sidebar {
-	display: flex;
-	flex-direction: column;
-	gap: 0;
-	min-width: 0;
-	border-left: 1px solid var(--color-border);
-	padding-left: 20px;
-}
-
-/* Tighten spacing between sidebar attribute rows */
-.card-modal__sidebar .card-modal__meta {
-	margin-bottom: 12px;
-}
-
-.card-modal__sidebar .card-modal__labels-section {
-	margin-bottom: 12px;
-}
-
-.card-modal__sidebar .card-modal__assignees-section {
-	margin-bottom: 12px;
-}
-
-.card-modal__sidebar .card-modal__hierarchy-section {
-	margin-top: 0;
-	margin-bottom: 12px;
-}
-
-.card-modal__sidebar .card-modal__checklist-section {
-	margin-top: 0;
-}
-
-/* Collapse to single column on narrow viewports */
-@media (max-width: 700px) {
-	.card-modal__columns {
-		grid-template-columns: 1fr;
-	}
-
-	.card-modal__sidebar {
-		border-left: none;
-		padding-left: 0;
-		border-top: 1px solid var(--color-border);
-		padding-top: 20px;
-	}
-
-	/* On narrow screens show sidebar above main (attributes first) */
-	.card-modal__sidebar {
-		order: -1;
-	}
-}
-
-/* ── GitHub links section ─────────────────────────────────────────────────── */
-.card-modal__links-section {
-	margin-top: 20px;
-}
-
-.card-modal__links-header {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-bottom: 8px;
-}
-
-.card-modal__links-header-icon {
-	color: var(--color-text-maxcontrast);
-}
-
-.card-modal__branch-btn {
-	margin-inline-start: auto;
-}
-
+/* GitHub links */
 .card-modal__links-list {
 	list-style: none;
+	margin: 0;
 	padding: 0;
-	margin: 0 0 8px;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 2px;
 }
-
 .card-modal__link-row {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 }
-
-.card-modal__link-chip {
+.card-modal__link {
+	flex: 1;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	min-width: 0;
-	flex: 1;
-	padding: 4px 8px;
-	border-radius: var(--border-radius);
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: 3px;
 	color: var(--color-main-text);
+	min-width: 0;
+}
+.card-modal__link:hover {
+	background: var(--color-background-hover);
 	text-decoration: none;
 }
-
-.card-modal__link-chip:hover {
-	background: var(--color-background-hover);
-}
-
-.card-modal__link-text {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .card-modal__link-badge {
 	flex: 0 0 auto;
 	font-size: 11px;
@@ -4095,26 +3193,376 @@ async function handleRemoveRelation(relationId) {
 	background: var(--color-text-maxcontrast);
 	text-transform: uppercase;
 }
-
-.card-modal__link-badge--open {
-	background: var(--color-success, #2fb344);
+.card-modal__link-badge--open { background: #46ba61; }
+.card-modal__link-badge--merged { background: #8e44ad; }
+.card-modal__link-badge--closed { background: #e9322d; }
+.card-modal__link-text {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.875rem;
 }
-
-.card-modal__link-badge--merged {
-	background: #8250df;
+.card-modal__link-ext {
+	margin-left: auto;
+	color: var(--color-text-maxcontrast);
 }
-
-.card-modal__link-badge--closed {
-	background: var(--color-error, #e9322d);
-}
-
 .card-modal__link-add {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.card-modal__link-add .card-modal__dashed-input {
+	flex: 1;
+	width: auto;
+}
+
+/* Relations */
+.card-modal__relation-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__relation-group {
+	list-style: none;
+	margin: 0 0 6px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.card-modal__relation-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: 3px;
+}
+.card-modal__relation-row:hover {
+	background: var(--color-background-hover);
+}
+.card-modal__relation-title {
+	flex: 1;
+	font-size: 0.875rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__relation-title--done {
+	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
+}
+.card-modal__relation-add {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.card-modal__relation-kind,
+.card-modal__relation-target {
+	height: 34px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font: inherit;
+	padding: 0 6px;
+}
+.card-modal__relation-target { flex: 1; min-width: 140px; }
+.card-modal__relation-add-btn {
+	height: 34px;
+	padding: 0 14px;
+	border: 1px solid var(--color-border);
+	border-radius: 100px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8125rem;
+	cursor: pointer;
+}
+.card-modal__relation-add-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* ── Discussion pane ─────────────────────────────────────────────────────── */
+.card-modal__discussion {
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	min-width: 0;
+	max-height: 64vh;
+}
+.card-modal__discussion-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 14px 18px;
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__discussion-head-icon { color: var(--color-text-maxcontrast); }
+.card-modal__discussion-title {
+	font-size: 0.8125rem;
+	font-weight: 600;
+}
+.card-modal__discussion-count {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__thread-scroll {
+	flex: 1;
+	overflow: auto;
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+}
+.card-modal__discussion-empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 32px;
+	text-align: center;
+}
+.card-modal__discussion-empty-icon { color: var(--color-border-dark); }
+.card-modal__discussion-empty span {
+	font-size: 0.875rem;
+	color: var(--color-text-maxcontrast);
+	max-width: 220px;
+}
+.card-modal__thread {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.card-modal__comment-group {
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	overflow: hidden;
+	flex-shrink: 0;
+}
+.card-modal__comment {
+	display: flex;
+	gap: 10px;
+	padding: 12px 14px;
+}
+.card-modal__comment-avatar { flex-shrink: 0; }
+.card-modal__comment-main {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: 1;
+}
+.card-modal__comment-meta {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.card-modal__comment-author {
+	font-size: 0.8125rem;
+	font-weight: 600;
+}
+.card-modal__comment-time,
+.card-modal__comment-edited {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__comment-edited { font-style: italic; }
+.card-modal__comment-body {
+	font-size: 0.875rem;
+	line-height: 1.55;
+	color: var(--color-main-text);
+	word-break: break-word;
+}
+.card-modal__comment-body :deep(p) { margin: 0 0 0.5em; }
+.card-modal__comment-body :deep(p:last-child) { margin-bottom: 0; }
+.card-modal__comment-body :deep(code) {
+	background: var(--color-border);
+	border-radius: 3px;
+	padding: 1px 4px;
+	font-size: 0.85em;
+}
+.card-modal__comment-controls {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 2px;
+}
+.card-modal__comment-link-btn {
+	height: 24px;
+	padding: 0 8px;
+	margin-left: -8px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	cursor: pointer;
+}
+.card-modal__comment-link-btn:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+.card-modal__comment-icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__comment-icon-btn:hover { background: var(--color-background-hover); }
+.card-modal__comment-icon-btn--danger:hover { background: var(--color-error); color: #fff; }
+.card-modal__comment--reply {
+	border-top: 1px solid var(--color-border);
+	background: var(--color-main-background);
+	padding-left: 44px;
+}
+.card-modal__replies {
+	border-top: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+}
+.card-modal__reply-compose {
+	padding: 6px 14px 12px 44px;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.card-modal__comment-edit-textarea {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 8px 10px;
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font: inherit;
+	font-size: 0.875rem;
+	resize: vertical;
+}
+.card-modal__comment-edit-textarea:focus {
+	outline: none;
+	border-color: var(--color-primary-element);
+}
+.card-modal__comment-edit-actions {
 	display: flex;
 	gap: 8px;
 }
 
-.card-modal__link-input {
+/* Composer (pinned) */
+.card-modal__composer {
+	border-top: 1px solid var(--color-border);
+	background: var(--color-main-background);
+	padding: 12px 16px;
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+}
+.card-modal__composer-avatar { flex-shrink: 0; }
+.card-modal__composer-main {
 	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 	min-width: 0;
+}
+.card-modal__composer-textarea {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 8px 10px;
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font: inherit;
+	font-size: 0.875rem;
+	line-height: 1.5;
+	resize: vertical;
+}
+.card-modal__composer-textarea:focus {
+	outline: none;
+	border-color: var(--color-primary-element);
+}
+.card-modal__composer-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+/* ── Shared error text ───────────────────────────────────────────────────── */
+.card-modal__save-error {
+	font-size: 0.8rem;
+	color: var(--color-error);
+}
+.card-modal__action-error {
+	padding: 0 24px 8px;
+}
+
+/* ── Mobile tab bar (hidden on desktop) ──────────────────────────────────── */
+.card-modal__tabbar { display: none; }
+.card-modal__tab {
+	flex: 1;
+	height: 44px;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.875rem;
+	cursor: pointer;
+}
+.card-modal__tab--active {
+	border-bottom-color: var(--color-primary-element);
+	color: var(--color-primary-element);
+	font-weight: 600;
+}
+
+/* ── Responsive: stack panes, switch via tabs ────────────────────────────── */
+@media (max-width: 680px) {
+	.card-modal__header { padding: 14px 16px 10px; }
+	.card-modal__title { font-size: 1.2rem; }
+	.card-modal__attrbar { flex-wrap: nowrap; overflow-x: auto; padding: 10px 16px; }
+	.card-modal__attr-right { margin-left: 0; }
+	.card-modal__body { grid-template-columns: 1fr; }
+	.card-modal__content,
+	.card-modal__discussion { max-height: none; }
+	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }
+	.card-modal__children-grid { grid-template-columns: 1fr; }
+	.card-modal__tabbar {
+		display: flex;
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		background: var(--color-main-background);
+		border-bottom: 1px solid var(--color-border);
+	}
+	/* Tab switching: show only the active pane */
+	.card-modal--tab-card .card-modal__discussion { display: none; }
+	.card-modal--tab-discussion .card-modal__content { display: none; }
+	/* Larger touch targets on mobile */
+	.card-modal__checklist-item { min-height: 44px; }
+	.card-modal__checklist-checkbox { width: 18px; height: 18px; }
+}
+</style>
+
+<!-- Widen the modal container for the two-pane card view (teleported outside
+     scoped styles, so this block is intentionally global). -->
+<style>
+.card-modal-modal .modal-container,
+.modal-container.card-modal-modal {
+	width: min(1180px, 94vw) !important;
+	max-width: min(1180px, 94vw) !important;
 }
 </style>

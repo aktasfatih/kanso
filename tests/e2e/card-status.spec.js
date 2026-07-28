@@ -66,10 +66,10 @@ test.describe('Card status (#3481)', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.manualCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 
-		// Set "In progress" from the card's status control.
-		const inProgressBtn = page.locator('.card-modal__status-btn--in_progress')
-		await inProgressBtn.click()
-		await expect(inProgressBtn).toHaveClass(/card-modal__status-btn--active/, { timeout: 6_000 })
+		// Set "In progress" from the card's status control (breadcrumb chip → dropdown).
+		await page.locator('.card-modal__status-chip--btn').click()
+		await page.locator('.card-modal__status-wrap .card-modal__popover-opt', { hasText: 'In progress' }).click()
+		await expect(page.locator('.card-modal__status-chip--in_progress')).toBeVisible({ timeout: 6_000 })
 
 		// Close the modal → the board tile shows the In-progress chip.
 		await page.keyboard.press('Escape')
