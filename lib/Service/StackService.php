@@ -86,6 +86,7 @@ class StackService {
 		?int $role,
 		?int $wipLimit,
 		string $uid,
+		?string $color = null,
 	): Stack {
 		$stack = $this->loadStack($id);
 		$board = $this->loadBoard($stack->getBoardId());
@@ -102,6 +103,10 @@ class StackService {
 		}
 		if ($wipLimit !== null) {
 			$stack->setWipLimit($this->validateWipLimit($wipLimit));
+		}
+		if ($color !== null) {
+			// '' clears; otherwise the shared validator normalises to bare hex.
+			$stack->setColor($color === '' ? null : ColorValidator::assertValid($color));
 		}
 
 		$stack = $this->stackMapper->update($stack);

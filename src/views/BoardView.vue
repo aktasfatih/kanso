@@ -260,6 +260,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-rename-stack="handleRenameStack"
 					:on-set-role="handleSetRole"
 					:on-set-wip="handleSetWip"
+					:on-set-color="handleSetColor"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }" />
 
 				<!-- Add stack inline input -->
@@ -1089,6 +1090,10 @@ async function handleSetRole(stackId, role) {
 
 async function handleSetWip(stackId, wipLimit) {
 	await updateStack.mutateAsync({ stackId, data: { wipLimit } })
+}
+
+async function handleSetColor(stackId, color) {
+	await updateStack.mutateAsync({ stackId, data: { color } })
 }
 </script>
 

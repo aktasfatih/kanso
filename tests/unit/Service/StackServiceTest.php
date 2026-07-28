@@ -165,6 +165,29 @@ class StackServiceTest extends TestCase {
 		self::assertSame(Stack::ROLE_DONE, $updated->getRole());
 	}
 
+	public function testUpdateSetsAndClearsColor(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Positional: id, title, archived, role, wipLimit, uid, color.
+		$set = $this->service->update(5, null, null, null, null, 'alice', 'e74c3c');
+		self::assertSame('e74c3c', $set->getColor());
+
+		$cleared = $this->service->update(5, null, null, null, null, 'alice', '');
+		self::assertNull($cleared->getColor());
+	}
+
+	public function testUpdateRejectsInvalidColor(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(5, null, null, null, null, 'alice', 'nothex');
+	}
+
 	public function testUpdateRejectsOutOfRangeRole(): void {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());

@@ -9,7 +9,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div v-if="stackDropEdge === 'right'" class="stack-column__drop-line stack-column__drop-line--right" />
 
 		<!-- Column header - drag handle for stack reordering -->
-		<div ref="headerRef" class="stack-column__header">
+		<div
+			ref="headerRef"
+			class="stack-column__header"
+			:class="{ 'stack-column__header--colored': !!stack.color }"
+			:style="stack.color ? { '--stack-color': cssColor(stack.color) } : {}">
 			<input
 				v-if="editingTitle"
 				ref="titleInputRef"
@@ -88,9 +92,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActionInput>
 				</template>
 
+				<!-- Column colour -->
+				<template v-if="onSetColor">
+					<NcActionSeparator />
+					<NcActionButton
+						v-for="opt in stackColorOptions"
+						:key="opt.hex"
+						:close-after-click="true"
+						@click="handleSetColor(opt.hex)">
+						<template #icon>
+							<span class="stack-column__swatch" :style="{ background: cssColor(opt.hex) }" />
+						</template>
+						{{ opt.name }}
+					</NcActionButton>
+					<NcActionButton
+						v-if="stack.color"
+						:close-after-click="true"
+						@click="handleSetColor('')">
+						<template #icon>
+							<span class="stack-column__swatch stack-column__swatch--none" />
+						</template>
+						{{ t('kanso', 'No colour') }}
+					</NcActionButton>
+				</template>
+
 				<!-- Delete -->
 				<template v-if="onDeleteStack">
-					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip" />
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor" />
 					<NcActionButton
 						:close-after-click="true"
 						@click="handleDeleteStack">
@@ -180,6 +208,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CardTile from './CardTile.vue'
+import { cssColor } from '../services/color.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -241,6 +270,11 @@ const props = defineProps({
 	 * When provided, a WIP limit input appears in the ⋯ menu.
 	 */
 	onSetWip: {
+		type: Function,
+		default: null,
+	},
+	/** Optional callback (stackId, color|'') → void — set/clear the column colour. */
+	onSetColor: {
 		type: Function,
 		default: null,
 	},
@@ -343,6 +377,27 @@ async function handleSetWip() {
 	const limit = Number.isFinite(n) && n > 0 ? n : 0
 	try {
 		await props.onSetWip(props.stack.id, limit)
+	} catch {
+		// Parent surfaces errors
+	}
+}
+
+// Named palette for the column-colour menu (shares the label preset hexes).
+const stackColorOptions = [
+	{ hex: 'e74c3c', name: t('kanso', 'Red') },
+	{ hex: 'e67e22', name: t('kanso', 'Orange') },
+	{ hex: 'f1c40f', name: t('kanso', 'Yellow') },
+	{ hex: '2ecc71', name: t('kanso', 'Green') },
+	{ hex: '1abc9c', name: t('kanso', 'Teal') },
+	{ hex: '3498db', name: t('kanso', 'Blue') },
+	{ hex: '9b59b6', name: t('kanso', 'Purple') },
+	{ hex: '34495e', name: t('kanso', 'Slate') },
+]
+
+async function handleSetColor(color) {
+	if (!props.onSetColor) return
+	try {
+		await props.onSetColor(props.stack.id, color)
 	} catch {
 		// Parent surfaces errors
 	}
@@ -564,6 +619,21 @@ async function submitCard() {
 	padding-bottom: 8px;
 	border-bottom: 1px solid var(--color-border);
 	cursor: grab;
+}
+/* Coloured column: a bottom accent bar in the stack colour. */
+.stack-column__header--colored {
+	border-bottom-color: var(--stack-color);
+	border-bottom-width: 3px;
+}
+.stack-column__swatch {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border);
+}
+.stack-column__swatch--none {
+	background: var(--color-main-background);
 }
 
 .stack-column__title {
