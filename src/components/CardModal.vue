@@ -514,7 +514,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-for="review in cardReviews"
 							:key="review.id"
 							class="card-modal__review-pill"
-							:class="`card-modal__review-pill--${review.state}`">
+							:class="[`card-modal__review-pill--${review.state}`, { 'card-modal__review-pill--compact': reviewsCompact }]">
 							<NcAvatar
 								:user="review.reviewer"
 								:display-name="participantName(review.reviewer)"
@@ -534,7 +534,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
 								<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
 								<CheckDecagramOutlineIcon v-else :size="12" />
-								{{ reviewStateLabel(review.state) }}
+								<span class="card-modal__review-state-label">{{ reviewStateLabel(review.state) }}</span>
 							</span>
 							<button
 								v-if="canEdit"
@@ -1426,6 +1426,12 @@ function reviewTypeById(typeId) {
 const cardReviews = computed(() =>
 	Array.isArray(cardData.value?.reviews) ? cardData.value.reviews : [],
 )
+
+// With 3+ reviews the full pills (avatar + name + type + state label) wrap and
+// inflate the header. Collapse to condensed chips (avatar + type + state icon;
+// name/state-text move to the avatar tooltip) so they stay on one row. One or
+// two reviews keep the legible full pill.
+const reviewsCompact = computed(() => cardReviews.value.length >= 3)
 
 // Participants offerable for the CURRENTLY-SELECTED review type. A card may hold
 // several reviews per person (one per type), so we only exclude a participant
@@ -2850,6 +2856,13 @@ function onCommentKeydown(event) {
 .card-modal__review-state--pending { color: var(--color-warning-text); }
 .card-modal__review-state--approved { color: var(--color-success-text); }
 .card-modal__review-state--changes_requested { color: var(--color-error-text); }
+/* Compact mode (3+ reviews): drop the reviewer name and the state text so the
+   chip shrinks to avatar + type badge + state icon and N reviews stay on one
+   row. The reviewer name is still available via the avatar's hover tooltip and
+   the state via its coloured icon + border. */
+.card-modal__review-pill--compact { gap: 4px; padding: 0 6px 0 3px; }
+.card-modal__review-pill--compact .card-modal__review-name,
+.card-modal__review-pill--compact .card-modal__review-state-label { display: none; }
 
 /* ── Popovers ────────────────────────────────────────────────────────────── */
 .card-modal__popover {
