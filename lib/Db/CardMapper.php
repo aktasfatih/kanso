@@ -38,6 +38,7 @@ class CardMapper extends QBMapper {
 		'done_at',
 		'started_at',
 		'archived',
+		'all_day',
 		'owner',
 		'created_at',
 		'last_modified',

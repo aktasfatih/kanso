@@ -294,13 +294,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="card-modal__field-row">
 								<input
 									class="card-modal__date-input"
-									type="datetime-local"
+									:type="isAllDay ? 'date' : 'datetime-local'"
 									:value="dueDateInputValue"
 									@change="handleDueDateChange">
 								<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 									<CloseIcon :size="14" />
 								</button>
 							</div>
+							<label class="card-modal__allday">
+								<input
+									type="checkbox"
+									:checked="isAllDay"
+									@change="toggleAllDay($event.target.checked)">
+								{{ t('kanso', 'All day (no time)') }}
+							</label>
 							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}</label>
 							<div class="card-modal__field-row">
 								<input
@@ -1635,20 +1642,34 @@ async function handleSetEstimate(token) {
 }
 
 // ── Due date (editable) ──────────────────────────────────────────────────────
-// datetime-local value needs "YYYY-MM-DDTHH:mm" format
+// All-day due dates hide the time-of-day (input becomes a plain date; the pill
+// and value drop "HH:MM"). The stored duedate is unchanged (at 00:00).
+const isAllDay = computed(() => cardData.value?.allDay === true)
+
+// datetime-local needs "YYYY-MM-DDTHH:mm"; an all-day input is just "YYYY-MM-DD".
 const dueDateInputValue = computed(() => {
 	if (!cardData.value?.duedate) return ''
 	const d = new Date(cardData.value.duedate)
 	const pad = (n) => String(n).padStart(2, '0')
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+	const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+	return isAllDay.value ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 })
 
 async function handleDueDateChange(event) {
 	const val = event.target.value
 	if (!val) return
+	// An all-day "YYYY-MM-DD" parses as UTC midnight; a datetime-local as local.
 	const iso = new Date(val).toISOString()
 	try {
 		await updateCard.mutateAsync({ data: { duedate: iso } })
+	} catch (err) {
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
+	}
+}
+
+async function toggleAllDay(checked) {
+	try {
+		await updateCard.mutateAsync({ data: { allDay: checked } })
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
 	}
@@ -2462,7 +2483,11 @@ const currentPriorityLevel = computed(() =>
 )
 const dueDateLabel = computed(() => {
 	if (!cardData.value?.duedate) return ''
-	return new Date(cardData.value.duedate).toLocaleString(undefined, {
+	const d = new Date(cardData.value.duedate)
+	if (isAllDay.value) {
+		return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+	}
+	return d.toLocaleString(undefined, {
 		weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
 	})
 })
@@ -3175,6 +3200,15 @@ function onCommentKeydown(event) {
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font: inherit;
+}
+.card-modal__allday {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
 }
 .card-modal__field-clear {
 	display: inline-flex;

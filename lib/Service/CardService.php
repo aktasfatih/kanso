@@ -157,6 +157,7 @@ class CardService {
 		?string $startDate = null,
 		?string $status = null,
 		?string $estimate = null,
+		?bool $allDay = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -188,7 +189,15 @@ class CardService {
 			$descriptionChanged = true;
 		}
 		if ($duedate !== null) {
-			$card->setDuedate($this->parseDuedate($duedate));
+			$parsedDue = $this->parseDuedate($duedate);
+			$card->setDuedate($parsedDue);
+			// Clearing the due date also clears the all-day flag (no date to qualify).
+			if ($parsedDue === null) {
+				$card->setAllDay(false);
+			}
+		}
+		if ($allDay !== null) {
+			$card->setAllDay($allDay);
 		}
 		if ($startDate !== null) {
 			// Same wire format + parsing as duedate; '' clears it.

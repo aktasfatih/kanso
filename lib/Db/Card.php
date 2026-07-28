@@ -39,6 +39,8 @@ use OCP\DB\Types;
  * @method void setStartedAt(int $startedAt)
  * @method bool getArchived()
  * @method void setArchived(bool $archived)
+ * @method bool|null getAllDay()
+ * @method void setAllDay(?bool $allDay)
  * @method string getOwner()
  * @method void setOwner(string $owner)
  * @method int getCreatedAt()
@@ -71,6 +73,7 @@ class Card extends Entity implements \JsonSerializable {
 	protected ?int $doneAt = null;
 	protected ?int $startedAt = null;
 	protected ?bool $archived = null;
+	protected ?bool $allDay = null;
 	protected ?string $owner = null;
 	protected ?int $createdAt = null;
 	protected ?int $lastModified = null;
@@ -90,6 +93,7 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('doneAt', Types::INTEGER);
 		$this->addType('startedAt', Types::INTEGER);
 		$this->addType('archived', Types::BOOLEAN);
+		$this->addType('allDay', Types::BOOLEAN);
 		$this->addType('owner', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('lastModified', Types::INTEGER);
@@ -103,7 +107,7 @@ class Card extends Entity implements \JsonSerializable {
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -117,6 +121,7 @@ class Card extends Entity implements \JsonSerializable {
 			'doneAt' => $this->doneAt ?? 0,
 			'startedAt' => $this->startedAt ?? 0,
 			'archived' => $this->archived ?? false,
+			'allDay' => $this->allDay ?? false,
 			'owner' => $this->owner,
 			'createdAt' => $this->createdAt ?? 0,
 			'lastModified' => $this->lastModified ?? 0,

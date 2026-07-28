@@ -353,6 +353,33 @@ class CardServiceTest extends TestCase {
 		self::assertNull($updated->getDuedate());
 	}
 
+	public function testUpdateSetsAllDayFlag(): void {
+		$card = $this->card();
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Positional: …, uid, priority, startDate, status, estimate, allDay.
+		$updated = $this->service->update(9, null, null, '2026-08-15T00:00:00+00:00', null, null, 'alice', null, null, null, null, true);
+		self::assertTrue($updated->getAllDay());
+		self::assertInstanceOf(\DateTime::class, $updated->getDuedate());
+	}
+
+	public function testUpdateClearingDuedateAlsoClearsAllDay(): void {
+		$card = $this->card();
+		$card->setDuedate(new \DateTime('2026-08-01T00:00:00+00:00'));
+		$card->setAllDay(true);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, '', null, null, 'alice');
+		self::assertNull($updated->getDuedate());
+		self::assertFalse($updated->getAllDay());
+	}
+
 	public function testUpdateSetsAndClearsStartDate(): void {
 		$card = $this->card();
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
