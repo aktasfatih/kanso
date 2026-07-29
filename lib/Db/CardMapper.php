@@ -644,6 +644,152 @@ class CardMapper extends QBMapper {
 		return $rows;
 	}
 
+	// ── Board-id-set variants (boards-list per-board signal) ──────────────────
+	//
+	// These mirror the single-board aggregates above but group by `board_id` over
+	// an explicit board id set (`board_id IN (:ids)`), so the boards LIST endpoint
+	// can attach per-board signal in a FIXED number of queries regardless of how
+	// many boards the user has - never one-query-per-board (the charter's
+	// summary-payload / no-N+1 bet). The caller (BoardService::findAllWithStats)
+	// supplies ONLY the board ids it has already ACL-resolved to the viewer's
+	// readable set (BoardMapper::findAllForUser), so a board the viewer cannot
+	// READ is simply never in the set and can never contribute a count - there is
+	// no accidental full-table scan. An empty set short-circuits (never emit
+	// `IN ()`, which is invalid SQL).
+
+	/**
+	 * Non-deleted card counts grouped by board over an explicit board id set - the
+	 * "cards remaining" signal for the boards list. Mirrors the archived-consistency
+	 * of the board-stats distribution aggregates ({@see self::countByStack()} /
+	 * {@see self::countByPriority()}): ARCHIVED cards are EXCLUDED, so the count is
+	 * the board's open (non-archived, non-deleted) card total - the actionable
+	 * "cards remaining" figure, not a historical grand total. Boards with no such
+	 * cards are absent from the map (callers default to 0).
+	 *
+	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @return array<int, int> map of boardId => open card count
+	 * @throws Exception
+	 */
+	public function countByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('board_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('board_id');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['board_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
+	 * Done-vs-total card counts grouped by board over an explicit board id set -
+	 * the source for the boards-list progress % (done ratio). Both totals cover the
+	 * same open scope as {@see self::countByBoards()} (non-deleted, non-archived);
+	 * "done" is a card with `done_at > 0`. Two fixed grouped queries (total, done),
+	 * so the list stays a constant query count. Boards with no open cards are absent
+	 * from the map (callers default to 0/0 ⇒ 0 %).
+	 *
+	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @return array<int, array{total: int, done: int}> map of boardId => counts
+	 * @throws Exception
+	 */
+	public function doneRatioByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$totals = $this->countByBoards($boardIds);
+		$done = $this->countDoneByBoards($boardIds);
+
+		$map = [];
+		foreach ($totals as $boardId => $count) {
+			$map[$boardId] = ['total' => $count, 'done' => $done[$boardId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
+	 * Done (non-deleted, non-archived, `done_at > 0`) card counts grouped by board
+	 * over an explicit board id set - the "done" half of {@see self::doneRatioByBoards()}.
+	 * Assumes a non-empty set (the caller guards).
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, int> map of boardId => done card count
+	 * @throws Exception
+	 */
+	private function countDoneByBoards(array $boardIds): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('board_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('board_id');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['board_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
+	 * Overdue open-card counts grouped by board over an explicit board id set - the
+	 * boards-list overdue signal, the board-set twin of {@see self::overdueCount()}.
+	 * "Overdue" is the same definition: not done, not archived, not soft-deleted,
+	 * and a `duedate` in the past. `duedate` is a DATETIME column so the comparison
+	 * binds a DATETIME parameter (dialect-clean) with a NOT NULL guard. Boards with
+	 * no overdue cards are absent from the map (callers default to 0).
+	 *
+	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @return array<int, int> map of boardId => overdue card count
+	 * @throws Exception
+	 */
+	public function overdueCountByBoards(array $boardIds, \DateTime $now): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('board_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->isNotNull('duedate'))
+			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->groupBy('board_id');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['board_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
 	// ── Card-id-set variants (project analytics) ──────────────────────────────
 	//
 	// These mirror the board-scoped aggregates above but key on an explicit card

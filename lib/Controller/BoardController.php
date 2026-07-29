@@ -62,7 +62,7 @@ class BoardController extends Controller {
 	#[NoAdminRequired]
 	public function index(): JSONResponse {
 		return $this->respond(function (): JSONResponse {
-			return new JSONResponse($this->boardService->findAll($this->currentUserId()));
+			return new JSONResponse($this->boardService->findAllWithStats($this->currentUserId()));
 		});
 	}
 

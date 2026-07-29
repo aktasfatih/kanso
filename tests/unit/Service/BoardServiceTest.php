@@ -9,6 +9,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ChangeNotifier;
@@ -22,6 +24,8 @@ class BoardServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private CardMapper&MockObject $cardMapper;
+	private CardReviewMapper&MockObject $cardReviewMapper;
 	private BoardService $service;
 
 	protected function setUp(): void {
@@ -29,10 +33,14 @@ class BoardServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->service = new BoardService(
 			$this->boardMapper,
 			$this->changeNotifier,
-			$this->permissionService
+			$this->permissionService,
+			$this->cardMapper,
+			$this->cardReviewMapper
 		);
 	}
 
@@ -179,5 +187,56 @@ class BoardServiceTest extends TestCase {
 			->willReturn($boards);
 
 		self::assertSame($boards, $this->service->findAll('alice'));
+	}
+
+	public function testFindAllWithStatsStitchesBatchedAggregatesOntoEachBoard(): void {
+		$b1 = $this->board(1, 'alice');
+		$b2 = $this->board(2, 'alice');
+		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn([]);
+		$this->boardMapper->method('findAllForUser')->with('alice', [])->willReturn([$b1, $b2]);
+
+		// The aggregates are called ONCE each with the full readable board-id set -
+		// a fixed query count, not one-query-per-board.
+		$this->cardMapper->expects(self::once())
+			->method('countByBoards')->with([1, 2])->willReturn([1 => 5, 2 => 0]);
+		$this->cardMapper->expects(self::once())
+			->method('doneRatioByBoards')->with([1, 2])->willReturn([1 => ['total' => 5, 'done' => 2]]);
+		$this->cardMapper->expects(self::once())
+			->method('overdueCountByBoards')->with([1, 2])->willReturn([1 => 3]);
+		$this->cardReviewMapper->expects(self::once())
+			->method('needsReviewCountByBoards')->with([1, 2])->willReturn([1 => 4]);
+
+		$result = $this->service->findAllWithStats('alice');
+
+		self::assertCount(2, $result);
+		self::assertSame(1, $result[0]['id']);
+		self::assertSame([
+			'cardCount' => 5,
+			'doneCount' => 2,
+			'progress' => 40,
+			'needsReview' => 4,
+			'overdue' => 3,
+		], $result[0]['stats']);
+		// A board absent from every aggregate map defaults to all-zero, 0 %.
+		self::assertSame(2, $result[1]['id']);
+		self::assertSame([
+			'cardCount' => 0,
+			'doneCount' => 0,
+			'progress' => 0,
+			'needsReview' => 0,
+			'overdue' => 0,
+		], $result[1]['stats']);
+	}
+
+	public function testFindAllWithStatsPassesEmptySetWhenUserHasNoBoards(): void {
+		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn([]);
+		$this->boardMapper->method('findAllForUser')->with('alice', [])->willReturn([]);
+
+		$this->cardMapper->expects(self::once())->method('countByBoards')->with([])->willReturn([]);
+		$this->cardMapper->expects(self::once())->method('doneRatioByBoards')->with([])->willReturn([]);
+		$this->cardMapper->expects(self::once())->method('overdueCountByBoards')->with([])->willReturn([]);
+		$this->cardReviewMapper->expects(self::once())->method('needsReviewCountByBoards')->with([])->willReturn([]);
+
+		self::assertSame([], $this->service->findAllWithStats('alice'));
 	}
 }

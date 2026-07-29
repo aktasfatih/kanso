@@ -9,6 +9,8 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\EstimateScale;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -25,6 +27,8 @@ class BoardService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		private CardMapper $cardMapper,
+		private CardReviewMapper $cardReviewMapper,
 	) {
 	}
 
@@ -38,6 +42,59 @@ class BoardService {
 			$uid,
 			$this->permissionService->getUserGroupIds($uid)
 		);
+	}
+
+	/**
+	 * The boards-LIST payload: every visible board serialized to a summary, each
+	 * with a `stats` block of per-board signal for the boards page - card count,
+	 * done progress %, needs-review count and overdue count.
+	 *
+	 * The list stays summary-only and, critically, N+1-free: the aggregates are a
+	 * FIXED number of batched `GROUP BY board_id` queries over the user's readable
+	 * board-id set (the exact set {@see self::findAll()} already ACL-authorizes),
+	 * NOT one query per board. A board the user cannot READ is never in that set,
+	 * so it contributes nothing - the aggregates are bounded to the readable set
+	 * with no full-table scan.
+	 *
+	 * Archived-consistency: all four signals (`cardCount`, `progress`,
+	 * `needsReview`, `overdue`) cover the SAME open scope (non-deleted,
+	 * non-archived), matching how the board-stats distribution aggregates treat
+	 * archived cards - so the tile is internally consistent (`cardCount` is "cards
+	 * remaining", not a historical grand total, and a board can never read
+	 * "0 cards" while still showing a review/overdue count from archived work).
+	 *
+	 * @return list<array<string, mixed>> each board's summary + a `stats` block
+	 * @throws \OCP\DB\Exception
+	 */
+	public function findAllWithStats(string $uid): array {
+		$boards = $this->findAll($uid);
+		$boardIds = array_map(static fn (Board $b): int => $b->getId(), $boards);
+
+		// A fixed set of batched aggregates over the readable board-id set - the
+		// count is constant no matter how many boards the user has.
+		$counts = $this->cardMapper->countByBoards($boardIds);
+		$ratios = $this->cardMapper->doneRatioByBoards($boardIds);
+		$overdue = $this->cardMapper->overdueCountByBoards($boardIds, new \DateTime('@' . time()));
+		$needsReview = $this->cardReviewMapper->needsReviewCountByBoards($boardIds);
+
+		$out = [];
+		foreach ($boards as $board) {
+			$id = $board->getId();
+			$ratio = $ratios[$id] ?? ['total' => 0, 'done' => 0];
+			$total = $ratio['total'];
+			$done = $ratio['done'];
+			$out[] = $board->jsonSerialize() + [
+				'stats' => [
+					'cardCount' => $counts[$id] ?? 0,
+					'doneCount' => $done,
+					// Whole-percent done ratio; 0 for an empty board (no divide-by-zero).
+					'progress' => $total > 0 ? (int)round($done * 100 / $total) : 0,
+					'needsReview' => $needsReview[$id] ?? 0,
+					'overdue' => $overdue[$id] ?? 0,
+				],
+			];
+		}
+		return $out;
 	}
 
 	/**

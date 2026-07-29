@@ -146,6 +146,55 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * Number of non-deleted cards that need review, grouped by board, over an
+	 * explicit board id set - the boards-list "needs review" signal. A card
+	 * "needs review" when it carries at least one review row that is not yet
+	 * approved (state != approved) - the same not-approved condition
+	 * {@see self::hasUnapprovedReviews()} gates the done-transition on, and the
+	 * cause of the tile's review chip. ARCHIVED cards are EXCLUDED so this shares
+	 * the same open scope (non-deleted, non-archived) as the other boards-list
+	 * signals ({@see \OCA\Kanso\Db\CardMapper::countByBoards()}): a board whose
+	 * only unapproved-review cards are archived is not actionable and reads 0, so
+	 * the tile stays internally consistent (no "0 cards but N need review"). Counts
+	 * DISTINCT card ids so a card with several open reviews is counted once. One
+	 * query joining through `kanso_cards`; the caller supplies ONLY the viewer's
+	 * ACL-resolved readable
+	 * board ids (BoardMapper::findAllForUser), so a board the viewer cannot READ is
+	 * never in the set and can never contribute a count. Boards with no such cards
+	 * are absent from the map (callers default to 0). An empty set short-circuits
+	 * (never emit `IN ()`).
+	 *
+	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @return array<int, int> map of boardId => needs-review card count
+	 * @throws Exception
+	 */
+	public function needsReviewCountByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.board_id')
+			->selectAlias($qb->func()->count($qb->createFunction('DISTINCT c.id')), 'cnt')
+			->from($this->getTableName(), 'r')
+			->innerJoin('r', 'kanso_cards', 'c', $qb->expr()->eq('r.card_id', 'c.id'))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->neq('r.state', $qb->createNamedParameter(CardReview::STATE_APPROVED)))
+			->groupBy('c.board_id');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['board_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * Whether the reviewer already holds a review of this exact type on the card
 	 * (untyped = 0). Same reviewer + different type is allowed, so uniqueness is
 	 * per (card, reviewer, type).

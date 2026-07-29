@@ -236,13 +236,19 @@ class BoardControllerTest extends TestCase {
 		self::assertArrayHasKey('error', $response->getData());
 	}
 
-	public function testIndexReturnsBoards(): void {
-		$boards = [$this->board()];
-		$this->boardService->method('findAll')->with('alice')->willReturn($boards);
+	public function testIndexReturnsBoardsWithStats(): void {
+		$payload = [$this->board()->jsonSerialize() + ['stats' => [
+			'cardCount' => 3,
+			'doneCount' => 1,
+			'progress' => 33,
+			'needsReview' => 0,
+			'overdue' => 2,
+		]]];
+		$this->boardService->method('findAllWithStats')->with('alice')->willReturn($payload);
 
 		$response = $this->controller->index();
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame($boards, $response->getData());
+		self::assertSame($payload, $response->getData());
 	}
 
 	public function testCreateMapsInvalidInputTo400(): void {
