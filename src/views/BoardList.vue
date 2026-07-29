@@ -88,6 +88,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</button>
 		</div>
 
+		<!-- Archived boards -->
+		<div v-if="!isLoading && archivedBoards.length > 0" class="board-list__archived">
+			<button class="board-list__archived-toggle" @click="showArchived = !showArchived">
+				<ChevronDownIcon v-if="showArchived" :size="18" />
+				<ChevronRightIcon v-else :size="18" />
+				{{ n('kanso', '%n archived board', '%n archived boards', archivedBoards.length) }}
+			</button>
+			<ul v-if="showArchived" class="board-list__archived-list">
+				<li v-for="board in archivedBoards" :key="board.id" class="board-list__archived-row">
+					<span class="board-tile__color-dot" :style="{ background: board.color || 'var(--color-primary)' }" />
+					<span class="board-list__archived-name">{{ board.title }}</span>
+					<NcButton :disabled="updateBoard.isPending.value" @click="unarchiveBoard(board.id)">
+						<template #icon>
+							<ArchiveArrowUpIcon :size="18" />
+						</template>
+						{{ t('kanso', 'Unarchive') }}
+					</NcButton>
+				</li>
+			</ul>
+		</div>
+
 		<!-- New board form -->
 		<form class="new-board-form" @submit.prevent="submitNewBoard">
 			<input
@@ -118,12 +139,15 @@ import NcModal from '@nextcloud/vue/components/NcModal'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import ImportIcon from 'vue-material-design-icons/Import.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import { useBoards } from '../composables/useBoards.js'
 import { fetchDeckImportBoards, importDeckBoard } from '../services/api.js'
 
 const router = useRouter()
 const queryClient = useQueryClient()
-const { data: boards, isLoading, isError, createBoard } = useBoards()
+const { data: boards, isLoading, isError, createBoard, updateBoard } = useBoards()
 
 const newBoardTitle = ref('')
 const createError = ref('')
@@ -171,9 +195,17 @@ async function doImport(db) {
 const activeBoards = computed(() =>
 	boards.value ? boards.value.filter((b) => !b.archived) : [],
 )
+const archivedBoards = computed(() =>
+	boards.value ? boards.value.filter((b) => b.archived) : [],
+)
+const showArchived = ref(false)
 
 function openBoard(id) {
 	router.push({ name: 'board', params: { id } })
+}
+
+async function unarchiveBoard(id) {
+	await updateBoard.mutateAsync({ id, data: { archived: false } })
 }
 
 async function submitNewBoard() {

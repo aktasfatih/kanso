@@ -34,6 +34,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<p v-if="canManage" class="board-settings__general-hint">
 						{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
 					</p>
+
+					<div v-if="canManage" class="board-settings__general-archive">
+						<NcButton type="warning" :disabled="archiving" @click="archiveBoard">
+							<template #icon>
+								<ArchiveArrowDownIcon :size="18" />
+							</template>
+							{{ t('kanso', 'Archive board') }}
+						</NcButton>
+						<p class="board-settings__general-hint">
+							{{ t('kanso', 'Hides the board from your list and navigation. Restore it any time from the Archived section on the boards page.') }}
+						</p>
+					</div>
 				</div>
 			</NcAppSidebarTab>
 
@@ -1355,6 +1367,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
+import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
 import NcAppSidebarTab from '@nextcloud/vue/components/NcAppSidebarTab'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -1369,6 +1382,7 @@ import RobotIcon from 'vue-material-design-icons/Robot.vue'
 import { useLabels } from '../composables/useLabels.js'
 import { useReviewTypes } from '../composables/useReviewTypes.js'
 import { useAcl } from '../composables/useAcl.js'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useBoard } from '../composables/useBoard.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
@@ -1603,6 +1617,25 @@ async function onNewCardsOnTopChange(checked) {
 		await updateBoard.mutateAsync({ newCardsOnTop: checked })
 	} finally {
 		newCardsOnTopSaving.value = false
+	}
+}
+
+// Archive the board: hides it from the list + nav (restorable from the boards
+// page). Close the panel and return to the board list, since the board the user
+// is on is now archived.
+const archiveQueryClient = useQueryClient()
+const archiving = ref(false)
+async function archiveBoard() {
+	archiving.value = true
+	try {
+		await updateBoard.mutateAsync({ archived: true })
+		// The board-list uses the ['boards'] query; refresh it so the now-archived
+		// board drops out of the active grid (into the Archived section).
+		await archiveQueryClient.invalidateQueries({ queryKey: ['boards'] })
+		emit('close')
+		router.push({ name: 'board-list' })
+	} finally {
+		archiving.value = false
 	}
 }
 
