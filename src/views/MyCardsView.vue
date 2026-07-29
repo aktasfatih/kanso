@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="my-cards-view">
-		<div class="my-cards-view__header">
+		<div v-if="!embedded" class="my-cards-view__header">
 			<h1 class="my-cards-view__title">{{ t('kanso', 'My tasks') }}</h1>
 		</div>
 
@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Empty state -->
 		<NcEmptyContent
-			v-else-if="!cards.length"
+			v-else-if="!filteredCards.length"
 			:name="t('kanso', 'No tasks assigned to you')"
 			:description="t('kanso', 'Cards assigned to you across your boards will appear here.')">
 			<template #icon>
@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Grouped sections -->
 		<template v-else>
 			<section
-				v-for="group in groups"
+				v-for="group in filteredGroups"
 				v-show="group.cards.length"
 				:key="group.key"
 				class="my-cards-view__section">
@@ -78,10 +78,22 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
 import { useMyCards } from '../composables/useMyCards.js'
 
+const props = defineProps({
+	embedded: { type: Boolean, default: false },
+	boardFilter: { type: Number, default: null },
+})
+
 const router = useRouter()
 const { data, isLoading, isError } = useMyCards()
 
 const cards = computed(() => data.value ?? [])
+
+/** Cards after applying the optional board filter from the hub. */
+const filteredCards = computed(() =>
+	props.boardFilter === null
+		? cards.value
+		: cards.value.filter((c) => c.boardId === props.boardFilter),
+)
 
 /** Local midnight boundaries used to bucket cards by due date. */
 function dayBounds() {
@@ -92,14 +104,14 @@ function dayBounds() {
 	return { start, tomorrow }
 }
 
-const groups = computed(() => {
+const filteredGroups = computed(() => {
 	const { start, tomorrow } = dayBounds()
 	const overdue = []
 	const today = []
 	const upcoming = []
 	const none = []
 
-	for (const card of cards.value) {
+	for (const card of filteredCards.value) {
 		if (!card.duedate) {
 			none.push(card)
 			continue

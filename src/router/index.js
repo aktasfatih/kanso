@@ -30,6 +30,11 @@ const routes = [
 		props: true,
 	},
 	{
+		path: '/my-work',
+		name: 'my-work',
+		component: () => import('../views/MyWorkView.vue'),
+	},
+	{
 		path: '/my-tasks',
 		name: 'my-cards',
 		component: () => import('../views/MyCardsView.vue'),

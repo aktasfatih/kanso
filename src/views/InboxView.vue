@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="inbox-view">
-		<div class="inbox-view__header">
+		<div v-if="!embedded" class="inbox-view__header">
 			<h1 class="inbox-view__title">{{ t('kanso', 'Inbox') }}</h1>
 		</div>
 
@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Empty state -->
 		<NcEmptyContent
-			v-else-if="items.length === 0"
+			v-else-if="filteredItems.length === 0"
 			:name="t('kanso', 'You\'re all caught up')"
 			:description="t('kanso', 'Comments on cards you watch will appear here. Subscribe to a card via its Watch button to follow activity.')">
 			<template #icon>
@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Feed -->
 		<ul v-else class="inbox-view__list">
 			<li
-				v-for="item in items"
+				v-for="item in filteredItems"
 				:key="item.type + '-' + item.id"
 				class="inbox-view__item"
 				role="button"
@@ -78,10 +78,22 @@ import BellIcon from 'vue-material-design-icons/Bell.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { useInbox } from '../composables/useInbox.js'
 
+const props = defineProps({
+	embedded: { type: Boolean, default: false },
+	boardFilter: { type: Number, default: null },
+})
+
 const router = useRouter()
 const { data, isLoading, isError } = useInbox()
 
 const items = computed(() => data.value ?? [])
+
+/** Items after applying the optional board filter from the hub. */
+const filteredItems = computed(() =>
+	props.boardFilter === null
+		? items.value
+		: items.value.filter((item) => item.boardId === props.boardFilter),
+)
 
 /**
  * Resolve the author display name.

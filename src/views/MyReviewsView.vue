@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="my-reviews-view">
-		<div class="my-reviews-view__header">
+		<div v-if="!embedded" class="my-reviews-view__header">
 			<h1 class="my-reviews-view__title">{{ t('kanso', 'My Reviews') }}</h1>
 		</div>
 
@@ -95,6 +95,11 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import { useMyReviews } from '../composables/useMyReviews.js'
 import ReviewRow from '../components/ReviewRow.vue'
 
+const props = defineProps({
+	embedded: { type: Boolean, default: false },
+	boardFilter: { type: Number, default: null },
+})
+
 const router = useRouter()
 const { data: reviews, isLoading, isError, setState } = useMyReviews()
 
@@ -102,14 +107,22 @@ const { data: reviews, isLoading, isError, setState } = useMyReviews()
 // their buttons individually without blocking the whole list.
 const mutatingCardId = ref(null)
 
+/** All reviews after applying the optional board filter from the hub. */
+const filteredReviews = computed(() => {
+	const all = reviews.value ?? []
+	return props.boardFilter === null
+		? all
+		: all.filter((r) => r.boardId === props.boardFilter)
+})
+
 const pendingReviews = computed(() =>
-	(reviews.value ?? []).filter((r) => r.state === 'pending'),
+	filteredReviews.value.filter((r) => r.state === 'pending'),
 )
 const changesRequestedReviews = computed(() =>
-	(reviews.value ?? []).filter((r) => r.state === 'changes_requested'),
+	filteredReviews.value.filter((r) => r.state === 'changes_requested'),
 )
 const approvedReviews = computed(() =>
-	(reviews.value ?? []).filter((r) => r.state === 'approved'),
+	filteredReviews.value.filter((r) => r.state === 'approved'),
 )
 
 const hasPending = computed(() => pendingReviews.value.length > 0)

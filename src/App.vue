@@ -33,27 +33,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
-					:name="t('kanso', 'My tasks')"
-					:to="{ name: 'my-cards' }"
-					:active="isMyCardsActive">
+					:name="t('kanso', 'My Work')"
+					:to="{ name: 'my-work' }"
+					:active="isMyWorkActive">
 					<template #icon>
-						<FormatListChecksIcon :size="20" />
-					</template>
-				</NcAppNavigationItem>
-				<NcAppNavigationItem
-					:name="t('kanso', 'My Reviews')"
-					:to="{ name: 'my-reviews' }"
-					:active="isMyReviewsActive">
-					<template #icon>
-						<CheckDecagramIcon :size="20" />
-					</template>
-				</NcAppNavigationItem>
-				<NcAppNavigationItem
-					:name="t('kanso', 'Inbox')"
-					:to="{ name: 'inbox' }"
-					:active="isInboxActive">
-					<template #icon>
-						<BellIcon :size="20" />
+						<BriefcaseOutlineIcon :size="20" />
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
@@ -82,9 +66,7 @@ import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
-import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
-import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
-import BellIcon from 'vue-material-design-icons/Bell.vue'
+import BriefcaseOutlineIcon from 'vue-material-design-icons/BriefcaseOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useBoards } from './composables/useBoards.js'
 
@@ -128,9 +110,7 @@ function isBoardActive(boardId) {
 	return (route.name === 'board' || route.name === 'card-modal')
 		&& String(route.params.id) === String(boardId)
 }
-const isMyCardsActive = computed(() => route.name === 'my-cards')
-const isMyReviewsActive = computed(() => route.name === 'my-reviews')
-const isInboxActive = computed(() => route.name === 'inbox')
+const isMyWorkActive = computed(() => route.name === 'my-work')
 const isProjectsActive = computed(() => route.name === 'projects' || route.name === 'project')
 </script>
 
