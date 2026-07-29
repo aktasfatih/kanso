@@ -233,6 +233,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Move to bottom') }}
 							</NcActionButton>
 							<NcActionSeparator v-if="canEdit" />
+							<NcActionButton
+								:close-after-click="true"
+								:disabled="copyingPrompt"
+								@click="copyAsPrompt">
+								<template #icon>
+									<ContentCopyIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Copy as prompt') }}
+							</NcActionButton>
+							<NcActionSeparator />
 							<NcActionButton :close-after-click="true" @click="handleArchiveToggle">
 								<template #icon>
 									<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
@@ -1305,7 +1315,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
-import { showUndo } from '@nextcloud/dialogs'
+import { showUndo, showSuccess, showError } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -1368,6 +1378,7 @@ import { useReviews } from '../composables/useReviews.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree } from '../composables/useComments.js'
+import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
@@ -2210,6 +2221,38 @@ async function handleDeleteComment(comment) {
 		await deleteComment.mutateAsync({ comment })
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to delete comment.')
+	}
+}
+
+// ── Copy as prompt ───────────────────────────────────────────────────────────
+// Copies the card title + description + full comment thread as a single
+// markdown block, ready to paste into an LLM. Comments are lazily loaded, so we
+// ensure the query has resolved before assembling the text.
+const copyingPrompt = ref(false)
+
+async function copyAsPrompt() {
+	if (copyingPrompt.value) return
+	copyingPrompt.value = true
+	try {
+		// Make sure the (lazy) comments query has data before assembling.
+		let comments = commentsQuery.data.value
+		if (!Array.isArray(comments)) {
+			const result = await commentsQuery.refetch()
+			comments = result?.data ?? commentsQuery.data.value ?? []
+		}
+
+		const prompt = buildCardPrompt(cardData.value ?? {}, comments)
+
+		if (!navigator.clipboard?.writeText) {
+			showError(t('kanso', 'Clipboard is not available in this context.'))
+			return
+		}
+		await navigator.clipboard.writeText(prompt)
+		showSuccess(t('kanso', 'Card copied as prompt.'))
+	} catch (err) {
+		showError(t('kanso', 'Could not copy to clipboard.'))
+	} finally {
+		copyingPrompt.value = false
 	}
 }
 
