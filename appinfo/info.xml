@@ -10,7 +10,7 @@ instant drag & drop, optimistic updates and payloads sized for large boards.
 
 Early development, not feature complete yet.
 	]]></description>
-	<version>0.1.30</version>
+	<version>0.1.31</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>

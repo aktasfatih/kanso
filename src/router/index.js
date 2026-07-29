@@ -24,6 +24,12 @@ const routes = [
 		],
 	},
 	{
+		path: '/board/:id/stats',
+		name: 'board-stats',
+		component: () => import('../views/BoardStats.vue'),
+		props: true,
+	},
+	{
 		path: '/my-tasks',
 		name: 'my-cards',
 		component: () => import('../views/MyCardsView.vue'),

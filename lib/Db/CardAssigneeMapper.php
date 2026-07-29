@@ -55,6 +55,67 @@ class CardAssigneeMapper extends QBMapper {
 	}
 
 	/**
+	 * Open (non-deleted) card counts grouped by assignee for a board - the
+	 * "cards per assignee" board-stats aggregate. Joins through `kanso_cards`,
+	 * user assignees only (TYPE_USER), grouped by participant.
+	 *
+	 * @return list<array{uid: string, count: int}>
+	 * @throws Exception
+	 */
+	public function countByAssigneeForBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ca.participant')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ca')
+			->innerJoin('ca', 'kanso_cards', 'c', $qb->expr()->eq('ca.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->groupBy('ca.participant');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['uid' => (string)$row['participant'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * The (participant, estimate) pairs of every open (non-deleted) card on a
+	 * board that carries an estimate, one row per assignment - the source for
+	 * the per-assignee estimate sum. Summing (and numeric filtering) is done in
+	 * PHP after fetch, same dialect-clean approach as
+	 * {@see \OCA\Kanso\Db\CardMapper::estimateByStack()}. User assignees only.
+	 *
+	 * @return list<array{uid: string, estimate: string}>
+	 * @throws Exception
+	 */
+	public function estimateByAssigneeForBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ca.participant', 'c.estimate')
+			->from($this->getTableName(), 'ca')
+			->innerJoin('ca', 'kanso_cards', 'c', $qb->expr()->eq('ca.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNotNull('c.estimate'));
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['uid' => (string)$row['participant'], 'estimate' => (string)$row['estimate']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Assignee uids of one card, in assignment order.
 	 *
 	 * @return string[]

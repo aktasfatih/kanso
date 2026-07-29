@@ -412,4 +412,193 @@ class CardMapper extends QBMapper {
 
 		return $rows;
 	}
+
+	/**
+	 * Open (non-deleted) card counts grouped by stack for a board - the
+	 * "cards per column" board-stats aggregate. One grouped query; stacks with
+	 * no open cards are simply absent from the list (the frontend defaults 0).
+	 *
+	 * @return list<array{stackId: int, count: int}>
+	 * @throws Exception
+	 */
+	public function countByStack(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('stack_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('stack_id');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['stackId' => (int)$row['stack_id'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * Open (non-deleted) card counts grouped by priority for a board.
+	 *
+	 * @return list<array{priority: int, count: int}>
+	 * @throws Exception
+	 */
+	public function countByPriority(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('priority')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('priority');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['priority' => (int)$row['priority'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * Number of open cards on a board that have been sitting since before
+	 * $cutoff - the aging bucket. "Open" here means not done (`done_at = 0`),
+	 * not archived, not soft-deleted; "old" means created at or before the
+	 * cutoff. `created_at` is a plain unix int so this is a direct comparison
+	 * (no per-dialect date SQL). There is no last-moved column, so age is
+	 * measured from creation.
+	 *
+	 * @throws Exception
+	 */
+	public function agingCount(int $boardId, int $cutoff): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+
+		return $count;
+	}
+
+	/**
+	 * Number of open cards on a board whose due date is already in the past -
+	 * the overdue count. "Open" means not done, not archived, not soft-deleted.
+	 * `duedate` is a DATETIME column, so the comparison binds a DATETIME
+	 * parameter (dialect-clean, same type QBMapper serializes the column as)
+	 * and adds a NOT NULL guard (an undated card is never overdue).
+	 *
+	 * @throws Exception
+	 */
+	public function overdueCount(int $boardId, \DateTime $now): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->isNotNull('duedate'))
+			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
+
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+
+		return $count;
+	}
+
+	/**
+	 * Raw `done_at` timestamps of non-deleted cards completed in the window
+	 * [$sinceTs, $untilTs] - the throughput timeline source. Bucketing into
+	 * per-day counts is done in PHP (dialect-safe: no per-dialect date SQL);
+	 * only cards actually done (`done_at > 0`) inside the window are returned.
+	 *
+	 * @return int[] the done_at unix timestamps (unordered)
+	 * @throws Exception
+	 */
+	public function doneTimeline(int $boardId, int $sinceTs, int $untilTs): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('done_at')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$stamps = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+
+		return $stamps;
+	}
+
+	/**
+	 * Raw `created_at` timestamps of non-deleted cards created in the window
+	 * [$sinceTs, $untilTs] - the "created" timeline source. Bucketed into
+	 * per-day counts in PHP, same dialect-safe approach as
+	 * {@see self::doneTimeline()}.
+	 *
+	 * @return int[] the created_at unix timestamps (unordered)
+	 * @throws Exception
+	 */
+	public function createdTimeline(int $boardId, int $sinceTs, int $untilTs): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('created_at')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$stamps = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+
+		return $stamps;
+	}
+
+	/**
+	 * The raw estimate token of every open (non-deleted) card on a board that
+	 * carries one, paired with its stack id - the source for the
+	 * per-stack estimate sum. Summing is done in PHP after casting the numeric
+	 * tokens (avoids CAST portability issues; only meaningful for numeric
+	 * scales, which the caller has already checked). Cards with no estimate are
+	 * excluded.
+	 *
+	 * @return list<array{stackId: int, estimate: string}>
+	 * @throws Exception
+	 */
+	public function estimateByStack(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('stack_id', 'estimate')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->isNotNull('estimate'));
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['stackId' => (int)$row['stack_id'], 'estimate' => (string)$row['estimate']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
 }

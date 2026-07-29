@@ -238,6 +238,31 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
+	 * Count of non-deleted comments posted on a board's non-deleted cards since
+	 * $sinceTs - the "comment activity" board-stats metric. One grouped-free
+	 * COUNT joining through `kanso_cards`. `created_at` is a plain unix int, so
+	 * the window is a direct integer comparison.
+	 *
+	 * @throws Exception
+	 */
+	public function countRecentForBoard(int $boardId, int $sinceTs): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*'))
+			->from($this->getTableName(), 'cm')
+			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('cm.created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+
+		return $count;
+	}
+
+	/**
 	 * Hard-deletes every comment of a card (all threads) - cascade for a card
 	 * purge.
 	 *

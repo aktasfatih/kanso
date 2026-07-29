@@ -17,6 +17,7 @@ return [
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
+		['name' => 'boardStats#show', 'url' => '/api/boards/{id}/stats', 'verb' => 'GET'],
 		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],
 		['name' => 'board#update', 'url' => '/api/boards/{id}', 'verb' => 'PATCH'],
 		['name' => 'board#destroy', 'url' => '/api/boards/{id}', 'verb' => 'DELETE'],

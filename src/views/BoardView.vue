@@ -178,6 +178,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
+			<!-- Analytics button - navigates to the board stats page -->
+			<NcButton
+				v-if="boardData"
+				class="board-view__analytics-btn"
+				:title="t('kanso', 'Board analytics')"
+				:aria-label="t('kanso', 'Board analytics')"
+				@click="goToStats">
+				<template #icon>
+					<ChartBarIcon :size="20" />
+				</template>
+			</NcButton>
+
 			<!-- Settings (gear) button - toggles the right-docked settings panel -->
 			<NcButton
 				v-if="boardData"
@@ -375,6 +387,7 @@ import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import SortIcon from 'vue-material-design-icons/Sort.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
+import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BoardListView from '../components/BoardListView.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
@@ -1053,6 +1066,10 @@ function clearAllFilters() {
 
 function goBack() {
 	router.push({ name: 'board-list' })
+}
+
+function goToStats() {
+	router.push({ name: 'board-stats', params: { id: props.id } })
 }
 
 async function submitNewStack() {

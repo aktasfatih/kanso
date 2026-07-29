@@ -50,6 +50,35 @@ class CardLabelMapper extends QBMapper {
 	}
 
 	/**
+	 * Open (non-deleted) card counts grouped by label for a board - the
+	 * "cards per label" board-stats aggregate. Joins through `kanso_cards`,
+	 * grouped by label_id.
+	 *
+	 * @return list<array{labelId: int, count: int}>
+	 * @throws Exception
+	 */
+	public function countByLabelForBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('cl.label_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'cl')
+			->innerJoin('cl', 'kanso_cards', 'c', $qb->expr()->eq('cl.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('cl.label_id');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['labelId' => (int)$row['label_id'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Label ids assigned to one card, in assignment order.
 	 *
 	 * @return int[]

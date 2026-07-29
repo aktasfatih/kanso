@@ -305,3 +305,7 @@ export const addCardToProject = (projectId, cardId) =>
 
 export const removeCardFromProject = (projectId, cardId) =>
 	axios.delete(url(`/api/projects/${projectId}/cards/${cardId}`)).then((r) => r.data)
+
+// Board analytics
+export const getBoardStats = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/stats`)).then((r) => r.data)
