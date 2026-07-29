@@ -59,17 +59,21 @@ class ChangeNotifier {
 	 *                   {@see self::emitPush()} yourself after commit - otherwise a client
 	 *                   could refetch pre-commit state, or (on rollback) get an event for a
 	 *                   change that never landed.
+	 * @param int|null $verb one of the Change::VERB_* constants for the per-card
+	 *                       Activity feed, or null (renders as a generic "updated"). Additive -
+	 *                       delta-sync keys on (entity_type, action), not the verb.
 	 * @return Change the inserted entry with its id set
 	 * @throws \OCP\DB\Exception if inserting the change row fails
 	 */
-	public function notify(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, bool $push = true): Change {
+	public function notify(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, bool $push = true, ?int $verb = null): Change {
 		$change = $this->changeMapper->insertChange(
 			$boardId,
 			$entityType,
 			$entityId,
 			$action,
 			$actor,
-			time()
+			time(),
+			$verb
 		);
 
 		if ($push) {

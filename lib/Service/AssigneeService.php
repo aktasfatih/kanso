@@ -75,7 +75,8 @@ class AssigneeService {
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$actorUid
+			$actorUid,
+			verb: Change::VERB_ASSIGNED,
 		);
 
 		// Targeted bell notification to the assignee (not the board fan-out).
@@ -105,7 +106,8 @@ class AssigneeService {
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$actorUid
+			$actorUid,
+			verb: Change::VERB_UNASSIGNED,
 		);
 
 		// Clear any pending "assigned to you" bell notification for this card.

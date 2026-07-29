@@ -1031,13 +1031,51 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- RIGHT: discussion pane -->
 					<aside class="card-modal__discussion">
-						<div class="card-modal__discussion-head">
-							<CommentMultipleOutlineIcon :size="16" class="card-modal__discussion-head-icon" />
-							<span class="card-modal__discussion-title">{{ t('kanso', 'Discussion') }}</span>
-							<span v-if="commentCount > 0" class="card-modal__discussion-count">{{ commentCount }}</span>
+						<div class="card-modal__discussion-head card-modal__discussion-tabs" role="tablist">
+							<button
+								class="card-modal__discussion-tab"
+								:class="{ 'card-modal__discussion-tab--active': discussionTab === 'discussion' }"
+								role="tab"
+								:aria-selected="discussionTab === 'discussion'"
+								@click="discussionTab = 'discussion'">
+								<CommentMultipleOutlineIcon :size="16" />
+								{{ t('kanso', 'Discussion') }}
+								<span v-if="commentCount > 0" class="card-modal__discussion-count">{{ commentCount }}</span>
+							</button>
+							<button
+								class="card-modal__discussion-tab"
+								:class="{ 'card-modal__discussion-tab--active': discussionTab === 'activity' }"
+								role="tab"
+								:aria-selected="discussionTab === 'activity'"
+								@click="discussionTab = 'activity'">
+								<HistoryIcon :size="16" />
+								{{ t('kanso', 'Activity') }}
+							</button>
 						</div>
 
-						<div class="card-modal__thread-scroll">
+						<!-- Activity feed (read-only view over the change log) -->
+						<div v-if="discussionTab === 'activity'" class="card-modal__activity">
+							<ul v-if="activityItems.length > 0" class="card-modal__activity-list">
+								<li v-for="(item, idx) in activityItems" :key="idx" class="card-modal__activity-row">
+									<NcAvatar
+										:user="item.actor || ''"
+										:display-name="item.actorName || item.actor || t('kanso', 'System')"
+										:size="24"
+										:show-user-status="false" />
+									<span class="card-modal__activity-text">
+										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
+										{{ activityVerbText(item) }}
+									</span>
+									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}</span>
+								</li>
+							</ul>
+							<div v-else class="card-modal__discussion-empty">
+								<HistoryIcon :size="64" class="card-modal__discussion-empty-icon" />
+								<p>{{ t('kanso', 'No activity yet.') }}</p>
+							</div>
+						</div>
+
+						<div v-if="discussionTab === 'discussion'" class="card-modal__thread-scroll">
 							<div v-if="commentThread.length > 0" class="card-modal__thread">
 								<div
 									v-for="{ comment: topComment, replies } in commentThread"
@@ -1175,7 +1213,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 						</div>
 
-						<div v-if="canEdit" class="card-modal__composer">
+						<div v-if="canEdit && discussionTab === 'discussion'" class="card-modal__composer">
 							<NcAvatar
 								:user="currentUserId"
 								:size="28"
@@ -1229,10 +1267,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showUndo } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -1249,6 +1287,7 @@ import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
+import HistoryIcon from 'vue-material-design-icons/History.vue'
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
@@ -1295,7 +1334,7 @@ import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity } from '../services/api.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -1962,6 +2001,53 @@ async function onItemDrop(event, targetItem) {
 	} catch (err) {
 		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to reorder item.')
 	}
+}
+
+// ── Discussion | Activity tabs ───────────────────────────────────────────────
+const discussionTab = ref('discussion')
+
+// Per-card activity feed — a read-only view over the change log. Fetched lazily
+// when the Activity tab is open, and refetched each time it's opened (staleTime 0).
+const activityQuery = useQuery({
+	queryKey: computed(() => ['card-activity', String(props.cardId)]),
+	queryFn: () => apiGetCardActivity(Number(props.cardId)),
+	enabled: computed(() => discussionTab.value === 'activity'),
+	staleTime: 0,
+})
+const activityItems = computed(() => (Array.isArray(activityQuery.data.value) ? activityQuery.data.value : []))
+
+// verb → human phrase. Falls back to a generic "updated this card".
+const ACTIVITY_VERBS = {
+	1: () => t('kanso', 'created this card'),
+	2: () => t('kanso', 'updated this card'),
+	3: () => t('kanso', 'moved this card'),
+	4: () => t('kanso', 'deleted this card'),
+	5: () => t('kanso', 'commented'),
+	6: () => t('kanso', 'added a label'),
+	7: () => t('kanso', 'removed a label'),
+	8: () => t('kanso', 'assigned a member'),
+	9: () => t('kanso', 'removed an assignee'),
+	10: () => t('kanso', 'requested a review'),
+	11: () => t('kanso', 'gave a review verdict'),
+	12: () => t('kanso', 'updated the checklist'),
+}
+function activityVerbText(item) {
+	const fn = ACTIVITY_VERBS[item.verb]
+	return fn ? fn() : t('kanso', 'updated this card')
+}
+
+// Compact relative time (falls back to a localized date for older entries).
+function relativeTime(tsSeconds) {
+	if (!tsSeconds) return ''
+	const secs = Math.max(0, Math.floor(Date.now() / 1000) - Number(tsSeconds))
+	if (secs < 60) return t('kanso', 'just now')
+	const mins = Math.floor(secs / 60)
+	if (mins < 60) return n('kanso', '%n minute ago', '%n minutes ago', mins)
+	const hours = Math.floor(mins / 60)
+	if (hours < 24) return n('kanso', '%n hour ago', '%n hours ago', hours)
+	const days = Math.floor(hours / 24)
+	if (days < 7) return n('kanso', '%n day ago', '%n days ago', days)
+	return new Date(Number(tsSeconds) * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 // ── Comments / Discussion ────────────────────────────────────────────────────
@@ -3871,6 +3957,61 @@ function onCommentKeydown(event) {
 .card-modal__discussion-count {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+/* Discussion | Activity tab bar */
+.card-modal__discussion-tabs {
+	gap: 4px;
+	padding: 8px 12px;
+}
+.card-modal__discussion-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+.card-modal__discussion-tab:hover { background: var(--color-background-hover); }
+.card-modal__discussion-tab--active {
+	background: var(--color-primary-element-light);
+	color: var(--color-main-text);
+}
+/* Activity feed */
+.card-modal__activity {
+	flex: 1;
+	overflow: auto;
+	padding: 8px 12px;
+}
+.card-modal__activity-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.card-modal__activity-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 4px;
+}
+.card-modal__activity-text {
+	flex: 1;
+	font-size: 0.8125rem;
+	color: var(--color-main-text);
+	min-width: 0;
+}
+.card-modal__activity-time {
+	flex: 0 0 auto;
+	font-size: 0.72rem;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
 }
 .card-modal__thread-scroll {
 	flex: 1;

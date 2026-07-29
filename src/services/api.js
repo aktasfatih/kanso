@@ -273,6 +273,10 @@ export const updateReviewType = (id, data) =>
 export const deleteReviewType = (id) =>
 	axios.delete(url(`/api/review-types/${id}`)).then((r) => r.data)
 
+// Per-card activity feed (read-only view over the change log)
+export const getCardActivity = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/activity`)).then((r) => r.data)
+
 // Per-user settings (default board on start, …)
 export const getSettings = () =>
 	axios.get(url('/api/settings')).then((r) => r.data)

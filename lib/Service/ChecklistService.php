@@ -209,7 +209,8 @@ class ChecklistService {
 			Change::ENTITY_CARD,
 			$card->getId(),
 			Change::ACTION_UPDATE,
-			$actorUid
+			$actorUid,
+			verb: Change::VERB_CHECKLIST,
 		);
 	}
 

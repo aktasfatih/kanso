@@ -162,7 +162,8 @@ class LabelService {
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$uid
+			$uid,
+			verb: Change::VERB_LABELED,
 		);
 	}
 
@@ -187,7 +188,8 @@ class LabelService {
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$uid
+			$uid,
+			verb: Change::VERB_UNLABELED,
 		);
 	}
 

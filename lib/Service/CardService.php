@@ -130,7 +130,8 @@ class CardService {
 			Change::ENTITY_CARD,
 			$card->getId(),
 			Change::ACTION_CREATE,
-			$uid
+			$uid,
+			verb: Change::VERB_CREATED,
 		);
 
 		// Fan a "new card on a board you watch" notification out to board
@@ -238,7 +239,8 @@ class CardService {
 			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_UPDATE,
-			$uid
+			$uid,
+			verb: Change::VERB_UPDATED,
 		);
 
 		// A new @mention in the description pings + auto-subscribes readable-board
@@ -285,7 +287,8 @@ class CardService {
 			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_DELETE,
-			$uid
+			$uid,
+			verb: Change::VERB_DELETED,
 		);
 	}
 
@@ -401,6 +404,7 @@ class CardService {
 				Change::ACTION_MOVE,
 				$uid,
 				false,
+				Change::VERB_MOVED,
 			);
 
 			$this->db->commit();
@@ -472,7 +476,8 @@ class CardService {
 			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_UPDATE,
-			$uid
+			$uid,
+			verb: Change::VERB_UPDATED,
 		);
 
 		return $card;
@@ -613,7 +618,8 @@ class CardService {
 			Change::ENTITY_CARD,
 			$parentId,
 			Change::ACTION_UPDATE,
-			$uid
+			$uid,
+			verb: Change::VERB_UPDATED,
 		);
 	}
 

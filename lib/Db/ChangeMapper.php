@@ -29,19 +29,42 @@ class ChangeMapper extends QBMapper {
 	 * @param int $action one of the Change::ACTION_* constants
 	 * @param string|null $actor uid of the acting user, null for system actions
 	 * @param int $createdAt unix timestamp of the change
+	 * @param int|null $verb one of the Change::VERB_* constants, or null (generic)
 	 * @return Change the inserted entry with its id set
 	 * @throws Exception
 	 */
-	public function insertChange(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, int $createdAt): Change {
+	public function insertChange(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, int $createdAt, ?int $verb = null): Change {
 		$change = new Change();
 		$change->setBoardId($boardId);
 		$change->setEntityType($entityType);
 		$change->setEntityId($entityId);
 		$change->setAction($action);
 		$change->setActor($actor);
+		$change->setVerb($verb);
 		$change->setCreatedAt($createdAt);
 
 		return $this->insert($change);
+	}
+
+	/**
+	 * A single entity's change rows, newest first, capped - the source for the
+	 * per-card Activity feed. Uses the (entity_type, entity_id) index.
+	 *
+	 * @param int $entityType one of the Change::ENTITY_* constants
+	 * @return Change[]
+	 * @throws Exception
+	 */
+	public function findByEntity(int $boardId, int $entityType, int $entityId, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('entity_type', $qb->createNamedParameter($entityType, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('entity_id', $qb->createNamedParameter($entityId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'DESC')
+			->setMaxResults($limit);
+
+		return $this->findEntities($qb);
 	}
 
 	/**

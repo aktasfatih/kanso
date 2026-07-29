@@ -58,6 +58,8 @@ return [
 		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'DELETE'],
 		['name' => 'review#setState', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'PATCH'],
 
+		['name' => 'activity#index', 'url' => '/api/cards/{cardId}/activity', 'verb' => 'GET'],
+
 		['name' => 'subscription#index', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'GET'],
 		['name' => 'subscription#subscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'PUT'],
 		['name' => 'subscription#unsubscribe', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'DELETE'],

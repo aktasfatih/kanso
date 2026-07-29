@@ -26,6 +26,8 @@ use OCP\DB\Types;
  * @method void setAction(int $action)
  * @method string|null getActor()
  * @method void setActor(?string $actor)
+ * @method int|null getVerb()
+ * @method void setVerb(?int $verb)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  */
@@ -42,6 +44,22 @@ class Change extends Entity {
 	public const ACTION_DELETE = 2;
 	public const ACTION_MOVE = 3;
 
+	// Fine-grained "what happened" for the per-card Activity feed. Nullable and
+	// additive over (entity_type, action): a null verb renders as a generic
+	// "updated". Only card-scoped mutations stamp these.
+	public const VERB_CREATED = 1;
+	public const VERB_UPDATED = 2;
+	public const VERB_MOVED = 3;
+	public const VERB_DELETED = 4;
+	public const VERB_COMMENTED = 5;
+	public const VERB_LABELED = 6;
+	public const VERB_UNLABELED = 7;
+	public const VERB_ASSIGNED = 8;
+	public const VERB_UNASSIGNED = 9;
+	public const VERB_REVIEW_REQUESTED = 10;
+	public const VERB_REVIEW_VERDICT = 11;
+	public const VERB_CHECKLIST = 12;
+
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of
 	// ACTION_CREATE would silently drop `action` from INSERTs of create
@@ -51,6 +69,7 @@ class Change extends Entity {
 	protected ?int $entityId = null;
 	protected ?int $action = null;
 	protected ?string $actor = null;
+	protected ?int $verb = null;
 	protected ?int $createdAt = null;
 
 	public function __construct() {
@@ -59,6 +78,7 @@ class Change extends Entity {
 		$this->addType('entityId', Types::INTEGER);
 		$this->addType('action', Types::INTEGER);
 		$this->addType('actor', Types::STRING);
+		$this->addType('verb', Types::INTEGER);
 		$this->addType('createdAt', Types::INTEGER);
 	}
 }

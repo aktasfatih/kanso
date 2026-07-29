@@ -103,7 +103,7 @@ class ReviewService {
 			throw $e;
 		}
 
-		$this->notify($card, $actorUid);
+		$this->notify($card, $actorUid, Change::VERB_REVIEW_REQUESTED);
 		$this->notificationService->notifyReviewRequested($cardId, $reviewerUid, $actorUid);
 	}
 
@@ -168,7 +168,7 @@ class ReviewService {
 			$review->setState($state);
 			$this->cardReviewMapper->update($review);
 
-			$this->notify($card, $actorUid);
+			$this->notify($card, $actorUid, Change::VERB_REVIEW_VERDICT);
 			// The reviewer has acted - clear their pending "review requested" bell.
 			$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
 		}
@@ -185,13 +185,14 @@ class ReviewService {
 		}
 	}
 
-	private function notify(Card $card, string $actorUid): void {
+	private function notify(Card $card, string $actorUid, ?int $verb = null): void {
 		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$card->getId(),
 			Change::ACTION_UPDATE,
-			$actorUid
+			$actorUid,
+			verb: $verb,
 		);
 	}
 
