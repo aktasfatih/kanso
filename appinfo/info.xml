@@ -3,12 +3,24 @@
 	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>kanso</id>
 	<name>Kanso</name>
-	<summary>Fast open-source kanban boards</summary>
+	<summary>Fast open-source kanban boards with reviews, projects and realtime sync</summary>
 	<description><![CDATA[
-Kanso is a kanban board app built for speed. Boards, stacks and cards with
-instant drag & drop, optimistic updates and payloads sized for large boards.
+Kanso is a kanban board app for Nextcloud, built for speed. Boards, stacks and
+cards with instant drag & drop, optimistic updates and payloads sized for large
+boards (2,000+ cards). Realtime updates via notify_push, with a polling fallback.
 
-Early development, not feature complete yet.
+Rich cards with markdown, labels, due dates, assignees, priorities, checklists,
+parent/child cards and threaded comments with @mentions and watchers. Board
+sharing with per-user and per-group access control.
+
+A review workflow (request review, approve / request changes, customizable
+review types, and an optional done-gate). A cross-board My Work hub (my tasks,
+reviews, inbox), cross-board Projects, and per-board and per-project analytics
+(velocity, cycle time, throughput). Board, List and Timeline (Gantt) views.
+
+Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
+roles, a command palette with full-text search, trash with restore, GitHub
+links and webhook, and one-click Import from Deck.
 	]]></description>
 	<version>0.1.32</version>
 	<licence>agpl</licence>

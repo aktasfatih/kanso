@@ -30,8 +30,9 @@ your work, on your own Nextcloud, laid out plainly.
   (fractional sort keys), never a bulk renumber.
 - **Built for large boards**: summary-only payloads, `ETag`/`If-None-Match`
   caching, and virtualized columns that stay smooth past **2,000+ cards**.
-- **Realtime**: live updates via `notify_push` when available, with a light
-  polling fallback everywhere else. Delta sync keeps clients in step.
+- **Realtime**: live updates via `notify_push` when available — a board change
+  triggers an `ETag`/`If-None-Match` refetch that returns `304 Not Modified`
+  when nothing changed — with a light polling fallback everywhere else.
 
 ### 🗂️ Rich cards
 - Markdown descriptions (sanitized), **labels**, due dates, **assignees**, and
@@ -50,7 +51,7 @@ your work, on your own Nextcloud, laid out plainly.
 - An optional **Done-gate**: a card can't leave a review column until every
   requested review is approved.
 - **Customizable review types**: QA, Code, Legal, or whatever your team needs.
-- A cross-board **My Reviews** page so nothing waiting on you slips through.
+- A cross-board **My Reviews** view so nothing waiting on you slips through.
 
 ### 🔁 Automation & workflows
 - **Stack roles** and **WIP limits**; moving a card into an "in progress" column
@@ -73,6 +74,19 @@ your work, on your own Nextcloud, laid out plainly.
   date axis by **start → due**, with due-only cards as milestones.
 - **Display sort**: order cards by priority, due date or title. View-only: your
   manual drag order is always preserved.
+
+### 🧭 Cross-board hub & projects
+- **My Work** hub gathers, across every board: **My tasks** (cards assigned to
+  you), **Reviews** (waiting on you), and an **Inbox** of mentions and activity
+  on cards you watch — filterable to a single board.
+- **Projects**: cross-board card collections with markdown descriptions and
+  per-project analytics.
+
+### 📈 Analytics
+- Per-board (and per-project) stats: **velocity** (cards/points per week with
+  trend), **cycle time** (median/average days to done), **throughput** (done
+  per day), plus breakdowns by stack, priority, assignee and label, and
+  overdue / aging / checklist-progress signals.
 
 ### ⌨️ Power-user UX
 - **Command palette** (`Ctrl`/`Cmd`+`K`) and full-text **search** across cards
@@ -155,8 +169,14 @@ its own data.
 
 ## Status & contributing
 
-Early development, but already usable day-to-day. Bug reports and pull requests
-are welcome. See the [issues](https://github.com/aktasfatih/kanso/issues).
+Actively developed and usable day-to-day, with a broad feature set already
+shipped (boards, the cross-board My Work hub, projects, analytics, reviews,
+recurring cards, realtime, Import from Deck, and more). Bug reports and pull
+requests are welcome. See the [issues](https://github.com/aktasfatih/kanso/issues).
+
+**Before a release**, re-check that this README and `appinfo/info.xml`
+(`<summary>` / `<description>`) still match the shipped feature set — verify
+against the code, and don't claim anything that isn't actually wired up.
 
 ## License
 
