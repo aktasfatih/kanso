@@ -33,7 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<ul v-else class="inbox-view__list">
 			<li
 				v-for="item in items"
-				:key="item.id"
+				:key="item.type + '-' + item.id"
 				class="inbox-view__item"
 				role="button"
 				tabindex="0"
@@ -42,10 +42,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@keydown.space.prevent="openCard(item)">
 				<!-- Main content -->
 				<div class="inbox-view__item-content">
-					<!-- Summary line: "{author} commented on {cardTitle}" -->
+					<!-- Summary line: "{author} {action} {cardTitle}" -->
 					<p class="inbox-view__item-summary">
 						<strong class="inbox-view__item-author">{{ displayName(item) }}</strong>
-						{{ t('kanso', 'commented on') }}
+						{{ actionPhrase(item) }}
 						<strong class="inbox-view__item-card">{{ item.cardTitle }}</strong>
 					</p>
 
@@ -58,8 +58,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</span>
 					</p>
 
-					<!-- Comment snippet (1–2 lines) -->
-					<p class="inbox-view__item-body">{{ item.body }}</p>
+					<!-- Comment snippet (1–2 lines); status changes carry no body -->
+					<p v-if="item.type === 'comment'" class="inbox-view__item-body">{{ item.body }}</p>
 				</div>
 
 				<!-- Chevron hint -->
@@ -91,6 +91,22 @@ const items = computed(() => data.value ?? [])
  */
 function displayName(item) {
 	return item.authorDisplayName || item.author
+}
+
+// kanso_changes verb constants surfaced in the feed (mirrors Change::VERB_*).
+const VERB_ASSIGNED = 8
+const VERB_REVIEW_REQUESTED = 10
+
+/**
+ * The verb phrase between the actor and the card title. Comments read
+ * "commented on"; status changes map their verb to a phrase.
+ */
+function actionPhrase(item) {
+	if (item.type === 'change') {
+		if (item.verb === VERB_REVIEW_REQUESTED) return t('kanso', 'requested a review on')
+		if (item.verb === VERB_ASSIGNED) return t('kanso', 'updated assignees on')
+	}
+	return t('kanso', 'commented on')
 }
 
 function openCard(item) {

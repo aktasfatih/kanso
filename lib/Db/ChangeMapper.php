@@ -68,6 +68,68 @@ class ChangeMapper extends QBMapper {
 	}
 
 	/**
+	 * Recent card-status change rows for the Inbox follow-feed: the given verbs,
+	 * on the followed cards, restricted to the viewer's readable board set,
+	 * excluding the viewer's own actions, newest first. Mirrors
+	 * {@see \OCA\Kanso\Db\CommentMapper::findInboxForCards()} - the caller supplies
+	 * both the followed-card set and the ACL-filtered readable board set, so no
+	 * per-row permission check is needed. The `author` key holds the actor uid so
+	 * the row merges cleanly with the comment feed. Empty card/board/verb set → [].
+	 * Uses the (entity_type, entity_id) index.
+	 *
+	 * @param int[] $cardIds followed card ids
+	 * @param int[] $boardIds the viewer's readable board ids
+	 * @param int[] $verbs the Change::VERB_* values to surface
+	 * @return list<array{id: int, cardId: int, boardId: int, cardTitle: string, boardTitle: string, author: string, verb: int, createdAt: int}>
+	 * @throws Exception
+	 */
+	public function findInboxForCards(array $cardIds, array $boardIds, string $excludeActor, array $verbs, int $limit): array {
+		if ($cardIds === [] || $boardIds === [] || $verbs === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ch.id', 'ch.actor', 'ch.verb', 'ch.created_at')
+			->selectAlias('ch.entity_id', 'card_id')
+			->addSelect('c.board_id')
+			->selectAlias('c.title', 'card_title')
+			->selectAlias('b.title', 'board_title')
+			->from($this->getTableName(), 'ch')
+			->innerJoin('ch', 'kanso_cards', 'c', $qb->expr()->eq('ch.entity_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->where($qb->expr()->eq('ch.entity_type', $qb->createNamedParameter(Change::ENTITY_CARD, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('ch.entity_id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in('ch.verb', $qb->createNamedParameter($verbs, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->neq('ch.actor', $qb->createNamedParameter($excludeActor)))
+			// Sort by created_at (id as tiebreak) to match CommentMapper's inbox
+			// query, so the SQL-side cap and the PHP-side merge in InboxService
+			// agree on the "newest first" dimension.
+			->orderBy('ch.created_at', 'DESC')
+			->addOrderBy('ch.id', 'DESC')
+			->setMaxResults($limit);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'cardId' => (int)$row['card_id'],
+				'boardId' => (int)$row['board_id'],
+				'cardTitle' => (string)$row['card_title'],
+				'boardTitle' => (string)$row['board_title'],
+				'author' => (string)$row['actor'],
+				'verb' => (int)$row['verb'],
+				'createdAt' => (int)$row['created_at'],
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Highest change id of a board - the board's sync cursor and ETag
 	 * source. 0 for boards without any change rows (which regular flows
 	 * never produce: board creation itself writes the first row, and

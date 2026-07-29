@@ -133,6 +133,16 @@ test.describe('Inbox feed', () => {
 			} catch {
 				// tester auth failed - still run fallback assertion
 			}
+
+			// Tester requests a review from admin - a card-status event (#3457)
+			// on a card admin follows, by an actor other than admin, so it should
+			// surface in admin's inbox feed alongside the comment.
+			try {
+				const r = await apiRequest(`/cards/${card.id}/reviews/${ADMIN}`, { method: 'PUT', auth: TESTER_AUTH })
+				state.reviewEventOk = r.ok
+			} catch {
+				// review request unavailable - the status-change test skips
+			}
 		}
 	})
 
@@ -220,6 +230,24 @@ test.describe('Inbox feed', () => {
 			{ timeout: 10_000 },
 		)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+	})
+
+	test('the feed surfaces card-status events, not only comments (#3457)', async ({ page }) => {
+		test.skip(!state.reviewEventOk, 'skipping status-event test: review request setup was not available')
+
+		await ncLogin(page)
+		await page.goto(state.inboxUrl)
+		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
+
+		// The review-request event (by tester) shows with its verb phrase, on our
+		// followed card — proving the feed reads the kanso_changes verb log, not
+		// just comments.
+		const list = page.locator('.inbox-view__list')
+		const statusItem = list.locator('.inbox-view__item', { hasText: 'requested a review on' })
+			.filter({ has: page.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }) })
+			.first()
+		await expect(statusItem).toBeVisible({ timeout: 8000 })
 	})
 
 	test('empty state renders when inbox is empty', async ({ page }) => {
