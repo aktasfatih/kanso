@@ -9,7 +9,7 @@
 ![Nextcloud 30–32](https://img.shields.io/badge/Nextcloud-30–32-0082c9)
 
 Instant drag & drop, payloads sized for large boards, realtime sync: a
-from-scratch alternative to Deck that stays out of your way.
+from-scratch kanban board that stays out of your way.
 
 <img src="docs/kanso-board.png" alt="A Kanso board with Backlog / In Progress / In Review / Done columns" width="900">
 

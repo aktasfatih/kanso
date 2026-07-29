@@ -1,7 +1,7 @@
 # Kanso
 
 Kanso is an open-source kanban app for Nextcloud (app id `kanso`) — a from-scratch,
-performance-first alternative to Deck. AGPL, targets Nextcloud 30–32.
+performance-first kanban board. AGPL, targets Nextcloud 30–32.
 
 ## Stack & conventions
 - Backend: PHP 8.2+, Nextcloud app framework (`OCA\Kanso`), own tables prefixed `kanso_`.
