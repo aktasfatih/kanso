@@ -122,6 +122,51 @@ test.describe('Projects — cross-board card collections', () => {
 		expect(remaining.length).toBe(1)
 	})
 
+	test('renders the project description as markdown and round-trips the editor', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
+		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+
+		// Open the edit dialog (Edit project lives in the header NcActions menu).
+		const openEdit = async () => {
+			await page.locator('.project-view__header-actions .action-item__menutoggle').last().click()
+			await page.getByRole('menuitem', { name: /Edit project/ }).click()
+		}
+		await openEdit()
+		const dialog = page.locator('.project-view__form')
+		await expect(dialog).toBeVisible({ timeout: 8_000 })
+
+		const md = '**bold text**\n\n- first item\n- second item'
+		const textarea = page.locator('#edit-project-desc')
+		await expect(textarea).toBeVisible()
+		await textarea.fill(md)
+
+		// The in-dialog preview renders the markdown as HTML (strong + li).
+		await page.locator('.project-view__md-btn[title="Toggle preview"]').click()
+		const preview = page.locator('.project-view__desc-rendered')
+		await expect(preview.locator('strong')).toHaveText('bold text')
+		await expect(preview.locator('li')).toHaveCount(2)
+
+		await page.getByRole('button', { name: /^Save$/ }).click()
+		await expect(dialog).toBeHidden({ timeout: 8_000 })
+
+		// Header render is HTML markdown, not the raw source.
+		const headerDesc = page.locator('.project-view__desc')
+		await expect(headerDesc.locator('strong')).toHaveText('bold text')
+		await expect(headerDesc.locator('li')).toHaveCount(2)
+		// The raw markdown asterisks must NOT be present as literal text.
+		await expect(headerDesc).not.toContainText('**bold text**')
+
+		// Round-trip: server persisted the raw markdown (client renders it).
+		const projects = await api('GET', '/projects')
+		const saved = projects.find((p) => p.id === state.projectId)
+		expect(saved.description).toBe(md)
+
+		// Reopening the editor shows the raw markdown source again (not HTML).
+		await openEdit()
+		await expect(page.locator('#edit-project-desc')).toHaveValue(md, { timeout: 8_000 })
+	})
+
 	test('adds a card via the cross-board search picker', async ({ page }) => {
 		// A fresh, distinctively-named card on board A to find through the picker.
 		const ts = Date.now()

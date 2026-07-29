@@ -27,7 +27,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						class="project-view__dot"
 						:style="{ background: '#' + project.color }" />
 					<h1 class="project-view__title">{{ project?.title ?? t('kanso', 'Project') }}</h1>
-					<span v-if="project?.description" class="project-view__desc">{{ project.description }}</span>
+					<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+					<div
+						v-if="project?.description"
+						class="project-view__desc"
+						v-html="renderMarkdown(project.description)" />
 				</div>
 
 				<div class="project-view__header-actions">
@@ -182,13 +186,39 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<label class="project-view__form-label" for="edit-project-desc">
 					{{ t('kanso', 'Description') }}
 				</label>
-				<input
+				<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="mdToolbar.bold()"><FormatBoldIcon :size="18" /></button>
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="mdToolbar.italic()"><FormatItalicIcon :size="18" /></button>
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Heading')" @mousedown.prevent @click="mdToolbar.heading()"><FormatHeaderPoundIcon :size="18" /></button>
+					<span class="project-view__md-sep" />
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="mdToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="mdToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
+					<span class="project-view__md-sep" />
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="mdToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
+					<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="mdToolbar.link()"><LinkVariantIcon :size="18" /></button>
+					<span class="project-view__md-toolbar-spacer" />
+					<button
+						type="button"
+						class="project-view__md-btn"
+						:class="{ 'project-view__md-btn--active': showDescPreview }"
+						:aria-pressed="showDescPreview"
+						:title="t('kanso', 'Toggle preview')"
+						@mousedown.prevent
+						@click="showDescPreview = !showDescPreview"><EyeOutlineIcon :size="18" /></button>
+				</div>
+				<textarea
 					id="edit-project-desc"
+					ref="descTextareaRef"
 					v-model="editDescription"
-					class="project-view__form-input"
-					type="text"
-					:placeholder="t('kanso', 'Optional description')"
-					:disabled="updateMutation.isPending.value">
+					class="project-view__form-input project-view__form-textarea"
+					rows="6"
+					:placeholder="t('kanso', 'Optional description — markdown supported')"
+					:disabled="updateMutation.isPending.value" />
+				<div v-if="showDescPreview" class="project-view__desc-preview">
+					<span class="project-view__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
+					<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+					<div class="project-view__desc-rendered" v-html="renderMarkdown(editDescription)" />
+				</div>
 
 				<label class="project-view__form-label">{{ t('kanso', 'Color') }}</label>
 				<div class="project-view__color-grid">
@@ -246,9 +276,19 @@ import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
+import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
+import FormatItalicIcon from 'vue-material-design-icons/FormatItalic.vue'
+import FormatHeaderPoundIcon from 'vue-material-design-icons/FormatHeaderPound.vue'
+import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
+import FormatQuoteCloseIcon from 'vue-material-design-icons/FormatQuoteClose.vue'
+import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
+import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
+import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import { useProjects } from '../composables/useProjects.js'
 import { useProjectCards } from '../composables/useProject.js'
 import { useSearch } from '../composables/useSearch.js'
+import { renderMarkdown } from '../services/markdown.js'
+import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 
 const COLOR_PRESETS = [
 	'e53935', 'f4511e', 'f6bf26', '33b679', '0b8043',
@@ -389,12 +429,23 @@ const editDescription = ref('')
 const editColor = ref('')
 const editError = ref('')
 const editTitleInputRef = ref(null)
+const descTextareaRef = ref(null)
+const showDescPreview = ref(false)
+
+// Markdown formatting toolbar over the description textarea (mutates the markdown
+// string in place; the preview reuses the same renderMarkdown as the read view).
+const mdToolbar = useMarkdownToolbar({
+	getText: () => editDescription.value,
+	setText: (v) => { editDescription.value = v },
+	textareaRef: descTextareaRef,
+})
 
 function openEditDialog() {
 	editTitle.value = project.value?.title ?? ''
 	editDescription.value = project.value?.description ?? ''
 	editColor.value = project.value?.color ?? ''
 	editError.value = ''
+	showDescPreview.value = false
 	showEditDialog.value = true
 	nextTick(() => editTitleInputRef.value?.focus())
 }
@@ -505,9 +556,27 @@ async function submitEdit() {
 .project-view__desc {
 	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
+	max-width: 340px;
+	/* Markdown can be multi-block; clamp to two lines in the header so long
+	   descriptions truncate gracefully instead of being clipped mid-block. */
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+}
+
+/* Markdown produces block <p>/<ul>… — flatten it to inline flow so the two-line
+   clamp above reads as a compact snippet rather than stacked blocks. */
+.project-view__desc :deep(p),
+.project-view__desc :deep(ul),
+.project-view__desc :deep(ol) { margin: 0; padding: 0; display: inline; }
+.project-view__desc :deep(li) { display: inline; margin-right: 0.6em; }
+.project-view__desc :deep(code) {
+	background: var(--color-border);
+	border-radius: 3px;
+	padding: 1px 4px;
+	font-size: 0.85em;
 }
 
 .project-view__loading {
@@ -808,5 +877,92 @@ async function submitEdit() {
 .project-view__form-error {
 	color: var(--color-error);
 	font-size: 0.85rem;
+}
+
+.project-view__form-textarea {
+	resize: vertical;
+	min-height: 120px;
+	line-height: 1.6;
+	font-family: inherit;
+}
+
+.project-view__md-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-bottom: 6px;
+	padding: 3px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	background: var(--color-background-hover);
+	flex-wrap: wrap;
+}
+
+.project-view__md-toolbar-spacer { flex: 1 1 auto; }
+
+.project-view__md-sep {
+	width: 1px;
+	align-self: stretch;
+	margin: 2px 4px;
+	background: var(--color-border);
+}
+
+.project-view__md-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+
+.project-view__md-btn:hover { background: var(--color-background-dark); }
+
+.project-view__md-btn--active {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+}
+
+.project-view__desc-preview {
+	margin: 8px 0 0;
+	padding: 10px 14px;
+	border: 1px dashed var(--color-border);
+	border-radius: 10px;
+	background: var(--color-main-background);
+}
+
+.project-view__desc-preview-label {
+	display: block;
+	margin-bottom: 4px;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-maxcontrast);
+}
+
+.project-view__desc-rendered {
+	font-size: 0.9375rem;
+	line-height: 1.65;
+	color: var(--color-main-text);
+}
+
+.project-view__desc-rendered :deep(p) { margin: 0 0 0.7em; }
+.project-view__desc-rendered :deep(p:last-child) { margin-bottom: 0; }
+.project-view__desc-rendered :deep(code) {
+	background: var(--color-border);
+	border-radius: 3px;
+	padding: 2px 5px;
+	font-size: 0.875em;
+}
+.project-view__desc-rendered :deep(pre) {
+	background: var(--color-background-dark);
+	border-radius: var(--border-radius);
+	padding: 10px 12px;
+	overflow: auto;
 }
 </style>
