@@ -52,14 +52,19 @@ class StatsServiceTest extends TestCase {
 		return $b;
 	}
 
-	private function stubCommonAggregates(): void {
+	/**
+	 * @param list<array{createdAt: int, doneAt: int, estimate: ?string}> $completions
+	 */
+	private function stubCommonAggregates(array $completions = []): void {
 		$this->cardMapper->method('countByStack')->willReturn([['stackId' => 42, 'count' => 3]]);
 		$this->cardMapper->method('countByPriority')->willReturn([['priority' => 4, 'count' => 1]]);
 		$this->cardAssigneeMapper->method('countByAssigneeForBoard')->willReturn([['uid' => 'alice', 'count' => 2]]);
 		$this->cardLabelMapper->method('countByLabelForBoard')->willReturn([['labelId' => 9, 'count' => 5]]);
-		// doneTimeline is stubbed per-test (the timeline test overrides it);
-		// createdTimeline defaults to empty for every test here.
+		// doneTimeline is stubbed per-test where the throughput timeline matters;
+		// createdTimeline defaults to empty; doneCycleTimes (velocity + cycle
+		// time source) defaults to empty and is passed in where those matter.
 		$this->cardMapper->method('createdTimeline')->willReturn([]);
+		$this->cardMapper->method('doneCycleTimes')->willReturn($completions);
 		$this->cardMapper->method('agingCount')->willReturn(4);
 		$this->cardMapper->method('overdueCount')->willReturn(2);
 		$this->checklistItemMapper->method('progressByBoard')->willReturn([
@@ -144,5 +149,149 @@ class StatsServiceTest extends TestCase {
 			['day' => '2026-01-02', 'count' => 2],
 			['day' => '2026-01-03', 'count' => 1],
 		], $dto['throughput']);
+	}
+
+	private const DAY = 86400;
+	private const WEEK = 604800;
+
+	public function testVelocityRollsCompletionsIntoWeeklyBucketsWithTrend(): void {
+		$now = time();
+		// Current flow window (last 4 weeks = 28d): 3 done this week, 1 done ~2
+		// weeks ago. Prior window (weeks 5-8 back): 1 done ~5 weeks ago. Current
+		// total (4) > prior total (1) ⇒ trend up. Non-numeric scale ⇒ points null.
+		$completions = [
+			$this->done($now - 1 * self::DAY),
+			$this->done($now - 2 * self::DAY),
+			$this->done($now - 3 * self::DAY),
+			$this->done($now - 15 * self::DAY),
+			$this->done($now - 36 * self::DAY),
+		];
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board('none'));
+		$this->stubCommonAggregates($completions);
+		$this->cardMapper->method('doneTimeline')->willReturn([]);
+
+		$velocity = $this->service->boardStats(1)['velocity'];
+
+		self::assertSame(4, $velocity['weeks']);
+		self::assertSame(28, $velocity['windowDays']);
+		self::assertCount(4, $velocity['weekly']);
+		// 4 cards over 4 weeks in the current window ⇒ 1.0/week.
+		self::assertSame(1.0, $velocity['cardsPerWeek']);
+		self::assertSame('up', $velocity['cardsTrend']);
+		// Non-numeric scale ⇒ points suppressed.
+		self::assertNull($velocity['pointsPerWeek']);
+		self::assertNull($velocity['pointsTrend']);
+		self::assertNull($velocity['weekly'][0]['points']);
+		// The most recent bucket (last row, oldest-first) holds the 3 recent cards.
+		self::assertSame(3, $velocity['weekly'][3]['cards']);
+	}
+
+	public function testVelocitySumsEstimatePointsPerWeekOnNumericScale(): void {
+		$now = time();
+		// Two cards done this week worth 3 + 5 points; one worth 8 last week.
+		$completions = [
+			$this->done($now - 1 * self::DAY, '3'),
+			$this->done($now - 2 * self::DAY, '5'),
+			$this->done($now - 8 * self::DAY, '8'),
+			$this->done($now - 3 * self::DAY, ''),   // non-numeric token: card counts, no points
+		];
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board('fibonacci'));
+		$this->stubCommonAggregates($completions);
+		$this->cardMapper->method('doneTimeline')->willReturn([]);
+		// Estimate-panel queries still run for a numeric board.
+		$this->cardMapper->method('estimateByStack')->willReturn([]);
+		$this->cardAssigneeMapper->method('estimateByAssigneeForBoard')->willReturn([]);
+
+		$velocity = $this->service->boardStats(1)['velocity'];
+
+		// 16 points over 4 weeks ⇒ 4.0/week.
+		self::assertSame(4.0, $velocity['pointsPerWeek']);
+		self::assertIsString($velocity['pointsTrend']);
+		// Most recent bucket: 3 + 5 = 8 points, 3 cards (incl. the empty-token one).
+		self::assertSame(8.0, $velocity['weekly'][3]['points']);
+		self::assertSame(3, $velocity['weekly'][3]['cards']);
+	}
+
+	public function testVelocityEmptyWindowIsZeroAndFlat(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board('none'));
+		$this->stubCommonAggregates([]);
+		$this->cardMapper->method('doneTimeline')->willReturn([]);
+
+		$velocity = $this->service->boardStats(1)['velocity'];
+
+		self::assertSame(0.0, $velocity['cardsPerWeek']);
+		self::assertSame('flat', $velocity['cardsTrend']);
+		self::assertNull($velocity['pointsPerWeek']);
+	}
+
+	public function testCycleTimeMedianAndAverageOverWindow(): void {
+		$now = time();
+		// Three cards done in-window with create→done spans of 2, 4 and 6 days.
+		$completions = [
+			['createdAt' => $now - 3 * self::DAY, 'doneAt' => $now - 1 * self::DAY, 'estimate' => null], // 2d
+			['createdAt' => $now - 6 * self::DAY, 'doneAt' => $now - 2 * self::DAY, 'estimate' => null], // 4d
+			['createdAt' => $now - 9 * self::DAY, 'doneAt' => $now - 3 * self::DAY, 'estimate' => null], // 6d
+			// Done outside the current 28d flow window (older than window) ⇒ excluded.
+			['createdAt' => $now - 60 * self::DAY, 'doneAt' => $now - 40 * self::DAY, 'estimate' => null],
+		];
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board('none'));
+		$this->stubCommonAggregates($completions);
+		$this->cardMapper->method('doneTimeline')->willReturn([]);
+
+		$cycle = $this->service->boardStats(1)['cycleTime'];
+
+		self::assertSame(28, $cycle['windowDays']);
+		self::assertSame(3, $cycle['sampleSize']);
+		self::assertSame(4.0, $cycle['medianDays']);
+		self::assertSame(4.0, $cycle['averageDays']);
+	}
+
+	public function testFlowWindowIsWeekAlignedAndConsistentAcrossVelocityAndCycleTime(): void {
+		$now = time();
+		// A card done 5 days ago is squarely inside the 28d current window - it
+		// must count in BOTH velocity's current total AND cycle time. A card done
+		// 29 days ago is just OUTSIDE the 28d window (bucket 4 = prior window for
+		// velocity, and before cycle time's windowStart) - it must appear in
+		// NEITHER velocity's current total NOR the cycle-time sample. This pins
+		// the single shared week-aligned window (regression guard for the earlier
+		// 28d-vs-30d split).
+		$completions = [
+			['createdAt' => $now - 7 * self::DAY, 'doneAt' => $now - 5 * self::DAY, 'estimate' => null],
+			['createdAt' => $now - 31 * self::DAY, 'doneAt' => $now - 29 * self::DAY, 'estimate' => null],
+		];
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board('none'));
+		$this->stubCommonAggregates($completions);
+		$this->cardMapper->method('doneTimeline')->willReturn([]);
+
+		$dto = $this->service->boardStats(1);
+
+		// Velocity current window: only the 5-day card ⇒ 1 card / 4 weeks = 0.25.
+		self::assertSame(0.25, $dto['velocity']['cardsPerWeek']);
+		// The 29-day card lands in the prior window (bucket 4), so current > 0 and
+		// prior > 0 with equal counts (1 vs 1) ⇒ flat.
+		self::assertSame('flat', $dto['velocity']['cardsTrend']);
+		// Cycle time: only the in-window (5-day) card is measured.
+		self::assertSame(1, $dto['cycleTime']['sampleSize']);
+		self::assertSame(28, $dto['cycleTime']['windowDays']);
+	}
+
+	public function testCycleTimeEmptySampleIsNull(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board('none'));
+		$this->stubCommonAggregates([]);
+		$this->cardMapper->method('doneTimeline')->willReturn([]);
+
+		$cycle = $this->service->boardStats(1)['cycleTime'];
+
+		self::assertSame(0, $cycle['sampleSize']);
+		self::assertNull($cycle['medianDays']);
+		self::assertNull($cycle['averageDays']);
+	}
+
+	/**
+	 * @return array{createdAt: int, doneAt: int, estimate: ?string}
+	 */
+	private function done(int $doneAt, ?string $estimate = null): array {
+		// created a day before done by default; cycle-time tests build spans explicitly.
+		return ['createdAt' => $doneAt - self::DAY, 'doneAt' => $doneAt, 'estimate' => $estimate];
 	}
 }

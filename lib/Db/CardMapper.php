@@ -548,6 +548,48 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Per-card completion facts for every non-deleted card done in the window
+	 * [$sinceTs, $untilTs] - the source for the velocity and lead/cycle-time
+	 * metrics. Each row is (created_at, done_at, estimate) so the caller can, in
+	 * one read, bucket completions by week (velocity), sum numeric estimates by
+	 * week (points velocity), and derive create→done durations (cycle time).
+	 *
+	 * Runs ALONGSIDE {@see self::doneTimeline()} (which returns done_at only) so
+	 * the throughput timeline stays a single-column read; this richer query is
+	 * issued only where the extra columns are needed. All aggregation (weekly
+	 * buckets, median/average, estimate sums) happens in PHP so the SQL carries
+	 * no per-dialect date, percentile, or CAST logic. `estimate` is the raw
+	 * nullable scale token; the caller applies the numeric guard. Only cards
+	 * actually done (`done_at > 0`) inside the window are returned.
+	 *
+	 * @return list<array{createdAt: int, doneAt: int, estimate: ?string}> unordered
+	 * @throws Exception
+	 */
+	public function doneCycleTimes(int $boardId, int $sinceTs, int $untilTs): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('created_at', 'done_at', 'estimate')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'createdAt' => (int)$row['created_at'],
+				'doneAt' => (int)$row['done_at'],
+				'estimate' => $row['estimate'] !== null ? (string)$row['estimate'] : null,
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Raw `created_at` timestamps of non-deleted cards created in the window
 	 * [$sinceTs, $untilTs] - the "created" timeline source. Bucketed into
 	 * per-day counts in PHP, same dialect-safe approach as

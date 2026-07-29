@@ -180,6 +180,73 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</ul>
 			</section>
 
+			<!-- ── Velocity (completed per week) ──────────────────────────── -->
+			<section v-if="velocity" class="board-stats__section">
+				<h2 class="board-stats__section-title">{{ t('kanso', 'Velocity — completed per week') }}</h2>
+				<div class="board-stats__stat-cards">
+					<div class="board-stats__stat-card">
+						<span class="board-stats__stat-value">
+							{{ velocity.cardsPerWeek }}
+							<span
+								class="board-stats__trend"
+								:class="`board-stats__trend--${velocity.cardsTrend}`"
+								:title="trendTitle(velocity.cardsTrend)">{{ trendGlyph(velocity.cardsTrend) }}</span>
+						</span>
+						<span class="board-stats__stat-label">{{ t('kanso', 'Cards / week (avg)') }}</span>
+					</div>
+					<div v-if="velocity.pointsPerWeek !== null" class="board-stats__stat-card">
+						<span class="board-stats__stat-value">
+							{{ velocity.pointsPerWeek }}
+							<span
+								class="board-stats__trend"
+								:class="`board-stats__trend--${velocity.pointsTrend}`"
+								:title="trendTitle(velocity.pointsTrend)">{{ trendGlyph(velocity.pointsTrend) }}</span>
+						</span>
+						<span class="board-stats__stat-label">{{ t('kanso', 'Points / week (avg)') }}</span>
+					</div>
+				</div>
+				<div class="board-stats__timeline" aria-label="Cards completed per week">
+					<template v-if="velocity.weekly.length">
+						<div
+							v-for="w in velocity.weekly"
+							:key="w.week"
+							class="board-stats__timeline-col board-stats__timeline-col--wide"
+							:title="velocityBarTitle(w)">
+							<div
+								class="board-stats__timeline-bar"
+								:style="{ height: pct(w.cards, maxVelocityCards) + '%' }" />
+						</div>
+					</template>
+					<span v-else class="board-stats__timeline-empty">{{ t('kanso', 'No data') }}</span>
+				</div>
+				<div class="board-stats__timeline-labels">
+					<span>{{ velocity.weekly[0]?.week ?? '' }}</span>
+					<span>{{ t('kanso', 'now') }}</span>
+				</div>
+			</section>
+
+			<!-- ── Cycle time (create → done) ─────────────────────────────── -->
+			<section v-if="cycleTime" class="board-stats__section">
+				<h2 class="board-stats__section-title">
+					{{ t('kanso', 'Cycle time — creation to done ({days}d)', { days: cycleTime.windowDays ?? 28 }) }}
+				</h2>
+				<div v-if="cycleTime.sampleSize > 0" class="board-stats__stat-cards">
+					<div class="board-stats__stat-card">
+						<span class="board-stats__stat-value">{{ cycleTime.medianDays }}</span>
+						<span class="board-stats__stat-label">{{ t('kanso', 'Median days') }}</span>
+					</div>
+					<div class="board-stats__stat-card">
+						<span class="board-stats__stat-value">{{ cycleTime.averageDays }}</span>
+						<span class="board-stats__stat-label">{{ t('kanso', 'Average days') }}</span>
+					</div>
+					<div class="board-stats__stat-card">
+						<span class="board-stats__stat-value">{{ cycleTime.sampleSize }}</span>
+						<span class="board-stats__stat-label">{{ t('kanso', 'Cards measured') }}</span>
+					</div>
+				</div>
+				<span v-else class="board-stats__timeline-empty">{{ t('kanso', 'No cards completed in the window') }}</span>
+			</section>
+
 			<!-- ── Throughput (done cards last 30d) ───────────────────────── -->
 			<section class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Throughput — done per day (30d)') }}</h2>
@@ -329,6 +396,30 @@ const throughputStart = computed(() => throughputDays.value[0]?.day ?? '')
 const throughputEnd = computed(() => throughputDays.value[throughputDays.value.length - 1]?.day ?? '')
 const createdStart = computed(() => createdDays.value[0]?.day ?? '')
 const createdEnd = computed(() => createdDays.value[createdDays.value.length - 1]?.day ?? '')
+
+// ── Velocity & cycle time ─────────────────────────────────────────────────────
+const velocity = computed(() => stats.value?.velocity ?? null)
+const cycleTime = computed(() => stats.value?.cycleTime ?? null)
+const maxVelocityCards = computed(() =>
+	Math.max(1, ...((velocity.value?.weekly ?? []).map((w) => w.cards))),
+)
+
+function trendGlyph(dir) {
+	if (dir === 'up') return '▲'
+	if (dir === 'down') return '▼'
+	return '▬'
+}
+
+function trendTitle(dir) {
+	if (dir === 'up') return t('kanso', 'Up vs previous period')
+	if (dir === 'down') return t('kanso', 'Down vs previous period')
+	return t('kanso', 'Flat vs previous period')
+}
+
+function velocityBarTitle(w) {
+	const base = `${w.week}: ${w.cards} ${t('kanso', 'cards')}`
+	return w.points !== null ? `${base}, ${w.points} ${t('kanso', 'points')}` : base
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function pct(value, max) {
@@ -550,11 +641,26 @@ function goBack() {
 	background: #5ec269;
 }
 
+.board-stats__timeline-col--wide {
+	min-width: 8px;
+}
+
 .board-stats__timeline-empty {
 	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
 	align-self: center;
 }
+
+/* ── Trend indicator ───────────────────────────────────────────────────────── */
+.board-stats__trend {
+	font-size: 1rem;
+	margin-left: 6px;
+	vertical-align: middle;
+}
+
+.board-stats__trend--up { color: #5ec269; }
+.board-stats__trend--down { color: #d0332a; }
+.board-stats__trend--flat { color: var(--color-text-maxcontrast); }
 
 .board-stats__timeline-labels {
 	display: flex;

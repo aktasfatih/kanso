@@ -74,6 +74,14 @@ test.describe('Board analytics', () => {
 
 		// At least one distribution bar rendered.
 		expect(await page.locator('.board-stats__bar-row').count()).toBeGreaterThanOrEqual(2)
+
+		// Velocity + cycle-time flow panels render (present even with no
+		// completions — velocity shows the 0/week rolling average, cycle time
+		// shows its neutral no-data state).
+		await expect(page.getByText('Velocity — completed per week')).toBeVisible()
+		await expect(page.getByText('Cards / week (avg)')).toBeVisible()
+		// Flow window is week-aligned (28d), rendered from the DTO's windowDays.
+		await expect(page.getByText(/Cycle time — creation to done \(28d\)/)).toBeVisible()
 	})
 
 	test('the stats API returns board-scoped aggregates', async () => {
@@ -86,5 +94,16 @@ test.describe('Board analytics', () => {
 		expect(stats.byPriority.some((r) => r.priority === 4 && r.count === 1)).toBe(true)
 		// Estimate panels null on a board with no estimate scale.
 		expect(stats.estimateByStack).toBeNull()
+		// Velocity + cycle-time flow metrics are always present. No cards done ⇒
+		// zero rolling average, flat trend, null points (no numeric scale), and
+		// an empty cycle-time sample.
+		expect(stats.velocity.cardsPerWeek).toBe(0)
+		expect(stats.velocity.cardsTrend).toBe('flat')
+		expect(stats.velocity.pointsPerWeek).toBeNull()
+		expect(Array.isArray(stats.velocity.weekly)).toBe(true)
+		// Velocity and cycle time share one week-aligned window.
+		expect(stats.velocity.windowDays).toBe(stats.cycleTime.windowDays)
+		expect(stats.cycleTime.sampleSize).toBe(0)
+		expect(stats.cycleTime.medianDays).toBeNull()
 	})
 })

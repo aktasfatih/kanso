@@ -22,9 +22,13 @@ use OCA\Kanso\Db\EstimateScale;
  * (filtered by board_id) and open-scoped (deleted_at = 0) at the query level,
  * so there is no cross-board leak and no per-row work here.
  *
- * This is deliberately a plain snapshot: NO burndown/velocity/forecasting is
- * derived (charter non-goal). Timelines are raw daily buckets computed in PHP
- * from unix timestamps so the SQL stays dialect-clean.
+ * Alongside the plain snapshot it derives two flow metrics from data already
+ * recorded (created_at / done_at / estimate) - velocity (cards, and estimate
+ * points on numeric scales, completed per week with a rolling average and an
+ * up/down/flat direction vs the prior period) and lead/cycle time (median and
+ * average create→done days). No new column is needed for either. Burndown and
+ * forecasting remain out of scope. All timelines and roll-ups are computed in
+ * PHP from unix timestamps so the SQL stays dialect-clean.
  */
 class StatsService {
 	/**
@@ -37,7 +41,17 @@ class StatsService {
 	/** Look-back window (days) for the throughput / created / comment timelines. */
 	private const WINDOW_DAYS = 30;
 
+	/**
+	 * Look-back window for the flow metrics (velocity + cycle time), expressed
+	 * in whole weeks so the weekly roll-up buckets align exactly with the window
+	 * (no ragged final week). The trend compares this window against an equal
+	 * prior window, so the completions query spans twice this many weeks.
+	 */
+	private const FLOW_WEEKS = 4;
+
 	private const DAY_SECONDS = 86400;
+
+	private const WEEK_SECONDS = 604800;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -67,7 +81,17 @@ class StatsService {
 	 *     aging: array{days: int, count: int},
 	 *     overdue: int,
 	 *     checklist: array{total: int, done: int},
-	 *     commentActivity: int
+	 *     commentActivity: int,
+	 *     velocity: array{
+	 *         weeks: int,
+	 *         windowDays: int,
+	 *         cardsPerWeek: float,
+	 *         cardsTrend: string,
+	 *         pointsPerWeek: null|float,
+	 *         pointsTrend: null|string,
+	 *         weekly: list<array{week: string, cards: int, points: null|float}>
+	 *     },
+	 *     cycleTime: array{windowDays: int, sampleSize: int, medianDays: null|float, averageDays: null|float}
 	 * }
 	 * @throws \OCP\DB\Exception
 	 * @throws \OCP\AppFramework\Db\DoesNotExistException
@@ -76,8 +100,17 @@ class StatsService {
 		$now = time();
 		$windowStart = $now - self::WINDOW_DAYS * self::DAY_SECONDS;
 		$agingCutoff = $now - self::AGING_DAYS * self::DAY_SECONDS;
+		// The flow metrics share ONE week-aligned window (FLOW_WEEKS) so velocity
+		// and cycle time measure the exact same span; the buckets align with it
+		// with no ragged final week. Velocity's up/down/flat trend needs the
+		// equal-length prior window too, so completions are read over 2x it.
+		$flowWindowStart = $now - self::FLOW_WEEKS * self::WEEK_SECONDS;
+		$flowFetchStart = $now - 2 * self::FLOW_WEEKS * self::WEEK_SECONDS;
 
 		$board = $this->boardMapper->find($boardId);
+		$numericScale = $this->isNumericScale($board);
+
+		$completions = $this->cardMapper->doneCycleTimes($boardId, $flowFetchStart, $now);
 
 		return [
 			'byStack' => $this->cardMapper->countByStack($boardId),
@@ -92,6 +125,8 @@ class StatsService {
 			'overdue' => $this->cardMapper->overdueCount($boardId, new \DateTime('@' . $now)),
 			'checklist' => $this->checklistTotals($boardId),
 			'commentActivity' => $this->commentMapper->countRecentForBoard($boardId, $windowStart),
+			'velocity' => $this->velocity($completions, $numericScale, $now),
+			'cycleTime' => $this->cycleTime($completions, $flowWindowStart),
 		];
 	}
 
@@ -116,6 +151,158 @@ class StatsService {
 			$rows[] = ['day' => $day, 'count' => $count];
 		}
 		return $rows;
+	}
+
+	/**
+	 * Velocity - completions rolled up into fixed 7-day buckets anchored at
+	 * $now and walking backwards, over the current FLOW_WEEKS window plus an
+	 * equal-length prior window (so a direction can be derived). Reports:
+	 *   - weekly:        the current window's weeks, oldest-first, each with a
+	 *                    card count and (numeric scale only) a points sum;
+	 *   - cardsPerWeek:  the current window's rolling average cards/week;
+	 *   - cardsTrend:    up / down / flat vs the prior window's total;
+	 *   - pointsPerWeek / pointsTrend: same for estimate points, or null when
+	 *                    the board scale is not numeric.
+	 *
+	 * Bucketing is by elapsed weeks from $now (age // 7d), so the buckets are
+	 * stable regardless of calendar week boundaries and need no date SQL. The
+	 * window is whole weeks (FLOW_WEEKS), so it aligns exactly with the buckets
+	 * and with the fetch span (2 * FLOW_WEEKS) - no completion in range is
+	 * dropped. Only numeric estimate tokens contribute points (same guard as the
+	 * estimate panels); a card with a non-numeric/absent token still counts
+	 * toward cards.
+	 *
+	 * @param list<array{createdAt: int, doneAt: int, estimate: ?string}> $completions
+	 *                                                                                 done cards over the doubled flow look-back (2 * FLOW_WEEKS)
+	 * @return array{
+	 *     weeks: int,
+	 *     windowDays: int,
+	 *     cardsPerWeek: float,
+	 *     cardsTrend: string,
+	 *     pointsPerWeek: null|float,
+	 *     pointsTrend: null|string,
+	 *     weekly: list<array{week: string, cards: int, points: null|float}>
+	 * }
+	 */
+	private function velocity(array $completions, bool $numericScale, int $now): array {
+		$weeksPerWindow = self::FLOW_WEEKS;
+		$totalWeeks = 2 * $weeksPerWindow;
+
+		// Per-week-bucket accumulators, index 0 = most recent 7 days.
+		$cardsByWeek = array_fill(0, $totalWeeks, 0);
+		$pointsByWeek = array_fill(0, $totalWeeks, 0.0);
+
+		foreach ($completions as $c) {
+			$age = $now - $c['doneAt'];
+			if ($age < 0) {
+				$age = 0;
+			}
+			$bucket = intdiv($age, self::WEEK_SECONDS);
+			if ($bucket < 0 || $bucket >= $totalWeeks) {
+				// Outside the fetch window (only reachable for a row exactly on the
+				// far boundary, since $age >= 0) - ignore defensively.
+				continue;
+			}
+			$cardsByWeek[$bucket]++;
+			if ($numericScale && $c['estimate'] !== null && is_numeric($c['estimate'])) {
+				$pointsByWeek[$bucket] += (float)$c['estimate'];
+			}
+		}
+
+		// Current window = the most recent $weeksPerWindow buckets (0..N-1);
+		// prior window = the next $weeksPerWindow buckets.
+		$currentCards = array_sum(array_slice($cardsByWeek, 0, $weeksPerWindow));
+		$priorCards = array_sum(array_slice($cardsByWeek, $weeksPerWindow, $weeksPerWindow));
+		$currentPoints = array_sum(array_slice($pointsByWeek, 0, $weeksPerWindow));
+		$priorPoints = array_sum(array_slice($pointsByWeek, $weeksPerWindow, $weeksPerWindow));
+
+		// weekly rows for the current window, oldest-first (bucket N-1 → 0), each
+		// labelled by its ISO start date so the frontend can axis-label them.
+		$weekly = [];
+		for ($i = $weeksPerWindow - 1; $i >= 0; $i--) {
+			$weekStart = $now - ($i + 1) * self::WEEK_SECONDS;
+			$weekly[] = [
+				'week' => gmdate('Y-m-d', $weekStart),
+				'cards' => $cardsByWeek[$i],
+				'points' => $numericScale ? round($pointsByWeek[$i], 2) : null,
+			];
+		}
+
+		return [
+			'weeks' => $weeksPerWindow,
+			'windowDays' => $weeksPerWindow * 7,
+			'cardsPerWeek' => round((float)$currentCards / (float)$weeksPerWindow, 2),
+			'cardsTrend' => $this->trend((float)$currentCards, (float)$priorCards),
+			'pointsPerWeek' => $numericScale ? round((float)$currentPoints / (float)$weeksPerWindow, 2) : null,
+			'pointsTrend' => $numericScale ? $this->trend((float)$currentPoints, (float)$priorPoints) : null,
+			'weekly' => $weekly,
+		];
+	}
+
+	/**
+	 * Direction of a current-period total vs the prior period: `up` / `down` /
+	 * `flat`. Flat when the two are within a small relative epsilon (so tiny
+	 * float wobble on points totals does not flip the arrow); an exact-zero
+	 * prior with any current work reads as `up`, and no change either way reads
+	 * `flat`.
+	 */
+	private function trend(float $current, float $prior): string {
+		$epsilon = max(0.5, abs($prior) * 0.05);
+		$delta = $current - $prior;
+		if ($delta > $epsilon) {
+			return 'up';
+		}
+		if ($delta < -$epsilon) {
+			return 'down';
+		}
+		return 'flat';
+	}
+
+	/**
+	 * Lead/cycle time - median and average create→done duration (in days) over
+	 * the SAME flow window as velocity ($windowStart = now - FLOW_WEEKS weeks),
+	 * computed in PHP (dialect-safe: no percentile SQL). Only completions whose
+	 * done_at falls inside that window are considered (the input spans the
+	 * doubled flow look-back). Negative or zero-length spans are clamped to 0
+	 * days. Returns null medians on an empty sample so the frontend can render a
+	 * neutral "no data" state.
+	 *
+	 * @param list<array{createdAt: int, doneAt: int, estimate: ?string}> $completions
+	 * @return array{windowDays: int, sampleSize: int, medianDays: null|float, averageDays: null|float}
+	 */
+	private function cycleTime(array $completions, int $windowStart): array {
+		$durations = [];
+		foreach ($completions as $c) {
+			if ($c['doneAt'] < $windowStart) {
+				continue;
+			}
+			$seconds = $c['doneAt'] - $c['createdAt'];
+			if ($seconds < 0) {
+				$seconds = 0;
+			}
+			$durations[] = (float)$seconds / (float)self::DAY_SECONDS;
+		}
+
+		$windowDays = self::FLOW_WEEKS * 7;
+
+		$n = count($durations);
+		if ($n === 0) {
+			return ['windowDays' => $windowDays, 'sampleSize' => 0, 'medianDays' => null, 'averageDays' => null];
+		}
+
+		sort($durations);
+		$mid = intdiv($n, 2);
+		$median = ($n % 2 === 1)
+			? $durations[$mid]
+			: ($durations[$mid - 1] + $durations[$mid]) / 2.0;
+		$average = array_sum($durations) / (float)$n;
+
+		return [
+			'windowDays' => $windowDays,
+			'sampleSize' => $n,
+			'medianDays' => round($median, 1),
+			'averageDays' => round($average, 1),
+		];
 	}
 
 	/**
