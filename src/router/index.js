@@ -38,6 +38,17 @@ const routes = [
 		name: 'inbox',
 		component: () => import('../views/InboxView.vue'),
 	},
+	{
+		path: '/projects',
+		name: 'projects',
+		component: () => import('../views/ProjectsView.vue'),
+	},
+	{
+		path: '/projects/:id',
+		name: 'project',
+		component: () => import('../views/ProjectView.vue'),
+		props: true,
+	},
 ]
 
 export const router = createRouter({

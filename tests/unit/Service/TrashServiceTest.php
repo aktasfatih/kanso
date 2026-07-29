@@ -13,12 +13,13 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardLinkMapper;
-use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
@@ -42,6 +43,7 @@ class TrashServiceTest extends TestCase {
 	private SubscriptionMapper&MockObject $subscriptionMapper;
 	private CardLinkMapper&MockObject $cardLinkMapper;
 	private CardRelationMapper&MockObject $cardRelationMapper;
+	private ProjectCardMapper&MockObject $projectCardMapper;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -58,6 +60,7 @@ class TrashServiceTest extends TestCase {
 		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
 		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
+		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -71,6 +74,7 @@ class TrashServiceTest extends TestCase {
 			$this->subscriptionMapper,
 			$this->cardLinkMapper,
 			$this->cardRelationMapper,
+			$this->projectCardMapper,
 		);
 	}
 

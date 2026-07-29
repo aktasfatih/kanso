@@ -56,6 +56,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<BellIcon :size="20" />
 					</template>
 				</NcAppNavigationItem>
+				<NcAppNavigationItem
+					:name="t('kanso', 'Projects')"
+					:to="{ name: 'projects' }"
+					:active="isProjectsActive">
+					<template #icon>
+						<FolderMultipleOutlineIcon :size="20" />
+					</template>
+				</NcAppNavigationItem>
 			</template>
 		</NcAppNavigation>
 		<NcAppContent>
@@ -77,6 +85,7 @@ import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
+import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useBoards } from './composables/useBoards.js'
 
 const route = useRoute()
@@ -122,6 +131,7 @@ function isBoardActive(boardId) {
 const isMyCardsActive = computed(() => route.name === 'my-cards')
 const isMyReviewsActive = computed(() => route.name === 'my-reviews')
 const isInboxActive = computed(() => route.name === 'inbox')
+const isProjectsActive = computed(() => route.name === 'projects' || route.name === 'project')
 </script>
 
 <style scoped>

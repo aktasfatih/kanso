@@ -58,6 +58,14 @@ return [
 		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'DELETE'],
 		['name' => 'review#setState', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'PATCH'],
 
+		['name' => 'project#index', 'url' => '/api/projects', 'verb' => 'GET'],
+		['name' => 'project#create', 'url' => '/api/projects', 'verb' => 'POST'],
+		['name' => 'project#update', 'url' => '/api/projects/{id}', 'verb' => 'PATCH'],
+		['name' => 'project#destroy', 'url' => '/api/projects/{id}', 'verb' => 'DELETE'],
+		['name' => 'project#cards', 'url' => '/api/projects/{id}/cards', 'verb' => 'GET'],
+		['name' => 'project#addCard', 'url' => '/api/projects/{id}/cards/{cardId}', 'verb' => 'PUT'],
+		['name' => 'project#removeCard', 'url' => '/api/projects/{id}/cards/{cardId}', 'verb' => 'DELETE'],
+
 		['name' => 'activity#index', 'url' => '/api/cards/{cardId}/activity', 'verb' => 'GET'],
 
 		['name' => 'subscription#index', 'url' => '/api/cards/{cardId}/subscription', 'verb' => 'GET'],

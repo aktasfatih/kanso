@@ -15,6 +15,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
@@ -42,6 +43,7 @@ class CardControllerTest extends TestCase {
 	private CommentMapper&MockObject $commentMapper;
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardRelationService&MockObject $relationService;
+	private ProjectCardMapper&MockObject $projectCardMapper;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -63,6 +65,9 @@ class CardControllerTest extends TestCase {
 		$this->relationService = $this->createMock(CardRelationService::class);
 		$this->relationService->method('groupedForCard')
 			->willReturn(['blocks' => [], 'blockedBy' => [], 'duplicates' => [], 'relates' => []]);
+		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
+		$this->projectCardMapper->method('findProjectIdsByCard')
+			->willReturn([]);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -82,7 +87,8 @@ class CardControllerTest extends TestCase {
 			$this->cardMapper,
 			$this->commentMapper,
 			$this->subscriptionService,
-			$this->relationService
+			$this->relationService,
+			$this->projectCardMapper
 		);
 	}
 

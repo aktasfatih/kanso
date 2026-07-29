@@ -283,3 +283,25 @@ export const getSettings = () =>
 
 export const updateSettings = (data) =>
 	axios.put(url('/api/settings'), data).then((r) => r.data)
+
+// Projects (cross-board card collections)
+export const getProjects = () =>
+	axios.get(url('/api/projects')).then((r) => r.data)
+
+export const createProject = (data) =>
+	axios.post(url('/api/projects'), data).then((r) => r.data)
+
+export const updateProject = (id, data) =>
+	axios.patch(url(`/api/projects/${id}`), data).then((r) => r.data)
+
+export const deleteProject = (id) =>
+	axios.delete(url(`/api/projects/${id}`)).then((r) => r.data)
+
+export const getProjectCards = (id) =>
+	axios.get(url(`/api/projects/${id}/cards`)).then((r) => r.data)
+
+export const addCardToProject = (projectId, cardId) =>
+	axios.put(url(`/api/projects/${projectId}/cards/${cardId}`)).then((r) => r.data)
+
+export const removeCardFromProject = (projectId, cardId) =>
+	axios.delete(url(`/api/projects/${projectId}/cards/${cardId}`)).then((r) => r.data)

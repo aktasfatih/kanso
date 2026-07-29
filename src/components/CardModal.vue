@@ -541,6 +541,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
+					<!-- Projects membership -->
+					<span class="card-modal__attr-divider" />
+
+					<div class="card-modal__attr">
+						<button
+							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							:aria-expanded="openPicker === 'project'"
+							@click="togglePicker('project')">
+							<FolderMultipleOutlineIcon :size="12" />
+							{{ cardProjectIds.size > 0
+								? t('kanso', '{n} project', { n: cardProjectIds.size })
+								: t('kanso', 'Project') }}
+						</button>
+						<div v-if="openPicker === 'project'" class="card-modal__popover">
+							<div v-if="allProjects.length === 0" class="card-modal__popover-empty">
+								{{ t('kanso', 'No projects yet.') }}
+							</div>
+							<button
+								v-for="project in allProjects"
+								:key="project.id"
+								class="card-modal__label-toggle"
+								:class="{ 'card-modal__label-toggle--active': cardProjectIds.has(project.id) }"
+								:aria-pressed="cardProjectIds.has(project.id)"
+								:disabled="projectTogglePending"
+								@click="handleToggleProject(project.id)">
+								<span
+									class="card-modal__project-dot"
+									:style="project.color ? { background: '#' + project.color } : {}" />
+								{{ project.title }}
+							</button>
+							<span v-if="projectToggleError" class="card-modal__save-error">{{ projectToggleError }}</span>
+						</div>
+					</div>
+
 					<!-- Reviews (pushed right) -->
 					<div class="card-modal__attr-right">
 						<span class="card-modal__attr-eyebrow">{{ t('kanso', 'Review') }}</span>
@@ -1312,6 +1346,7 @@ import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
+import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -1322,6 +1357,8 @@ import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue
 import FormatQuoteCloseIcon from 'vue-material-design-icons/FormatQuoteClose.vue'
 import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
 import { useCard } from '../composables/useCard.js'
+import { useProjects } from '../composables/useProjects.js'
+import { addCardToProject as apiAddCardToProject, removeCardFromProject as apiRemoveCardFromProject } from '../services/api.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useBoard } from '../composables/useBoard.js'
 import { scaleTokens } from '../services/estimateScales.js'
@@ -2649,6 +2686,40 @@ function onCommentKeydown(event) {
 		submitNewComment()
 	}
 }
+
+// ── Projects membership ──────────────────────────────────────────────────────
+const { data: projectsData } = useProjects()
+const allProjects = computed(() => projectsData.value ?? [])
+
+// The card detail now returns projectIds: number[]; fall back to [] if absent.
+const cardProjectIds = computed(() => {
+	const ids = Array.isArray(cardData.value?.projectIds) ? cardData.value.projectIds : []
+	return new Set(ids)
+})
+
+const projectTogglePending = ref(false)
+const projectToggleError = ref('')
+
+async function handleToggleProject(projectId) {
+	projectToggleError.value = ''
+	projectTogglePending.value = true
+	const isMember = cardProjectIds.value.has(projectId)
+	try {
+		if (isMember) {
+			await apiRemoveCardFromProject(projectId, Number(props.cardId))
+		} else {
+			await apiAddCardToProject(projectId, Number(props.cardId))
+		}
+		// Invalidate card (so projectIds refreshes) + the project's card list
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		queryClient.invalidateQueries({ queryKey: ['project', String(projectId), 'cards'] })
+		queryClient.invalidateQueries({ queryKey: ['projects'] })
+	} catch (err) {
+		projectToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update project membership.')
+	} finally {
+		projectTogglePending.value = false
+	}
+}
 </script>
 
 <style scoped>
@@ -3190,6 +3261,16 @@ function onCommentKeydown(event) {
 .card-modal__label-toggle--no-color.card-modal__label-toggle--active {
 	background: var(--color-primary-element);
 	border-color: var(--color-primary-element);
+}
+/* Projects dropdown uses label-toggle styling; dot provides color identity */
+.card-modal__project-dot {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--color-primary-element);
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	flex-shrink: 0;
 }
 .card-modal__label-create {
 	display: flex;
