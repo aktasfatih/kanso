@@ -60,6 +60,12 @@ const routes = [
 		component: () => import('../views/ProjectView.vue'),
 		props: true,
 	},
+	{
+		path: '/projects/:id/stats',
+		name: 'project-stats',
+		component: () => import('../views/ProjectStats.vue'),
+		props: true,
+	},
 ]
 
 export const router = createRouter({

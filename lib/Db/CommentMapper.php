@@ -263,6 +263,37 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
+	 * The project-analytics twin of {@see self::countRecentForBoard()} - count of
+	 * non-deleted comments created since $sinceTs on cards in an explicit card id
+	 * set instead of a board. The caller supplies ONLY ACL-resolved project card
+	 * ids (see {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}),
+	 * so there is no board scope and no cross-board leak. An empty set short-circuits.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → 0)
+	 * @throws Exception
+	 */
+	public function countRecentForCards(array $cardIds, int $sinceTs): int {
+		if ($cardIds === []) {
+			return 0;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*'))
+			->from($this->getTableName(), 'cm')
+			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
+			->where($qb->expr()->in('c.id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('cm.created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+
+		return $count;
+	}
+
+	/**
 	 * Hard-deletes every comment of a card (all threads) - cascade for a card
 	 * purge.
 	 *

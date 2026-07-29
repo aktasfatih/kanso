@@ -306,6 +306,10 @@ export const addCardToProject = (projectId, cardId) =>
 export const removeCardFromProject = (projectId, cardId) =>
 	axios.delete(url(`/api/projects/${projectId}/cards/${cardId}`)).then((r) => r.data)
 
+// Cross-board project analytics (owner-only)
+export const getProjectStats = (projectId) =>
+	axios.get(url(`/api/projects/${projectId}/stats`)).then((r) => r.data)
+
 // Board analytics
 export const getBoardStats = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/stats`)).then((r) => r.data)

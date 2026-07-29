@@ -131,6 +131,82 @@ class StatsService {
 	}
 
 	/**
+	 * The project-analytics DTO, computed over an explicit ACL-resolved card id
+	 * set (#3568) rather than a single board. The caller (ProjectStatsController
+	 * → ProjectService) has already owner-gated the project AND resolved the card
+	 * ids to the owner's readable-board set (one ACL-filtered pass via
+	 * {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}), so a
+	 * card on a board the owner cannot READ is never in $cardIds and can never
+	 * contribute - there is no board scope here and no cross-board leak. Every
+	 * aggregate re-uses the same PHP-side roll-ups as {@see self::boardStats()}
+	 * (bucketByDay / velocity / cycleTime / trend), just fed the card-id-set
+	 * mapper variants; there is no second stats engine.
+	 *
+	 * This DTO deliberately DIFFERS from the board one on the board-specific
+	 * panels that carry no cross-board meaning:
+	 *   - byStack is OMITTED: stacks belong to one board, so a project-wide
+	 *     per-stack count would collide unrelated columns from different boards.
+	 *   - estimate totals / points velocity are OMITTED: a project may span
+	 *     boards on different estimate scales (a t-shirt board's tokens cannot be
+	 *     summed with a fibonacci board's), so points are never summed here -
+	 *     velocity.pointsPerWeek / pointsTrend are always null and there are no
+	 *     estimateBy* panels. Cross-board-meaningful metrics (byPriority,
+	 *     byAssignee, byLabel, throughput/created timelines, overdue, aging,
+	 *     checklist, comment activity, velocity cards + cycle time) are kept.
+	 *
+	 * @param int[] $cardIds the owner's ACL-resolved project card ids (empty → all-zero DTO)
+	 * @return array{
+	 *     byPriority: list<array{priority: int, count: int}>,
+	 *     byAssignee: list<array{uid: string, count: int}>,
+	 *     byLabel: list<array{boardId: int, labelId: int, count: int}>,
+	 *     throughput: list<array{day: string, count: int}>,
+	 *     created: list<array{day: string, count: int}>,
+	 *     aging: array{days: int, count: int},
+	 *     overdue: int,
+	 *     checklist: array{total: int, done: int},
+	 *     commentActivity: int,
+	 *     velocity: array{
+	 *         weeks: int,
+	 *         windowDays: int,
+	 *         cardsPerWeek: float,
+	 *         cardsTrend: string,
+	 *         pointsPerWeek: null|float,
+	 *         pointsTrend: null|string,
+	 *         weekly: list<array{week: string, cards: int, points: null|float}>
+	 *     },
+	 *     cycleTime: array{windowDays: int, sampleSize: int, medianDays: null|float, averageDays: null|float},
+	 *     cardCount: int
+	 * }
+	 * @throws \OCP\DB\Exception
+	 */
+	public function projectStats(array $cardIds): array {
+		$now = time();
+		$windowStart = $now - self::WINDOW_DAYS * self::DAY_SECONDS;
+		$agingCutoff = $now - self::AGING_DAYS * self::DAY_SECONDS;
+		$flowWindowStart = $now - self::FLOW_WEEKS * self::WEEK_SECONDS;
+		$flowFetchStart = $now - 2 * self::FLOW_WEEKS * self::WEEK_SECONDS;
+
+		$completions = $this->cardMapper->doneCycleTimesForCards($cardIds, $flowFetchStart, $now);
+
+		return [
+			'byPriority' => $this->cardMapper->countByPriorityForCards($cardIds),
+			'byAssignee' => $this->cardAssigneeMapper->countByAssigneeForCards($cardIds),
+			'byLabel' => $this->cardLabelMapper->countByLabelForCards($cardIds),
+			'throughput' => $this->bucketByDay($this->cardMapper->doneTimelineForCards($cardIds, $windowStart, $now)),
+			'created' => $this->bucketByDay($this->cardMapper->createdTimelineForCards($cardIds, $windowStart, $now)),
+			'aging' => ['days' => self::AGING_DAYS, 'count' => $this->cardMapper->agingCountForCards($cardIds, $agingCutoff)],
+			'overdue' => $this->cardMapper->overdueCountForCards($cardIds, new \DateTime('@' . $now)),
+			'checklist' => $this->checklistTotalsForCards($cardIds),
+			'commentActivity' => $this->commentMapper->countRecentForCards($cardIds, $windowStart),
+			// Mixed estimate scales across boards ⇒ points are never summed: pass
+			// $numericScale = false so velocity reports cards only (points null).
+			'velocity' => $this->velocity($completions, false, $now),
+			'cycleTime' => $this->cycleTime($completions, $flowWindowStart),
+			'cardCount' => count($cardIds),
+		];
+	}
+
+	/**
 	 * Buckets a flat list of unix timestamps into ascending per-day
 	 * {day: "YYYY-MM-DD", count} rows (UTC, sparse: only days with activity).
 	 * Kept in PHP so the timeline queries carry no per-dialect date SQL.
@@ -398,6 +474,25 @@ class StatsService {
 		$total = 0;
 		$done = 0;
 		foreach ($this->checklistItemMapper->progressByBoard($boardId) as $progress) {
+			$total += $progress['total'];
+			$done += $progress['done'];
+		}
+		return ['total' => $total, 'done' => $done];
+	}
+
+	/**
+	 * Checklist totals over an explicit card id set - the project-analytics twin
+	 * of {@see self::checklistTotals()}, summed from
+	 * {@see ChecklistItemMapper::progressByCards()}.
+	 *
+	 * @param int[] $cardIds
+	 * @return array{total: int, done: int}
+	 * @throws \OCP\DB\Exception
+	 */
+	private function checklistTotalsForCards(array $cardIds): array {
+		$total = 0;
+		$done = 0;
+		foreach ($this->checklistItemMapper->progressByCards($cardIds) as $progress) {
 			$total += $progress['total'];
 			$done += $progress['done'];
 		}

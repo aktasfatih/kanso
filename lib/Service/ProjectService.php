@@ -40,6 +40,7 @@ class ProjectService {
 		private PermissionService $permissionService,
 		private CardMapper $cardMapper,
 		private BoardMapper $boardMapper,
+		private StatsService $statsService,
 	) {
 	}
 
@@ -166,12 +167,52 @@ class ProjectService {
 	public function listCards(int $projectId, string $uid): array {
 		$project = $this->loadOwnedProject($projectId, $uid);
 
-		$boardIds = array_map(
+		return $this->projectCardMapper->findCardsInProjectAndBoards(
+			$project->getId(),
+			$this->readableBoardIds($uid),
+		);
+	}
+
+	/**
+	 * Cross-board analytics over the project's ACL-resolved card set - mirrors
+	 * board analytics but for a project (#3568). Only the owner may act. The card
+	 * set is resolved EXACTLY as {@see self::listCards()} does - one ACL-filtered
+	 * pass through the owner's readable-board set (never per-row), so a card on a
+	 * board the owner cannot READ is never in the set and can never contribute to
+	 * a metric. The resolved card ids are then handed to StatsService, which
+	 * re-uses the board-stats aggregation over an explicit card id set (no second
+	 * stats engine, no board scope). Board-specific panels (byStack, estimate
+	 * totals / points) are omitted - see {@see StatsService::projectStats()}.
+	 *
+	 * @return array<string, mixed> the project-stats DTO
+	 * @throws DoesNotExistException if the project does not exist
+	 * @throws NotPermittedException if the actor is not the owner
+	 * @throws \OCP\DB\Exception
+	 */
+	public function stats(int $projectId, string $uid): array {
+		$project = $this->loadOwnedProject($projectId, $uid);
+
+		$cards = $this->projectCardMapper->findCardsInProjectAndBoards(
+			$project->getId(),
+			$this->readableBoardIds($uid),
+		);
+		$cardIds = array_map(static fn (array $card): int => (int)$card['id'], $cards);
+
+		return $this->statsService->projectStats($cardIds);
+	}
+
+	/**
+	 * The ids of every board the user can READ - the ACL frame for a project's
+	 * cross-board card resolution (shared by {@see self::listCards()} and
+	 * {@see self::stats()}).
+	 *
+	 * @return int[]
+	 */
+	private function readableBoardIds(string $uid): array {
+		return array_map(
 			static fn (Board $board): int => $board->getId(),
 			$this->boardService->findAll($uid)
 		);
-
-		return $this->projectCardMapper->findCardsInProjectAndBoards($project->getId(), $boardIds);
 	}
 
 	/**

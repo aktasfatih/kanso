@@ -79,6 +79,51 @@ class CardLabelMapper extends QBMapper {
 	}
 
 	/**
+	 * The project-analytics twin of {@see self::countByLabelForBoard()} - label
+	 * counts over an explicit card id set instead of a board. The caller supplies
+	 * ONLY ACL-resolved project card ids (see
+	 * {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}), so
+	 * there is no board scope and no cross-board leak. An empty set short-circuits
+	 * (never emit an invalid `IN ()`).
+	 *
+	 * Grouping is by `(board_id, label_id)`, NOT label_id alone: a label id is
+	 * only board-unique, so across a multi-board project two DISTINCT labels can
+	 * share an id (e.g. "Bug" on board A and "Urgent" on board B are both id 5).
+	 * Grouping by the id alone would silently sum them into one wrong bar; keying
+	 * on the pair keeps each label distinct and lets the DTO layer label the bar
+	 * with its board context. Each row carries `boardId` for that resolution.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return list<array{boardId: int, labelId: int, count: int}>
+	 * @throws Exception
+	 */
+	public function countByLabelForCards(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.board_id', 'cl.label_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'cl')
+			->innerJoin('cl', 'kanso_cards', 'c', $qb->expr()->eq('cl.card_id', 'c.id'))
+			->where($qb->expr()->in('c.id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('c.board_id')
+			->addGroupBy('cl.label_id');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['boardId' => (int)$row['board_id'], 'labelId' => (int)$row['label_id'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Label ids assigned to one card, in assignment order.
 	 *
 	 * @return int[]

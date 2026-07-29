@@ -287,6 +287,99 @@ class StatsServiceTest extends TestCase {
 		self::assertNull($cycle['averageDays']);
 	}
 
+	// ── Project analytics (card-id-set variant, #3568) ────────────────────────
+
+	public function testProjectStatsComposesCardSetAggregatesAndOmitsBoardSpecificPanels(): void {
+		$cardIds = [9, 11, 42];
+		$this->cardMapper->expects(self::once())->method('countByPriorityForCards')->with($cardIds)
+			->willReturn([['priority' => 4, 'count' => 2]]);
+		$this->cardAssigneeMapper->expects(self::once())->method('countByAssigneeForCards')->with($cardIds)
+			->willReturn([['uid' => 'alice', 'count' => 3]]);
+		$this->cardLabelMapper->expects(self::once())->method('countByLabelForCards')->with($cardIds)
+			->willReturn([['boardId' => 1, 'labelId' => 9, 'count' => 1]]);
+		$this->cardMapper->method('doneTimelineForCards')->willReturn([]);
+		$this->cardMapper->method('createdTimelineForCards')->willReturn([]);
+		$this->cardMapper->method('doneCycleTimesForCards')->willReturn([]);
+		$this->cardMapper->method('agingCountForCards')->willReturn(5);
+		$this->cardMapper->method('overdueCountForCards')->willReturn(1);
+		$this->checklistItemMapper->method('progressByCards')->willReturn([
+			9 => ['total' => 4, 'done' => 2],
+			11 => ['total' => 1, 'done' => 1],
+		]);
+		$this->commentMapper->method('countRecentForCards')->willReturn(7);
+		// A project never reads a board scale - the board-specific board* methods
+		// and estimate panels must never run over a card set.
+		$this->boardMapper->expects(self::never())->method('find');
+		$this->cardMapper->expects(self::never())->method('countByStack');
+		$this->cardMapper->expects(self::never())->method('estimateByStack');
+
+		$dto = $this->service->projectStats($cardIds);
+
+		self::assertArrayNotHasKey('byStack', $dto);
+		self::assertArrayNotHasKey('estimateByStack', $dto);
+		self::assertArrayNotHasKey('estimateByAssignee', $dto);
+		self::assertSame([['priority' => 4, 'count' => 2]], $dto['byPriority']);
+		self::assertSame([['uid' => 'alice', 'count' => 3]], $dto['byAssignee']);
+		self::assertSame([['boardId' => 1, 'labelId' => 9, 'count' => 1]], $dto['byLabel']);
+		self::assertSame(5, $dto['aging']['count']);
+		self::assertSame(1, $dto['overdue']);
+		self::assertSame(7, $dto['commentActivity']);
+		self::assertSame(['total' => 5, 'done' => 3], $dto['checklist']);
+		self::assertSame(3, $dto['cardCount']);
+	}
+
+	public function testProjectStatsNeverSumsPointsAcrossMixedScales(): void {
+		// Completions carry numeric-looking estimate tokens, but a project spans
+		// boards on different scales, so points must never be summed - velocity
+		// reports cards only, with points null regardless of the tokens.
+		$now = time();
+		$completions = [
+			$this->done($now - 1 * self::DAY, '3'),
+			$this->done($now - 2 * self::DAY, '5'),
+		];
+		$this->cardMapper->method('countByPriorityForCards')->willReturn([]);
+		$this->cardAssigneeMapper->method('countByAssigneeForCards')->willReturn([]);
+		$this->cardLabelMapper->method('countByLabelForCards')->willReturn([]);
+		$this->cardMapper->method('doneTimelineForCards')->willReturn([]);
+		$this->cardMapper->method('createdTimelineForCards')->willReturn([]);
+		$this->cardMapper->method('doneCycleTimesForCards')->willReturn($completions);
+		$this->cardMapper->method('agingCountForCards')->willReturn(0);
+		$this->cardMapper->method('overdueCountForCards')->willReturn(0);
+		$this->checklistItemMapper->method('progressByCards')->willReturn([]);
+		$this->commentMapper->method('countRecentForCards')->willReturn(0);
+
+		$velocity = $this->service->projectStats([9, 11])['velocity'];
+
+		self::assertSame(2, $velocity['weekly'][3]['cards']);
+		self::assertNull($velocity['pointsPerWeek']);
+		self::assertNull($velocity['pointsTrend']);
+		self::assertNull($velocity['weekly'][3]['points']);
+	}
+
+	public function testProjectStatsEmptyCardSetYieldsZeroedDto(): void {
+		// No cards ⇒ every card-set mapper returns its empty/zero result; the DTO
+		// composes cleanly with no throw and an all-zero shape.
+		$this->cardMapper->method('countByPriorityForCards')->with([])->willReturn([]);
+		$this->cardAssigneeMapper->method('countByAssigneeForCards')->with([])->willReturn([]);
+		$this->cardLabelMapper->method('countByLabelForCards')->with([])->willReturn([]);
+		$this->cardMapper->method('doneTimelineForCards')->willReturn([]);
+		$this->cardMapper->method('createdTimelineForCards')->willReturn([]);
+		$this->cardMapper->method('doneCycleTimesForCards')->willReturn([]);
+		$this->cardMapper->method('agingCountForCards')->willReturn(0);
+		$this->cardMapper->method('overdueCountForCards')->willReturn(0);
+		$this->checklistItemMapper->method('progressByCards')->willReturn([]);
+		$this->commentMapper->method('countRecentForCards')->willReturn(0);
+
+		$dto = $this->service->projectStats([]);
+
+		self::assertSame(0, $dto['cardCount']);
+		self::assertSame([], $dto['byPriority']);
+		self::assertSame(0, $dto['overdue']);
+		self::assertSame(['total' => 0, 'done' => 0], $dto['checklist']);
+		self::assertSame(0.0, $dto['velocity']['cardsPerWeek']);
+		self::assertNull($dto['cycleTime']['medianDays']);
+	}
+
 	/**
 	 * @return array{createdAt: int, doneAt: int, estimate: ?string}
 	 */

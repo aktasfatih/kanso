@@ -97,6 +97,65 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The project-analytics twin of {@see self::progressByBoard()} - per-card
+	 * checklist progress over an explicit card id set instead of a board, as two
+	 * grouped queries. The caller supplies ONLY ACL-resolved project card ids
+	 * (see {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}),
+	 * so there is no board scope and no cross-board leak. An empty set yields an
+	 * empty map.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return array<int, array{total: int, done: int}> map of cardId => counts
+	 * @throws Exception
+	 */
+	public function progressByCards(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$totals = $this->countByCards($cardIds, false);
+		$done = $this->countByCards($cardIds, true);
+
+		$map = [];
+		foreach ($totals as $cardId => $count) {
+			$map[$cardId] = ['total' => $count, 'done' => $done[$cardId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
+	 * Item counts grouped by card for an explicit card id set, optionally
+	 * restricted to done items. Assumes a non-empty set (the caller guards).
+	 *
+	 * @param int[] $cardIds
+	 * @return array<int, int> map of cardId => count
+	 * @throws Exception
+	 */
+	private function countByCards(array $cardIds, bool $doneOnly): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->in('c.id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('ci.card_id');
+
+		if ($doneOnly) {
+			$qb->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+		}
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * Item counts grouped by card for a board, optionally restricted to done
 	 * items.
 	 *

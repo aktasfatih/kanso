@@ -30,21 +30,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span v-if="project?.description" class="project-view__desc">{{ project.description }}</span>
 				</div>
 
-				<NcActions :force-menu="true">
-					<NcActionButton :close-after-click="true" @click="openEditDialog">
-						<template #icon>
-							<PencilIcon :size="20" />
-						</template>
-						{{ t('kanso', 'Edit project') }}
-					</NcActionButton>
-					<NcActionSeparator />
-					<NcActionButton :close-after-click="true" @click="handleDelete">
-						<template #icon>
-							<TrashCanIcon :size="20" />
-						</template>
-						{{ t('kanso', 'Delete project') }}
-					</NcActionButton>
-				</NcActions>
+				<div class="project-view__header-actions">
+					<button
+						class="project-view__analytics-btn"
+						:title="t('kanso', 'Project analytics')"
+						:aria-label="t('kanso', 'Project analytics')"
+						@click="goToStats">
+						<ChartBarIcon :size="20" />
+					</button>
+
+					<NcActions :force-menu="true">
+						<NcActionButton :close-after-click="true" @click="openEditDialog">
+							<template #icon>
+								<PencilIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Edit project') }}
+						</NcActionButton>
+						<NcActionSeparator />
+						<NcActionButton :close-after-click="true" @click="handleDelete">
+							<template #icon>
+								<TrashCanIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Delete project') }}
+						</NcActionButton>
+					</NcActions>
+				</div>
 			</div>
 
 			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
@@ -233,6 +243,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
+import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useProjects } from '../composables/useProjects.js'
@@ -290,6 +301,10 @@ function formatDue(iso) {
 
 function openCard(card) {
 	router.push({ name: 'card-modal', params: { id: String(card.boardId), cardId: String(card.id) } })
+}
+
+function goToStats() {
+	router.push({ name: 'project-stats', params: { id: String(props.id) } })
 }
 
 // ── Card picker (cross-board search) ────────────────────────────────────────
@@ -441,6 +456,31 @@ async function submitEdit() {
 }
 
 .project-view__back:hover {
+	color: var(--color-main-text);
+	background: var(--color-background-hover);
+}
+
+.project-view__header-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.project-view__analytics-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--color-text-maxcontrast);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--border-radius);
+	padding: 6px;
+	transition: color 0.15s, background 0.15s;
+}
+
+.project-view__analytics-btn:hover {
 	color: var(--color-main-text);
 	background: var(--color-background-hover);
 }

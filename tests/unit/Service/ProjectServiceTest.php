@@ -19,6 +19,7 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\ProjectService;
+use OCA\Kanso\Service\StatsService;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -29,6 +30,7 @@ class ProjectServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private CardMapper&MockObject $cardMapper;
 	private BoardMapper&MockObject $boardMapper;
+	private StatsService&MockObject $statsService;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -39,6 +41,7 @@ class ProjectServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
+		$this->statsService = $this->createMock(StatsService::class);
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -46,6 +49,7 @@ class ProjectServiceTest extends TestCase {
 			$this->permissionService,
 			$this->cardMapper,
 			$this->boardMapper,
+			$this->statsService,
 		);
 	}
 
@@ -166,5 +170,60 @@ class ProjectServiceTest extends TestCase {
 		$this->projectCardMapper->expects(self::never())->method('findCardsInProjectAndBoards');
 		$this->expectException(NotPermittedException::class);
 		$this->service->listCards(5, 'mallory');
+	}
+
+	public function testStatsResolvesReadableCardIdsAndDelegatesToStatsService(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
+		// The ACL-filtered card set (already restricted to boards 1 & 7).
+		$this->projectCardMapper->expects(self::once())
+			->method('findCardsInProjectAndBoards')
+			->with(5, [1, 7])
+			->willReturn([
+				['id' => 9, 'boardId' => 1],
+				['id' => 11, 'boardId' => 7],
+			]);
+		// Exactly those two card ids are handed to the stats engine - never a
+		// board id, never a per-row leak.
+		$this->statsService->expects(self::once())
+			->method('projectStats')
+			->with([9, 11])
+			->willReturn(['cardCount' => 2, 'overdue' => 0]);
+
+		$result = $this->service->stats(5, 'alice');
+		self::assertSame(2, $result['cardCount']);
+	}
+
+	public function testStatsRejectsNonOwner(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->projectCardMapper->expects(self::never())->method('findCardsInProjectAndBoards');
+		$this->statsService->expects(self::never())->method('projectStats');
+		$this->expectException(NotPermittedException::class);
+		$this->service->stats(5, 'mallory');
+	}
+
+	public function testStatsNeverIncludesCardsFromUnreadableBoards(): void {
+		// The owner can read only board 1. A card living on board 99 (which the
+		// owner cannot READ) must NOT reach the stats engine: the readable-board
+		// frame passed to the mapper excludes it, and the mapper's board filter
+		// drops it - so the id set fed to projectStats holds only the readable
+		// card. This is the cross-board-leak guard for project analytics.
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+
+		$this->projectCardMapper->expects(self::once())
+			->method('findCardsInProjectAndBoards')
+			// Only the readable board id (1) frames the query - board 99 is absent.
+			->with(5, [1])
+			// The mapper, given that frame, returns only the readable card.
+			->willReturn([['id' => 9, 'boardId' => 1]]);
+
+		$this->statsService->expects(self::once())
+			->method('projectStats')
+			->with([9])
+			->willReturn(['cardCount' => 1]);
+
+		$result = $this->service->stats(5, 'alice');
+		self::assertSame(1, $result['cardCount']);
 	}
 }

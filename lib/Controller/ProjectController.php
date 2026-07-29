@@ -80,6 +80,19 @@ class ProjectController extends Controller {
 	}
 
 	/**
+	 * Cross-board analytics for the project, owner-gated and ACL-filtered to the
+	 * owner's readable boards (mirrors board analytics). The owner gate + the
+	 * one-pass ACL card resolution live in {@see ProjectService::stats()}, so a
+	 * non-owner gets a 403 and a card on an unreadable board never contributes.
+	 */
+	#[NoAdminRequired]
+	public function stats(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			return new JSONResponse($this->projectService->stats($id, $this->currentUserId()));
+		});
+	}
+
+	/**
 	 * Adds a card to the project. Idempotent - a repeat add succeeds without
 	 * writing anything.
 	 */

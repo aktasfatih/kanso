@@ -643,4 +643,201 @@ class CardMapper extends QBMapper {
 
 		return $rows;
 	}
+
+	// ── Card-id-set variants (project analytics) ──────────────────────────────
+	//
+	// These mirror the board-scoped aggregates above but key on an explicit card
+	// id set (`c.id IN (:ids)`) instead of `board_id = :id`, so StatsService can
+	// aggregate over a project's ACL-resolved cross-board card set (#3568). The
+	// caller supplies ONLY card ids it has already ACL-filtered to the viewer's
+	// readable boards (see {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}),
+	// so there is no board scope here and no cross-board leak: a card the viewer
+	// cannot read is simply never in the set. An empty set short-circuits (never
+	// emit `IN ()`, which is invalid SQL and would otherwise match nothing).
+	// board-specific aggregates (countByStack, estimateByStack) are deliberately
+	// NOT duplicated - a per-stack roll-up is meaningless across boards.
+
+	/**
+	 * Open (non-deleted, non-archived) card counts grouped by priority over an
+	 * explicit card id set - the project-analytics twin of {@see self::countByPriority()}.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return list<array{priority: int, count: int}>
+	 * @throws Exception
+	 */
+	public function countByPriorityForCards(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('priority')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('priority');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['priority' => (int)$row['priority'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * Count of aging open cards over an explicit card id set - the twin of
+	 * {@see self::agingCount()}.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → 0)
+	 * @throws Exception
+	 */
+	public function agingCountForCards(array $cardIds, int $cutoff): int {
+		if ($cardIds === []) {
+			return 0;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*'))
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+
+		return $count;
+	}
+
+	/**
+	 * Count of overdue open cards over an explicit card id set - the twin of
+	 * {@see self::overdueCount()}.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → 0)
+	 * @throws Exception
+	 */
+	public function overdueCountForCards(array $cardIds, \DateTime $now): int {
+		if ($cardIds === []) {
+			return 0;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*'))
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->isNotNull('duedate'))
+			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
+
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+
+		return $count;
+	}
+
+	/**
+	 * `done_at` timestamps of cards done in the window over an explicit card id
+	 * set - the twin of {@see self::doneTimeline()} (throughput source).
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return int[] the done_at unix timestamps (unordered)
+	 * @throws Exception
+	 */
+	public function doneTimelineForCards(array $cardIds, int $sinceTs, int $untilTs): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('done_at')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$stamps = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+
+		return $stamps;
+	}
+
+	/**
+	 * `created_at` timestamps of cards created in the window over an explicit
+	 * card id set - the twin of {@see self::createdTimeline()}.
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return int[] the created_at unix timestamps (unordered)
+	 * @throws Exception
+	 */
+	public function createdTimelineForCards(array $cardIds, int $sinceTs, int $untilTs): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('created_at')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$stamps = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+		$result->closeCursor();
+
+		return $stamps;
+	}
+
+	/**
+	 * Per-card completion facts (created_at, done_at, estimate) for cards done in
+	 * the window over an explicit card id set - the velocity + cycle-time source,
+	 * the twin of {@see self::doneCycleTimes()}. The caller applies its own
+	 * estimate guard; project analytics omits points entirely (mixed scales).
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return list<array{createdAt: int, doneAt: int, estimate: ?string}> unordered
+	 * @throws Exception
+	 */
+	public function doneCycleTimesForCards(array $cardIds, int $sinceTs, int $untilTs): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('created_at', 'done_at', 'estimate')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'createdAt' => (int)$row['created_at'],
+				'doneAt' => (int)$row['done_at'],
+				'estimate' => $row['estimate'] !== null ? (string)$row['estimate'] : null,
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
 }

@@ -85,6 +85,44 @@ class CardAssigneeMapper extends QBMapper {
 	}
 
 	/**
+	 * The project-analytics twin of {@see self::countByAssigneeForBoard()} - user
+	 * assignee counts grouped by participant over an explicit card id set instead
+	 * of a board. The caller supplies ONLY ACL-resolved project card ids (see
+	 * {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}), so
+	 * there is no board scope and no cross-board leak. An empty set short-circuits
+	 * (never emit an invalid `IN ()`).
+	 *
+	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
+	 * @return list<array{uid: string, count: int}>
+	 * @throws Exception
+	 */
+	public function countByAssigneeForCards(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ca.participant')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ca')
+			->innerJoin('ca', 'kanso_cards', 'c', $qb->expr()->eq('ca.card_id', 'c.id'))
+			->where($qb->expr()->in('c.id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->groupBy('ca.participant');
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['uid' => (string)$row['participant'], 'count' => (int)$row['cnt']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * The (participant, estimate) pairs of every open (non-deleted) card on a
 	 * board that carries an estimate, one row per assignment - the source for
 	 * the per-assignee estimate sum. Summing (and numeric filtering) is done in
