@@ -126,44 +126,41 @@ const boardFilter = computed(() => selectedBoardOption.value?.value ?? null)
 	flex-wrap: wrap;
 }
 
-/* Segmented tab strip */
+/* Segmented tab strip — a subtle track with the active tab as a raised pill;
+   no inter-tab divider lines. */
 .my-work-view__tabs {
 	display: flex;
-	border: 1px solid var(--color-border-dark);
+	gap: 2px;
+	padding: 3px;
+	background: var(--color-background-hover);
 	border-radius: var(--border-radius-large, 8px);
-	overflow: hidden;
 }
 
 .my-work-view__tab {
-	padding: 6px 14px;
+	padding: 5px 14px;
 	font-size: 0.875rem;
 	font-weight: 500;
 	background: transparent;
 	border: none;
-	border-right: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius, 6px);
 	cursor: pointer;
 	color: var(--color-text-maxcontrast);
-	transition: background 0.15s, color 0.15s;
+	transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 	white-space: nowrap;
 }
 
-.my-work-view__tab:last-child {
-	border-right: none;
-}
-
 .my-work-view__tab:hover {
-	background: var(--color-background-hover);
 	color: var(--color-main-text);
 }
 
 .my-work-view__tab--active {
-	background: var(--color-primary-element);
-	color: var(--color-primary-element-text);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .my-work-view__tab--active:hover {
-	background: var(--color-primary-element-hover, var(--color-primary-element));
-	color: var(--color-primary-element-text);
+	color: var(--color-main-text);
 }
 
 /* Board filter select — constrain width */
