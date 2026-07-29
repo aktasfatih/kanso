@@ -58,9 +58,8 @@ test.describe('Board archiving', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		// Board settings → General → Archive board.
+		// Board settings → Archive board (pinned in the rail's danger group).
 		await page.getByRole('button', { name: /board settings/i }).click()
-		await page.getByRole('tab', { name: 'General' }).click()
 		await page.getByRole('button', { name: 'Archive board' }).click()
 
 		// Persisted archived + landed on the board list.

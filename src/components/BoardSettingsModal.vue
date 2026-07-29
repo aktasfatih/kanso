@@ -4,55 +4,130 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<Teleport to="#content-vue">
-		<NcAppSidebar
-			:name="t('kanso', 'Board settings')"
-			:active="activeTab"
-			@update:active="activeTab = $event"
-			@close="$emit('close')">
+		<aside
+			class="bs-modal"
+			role="dialog"
+			aria-modal="true"
+			:aria-label="t('kanso', 'Board settings')">
 
-			<NcAppSidebarTab id="general" :name="t('kanso', 'General')">
-				<template #icon>
-					<CogIcon :size="20" />
-				</template>
-				<div class="board-settings__general">
-					<NcCheckboxRadioSwitch
-						:model-value="isDefaultBoard"
-						:disabled="settingsBusy"
-						@update:model-value="setDefaultBoard">
-						{{ t('kanso', 'Open this board when Kanso starts') }}
-					</NcCheckboxRadioSwitch>
-					<p class="board-settings__general-hint">
-						{{ t('kanso', 'Kanso opens the board list by default. Turn this on to open this board instead.') }}
-					</p>
-					<NcCheckboxRadioSwitch
-						v-if="canManage"
-						:model-value="newCardsOnTop"
-						:disabled="newCardsOnTopSaving"
-						@update:model-value="onNewCardsOnTopChange">
-						{{ t('kanso', 'Add new cards to the top of a column') }}
-					</NcCheckboxRadioSwitch>
-					<p v-if="canManage" class="board-settings__general-hint">
-						{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
-					</p>
+			<!-- Header -->
+			<header class="bs-modal__header">
+				<div class="bs-modal__heading">
+					<span class="bs-modal__title">{{ t('kanso', 'Board settings') }}</span>
+					<span v-if="boardSubtitle" class="bs-modal__subtitle">{{ boardSubtitle }}</span>
+				</div>
+				<button
+					class="bs-modal__close"
+					:aria-label="t('kanso', 'Close')"
+					@click="$emit('close')">
+					<CloseIcon :size="20" />
+				</button>
+			</header>
 
-					<div v-if="canManage" class="board-settings__general-archive">
-						<NcButton type="warning" :disabled="archiving" @click="archiveBoard">
-							<template #icon>
-								<ArchiveArrowDownIcon :size="18" />
-							</template>
-							{{ t('kanso', 'Archive board') }}
-						</NcButton>
+			<div class="bs-modal__body">
+				<!-- Vertical section rail -->
+				<nav class="bs-rail" :aria-label="t('kanso', 'Board settings sections')">
+					<!-- The tablist holds ONLY tabs; the danger group is a sibling so it
+					     does not pollute the tablist's child structure (WAI-ARIA). -->
+					<div
+						class="bs-rail__tabs"
+						role="tablist"
+						aria-orientation="vertical"
+						@keydown="onRailKeydown">
+						<button
+							v-for="section in railSections"
+							:id="`bs-rail-tab-${section.id}`"
+							:key="section.id"
+							class="bs-rail__item"
+							:class="{ 'bs-rail__item--active': activeTab === section.id }"
+							type="button"
+							role="tab"
+							:aria-selected="activeTab === section.id ? 'true' : 'false'"
+							:aria-controls="`bs-pane-${section.id}`"
+							:tabindex="activeTab === section.id ? 0 : -1"
+							@click="activeTab = section.id">
+							<component :is="section.icon" :size="16" class="bs-rail__icon" />
+							<span class="bs-rail__label">{{ section.name }}</span>
+						</button>
+					</div>
+
+					<!-- Destructive actions, pinned to the bottom -->
+					<div v-if="canManage" class="bs-rail__danger">
+						<button
+							class="bs-rail__danger-item"
+							type="button"
+							:disabled="archiving"
+							@click="archiveBoard">
+							<ArchiveArrowDownIcon :size="16" class="bs-rail__icon" />
+							<span class="bs-rail__label">{{ t('kanso', 'Archive board') }}</span>
+						</button>
+						<button
+							class="bs-rail__danger-item bs-rail__danger-item--delete"
+							type="button"
+							:disabled="isDeletingBoard"
+							@click="onDeleteBoardClick">
+							<DeleteIcon :size="16" class="bs-rail__icon" />
+							<span class="bs-rail__label">{{ t('kanso', 'Delete board') }}</span>
+						</button>
+					</div>
+				</nav>
+
+				<!-- Pane area -->
+				<div class="bs-panes">
+					<!-- Delete-board confirm -->
+					<div v-if="showDeleteBoardConfirm" class="bs-delete-confirm" role="alertdialog">
+						<p class="bs-delete-confirm__title">
+							{{ t('kanso', 'Delete this board permanently?') }}
+						</p>
+						<p class="bs-delete-confirm__hint">
+							{{ t('kanso', 'This removes the board and all of its cards for everyone. This cannot be undone.') }}
+						</p>
+						<div class="bs-delete-confirm__actions">
+							<NcButton type="error" :disabled="isDeletingBoard" @click="doDeleteBoard">
+								{{ isDeletingBoard ? t('kanso', 'Deleting…') : t('kanso', 'Delete board') }}
+							</NcButton>
+							<NcButton :disabled="isDeletingBoard" @click="showDeleteBoardConfirm = false">
+								{{ t('kanso', 'Cancel') }}
+							</NcButton>
+						</div>
+						<span v-if="deleteBoardError" class="label-settings__error">{{ deleteBoardError }}</span>
+					</div>
+
+					<section
+						v-show="activeTab === 'general'"
+						id="bs-pane-general"
+						class="bs-pane"
+						role="tabpanel"
+						aria-labelledby="bs-rail-tab-general">
+					<div class="board-settings__general">
+						<NcCheckboxRadioSwitch
+							:model-value="isDefaultBoard"
+							:disabled="settingsBusy"
+							@update:model-value="setDefaultBoard">
+							{{ t('kanso', 'Open this board when Kanso starts') }}
+						</NcCheckboxRadioSwitch>
 						<p class="board-settings__general-hint">
-							{{ t('kanso', 'Hides the board from your list and navigation. Restore it any time from the Archived section on the boards page.') }}
+							{{ t('kanso', 'Kanso opens the board list by default. Turn this on to open this board instead.') }}
+						</p>
+						<NcCheckboxRadioSwitch
+							v-if="canManage"
+							:model-value="newCardsOnTop"
+							:disabled="newCardsOnTopSaving"
+							@update:model-value="onNewCardsOnTopChange">
+							{{ t('kanso', 'Add new cards to the top of a column') }}
+						</NcCheckboxRadioSwitch>
+						<p v-if="canManage" class="board-settings__general-hint">
+							{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
 						</p>
 					</div>
-				</div>
-			</NcAppSidebarTab>
+					</section>
 
-			<NcAppSidebarTab id="labels" :name="t('kanso', 'Labels')">
-				<template #icon>
-					<TagMultipleIcon :size="20" />
-				</template>
+				<section
+					v-show="activeTab === 'labels'"
+					id="bs-pane-labels"
+					class="bs-pane"
+					role="tabpanel"
+					aria-labelledby="bs-rail-tab-labels">
 				<ul class="label-settings__list" role="list">
 					<li v-if="labels.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No labels yet. Create one below.') }}
@@ -223,12 +298,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="createError" class="label-settings__error">{{ createError }}</span>
 				</form>
-			</NcAppSidebarTab>
+				</section>
 
-			<NcAppSidebarTab id="review-types" :name="t('kanso', 'Review types')">
-				<template #icon>
-					<CheckDecagramIcon :size="20" />
-				</template>
+				<section
+					v-show="activeTab === 'review-types'"
+					id="bs-pane-review-types"
+					class="bs-pane"
+					role="tabpanel"
+					aria-labelledby="bs-rail-tab-review-types">
 				<ul class="rt-settings__list" role="list">
 					<li v-if="reviewTypes.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No review types yet. Create one below.') }}
@@ -397,12 +474,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="createRtError" class="label-settings__error">{{ createRtError }}</span>
 				</form>
-			</NcAppSidebarTab>
+				</section>
 
-			<NcAppSidebarTab v-if="canShare" id="sharing" :name="t('kanso', 'Sharing')">
-				<template #icon>
-					<ShareVariantIcon :size="20" />
-				</template>
+				<section
+					v-if="canShare"
+					v-show="activeTab === 'sharing'"
+					id="bs-pane-sharing"
+					class="bs-pane"
+					role="tabpanel"
+					aria-labelledby="bs-rail-tab-sharing">
 				<!-- Sharee search -->
 				<div class="sharing__search-wrap">
 					<input
@@ -543,12 +623,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="leaveError" class="label-settings__error">{{ leaveError }}</span>
 					</div>
 				</div>
-			</NcAppSidebarTab>
+				</section>
 
-			<NcAppSidebarTab id="workflow" :name="t('kanso', 'Workflow')">
-				<template #icon>
-					<SwapHorizontalIcon :size="20" />
-				</template>
+				<section
+					v-show="activeTab === 'workflow'"
+					id="bs-pane-workflow"
+					class="bs-pane"
+					role="tabpanel"
+					aria-labelledby="bs-rail-tab-workflow">
 				<p v-if="!canEdit" class="workflow__readonly-notice">
 					{{ t('kanso', 'You need edit permission to configure workflows.') }}
 				</p>
@@ -648,15 +730,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<p v-else class="label-settings__empty">
 					{{ t('kanso', 'No stacks yet.') }}
 				</p>
-			</NcAppSidebarTab>
+				</section>
 
-			<NcAppSidebarTab id="automation" :name="t('kanso', 'Automation')">
-				<template #icon>
-					<RobotIcon :size="20" />
-				</template>
+				<section
+					v-show="activeTab === 'automation'"
+					id="bs-pane-automation"
+					class="bs-pane"
+					role="tabpanel"
+					aria-labelledby="bs-rail-tab-automation">
 
-				<!-- GitHub webhook section -->
-				<h3 class="automation__section-heading">{{ t('kanso', 'GitHub') }}</h3>
+				<p class="automation__intro">
+					{{ t('kanso', 'Rules run on Nextcloud cron.') }}
+				</p>
+
+				<!-- GitHub integration group -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.github ? 'true' : 'false'"
+						aria-controls="bs-automation-github"
+						@click="toggleAutomationGroup('github')">
+						<GithubIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'GitHub') }}</span>
+						<span v-if="webhook.enabled" class="automation__group-badge">{{ t('kanso', 'Webhook active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.github" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.github" id="bs-automation-github" class="automation__group-body">
 				<p v-if="!canManage" class="workflow__readonly-notice">
 					{{ t('kanso', 'You need manage permission to configure the GitHub webhook.') }}
 				</p>
@@ -696,11 +797,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="webhookError" class="label-settings__error">{{ webhookError }}</span>
 				</template>
+					</div>
+				</div>
 
-				<hr class="github-webhook__divider">
-
-				<!-- Auto-archive section -->
-				<h3 class="automation__section-heading">{{ t('kanso', 'Auto-archive') }}</h3>
+				<!-- Auto-archive group -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.autoArchive ? 'true' : 'false'"
+						aria-controls="bs-automation-auto-archive"
+						@click="toggleAutomationGroup('autoArchive')">
+						<ArchiveIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Auto-archive') }}</span>
+						<span v-if="archiveRules.length" class="automation__group-count">{{ archiveRules.length }}</span>
+						<ChevronUpIcon v-if="automationGroups.autoArchive" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.autoArchive" id="bs-automation-auto-archive" class="automation__group-body">
 
 				<p v-if="!canManage" class="workflow__readonly-notice">
 					{{ t('kanso', 'You need manage permission to configure automation rules.') }}
@@ -879,11 +993,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="createRuleError" class="label-settings__error">{{ createRuleError }}</span>
 					</form>
 				</template>
+					</div>
+				</div>
 
-				<!-- Recurring cards section -->
-				<h3 class="automation__section-heading automation__section-heading--spaced">
-					{{ t('kanso', 'Recurring cards') }}
-				</h3>
+				<!-- Recurring cards group -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.recurring ? 'true' : 'false'"
+						aria-controls="bs-automation-recurring"
+						@click="toggleAutomationGroup('recurring')">
+						<RepeatIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Recurring cards') }}</span>
+						<span v-if="recurRules.length" class="automation__group-count">{{ recurRules.length }}</span>
+						<ChevronUpIcon v-if="automationGroups.recurring" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.recurring" id="bs-automation-recurring" class="automation__group-body">
 
 				<!-- Loading / error states -->
 				<p v-if="recurRulesQuery.isLoading.value" class="automation__loading">
@@ -1190,11 +1317,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="createRecurRuleError" class="label-settings__error">{{ createRecurRuleError }}</span>
 					</form>
 				</template>
+					</div>
+				</div>
 
-				<!-- Card rules section (trigger → action) -->
-				<h3 class="automation__section-heading automation__section-heading--spaced">
-					{{ t('kanso', 'Card rules') }}
-				</h3>
+				<!-- Column automations (card rules) group -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.cardRules ? 'true' : 'false'"
+						aria-controls="bs-automation-card-rules"
+						@click="toggleAutomationGroup('cardRules')">
+						<ViewColumnIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Column automations') }}</span>
+						<span v-if="autoRules.length" class="automation__group-count">{{ autoRules.length }}</span>
+						<ChevronUpIcon v-if="automationGroups.cardRules" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.cardRules" id="bs-automation-card-rules" class="automation__group-body">
 				<p class="automation__section-hint">
 					{{ t('kanso', 'Run an action when a card enters a stack with a given role.') }}
 				</p>
@@ -1353,9 +1493,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span v-if="createAutoRuleError" class="label-settings__error">{{ createAutoRuleError }}</span>
 					</form>
 				</template>
-			</NcAppSidebarTab>
+					</div>
+				</div>
 
-		</NcAppSidebar>
+				</section>
+				</div>
+			</div>
+		</aside>
 	</Teleport>
 </template>
 
@@ -1368,8 +1512,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
-import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
-import NcAppSidebarTab from '@nextcloud/vue/components/NcAppSidebarTab'
+import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
@@ -1379,11 +1522,18 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
 import SwapHorizontalIcon from 'vue-material-design-icons/SwapHorizontal.vue'
 import RobotIcon from 'vue-material-design-icons/Robot.vue'
+import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
+import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
+import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
+import GithubIcon from 'vue-material-design-icons/Github.vue'
+import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import { useLabels } from '../composables/useLabels.js'
 import { useReviewTypes } from '../composables/useReviewTypes.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useBoard } from '../composables/useBoard.js'
+import { useBoards } from '../composables/useBoards.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
@@ -1446,9 +1596,14 @@ const emit = defineEmits(['close', 'leave'])
 
 // ── Escape key dismissal ──────────────────────────────────────────────────────
 function onKeydown(e) {
-	if (e.key === 'Escape') {
-		emit('close')
+	if (e.key !== 'Escape') return
+	// A destructive confirm takes Escape first — dismiss it instead of tearing
+	// down the whole settings modal.
+	if (showDeleteBoardConfirm.value) {
+		showDeleteBoardConfirm.value = false
+		return
 	}
+	emit('close')
 }
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
@@ -1473,6 +1628,10 @@ async function loadWebhookConfig() {
 	if (!canManage.value) return
 	try {
 		webhook.value = await fetchWebhookConfig(props.boardId)
+		// An active integration should be visible without a click.
+		if (webhook.value.enabled) {
+			automationGroups.value.github = true
+		}
 	} catch (e) {
 		webhookError.value = t('kanso', 'Failed to load the GitHub webhook config.')
 	}
@@ -1530,8 +1689,95 @@ function canToggleBit(entry, bit) {
 	return hasBit(props.permissions, bit)
 }
 
-// ── Tab state ─────────────────────────────────────────────────────────────────
+// ── Tab / section-rail state ──────────────────────────────────────────────────
 const activeTab = ref('labels')
+
+// Section rail items. Sharing is gated behind canShare (mirrors the old tab's v-if).
+const railSections = computed(() => {
+	const sections = [
+		{ id: 'general', name: t('kanso', 'General'), icon: CogIcon },
+		{ id: 'labels', name: t('kanso', 'Labels'), icon: TagMultipleIcon },
+		{ id: 'review-types', name: t('kanso', 'Review types'), icon: CheckDecagramIcon },
+	]
+	if (canShare.value) {
+		sections.push({ id: 'sharing', name: t('kanso', 'Sharing'), icon: ShareVariantIcon })
+	}
+	sections.push({ id: 'workflow', name: t('kanso', 'Workflow'), icon: SwapHorizontalIcon })
+	sections.push({ id: 'automation', name: t('kanso', 'Automation'), icon: RobotIcon })
+	return sections
+})
+
+// Keyboard navigation for the rail (roving tabindex, WAI-ARIA vertical tablist).
+function onRailKeydown(e) {
+	const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+	if (!keys.includes(e.key)) return
+	e.preventDefault()
+	const ids = railSections.value.map((s) => s.id)
+	const current = ids.indexOf(activeTab.value)
+	let next = current
+	if (e.key === 'ArrowDown') next = (current + 1) % ids.length
+	else if (e.key === 'ArrowUp') next = (current - 1 + ids.length) % ids.length
+	else if (e.key === 'Home') next = 0
+	else if (e.key === 'End') next = ids.length - 1
+	activeTab.value = ids[next]
+	nextTick(() => {
+		document.getElementById(`bs-rail-tab-${ids[next]}`)?.focus()
+	})
+}
+
+// Human subtitle under the header title (e.g. "Product Roadmap · you can manage").
+const boardSubtitle = computed(() => {
+	const title = boardQueryData.value?.board?.title ?? ''
+	const role = canManage.value
+		? t('kanso', 'you can manage')
+		: canEdit.value
+			? t('kanso', 'you can edit')
+			: t('kanso', 'view only')
+	return title ? `${title} · ${role}` : role
+})
+
+// ── Automation collapsible groups ─────────────────────────────────────────────
+// Column automations (card rules) start expanded; the GitHub integration expands
+// when its webhook is active. Everything else defaults collapsed to keep the pane
+// from being one long scroll.
+const automationGroups = ref({
+	cardRules: true,
+	autoArchive: false,
+	recurring: false,
+	github: false,
+})
+function toggleAutomationGroup(key) {
+	automationGroups.value[key] = !automationGroups.value[key]
+}
+
+// ── Delete board (MANAGE, destructive) ────────────────────────────────────────
+const { deleteBoard: deleteBoardMutation } = useBoards()
+const showDeleteBoardConfirm = ref(false)
+const isDeletingBoard = ref(false)
+const deleteBoardError = ref('')
+function onDeleteBoardClick() {
+	deleteBoardError.value = ''
+	showDeleteBoardConfirm.value = true
+	// Move focus into the confirmation so keyboard users land on the action and
+	// Escape/Tab operate within the confirm rather than the page behind it.
+	nextTick(() => {
+		document.querySelector('.bs-delete-confirm .bs-delete-confirm__actions button')?.focus()
+	})
+}
+async function doDeleteBoard() {
+	isDeletingBoard.value = true
+	deleteBoardError.value = ''
+	try {
+		await deleteBoardMutation.mutateAsync(Number(props.boardId))
+		showDeleteBoardConfirm.value = false
+		emit('close')
+		router.push({ name: 'board-list' })
+	} catch (e) {
+		deleteBoardError.value = e?.response?.data?.error || t('kanso', 'Could not delete the board.')
+	} finally {
+		isDeletingBoard.value = false
+	}
+}
 
 // ── General: default-board-on-start preference ───────────────────────────────
 const isDefaultBoard = ref(false)
@@ -1791,8 +2037,8 @@ function openColorPicker(label) {
 }
 
 // Escape while a colour popover is open closes just the popover — stop it from
-// bubbling to NcAppSidebar, which would otherwise close the whole settings
-// sidebar. When no popover is open, let Escape bubble (default close behaviour).
+// bubbling to the modal's Escape handler, which would otherwise close the whole
+// settings sidebar. When no popover is open, let Escape bubble (default close).
 function onColorPickerEscape(event) {
 	if (showNewColorPicker.value || colorPickerFor.value !== null || rtColorPickerFor.value !== null) {
 		event.stopPropagation()
@@ -3569,5 +3815,332 @@ async function doDeleteAutoRule(rule) {
 	border: none;
 	border-top: 1px solid var(--color-border);
 	margin: 20px 0;
+}
+
+/* ── Board settings modal shell (replaces NcAppSidebar) ─────────────────────── */
+
+.bs-modal {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 500px;
+	max-width: 100%;
+	z-index: 2000;
+	display: flex;
+	flex-direction: column;
+	background: var(--color-main-background);
+	border-left: 1px solid var(--color-border);
+	box-shadow: var(--shadow-dropdown, 0 0 12px rgba(0, 0, 0, 0.12));
+	box-sizing: border-box;
+}
+
+.bs-modal__header {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 16px 16px 12px 20px;
+	border-bottom: 1px solid var(--color-border);
+	flex-shrink: 0;
+}
+
+.bs-modal__heading {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.bs-modal__title {
+	font-size: 1.2rem;
+	font-weight: 700;
+}
+
+.bs-modal__subtitle {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.bs-modal__close {
+	margin-left: auto;
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+
+.bs-modal__close:hover,
+.bs-modal__close:focus-visible {
+	background: var(--color-background-hover);
+}
+
+.bs-modal__body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+}
+
+/* ── Section rail ──────────────────────────────────────────────────────────── */
+
+.bs-rail {
+	width: 164px;
+	flex-shrink: 0;
+	border-right: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+
+.bs-rail__tabs {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.bs-rail__item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 10px;
+	border: none;
+	border-radius: var(--border-radius-large);
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.bs-rail__item:hover {
+	background: var(--color-background-dark);
+}
+
+.bs-rail__item:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+
+.bs-rail__item--active {
+	background: var(--color-main-background);
+	color: var(--color-primary-element);
+	font-weight: 600;
+	box-shadow: var(--shadow-card-hover, 0 1px 3px rgba(0, 0, 0, 0.1));
+}
+
+.bs-rail__item--active .bs-rail__icon {
+	color: var(--color-primary-element);
+}
+
+.bs-rail__icon {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+
+.bs-rail__label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Danger group pinned to the bottom of the rail. */
+.bs-rail__danger {
+	margin-top: auto;
+	padding-top: 8px;
+	border-top: 1px solid var(--color-border);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.bs-rail__danger-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 34px;
+	padding: 0 10px;
+	border: none;
+	border-radius: var(--border-radius-large);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.bs-rail__danger-item:hover:not(:disabled) {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+}
+
+.bs-rail__danger-item:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+
+.bs-rail__danger-item:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.bs-rail__danger-item--delete {
+	color: var(--color-error);
+}
+
+.bs-rail__danger-item--delete .bs-rail__icon {
+	color: var(--color-error);
+}
+
+.bs-rail__danger-item--delete:hover:not(:disabled) {
+	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 12%, transparent));
+	color: var(--color-error);
+}
+
+/* ── Pane area ─────────────────────────────────────────────────────────────── */
+
+.bs-panes {
+	flex: 1;
+	min-width: 0;
+	overflow-y: auto;
+}
+
+.bs-pane {
+	padding: 20px;
+	box-sizing: border-box;
+}
+
+/* Delete-board confirmation banner. */
+.bs-delete-confirm {
+	margin: 16px 16px 0;
+	padding: 16px;
+	border: 1px solid var(--color-error);
+	border-radius: var(--border-radius-large);
+	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 8%, transparent));
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.bs-delete-confirm__title {
+	margin: 0;
+	font-weight: 700;
+}
+
+.bs-delete-confirm__hint {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.bs-delete-confirm__actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+/* ── Automation collapsible groups ─────────────────────────────────────────── */
+
+.automation__intro {
+	margin: 0 0 16px;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.automation__group {
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	margin-bottom: 16px;
+	overflow: hidden;
+}
+
+.automation__group-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: 44px;
+	padding: 0 12px;
+	border: none;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	text-align: left;
+	cursor: pointer;
+	box-sizing: border-box;
+}
+
+.automation__group-header:hover {
+	background: var(--color-background-hover);
+}
+
+.automation__group-header:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+
+.automation__group-icon {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+
+.automation__group-title {
+	font-weight: 600;
+}
+
+.automation__group-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: 10px;
+	background: var(--color-border);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+
+.automation__group-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding: 1px 7px;
+	border: 1px solid var(--color-success);
+	border-radius: 10px;
+	color: var(--color-success);
+	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 12%, transparent));
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+
+.automation__group-chevron {
+	margin-left: auto;
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+
+/* The badge sits next to the chevron; give the chevron no auto-margin then. */
+.automation__group-badge + .automation__group-chevron,
+.automation__group-count + .automation__group-chevron {
+	margin-left: 8px;
+}
+
+.automation__group-body {
+	padding: 12px;
+	border-top: 1px solid var(--color-border);
 }
 </style>
