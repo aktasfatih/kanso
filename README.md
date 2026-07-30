@@ -40,6 +40,8 @@ your work, on your own Nextcloud, laid out plainly.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
   comments**.
 
+<img src="docs/kanso-card.png" alt="A Kanso card with a markdown description, a checklist, priority, due date, an assignee and a threaded discussion" width="900">
+
 ### 👥 Collaboration
 - **Board sharing** with per-user and per-group access control.
 - **Watchers**: subscribe to cards, comment threads, or a **whole board** and
@@ -75,6 +77,8 @@ your work, on your own Nextcloud, laid out plainly.
 - **Display sort**: order cards by priority, due date or title. View-only: your
   manual drag order is always preserved.
 
+<img src="docs/kanso-timeline.png" alt="Kanso Timeline (Gantt) view: cards plotted on a date axis by start → due, with a due-only card shown as a milestone" width="900">
+
 ### 🧭 Cross-board hub & projects
 - **My Work** hub gathers, across every board: **My tasks** (cards assigned to
   you), **Reviews** (waiting on you), and an **Inbox** of mentions and activity
@@ -87,6 +91,8 @@ your work, on your own Nextcloud, laid out plainly.
   trend), **cycle time** (median/average days to done), **throughput** (done
   per day), plus breakdowns by stack, priority, assignee and label, and
   overdue / aging / checklist-progress signals.
+
+<img src="docs/kanso-analytics.png" alt="Kanso board analytics: cards by stack, priority and label, plus a weekly velocity trend" width="900">
 
 ### ⌨️ Power-user UX
 - **Command palette** (`Ctrl`/`Cmd`+`K`) and full-text **search** across cards
