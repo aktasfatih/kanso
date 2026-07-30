@@ -26,11 +26,12 @@ Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
 roles, a command palette with full-text search, trash with restore, GitHub
 links and webhook, and one-click Import from Deck.
 	]]></description>
-	<version>0.1.32</version>
+	<version>0.9.0</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>
 	<category>organization</category>
+	<website>https://github.com/aktasfatih/kanso</website>
 	<bugs>https://github.com/aktasfatih/kanso/issues</bugs>
 	<repository type="git">https://github.com/aktasfatih/kanso.git</repository>
 	<dependencies>

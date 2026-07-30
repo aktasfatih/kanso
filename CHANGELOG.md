@@ -1,0 +1,66 @@
+<!--
+  - SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+# Changelog
+
+All notable changes to Kanso are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.9.0] - 2026-07-30
+
+First public release, published to the Nextcloud App Store. Targets
+Nextcloud 30–32 and PHP 8.2+.
+
+### Added
+
+- **Boards, stacks and cards** with instant, optimistic drag & drop. A card move
+  is a single-row update backed by fractional sort keys, never a bulk renumber.
+- **Large-board performance**: summary-only board payloads, `ETag` /
+  `If-None-Match` caching, and virtualized columns that stay smooth past
+  2,000+ cards.
+- **Rich cards**: sanitized markdown descriptions, labels, due dates, assignees,
+  priorities, checklists / sub-tasks, and parent ↔ child cards (a parent
+  auto-completes when all its children are done).
+- **Comments** with threaded replies, **@mentions**, and **watchers** on cards,
+  comment threads, or a whole board.
+- **Board sharing** with per-user and per-group access control.
+- **Review workflow**: request a review, then approve or request changes;
+  customizable review types (QA, Code, Legal, …); and an optional done-gate that
+  blocks a card from leaving a review column until every review is approved.
+- **My Work hub**: a cross-board view of My tasks (cards assigned to you),
+  Reviews (waiting on you), and an Inbox of mentions and watched-card activity,
+  filterable to a single board.
+- **Projects**: cross-board card collections with markdown descriptions and
+  per-project analytics.
+- **Analytics** (per-board and per-project): velocity (cards/points per week with
+  trend), cycle time (median/average days to done), throughput, plus breakdowns
+  by stack, priority, assignee and label, and overdue / aging /
+  checklist-progress signals.
+- **Stack roles and WIP limits**: moving a card into an "in progress" column
+  auto-starts it and a "done" column stamps it done; status can also be set
+  directly on the card.
+- **Recurring cards** on RRULE schedules and **auto-archive** rules for done
+  cards.
+- **Board, List and Timeline (Gantt) views**, remembered per user, plus a
+  view-only display sort (by priority, due date or title) that preserves the
+  manual drag order.
+- **Command palette** (`Ctrl` / `Cmd` + `K`) and full-text search across cards
+  and comments.
+- **Trash with restore** and undo toasts for destructive actions.
+- **GitHub links**: attach PRs/issues with live open/merged/closed badges and a
+  ready-made `kanso-<id>` branch name, plus an HMAC-verified **GitHub webhook**
+  that moves a card to your Review column when its PR opens and to Done when it
+  merges.
+- **Import from Deck**: one click copies a Deck board (stacks, cards, labels,
+  assignees) into a new Kanso board you own, leaving your Deck boards untouched.
+- **Realtime updates** via `notify_push` (High Performance Backend) when
+  available, with an automatic light polling fallback everywhere else.
+
+[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/aktasfatih/kanso/releases/tag/v0.9.0
