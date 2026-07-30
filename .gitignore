@@ -2,7 +2,13 @@ node_modules/
 js/
 css/
 vendor/
+build/
 *.tar.gz
+# Signing material — never commit
+*.key
+*.crt
+*.csr
+appinfo/signature.json
 .DS_Store
 .phpunit.result.cache
 .phpunit.cache/
@@ -11,3 +17,5 @@ playwright-report/
 .php-cs-fixer.cache
 .claude/
 docs/design/
+.playwright-mcp/
+roadmap-preview.png

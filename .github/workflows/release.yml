@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Release
+
+# Tag a release: git tag v0.9.0 && git push origin v0.9.0
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # The `secrets` context is NOT allowed in a step-level `if:`, so surface
+    # "do we have a signing key?" as a job-level env var (which IS allowed).
+    env:
+      HAVE_SIGNING_KEY: ${{ secrets.APP_PRIVATE_KEY != '' && 'yes' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      # Nextcloud occ is only needed to embed appinfo/signature.json. We fetch a
+      # matching server checkout so `occ integrity:sign-app` is available in CI.
+      # Signing is gated on the APP_PRIVATE_KEY secret being present; without it
+      # the build still produces a valid (unsigned) tarball.
+      - name: Provide occ for signing
+        id: occ
+        if: env.HAVE_SIGNING_KEY == 'yes'
+        run: |
+          git clone --depth=1 --branch=v32.0.12 https://github.com/nextcloud/server.git "$RUNNER_TEMP/server"
+          echo "path=$RUNNER_TEMP/server/occ" >> "$GITHUB_OUTPUT"
+
+      - name: Build release tarball
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_CERTIFICATE: ${{ secrets.APP_CERTIFICATE }}
+          OCC: ${{ steps.occ.outputs.path }}
+        run: bash scripts/build-release.sh
+
+      - name: Attach tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/kanso.tar.gz
+            build/kanso.tar.gz.sig.base64
+          fail_on_unmatched_files: false
+          body: |
+            Kanso ${{ github.ref_name }}
+
+            Runtime tarball `kanso.tar.gz` for manual install and App Store
+            submission. See `docs/RELEASING.md` for the store-upload steps
+            (the base64 in `kanso.tar.gz.sig.base64` is the detached signature
+            required by apps.nextcloud.com).
