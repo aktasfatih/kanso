@@ -53,7 +53,11 @@ class Version001300Date20260801000000 extends SimpleMigrationStep {
 				'length' => 8,
 				'default' => 0,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Explicit PK index name: the table name without the DB prefix is
+			// 25 chars, and Nextcloud rejects a default-named primary key when
+			// that length is >= 23 (MigrationService::ensureOracleConstraints).
+			// A short explicit name keeps a fresh install working on every DB.
+			$table->setPrimaryKey(['id'], 'kanso_boardsub_pk');
 			// One row per (subscriber, board); the subscribe path relies on this
 			// to make a double-subscribe idempotent.
 			$table->addUniqueIndex(['subscriber', 'board_id'], 'kanso_boardsub_uniq');
