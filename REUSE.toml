@@ -1,0 +1,34 @@
+version = 1
+
+# Licensing info for files that can't carry an inline SPDX header
+# (JSON has no comment syntax, lockfiles are generated, images and
+# markers are binary/empty). Source files declare their own headers.
+
+[[annotations]]
+path = [
+    "composer.json",
+    "composer.lock",
+    "package.json",
+    "package-lock.json",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = [
+    ".gitignore",
+    "README.md",
+    "CLAUDE.md",
+    "LICENSE",
+    "tests/unit/.gitkeep",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = ["docs/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
