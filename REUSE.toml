@@ -20,6 +20,8 @@ path = [
     ".gitignore",
     "README.md",
     "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "CLA.md",
     "LICENSE",
     "tests/unit/.gitkeep",
 ]

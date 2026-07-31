@@ -178,7 +178,8 @@ its own data.
 Actively developed and usable day-to-day, with a broad feature set already
 shipped (boards, the cross-board My Work hub, projects, analytics, reviews,
 recurring cards, realtime, Import from Deck, and more). Bug reports and pull
-requests are welcome. See the [issues](https://github.com/aktasfatih/kanso/issues).
+requests are welcome. See the [issues](https://github.com/aktasfatih/kanso/issues)
+and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Before a release**, re-check that this README and `appinfo/info.xml`
 (`<summary>` / `<description>`) still match the shipped feature set — verify
@@ -186,4 +187,15 @@ against the code, and don't claim anything that isn't actually wired up.
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE).
+Kanso is free and open source under the [AGPL-3.0-or-later](LICENSE), and always
+will be for the community.
+
+### Commercial licensing
+
+The AGPL requires that anyone running a modified version — including over a
+network — makes their source available under the AGPL. Some organizations cannot
+accept those terms. If you need to use Kanso without AGPL obligations, a separate
+commercial license is available. Reach out at **akfatih2@gmail.com**.
+
+Contributions are accepted under a [CLA](CLA.md) that keeps this dual-licensing
+possible — see [CONTRIBUTING.md](CONTRIBUTING.md).
