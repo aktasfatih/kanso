@@ -70,6 +70,10 @@ jobs:
     # Boots a full Nextcloud + runs 60 serial specs; cap it so a hung stack
     # doesn't burn to the 6h default.
     timeout-minutes: 30
+    env:
+      # Realtime push isn't needed for the UI specs (they poll); skip it so a
+      # flaky appstore release can't fail the boot.
+      KANSO_SKIP_NOTIFY_PUSH: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

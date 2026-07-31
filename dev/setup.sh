@@ -36,6 +36,12 @@ if ! $OCC user:list | grep -q '^  - tester:'; then
 fi
 
 # --- notify_push (realtime push) ---------------------------------------------
+# Optional: the app falls back to delta-polling without it, and the e2e suite
+# doesn't need realtime. Skip in CI (KANSO_SKIP_NOTIFY_PUSH=1) so a flaky/absent
+# appstore release can't fail the whole boot.
+if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ]; then
+	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=1)"
+else
 # Browsers reach the push daemon through apache at http://localhost:8891/push.
 # Apache additionally listens on 8891 INSIDE the container so the very same
 # URL is reachable from occ/php too (notify_push:setup connects to it).
@@ -58,6 +64,7 @@ fi
 $OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
 $OCC config:system:set trusted_domains 1 --value nextcloud
 $OCC notify_push:setup http://localhost:8891/push
+fi
 
 echo
 echo "Ready: http://localhost:8891  (admin / admin, test user: tester / kanso-dev-tester!1)"
