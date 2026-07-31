@@ -84,6 +84,19 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      # The self-hosted ARC runner image ships the docker CLI but not the
+      # Compose v2 plugin (ubuntu-latest has it preinstalled). setup.sh uses
+      # `docker compose`, so install the plugin if it's missing.
+      - name: Ensure docker compose plugin
+        run: |
+          if ! docker compose version >/dev/null 2>&1; then
+            mkdir -p ~/.docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o ~/.docker/cli-plugins/docker-compose
+            chmod +x ~/.docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
       # Boot the same throwaway Nextcloud stack used locally (dev/setup.sh):
       # postgres + redis + notify_push + nextcloud:32-apache, app enabled,
       # firstrunwizard disabled, tester user + push wired up. Idempotent.
