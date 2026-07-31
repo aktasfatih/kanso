@@ -107,10 +107,17 @@ jobs:
       - name: Boot dev Nextcloud stack
         run: ./dev/setup.sh
 
-      # deck-import.spec.js drives the real Deck API to seed a source board,
-      # so Deck must be installed alongside Kanso (setup.sh only enables Kanso).
+      # deck-import.spec.js drives the real Deck API to seed a source board, so
+      # Deck must be installed. The cluster's dind network can't reach the NC
+      # appstore, so side-load the signed release tarball (runner has internet):
+      # download here, copy into the container, enable. Pinned to the version
+      # the dev stack uses.
       - name: Install Deck (for the import spec)
-        run: docker exec -u www-data kanso-dev php occ app:install deck
+        run: |
+          curl -fsSL https://github.com/nextcloud-releases/deck/releases/download/v1.16.7/deck-v1.16.7.tar.gz -o /tmp/deck.tar.gz
+          docker cp /tmp/deck.tar.gz kanso-dev:/tmp/deck.tar.gz
+          docker exec kanso-dev bash -c 'tar -xzf /tmp/deck.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/deck'
+          docker exec -u www-data kanso-dev php occ app:enable deck
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
