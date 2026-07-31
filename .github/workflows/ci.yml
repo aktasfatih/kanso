@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   cs-check:
-    runs-on: ubuntu-latest
+    runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -27,7 +27,7 @@ jobs:
         run: composer cs:check
 
   psalm:
-    runs-on: ubuntu-latest
+    runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -40,7 +40,7 @@ jobs:
         run: composer psalm
 
   unit-php:
-    runs-on: ubuntu-latest
+    runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -53,7 +53,7 @@ jobs:
         run: vendor/bin/phpunit -c phpunit.xml
 
   build-frontend:
-    runs-on: ubuntu-latest
+    runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,7 +66,7 @@ jobs:
         run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: kanso-runners
     # Boots a full Nextcloud + runs 60 serial specs; cap it so a hung stack
     # doesn't burn to the 6h default.
     timeout-minutes: 30
