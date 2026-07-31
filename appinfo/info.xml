@@ -34,6 +34,10 @@ links and webhook, and one-click Import from Deck.
 	<website>https://github.com/aktasfatih/kanso</website>
 	<bugs>https://github.com/aktasfatih/kanso/issues</bugs>
 	<repository type="git">https://github.com/aktasfatih/kanso.git</repository>
+	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-board.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-card.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-timeline.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-analytics.png</screenshot>
 	<dependencies>
 		<nextcloud min-version="30" max-version="32"/>
 	</dependencies>
