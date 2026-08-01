@@ -72,6 +72,37 @@ export function useCardMove(boardId) {
 		})
 	}
 
+	/**
+	 * Snapshot a single card's pre-move placement so a failed move can be
+	 * reverted per-card without clobbering other in-flight optimistic patches
+	 * (a full-board restore would undo newer queued moves). Mirrors the
+	 * snapshot-in-onMutate → restore-in-onError pattern, scoped to one row.
+	 *
+	 * @param {number|string} cardId
+	 * @return {?{stackId: *, sortKey: *}}
+	 */
+	function snapshotCard(cardId) {
+		const old = queryClient.getQueryData(getBoardQueryKey())
+		const card = old?.cards?.find((c) => c.id === cardId)
+		return card ? { stackId: card.stackId, sortKey: card.sortKey } : null
+	}
+
+	function restoreCard(cardId, snapshot) {
+		if (!snapshot) return
+		const key = getBoardQueryKey()
+		queryClient.setQueryData(key, (old) => {
+			if (!old) return old
+			return {
+				...old,
+				cards: old.cards.map((c) =>
+					c.id === cardId
+						? { ...c, stackId: snapshot.stackId, sortKey: snapshot.sortKey }
+						: c,
+				),
+			}
+		})
+	}
+
 	function reconcileFromServer(updatedCard) {
 		const key = getBoardQueryKey()
 		queryClient.setQueryData(key, (old) => {
@@ -90,6 +121,11 @@ export function useCardMove(boardId) {
 	function enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey }) {
 		// Cancel any in-flight board queries so they don't clobber the optimistic patch
 		queryClient.cancelQueries({ queryKey: getBoardQueryKey() })
+
+		// Snapshot this card's placement BEFORE patching so a failed move can be
+		// reverted immediately (per-card, not a full-board restore that would
+		// clobber other queued optimistic patches).
+		const cardSnapshot = snapshotCard(cardId)
 
 		// Apply optimistic patch synchronously
 		applyOptimisticPatch(cardId, targetStackId, optimisticKey)
@@ -117,8 +153,12 @@ export function useCardMove(boardId) {
 				} else {
 					lastError.value = t('kanso', 'Failed to move card. Please try again.')
 				}
-				// Rollback happens at drain time - invalidating here would
-				// refetch pre-move state over newer optimistic patches.
+				// Revert THIS card to its pre-move placement right away using the
+				// snapshot. Scoped to one row so it never clobbers other queued
+				// optimistic patches; a full invalidate here would refetch
+				// pre-move state over newer moves. The drain invalidate below
+				// still reconciles any remaining server-side divergence.
+				restoreCard(cardId, cardSnapshot)
 			} finally {
 				pendingCount--
 				const remaining = (pendingByBoard.get(pendingKey) ?? 1) - 1

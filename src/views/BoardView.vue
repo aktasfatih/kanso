@@ -1009,6 +1009,10 @@ onMounted(() => {
 
 				// Cancel in-flight board fetches so they can't clobber the patch
 				queryClient.cancelQueries({ queryKey: key })
+				// Snapshot the prior board so a failed move reverts immediately
+				// (mirrors the snapshot-in-onMutate → restore-in-onError pattern),
+				// rather than waiting on a refetch round-trip.
+				const previousBoard = queryClient.getQueryData(key)
 				patchStackKey(optimisticKey)
 
 				apiMoveStack(draggedStackId, afterStackId)
@@ -1020,6 +1024,9 @@ onMounted(() => {
 						shortcutError.value = serverError === 'rebalance_required'
 							? t('kanso', 'Board ordering needs a refresh.')
 							: t('kanso', 'Failed to move stack. Please try again.')
+						if (previousBoard !== undefined) {
+							queryClient.setQueryData(key, previousBoard)
+						}
 						queryClient.invalidateQueries({ queryKey: key })
 					})
 			},

@@ -119,6 +119,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<p v-if="canManage" class="board-settings__general-hint">
 							{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
 						</p>
+						<span v-if="newCardsOnTopError" class="label-settings__error">{{ newCardsOnTopError }}</span>
 					</div>
 					</section>
 
@@ -1857,10 +1858,19 @@ async function onEstimateScaleChange(newScale) {
 // ── New-cards-on-top (per-board) ─────────────────────────────────────────────
 const newCardsOnTop = computed(() => boardQueryData.value?.board?.newCardsOnTop === true)
 const newCardsOnTopSaving = ref(false)
+const newCardsOnTopError = ref('')
 async function onNewCardsOnTopChange(checked) {
 	newCardsOnTopSaving.value = true
+	newCardsOnTopError.value = ''
+	// The switch is bound to the `newCardsOnTop` cache value (updateBoard does
+	// not optimistically patch — it invalidates on settle), so a failed save
+	// leaves the cache on its prior value and the toggle visibly reverts once
+	// the invalidate refetch lands. Previously the rejection was swallowed
+	// (unhandled) and no error surfaced; catch it and show the failure.
 	try {
 		await updateBoard.mutateAsync({ newCardsOnTop: checked })
+	} catch (err) {
+		newCardsOnTopError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		newCardsOnTopSaving.value = false
 	}

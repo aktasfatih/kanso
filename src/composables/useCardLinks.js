@@ -57,6 +57,22 @@ export function useCardLinks(cardId) {
 
 	const removeLink = useMutation({
 		mutationFn: (linkId) => apiDeleteCardLink(resolvedId.value, linkId),
+		onMutate: async (linkId) => {
+			// Optimistically drop the link, snapshotting the prior list so a
+			// failed delete can restore it (mirrors the board-subscription
+			// snapshot-in-onMutate → restore-in-onError pattern).
+			await queryClient.cancelQueries({ queryKey: linksKey.value })
+			const previousLinks = queryClient.getQueryData(linksKey.value)
+			queryClient.setQueryData(linksKey.value, (old) =>
+				Array.isArray(old) ? old.filter((l) => l.id !== linkId) : old,
+			)
+			return { previousLinks }
+		},
+		onError: (_err, _linkId, context) => {
+			if (context?.previousLinks !== undefined) {
+				queryClient.setQueryData(linksKey.value, context.previousLinks)
+			}
+		},
 		onSettled: () => queryClient.invalidateQueries({ queryKey: linksKey.value }),
 	})
 

@@ -2483,9 +2483,13 @@ async function handleAddLink() {
 	}
 }
 
-function handleRemoveLink(linkId) {
+async function handleRemoveLink(linkId) {
 	linkError.value = ''
-	removeLink.mutate(linkId)
+	try {
+		await removeLink.mutateAsync(linkId)
+	} catch (e) {
+		linkError.value = e?.response?.data?.error || t('kanso', 'Failed to remove link.')
+	}
 }
 
 async function copyBranchName() {
