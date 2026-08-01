@@ -26,6 +26,7 @@ use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\RecurrenceService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -45,6 +46,7 @@ class RecurrenceServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private ITimeFactory&MockObject $time;
 	private IDBConnection&MockObject $db;
+	private IConfig&MockObject $config;
 	private LoggerInterface&MockObject $logger;
 	private RecurrenceService $service;
 
@@ -62,6 +64,9 @@ class RecurrenceServiceTest extends TestCase {
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->config = $this->createMock(IConfig::class);
+		// Default: no personal timezone set → rules default to the server tz.
+		$this->config->method('getUserValue')->willReturn('');
 		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->service = new RecurrenceService(
 			$this->ruleMapper,
@@ -75,6 +80,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->permissionService,
 			$this->time,
 			$this->db,
+			$this->config,
 			$this->logger,
 		);
 	}
@@ -137,6 +143,8 @@ class RecurrenceServiceTest extends TestCase {
 		$rule->setNextOccurrenceAt($nextOccurrenceAt);
 		$rule->setOccurrencesSpawned($occurrencesSpawned);
 		$rule->setCreatedAt(self::NOW);
+		// Anchor in UTC so the +86400 daily-step assertions are host-tz agnostic.
+		$rule->setTimezone('UTC');
 		return $rule;
 	}
 
@@ -679,5 +687,206 @@ class RecurrenceServiceTest extends TestCase {
 		$this->logger->expects(self::once())->method('warning');
 
 		self::assertSame(1, $this->service->runDueRules());
+	}
+
+	// ---- catch-up on missed occurrences (#3587) ---------------------------
+
+	/**
+	 * A rule whose next_occurrence_at is N intervals in the past spawns N cards
+	 * in a single cron run - one per missed occurrence, not one per run. The
+	 * cursor walks occurrence-by-occurrence; runDueRules keeps calling spawn()
+	 * while the rule stays due (next_occurrence_at <= now).
+	 */
+	public function testCatchUpSpawnsOneCardPerMissedOccurrence(): void {
+		// Daily rule; cursor sits 3 days before now → 3 missed daily occurrences
+		// are due (t-3d, t-2d, t-1d); the t=now one is also due (<= now) = 4.
+		$firstMissed = self::NOW - 3 * 86400;
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: $firstMissed);
+		// createdAt anchors the DAILY series; set it to the first missed point so
+		// the occurrences land exactly on 24h steps from there.
+		$rule->setCreatedAt($firstMissed);
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		// A fresh card per occurrence, and capture the per-occurrence due dates.
+		$dueDates = [];
+		$id = 100;
+		$this->cardService->method('create')->willReturnCallback(function () use (&$id): Card {
+			return $this->spawnedCard($id++);
+		});
+		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$dueDates): Card {
+			$dueDates[] = $c->getDuedate()?->getTimestamp();
+			return $c;
+		});
+
+		$spawned = $this->service->runDueRules();
+
+		// t-3d, t-2d, t-1d, t=now → 4 cards, each with its own occurrence due date.
+		self::assertSame(4, $spawned);
+		self::assertSame([
+			self::NOW - 3 * 86400,
+			self::NOW - 2 * 86400,
+			self::NOW - 1 * 86400,
+			self::NOW,
+		], $dueDates);
+		// Cursor advanced past now to tomorrow; rule is no longer due.
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Catch-up is BOUNDED: a rule dormant far longer than the cap spawns at most
+	 * MAX_CATCHUP cards in one run, logs the truncation, and stays due so the
+	 * remainder continue on the next run.
+	 */
+	public function testCatchUpIsBoundedByMaxCatchupAndLogsTruncation(): void {
+		// Hourly rule dormant for far more than MAX_CATCHUP hours.
+		$backlog = RecurrenceService::MAX_CATCHUP + 20;
+		$first = self::NOW - $backlog * 3600;
+		$rule = $this->rule(rrule: 'FREQ=HOURLY', nextOccurrenceAt: $first);
+		$rule->setCreatedAt($first);
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+		$id = 1000;
+		$this->cardService->method('create')->willReturnCallback(function () use (&$id): Card {
+			return $this->spawnedCard($id++);
+		});
+		$this->cardMapper->method('update')->willReturnArgument(0);
+
+		// Truncation is logged once.
+		$this->logger->expects(self::once())->method('warning')
+			->with(self::stringContains('catch-up truncated'));
+
+		$spawned = $this->service->runDueRules();
+
+		self::assertSame(RecurrenceService::MAX_CATCHUP, $spawned);
+		// Rule is still due (cursor advanced by exactly MAX_CATCHUP hours, still
+		// in the past), so the remainder continue next run.
+		self::assertSame($first + RecurrenceService::MAX_CATCHUP * 3600, $rule->getNextOccurrenceAt());
+		self::assertLessThanOrEqual(self::NOW, $rule->getNextOccurrenceAt());
+		self::assertTrue($rule->getEnabled());
+	}
+
+	/**
+	 * Durable partial progress across a simulated mid-run interruption: with two
+	 * missed occurrences due, if the SECOND occurrence's write throws, the first
+	 * one stays committed (its own transaction) and only the second rolls back.
+	 * The rule's cursor is left at the second occurrence, so the retry re-spawns
+	 * ONLY the second - never a duplicate of the already-committed first.
+	 */
+	public function testCatchUpMakesDurablePartialProgressNoDoubleSpawn(): void {
+		$firstMissed = self::NOW - 2 * 86400;
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: $firstMissed);
+		$rule->setCreatedAt($firstMissed);
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+		$this->cardService->method('create')->willReturn($this->spawnedCard(200));
+
+		// First occurrence enriches fine; the second occurrence's enrich write
+		// dies mid-transaction (simulated crash).
+		$call = 0;
+		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$call): Card {
+			$call++;
+			if ($call === 2) {
+				throw new \RuntimeException('write died on the 2nd occurrence');
+			}
+			return $c;
+		});
+
+		// The failing occurrence rolls back; runDueRules swallows and logs it.
+		$this->db->method('rollBack');
+		$this->logger->expects(self::atLeastOnce())->method('warning');
+
+		$this->service->runDueRules();
+
+		// The FIRST occurrence committed and advanced the cursor to the second
+		// (t-1d); the second rolled back and did NOT advance further. A retry
+		// therefore starts at the second occurrence - no double-spawn of the first.
+		self::assertSame(self::NOW - 86400, $rule->getNextOccurrenceAt());
+		self::assertSame(1, $rule->getOccurrencesSpawned());
+	}
+
+	// ---- timezone / DST stability (#3587) ---------------------------------
+
+	/**
+	 * A daily rule anchored in a DST-observing zone fires at a STABLE local hour
+	 * on both sides of a spring-forward transition: the UTC instant shifts by an
+	 * hour but "09:00 local" stays 09:00 local. We must not hand-roll DST -
+	 * sabre's RRuleIterator does it when anchored in a real zone.
+	 */
+	public function testDailyRuleKeepsStableLocalHourAcrossDstBoundary(): void {
+		// Europe/Berlin springs forward 2026-03-29 (02:00 → 03:00 CET→CEST).
+		// Anchor a daily 09:00 rule the day before the transition.
+		$tz = new \DateTimeZone('Europe/Berlin');
+		$anchor = (new \DateTimeImmutable('2026-03-28 09:00:00', $tz))->getTimestamp();
+
+		// Next occurrence after the anchor day = 2026-03-29 09:00 local, which is
+		// AFTER the DST jump, so its UTC instant is one hour earlier than a naive
+		// +86400 would give.
+		$next = $this->service->computeNextOccurrence('FREQ=DAILY', $anchor, $anchor, 'Europe/Berlin');
+
+		$expected = (new \DateTimeImmutable('2026-03-29 09:00:00', $tz))->getTimestamp();
+		self::assertSame($expected, $next);
+
+		// The local wall-clock hour is stable (09), even though the UTC offset
+		// changed from +01:00 to +02:00 across the boundary.
+		$before = (new \DateTimeImmutable('@' . $anchor))->setTimezone($tz);
+		$after = (new \DateTimeImmutable('@' . $next))->setTimezone($tz);
+		self::assertSame('09', $before->format('H'));
+		self::assertSame('09', $after->format('H'));
+		// UTC instants are 23h apart (spring forward), not 24h - proof the zone,
+		// not a fixed 86400, drove the step.
+		self::assertSame(23 * 3600, $next - $anchor);
+	}
+
+	/**
+	 * A rule with a NULL timezone (created before #3587) falls back to the server
+	 * default timezone (pinned to UTC in the test bootstrap) - it still expands,
+	 * it does not throw.
+	 */
+	public function testNullTimezoneFallsBackToServerDefault(): void {
+		$anchor = self::NOW;
+		$next = $this->service->computeNextOccurrence('FREQ=DAILY', $anchor, $anchor, null);
+		// UTC has no DST, so a plain +86400 step.
+		self::assertSame($anchor + 86400, $next);
+	}
+
+	/**
+	 * On create, the rule's timezone defaults to the owner's Nextcloud personal
+	 * timezone (core/timezone user value).
+	 */
+	public function testCreateDefaultsTimezoneToOwnerPersonalTimezone(): void {
+		$config = $this->createMock(IConfig::class);
+		$config->method('getUserValue')
+			->with('alice', 'core', 'timezone', '')
+			->willReturn('America/New_York');
+		$service = new RecurrenceService(
+			$this->ruleMapper, $this->cardMapper, $this->stackMapper, $this->boardMapper,
+			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
+			$this->changeNotifier, $this->permissionService, $this->time, $this->db,
+			$config, $this->logger,
+		);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('insert')->willReturnCallback(static function (RecurRule $r): RecurRule {
+			self::assertSame('America/New_York', $r->getTimezone());
+			$r->setId(9);
+			return $r;
+		});
+
+		$service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 	}
 }

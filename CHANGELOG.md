@@ -12,6 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-01
+
+### Fixed
+
+- **Recurring cards catch up on missed occurrences.** A delayed or downed cron
+  now spawns one card per missed occurrence (e.g. a server off for three days
+  backfills the three cards it owed), instead of a single card per run. Catch-up
+  is bounded per run so a long-dormant rule can't flood a board; the remainder
+  continue on the next run.
+- **Recurring schedules are timezone-stable across DST.** A rule now carries an
+  IANA timezone (defaulting to the owner's Nextcloud personal timezone, server
+  default as fallback) and is expanded as floating wall-clock time (RFC 5545 /
+  CalDAV): "daily at 09:00" fires 09:00 local on both sides of a daylight-saving
+  transition. Existing rules with no timezone fall back to the server timezone.
+
 ## [0.9.0] - 2026-07-30
 
 First public release, published to the Nextcloud App Store. Targets
@@ -62,5 +77,6 @@ Nextcloud 30–32 and PHP 8.2+.
 - **Realtime updates** via `notify_push` (High Performance Backend) when
   available, with an automatic light polling fallback everywhere else.
 
-[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/aktasfatih/kanso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aktasfatih/kanso/releases/tag/v0.9.0

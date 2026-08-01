@@ -50,6 +50,8 @@ use OCP\DB\Types;
  * @method void setOccurrencesSpawned(int $occurrencesSpawned)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method ?string getTimezone()
+ * @method void setTimezone(?string $timezone)
  */
 class RecurRule extends Entity implements \JsonSerializable {
 	/** Each occurrence creates a fresh copy of the template card. */
@@ -81,6 +83,9 @@ class RecurRule extends Entity implements \JsonSerializable {
 	protected ?int $nextOccurrenceAt = null;
 	protected ?int $occurrencesSpawned = null;
 	protected ?int $createdAt = null;
+	// IANA timezone id the RRULE is anchored in (floating wall-clock time).
+	// NULL = fall back to the server default timezone (pre-#3587 rules).
+	protected ?string $timezone = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -97,10 +102,11 @@ class RecurRule extends Entity implements \JsonSerializable {
 		$this->addType('nextOccurrenceAt', Types::INTEGER);
 		$this->addType('occurrencesSpawned', Types::INTEGER);
 		$this->addType('createdAt', Types::INTEGER);
+		$this->addType('timezone', Types::STRING);
 	}
 
 	/**
-	 * @return array{id: int, boardId: ?int, templateCardId: ?int, targetStackId: ?int, mode: int, rrule: ?string, duedatePolicy: int, duedateOffsetSeconds: int, skipWhileOpen: bool, enabled: bool, owner: ?string, lastSpawnedAt: int, nextOccurrenceAt: int, occurrencesSpawned: int, createdAt: int}
+	 * @return array{id: int, boardId: ?int, templateCardId: ?int, targetStackId: ?int, mode: int, rrule: ?string, duedatePolicy: int, duedateOffsetSeconds: int, skipWhileOpen: bool, enabled: bool, owner: ?string, lastSpawnedAt: int, nextOccurrenceAt: int, occurrencesSpawned: int, createdAt: int, timezone: ?string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -120,6 +126,7 @@ class RecurRule extends Entity implements \JsonSerializable {
 			'nextOccurrenceAt' => $this->nextOccurrenceAt ?? 0,
 			'occurrencesSpawned' => $this->occurrencesSpawned ?? 0,
 			'createdAt' => $this->createdAt ?? 0,
+			'timezone' => $this->timezone,
 		];
 	}
 }

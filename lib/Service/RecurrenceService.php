@@ -20,6 +20,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use Sabre\VObject\Recur\RRuleIterator;
 
@@ -30,7 +31,12 @@ use Sabre\VObject\Recur\RRuleIterator;
  * READ. The schedule is expanded with sabre/vobject's {@see RRuleIterator},
  * anchored at the rule's `createdAt` (its DTSTART), and the next fire time is
  * cached in `next_occurrence_at` so the cron scan is a single indexed range
- * query.
+ * query. The schedule is expanded as floating wall-clock time (RFC 5545 /
+ * CalDAV) in the rule's IANA `timezone` (defaulting to the owner's personal
+ * timezone, server default as fallback), so e.g. "daily at 09:00" fires 09:00
+ * local on both sides of a DST boundary. A delayed/downed cron catches up on
+ * every MISSED occurrence - one card per occurrence - bounded per run by
+ * {@see self::MAX_CATCHUP}; see {@see self::runDueRules}.
  *
  * Two modes (see {@see RecurRule} MODE_* constants):
  *   - CLONE: each occurrence creates a fresh card in the target stack, copying
@@ -49,6 +55,16 @@ class RecurrenceService {
 	/** Ten years, a sane upper bound for a due-date offset. */
 	private const MAX_OFFSET_SECONDS = 315360000;
 
+	/**
+	 * Catch-up cap: the most occurrences a single rule may spawn in one cron
+	 * run. A rule dormant for months (server down, rule re-enabled) must not
+	 * flood a board with hundreds of cards in one pass - it stamps up to this
+	 * many, logs that catch-up was truncated, and the remainder continue on the
+	 * next run (the cursor is durable per occurrence). Kept modest: a daily rule
+	 * catches up ~2 months of backlog per run, hourly ~2 days.
+	 */
+	public const MAX_CATCHUP = 50;
+
 	public function __construct(
 		private RecurRuleMapper $ruleMapper,
 		private CardMapper $cardMapper,
@@ -61,6 +77,7 @@ class RecurrenceService {
 		private PermissionService $permissionService,
 		private ITimeFactory $time,
 		private IDBConnection $db,
+		private IConfig $config,
 		private \Psr\Log\LoggerInterface $logger,
 	) {
 	}
@@ -72,13 +89,21 @@ class RecurrenceService {
 	 * COUNT/UNTIL embedded in the RRULE. Returns 0 when the rule is exhausted
 	 * (no further occurrence) - the caller treats 0 as "self-disable".
 	 *
-	 * The RRULE is anchored at $dtstartTs (the rule's creation time), so the
-	 * iterator only ever emits occurrences at or after that anchor.
+	 * The RRULE is anchored at $dtstartTs (the rule's creation time) reinterpreted
+	 * as a wall-clock time in $timezone, so occurrences are floating local times
+	 * per RFC 5545 / CalDAV: "daily at 09:00" fires 09:00 local on both sides of a
+	 * DST boundary and the concrete UTC instant shifts to keep the local hour
+	 * stable. $timezone null falls back to the server default timezone (back-compat
+	 * for rules created before the timezone column existed). We do NOT hand-roll
+	 * DST math - sabre's {@see RRuleIterator} does it when anchored in a real zone.
 	 *
 	 * @throws InvalidInputException if the RRULE cannot be parsed
 	 */
-	public function computeNextOccurrence(string $rrule, int $afterTs, int $dtstartTs): int {
-		$start = new \DateTimeImmutable('@' . $dtstartTs);
+	public function computeNextOccurrence(string $rrule, int $afterTs, int $dtstartTs, ?string $timezone = null): int {
+		$tz = $this->timezoneFor($timezone);
+		// Anchor as a floating wall-clock time in the rule's zone: take the UTC
+		// instant of $dtstartTs and re-interpret its calendar fields in $tz.
+		$start = (new \DateTimeImmutable('@' . $dtstartTs))->setTimezone($tz);
 		try {
 			$iterator = new RRuleIterator($rrule, $start);
 		} catch (\Exception $e) {
@@ -89,7 +114,7 @@ class RecurrenceService {
 
 		// fastForward positions at the first occurrence >= the target; asking
 		// for afterTs + 1 makes the result strictly after afterTs.
-		$target = new \DateTimeImmutable('@' . ($afterTs + 1));
+		$target = (new \DateTimeImmutable('@' . ($afterTs + 1)))->setTimezone($tz);
 		try {
 			$iterator->fastForward($target);
 		} catch (\Exception $e) {
@@ -101,6 +126,45 @@ class RecurrenceService {
 			return 0;
 		}
 		return $iterator->current()->getTimestamp();
+	}
+
+	/**
+	 * Resolves the rule's stored IANA timezone id to a DateTimeZone. A null or
+	 * empty stored value (pre-#3587 rules) or an unparseable id falls back to the
+	 * server default timezone, then UTC as a last resort.
+	 */
+	private function timezoneFor(?string $timezone): \DateTimeZone {
+		if ($timezone !== null && $timezone !== '') {
+			try {
+				return new \DateTimeZone($timezone);
+			} catch (\Exception $e) {
+				// fall through to the server default
+			}
+		}
+		try {
+			return new \DateTimeZone(date_default_timezone_get() ?: 'UTC');
+		} catch (\Exception $e) {
+			return new \DateTimeZone('UTC');
+		}
+	}
+
+	/**
+	 * The IANA timezone a new rule owned by $uid should carry: the user's
+	 * Nextcloud personal timezone (Settings → Personal), falling back to the
+	 * server default. Stored on the rule so its schedule is stable even if the
+	 * user later changes their personal timezone.
+	 */
+	private function defaultTimezoneFor(string $uid): string {
+		$tz = $this->config->getUserValue($uid, 'core', 'timezone', '');
+		if ($tz !== '') {
+			try {
+				new \DateTimeZone($tz);
+				return $tz;
+			} catch (\Exception $e) {
+				// invalid stored value - fall through to server default
+			}
+		}
+		return date_default_timezone_get() ?: 'UTC';
 	}
 
 	// ---- rule CRUD --------------------------------------------------------
@@ -158,9 +222,13 @@ class RecurrenceService {
 		$rule->setLastSpawnedAt(0);
 		$rule->setOccurrencesSpawned(0);
 		$rule->setCreatedAt($now);
+		// Default the rule's timezone to the owner's personal timezone (server
+		// default fallback); the schedule is expanded as floating wall-clock time
+		// in this zone.
+		$rule->setTimezone($this->defaultTimezoneFor($uid));
 		// Anchor the schedule at creation; the first fire is the next occurrence
 		// at or after now.
-		$rule->setNextOccurrenceAt($this->computeNextOccurrence($rrule, $now - 1, $now));
+		$rule->setNextOccurrenceAt($this->computeNextOccurrence($rrule, $now - 1, $now, $rule->getTimezone()));
 
 		return $this->ruleMapper->insert($rule);
 	}
@@ -214,7 +282,7 @@ class RecurrenceService {
 		// state might have changed (cheap; keeps the cron scan honest).
 		$now = $this->time->getTime();
 		if ($rule->getEnabled()) {
-			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $now - 1, $rule->getCreatedAt()));
+			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $now - 1, $rule->getCreatedAt(), $rule->getTimezone()));
 		}
 
 		return $this->ruleMapper->update($rule);
@@ -266,9 +334,19 @@ class RecurrenceService {
 	 * action always spawns). Returns the spawned/reset card, or null when a
 	 * scheduled CLONE spawn was skipped because the previous card is still open.
 	 *
+	 * Spawns exactly ONE occurrence - the one currently cached in
+	 * next_occurrence_at - and advances the cursor to the NEXT occurrence strictly
+	 * after it (NOT to now). Advancing per occurrence, rather than jumping the
+	 * cursor to now, is what lets a delayed cron catch up: {@see self::runDueRules}
+	 * calls spawn() repeatedly while the rule stays due, so a rule N intervals in
+	 * the past yields N cards - one per missed occurrence - each in its own
+	 * transaction, so partial progress is durable (a crash mid-catch-up never
+	 * re-spawns an already-committed occurrence). Manual create-now fires the
+	 * cached occurrence too, then advances the same way.
+	 *
 	 * Bookkeeping always runs (except on a skip): occurrences_spawned and
-	 * last_spawned_at are bumped, and next_occurrence_at is recomputed from now
-	 * - 0 (COUNT/UNTIL exhausted) self-disables the rule.
+	 * last_spawned_at are bumped, and next_occurrence_at is advanced past the
+	 * fired occurrence - 0 (COUNT/UNTIL exhausted) self-disables the rule.
 	 *
 	 * Atomicity (idempotency on cron retry): the card mutation AND the rule
 	 * bookkeeping/schedule advance are wrapped in a single DB transaction, so a
@@ -305,8 +383,9 @@ class RecurrenceService {
 						. ' skipped, previously spawned card is still open'
 					);
 					// A skip is not an occurrence: leave the counters be, but still
-					// advance the schedule so the rule does not re-fire immediately.
-					$this->advanceSchedule($rule);
+					// advance the schedule past this occurrence so the rule does not
+					// re-fire it (the next due occurrence is still handled next loop).
+					$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
 					$this->ruleMapper->update($rule);
 					$this->db->commit();
 					return null;
@@ -316,7 +395,7 @@ class RecurrenceService {
 
 			$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
 			$rule->setLastSpawnedAt($card->getId());
-			$this->advanceSchedule($rule);
+			$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
 			$this->ruleMapper->update($rule);
 
 			$this->db->commit();
@@ -450,16 +529,32 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Recomputes and stores the rule's next fire time from now; 0 (COUNT/UNTIL
-	 * exhausted) self-disables the rule. A malformed RRULE (should be
-	 * impossible past create/update validation, but a rule could predate a
-	 * stricter parser) is treated as exhausted and disables the rule rather than
-	 * throwing out of the spawn.
+	 * Advances the rule's cached next fire time to the first occurrence strictly
+	 * after the occurrence that just fired ($firedOccurrenceTs) - NOT to now.
+	 * Walking the cursor occurrence-by-occurrence is what lets a delayed cron
+	 * catch up on every missed occurrence instead of skipping to the next future
+	 * one. 0 (COUNT/UNTIL exhausted) self-disables the rule. A malformed RRULE
+	 * (should be impossible past create/update validation, but a rule could
+	 * predate a stricter parser) is treated as exhausted and disables the rule
+	 * rather than throwing out of the spawn.
 	 */
-	private function advanceSchedule(RecurRule $rule): void {
-		$now = $this->time->getTime();
+	/**
+	 * The point the schedule should advance PAST after this spawn.
+	 *
+	 * Scheduled spawns advance strictly past the occurrence that just fired, so
+	 * the cursor walks occurrence-by-occurrence and the cron catches up on every
+	 * missed one. Manual create-now instead re-arms to the next occurrence at or
+	 * after now (advance from now - 1): it stamps an extra card without bringing
+	 * the cadence forward, so a missed/early manual spawn never skips the upcoming
+	 * scheduled fire.
+	 */
+	private function advanceFrom(RecurRule $rule, int $occurrenceTs, bool $manual): int {
+		return $manual ? $this->time->getTime() - 1 : $occurrenceTs;
+	}
+
+	private function advanceSchedule(RecurRule $rule, int $firedOccurrenceTs): void {
 		try {
-			$next = $this->computeNextOccurrence($rule->getRrule(), $now, $rule->getCreatedAt());
+			$next = $this->computeNextOccurrence($rule->getRrule(), $firedOccurrenceTs, $rule->getCreatedAt(), $rule->getTimezone());
 		} catch (InvalidInputException $e) {
 			$this->logger->error(
 				'kanso: recurring rule ' . $rule->getId() . ' has an invalid RRULE, disabling',
@@ -495,18 +590,51 @@ class RecurrenceService {
 	// ---- cron entry -------------------------------------------------------
 
 	/**
-	 * Spawns every due rule - the cron entry point. Each rule runs in its own
-	 * try/catch so one broken rule (deleted template, lost board access) cannot
-	 * stall the rest; failures are logged and skipped.
+	 * Spawns every due rule - the cron entry point. For each due rule this
+	 * catches up on ALL missed occurrences (server was down / cron delayed):
+	 * spawn() fires the cached occurrence and advances the cursor by exactly one
+	 * occurrence, so while the rule stays due (next_occurrence_at <= now) we keep
+	 * spawning - one card per missed occurrence, each in its own transaction, so
+	 * partial progress survives a crash and is never double-spawned.
 	 *
-	 * @return int number of rules successfully spawned this run
+	 * BOUNDED: at most {@see self::MAX_CATCHUP} occurrences per rule per run. A
+	 * rule dormant for months cannot flood a board in one pass; when the cap is
+	 * hit we log the truncation and leave the rule due, so the remaining
+	 * occurrences continue on the next run. Each rule runs in its own try/catch so
+	 * one broken rule (deleted template, lost board access) cannot stall the rest;
+	 * a rule that throws mid-catch-up keeps the occurrences it already committed
+	 * and is retried next run from its durable cursor.
+	 *
+	 * @return int number of cards successfully spawned this run (across all rules)
 	 */
 	public function runDueRules(): int {
 		$spawned = 0;
-		foreach ($this->ruleMapper->findDueEnabled($this->time->getTime()) as $rule) {
+		$now = $this->time->getTime();
+		foreach ($this->ruleMapper->findDueEnabled($now) as $rule) {
+			$count = 0;
 			try {
-				if ($this->spawn($rule) !== null) {
-					$spawned++;
+				// Catch up occurrence-by-occurrence while the rule stays due, up to
+				// the per-run cap. spawn() advances next_occurrence_at past each
+				// fired occurrence; a skip (skip_while_open) advances it too, so the
+				// loop still terminates.
+				while ($rule->getEnabled()
+					&& $rule->getNextOccurrenceAt() > 0
+					&& $rule->getNextOccurrenceAt() <= $now
+					&& $count < self::MAX_CATCHUP) {
+					if ($this->spawn($rule) !== null) {
+						$spawned++;
+					}
+					$count++;
+				}
+				if ($count >= self::MAX_CATCHUP
+					&& $rule->getEnabled()
+					&& $rule->getNextOccurrenceAt() > 0
+					&& $rule->getNextOccurrenceAt() <= $now) {
+					$this->logger->warning(
+						'kanso: recurring rule ' . $rule->getId()
+						. ' catch-up truncated at ' . self::MAX_CATCHUP
+						. ' occurrences; remaining occurrences continue next run'
+					);
 				}
 			} catch (\Throwable $e) {
 				$this->logger->warning(
