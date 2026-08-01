@@ -8,6 +8,7 @@ import App from './App.vue'
 import { router } from './router/index.js'
 import { initRealtime } from './services/realtime.js'
 import { isBoardMovePending } from './composables/useCardMove.js'
+import { boardQueryKey } from './composables/queryKeys.js'
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -26,10 +27,11 @@ createApp(App)
 // Realtime: a push event means someone changed the board - refetch it,
 // unless our own moves are still in flight (the move queue's drain
 // invalidate syncs afterwards; refetching now would show pre-move state).
-// Board query keys are ['board', <route param>], hence String(boardId).
+// Board query keys are ['board', <route param>]; boardQueryKey coerces the
+// realtime boardId to the same string key the board query is registered under.
 initRealtime((boardId) => {
 	if (isBoardMovePending(boardId)) {
 		return
 	}
-	queryClient.invalidateQueries({ queryKey: ['board', String(boardId)] })
+	queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId) })
 })

@@ -8,10 +8,24 @@
  * useBoard.js and useCardMove.js can both import it without creating a circular
  * dependency between each other.
  *
- * @param {number|string|import('vue').Ref} id
- * @returns {[string, string|number]}
+ * The id is coerced to a String so every producer and consumer of this key
+ * agrees on its type. The board query is registered from the STRING route param
+ * (`['board', '14']`), but several optimistic patches derive the id from a
+ * NUMERIC `card.boardId` API field. Without coercion those would resolve to
+ * `['board', 14]` — a different cache entry — and `setQueryData` would silently
+ * no-op, dropping optimistic board-tile updates until the next poll.
+ *
+ * Accepts a ref, a getter function, or a plain primitive.
+ *
+ * @param {number|string|import('vue').Ref|Function} id
+ * @returns {[string, string]}
  */
 export function boardQueryKey(id) {
-	const value = typeof id === 'object' && id !== null && id.value !== undefined ? id.value : id
-	return ['board', value]
+	let value = id
+	if (typeof value === 'function') {
+		value = value()
+	} else if (value !== null && typeof value === 'object' && value.value !== undefined) {
+		value = value.value
+	}
+	return ['board', String(value)]
 }

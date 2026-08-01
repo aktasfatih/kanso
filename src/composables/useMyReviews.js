@@ -3,6 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { getMyReviews as apiGetMyReviews, setReviewState as apiSetReviewState } from '../services/api.js'
+import { boardQueryKey } from './queryKeys.js'
 
 /**
  * Composable for the "My Reviews" feed - all review requests assigned to the
@@ -49,7 +50,7 @@ export function useMyReviews() {
 				queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			}
 			if (boardId) {
-				queryClient.invalidateQueries({ queryKey: ['board', boardId] })
+				queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId) })
 			}
 		},
 	})

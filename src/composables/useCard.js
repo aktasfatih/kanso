@@ -4,6 +4,7 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { fetchCard, updateCard as apiUpdateCard } from '../services/api.js'
+import { boardQueryKey } from './queryKeys.js'
 
 export function useCard(id, enabled) {
 	const queryClient = useQueryClient()
@@ -29,8 +30,9 @@ export function useCard(id, enabled) {
 			// Also invalidate the parent board - we don't know which board the card
 			// belongs to here, but we have the result data or can invalidate all boards.
 			if (data?.boardId) {
-				// The board query key holds the route param, which is a string.
-				queryClient.invalidateQueries({ queryKey: ['board', String(data.boardId)] })
+				// boardQueryKey coerces the numeric API boardId to the same string
+				// key the board query is registered under (from the route param).
+				queryClient.invalidateQueries({ queryKey: boardQueryKey(data.boardId) })
 			} else {
 				// Invalidate all board queries as a fallback
 				queryClient.invalidateQueries({ queryKey: ['board'] })

@@ -124,6 +124,19 @@ test.describe('Checklist', () => {
 		await expect(page.locator('.card-modal__checklist-bar')).toBeVisible()
 		await expect(page.locator('.card-modal__checklist-bar-fill')).toBeVisible()
 
+		// Regression guard for the boardQueryKey type-mismatch bug (Deck #3576):
+		// the optimistic checklist-progress patch must land on the board tile
+		// IMMEDIATELY, while the modal is still open and before any refetch. The
+		// card tile stays mounted behind the modal, so its badge should already
+		// read 1/2 from the optimistic setQueryData on the board cache. With the
+		// bug, that write hit a numeric-keyed sibling entry and no-op'd, so the
+		// tile only corrected on the next poll. A short timeout keeps this from
+		// masking the bug by waiting for the 5s poll to bail us out.
+		await expect(
+			page.locator('.card-tile').filter({ hasText: 'Card With Checklist' })
+				.locator('.card-tile__checklist'),
+		).toHaveText(/1\/2/, { timeout: 1500 })
+
 		// Close the modal by pressing Escape or clicking outside
 		await page.keyboard.press('Escape')
 

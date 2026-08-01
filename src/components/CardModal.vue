@@ -1380,6 +1380,7 @@ import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
+import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity } from '../services/api.js'
@@ -2557,7 +2558,7 @@ async function moveToEdge(toTop) {
 	}
 	try {
 		await apiMoveCard(selfId, { targetStackId: stackId, afterCardId })
-		queryClient.invalidateQueries({ queryKey: ['board', boardId.value] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
 	} catch (err) {
 		moveError.value = err?.response?.data?.error || t('kanso', 'Failed to move card.')
@@ -2592,7 +2593,7 @@ const addRelation = useMutation({
 		apiAddCardRelation(Number(props.cardId), otherCardId, kind),
 	onSettled: () => {
 		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-		queryClient.invalidateQueries({ queryKey: ['board', boardId.value] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 	},
 })
 
@@ -2601,7 +2602,7 @@ const removeRelation = useMutation({
 		apiRemoveCardRelation(Number(props.cardId), relationId),
 	onSettled: () => {
 		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-		queryClient.invalidateQueries({ queryKey: ['board', boardId.value] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 	},
 })
 

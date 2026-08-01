@@ -20,6 +20,7 @@ import {
 	subscribeBoard as apiSubscribeBoard,
 	unsubscribeBoard as apiUnsubscribeBoard,
 } from '../services/api.js'
+import { boardQueryKey } from './queryKeys.js'
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -43,7 +44,7 @@ export function useBoardSubscription(boardId) {
 	}
 
 	function getBoardKey() {
-		return ['board', getBoardId()]
+		return boardQueryKey(getBoardId())
 	}
 
 	const toggle = useMutation({
