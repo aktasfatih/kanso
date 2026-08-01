@@ -19,6 +19,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 use Sabre\VObject\Recur\RRuleIterator;
 
 /**
@@ -57,6 +58,7 @@ class RecurrenceService {
 		private CardService $cardService,
 		private PermissionService $permissionService,
 		private ITimeFactory $time,
+		private IDBConnection $db,
 		private \Psr\Log\LoggerInterface $logger,
 	) {
 	}
@@ -266,6 +268,21 @@ class RecurrenceService {
 	 * last_spawned_at are bumped, and next_occurrence_at is recomputed from now
 	 * - 0 (COUNT/UNTIL exhausted) self-disables the rule.
 	 *
+	 * Atomicity (idempotency on cron retry): the card mutation AND the rule
+	 * bookkeeping/schedule advance are wrapped in a single DB transaction, so a
+	 * crash (or a throwing enrich write) after the card insert but before
+	 * next_occurrence_at is advanced rolls the whole occurrence back - both the
+	 * card and the un-advanced rule. Without this, a half-done CLONE spawn left
+	 * the rule still due and the next cron run stamped a duplicate card
+	 * (RESET self-corrected; CLONE duplicated unboundedly). Nextcloud DB
+	 * transactions nest via savepoints, so CardService's own transactions run
+	 * inside this outer one. Ordering decision: single-transaction (not
+	 * advance-cursor-first, not an occurrence key) - it fits the existing
+	 * IDBConnection begin/commit/rollBack idiom used across the services and
+	 * keeps every write in the occurrence rolled back together. A sibling card
+	 * (#3575) adds the spawned-card change-log row and can hang it off this same
+	 * transaction.
+	 *
 	 * @throws DoesNotExistException if the template card or target stack is gone
 	 * @throws NotPermittedException if the owner lost board access
 	 * @throws InvalidInputException on a card mutation error
@@ -275,27 +292,36 @@ class RecurrenceService {
 			? $rule->getNextOccurrenceAt()
 			: $this->time->getTime();
 
-		if ($rule->getMode() === RecurRule::MODE_RESET) {
-			$card = $this->spawnReset($rule, $occurrenceTs);
-		} else {
-			if (!$manual && $rule->getSkipWhileOpen() && $this->previousCardOpen($rule)) {
-				$this->logger->info(
-					'kanso: recurring rule ' . $rule->getId()
-					. ' skipped, previously spawned card is still open'
-				);
-				// A skip is not an occurrence: leave the counters be, but still
-				// advance the schedule so the rule does not re-fire immediately.
-				$this->advanceSchedule($rule);
-				$this->ruleMapper->update($rule);
-				return null;
+		$this->db->beginTransaction();
+		try {
+			if ($rule->getMode() === RecurRule::MODE_RESET) {
+				$card = $this->spawnReset($rule, $occurrenceTs);
+			} else {
+				if (!$manual && $rule->getSkipWhileOpen() && $this->previousCardOpen($rule)) {
+					$this->logger->info(
+						'kanso: recurring rule ' . $rule->getId()
+						. ' skipped, previously spawned card is still open'
+					);
+					// A skip is not an occurrence: leave the counters be, but still
+					// advance the schedule so the rule does not re-fire immediately.
+					$this->advanceSchedule($rule);
+					$this->ruleMapper->update($rule);
+					$this->db->commit();
+					return null;
+				}
+				$card = $this->spawnClone($rule, $occurrenceTs);
 			}
-			$card = $this->spawnClone($rule, $occurrenceTs);
-		}
 
-		$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
-		$rule->setLastSpawnedAt($card->getId());
-		$this->advanceSchedule($rule);
-		$this->ruleMapper->update($rule);
+			$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
+			$rule->setLastSpawnedAt($card->getId());
+			$this->advanceSchedule($rule);
+			$this->ruleMapper->update($rule);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 
 		return $card;
 	}

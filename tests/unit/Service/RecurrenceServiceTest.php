@@ -24,6 +24,7 @@ use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\RecurrenceService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -40,6 +41,7 @@ class RecurrenceServiceTest extends TestCase {
 	private CardService&MockObject $cardService;
 	private PermissionService&MockObject $permissionService;
 	private ITimeFactory&MockObject $time;
+	private IDBConnection&MockObject $db;
 	private LoggerInterface&MockObject $logger;
 	private RecurrenceService $service;
 
@@ -55,6 +57,7 @@ class RecurrenceServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->service = new RecurrenceService(
 			$this->ruleMapper,
@@ -66,6 +69,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->cardService,
 			$this->permissionService,
 			$this->time,
+			$this->db,
 			$this->logger,
 		);
 	}
@@ -484,6 +488,80 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->spawn($rule);
 		self::assertSame(0, $rule->getNextOccurrenceAt());
 		self::assertFalse($rule->getEnabled());
+	}
+
+	// ---- atomic spawn (idempotency on cron retry) -------------------------
+
+	public function testSpawnCommitsOnSuccess(): void {
+		$rule = $this->rule(nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$this->service->spawn($rule);
+	}
+
+	/**
+	 * The core idempotency guarantee: if an enrich write throws AFTER the card
+	 * is created but BEFORE next_occurrence_at is advanced, the whole occurrence
+	 * rolls back - the rule is never persisted with a bumped cursor and, because
+	 * the card insert rolls back too, the next cron run does NOT leave a second
+	 * card behind. Before the transaction wrap, the created card survived while
+	 * the rule stayed due, so the next run stamped a duplicate.
+	 */
+	public function testSpawnRollsBackAndDoesNotAdvanceRuleWhenEnrichFails(): void {
+		$rule = $this->rule(nextOccurrenceAt: self::NOW, occurrencesSpawned: 0);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		// Card gets created...
+		$this->cardService->expects(self::once())->method('create')->willReturn($this->spawnedCard());
+		// ...but the enrich UPDATE throws, mid-occurrence (simulating a crash /
+		// failing write between the insert and the rule advance).
+		$this->cardMapper->method('update')
+			->willThrowException(new \RuntimeException('write died mid-spawn'));
+
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::never())->method('commit');
+		// Everything in the occurrence is rolled back together.
+		$this->db->expects(self::once())->method('rollBack');
+		// The rule's schedule is NEVER advanced/persisted, so it stays due and
+		// the retry is a clean re-spawn (not a duplicate on top of a ghost card).
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		try {
+			$this->service->spawn($rule);
+			self::fail('spawn should propagate the failing write');
+		} catch (\RuntimeException $e) {
+			self::assertSame('write died mid-spawn', $e->getMessage());
+		}
+
+		// Bookkeeping was not committed to the in-memory entity past the failure
+		// point: next_occurrence_at is untouched, so findDueEnabled still returns
+		// it on the next run.
+		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
+		self::assertSame(0, $rule->getOccurrencesSpawned());
+	}
+
+	public function testSpawnSkipCommitsAdvancedSchedule(): void {
+		// A skip still opens a transaction, advances the schedule and commits -
+		// so the rule does not re-fire immediately, atomically.
+		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42, occurrencesSpawned: 1);
+		$openCard = $this->spawnedCard(42);
+		$this->cardMapper->method('find')->with(42)->willReturn($openCard);
+		$this->cardService->expects(self::never())->method('create');
+		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		self::assertNull($this->service->spawn($rule));
 	}
 
 	// ---- createNow --------------------------------------------------------
