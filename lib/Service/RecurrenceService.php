@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\RecurRule;
 use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\Stack;
@@ -56,6 +57,7 @@ class RecurrenceService {
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardService $cardService,
+		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private ITimeFactory $time,
 		private IDBConnection $db,
@@ -323,14 +325,30 @@ class RecurrenceService {
 			throw $e;
 		}
 
+		// Commit succeeded - now it is safe to broadcast the enrichment UPDATE
+		// row that spawnClone deferred (push=false inside the transaction).
+		$this->changeNotifier->emitPush($card->getBoardId());
+
 		return $card;
 	}
 
 	/**
 	 * CLONE: a new card at the bottom of the target stack (CardService handles
 	 * the EDIT check, the sort key and the CREATE change), then the template's
-	 * description, due date, labels and assignees copied over. The description
-	 * and due date ride the CREATE - no extra UPDATE change row.
+	 * description, due date, labels and assignees copied over.
+	 *
+	 * The enrichment (description + due date + labels + assignees) is written
+	 * straight through the mappers - it bypasses CardService, so none of it
+	 * lands in the change log on its own. CardService::create logged only a
+	 * title-only CREATE, so a delta-only client that consumed that CREATE would
+	 * refetch a card whose description/labels/assignees had not yet reached the
+	 * board's change log, and would keep that stripped copy until an unrelated
+	 * mutation happened to bump the board. To close that gap we append an
+	 * ACTION_UPDATE change row for the enriched card here, inside the spawn
+	 * transaction (#3574), so the enrichment advances getLatestChangeId / the
+	 * board ETag atomically with the CREATE. The push is deferred (push=false)
+	 * and emitted by {@see self::spawn()} after commit - a pre-commit push could
+	 * make a client refetch state the transaction may still roll back.
 	 */
 	private function spawnClone(RecurRule $rule, int $occurrenceTs): Card {
 		$template = $this->cardMapper->find($rule->getTemplateCardId());
@@ -355,6 +373,19 @@ class RecurrenceService {
 			}
 		}
 
+		// Log the enrichment as an UPDATE so delta-sync (?since=) and the board
+		// ETag reflect the full card, not just its title. Deferred push - the
+		// spawn transaction owns the commit and the post-commit broadcast.
+		$this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			$card->getId(),
+			Change::ACTION_UPDATE,
+			$rule->getOwner(),
+			false,
+			Change::VERB_UPDATED,
+		);
+
 		return $card;
 	}
 
@@ -362,8 +393,16 @@ class RecurrenceService {
 	 * RESET: the template card is the one working card. Move it back to the
 	 * target stack (CardService::move handles the EDIT check, the sort key and
 	 * the MOVE change), then clear its done/archived state and re-arm the due
-	 * date per policy. The done/duedate reset rides a plain card UPDATE - no
-	 * extra change row beyond the move.
+	 * date per policy.
+	 *
+	 * The done/archived/duedate reset is a direct mapper update - like CLONE's
+	 * enrichment it bypasses CardService and so writes no change row of its own;
+	 * only the MOVE reaches the log. A delta-only client that consumed the MOVE
+	 * would refetch a card still flagged done / carrying its old due date until
+	 * an unrelated mutation bumped the board. Append an ACTION_UPDATE change row
+	 * for the reset (deferred push - the spawn transaction broadcasts after
+	 * commit) so the cleared state advances getLatestChangeId / the board ETag
+	 * atomically.
 	 */
 	private function spawnReset(RecurRule $rule, int $occurrenceTs): Card {
 		// Move to the bottom of the target stack (afterCardId = last card).
@@ -382,7 +421,19 @@ class RecurrenceService {
 		$card->setArchived(false);
 		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));
 		$card->setLastModified($this->time->getTime());
-		return $this->cardMapper->update($card);
+		$card = $this->cardMapper->update($card);
+
+		$this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			$card->getId(),
+			Change::ACTION_UPDATE,
+			$rule->getOwner(),
+			false,
+			Change::VERB_UPDATED,
+		);
+
+		return $card;
 	}
 
 	/**

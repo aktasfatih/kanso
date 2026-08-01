@@ -13,11 +13,13 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\RecurRule;
 use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -39,6 +41,7 @@ class RecurrenceServiceTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardService&MockObject $cardService;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private ITimeFactory&MockObject $time;
 	private IDBConnection&MockObject $db;
@@ -54,6 +57,7 @@ class RecurrenceServiceTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->cardService = $this->createMock(CardService::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
@@ -67,6 +71,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
 			$this->cardService,
+			$this->changeNotifier,
 			$this->permissionService,
 			$this->time,
 			$this->db,
@@ -343,6 +348,13 @@ class RecurrenceServiceTest extends TestCase {
 		$this->cardAssigneeMapper->method('exists')->willReturn(false);
 		$this->cardAssigneeMapper->expects(self::once())->method('insertAssignment')->with(99, 'bob');
 
+		// The enrichment (description/labels/assignees) is logged as an UPDATE so
+		// delta-sync reflects the full card, deferred push (transaction owns it).
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, 'alice', false, Change::VERB_UPDATED);
+		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
+
 		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
 
 		$card = $this->service->spawn($rule);
@@ -411,6 +423,13 @@ class RecurrenceServiceTest extends TestCase {
 				self::assertSame(self::NOW, $c->getDuedate()->getTimestamp());
 				return $c;
 			});
+
+		// The done/duedate reset bypasses CardService, so it needs its own UPDATE
+		// change row for delta-sync (only the MOVE reaches the log otherwise).
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 10, Change::ACTION_UPDATE, 'alice', false, Change::VERB_UPDATED);
+		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
 
 		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
 
@@ -546,6 +565,45 @@ class RecurrenceServiceTest extends TestCase {
 		// it on the next run.
 		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
 		self::assertSame(0, $rule->getOccurrencesSpawned());
+	}
+
+	/**
+	 * Delta-sync gap fix (#3575): the enrichment change row must land INSIDE the
+	 * spawn transaction (before commit) so a ?since=<before> delta consuming the
+	 * spawn sees the full card - description/labels/assignees, not just the title.
+	 * The realtime push is deferred until AFTER commit (a pre-commit push could
+	 * make a client refetch state the transaction may still roll back).
+	 */
+	public function testSpawnCloneLogsEnrichmentInsideTransactionAndPushesAfterCommit(): void {
+		$rule = $this->rule(nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$order = [];
+		$this->db->method('beginTransaction')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'begin';
+		});
+		$this->changeNotifier->method('notify')->willReturnCallback(
+			function () use (&$order): Change {
+				$order[] = 'notify';
+				return new Change();
+			}
+		);
+		$this->db->method('commit')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'commit';
+		});
+		$this->changeNotifier->method('emitPush')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'push';
+		});
+
+		$this->service->spawn($rule);
+
+		// The change row is appended before commit; the push fires only after.
+		self::assertSame(['begin', 'notify', 'commit', 'push'], $order);
 	}
 
 	public function testSpawnSkipCommitsAdvancedSchedule(): void {
