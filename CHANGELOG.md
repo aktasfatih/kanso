@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-08-01
+
+### Changed
+
+- **Faster "My tasks" and label deletion on large instances.** Added two
+  hot-path database indexes: `kanso_card_assignees(participant, type)` so the
+  cross-board assigned-cards dashboard query is a range seek instead of a full
+  scan of the assignee table per user, and `kanso_card_labels(label_id)` so
+  deleting a label targets its rows instead of full-scanning and lock-holding
+  the label join table. Additive schema migration, no data changes.
+
 ## [0.9.1] - 2026-08-01
 
 ### Fixed
