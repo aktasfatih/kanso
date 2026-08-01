@@ -1155,7 +1155,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
 												</div>
 											</template>
-											<div v-else class="card-modal__comment-body" v-html="renderMarkdown(topComment.body)" />
+											<div v-else class="card-modal__comment-body" v-html="renderedComments.get(topComment.id)" />
 
 											<div class="card-modal__comment-controls">
 												<button
@@ -1229,7 +1229,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
 													</div>
 												</template>
-												<div v-else class="card-modal__comment-body" v-html="renderMarkdown(reply.body)" />
+												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" />
 
 												<div
 													v-if="canEdit && currentUserId === reply.author"
@@ -1310,7 +1310,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
@@ -2124,6 +2124,16 @@ const canManage = computed(() => {
 
 const flatComments = computed(() => commentsQuery.data.value ?? [])
 const commentThread = computed(() => buildCommentTree(flatComments.value))
+// Memoized per-comment rendered markdown, keyed by comment id. renderMarkdown is
+// expensive; rendering inline in-template re-ran it on any modal re-render. This
+// map only recomputes when the comments data actually changes.
+const renderedComments = computed(() => {
+	const map = new Map()
+	for (const c of flatComments.value) {
+		map.set(c.id, renderMarkdown(c.body))
+	}
+	return map
+})
 const commentCount = computed(() => flatComments.value.length)
 
 const commentError = ref('')
@@ -2685,7 +2695,57 @@ const mdToolbar = useMarkdownToolbar({
 	textareaRef: descTextareaRef,
 })
 const showDescPreview = ref(false)
-const draftPreview = computed(() => renderMarkdown(draftDescription.value))
+// Debounced source for the live preview. renderMarkdown (markdown-it + DOMPurify)
+// is expensive, so we don't re-parse on every keystroke: instead we mirror
+// draftDescription into this ref on a short delay, and only while the preview
+// pane is actually open. This keeps typing snappy for large descriptions.
+const previewSource = ref('')
+const PREVIEW_DEBOUNCE_MS = 200
+let previewDebounceTimer = null
+
+function flushPreviewSource() {
+	if (previewDebounceTimer !== null) {
+		clearTimeout(previewDebounceTimer)
+		previewDebounceTimer = null
+	}
+	previewSource.value = draftDescription.value
+}
+
+// Debounce keystrokes into previewSource, but only when the preview is visible.
+watch(draftDescription, () => {
+	if (!showDescPreview.value) {
+		return
+	}
+	if (previewDebounceTimer !== null) {
+		clearTimeout(previewDebounceTimer)
+	}
+	previewDebounceTimer = setTimeout(() => {
+		previewDebounceTimer = null
+		previewSource.value = draftDescription.value
+	}, PREVIEW_DEBOUNCE_MS)
+})
+
+// When the preview is toggled on, sync immediately so it shows current text
+// (no stale render from a previous edit session). When toggled off, cancel any
+// pending debounce so it can't fire against closed/stale state.
+watch(showDescPreview, (visible) => {
+	if (visible) {
+		flushPreviewSource()
+	} else if (previewDebounceTimer !== null) {
+		clearTimeout(previewDebounceTimer)
+		previewDebounceTimer = null
+	}
+})
+
+onBeforeUnmount(() => {
+	if (previewDebounceTimer !== null) {
+		clearTimeout(previewDebounceTimer)
+		previewDebounceTimer = null
+	}
+})
+
+// Only render when the preview pane is open; feed it from the debounced source.
+const draftPreview = computed(() => (showDescPreview.value ? renderMarkdown(previewSource.value) : ''))
 
 // New-comment composer
 const newCommentTextareaRef = ref(null)
