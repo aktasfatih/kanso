@@ -1100,7 +1100,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Activity feed (read-only view over the change log) -->
 						<div v-if="discussionTab === 'activity'" class="card-modal__activity">
 							<ul v-if="activityItems.length > 0" class="card-modal__activity-list">
-								<li v-for="(item, idx) in activityItems" :key="idx" class="card-modal__activity-row">
+								<li v-for="item in activityItems" :key="item.id ?? `${item.action}-${item.verb}-${item.timestamp}-${item.actor || ''}`" class="card-modal__activity-row">
 									<NcAvatar
 										:user="item.actor || ''"
 										:display-name="item.actorName || item.actor || t('kanso', 'System')"

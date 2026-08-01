@@ -37,7 +37,7 @@ class ActivityService {
 	/**
 	 * A card's activity, newest-first. Requires READ on the card's board.
 	 *
-	 * @return list<array{actor: ?string, actorName: ?string, verb: ?int, action: int, timestamp: int}>
+	 * @return list<array{id: int, actor: ?string, actorName: ?string, verb: ?int, action: int, timestamp: int}>
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not read the board
 	 */
@@ -60,6 +60,7 @@ class ActivityService {
 				$names[$actor] = $user !== null ? $user->getDisplayName() : $actor;
 			}
 			return [
+				'id' => $change->getId(),
 				'actor' => $actor,
 				'actorName' => $actor !== null ? $names[$actor] : null,
 				'verb' => $change->getVerb(),
