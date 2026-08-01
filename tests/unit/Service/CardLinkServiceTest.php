@@ -76,10 +76,16 @@ class CardLinkServiceTest extends TestCase {
 		return $board;
 	}
 
+	/** @var array<string, mixed>|null Options passed to the last client GET (for assertions). */
+	private ?array $lastGetOptions = null;
+
 	private function githubResponse(string $json): void {
 		$response = $this->createMock(IResponse::class);
 		$response->method('getBody')->willReturn($json);
-		$this->client->method('get')->willReturn($response);
+		$this->client->method('get')->willReturnCallback(function (string $url, array $options = []) use ($response): IResponse {
+			$this->lastGetOptions = $options;
+			return $response;
+		});
 	}
 
 	// ---- URL parsing ------------------------------------------------------
@@ -183,6 +189,23 @@ class CardLinkServiceTest extends TestCase {
 		$link = $this->service->addLink(9, 'https://github.com/octo/app', 'bob');
 		self::assertSame(CardLink::KIND_OTHER, $link->getKind());
 		self::assertSame(CardLink::STATE_UNKNOWN, $link->getState());
+	}
+
+	public function testPollDisablesRedirects(): void {
+		$this->expectCardLoaded();
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+		$this->githubResponse('{"title":"WIP","state":"open","merged_at":null}');
+
+		$this->service->addLink(9, 'https://github.com/octo/app/pull/5', 'bob');
+
+		self::assertNotNull($this->lastGetOptions, 'GitHub poll should have issued a GET');
+		self::assertArrayHasKey('allow_redirects', $this->lastGetOptions);
+		// Accept either the boolean-false or the max=0 form; both pin the host.
+		$redirects = $this->lastGetOptions['allow_redirects'];
+		self::assertTrue(
+			$redirects === false || (is_array($redirects) && ($redirects['max'] ?? null) === 0),
+			'GitHub poll must not follow redirects (SSRF defence in depth)',
+		);
 	}
 
 	// ---- listForCard ------------------------------------------------------

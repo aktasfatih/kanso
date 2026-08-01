@@ -214,6 +214,10 @@ class CardLinkService {
 
 			$response = $this->clientService->newClient()->get($apiUrl, [
 				'timeout' => self::POLL_TIMEOUT,
+				// Defence in depth: never let an upstream response steer this
+				// server-side fetch off the pinned api.github.com host. Keeps the
+				// SSRF guarantee end-to-end even if GitHub ever 3xx'd.
+				'allow_redirects' => false,
 				'headers' => [
 					'Accept' => 'application/vnd.github+json',
 					'User-Agent' => 'Kanso',
