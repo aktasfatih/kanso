@@ -29,9 +29,14 @@ createApp(App)
 // invalidate syncs afterwards; refetching now would show pre-move state).
 // Board query keys are ['board', <route param>]; boardQueryKey coerces the
 // realtime boardId to the same string key the board query is registered under.
-initRealtime((boardId) => {
+// Cancel any in-flight board refetch before invalidating (mirrors
+// useBoardSubscription): otherwise a pre-change response already on the wire
+// can settle after the push-triggered refetch and overwrite fresher data.
+initRealtime(async (boardId) => {
 	if (isBoardMovePending(boardId)) {
 		return
 	}
-	queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId) })
+	const boardKey = boardQueryKey(boardId)
+	await queryClient.cancelQueries({ queryKey: boardKey })
+	queryClient.invalidateQueries({ queryKey: boardKey })
 })
