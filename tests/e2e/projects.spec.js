@@ -76,7 +76,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await expect(view).toContainText('Beta cross-board task')
 
 		// Grouped by board: both board headers render as section titles.
-		const sectionTitles = page.locator('.project-view__section-title')
+		const sectionTitles = page.locator('.project-view__section .project-view__section-title')
 		await expect(sectionTitles).toHaveCount(2)
 
 		// Two card rows total.
@@ -184,7 +184,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await descView.click()
 		const textarea = page.locator('.project-view__desc-textarea')
 		await expect(textarea).toBeVisible({ timeout: 5_000 })
-		await expect(page.locator('.project-view__md-toolbar')).toBeVisible()
+		await expect(page.locator('.project-view__description .project-view__md-toolbar')).toBeVisible()
 
 		const md = '## Overview\n\nA **detailed** project note with:\n\n- point one\n- point two'
 		await textarea.fill(md)
