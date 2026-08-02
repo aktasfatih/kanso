@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Board export / import (full data portability).** Every board can be exported
+  to a single Kanso JSON document (board settings → Export board) carrying its
+  whole graph — stacks, cards, labels, review types, checklist items, comments
+  (with threading), card↔label / assignee links, archive rules and recur rules.
+  Uploading that file from the board list (Import → Kanso export) recreates the
+  whole board with fresh ids under the importer, remapping every internal
+  reference and preserving sort keys. The import is all-or-nothing, size-capped,
+  and rejects unknown/future export versions. This is Kanso's own round-trippable
+  format, distinct from the one-click Deck importer.
+
 ## [0.9.2] - 2026-08-01
 
 ### Changed

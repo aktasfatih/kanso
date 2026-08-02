@@ -50,6 +50,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ t('kanso', 'Nextcloud Deck') }}
 				</NcActionButton>
+				<NcActionButton close-after-click @click="triggerJsonImport">
+					<template #icon>
+						<CodeJsonIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Kanso export (.json)') }}
+				</NcActionButton>
 				<NcActionButton :disabled="true">
 					{{ t('kanso', 'Trello (coming soon)') }}
 				</NcActionButton>
@@ -57,12 +63,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'GitHub Projects (coming soon)') }}
 				</NcActionButton>
 				<NcActionButton :disabled="true">
-					{{ t('kanso', 'JSON file (coming soon)') }}
-				</NcActionButton>
-				<NcActionButton :disabled="true">
 					{{ t('kanso', 'CSV file (coming soon)') }}
 				</NcActionButton>
 			</NcActions>
+
+			<!-- Hidden file input backing the "Kanso export (.json)" import action -->
+			<input
+				ref="jsonImportInput"
+				type="file"
+				accept="application/json,.json"
+				class="board-list__hidden-file"
+				data-test="kanso-import-file"
+				@change="onJsonImportChange">
+			<p v-if="jsonImportError" class="board-list__import-error" data-test="kanso-import-error">
+				{{ jsonImportError }}
+			</p>
 
 			<!-- Create board -->
 			<NcButton type="primary" @click="showCreate = !showCreate">
@@ -231,12 +246,13 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDashboardOutlineIcon from 'vue-material-design-icons/ViewDashboardOutline.vue'
 import ImportIcon from 'vue-material-design-icons/Import.vue'
+import CodeJsonIcon from 'vue-material-design-icons/CodeJson.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import BoardTileContent from '../components/BoardTileContent.vue'
 import { useBoards } from '../composables/useBoards.js'
-import { fetchDeckImportBoards, importDeckBoard } from '../services/api.js'
+import { fetchDeckImportBoards, importDeckBoard, importBoard } from '../services/api.js'
 
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -349,6 +365,32 @@ async function doImport(db) {
 		importError.value = err?.response?.data?.error || t('kanso', 'Failed to import that board.')
 	} finally {
 		importingId.value = null
+	}
+}
+
+// ── Import from a Kanso export (.json) ────────────────────────────────────────
+const jsonImportInput = ref(null)
+const jsonImportError = ref('')
+
+function triggerJsonImport() {
+	jsonImportError.value = ''
+	jsonImportInput.value?.click()
+}
+
+async function onJsonImportChange(event) {
+	const file = event.target.files?.[0]
+	// Reset the input so re-picking the same file fires change again.
+	event.target.value = ''
+	if (!file) return
+	jsonImportError.value = ''
+	try {
+		const text = await file.text()
+		const res = await importBoard(text)
+		await queryClient.invalidateQueries({ queryKey: ['boards'] })
+		router.push({ name: 'board', params: { id: res.boardId } })
+	} catch (err) {
+		jsonImportError.value =
+			err?.response?.data?.error || t('kanso', 'Could not import that file.')
 	}
 }
 </script>
@@ -601,6 +643,17 @@ button.board-tile:hover {
 .board-list-error {
 	color: var(--color-error);
 	padding: 16px;
+}
+
+.board-list__hidden-file {
+	display: none;
+}
+
+.board-list__import-error {
+	width: 100%;
+	color: var(--color-error);
+	font-size: 0.8rem;
+	margin: 0;
 }
 
 /* ── Import from Deck modal ─────────────────────────────────────────────── */

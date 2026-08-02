@@ -219,6 +219,14 @@ export const fetchDeckImportBoards = () =>
 export const importDeckBoard = (deckBoardId) =>
 	axios.post(url(`/api/deck-import/boards/${deckBoardId}`)).then((r) => r.data)
 
+// Full-board portability (Kanso's own round-trippable JSON format)
+export const exportBoard = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/export`)).then((r) => r.data)
+
+// `document` is the raw export-file text; the server parses + validates it.
+export const importBoard = (document) =>
+	axios.post(url('/api/boards/import'), { document }).then((r) => r.data)
+
 // GitHub webhook config (board-level, MANAGE)
 export const fetchWebhookConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)

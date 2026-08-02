@@ -51,6 +51,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</div>
 
+					<!-- Non-destructive board tools, above the danger group. Export
+					     is READ-gated on the server, so it is available to anyone
+					     who can open this board's settings. -->
+					<div class="bs-rail__tools">
+						<button
+							class="bs-rail__item"
+							type="button"
+							:disabled="exporting"
+							data-test="board-export"
+							@click="exportBoardToFile">
+							<DownloadIcon :size="16" class="bs-rail__icon" />
+							<span class="bs-rail__label">
+								{{ exporting ? t('kanso', 'Exporting…') : t('kanso', 'Export board') }}
+							</span>
+						</button>
+						<span v-if="exportError" class="bs-rail__tools-error">{{ exportError }}</span>
+					</div>
+
 					<!-- Destructive actions, pinned to the bottom -->
 					<div v-if="canManage" class="bs-rail__danger">
 						<button
@@ -1513,6 +1531,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
+import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -1546,6 +1565,7 @@ import {
 	disableWebhook as apiDisableWebhook,
 	getSettings,
 	updateSettings,
+	exportBoard as apiExportBoard,
 } from '../services/api.js'
 
 const props = defineProps({
@@ -1892,6 +1912,34 @@ async function archiveBoard() {
 		router.push({ name: 'board-list' })
 	} finally {
 		archiving.value = false
+	}
+}
+
+// ── Export board to a downloadable .json file ─────────────────────────────────
+const exporting = ref(false)
+const exportError = ref('')
+
+async function exportBoardToFile() {
+	exporting.value = true
+	exportError.value = ''
+	try {
+		const doc = await apiExportBoard(props.boardId)
+		const title = (doc?.board?.title || 'board')
+			.replace(/[^\w.-]+/g, '-')
+			.replace(/^-+|-+$/g, '') || 'board'
+		const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
+		const href = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = href
+		a.download = `kanso-${title}.json`
+		document.body.appendChild(a)
+		a.click()
+		a.remove()
+		URL.revokeObjectURL(href)
+	} catch (e) {
+		exportError.value = e?.response?.data?.error || t('kanso', 'Could not export this board.')
+	} finally {
+		exporting.value = false
 	}
 }
 
@@ -3970,10 +4018,23 @@ async function doDeleteAutoRule(rule) {
 }
 
 /* Danger group pinned to the bottom of the rail. */
-.bs-rail__danger {
+.bs-rail__tools {
 	margin-top: auto;
 	padding-top: 8px;
 	border-top: 1px solid var(--color-border);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.bs-rail__tools-error {
+	color: var(--color-error);
+	font-size: 0.75rem;
+	padding: 0 10px;
+}
+
+.bs-rail__danger {
+	padding-top: 8px;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;

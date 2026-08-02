@@ -16,6 +16,11 @@ return [
 
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
+		// Full-board portability. The literal /import segment is a distinct POST
+		// path (board#show is GET {id}), and export is nested under an existing
+		// board id - neither collides with the CRUD routes above.
+		['name' => 'boardPortability#import', 'url' => '/api/boards/import', 'verb' => 'POST'],
+		['name' => 'boardPortability#export', 'url' => '/api/boards/{id}/export', 'verb' => 'GET'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
 		['name' => 'boardStats#show', 'url' => '/api/boards/{id}/stats', 'verb' => 'GET'],
 		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],
