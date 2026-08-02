@@ -122,7 +122,10 @@ function actionPhrase(item) {
 }
 
 function openCard(item) {
-	router.push({ name: 'card-modal', params: { id: item.boardId, cardId: item.cardId } })
+	// Thread the origin so CardModal returns to My Work on close (see MyCardsView).
+	const from = props.embedded ? 'my-work' : 'inbox'
+	const query = props.embedded ? { from, tab: 'inbox' } : { from }
+	router.push({ name: 'card-modal', params: { id: item.boardId, cardId: item.cardId }, query })
 }
 
 /**

@@ -70,6 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { useBoards } from '../composables/useBoards.js'
@@ -77,8 +78,14 @@ import MyCardsView from './MyCardsView.vue'
 import MyReviewsView from './MyReviewsView.vue'
 import InboxView from './InboxView.vue'
 
-/** Active tab: 'tasks' | 'reviews' | 'inbox' */
-const tab = ref('tasks')
+const route = useRoute()
+
+/**
+ * Active tab: 'tasks' | 'reviews' | 'inbox'. Initialised from a `?tab=` query so
+ * that closing a card opened from an embedded surface returns to the same tab.
+ */
+const VALID_TABS = ['tasks', 'reviews', 'inbox']
+const tab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'tasks')
 
 // Board options for the filter dropdown
 const { data: boardsData } = useBoards()

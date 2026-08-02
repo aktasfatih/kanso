@@ -139,7 +139,13 @@ function formatDue(iso) {
 }
 
 function openCard(card) {
-	router.push({ name: 'card-modal', params: { id: card.boardId, cardId: card.id } })
+	// Thread the origin so CardModal can return to My Work on close instead of
+	// dumping the user on the board. Embedded surfaces live under the /my-work
+	// hub (carry the tab so it re-opens on the right one); standalone uses its
+	// own route name.
+	const from = props.embedded ? 'my-work' : 'my-cards'
+	const query = props.embedded ? { from, tab: 'tasks' } : { from }
+	router.push({ name: 'card-modal', params: { id: card.boardId, cardId: card.id }, query })
 }
 </script>
 

@@ -130,7 +130,10 @@ const hasChangesRequested = computed(() => changesRequestedReviews.value.length 
 const hasApproved = computed(() => approvedReviews.value.length > 0)
 
 function openCard(review) {
-	router.push({ name: 'card-modal', params: { id: review.boardId, cardId: review.cardId } })
+	// Thread the origin so CardModal returns to My Work on close (see MyCardsView).
+	const from = props.embedded ? 'my-work' : 'my-reviews'
+	const query = props.embedded ? { from, tab: 'reviews' } : { from }
+	router.push({ name: 'card-modal', params: { id: review.boardId, cardId: review.cardId }, query })
 }
 
 async function setVerdict(review, state) {

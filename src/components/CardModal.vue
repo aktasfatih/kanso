@@ -2287,8 +2287,20 @@ function formatCommentTime(unixTs) {
 	return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// My Work surfaces open a card with `?from=<routeName>` so we can return there on
+// close instead of dumping the user on the board. Board-opened / deep-linked cards
+// have no `from` and still close to the board (do not regress that flow).
+const MY_WORK_RETURN_ROUTES = ['my-work', 'my-cards', 'my-reviews', 'inbox']
+
 function closeModal() {
 	isOpen.value = false
+	const from = route.query.from
+	if (MY_WORK_RETURN_ROUTES.includes(from)) {
+		// Preserve the hub tab when returning to the /my-work hub.
+		const query = from === 'my-work' && route.query.tab ? { tab: route.query.tab } : undefined
+		router.push({ name: from, query })
+		return
+	}
 	router.push({ name: 'board', params: { id: route.params.id } })
 }
 
