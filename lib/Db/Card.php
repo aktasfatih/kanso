@@ -57,6 +57,12 @@ use OCP\DB\Types;
  * @method void setEstimate(?string $estimate)
  * @method int|null getBoardSeq()
  * @method void setBoardSeq(?int $boardSeq)
+ * @method int getDueReminderSent()
+ * @method void setDueReminderSent(int $dueReminderSent)
+ * @method int getDayBeforeReminderSent()
+ * @method void setDayBeforeReminderSent(int $dayBeforeReminderSent)
+ * @method bool|null getDueReminderDayBefore()
+ * @method void setDueReminderDayBefore(?bool $dueReminderDayBefore)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
@@ -87,6 +93,13 @@ class Card extends Entity implements \JsonSerializable {
 	// human-readable id (prefix + '-' + board_seq). Assigned once on create and
 	// immutable thereafter; a DISPLAY/reference id only (ordering stays sortKey).
 	protected ?int $boardSeq = null;
+	// Due-date reminder markers (#3545): the unix ts each fixed reminder fired,
+	// 0 = not yet. Reset to 0 when the due date changes so a moved date re-arms.
+	protected ?int $dueReminderSent = null;
+	protected ?int $dayBeforeReminderSent = null;
+	// Fixed, card-level opt-in for the "1 day before" reminder (the at-due one
+	// always fires). Not a board setting, not a per-user preference.
+	protected ?bool $dueReminderDayBefore = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -108,13 +121,16 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('priority', Types::INTEGER);
 		$this->addType('estimate', Types::STRING);
 		$this->addType('boardSeq', Types::INTEGER);
+		$this->addType('dueReminderSent', Types::INTEGER);
+		$this->addType('dayBeforeReminderSent', Types::INTEGER);
+		$this->addType('dueReminderDayBefore', Types::BOOLEAN);
 	}
 
 	/**
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -138,6 +154,10 @@ class Card extends Entity implements \JsonSerializable {
 			// The numeric half of the human id; the board supplies the prefix.
 			// Null only for a card not yet backfilled (pre-migration rows).
 			'boardSeq' => $this->boardSeq,
+			// The "1 day before" due reminder opt-in (the at-due reminder is
+			// always on when a card has a due date). The sent-markers are
+			// internal bookkeeping and deliberately not exposed.
+			'dueReminderDayBefore' => $this->dueReminderDayBefore ?? false,
 		];
 	}
 

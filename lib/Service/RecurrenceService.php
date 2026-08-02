@@ -499,6 +499,9 @@ class RecurrenceService {
 		$card->setDoneAt(0);
 		$card->setArchived(false);
 		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));
+		// Re-arm the due-date reminders (#3545) for the reset card's new due date.
+		$card->setDueReminderSent(0);
+		$card->setDayBeforeReminderSent(0);
 		$card->setLastModified($this->time->getTime());
 		$card = $this->cardMapper->update($card);
 

@@ -17,7 +17,8 @@ use OCP\Notification\IManager;
  *
  * v1 subject: `card_assigned`. A user is never notified of their own action.
  * The reverse action dismisses the matching notification so a stale "assigned
- * to you" doesn't linger after an unassign.
+ * to you" doesn't linger after an unassign. The `card_due` / `card_due_soon`
+ * reminder subjects are actor-less system events (no self-suppression).
  */
 class NotificationService {
 	public const SUBJECT_CARD_ASSIGNED = 'card_assigned';
@@ -25,6 +26,8 @@ class NotificationService {
 	public const SUBJECT_CARD_MENTIONED = 'card_mentioned';
 	public const SUBJECT_CARD_REVIEW_REQUESTED = 'card_review_requested';
 	public const SUBJECT_BOARD_ACTIVITY = 'board_activity';
+	public const SUBJECT_CARD_DUE = 'card_due';
+	public const SUBJECT_CARD_DUE_SOON = 'card_due_soon';
 	public const OBJECT_CARD = 'card';
 
 	public function __construct(
@@ -128,6 +131,30 @@ class NotificationService {
 			->setDateTime((new \DateTime())->setTimestamp(time()))
 			->setObject(self::OBJECT_CARD, (string)$cardId)
 			->setSubject(self::SUBJECT_BOARD_ACTIVITY, ['actor' => $actorUid, 'cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Notifies $targetUid that a card they assign/watch is due. Actor-less: the
+	 * reminder is a system event fired by the due-reminder cron
+	 * ({@see \OCA\Kanso\Service\DueReminderService}), so there is no actor to skip
+	 * and no "you did this" self-suppression. $daysBefore selects the fixed
+	 * reminder: 0 = at due time, 1 = one day before. The two use distinct
+	 * subjects so the "1 day before" notification is not dismissed/overwritten by
+	 * the later at-due one (both can land for the same card).
+	 */
+	public function notifyCardDue(int $cardId, string $targetUid, int $daysBefore): void {
+		$subject = $daysBefore >= 1
+			? self::SUBJECT_CARD_DUE_SOON
+			: self::SUBJECT_CARD_DUE;
+
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject($subject, ['cardId' => $cardId]);
 
 		$this->manager->notify($notification);
 	}

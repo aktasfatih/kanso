@@ -149,10 +149,11 @@ class CardController extends Controller {
 		?string $status = null,
 		?string $estimate = null,
 		?bool $allDay = null,
+		?bool $dueReminderDayBefore = null,
 	): JSONResponse {
-		return $this->respond(function () use ($id, $title, $description, $duedate, $done, $archived, $priority, $startDate, $status, $estimate, $allDay): JSONResponse {
+		return $this->respond(function () use ($id, $title, $description, $duedate, $done, $archived, $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore): JSONResponse {
 			return new JSONResponse(
-				$this->cardService->update($id, $title, $description, $duedate, $done, $archived, $this->currentUserId(), $priority, $startDate, $status, $estimate, $allDay)
+				$this->cardService->update($id, $title, $description, $duedate, $done, $archived, $this->currentUserId(), $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore)
 			);
 		});
 	}

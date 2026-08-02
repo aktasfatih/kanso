@@ -59,7 +59,9 @@ class Notifier implements INotifier {
 			&& $subject !== NotificationService::SUBJECT_CARD_COMMENT
 			&& $subject !== NotificationService::SUBJECT_CARD_MENTIONED
 			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
-			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY) {
+			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY
+			&& $subject !== NotificationService::SUBJECT_CARD_DUE
+			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON) {
 			throw new UnknownNotificationException();
 		}
 
@@ -77,6 +79,25 @@ class Notifier implements INotifier {
 		$actor = $this->userManager->get($actorUid);
 		$actorName = $actor !== null ? $actor->getDisplayName() : $actorUid;
 		$cardTitle = (string)$card->getTitle();
+
+		// The due reminders are actor-less system events - no {actor} placeholder.
+		if ($subject === NotificationService::SUBJECT_CARD_DUE
+			|| $subject === NotificationService::SUBJECT_CARD_DUE_SOON) {
+			[$plain, $rich] = $subject === NotificationService::SUBJECT_CARD_DUE_SOON
+				? [$l->t('%1$s is due tomorrow', [$cardTitle]), $l->t('{card} is due tomorrow')]
+				: [$l->t('%1$s is due', [$cardTitle]), $l->t('{card} is due')];
+
+			$notification
+				->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+				->setLink($this->cardLink($card->getBoardId(), $cardId))
+				->setParsedSubject($plain)
+				->setRichSubject(
+					$rich,
+					['card' => ['type' => 'highlight', 'id' => (string)$cardId, 'name' => $cardTitle]]
+				);
+
+			return $notification;
+		}
 
 		[$plain, $rich] = match ($subject) {
 			NotificationService::SUBJECT_CARD_ASSIGNED

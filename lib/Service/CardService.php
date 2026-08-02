@@ -311,7 +311,9 @@ class CardService {
 	 * Updates the given fields (null = leave unchanged). An empty duedate
 	 * string clears the due date; an empty description string clears the
 	 * description. done=true stamps done_at only once (idempotent),
-	 * done=false clears it.
+	 * done=false clears it. Moving the due date re-arms the due-date reminders
+	 * (#3545) by clearing their "already sent" markers; $dueReminderDayBefore
+	 * toggles the optional "1 day before" reminder.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
@@ -330,6 +332,7 @@ class CardService {
 		?string $status = null,
 		?string $estimate = null,
 		?bool $allDay = null,
+		?bool $dueReminderDayBefore = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -362,11 +365,24 @@ class CardService {
 		}
 		if ($duedate !== null) {
 			$parsedDue = $this->parseDuedate($duedate);
+			$oldDue = $card->getDuedate();
 			$card->setDuedate($parsedDue);
 			// Clearing the due date also clears the all-day flag (no date to qualify).
 			if ($parsedDue === null) {
 				$card->setAllDay(false);
 			}
+			// Re-arm the due-date reminders (#3545) whenever the due date actually
+			// moves: clear both "already sent" markers so the reminder cron fires
+			// again for the new date. Compared by unix instant (how due dates are
+			// stored/compared elsewhere); a no-op set of the same date leaves the
+			// markers alone so it does not re-spam.
+			if ($oldDue?->getTimestamp() !== $parsedDue?->getTimestamp()) {
+				$card->setDueReminderSent(0);
+				$card->setDayBeforeReminderSent(0);
+			}
+		}
+		if ($dueReminderDayBefore !== null) {
+			$card->setDueReminderDayBefore($dueReminderDayBefore);
 		}
 		if ($allDay !== null) {
 			$card->setAllDay($allDay);

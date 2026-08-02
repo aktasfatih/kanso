@@ -482,6 +482,50 @@ class CardServiceTest extends TestCase {
 		self::assertFalse($updated->getAllDay());
 	}
 
+	public function testUpdateMovingDuedateResetsReminderMarkers(): void {
+		$card = $this->card();
+		$card->setDuedate(new \DateTime('2026-08-01T10:00:00+00:00'));
+		$card->setDueReminderSent(1_700_000_000);
+		$card->setDayBeforeReminderSent(1_700_000_000);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Moving the due date forward re-arms both reminders (markers cleared).
+		$updated = $this->service->update(9, null, null, '2026-08-05T10:00:00+00:00', null, null, 'alice');
+		self::assertSame(0, $updated->getDueReminderSent());
+		self::assertSame(0, $updated->getDayBeforeReminderSent());
+	}
+
+	public function testUpdateKeepingSameDuedateLeavesReminderMarkers(): void {
+		$card = $this->card();
+		$card->setDuedate(new \DateTime('2026-08-01T10:00:00+00:00'));
+		$card->setDueReminderSent(1_700_000_000);
+		$card->setDayBeforeReminderSent(1_700_000_000);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Re-setting the identical due date must NOT re-arm (no re-spam).
+		$updated = $this->service->update(9, null, null, '2026-08-01T10:00:00+00:00', null, null, 'alice');
+		self::assertSame(1_700_000_000, $updated->getDueReminderSent());
+		self::assertSame(1_700_000_000, $updated->getDayBeforeReminderSent());
+	}
+
+	public function testUpdateTogglesDayBeforeReminder(): void {
+		$card = $this->card();
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Positional: …, uid, priority, startDate, status, estimate, allDay, dueReminderDayBefore.
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, null, null, null, true);
+		self::assertTrue($updated->getDueReminderDayBefore());
+	}
+
 	public function testUpdateSetsAndClearsStartDate(): void {
 		$card = $this->card();
 		$this->cardMapper->method('find')->with(9)->willReturn($card);

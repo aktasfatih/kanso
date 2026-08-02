@@ -47,6 +47,9 @@ class CardMapper extends QBMapper {
 		'priority',
 		'estimate',
 		'board_seq',
+		'due_reminder_sent',
+		'day_before_reminder_sent',
+		'due_reminder_day_before',
 	];
 
 	public function __construct(IDBConnection $db) {
@@ -368,6 +371,57 @@ class CardMapper extends QBMapper {
 		// conditions; here we add the age half against the right column.
 		$column = $condition === ArchiveRule::CONDITION_DONE_AND_AGE ? 'created_at' : 'done_at';
 		$qb->andWhere($qb->expr()->lte($column, $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Cards whose due-date reminder threshold has been crossed and that still
+	 * have at least one un-fired reminder - the source for the due-reminder cron
+	 * ({@see \OCA\Kanso\Service\DueReminderService}). Excludes done, archived and
+	 * deleted cards, and any card without a due date (`duedate IS NULL`).
+	 *
+	 * A card qualifies when EITHER:
+	 *   - the at-due reminder is unsent (`due_reminder_sent = 0`) and the due
+	 *     date is at or before $now; OR
+	 *   - the day-before reminder is opted-in + unsent
+	 *     (`due_reminder_day_before` true, `day_before_reminder_sent = 0`) and
+	 *     the due date is at or before $now + 86400 (i.e. duedate - 86400 <= now).
+	 *
+	 * The precise per-marker decision (which reminders to actually send) is made
+	 * in PHP by the service against the same $now; this query is just the bounded
+	 * candidate set. Ordered by duedate ASC (soonest first), capped at $limit.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findDueForReminder(int $now, int $limit): array {
+		$nowDt = new \DateTime('@' . $now);
+		$dayAheadDt = new \DateTime('@' . ($now + 86400));
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->isNotNull('duedate'))
+			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->orX(
+				// At-due reminder still owed.
+				$qb->expr()->andX(
+					$qb->expr()->eq('due_reminder_sent', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)),
+					$qb->expr()->lte('duedate', $qb->createNamedParameter($nowDt, 'datetime')),
+				),
+				// Day-before reminder opted-in and still owed.
+				$qb->expr()->andX(
+					$qb->expr()->eq('due_reminder_day_before', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)),
+					$qb->expr()->eq('day_before_reminder_sent', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)),
+					$qb->expr()->lte('duedate', $qb->createNamedParameter($dayAheadDt, 'datetime')),
+				),
+			))
+			->orderBy('duedate', 'ASC')
+			->addOrderBy('id', 'ASC')
+			->setMaxResults($limit);
 
 		return $this->findEntities($qb);
 	}
