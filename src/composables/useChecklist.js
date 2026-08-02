@@ -89,6 +89,11 @@ export function useChecklist(cardId, boardId) {
 	const items = useQuery({
 		queryKey: computed(() => getChecklistKey()),
 		queryFn: () => apiFetchChecklist(getCardId()),
+		// Gated to a numeric card id: a card can be addressed by its human id in
+		// the URL (e.g. /card/KAN-123, #3611), which the modal resolves + redirects
+		// to the numeric id. Firing this against the raw ref would be a
+		// guaranteed-failing GET /api/cards/KAN-123/checklist before the redirect.
+		enabled: computed(() => /^\d+$/.test(getCardId())),
 		// Seed initial data from the card detail cache if it has checklistItems
 		initialData: () => {
 			const card = queryClient.getQueryData(getCardKey())

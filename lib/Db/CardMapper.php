@@ -96,6 +96,30 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * The non-deleted card carrying a given per-board sequence number - the
+	 * lookup behind a `PREFIX-<board_seq>` cross-reference (#3611). Resolves on
+	 * the (board_id, board_seq) UNIQUE index, so it is a single-row point read.
+	 * A summary shape (no description) is enough: callers only need the id + title
+	 * to render the link. Trashed cards are excluded so a stale reference to a
+	 * deleted card resolves to null (falls back to the raw text) rather than
+	 * linking to a card the board no longer shows.
+	 *
+	 * @throws Exception
+	 */
+	public function findByBoardAndSeq(int $boardId, int $seq): ?Card {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$cards = $this->findEntities($qb);
+		return $cards[0] ?? null;
+	}
+
+	/**
 	 * Summaries (no description) of all non-deleted cards on a board,
 	 * grouped by stack and in display order.
 	 *

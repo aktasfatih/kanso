@@ -401,6 +401,85 @@ class CardServiceTest extends TestCase {
 		$this->service->find(9, 'alice');
 	}
 
+	// ---- findByRef (board-scoped PREFIX-<seq> resolution, #3611) -----------
+
+	private function boardWithPrefix(string $prefix, int $id = 1): Board {
+		$board = $this->board($id);
+		$board->setPrefix($prefix);
+		return $board;
+	}
+
+	public function testFindByRefResolvesToCardOnMatchingBoardPrefix(): void {
+		$board = $this->boardWithPrefix('KAN');
+		$card = $this->card(42);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'alice', PermissionService::PERMISSION_READ);
+		$this->cardMapper->expects(self::once())
+			->method('findByBoardAndSeq')->with(1, 123)->willReturn($card);
+
+		self::assertSame($card, $this->service->findByRef(1, 'KAN-123', 'alice'));
+	}
+
+	public function testFindByRefIsCaseInsensitiveOnTheReference(): void {
+		$board = $this->boardWithPrefix('KAN');
+		$card = $this->card(42);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findByBoardAndSeq')->with(1, 7)->willReturn($card);
+
+		self::assertSame($card, $this->service->findByRef(1, 'kan-7', 'alice'));
+	}
+
+	public function testFindByRefReturnsNullForUnknownSeq(): void {
+		$board = $this->boardWithPrefix('KAN');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findByBoardAndSeq')->with(1, 999)->willReturn(null);
+
+		self::assertNull($this->service->findByRef(1, 'KAN-999', 'alice'));
+	}
+
+	public function testFindByRefReturnsNullWhenPrefixDoesNotMatchBoard(): void {
+		// The board's prefix is KAN; a reference to another prefix is not
+		// resolvable here (board-scoped, per-board prefixes) - and never touches
+		// the mapper.
+		$board = $this->boardWithPrefix('KAN');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->expects(self::never())->method('findByBoardAndSeq');
+
+		self::assertNull($this->service->findByRef(1, 'OTHER-1', 'alice'));
+	}
+
+	public function testFindByRefReturnsNullForMalformedReference(): void {
+		$board = $this->boardWithPrefix('KAN');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->expects(self::never())->method('findByBoardAndSeq');
+
+		self::assertNull($this->service->findByRef(1, 'not a ref', 'alice'));
+	}
+
+	public function testFindByRefFallsBackToDefaultPrefixForUnprefixedBoard(): void {
+		// A board created before the prefix backfill has a null prefix; it defaults
+		// to the shared "KAN", so a KAN-<n> reference still resolves.
+		$board = $this->board(); // no prefix set
+		$card = $this->card(42);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findByBoardAndSeq')->with(1, 5)->willReturn($card);
+
+		self::assertSame($card, $this->service->findByRef(1, 'KAN-5', 'alice'));
+	}
+
+	public function testFindByRefAssertsReadPermissionBeforeResolving(): void {
+		$board = $this->boardWithPrefix('KAN');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('findByBoardAndSeq');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->findByRef(1, 'KAN-1', 'alice');
+	}
+
 	// ---- update -----------------------------------------------------------
 
 	public function testUpdateAppliesFieldsAndWritesChangeRow(): void {

@@ -795,7 +795,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-if="cardData.description"
 									class="card-modal__desc-view"
 									@click="startDescriptionEdit">
-									<div class="card-modal__desc-rendered" v-html="renderedDescription" />
+									<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+									<div class="card-modal__desc-rendered" v-html="renderedDescription" @click="handleRefClick" />
 								</div>
 								<button
 									v-else
@@ -1175,7 +1176,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
 												</div>
 											</template>
-											<div v-else class="card-modal__comment-body" v-html="renderedComments.get(topComment.id)" />
+											<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+											<div v-else class="card-modal__comment-body" v-html="renderedComments.get(topComment.id)" @click="handleRefClick" />
 
 											<div class="card-modal__comment-controls">
 												<button
@@ -1249,7 +1251,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
 													</div>
 												</template>
-												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" />
+												<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
 												<div
 													v-if="canEdit && currentUserId === reply.author"
@@ -1446,11 +1449,11 @@ import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
-import { renderMarkdown } from '../services/markdown.js'
+import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -1474,10 +1477,40 @@ const boardId = computed(() => route.params.id)
 
 // Modal is open when this component is mounted - enabled is always true here
 const isOpen = ref(true)
-const { data: cardData, isLoading, isError, updateCard } = useCard(
+
+// A card can be addressed in the URL by its human id (e.g. .../card/KAN-123) as
+// well as its numeric id (#3611). A non-numeric cardId is a human reference: we
+// resolve it board-scoped to the numeric id and REPLACE the route so the modal
+// (and useCard, which fetches /api/cards/{numeric id}) only ever sees a number.
+// The numeric route keeps working unchanged. An unresolvable ref surfaces the
+// existing not-found modal state.
+const isNumericCardId = computed(() => /^\d+$/.test(String(props.cardId)))
+const refResolveError = ref(false)
+
+watch([() => props.cardId, boardId], async ([cardId, bId]) => {
+	refResolveError.value = false
+	if (isNumericCardId.value || !cardId || !bId) return
+	try {
+		const { cardId: numericId } = await apiResolveCardRef(bId, cardId)
+		router.replace({ name: 'card-modal', params: { id: String(bId), cardId: String(numericId) } })
+	} catch (err) {
+		// Unknown / mismatched / malformed reference: leave the modal in a
+		// not-found state rather than fetching a bogus numeric id.
+		refResolveError.value = true
+	}
+}, { immediate: true })
+
+const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, updateCard } = useCard(
 	computed(() => props.cardId),
-	isOpen,
+	// Only fetch once the id is numeric (a human ref is redirected first).
+	computed(() => isOpen.value && isNumericCardId.value),
 )
+// While a human reference is being resolved to its numeric id, show the loading
+// skeleton (the card query is still disabled at that point).
+const isLoading = computed(() => cardIsLoading.value || (!isNumericCardId.value && !refResolveError.value))
+// Surface a failed human-ref resolution through the same error path as a failed
+// card fetch, so the template's not-found branch covers both.
+const isError = computed(() => cardIsError.value || refResolveError.value)
 
 // Read board data from cache (same queryKey as BoardView - no extra request).
 const { data: boardData } = useBoard(boardId)
@@ -1877,7 +1910,14 @@ const dueDateClass = computed(() => {
 })
 
 const cardTitle = computed(() => cardData.value?.title || t('kanso', 'Card'))
-const renderedDescription = computed(() => renderMarkdown(cardData.value?.description || ''))
+// Board-scoped PREFIX-<seq> → {cardId, title} map for cross-references, built
+// from the already-cached board cards + prefix (no extra request). Drives the
+// title-link rendering of `KAN-123` in the description and comments.
+const cardRefMap = computed(() =>
+	buildCardRefMap(boardData.value?.cards ?? [], boardData.value?.board?.prefix),
+)
+const renderedDescription = computed(() =>
+	renderMarkdown(cardData.value?.description || '', { refs: cardRefMap.value }))
 
 // ── Title editing ─────────────────────────────────────────────────────────────
 const editingTitle = ref(false)
@@ -2194,8 +2234,9 @@ const commentThread = computed(() => buildCommentTree(flatComments.value))
 // map only recomputes when the comments data actually changes.
 const renderedComments = computed(() => {
 	const map = new Map()
+	const refs = cardRefMap.value
 	for (const c of flatComments.value) {
-		map.set(c.id, renderMarkdown(c.body))
+		map.set(c.id, renderMarkdown(c.body, { refs }))
 	}
 	return map
 })
@@ -2504,6 +2545,22 @@ const parentTitle = computed(() => {
  */
 function openCard(cardId) {
 	router.push({ name: 'card-modal', params: { id: route.params.id, cardId: String(cardId) } })
+}
+
+/**
+ * Delegated click handler for rendered markdown containers: a click on a
+ * `KAN-123` cross-reference anchor (class kanso-cardref) opens the target card
+ * in the modal. The anchor carries no href, so this is the only navigation path.
+ * @param {MouseEvent} event the click event
+ */
+function handleRefClick(event) {
+	const anchor = event.target?.closest?.('a.kanso-cardref')
+	if (!anchor) return
+	const cardId = anchor.getAttribute('data-kanso-card-id')
+	if (!cardId) return
+	event.preventDefault()
+	event.stopPropagation()
+	openCard(cardId)
 }
 
 async function handleClearParent() {
@@ -2938,7 +2995,7 @@ onBeforeUnmount(() => {
 })
 
 // Only render when the preview pane is open; feed it from the debounced source.
-const draftPreview = computed(() => (showDescPreview.value ? renderMarkdown(previewSource.value) : ''))
+const draftPreview = computed(() => (showDescPreview.value ? renderMarkdown(previewSource.value, { refs: cardRefMap.value }) : ''))
 
 // New-comment composer
 const newCommentTextareaRef = ref(null)
@@ -4742,6 +4799,18 @@ async function handleToggleProject(projectId) {
 	color: var(--color-primary-element, #0082c9);
 	font-weight: 500;
 	white-space: nowrap;
+}
+
+/* Card cross-reference link (KAN-123 → the target card's title). Carries no
+ * href; the delegated click handler navigates. */
+:deep(.kanso-cardref) {
+	color: var(--color-primary-element, #0082c9);
+	font-weight: 500;
+	cursor: pointer;
+	text-decoration: none;
+}
+:deep(.kanso-cardref:hover) {
+	text-decoration: underline;
 }
 
 /* ── @-mention autocomplete dropdown ────────────────────────────────────── */

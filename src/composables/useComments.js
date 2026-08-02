@@ -123,9 +123,14 @@ export function useComments(cardId, boardId) {
 	}
 
 	// ── Comments query ──────────────────────────────────────────────────────────
+	// Gated to a numeric card id: a card can be addressed by its human id in the
+	// URL (e.g. /card/KAN-123, #3611), which the modal resolves + redirects to the
+	// numeric id. Firing this against the raw ref would be a guaranteed-failing
+	// GET /api/cards/KAN-123/comments before the redirect lands.
 	const comments = useQuery({
 		queryKey: computed(() => getCommentsKey()),
 		queryFn: () => apiFetchComments(getCardId()),
+		enabled: computed(() => /^\d+$/.test(getCardId())),
 	})
 
 	// ── addComment ──────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -67,6 +68,50 @@ class CardService {
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
 		return $card;
+	}
+
+	/**
+	 * Board-scoped resolution of a `PREFIX-<board_seq>` human reference (e.g.
+	 * "KAN-123") to a card on the given board (#3611). Per-board prefixes make a
+	 * reference unambiguous only WITHIN a board, so this is deliberately scoped to
+	 * a single board (cross-board references are a follow-up). The reference's
+	 * prefix half is validated against the board's own prefix - a reference whose
+	 * prefix does not match the board resolves to null rather than silently
+	 * matching on the number alone. Only the numeric sequence is looked up (the
+	 * (board_id, board_seq) unique index); a trashed card resolves to null.
+	 *
+	 * Returns null (not an exception) for a malformed/mismatched/unknown reference
+	 * so the caller can fall back to plain text; only a genuinely missing/deleted
+	 * board or a permission failure throws.
+	 *
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the user may not read the board
+	 */
+	public function findByRef(int $boardId, string $ref, string $uid): ?Card {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+
+		// Split "PREFIX-<digits>" - uppercase letters/digits prefix, a dash, then
+		// the sequence number. Mirrors the client-side token shape in markdown.js.
+		if (!preg_match('/^([A-Z][A-Z0-9]*)-(\d+)$/', strtoupper(trim($ref)), $m)) {
+			return null;
+		}
+		$prefix = $m[1];
+		$seq = (int)$m[2];
+		if ($seq <= 0) {
+			return null;
+		}
+
+		// The board's prefix must match the reference's prefix (a reference to a
+		// different board's prefix is not resolvable here). Fall back to the shared
+		// default for boards created before the prefix backfill, mirroring the
+		// board payload's default (Board::jsonSerialize / BoardPrefix::DEFAULT).
+		$boardPrefix = $board->getPrefix() ?? BoardPrefix::DEFAULT;
+		if ($prefix !== $boardPrefix) {
+			return null;
+		}
+
+		return $this->cardMapper->findByBoardAndSeq($boardId, $seq);
 	}
 
 	/**

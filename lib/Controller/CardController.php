@@ -76,6 +76,27 @@ class CardController extends Controller {
 	}
 
 	/**
+	 * Resolves a board-scoped `PREFIX-<board_seq>` human reference (e.g.
+	 * "KAN-123") to the referenced card's numeric id + title (#3611). Powers
+	 * opening a card by its human id from a URL/deep link, and is the fallback
+	 * the markdown renderer can call when the card isn't in the board cache.
+	 * Board-scoped (per-board prefixes); requires READ on the board. Returns
+	 * {"cardId": <int>, "title": "..."} on a hit, or 404 for an
+	 * unknown/mismatched/malformed reference.
+	 */
+	#[NoAdminRequired]
+	public function resolveRef(int $id, string $ref): JSONResponse {
+		return $this->respond(function () use ($id, $ref): JSONResponse {
+			$uid = $this->currentUserId();
+			$card = $this->cardService->findByRef($id, $ref, $uid);
+			if ($card === null) {
+				return new JSONResponse(['error' => 'Not found'], \OCP\AppFramework\Http::STATUS_NOT_FOUND);
+			}
+			return new JSONResponse(['cardId' => $card->getId(), 'title' => $card->getTitle()]);
+		});
+	}
+
+	/**
 	 * Full single-card detail payload (description + labels + assignees +
 	 * checklist + parent/children). Shared by show() and setParent() so both
 	 * return the identical shape. Takes a fully-hydrated Card (from

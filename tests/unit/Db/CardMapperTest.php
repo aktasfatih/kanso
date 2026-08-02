@@ -55,6 +55,7 @@ class CardMapperTest extends TestCase {
 		$qb = $this->createMock(IQueryBuilder::class);
 		foreach ([
 			'select', 'selectAlias', 'addSelect', 'from', 'where', 'andWhere', 'groupBy',
+			'orderBy', 'addOrderBy', 'setMaxResults',
 		] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
@@ -162,5 +163,34 @@ class CardMapperTest extends TestCase {
 		$this->db->expects(self::never())->method('getQueryBuilder');
 
 		self::assertSame([], $this->mapper->overdueCountByBoards([], new \DateTime('@1000')));
+	}
+
+	// ---- findByBoardAndSeq (PREFIX-<board_seq> point read, #3611) ----------
+
+	public function testFindByBoardAndSeqReturnsTheMatchingCard(): void {
+		// One row on the (board_id, board_seq) index → a hydrated summary Card.
+		$this->stubQuery([[
+			'id' => 42,
+			'board_id' => 7,
+			'stack_id' => 3,
+			'title' => 'Referenced card',
+			'sort_key' => 'aa',
+			'board_seq' => 123,
+			'deleted_at' => 0,
+		]]);
+
+		$card = $this->mapper->findByBoardAndSeq(7, 123);
+		self::assertNotNull($card);
+		self::assertSame(42, $card->getId());
+		self::assertSame('Referenced card', $card->getTitle());
+		self::assertSame(123, $card->getBoardSeq());
+	}
+
+	public function testFindByBoardAndSeqReturnsNullWhenNoRow(): void {
+		// No card carries that sequence on the board (unknown/deleted) → null,
+		// so a stale reference falls back to plain text.
+		$this->stubQuery([]);
+
+		self::assertNull($this->mapper->findByBoardAndSeq(7, 999));
 	}
 }

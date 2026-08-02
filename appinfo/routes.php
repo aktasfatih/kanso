@@ -31,6 +31,11 @@ return [
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
 		['name' => 'boardStats#show', 'url' => '/api/boards/{id}/stats', 'verb' => 'GET'],
 		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],
+		// Resolve a board-scoped PREFIX-<board_seq> human reference (e.g. KAN-123)
+		// to a card {cardId, title} - opens a card by its human id from a URL and
+		// backs the markdown cross-reference renderer (#3611). The literal
+		// /cards/by-ref segment is distinct from every card CRUD path.
+		['name' => 'card#resolveRef', 'url' => '/api/boards/{id}/cards/by-ref/{ref}', 'verb' => 'GET'],
 		['name' => 'board#update', 'url' => '/api/boards/{id}', 'verb' => 'PATCH'],
 		['name' => 'board#destroy', 'url' => '/api/boards/{id}', 'verb' => 'DELETE'],
 

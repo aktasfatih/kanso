@@ -22,6 +22,13 @@ export const updateBoard = (id, data) =>
 export const deleteBoard = (id) =>
 	axios.delete(url(`/api/boards/${id}`)).then((r) => r.data)
 
+// Resolve a board-scoped PREFIX-<board_seq> human reference (e.g. "KAN-123") to
+// { cardId, title } (#3611). Used to open a card by its human id from a URL when
+// the board cache is not already loaded; the in-app renderer resolves from cache
+// without a request. Rejects (404) for an unknown/mismatched reference.
+export const resolveCardRef = (boardId, ref) =>
+	axios.get(url(`/api/boards/${boardId}/cards/by-ref/${encodeURIComponent(ref)}`)).then((r) => r.data)
+
 // Stacks
 export const createStack = (data) =>
 	axios.post(url('/api/stacks'), data).then((r) => r.data)

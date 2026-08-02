@@ -145,6 +145,39 @@ class CardControllerTest extends TestCase {
 		self::assertSame(['bob', 'carol'], $data['assigneeIds']);
 	}
 
+	public function testResolveRefReturnsCardIdAndTitle(): void {
+		$card = $this->card(42);
+		$card->setTitle('Referenced card');
+		$this->cardService->method('findByRef')->with(1, 'KAN-123', 'alice')->willReturn($card);
+
+		$response = $this->controller->resolveRef(1, 'KAN-123');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['cardId' => 42, 'title' => 'Referenced card'], $response->getData());
+	}
+
+	public function testResolveRefMapsUnknownReferenceTo404(): void {
+		$this->cardService->method('findByRef')->with(1, 'KAN-999', 'alice')->willReturn(null);
+
+		$response = $this->controller->resolveRef(1, 'KAN-999');
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testResolveRefMapsMissingBoardTo404(): void {
+		$this->cardService->method('findByRef')
+			->willThrowException(new DoesNotExistException('gone'));
+
+		$response = $this->controller->resolveRef(1, 'KAN-1');
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	public function testResolveRefMapsNotPermittedTo403(): void {
+		$this->cardService->method('findByRef')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->resolveRef(1, 'KAN-1');
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
 	public function testShowMapsDoesNotExistTo404(): void {
 		$this->cardService->method('find')
 			->willThrowException(new DoesNotExistException('gone'));
