@@ -260,7 +260,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-set-role="handleSetRole"
 					:on-set-wip="handleSetWip"
 					:on-set-color="handleSetColor"
-					:on-card-focus="(cardId) => { focusedCardId = cardId }" />
+					:on-card-focus="(cardId) => { focusedCardId = cardId }"
+					:on-card-hover="(cardId) => { hoveredCardId = cardId }" />
 
 				<!-- Add stack inline input -->
 				<div class="add-stack">
@@ -318,6 +319,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<td>{{ t('kanso', 'Open focused card') }}</td>
 						</tr>
 						<tr>
+							<td class="shortcuts-modal__key"><kbd>Space</kbd></td>
+							<td>{{ t('kanso', 'Quick preview of the hovered / focused card') }}</td>
+						</tr>
+						<tr>
 							<td class="shortcuts-modal__key"><kbd>d</kbd></td>
 							<td>{{ t('kanso', 'Toggle done on focused card') }}</td>
 						</tr>
@@ -341,6 +346,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</table>
 			</div>
 		</NcModal>
+
+		<!-- Quick-look card preview (Space on a hovered/focused card).
+		     A transparent backdrop captures click-away; the panel itself is
+		     read-only and dismisses on Escape / Space / mouse-leave. -->
+		<template v-if="previewCard">
+			<div class="card-preview-backdrop" @click="closePreview" />
+			<CardPreview
+				:card="previewCard"
+				:labels-by-id="labelsById"
+				:board-prefix="boardData?.board?.prefix ?? ''"
+				:participants="participants.data.value ?? []"
+				:anchor-rect="previewAnchorRect"
+				@close="closePreview"
+				@open="openPreviewCard" />
+		</template>
 
 		<!-- Command palette (Ctrl/Cmd+K) -->
 		<CommandPalette
@@ -382,6 +402,7 @@ import SearchBox from '../components/SearchBox.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
+import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { useBoardSubscription } from '../composables/useBoardSubscription.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
@@ -518,6 +539,15 @@ function dismissActionError() {
 /** Currently keyboard-focused card id (number | null). */
 const focusedCardId = ref(null)
 
+/** Currently mouse-hovered card id (number | null). Feeds the Space quick-preview. */
+const hoveredCardId = ref(null)
+
+// ── Quick-look preview state ──────────────────────────────────────────────────
+/** Card id the floating preview is open for (number | null). */
+const previewCardId = ref(null)
+/** Anchor rect (the originating tile's bounding box) for positioning the panel. */
+const previewAnchorRect = ref(null)
+
 /** Map<stackId, StackColumn component instance> - populated by function refs. */
 const columnRefs = new Map()
 
@@ -615,6 +645,55 @@ function cardsForStack(stackId) {
 	return cardsByStack.value.get(stackId) ?? []
 }
 
+// ── Quick-look preview helpers ────────────────────────────────────────────────
+// The preview reads its meta straight from the board summary card already in the
+// cache; only the description is lazily fetched inside CardPreview via useCard.
+const boardCardsById = computed(() => {
+	const map = new Map()
+	for (const c of boardData.value?.cards ?? []) map.set(c.id, c)
+	return map
+})
+
+/** The board summary card the preview is open for, or null. */
+const previewCard = computed(() =>
+	previewCardId.value == null ? null : (boardCardsById.value.get(previewCardId.value) ?? null),
+)
+
+/**
+ * Toggle the quick-look preview for a given card id. Called from the Space
+ * branch in handleKeydown. Capturing the tile's rect anchors the panel; if the
+ * tile isn't in the DOM (edge case) the preview still opens, centered.
+ */
+function togglePreview(cardId) {
+	if (cardId == null) return
+	if (previewCardId.value === cardId) {
+		closePreview()
+		return
+	}
+	const el = document.querySelector(`[data-card-id="${cardId}"]`)
+	previewAnchorRect.value = el ? el.getBoundingClientRect() : null
+	previewCardId.value = cardId
+}
+
+function closePreview() {
+	previewCardId.value = null
+	previewAnchorRect.value = null
+}
+
+/** Open the full card modal for the previewed card, dismissing the preview. */
+function openPreviewCard() {
+	const id = previewCardId.value
+	closePreview()
+	if (id == null) return
+	router.push({ name: 'card-modal', params: { id: props.id, cardId: id } })
+}
+
+// If the previewed card disappears from the board (archived/deleted/filtered),
+// close the preview so it can't dangle over a stale rect.
+watch(previewCard, (card) => {
+	if (previewCardId.value != null && !card) closePreview()
+})
+
 // ── Keyboard navigation helpers (declared after cardsByStack + sortedStacks) ──
 // NOTE: function declarations are hoisted and can reference these computeds
 // safely. Only computed() and watch() calls must follow their dependencies.
@@ -664,11 +743,18 @@ async function navigateTo(stackId, cardIdx) {
 	document.querySelector(`[data-card-id="${card.id}"]`)?.focus()
 }
 
-// Clear focusedCardId when the card disappears from cardsByStack (archived, deleted, filtered out)
+// Clear focusedCardId / hoveredCardId when the card disappears from cardsByStack
+// (archived, deleted, filtered out). Without this the hovered id could dangle
+// after the tile unmounts (no mouseleave fires) and a later Space would target a
+// stale id. The previewCard computed also guards, but clearing here keeps the
+// hover anchor honest.
 watch(cardsByStack, () => {
-	if (focusedCardId.value == null) return
-	const pos = findCardPosition(focusedCardId.value)
-	if (!pos) focusedCardId.value = null
+	if (focusedCardId.value != null && !findCardPosition(focusedCardId.value)) {
+		focusedCardId.value = null
+	}
+	if (hoveredCardId.value != null && !findCardPosition(hoveredCardId.value)) {
+		hoveredCardId.value = null
+	}
 })
 
 function handleKeydown(e) {
@@ -708,6 +794,31 @@ function handleKeydown(e) {
 		searchBoxRef.value?.focus()
 		return
 	}
+
+	// ── Quick-look preview (Space) ────────────────────────────────────────────
+	// Space peeks the hovered (mouse) or keyboard-focused card in a floating
+	// read-only panel. preventDefault stops the board scrolling. The typing guard
+	// above has already bailed, so a space typed in the composer still inserts a
+	// space. When a preview is already open, Space / Escape close it and Enter
+	// opens the full card - handled here, before the overlay-open guard below.
+	if (previewCardId.value != null) {
+		if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Escape') {
+			e.preventDefault()
+			closePreview()
+			return
+		}
+		if (e.key === 'Enter') {
+			e.preventDefault()
+			openPreviewCard()
+			return
+		}
+	}
+	if (e.key === ' ' || e.key === 'Spacebar') {
+		e.preventDefault()
+		togglePreview(hoveredCardId.value ?? focusedCardId.value)
+		return
+	}
+
 	// Guard: settings modal or shortcuts overlay open
 	if (showSettings.value || showShortcuts.value) return
 
@@ -1424,5 +1535,14 @@ async function handleSetColor(stackId, color) {
 /* Trash button */
 .board-view__trash-btn {
 	flex-shrink: 0;
+}
+
+/* Quick-look preview click-away backdrop - transparent, sits just under the
+   panel (panel z-index 2100) and above the board content. */
+.card-preview-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 2099;
+	background: transparent;
 }
 </style>

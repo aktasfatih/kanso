@@ -189,7 +189,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:card="cards[vRow.index]"
 						:labels-by-id="labelsById"
 						:board-prefix="boardPrefix"
-						@click="openCard(cards[vRow.index].id)" />
+						@click="openCard(cards[vRow.index].id)"
+						@hover="(id) => onCardHover?.(id)" />
 				</div>
 			</div>
 		</div>
@@ -299,6 +300,15 @@ const props = defineProps({
 	 * clicked so BoardView can keep focusedCardId in sync with mouse navigation.
 	 */
 	onCardFocus: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Optional callback (cardId: number|null) → void - called on tile
+	 * mouseenter (cardId) / mouseleave (null) so BoardView can track the
+	 * hovered card for the Space quick-preview.
+	 */
+	onCardHover: {
 		type: Function,
 		default: null,
 	},

@@ -12,7 +12,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			class="card-tile"
 			:class="{ 'card-tile--done': isDone }"
 			:data-card-id="card.id"
-			@click="$emit('click')">
+			@click="$emit('click')"
+			@mouseenter="$emit('hover', card.id)"
+			@mouseleave="$emit('hover', null)">
 			<!-- Label chips row - only rendered when the card has assigned labels -->
 			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
 				<span
@@ -178,7 +180,7 @@ const props = defineProps({
 // Human-readable reference id (prefix + '-' + boardSeq), null when unassigned.
 const cardHumanId = computed(() => humanId(props.boardPrefix, props.card.boardSeq))
 
-defineEmits(['click'])
+defineEmits(['click', 'hover'])
 
 const el = ref(null)
 const isDragging = ref(false)
