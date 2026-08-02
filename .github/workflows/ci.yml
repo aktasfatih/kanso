@@ -67,9 +67,10 @@ jobs:
 
   e2e:
     runs-on: kanso-runners
-    # Boots a full Nextcloud + runs 60 serial specs; cap it so a hung stack
-    # doesn't burn to the 6h default.
-    timeout-minutes: 30
+    # Boots a full Nextcloud + runs ~170 serial tests (workers:1, retries:1);
+    # the suite needs ~30 min of test time + ~5 min setup, so cap at 60 to give
+    # headroom (and still bound a hung stack well under the 6h default).
+    timeout-minutes: 60
     env:
       # Realtime push isn't needed for the UI specs (they poll); skip it so a
       # flaky appstore release can't fail the boot.
