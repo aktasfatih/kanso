@@ -149,7 +149,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcButton>
 
 			<!-- Watch / unwatch this board - subscribes to a "new card created"
-			     notification. A filled bell means you're watching. -->
+			     notification. Uses the same eye icon as the card-level watcher:
+			     eye-off (crossed) when watching, plain eye outline when not. -->
 			<NcButton
 				v-if="boardData"
 				class="board-view__watch-btn"
@@ -161,8 +162,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
 				@click="toggleBoardWatch">
 				<template #icon>
-					<BellIcon v-if="isBoardSubscribed" :size="20" />
-					<BellOutlineIcon v-else :size="20" />
+					<EyeOffOutlineIcon v-if="isBoardSubscribed" :size="20" />
+					<EyeOutlineIcon v-else :size="20" />
 				</template>
 			</NcButton>
 
@@ -381,8 +382,8 @@ import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
-import BellIcon from 'vue-material-design-icons/Bell.vue'
-import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
+import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
+import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import SortIcon from 'vue-material-design-icons/Sort.vue'
