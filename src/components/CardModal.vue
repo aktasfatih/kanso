@@ -1030,11 +1030,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<span class="card-modal__relation-label">{{ group.label }}</span>
 									<ul class="card-modal__relation-group">
 										<li v-for="rel in group.items" :key="rel.id" class="card-modal__relation-row">
-											<span
+											<button
+												type="button"
 												class="card-modal__relation-title"
-												:class="{ 'card-modal__relation-title--done': rel.done }">
+												:class="{ 'card-modal__relation-title--done': rel.done }"
+												@click="openCard(rel.cardId)">
 												{{ rel.title }}
-											</span>
+											</button>
 											<button
 												v-if="canEdit"
 												class="card-modal__child-remove"
@@ -4081,10 +4083,26 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__relation-title {
 	flex: 1;
+	min-width: 0;
+	text-align: left;
+	border: none;
+	background: transparent;
+	padding: 0;
+	color: var(--color-main-text);
 	font-size: 0.875rem;
+	cursor: pointer;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+.card-modal__relation-title:hover {
+	text-decoration: underline;
+	color: var(--color-primary-element);
+}
+.card-modal__relation-title:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+	border-radius: 2px;
 }
 .card-modal__relation-title--done {
 	color: var(--color-text-maxcontrast);

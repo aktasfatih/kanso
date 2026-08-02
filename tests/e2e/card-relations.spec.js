@@ -123,4 +123,25 @@ test.describe('Card relations (#3404)', () => {
 		await row.locator('.card-modal__child-remove').click()
 		await expect(page.locator('.card-modal__relation-row', { hasText: state.cTitle })).toHaveCount(0, { timeout: 8_000 })
 	})
+
+	test('clicking a relation row opens the related card', async ({ page }) => {
+		// Ensure A relates to B (symmetric, so it shows on A's modal).
+		const a = await api('GET', `/cards/${state.a}`)
+		if (!a.relations.relates.map((r) => r.cardId).includes(state.b)) {
+			await api('POST', `/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'relates' })
+		}
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.a}`)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
+
+		// The related row's title is a button — clicking it navigates to that card.
+		const row = page.locator('.card-modal__relation-row', { hasText: state.cTitle })
+		await expect(row).toBeVisible({ timeout: 8_000 })
+		await row.locator('.card-modal__relation-title').click()
+
+		// The route (and the modal title) should now be card B.
+		await page.waitForURL(new RegExp(`/card/${state.b}(?!\\d)`), { timeout: 8_000 })
+		await expect(page.locator('.card-modal').getByText(state.cTitle).first()).toBeVisible({ timeout: 8_000 })
+	})
 })
