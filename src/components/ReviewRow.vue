@@ -75,7 +75,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
-import { cssColor } from '../services/color.js'
+import { cssColor, readableColor } from '../services/color.js'
 
 const props = defineProps({
 	review: {
@@ -93,7 +93,7 @@ const emit = defineEmits(['open', 'approve', 'request-changes'])
 const typeChipStyle = computed(() => {
 	if (!props.review.reviewTypeColor) return {}
 	const color = cssColor(props.review.reviewTypeColor)
-	return { background: color, color: '#fff', borderColor: color }
+	return { background: color, color: readableColor(props.review.reviewTypeColor), borderColor: color }
 })
 
 const fullDate = computed(() => {

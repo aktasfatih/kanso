@@ -4071,16 +4071,16 @@ async function doDeleteAutoRule(rule) {
 }
 
 .bs-rail__danger-item--delete {
-	color: var(--color-error);
+	color: var(--color-error-text, var(--color-error));
 }
 
 .bs-rail__danger-item--delete .bs-rail__icon {
-	color: var(--color-error);
+	color: var(--color-error-text, var(--color-error));
 }
 
 .bs-rail__danger-item--delete:hover:not(:disabled) {
 	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 12%, transparent));
-	color: var(--color-error);
+	color: var(--color-error-text, var(--color-error));
 }
 
 /* ── Pane area ─────────────────────────────────────────────────────────────── */

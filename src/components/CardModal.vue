@@ -604,7 +604,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								v-if="reviewTypeById(review.reviewTypeId)"
 								class="card-modal__review-type-badge"
 								:style="reviewTypeById(review.reviewTypeId).color
-									? { background: cssColor(reviewTypeById(review.reviewTypeId).color), color: '#fff' }
+									? { background: cssColor(reviewTypeById(review.reviewTypeId).color), color: readableColor(reviewTypeById(review.reviewTypeId).color) }
 									: {}">
 								{{ reviewTypeById(review.reviewTypeId).title }}
 							</span>
@@ -646,7 +646,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										class="card-modal__review-type-option"
 										:class="{ 'card-modal__review-type-option--active': selectedReviewTypeId === rt.id }"
 										:style="rt.color && selectedReviewTypeId === rt.id
-											? { background: cssColor(rt.color), color: '#fff', borderColor: cssColor(rt.color) }
+											? { background: cssColor(rt.color), color: readableColor(rt.color), borderColor: cssColor(rt.color) }
 											: rt.color
 												? { borderColor: cssColor(rt.color), color: cssColor(rt.color) }
 												: {}"
@@ -3063,8 +3063,8 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__done-btn--done {
 	border-color: var(--color-success);
-	color: var(--color-success);
-	background: rgba(70, 186, 97, 0.08);
+	color: var(--color-success-text, var(--color-success));
+	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 10%, var(--color-main-background)));
 }
 .card-modal__watch-btn {
 	display: inline-flex;
