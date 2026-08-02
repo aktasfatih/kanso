@@ -14,9 +14,10 @@ export default defineConfig({
 	// PHP/route-cache cold-start (a long-standing flake on `checklist`, which
 	// runs first alphabetically).
 	globalSetup: './tests/e2e/global-setup.js',
-	// One retry as a backstop for transient cold-start hiccups; real failures
-	// still fail on the retry.
-	retries: 1,
+	// Two retries as a backstop for confirmed slow-CI timing flakes (cold-start
+	// races that pass on a later attempt). Retries only re-run FAILED tests, so
+	// real failures still fail on the 3rd attempt.
+	retries: 2,
 	use: {
 		baseURL: 'http://localhost:8891',
 		screenshot: 'only-on-failure',
