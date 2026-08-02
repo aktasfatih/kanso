@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Project discussion log (owner-only comments on a project).** The project page
+  now carries a comment thread — post, edit, delete, with one-level replies and
+  the same markdown toolbar + rendering as card comments. Because projects are
+  owner-only (no sharing), it is a private per-owner log: every operation is
+  owner-gated and there is no @mention/notify. New table `kanso_project_comments`
+  and endpoints under `/api/projects/{id}/comments`.
+
 - **Board export / import (full data portability).** Every board can be exported
   to a single Kanso JSON document (board settings → Export board) carrying its
   whole graph — stacks, cards, labels, review types, checklist items, comments

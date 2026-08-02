@@ -330,6 +330,22 @@ export const removeCardFromProject = (projectId, cardId) =>
 export const getProjectStats = (projectId) =>
 	axios.get(url(`/api/projects/${projectId}/stats`)).then((r) => r.data)
 
+// Project comments — an owner-only personal discussion log on a project (#3563).
+// One-level threads, mirroring the card-comment API but project-scoped. The
+// update/delete paths are /api/project-comments/{id} (distinct from card
+// comments' /api/comments/{id}).
+export const fetchProjectComments = (projectId) =>
+	axios.get(url(`/api/projects/${projectId}/comments`)).then((r) => r.data)
+
+export const createProjectComment = (projectId, data) =>
+	axios.post(url(`/api/projects/${projectId}/comments`), data).then((r) => r.data)
+
+export const updateProjectComment = (commentId, data) =>
+	axios.patch(url(`/api/project-comments/${commentId}`), data).then((r) => r.data)
+
+export const deleteProjectComment = (commentId) =>
+	axios.delete(url(`/api/project-comments/${commentId}`)).then((r) => r.data)
+
 // Board analytics
 export const getBoardStats = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/stats`)).then((r) => r.data)

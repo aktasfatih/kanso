@@ -228,6 +228,158 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</ul>
 				</section>
 			</template>
+
+			<!-- Discussion log — an owner-only personal thread on the project (#3563).
+			     Reuses the shipped markdown editor (useMarkdownToolbar + renderMarkdown,
+			     same as the description) and mirrors the card comment thread pattern:
+			     one-level replies, edit/delete. No @mention/notify — a project has a
+			     single reader (the owner). -->
+			<section class="project-view__discussion">
+				<h2 class="project-view__section-title">
+					{{ t('kanso', 'Discussion') }}<span v-if="commentTree.length"> · {{ commentTotal }}</span>
+				</h2>
+
+				<!-- Composer -->
+				<div class="project-view__composer">
+					<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="commentToolbar.bold()"><FormatBoldIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="commentToolbar.italic()"><FormatItalicIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="commentToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="commentToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="commentToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="commentToolbar.link()"><LinkVariantIcon :size="18" /></button>
+					</div>
+					<textarea
+						ref="newCommentRef"
+						v-model="newCommentBody"
+						class="project-view__comment-textarea"
+						rows="3"
+						:placeholder="t('kanso', 'Add a note to this project — markdown supported')"
+						:disabled="addComment.isPending.value"
+						@keydown.ctrl.enter.prevent="submitNewComment"
+						@keydown.meta.enter.prevent="submitNewComment" />
+					<div class="project-view__comment-actions">
+						<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
+							{{ t('kanso', 'Post') }}
+						</NcButton>
+						<span class="project-view__desc-hint">{{ t('kanso', 'Ctrl+Enter to post') }}</span>
+						<span v-if="commentError" class="project-view__desc-error">{{ commentError }}</span>
+					</div>
+				</div>
+
+				<!-- Thread -->
+				<div v-if="commentTree.length" class="project-view__thread">
+					<div
+						v-for="{ comment: topComment, replies } in commentTree"
+						:key="topComment.id"
+						class="project-view__comment-group">
+						<div class="project-view__comment">
+							<div class="project-view__comment-main">
+								<div class="project-view__comment-meta">
+									<span class="project-view__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+									<span class="project-view__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
+									<span v-if="topComment.editedAt > 0" class="project-view__comment-edited">{{ t('kanso', 'edited') }}</span>
+								</div>
+
+								<template v-if="editingCommentId === topComment.id">
+									<textarea
+										v-model="editingCommentBody"
+										class="project-view__comment-textarea"
+										rows="3"
+										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.escape.stop="cancelCommentEdit" />
+									<div class="project-view__comment-edit-actions">
+										<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">{{ t('kanso', 'Save') }}</NcButton>
+										<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
+									</div>
+								</template>
+								<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+								<div v-else class="project-view__comment-body project-view__desc-rendered" v-html="renderMarkdown(topComment.body)" />
+
+								<div class="project-view__comment-controls">
+									<button
+										v-if="editingCommentId !== topComment.id"
+										class="project-view__comment-link-btn"
+										@click="openReplyBox(topComment.id)">
+										{{ t('kanso', 'Reply') }}
+									</button>
+									<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
+										<PencilIcon :size="14" />
+									</button>
+									<button
+										class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
+										:title="t('kanso', 'Delete comment')"
+										:disabled="deleteComment.isPending.value"
+										@click="handleDeleteComment(topComment)">
+										<TrashCanIcon :size="14" />
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<div v-if="replyingToId === topComment.id" class="project-view__reply-compose">
+							<textarea
+								v-model="replyBody"
+								class="project-view__comment-textarea"
+								:placeholder="t('kanso', 'Write a reply…')"
+								rows="2"
+								@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
+								@keydown.meta.enter.prevent="submitReply(topComment.id)"
+								@keydown.escape.stop="closeReplyBox" />
+							<div class="project-view__comment-edit-actions">
+								<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">{{ t('kanso', 'Post reply') }}</NcButton>
+								<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
+							</div>
+						</div>
+
+						<div v-if="replies.length" class="project-view__replies">
+							<div v-for="reply in replies" :key="reply.id" class="project-view__comment project-view__comment--reply">
+								<div class="project-view__comment-main">
+									<div class="project-view__comment-meta">
+										<span class="project-view__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
+										<span class="project-view__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
+										<span v-if="reply.editedAt > 0" class="project-view__comment-edited">{{ t('kanso', 'edited') }}</span>
+									</div>
+
+									<template v-if="editingCommentId === reply.id">
+										<textarea
+											v-model="editingCommentBody"
+											class="project-view__comment-textarea"
+											rows="3"
+											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
+											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+											@keydown.escape.stop="cancelCommentEdit" />
+										<div class="project-view__comment-edit-actions">
+											<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">{{ t('kanso', 'Save') }}</NcButton>
+											<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
+										</div>
+									</template>
+									<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+									<div v-else class="project-view__comment-body project-view__desc-rendered" v-html="renderMarkdown(reply.body)" />
+
+									<div class="project-view__comment-controls">
+										<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
+											<PencilIcon :size="14" />
+										</button>
+										<button
+											class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
+											:title="t('kanso', 'Delete comment')"
+											:disabled="deleteComment.isPending.value"
+											@click="handleDeleteComment(reply)">
+											<TrashCanIcon :size="14" />
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div v-else class="project-view__discussion-empty">
+					{{ t('kanso', 'No notes yet. Start a discussion log for this project.') }}
+				</div>
+			</section>
 		</template>
 
 		<!-- Edit project dialog -->
@@ -354,6 +506,8 @@ import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import { useProjects } from '../composables/useProjects.js'
 import { useProjectCards } from '../composables/useProject.js'
+import { useProjectComments } from '../composables/useProjectComments.js'
+import { buildCommentTree } from '../composables/useComments.js'
 import { useSearch } from '../composables/useSearch.js'
 import { renderMarkdown } from '../services/markdown.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
@@ -614,6 +768,117 @@ async function submitEdit() {
 		closeEditDialog()
 	} catch (err) {
 		editError.value = err?.response?.data?.error || t('kanso', 'Failed to update project.')
+	}
+}
+
+// ── Discussion log (owner-only project comments, #3563) ──────────────────────
+// Reuses the shipped markdown editor (useMarkdownToolbar + renderMarkdown) and
+// mirrors the card comment thread pattern: one-level threading, edit/delete.
+const {
+	comments: commentsQuery,
+	addComment,
+	editComment,
+	deleteComment,
+} = useProjectComments(computed(() => props.id))
+
+const commentTree = computed(() => buildCommentTree(commentsQuery.data.value ?? []))
+const commentTotal = computed(() => (commentsQuery.data.value ?? []).length)
+
+const newCommentBody = ref('')
+const newCommentRef = ref(null)
+const commentError = ref('')
+
+const commentToolbar = useMarkdownToolbar({
+	getText: () => newCommentBody.value,
+	setText: (v) => { newCommentBody.value = v },
+	textareaRef: newCommentRef,
+})
+
+function formatCommentTime(unixSeconds) {
+	try {
+		return new Date(unixSeconds * 1000).toLocaleString(undefined, {
+			month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+		})
+	} catch {
+		return ''
+	}
+}
+
+async function submitNewComment() {
+	const body = newCommentBody.value.trim()
+	if (!body || addComment.isPending.value) return
+	commentError.value = ''
+	try {
+		await addComment.mutateAsync({ body, parentCommentId: null })
+		// Only clear after a successful post so a failed post keeps the text (#3510).
+		newCommentBody.value = ''
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post note.')
+	}
+}
+
+// ── Reply ────────────────────────────────────────────────────────────────────
+const replyingToId = ref(null)
+const replyBody = ref('')
+
+function openReplyBox(parentId) {
+	replyingToId.value = parentId
+	replyBody.value = ''
+}
+
+function closeReplyBox() {
+	replyingToId.value = null
+	replyBody.value = ''
+}
+
+async function submitReply(parentId) {
+	const body = replyBody.value.trim()
+	if (!body || addComment.isPending.value) return
+	commentError.value = ''
+	try {
+		await addComment.mutateAsync({ body, parentCommentId: parentId })
+		closeReplyBox()
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
+	}
+}
+
+// ── Edit ─────────────────────────────────────────────────────────────────────
+const editingCommentId = ref(null)
+const editingCommentBody = ref('')
+
+function startCommentEdit(comment) {
+	editingCommentId.value = comment.id
+	editingCommentBody.value = comment.body
+}
+
+function cancelCommentEdit() {
+	editingCommentId.value = null
+	editingCommentBody.value = ''
+}
+
+async function saveCommentEdit(comment) {
+	const body = editingCommentBody.value.trim()
+	if (!body || editComment.isPending.value || body === comment.body) {
+		cancelCommentEdit()
+		return
+	}
+	commentError.value = ''
+	try {
+		await editComment.mutateAsync({ comment, body })
+		cancelCommentEdit()
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to update note.')
+	}
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+async function handleDeleteComment(comment) {
+	commentError.value = ''
+	try {
+		await deleteComment.mutateAsync({ comment })
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to delete note.')
 	}
 }
 </script>
@@ -1187,4 +1452,160 @@ async function submitEdit() {
 }
 /* .project-view__desc-rendered typography is defined once, up in the
    description block, and shared by the read view + both previews. */
+
+/* ── Discussion log ─────────────────────────────────────────────────────────── */
+.project-view__discussion {
+	margin-top: 12px;
+	padding-top: 20px;
+	border-top: 1px solid var(--color-border);
+}
+
+.project-view__composer {
+	margin-bottom: 20px;
+}
+
+.project-view__comment-textarea {
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.9375rem;
+	font-family: inherit;
+	line-height: 1.6;
+	resize: vertical;
+}
+
+.project-view__comment-textarea:focus {
+	outline: none;
+	border-color: var(--color-primary-element);
+	box-shadow: 0 0 0 2px var(--color-primary-element-light);
+}
+
+.project-view__comment-actions,
+.project-view__comment-edit-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	flex-wrap: wrap;
+}
+
+.project-view__thread {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.project-view__comment-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.project-view__comment {
+	display: flex;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-background-hover);
+}
+
+.project-view__comment--reply {
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+}
+
+.project-view__replies {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-left: 24px;
+}
+
+.project-view__reply-compose {
+	margin-left: 24px;
+}
+
+.project-view__comment-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.project-view__comment-meta {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 4px;
+	flex-wrap: wrap;
+}
+
+.project-view__comment-author {
+	font-weight: 600;
+	font-size: 0.875rem;
+}
+
+.project-view__comment-time,
+.project-view__comment-edited {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.project-view__comment-edited {
+	font-style: italic;
+}
+
+.project-view__comment-body {
+	font-size: 0.9375rem;
+}
+
+.project-view__comment-controls {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 6px;
+}
+
+.project-view__comment-link-btn {
+	background: none;
+	border: none;
+	padding: 2px 4px;
+	cursor: pointer;
+	color: var(--color-primary-element);
+	font-size: 0.8rem;
+}
+
+.project-view__comment-link-btn:hover {
+	text-decoration: underline;
+}
+
+.project-view__comment-icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+
+.project-view__comment-icon-btn:hover {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+}
+
+.project-view__comment-icon-btn--danger:hover {
+	color: var(--color-error);
+}
+
+.project-view__discussion-empty {
+	padding: 12px 0;
+	font-size: 0.9rem;
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
+}
 </style>

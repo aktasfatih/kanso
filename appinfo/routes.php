@@ -113,6 +113,14 @@ return [
 		['name' => 'comment#update', 'url' => '/api/comments/{commentId}', 'verb' => 'PATCH'],
 		['name' => 'comment#destroy', 'url' => '/api/comments/{commentId}', 'verb' => 'DELETE'],
 
+		// Project comments — an owner-only personal discussion log (#3563). The
+		// update/destroy paths are scoped under /api/project-comments so they never
+		// collide with the card-comment /api/comments/{commentId} routes above.
+		['name' => 'projectComment#index', 'url' => '/api/projects/{projectId}/comments', 'verb' => 'GET'],
+		['name' => 'projectComment#create', 'url' => '/api/projects/{projectId}/comments', 'verb' => 'POST'],
+		['name' => 'projectComment#update', 'url' => '/api/project-comments/{commentId}', 'verb' => 'PATCH'],
+		['name' => 'projectComment#destroy', 'url' => '/api/project-comments/{commentId}', 'verb' => 'DELETE'],
+
 		['name' => 'checklist#index', 'url' => '/api/cards/{cardId}/checklist', 'verb' => 'GET'],
 		['name' => 'checklist#create', 'url' => '/api/cards/{cardId}/checklist', 'verb' => 'POST'],
 		['name' => 'checklist#update', 'url' => '/api/checklist/{itemId}', 'verb' => 'PATCH'],
