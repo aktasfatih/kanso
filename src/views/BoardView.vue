@@ -302,11 +302,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<table class="shortcuts-modal__table">
 					<tbody>
 						<tr>
-							<td class="shortcuts-modal__key"><kbd>↓</kbd> / <kbd>↑</kbd></td>
+							<td class="shortcuts-modal__key"><kbd>↓</kbd> / <kbd>↑</kbd> · <kbd>j</kbd> / <kbd>k</kbd></td>
 							<td>{{ t('kanso', 'Navigate cards up / down') }}</td>
 						</tr>
 						<tr>
-							<td class="shortcuts-modal__key"><kbd>→</kbd> / <kbd>←</kbd></td>
+							<td class="shortcuts-modal__key"><kbd>→</kbd> / <kbd>←</kbd> · <kbd>l</kbd> / <kbd>h</kbd></td>
 							<td>{{ t('kanso', 'Move to next / previous stack') }}</td>
 						</tr>
 						<tr>
@@ -711,7 +711,11 @@ function handleKeydown(e) {
 	// Guard: settings modal or shortcuts overlay open
 	if (showSettings.value || showShortcuts.value) return
 
-	const key = e.key
+	// Vim-style aliases for the arrow navigation below. The typing-context
+	// guard above has already bailed, so h/j/k/l still type normally in
+	// inputs/textareas/contenteditables — here they only alias the arrows.
+	const VIM_KEYS = { j: 'ArrowDown', k: 'ArrowUp', l: 'ArrowRight', h: 'ArrowLeft' }
+	const key = VIM_KEYS[e.key] ?? e.key
 
 	if (key === 'ArrowDown' || key === 'ArrowUp') {
 		e.preventDefault()

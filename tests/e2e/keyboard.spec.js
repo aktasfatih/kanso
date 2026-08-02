@@ -239,6 +239,65 @@ test.describe('Keyboard navigation', () => {
 		await expect(modal).not.toBeVisible({ timeout: 3000 })
 	})
 
+	test('hjkl alias the arrow-key navigation (j/k cards, l/h stacks)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		// 'j' with no focus should seed to first card of first stack (like ArrowDown)
+		await page.keyboard.press('j')
+		await page.waitForTimeout(200)
+		const s1 = page.locator('.stack-column').nth(0)
+		const firstCard = s1.locator('.card-tile').first()
+		await expect(firstCard).toBeFocused({ timeout: 3000 })
+
+		// 'j' → second card in S1 (ArrowDown)
+		await page.keyboard.press('j')
+		await page.waitForTimeout(200)
+		const secondCard = s1.locator('.card-tile').nth(1)
+		await expect(secondCard).toBeFocused({ timeout: 3000 })
+
+		// 'k' → back to first card in S1 (ArrowUp)
+		await page.keyboard.press('k')
+		await page.waitForTimeout(200)
+		await expect(firstCard).toBeFocused({ timeout: 3000 })
+
+		// 'l' → move to S2 (ArrowRight)
+		await page.keyboard.press('l')
+		await page.waitForTimeout(200)
+		const s2 = page.locator('.stack-column').nth(1)
+		const s2FirstCard = s2.locator('.card-tile').first()
+		await expect(s2FirstCard).toBeFocused({ timeout: 3000 })
+
+		// 'h' → back to S1 (ArrowLeft)
+		await page.keyboard.press('h')
+		await page.waitForTimeout(200)
+		await expect(firstCard).toBeFocused({ timeout: 3000 })
+	})
+
+	test('typing h/j/k/l in the composer inserts the letters (guard holds)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		// Seed focus to S1, then open its composer with 'n'
+		await page.keyboard.press('j')
+		await page.waitForTimeout(200)
+		await page.keyboard.press('n')
+		await page.waitForTimeout(200)
+
+		const s1 = page.locator('.stack-column').nth(0)
+		const composer = s1.locator('.card-composer__input')
+		await expect(composer).toBeFocused({ timeout: 3000 })
+
+		// Typing the vim nav letters must insert them, not navigate
+		await page.keyboard.type('hjkl')
+		await page.waitForTimeout(200)
+		await expect(composer).toHaveValue('hjkl')
+	})
+
 	test('mouse click on tile keeps focusedCardId in sync (tile click syncs keyboard state)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
