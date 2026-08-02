@@ -106,16 +106,21 @@ test.describe('Card relations (#3404)', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.a}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 
-		// Add "A blocks B" via the relation controls.
+		// The relation editor lives behind the ⋯ (more) menu — open it via the
+		// "Add relation" action, which reveals the inline relation form.
+		await page.locator('.card-modal__actions-menu button').first().click()
+		await page.getByRole('menuitem', { name: /add relation/i }).click()
+
+		// Add "A blocks B" via the revealed relation controls.
 		await page.locator('.card-modal__relation-kind').selectOption('blocks')
 		await page.locator('.card-modal__relation-target').selectOption(String(state.b))
-		await page.locator('.card-modal__relation-add').click()
+		await page.locator('.card-modal__relation-add-btn', { hasText: /^Add$/ }).click()
 
 		const row = page.locator('.card-modal__relation-row', { hasText: state.cTitle })
 		await expect(row).toBeVisible({ timeout: 8_000 })
 
 		// Remove it again.
-		await row.locator('.card-modal__relation-remove').click()
+		await row.locator('.card-modal__child-remove').click()
 		await expect(page.locator('.card-modal__relation-row', { hasText: state.cTitle })).toHaveCount(0, { timeout: 8_000 })
 	})
 })

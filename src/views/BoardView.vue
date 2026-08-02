@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <template>
 	<div class="board-view">
 		<!-- Header -->
-		<div class="board-view__header">
+		<div ref="headerRef" class="board-view__header">
 			<NcButton class="board-view__back" @click="goBack">
 				<template #icon>
 					<ArrowLeftIcon :size="20" />
@@ -528,6 +528,7 @@ const shortcutError = ref('')
 
 // ── Search box ref (for programmatic focus via '/' shortcut) ─────────────────
 const searchBoxRef = ref(null)
+const headerRef = ref(null)
 
 function dismissActionError() {
 	dismissMoveError()
@@ -847,8 +848,23 @@ function handleKeydown(e) {
 	}
 }
 
+// Publish the toolbar height as a CSS var so the (teleported) settings panel can
+// dock BELOW the toolbar instead of over it — otherwise the panel covers the gear
+// button and a second gear click can't toggle it closed.
+let toolbarResizeObserver = null
+function publishToolbarHeight() {
+	const h = headerRef.value ? headerRef.value.offsetHeight : 0
+	document.documentElement.style.setProperty('--kanso-board-toolbar-height', `${h}px`)
+}
+
 onMounted(() => {
 	document.addEventListener('keydown', handleKeydown)
+
+	if (headerRef.value && typeof ResizeObserver !== 'undefined') {
+		toolbarResizeObserver = new ResizeObserver(publishToolbarHeight)
+		toolbarResizeObserver.observe(headerRef.value)
+	}
+	publishToolbarHeight()
 
 	const cleanups = [
 		monitorForElements({
@@ -1048,6 +1064,11 @@ onMounted(() => {
 onUnmounted(() => {
 	document.removeEventListener('keydown', handleKeydown)
 	boardCleanup()
+	if (toolbarResizeObserver) {
+		toolbarResizeObserver.disconnect()
+		toolbarResizeObserver = null
+	}
+	document.documentElement.style.removeProperty('--kanso-board-toolbar-height')
 })
 
 function toggleFilterLabel(labelId) {

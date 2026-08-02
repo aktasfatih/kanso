@@ -87,7 +87,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		await page.getByRole('button', { name: /board settings/i }).click()
 
 		// Panel must be visible
-		const panel = page.locator('.app-sidebar')
+		const panel = page.locator('.bs-modal')
 		await expect(panel).toBeVisible({ timeout: 5_000 })
 
 		// ── Positioning assertions ────────────────────────────────────────────
@@ -99,7 +99,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		expect(panelBox.x + panelBox.width).toBeGreaterThanOrEqual(viewport.width - 30)
 
 		// Left edge of panel must be well right of the viewport center
-		// (panel width ~380px; viewport is typically ≥1280px in CI)
+		// (panel width ~500px; viewport is typically ≥1280px in CI)
 		expect(panelBox.x).toBeGreaterThan(viewport.width / 2)
 
 		// ── Board card still visible & interactive while panel is open ────────
@@ -125,11 +125,11 @@ test.describe('Settings panel (right-docked drawer)', () => {
 
 		// Open panel
 		await page.getByRole('button', { name: /board settings/i }).click()
-		const panel = page.locator('.app-sidebar')
+		const panel = page.locator('.bs-modal')
 		await expect(panel).toBeVisible({ timeout: 5_000 })
 
-		// Click the close button inside the NcAppSidebar header
-		await page.locator('.app-sidebar__close').click()
+		// Click the close (×) button inside the settings modal header
+		await page.locator('.bs-modal__close').click()
 		await expect(panel).not.toBeVisible({ timeout: 3_000 })
 	})
 
@@ -140,7 +140,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		await page.locator('.card-tile').first().waitFor({ state: 'visible', timeout: 20_000 })
 
 		const gearBtn = page.getByRole('button', { name: /board settings/i })
-		const panel = page.locator('.app-sidebar')
+		const panel = page.locator('.bs-modal')
 
 		// First click opens
 		await gearBtn.click()

@@ -3831,12 +3831,15 @@ async function doDeleteAutoRule(rule) {
 
 .bs-modal {
 	position: absolute;
-	top: 0;
+	/* Dock BELOW the board toolbar so the gear button that toggles this panel
+	   stays clickable — a second gear click must be able to close it. BoardView
+	   publishes the toolbar height as this CSS var. */
+	top: var(--kanso-board-toolbar-height, 0px);
 	right: 0;
 	bottom: 0;
 	width: 500px;
 	max-width: 100%;
-	z-index: 2000;
+	z-index: 1800;
 	display: flex;
 	flex-direction: column;
 	background: var(--color-main-background);
