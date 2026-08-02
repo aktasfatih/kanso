@@ -18,6 +18,14 @@ export default defineConfig({
 	// races that pass on a later attempt). Retries only re-run FAILED tests, so
 	// real failures still fail on the 3rd attempt.
 	retries: 2,
+	// Reporter: force the verbose `list` reporter in CI too — Playwright otherwise
+	// defaults to the terse `dot` reporter when CI is set, which hides test names
+	// and makes a hang impossible to attribute. `list` prints one line per test as
+	// it finishes (so a stuck test is the one right after the last printed line);
+	// also emit the HTML report to populate the uploaded CI artifact.
+	reporter: process.env.CI
+		? [['list'], ['html', { open: 'never' }]]
+		: 'list',
 	use: {
 		baseURL: 'http://localhost:8891',
 		screenshot: 'only-on-failure',
