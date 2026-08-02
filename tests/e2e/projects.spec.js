@@ -142,16 +142,16 @@ test.describe('Projects — cross-board card collections', () => {
 		await textarea.fill(md)
 
 		// The in-dialog preview renders the markdown as HTML (strong + li).
-		await page.locator('.project-view__md-btn[title="Toggle preview"]').click()
-		const preview = page.locator('.project-view__desc-rendered')
+		await dialog.locator('.project-view__md-btn[title="Toggle preview"]').click()
+		const preview = dialog.locator('.project-view__desc-preview .project-view__desc-rendered')
 		await expect(preview.locator('strong')).toHaveText('bold text')
 		await expect(preview.locator('li')).toHaveCount(2)
 
 		await page.getByRole('button', { name: /^Save$/ }).click()
 		await expect(dialog).toBeHidden({ timeout: 8_000 })
 
-		// Header render is HTML markdown, not the raw source.
-		const headerDesc = page.locator('.project-view__desc')
+		// The prominent under-title description renders HTML markdown, not raw source.
+		const headerDesc = page.locator('.project-view__desc-view .project-view__desc-rendered')
 		await expect(headerDesc.locator('strong')).toHaveText('bold text')
 		await expect(headerDesc.locator('li')).toHaveCount(2)
 		// The raw markdown asterisks must NOT be present as literal text.
@@ -165,6 +165,84 @@ test.describe('Projects — cross-board card collections', () => {
 		// Reopening the editor shows the raw markdown source again (not HTML).
 		await openEdit()
 		await expect(page.locator('#edit-project-desc')).toHaveValue(md, { timeout: 8_000 })
+	})
+
+	test('edits the description in place under the title and persists across reload', async ({ page }) => {
+		// Reset to a known starting description so this test is order-independent.
+		await api('PATCH', `/projects/${state.projectId}`, { description: 'Starting note' })
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
+		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+
+		// The description is prominent under the title (its own region, rendered md).
+		const descView = page.locator('.project-view__desc-view')
+		await expect(descView).toBeVisible({ timeout: 8_000 })
+		await expect(descView).toContainText('Starting note')
+
+		// Click it to edit in place — no dialog: the inline toolbar + textarea appear.
+		await descView.click()
+		const textarea = page.locator('.project-view__desc-textarea')
+		await expect(textarea).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.project-view__md-toolbar')).toBeVisible()
+
+		const md = '## Overview\n\nA **detailed** project note with:\n\n- point one\n- point two'
+		await textarea.fill(md)
+
+		// Save via the inline Save button.
+		await page.getByRole('button', { name: /^Save$/ }).click()
+
+		// Back to read mode: rendered markdown, not raw source.
+		await expect(page.locator('.project-view__desc-textarea')).toBeHidden({ timeout: 8_000 })
+		const rendered = page.locator('.project-view__desc-view .project-view__desc-rendered')
+		await expect(rendered.locator('h2')).toHaveText('Overview')
+		await expect(rendered.locator('strong')).toHaveText('detailed')
+		await expect(rendered.locator('li')).toHaveCount(2)
+		await expect(rendered).not.toContainText('**detailed**')
+
+		// Server persisted the raw markdown.
+		const projects = await api('GET', '/projects')
+		expect(projects.find((p) => p.id === state.projectId).description).toBe(md)
+
+		// Persists across a full reload (database-first, not just optimistic UI).
+		await page.reload()
+		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		const renderedAfter = page.locator('.project-view__desc-view .project-view__desc-rendered')
+		await expect(renderedAfter.locator('h2')).toHaveText('Overview', { timeout: 8_000 })
+		await expect(renderedAfter.locator('li')).toHaveCount(2)
+
+		// Escape cancels an in-place edit without persisting.
+		await page.locator('.project-view__desc-view').click()
+		const ta2 = page.locator('.project-view__desc-textarea')
+		await expect(ta2).toBeVisible({ timeout: 5_000 })
+		await ta2.fill('discarded edit')
+		await ta2.press('Escape')
+		await expect(page.locator('.project-view__desc-textarea')).toBeHidden({ timeout: 5_000 })
+		await expect(page.locator('.project-view__desc-view')).toContainText('Overview')
+		const afterCancel = await api('GET', '/projects')
+		expect(afterCancel.find((p) => p.id === state.projectId).description).toBe(md)
+	})
+
+	test('shows an add-a-description affordance when empty and saves inline', async ({ page }) => {
+		await api('PATCH', `/projects/${state.projectId}`, { description: '' })
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
+		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+
+		// Empty state: a subtle "Add a description…" affordance under the title.
+		const placeholder = page.locator('.project-view__desc-placeholder')
+		await expect(placeholder).toBeVisible({ timeout: 8_000 })
+		await placeholder.click()
+
+		const textarea = page.locator('.project-view__desc-textarea')
+		await expect(textarea).toBeVisible({ timeout: 5_000 })
+		await textarea.fill('First description added inline')
+		await page.getByRole('button', { name: /^Save$/ }).click()
+
+		await expect(page.locator('.project-view__desc-view')).toContainText('First description added inline', { timeout: 8_000 })
+		const projects = await api('GET', '/projects')
+		expect(projects.find((p) => p.id === state.projectId).description).toBe('First description added inline')
 	})
 
 	test('adds a card via the cross-board search picker', async ({ page }) => {

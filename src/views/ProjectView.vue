@@ -27,11 +27,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						class="project-view__dot"
 						:style="{ background: '#' + project.color }" />
 					<h1 class="project-view__title">{{ project?.title ?? t('kanso', 'Project') }}</h1>
-					<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-					<div
-						v-if="project?.description"
-						class="project-view__desc"
-						v-html="renderMarkdown(project.description)" />
 				</div>
 
 				<div class="project-view__header-actions">
@@ -60,6 +55,79 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActions>
 				</div>
 			</div>
+
+			<!-- Prominent, in-place editable description directly under the title.
+			     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
+			     renderMarkdown + the updateProject mutation path — no backend change. -->
+			<section class="project-view__description">
+				<template v-if="editingDescription">
+					<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="descToolbar.bold()"><FormatBoldIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="descToolbar.italic()"><FormatItalicIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Heading')" @mousedown.prevent @click="descToolbar.heading()"><FormatHeaderPoundIcon :size="18" /></button>
+						<span class="project-view__md-sep" />
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="descToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="descToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
+						<span class="project-view__md-sep" />
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="descToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="descToolbar.link()"><LinkVariantIcon :size="18" /></button>
+						<span class="project-view__md-toolbar-spacer" />
+						<button
+							type="button"
+							class="project-view__md-btn"
+							:class="{ 'project-view__md-btn--active': showInlinePreview }"
+							:aria-pressed="showInlinePreview"
+							:title="t('kanso', 'Toggle preview')"
+							@mousedown.prevent
+							@click="showInlinePreview = !showInlinePreview"><EyeOutlineIcon :size="18" /></button>
+					</div>
+					<textarea
+						ref="inlineDescRef"
+						v-model="draftDescription"
+						class="project-view__desc-textarea"
+						rows="6"
+						:placeholder="t('kanso', 'Add a description — markdown supported')"
+						:disabled="updateMutation.isPending.value"
+						@keydown="onInlineDescKeydown"
+						@blur="saveDescriptionOnBlur" />
+					<div v-if="showInlinePreview" class="project-view__desc-preview">
+						<span class="project-view__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
+						<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+						<div class="project-view__desc-rendered" v-html="renderMarkdown(draftDescription)" />
+					</div>
+					<div class="project-view__desc-actions">
+						<NcButton type="primary" :disabled="updateMutation.isPending.value" @mousedown.prevent @click="saveDescription">
+							{{ t('kanso', 'Save') }}
+						</NcButton>
+						<NcButton @mousedown.prevent @click="cancelDescriptionEdit">
+							{{ t('kanso', 'Cancel') }}
+						</NcButton>
+						<span class="project-view__desc-hint">{{ t('kanso', 'Esc cancel · Ctrl+Enter save') }}</span>
+						<span v-if="descError" class="project-view__desc-error">{{ descError }}</span>
+					</div>
+				</template>
+
+				<template v-else>
+					<div
+						v-if="project?.description"
+						class="project-view__desc-view"
+						tabindex="0"
+						role="button"
+						:title="t('kanso', 'Click to edit the description')"
+						@click="startDescriptionEdit"
+						@keydown.enter="startDescriptionEdit">
+						<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+						<div class="project-view__desc-rendered" v-html="renderMarkdown(project.description)" />
+					</div>
+					<button
+						v-else
+						type="button"
+						class="project-view__desc-placeholder"
+						@click="startDescriptionEdit">
+						{{ t('kanso', 'Add a description…') }}
+					</button>
+				</template>
+			</section>
 
 			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
 
@@ -422,6 +490,84 @@ async function handleDelete() {
 	}
 }
 
+// ── In-place description edit (under the title) ──────────────────────────────
+// Reuses the shipped markdown editor (#3562): the same useMarkdownToolbar +
+// renderMarkdown + updateProject path as the dialog, but inline under the title
+// so the description can be edited where it's read. No backend change.
+const editingDescription = ref(false)
+const draftDescription = ref('')
+const descError = ref('')
+const inlineDescRef = ref(null)
+const showInlinePreview = ref(false)
+// Set while cancelling so the blur fired by unmounting the textarea can't
+// re-trigger a save — Escape must never persist. Decoupled from flush timing.
+let suppressBlurSave = false
+
+const descToolbar = useMarkdownToolbar({
+	getText: () => draftDescription.value,
+	setText: (v) => { draftDescription.value = v },
+	textareaRef: inlineDescRef,
+})
+
+function startDescriptionEdit() {
+	draftDescription.value = project.value?.description ?? ''
+	descError.value = ''
+	showInlinePreview.value = false
+	suppressBlurSave = false
+	editingDescription.value = true
+	nextTick(() => inlineDescRef.value?.focus())
+}
+
+function cancelDescriptionEdit() {
+	suppressBlurSave = true
+	editingDescription.value = false
+	descError.value = ''
+}
+
+async function saveDescription() {
+	if (updateMutation.isPending.value) return
+	const next = draftDescription.value.trim()
+	// No change → just close without a round-trip.
+	if (next === (project.value?.description ?? '').trim()) {
+		editingDescription.value = false
+		return
+	}
+	descError.value = ''
+	try {
+		await updateMutation.mutateAsync({
+			id: Number(props.id),
+			// Send the empty string (not undefined) to clear an existing description.
+			description: next,
+		})
+		editingDescription.value = false
+	} catch (err) {
+		descError.value = err?.response?.data?.error || t('kanso', 'Failed to update description.')
+	}
+}
+
+// Blur commits the edit, but only when focus actually leaves the editor region
+// (not when a toolbar / Save / Cancel button inside it took focus — those also
+// use @mousedown.prevent to keep the caret) and never when we're cancelling.
+function saveDescriptionOnBlur(event) {
+	if (suppressBlurSave || !editingDescription.value) return
+	const next = event.relatedTarget
+	if (next && next.closest && next.closest('.project-view__description')) return
+	saveDescription()
+}
+
+function onInlineDescKeydown(event) {
+	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+		event.preventDefault()
+		saveDescription()
+		return
+	}
+	if (event.key === 'Escape') {
+		event.stopPropagation()
+		event.preventDefault()
+		cancelDescriptionEdit()
+	}
+}
+
 // ── Edit project dialog ──────────────────────────────────────────────────────
 const showEditDialog = ref(false)
 const editTitle = ref('')
@@ -553,30 +699,125 @@ async function submitEdit() {
 	white-space: nowrap;
 }
 
-.project-view__desc {
-	font-size: 0.85rem;
-	color: var(--color-text-maxcontrast);
-	max-width: 340px;
-	/* Markdown can be multi-block; clamp to two lines in the header so long
-	   descriptions truncate gracefully instead of being clipped mid-block. */
-	overflow: hidden;
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
+/* ── Prominent, in-place editable description ──────────────────────────────── */
+.project-view__description {
+	margin: -8px 0 20px;
 }
 
-/* Markdown produces block <p>/<ul>… — flatten it to inline flow so the two-line
-   clamp above reads as a compact snippet rather than stacked blocks. */
-.project-view__desc :deep(p),
-.project-view__desc :deep(ul),
-.project-view__desc :deep(ol) { margin: 0; padding: 0; display: inline; }
-.project-view__desc :deep(li) { display: inline; margin-right: 0.6em; }
-.project-view__desc :deep(code) {
+/* Read mode: comfortable typography + reading width. Long, multi-paragraph
+   markdown scrolls inside a capped region instead of being clipped mid-block. */
+.project-view__desc-view {
+	cursor: text;
+	border-radius: var(--border-radius-large, 8px);
+	padding: 8px 10px;
+	margin: 0 -10px;
+	transition: background 0.15s;
+	max-height: 420px;
+	overflow-y: auto;
+}
+
+.project-view__desc-view:hover,
+.project-view__desc-view:focus-visible {
+	background: var(--color-background-hover);
+	outline: none;
+}
+
+.project-view__desc-rendered {
+	font-size: 0.9375rem;
+	line-height: 1.65;
+	color: var(--color-main-text);
+	/* Long unbroken tokens (URLs) wrap instead of forcing horizontal scroll. */
+	overflow-wrap: anywhere;
+}
+
+.project-view__desc-rendered :deep(p) { margin: 0 0 0.7em; }
+.project-view__desc-rendered :deep(p:last-child) { margin-bottom: 0; }
+.project-view__desc-rendered :deep(h1),
+.project-view__desc-rendered :deep(h2),
+.project-view__desc-rendered :deep(h3) {
+	margin: 1em 0 0.4em;
+	line-height: 1.3;
+}
+.project-view__desc-rendered :deep(h1:first-child),
+.project-view__desc-rendered :deep(h2:first-child),
+.project-view__desc-rendered :deep(h3:first-child) { margin-top: 0; }
+.project-view__desc-rendered :deep(ul),
+.project-view__desc-rendered :deep(ol) { margin: 0 0 0.7em; padding-left: 1.4em; }
+.project-view__desc-rendered :deep(li) { margin: 0.15em 0; }
+.project-view__desc-rendered :deep(blockquote) {
+	margin: 0 0 0.7em;
+	padding-left: 12px;
+	border-left: 3px solid var(--color-border-dark);
+	color: var(--color-text-maxcontrast);
+}
+.project-view__desc-rendered :deep(a) { color: var(--color-primary-element); }
+.project-view__desc-rendered :deep(code) {
 	background: var(--color-border);
 	border-radius: 3px;
-	padding: 1px 4px;
-	font-size: 0.85em;
+	padding: 2px 5px;
+	font-size: 0.875em;
+}
+.project-view__desc-rendered :deep(pre) {
+	background: var(--color-background-dark);
+	border-radius: var(--border-radius);
+	padding: 10px 12px;
+	overflow: auto;
+}
+.project-view__desc-rendered :deep(pre) code { background: none; padding: 0; }
+
+.project-view__desc-placeholder {
+	display: inline-flex;
+	align-items: center;
+	background: none;
+	border: none;
+	padding: 4px 0;
+	cursor: pointer;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9375rem;
+	font-style: italic;
+}
+
+.project-view__desc-placeholder:hover {
+	color: var(--color-main-text);
+	text-decoration: underline;
+}
+
+.project-view__desc-textarea {
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.9375rem;
+	font-family: inherit;
+	line-height: 1.6;
+	resize: vertical;
+	min-height: 140px;
+}
+
+.project-view__desc-textarea:focus {
+	outline: none;
+	border-color: var(--color-primary-element);
+	box-shadow: 0 0 0 2px var(--color-primary-element-light);
+}
+
+.project-view__desc-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	flex-wrap: wrap;
+}
+
+.project-view__desc-hint {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.project-view__desc-error {
+	color: var(--color-error);
+	font-size: 0.85rem;
 }
 
 .project-view__loading {
@@ -944,25 +1185,6 @@ async function submitEdit() {
 	text-transform: uppercase;
 	color: var(--color-text-maxcontrast);
 }
-
-.project-view__desc-rendered {
-	font-size: 0.9375rem;
-	line-height: 1.65;
-	color: var(--color-main-text);
-}
-
-.project-view__desc-rendered :deep(p) { margin: 0 0 0.7em; }
-.project-view__desc-rendered :deep(p:last-child) { margin-bottom: 0; }
-.project-view__desc-rendered :deep(code) {
-	background: var(--color-border);
-	border-radius: 3px;
-	padding: 2px 5px;
-	font-size: 0.875em;
-}
-.project-view__desc-rendered :deep(pre) {
-	background: var(--color-background-dark);
-	border-radius: var(--border-radius);
-	padding: 10px 12px;
-	overflow: auto;
-}
+/* .project-view__desc-rendered typography is defined once, up in the
+   description block, and shared by the read view + both previews. */
 </style>
