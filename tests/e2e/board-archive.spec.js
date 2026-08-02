@@ -58,9 +58,13 @@ test.describe('Board archiving', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		// Board settings → Archive board (pinned in the rail's danger group).
+		// Board settings → General tab → Archive (board actions moved into the
+		// General tab's danger zone; #3614). The modal opens on the labels tab, so
+		// switch to General first.
 		await page.getByRole('button', { name: /board settings/i }).click()
-		await page.getByRole('button', { name: 'Archive board' }).click()
+		await page.getByRole('tab', { name: 'General' }).click()
+		const general = page.locator('#bs-pane-general')
+		await general.locator('.board-actions__danger').getByRole('button', { name: 'Archive' }).click()
 
 		// Persisted archived + landed on the board list.
 		await expect.poll(() => boardArchived(state.boardId), { timeout: 8_000 }).toBe(true)

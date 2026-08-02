@@ -120,6 +120,15 @@ test.describe('Project discussion log (owner-only comments)', () => {
 	})
 
 	test('delete the top-level comment removes it and its reply', async ({ page }) => {
+		// Self-contained: don't depend on the prior tests' thread (order/sharding
+		// safe). Reset to exactly one top-level comment + one reply via the API.
+		const existing = await api('GET', `/projects/${state.projectId}/comments`)
+		for (const c of existing.filter((c) => c.parentCommentId == null)) {
+			await api('DELETE', `/project-comments/${c.id}`).catch(() => {})
+		}
+		const top = await api('POST', `/projects/${state.projectId}/comments`, { body: 'Top **note** to delete' })
+		await api('POST', `/projects/${state.projectId}/comments`, { body: 'A **reply** note', parentCommentId: top.id })
+
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
 		await expect(page.locator('.project-view__comment-group > .project-view__comment')).toHaveCount(1, { timeout: 10_000 })
