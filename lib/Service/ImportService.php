@@ -9,6 +9,9 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
+use OCA\Kanso\Db\AutomationRule;
+use OCA\Kanso\Db\AutomationRuleMapper;
+use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
@@ -64,6 +67,7 @@ class ImportService {
 
 	public function __construct(
 		private BoardService $boardService,
+		private ExportService $exportService,
 		private StackMapper $stackMapper,
 		private CardMapper $cardMapper,
 		private LabelMapper $labelMapper,
@@ -75,6 +79,7 @@ class ImportService {
 		private CardReviewMapper $cardReviewMapper,
 		private ArchiveRuleMapper $archiveRuleMapper,
 		private RecurRuleMapper $recurRuleMapper,
+		private AutomationRuleMapper $automationRuleMapper,
 		private IUserManager $userManager,
 		private IDBConnection $db,
 	) {
@@ -119,6 +124,68 @@ class ImportService {
 			throw new InvalidInputException('The export is missing its board');
 		}
 
+		return $this->rebuildInTransaction($board, $actorUid);
+	}
+
+	/**
+	 * Duplicates an existing board (already READ-authorized by the caller) into a
+	 * FRESH board owned by the actor, reusing the export→rebuild machinery: the
+	 * source board's live graph is assembled in-process via {@see ExportService}
+	 * and fed straight to the same transactional rebuild (no JSON round-trip).
+	 *
+	 * The copy's title is "<original> (copy)". When $withCards is false the card
+	 * graph is stripped, producing a structural-only clone (stacks, roles,
+	 * labels, review types, archive/automation rules); recur rules then self-drop
+	 * for lack of a surviving template card, which is correct for a template.
+	 *
+	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
+	 * @throws \OCP\DB\Exception
+	 */
+	public function duplicate(Board $source, string $actorUid, bool $withCards): array {
+		$doc = $this->exportService->export($source);
+		$board = $doc['board'];
+		$board['title'] = $this->copyTitle($source->getTitle());
+		// A copy always starts un-archived, whatever the source's state.
+		$board['archived'] = false;
+		if (!$withCards) {
+			// Structural-only clone: drop the card graph. Recur rules, which point
+			// at a template card, are dropped downstream once no card survives.
+			$board['cards'] = [];
+		}
+
+		return $this->rebuildInTransaction($board, $actorUid);
+	}
+
+	/**
+	 * Max board-title length {@see BoardService} accepts. Kept in sync here so a
+	 * duplicate of an already-maximal title still validates once the " (copy)"
+	 * suffix is appended (the base is truncated to make room).
+	 */
+	private const MAX_TITLE_LENGTH = 100;
+
+	/** The " (copy)" suffix used to name a duplicated board. */
+	private const COPY_SUFFIX = ' (copy)';
+
+	/**
+	 * "<title> (copy)", truncating the base so the result never overflows the
+	 * board-title limit (which would otherwise fail the whole duplicate).
+	 */
+	private function copyTitle(string $title): string {
+		$budget = self::MAX_TITLE_LENGTH - mb_strlen(self::COPY_SUFFIX);
+		if (mb_strlen($title) > $budget) {
+			$title = mb_substr($title, 0, $budget);
+		}
+		return $title . self::COPY_SUFFIX;
+	}
+
+	/**
+	 * Runs {@see rebuild} inside a single all-or-nothing transaction. Shared by
+	 * the document import path and the in-process duplicate path.
+	 *
+	 * @param array<string, mixed> $board
+	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
+	 */
+	private function rebuildInTransaction(array $board, string $actorUid): array {
 		$this->db->beginTransaction();
 		try {
 			$result = $this->rebuild($board, $actorUid);
@@ -158,6 +225,7 @@ class ImportService {
 
 		$this->importArchiveRules($board, $boardId, $stackIdMap, $now);
 		$this->importRecurRules($board, $boardId, $stackIdMap, $cardIdMap, $actorUid, $now);
+		$this->importAutomationRules($board, $boardId, $labelIdMap, $now);
 
 		return [
 			'boardId' => $boardId,
@@ -507,6 +575,53 @@ class ImportService {
 			$rule->setCreatedAt((int)($row['createdAt'] ?? $now));
 			$rule->setTimezone($this->nullableStr($row, 'timezone'));
 			$this->recurRuleMapper->insert($rule);
+		}
+	}
+
+	/**
+	 * Automation rules are per-board (trigger→action) with a small params blob.
+	 * The only id inside params is `label` (add_label action), which is remapped
+	 * old→new; a rule whose label did not survive is dropped rather than left
+	 * pointing at a foreign label. A `reviewer` uid (request_review action) that
+	 * no longer exists here also drops the rule, mirroring the review rule at
+	 * {@see attachReviews}. `role` is a portable stack-role constant, kept as-is.
+	 *
+	 * @param array<string, mixed> $board
+	 * @param array<int, int> $labelIdMap
+	 */
+	private function importAutomationRules(array $board, int $boardId, array $labelIdMap, int $now): void {
+		foreach ($this->rows($board, 'automationRules') as $row) {
+			$action = $this->str($row, 'action', '');
+			$params = is_array($row['params'] ?? null) ? $row['params'] : [];
+
+			if ($action === AutomationRule::ACTION_ADD_LABEL) {
+				$oldLabelId = isset($params['label']) ? (int)$params['label'] : 0;
+				$newLabelId = $labelIdMap[$oldLabelId] ?? null;
+				// The rule adds a label that did not survive the copy - meaningless.
+				if ($newLabelId === null) {
+					continue;
+				}
+				$params['label'] = $newLabelId;
+			} elseif ($action === AutomationRule::ACTION_REQUEST_REVIEW) {
+				$reviewer = isset($params['reviewer']) && is_string($params['reviewer']) ? $params['reviewer'] : '';
+				// The rule requests a reviewer who does not exist here - drop it,
+				// parallel to the per-card review rule.
+				if ($reviewer === '' || !$this->userManager->userExists($reviewer)) {
+					continue;
+				}
+			} else {
+				// Unknown action - skip rather than store a rule the engine can't run.
+				continue;
+			}
+
+			$rule = new AutomationRule();
+			$rule->setBoardId($boardId);
+			$rule->setTrigger($this->str($row, 'trigger', AutomationRule::TRIGGER_CARD_ENTERED_ROLE));
+			$rule->setAction($action);
+			$rule->setParams((string)json_encode($params));
+			$rule->setEnabled((bool)($row['enabled'] ?? false));
+			$rule->setCreatedAt((int)($row['createdAt'] ?? $now));
+			$this->automationRuleMapper->insert($rule);
 		}
 	}
 

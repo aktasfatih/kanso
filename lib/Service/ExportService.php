@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\ArchiveRuleMapper;
+use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -32,7 +33,7 @@ use OCA\Kanso\Db\StackMapper;
  * + wip limit), its live cards (all fields, soft-deleted rows excluded), the
  * card↔label and card↔assignee links, labels, checklist items, comments (with
  * their threading parent, author uid and timestamps), archive rules, recur
- * rules and review types.
+ * rules, automation rules and review types.
  *
  * Every entity keeps its ORIGINAL numeric id so {@see ImportService} can
  * rebuild the reference graph; sort keys are emitted verbatim (they are
@@ -40,8 +41,12 @@ use OCA\Kanso\Db\StackMapper;
  * by the caller.
  */
 class ExportService {
-	/** The envelope format version this build writes and can read back. */
-	public const FORMAT_VERSION = 1;
+	/**
+	 * The envelope format version this build writes and can read back.
+	 * v2 added the board's automation rules to the envelope; older (v1)
+	 * documents simply carry no automationRules key and still import.
+	 */
+	public const FORMAT_VERSION = 2;
 
 	public function __construct(
 		private StackMapper $stackMapper,
@@ -55,6 +60,7 @@ class ExportService {
 		private RecurRuleMapper $recurRuleMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
 		private CardReviewMapper $cardReviewMapper,
+		private AutomationRuleMapper $automationRuleMapper,
 	) {
 	}
 
@@ -147,6 +153,18 @@ class ExportService {
 			];
 		}
 
+		$automationRules = [];
+		foreach ($this->automationRuleMapper->findByBoard($boardId) as $rule) {
+			$automationRules[] = [
+				'id' => $rule->getId(),
+				'trigger' => $rule->getTrigger(),
+				'action' => $rule->getAction(),
+				'params' => $rule->paramsArray(),
+				'enabled' => $rule->getEnabled(),
+				'createdAt' => $rule->getCreatedAt(),
+			];
+		}
+
 		return [
 			'kanso' => self::FORMAT_VERSION,
 			'exportedAt' => time(),
@@ -162,6 +180,7 @@ class ExportService {
 				'cards' => $cards,
 				'archiveRules' => $archiveRules,
 				'recurRules' => $recurRules,
+				'automationRules' => $automationRules,
 			],
 		];
 	}

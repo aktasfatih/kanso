@@ -230,6 +230,11 @@ export const exportBoard = (boardId) =>
 export const importBoard = (document) =>
 	axios.post(url('/api/boards/import'), { document }).then((r) => r.data)
 
+// Server-side duplicate of a board the caller can READ into a fresh board they
+// own (export→import in-process). `withCards` also clones the card graph.
+export const duplicateBoard = (boardId, withCards) =>
+	axios.post(url(`/api/boards/${boardId}/duplicate`), { withCards: !!withCards }).then((r) => r.data)
+
 // Trello board JSON import; `document` is the raw uploaded Trello export text.
 export const importTrelloBoard = (document) =>
 	axios.post(url('/api/trello-import'), { document }).then((r) => r.data)

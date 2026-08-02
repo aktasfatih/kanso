@@ -21,6 +21,10 @@ return [
 		// board id - neither collides with the CRUD routes above.
 		['name' => 'boardPortability#import', 'url' => '/api/boards/import', 'verb' => 'POST'],
 		['name' => 'boardPortability#export', 'url' => '/api/boards/{id}/export', 'verb' => 'GET'],
+		// Server-side board duplicate (export→import in-process) into a fresh
+		// board owned by the caller. Nested under an existing board id, distinct
+		// from board#show (GET {id}).
+		['name' => 'boardPortability#duplicate', 'url' => '/api/boards/{id}/duplicate', 'verb' => 'POST'],
 		// Trello board JSON import → a fresh Kanso board owned by the importer.
 		// A distinct literal POST path, alongside boardPortability#import above.
 		['name' => 'trelloImport#import', 'url' => '/api/trello-import', 'verb' => 'POST'],

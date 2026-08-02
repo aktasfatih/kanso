@@ -67,6 +67,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</span>
 						</button>
 						<span v-if="exportError" class="bs-rail__tools-error">{{ exportError }}</span>
+
+						<!-- Duplicate: READ-gated on the server (creates a NEW board the
+						     caller owns), so it lives alongside Export rather than in
+						     the MANAGE-only danger group. -->
+						<button
+							class="bs-rail__item"
+							type="button"
+							:disabled="duplicating"
+							data-test="board-duplicate"
+							@click="duplicateBoardNow">
+							<ContentCopyIcon :size="16" class="bs-rail__icon" />
+							<span class="bs-rail__label">
+								{{ duplicating ? t('kanso', 'Duplicating…') : t('kanso', 'Duplicate board') }}
+							</span>
+						</button>
+						<label class="bs-rail__tools-check">
+							<input
+								type="checkbox"
+								v-model="duplicateWithCards"
+								:disabled="duplicating"
+								data-test="board-duplicate-with-cards">
+							{{ t('kanso', 'Copy cards too') }}
+						</label>
+						<span v-if="duplicateError" class="bs-rail__tools-error">{{ duplicateError }}</span>
 					</div>
 
 					<!-- Destructive actions, pinned to the bottom -->
@@ -1558,6 +1582,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import DownloadIcon from 'vue-material-design-icons/Download.vue'
+import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -1592,6 +1617,7 @@ import {
 	getSettings,
 	updateSettings,
 	exportBoard as apiExportBoard,
+	duplicateBoard as apiDuplicateBoard,
 } from '../services/api.js'
 
 const props = defineProps({
@@ -1995,6 +2021,30 @@ async function exportBoardToFile() {
 		exportError.value = e?.response?.data?.error || t('kanso', 'Could not export this board.')
 	} finally {
 		exporting.value = false
+	}
+}
+
+const duplicating = ref(false)
+const duplicateError = ref('')
+const duplicateWithCards = ref(true)
+
+/**
+ * Server-side duplicate of this board into a fresh one the caller owns. On
+ * success the board list is refreshed, the settings modal closed, and the
+ * router navigates to the new copy.
+ */
+async function duplicateBoardNow() {
+	duplicating.value = true
+	duplicateError.value = ''
+	try {
+		const res = await apiDuplicateBoard(props.boardId, duplicateWithCards.value)
+		await archiveQueryClient.invalidateQueries({ queryKey: ['boards'] })
+		emit('close')
+		router.push({ name: 'board', params: { id: res.boardId } })
+	} catch (e) {
+		duplicateError.value = e?.response?.data?.error || t('kanso', 'Could not duplicate this board.')
+	} finally {
+		duplicating.value = false
 	}
 }
 
@@ -4105,6 +4155,16 @@ async function doDeleteAutoRule(rule) {
 	color: var(--color-error);
 	font-size: 0.75rem;
 	padding: 0 10px;
+}
+
+.bs-rail__tools-check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 10px 4px;
+	font-size: 0.8125rem;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
 }
 
 .bs-rail__danger {

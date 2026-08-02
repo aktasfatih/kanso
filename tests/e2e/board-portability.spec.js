@@ -91,7 +91,8 @@ test.describe('Board export / import', () => {
 
 	test('exports a populated board, imports it, and the re-export matches', async () => {
 		const original = await kanso('GET', `/boards/${srcBoardId}/export`)
-		expect(original.kanso).toBe(1)
+		// Envelope format version (bumped to 2 when automation rules joined it).
+		expect(original.kanso).toBeGreaterThanOrEqual(1)
 		expect(original.board.title).toBe(title)
 		expect(original.board.cards.length).toBe(2)
 		// The description + checklist + comment made it into the export.

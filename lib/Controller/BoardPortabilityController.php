@@ -64,6 +64,23 @@ class BoardPortabilityController extends Controller {
 	}
 
 	/**
+	 * Duplicates an existing board the caller can READ into a fresh board owned
+	 * by the caller. The board load asserts READ; the new board's title is
+	 * "<original> (copy)". `withCards` also clones the card graph; when false a
+	 * structural-only clone (stacks/roles/labels/rules) is produced.
+	 */
+	#[NoAdminRequired]
+	public function duplicate(int $id, bool $withCards = false): JSONResponse {
+		return $this->respond(function () use ($id, $withCards): JSONResponse {
+			$uid = $this->currentUserId();
+			$board = $this->boardService->find($id, $uid);
+			return new JSONResponse(
+				$this->importService->duplicate($board, $uid, $withCards)
+			);
+		});
+	}
+
+	/**
 	 * @throws NotPermittedException if there is no user session
 	 */
 	private function currentUserId(): string {

@@ -9,6 +9,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
+use OCA\Kanso\Db\AutomationRule;
+use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -26,6 +28,7 @@ use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\ExportService;
 use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCP\IUserManager;
@@ -34,6 +37,7 @@ use PHPUnit\Framework\TestCase;
 
 class ImportServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
+	private ExportService&MockObject $exportService;
 	private StackMapper&MockObject $stackMapper;
 	private CardMapper&MockObject $cardMapper;
 	private LabelMapper&MockObject $labelMapper;
@@ -45,6 +49,7 @@ class ImportServiceTest extends TestCase {
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private ArchiveRuleMapper&MockObject $archiveRuleMapper;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
+	private AutomationRuleMapper&MockObject $automationRuleMapper;
 	private IUserManager&MockObject $userManager;
 	private \OCP\IDBConnection&MockObject $db;
 	private ImportService $service;
@@ -57,6 +62,7 @@ class ImportServiceTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->boardService = $this->createMock(BoardService::class);
+		$this->exportService = $this->createMock(ExportService::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
@@ -68,11 +74,13 @@ class ImportServiceTest extends TestCase {
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->archiveRuleMapper = $this->createMock(ArchiveRuleMapper::class);
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
+		$this->automationRuleMapper = $this->createMock(AutomationRuleMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(\OCP\IDBConnection::class);
 
 		$this->service = new ImportService(
 			$this->boardService,
+			$this->exportService,
 			$this->stackMapper,
 			$this->cardMapper,
 			$this->labelMapper,
@@ -84,6 +92,7 @@ class ImportServiceTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->archiveRuleMapper,
 			$this->recurRuleMapper,
+			$this->automationRuleMapper,
 			$this->userManager,
 			$this->db,
 		);
@@ -180,6 +189,12 @@ class ImportServiceTest extends TestCase {
 			$capturedArchive = $a;
 			return $a;
 		});
+		$capturedAutomation = [];
+		$this->automationRuleMapper->method('insert')->willReturnCallback(function (AutomationRule $r) use (&$capturedAutomation): AutomationRule {
+			$r->setId(200 + count($capturedAutomation));
+			$capturedAutomation[] = $r;
+			return $r;
+		});
 
 		$labelAssignments = [];
 		$this->cardLabelMapper->method('insertAssignment')->willReturnCallback(function (int $cardId, int $labelId) use (&$labelAssignments): \OCA\Kanso\Db\CardLabel {
@@ -236,6 +251,20 @@ class ImportServiceTest extends TestCase {
 					'id' => 8, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
 					'rrule' => 'FREQ=DAILY', 'owner' => 'ghost', 'enabled' => true,
 				]],
+				'automationRules' => [
+					// add_label rule: label id 5 must remap to the new id 10.
+					['id' => 70, 'trigger' => 'card_entered_role', 'action' => 'add_label',
+						'params' => ['role' => 5, 'label' => 5], 'enabled' => true],
+					// request_review rule: reviewer "bob" exists → kept.
+					['id' => 71, 'trigger' => 'card_entered_role', 'action' => 'request_review',
+						'params' => ['role' => 3, 'reviewer' => 'bob'], 'enabled' => true],
+					// request_review rule: reviewer "ghost" is gone here → dropped.
+					['id' => 72, 'trigger' => 'card_entered_role', 'action' => 'request_review',
+						'params' => ['role' => 3, 'reviewer' => 'ghost'], 'enabled' => true],
+					// add_label rule for a label not in the export → dropped.
+					['id' => 73, 'trigger' => 'card_entered_role', 'action' => 'add_label',
+						'params' => ['role' => 5, 'label' => 999], 'enabled' => false],
+				],
 			],
 		];
 
@@ -274,6 +303,102 @@ class ImportServiceTest extends TestCase {
 
 		// Archive rule remapped its stack (old 2 → new 31).
 		self::assertSame(31, $capturedArchive->getStackId());
+
+		// Automation rules: the add_label rule remapped its label (5 → 10) and the
+		// request_review rule with a known reviewer survived; the rule referencing
+		// the vanished reviewer "ghost" and the one referencing an absent label
+		// were both dropped. Two rules survive.
+		self::assertCount(2, $capturedAutomation);
+		$byAction = [];
+		foreach ($capturedAutomation as $r) {
+			$byAction[$r->getAction()] = json_decode($r->getParams(), true);
+		}
+		self::assertSame(10, $byAction['add_label']['label']);
+		self::assertSame('bob', $byAction['request_review']['reviewer']);
+	}
+
+	// ── duplicate ───────────────────────────────────────────────────────────────
+
+	/**
+	 * Builds a minimal export doc a duplicated source board would produce.
+	 *
+	 * @return array{kanso: int, exportedAt: int, board: array<string, mixed>}
+	 */
+	private function sourceExport(): array {
+		return [
+			'kanso' => ExportService::FORMAT_VERSION,
+			'exportedAt' => 1234,
+			'board' => [
+				'title' => 'Roadmap',
+				'color' => '0082c9',
+				'archived' => false,
+				'labels' => [['id' => 5, 'title' => 'Bug', 'color' => 'e11']],
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a', 'role' => 0, 'wipLimit' => null]],
+				'cards' => [['id' => 100, 'stackId' => 1, 'title' => 'Alpha', 'sortKey' => 'h', 'priority' => 0]],
+			],
+		];
+	}
+
+	public function testDuplicateWithCardsClonesTheGraphIntoACopyOwnedByCaller(): void {
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+
+		$source = new Board();
+		$source->setId(7);
+		$source->setTitle('Roadmap');
+		$this->exportService->expects(self::once())->method('export')->with($source)
+			->willReturn($this->sourceExport());
+
+		// The copy is created through BoardService, titled "<original> (copy)",
+		// owned by the caller.
+		$this->boardService->expects(self::once())->method('create')
+			->with('Roadmap (copy)', '0082c9', 'alice')
+			->willReturn($this->newBoard('Roadmap (copy)'));
+
+		$this->labelMapper->method('insert')->willReturnCallback($this->autoId('label', 10));
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
+		$this->userManager->method('userExists')->willReturn(true);
+
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c): Card {
+			$this->seq['card'] ??= 100;
+			$c->setId($this->seq['card']++);
+			$this->cardsById[$c->getId()] = $c;
+			return $c;
+		});
+
+		$result = $this->service->duplicate($source, 'alice', true);
+
+		self::assertSame('Roadmap (copy)', $result['title']);
+		self::assertSame(900, $result['boardId']);
+		self::assertSame(1, $result['stacks']);
+		self::assertSame(1, $result['cards']);
+		self::assertSame(1, $result['labels']);
+	}
+
+	public function testDuplicateWithoutCardsProducesAStructuralClone(): void {
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+
+		$source = new Board();
+		$source->setId(7);
+		$source->setTitle('Roadmap');
+		$this->exportService->method('export')->willReturn($this->sourceExport());
+
+		$this->boardService->method('create')->willReturn($this->newBoard('Roadmap (copy)'));
+		$this->labelMapper->method('insert')->willReturnCallback($this->autoId('label', 10));
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
+		$this->userManager->method('userExists')->willReturn(true);
+
+		// Structure-only clone: NOT a single card is inserted.
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+
+		$result = $this->service->duplicate($source, 'alice', false);
+
+		self::assertSame(0, $result['cards']);
+		self::assertSame(1, $result['stacks']);
+		self::assertSame(1, $result['labels']);
 	}
 
 	public function testImportRollsBackOnFailure(): void {

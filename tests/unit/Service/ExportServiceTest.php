@@ -9,6 +9,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
+use OCA\Kanso\Db\AutomationRule;
+use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -44,6 +46,7 @@ class ExportServiceTest extends TestCase {
 	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
+	private AutomationRuleMapper&MockObject $automationRuleMapper;
 	private ExportService $service;
 
 	protected function setUp(): void {
@@ -59,6 +62,7 @@ class ExportServiceTest extends TestCase {
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
+		$this->automationRuleMapper = $this->createMock(AutomationRuleMapper::class);
 		$this->service = new ExportService(
 			$this->stackMapper,
 			$this->cardMapper,
@@ -71,6 +75,7 @@ class ExportServiceTest extends TestCase {
 			$this->recurRuleMapper,
 			$this->reviewTypeMapper,
 			$this->cardReviewMapper,
+			$this->automationRuleMapper,
 		);
 	}
 
@@ -198,6 +203,16 @@ class ExportServiceTest extends TestCase {
 		$recurRule->setTimezone('Europe/Berlin');
 		$this->recurRuleMapper->method('findByBoard')->with(7)->willReturn([$recurRule]);
 
+		$autoRule = new AutomationRule();
+		$autoRule->setId(101);
+		$autoRule->setBoardId(7);
+		$autoRule->setTrigger(AutomationRule::TRIGGER_CARD_ENTERED_ROLE);
+		$autoRule->setAction(AutomationRule::ACTION_ADD_LABEL);
+		$autoRule->setParams(json_encode(['role' => Stack::ROLE_IN_PROGRESS, 'label' => 21]));
+		$autoRule->setEnabled(true);
+		$autoRule->setCreatedAt(560);
+		$this->automationRuleMapper->method('findByBoard')->with(7)->willReturn([$autoRule]);
+
 		$doc = $this->service->export($this->board());
 
 		self::assertSame(ExportService::FORMAT_VERSION, $doc['kanso']);
@@ -235,6 +250,11 @@ class ExportServiceTest extends TestCase {
 		self::assertSame('FREQ=WEEKLY', $board['recurRules'][0]['rrule']);
 		self::assertSame(41, $board['recurRules'][0]['templateCardId']);
 		self::assertSame('Europe/Berlin', $board['recurRules'][0]['timezone']);
+
+		self::assertCount(1, $board['automationRules']);
+		self::assertSame(AutomationRule::ACTION_ADD_LABEL, $board['automationRules'][0]['action']);
+		self::assertSame(['role' => Stack::ROLE_IN_PROGRESS, 'label' => 21], $board['automationRules'][0]['params']);
+		self::assertTrue($board['automationRules'][0]['enabled']);
 	}
 
 	public function testExportEmptyBoardIsWellFormed(): void {
@@ -243,11 +263,13 @@ class ExportServiceTest extends TestCase {
 		$this->reviewTypeMapper->method('findByBoard')->willReturn([]);
 		$this->archiveRuleMapper->method('findByBoard')->willReturn([]);
 		$this->recurRuleMapper->method('findByBoard')->willReturn([]);
+		$this->automationRuleMapper->method('findByBoard')->willReturn([]);
 
 		$doc = $this->service->export($this->board());
 
 		self::assertSame([], $doc['board']['stacks']);
 		self::assertSame([], $doc['board']['cards']);
 		self::assertSame([], $doc['board']['labels']);
+		self::assertSame([], $doc['board']['automationRules']);
 	}
 }
