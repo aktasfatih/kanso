@@ -70,13 +70,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { useInbox } from '../composables/useInbox.js'
+import { markInboxSeen } from '../composables/useMyWorkBadges.js'
 
 const props = defineProps({
 	embedded: { type: Boolean, default: false },
@@ -87,6 +88,15 @@ const router = useRouter()
 const { data, isLoading, isError } = useInbox()
 
 const items = computed(() => data.value ?? [])
+
+// Opening the Inbox clears its nav "new" badge: mark everything up to the newest
+// currently-known item as seen. Runs whenever the feed loads/refreshes while the
+// view is mounted so freshly-fetched items also count as read on this visit.
+watch(items, (list) => {
+	if (!list.length) return
+	const newest = list.reduce((max, it) => Math.max(max, Number(it.createdAt) || 0), 0)
+	markInboxSeen(newest)
+}, { immediate: true })
 
 /** Items after applying the optional board filter from the hub. */
 const filteredItems = computed(() =>

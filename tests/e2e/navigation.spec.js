@@ -33,38 +33,39 @@ test.describe('Left Navigation App Shell', () => {
 		await gotoKanso(page)
 	})
 
-	test('left nav shows Boards and the unified My Work items', async ({ page }) => {
+	test('left nav shows Boards and three separate My Work items', async ({ page }) => {
 		// NcAppNavigation renders as nav with list items
 		const nav = page.locator('.app-navigation, [class*="app-navigation"]').first()
 		await expect(nav).toBeVisible({ timeout: 10_000 })
 
-		// The personal surfaces (My tasks / My Reviews / Inbox) are unified into
-		// one "My Work" entry (#3458); the standalone links no longer exist.
+		// The personal surfaces are three distinct nav entries (#3610): My Tasks,
+		// My Reviews, and Inbox. The unified "My Work" hub entry is retired from
+		// the nav (its route still resolves for deep links).
 		await expect(page.getByRole('link', { name: 'Boards' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.getByRole('link', { name: 'My Work' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.getByRole('link', { name: 'My Reviews' })).toHaveCount(0)
-		await expect(page.getByRole('link', { name: 'Inbox' })).toHaveCount(0)
+		await expect(page.getByRole('link', { name: 'My Tasks' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('link', { name: 'My Reviews' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('link', { name: 'My Work', exact: true })).toHaveCount(0)
 	})
 
-	test('clicking "My Work" opens the hub, whose tabs reach Reviews and Inbox', async ({ page }) => {
-		await page.getByRole('link', { name: 'My Work' }).click()
+	test('the three My Work nav items route to their standalone views', async ({ page }) => {
+		await page.getByRole('link', { name: 'My Tasks' }).click()
+		await expect(page).toHaveURL(/#\/my-tasks/, { timeout: 10_000 })
+		await expect(page.locator('.my-cards-view')).toBeVisible({ timeout: 8_000 })
 
-		await expect(page).toHaveURL(/#\/my-work/, { timeout: 10_000 })
-		await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible({ timeout: 8_000 })
-
-		// Reviews tab → the embedded My Reviews view.
-		await page.getByRole('tab', { name: 'Reviews' }).click()
+		await page.getByRole('link', { name: 'My Reviews' }).click()
+		await expect(page).toHaveURL(/#\/reviews/, { timeout: 10_000 })
 		await expect(page.locator('.my-reviews-view')).toBeVisible({ timeout: 8_000 })
 
-		// Inbox tab → the embedded Inbox view.
-		await page.getByRole('tab', { name: 'Inbox' }).click()
+		await page.getByRole('link', { name: 'Inbox' }).click()
+		await expect(page).toHaveURL(/#\/inbox/, { timeout: 10_000 })
 		await expect(page.locator('.inbox-view')).toBeVisible({ timeout: 8_000 })
 	})
 
-	test('clicking "Boards" from the hub navigates back to #/', async ({ page }) => {
-		// First navigate away to the My Work hub
-		await page.getByRole('link', { name: 'My Work' }).click()
-		await expect(page).toHaveURL(/#\/my-work/, { timeout: 10_000 })
+	test('clicking "Boards" from a personal view navigates back to #/', async ({ page }) => {
+		// First navigate away to a personal view.
+		await page.getByRole('link', { name: 'My Reviews' }).click()
+		await expect(page).toHaveURL(/#\/reviews/, { timeout: 10_000 })
 
 		// Now click Boards
 		await page.getByRole('link', { name: 'Boards' }).click()
