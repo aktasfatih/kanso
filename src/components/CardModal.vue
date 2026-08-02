@@ -232,6 +232,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</template>
 								{{ t('kanso', 'Move to bottom') }}
 							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
+								@click="openCopyDialog">
+								<template #icon>
+									<ContentDuplicateIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Copy to…') }}
+							</NcActionButton>
 							<NcActionSeparator v-if="canEdit" />
 							<NcActionButton
 								:close-after-click="true"
@@ -1309,6 +1318,48 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 		</div>
 	</NcModal>
+
+	<!-- Copy to… : pick a target board + stack (same or another board the user can edit). -->
+	<NcModal
+		v-if="showCopyDialog"
+		size="small"
+		:name="t('kanso', 'Copy card to…')"
+		@close="showCopyDialog = false">
+		<div class="card-modal__copy-dialog">
+			<h2 class="card-modal__copy-title">{{ t('kanso', 'Copy card to…') }}</h2>
+			<p class="card-modal__copy-hint">
+				{{ t('kanso', 'Duplicates the title, description, labels, checklist, estimate, priority and status. Comments, activity and assignees are not copied.') }}
+			</p>
+			<label class="card-modal__copy-field">
+				<span class="card-modal__copy-label">{{ t('kanso', 'Board') }}</span>
+				<select v-model="copyTargetBoardId" class="card-modal__relation-target" @change="onCopyBoardChange">
+					<option v-for="b in copyBoardOptions" :key="b.id" :value="b.id">{{ b.title }}</option>
+				</select>
+			</label>
+			<label class="card-modal__copy-field">
+				<span class="card-modal__copy-label">{{ t('kanso', 'Column') }}</span>
+				<select v-model="copyTargetStackId" class="card-modal__relation-target" :disabled="copyStacksLoading || copyStackOptions.length === 0">
+					<option v-if="copyStacksLoading" value="">{{ t('kanso', 'Loading…') }}</option>
+					<option v-for="s in copyStackOptions" :key="s.id" :value="s.id">{{ s.title }}</option>
+				</select>
+			</label>
+			<p v-if="copyIsCrossBoard" class="card-modal__copy-note">
+				{{ t('kanso', 'Labels are board-specific: only labels that also exist (same name and color) on the target board are kept.') }}
+			</p>
+			<span v-if="copyError" class="card-modal__save-error">{{ copyError }}</span>
+			<div class="card-modal__copy-actions">
+				<NcButton :disabled="copyPending" @click="showCopyDialog = false">
+					{{ t('kanso', 'Cancel') }}
+				</NcButton>
+				<NcButton
+					type="primary"
+					:disabled="copyPending || !copyTargetStackId"
+					@click="confirmCopy">
+					{{ copyPending ? t('kanso', 'Copying…') : t('kanso', 'Copy') }}
+				</NcButton>
+			</div>
+		</div>
+	</NcModal>
 </template>
 
 <script setup>
@@ -1329,6 +1380,7 @@ import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
+import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
@@ -1385,7 +1437,8 @@ import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard } from '../services/api.js'
+import { useBoards } from '../composables/useBoards.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { renderMarkdown } from '../services/markdown.js'
 
@@ -2269,6 +2322,99 @@ async function copyAsPrompt() {
 	}
 }
 
+// ── Copy to… (duplicate card into a target board/stack) ──────────────────────
+const showCopyDialog = ref(false)
+const copyTargetBoardId = ref(null)
+const copyTargetStackId = ref('')
+const copyStackOptions = ref([])
+const copyStacksLoading = ref(false)
+const copyPending = ref(false)
+const copyError = ref('')
+
+// All boards the user can see - the picker offers every board; a copy into one
+// the user cannot EDIT is rejected server-side and surfaced as copyError.
+const { data: allBoardsData } = useBoards()
+const copyBoardOptions = computed(() =>
+	(allBoardsData.value ?? []).filter((b) => !b.archived),
+)
+
+const copyIsCrossBoard = computed(() =>
+	copyTargetBoardId.value != null && Number(copyTargetBoardId.value) !== Number(boardId.value),
+)
+
+async function openCopyDialog() {
+	copyError.value = ''
+	copyTargetStackId.value = ''
+	// Default the target to the card's current board so the common case (copy
+	// within the same board) is one click away.
+	copyTargetBoardId.value = Number(boardId.value)
+	showCopyDialog.value = true
+	await loadCopyStacks(Number(boardId.value))
+}
+
+function onCopyBoardChange() {
+	copyTargetStackId.value = ''
+	loadCopyStacks(Number(copyTargetBoardId.value))
+}
+
+// Load the target board's stacks for the column picker. The current board's
+// stacks come from cache; another board is fetched on demand.
+async function loadCopyStacks(targetBoardId) {
+	copyError.value = ''
+	copyStacksLoading.value = true
+	copyStackOptions.value = []
+	try {
+		let stacks
+		if (Number(targetBoardId) === Number(boardId.value) && Array.isArray(boardData.value?.stacks)) {
+			stacks = boardData.value.stacks
+		} else {
+			const board = await apiFetchBoard(targetBoardId)
+			stacks = board?.stacks ?? []
+		}
+		copyStackOptions.value = stacks
+			.slice()
+			.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
+		// Preselect the card's current column when copying within the same board.
+		if (Number(targetBoardId) === Number(boardId.value) && cardData.value?.stackId != null) {
+			copyTargetStackId.value = cardData.value.stackId
+		} else if (copyStackOptions.value.length > 0) {
+			copyTargetStackId.value = copyStackOptions.value[0].id
+		}
+	} catch (err) {
+		copyError.value = err?.response?.data?.error || t('kanso', 'You cannot copy to that board.')
+	} finally {
+		copyStacksLoading.value = false
+	}
+}
+
+async function confirmCopy() {
+	const targetStackId = Number(copyTargetStackId.value)
+	if (!targetStackId || copyPending.value) return
+	copyError.value = ''
+	copyPending.value = true
+	try {
+		const targetBoard = Number(copyTargetBoardId.value)
+		const newCard = await apiCopyCard(Number(props.cardId), targetStackId)
+		// Refresh the target board so the duplicate appears; also refresh the
+		// source board (unchanged, but keeps caches consistent) and the boards
+		// list (its per-board card counts now include the copy).
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(targetBoard) })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		queryClient.invalidateQueries({ queryKey: ['boards'] })
+		showCopyDialog.value = false
+		showSuccess(t('kanso', 'Card copied.'))
+		// Same-board copy: jump straight to the new card. Cross-board: leave the
+		// user where they are (a full board switch would be jarring mid-flow).
+		if (targetBoard === Number(boardId.value) && newCard?.id != null) {
+			openCard(newCard.id)
+		}
+	} catch (err) {
+		copyError.value = err?.response?.data?.error || t('kanso', 'Failed to copy card.')
+	} finally {
+		copyPending.value = false
+	}
+}
+
 /**
  * Format a unix timestamp as a relative time string (e.g. "2 hours ago").
  * Falls back to a locale date string for older timestamps.
@@ -2845,6 +2991,45 @@ async function handleToggleProject(projectId) {
 </script>
 
 <style scoped>
+/* ── Copy-to dialog ──────────────────────────────────────────────────────── */
+.card-modal__copy-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 20px;
+}
+
+.card-modal__copy-title {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 600;
+}
+
+.card-modal__copy-hint,
+.card-modal__copy-note {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.card-modal__copy-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.card-modal__copy-label {
+	font-size: 0.85rem;
+	font-weight: 500;
+}
+
+.card-modal__copy-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 4px;
+}
+
 /* ── Modal shell ─────────────────────────────────────────────────────────── */
 .card-modal {
 	display: flex;

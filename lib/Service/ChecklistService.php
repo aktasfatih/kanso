@@ -54,14 +54,16 @@ class ChecklistService {
 	}
 
 	/**
-	 * Appends an item to the card's checklist. Requires EDIT.
+	 * Appends an item to the card's checklist. Requires EDIT. `$done` seeds the
+	 * item's checked state in the same insert (used when cloning a card's
+	 * checklist so a done item is a single write, not an add-then-toggle).
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
 	 * @throws InvalidInputException if the title is empty or too long
 	 * @throws \OverflowException if the appended sort key would overflow (rebalance needed)
 	 */
-	public function addItem(int $cardId, string $title, string $actorUid): ChecklistItem {
+	public function addItem(int $cardId, string $title, string $actorUid, bool $done = false): ChecklistItem {
 		$title = $this->normalizeTitle($title);
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
@@ -75,7 +77,7 @@ class ChecklistService {
 		$item = new ChecklistItem();
 		$item->setCardId($cardId);
 		$item->setTitle($title);
-		$item->setDone(false);
+		$item->setDone($done);
 		$item->setSortKey($sortKey);
 		$item->setCreatedAt(time());
 		$saved = $this->itemMapper->insert($item);

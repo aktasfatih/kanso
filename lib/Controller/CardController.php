@@ -180,6 +180,24 @@ class CardController extends Controller {
 	}
 
 	/**
+	 * Copies (duplicates) the card's content into $targetStackId - the same
+	 * stack, another stack on the same board, or a stack on another board the
+	 * user can EDIT. Clones title/description/labels/checklist/estimate/
+	 * priority/status only; comments, activity, relations and assignees are NOT
+	 * copied. Cross-board labels map by title+color or drop. Returns the full
+	 * detail payload of the new card. A sort-key overflow surfaces as
+	 * 409 {"error": "rebalance_required"} via ApiErrorTrait.
+	 */
+	#[NoAdminRequired]
+	public function copy(int $id, int $targetStackId = 0): JSONResponse {
+		return $this->respond(function () use ($id, $targetStackId): JSONResponse {
+			$uid = $this->currentUserId();
+			$card = $this->cardService->copy($id, $targetStackId, $uid);
+			return new JSONResponse($this->detailPayload($card, $uid));
+		});
+	}
+
+	/**
 	 * Assigns a label of the card's board to the card. Idempotent - PUT of
 	 * an already assigned label succeeds without writing anything.
 	 */

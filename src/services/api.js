@@ -51,6 +51,9 @@ export const deleteCard = (id) =>
 export const moveCard = (id, data) =>
 	axios.post(url(`/api/cards/${id}/move`), data).then((r) => r.data)
 
+export const copyCard = (id, targetStackId) =>
+	axios.post(url(`/api/cards/${id}/copy`), { targetStackId }).then((r) => r.data)
+
 // Labels
 export const createLabel = (data) =>
 	axios.post(url('/api/labels'), data).then((r) => r.data)

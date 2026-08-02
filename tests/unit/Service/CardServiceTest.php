@@ -39,6 +39,11 @@ class CardServiceTest extends TestCase {
 	private SubscriptionService&MockObject $subscriptionService;
 	private AutomationService&MockObject $automationService;
 	private \OCA\Kanso\Service\MentionService&MockObject $mentionService;
+	private \OCA\Kanso\Service\LabelService&MockObject $labelService;
+	private \OCA\Kanso\Service\ChecklistService&MockObject $checklistService;
+	private \OCA\Kanso\Db\LabelMapper&MockObject $labelMapper;
+	private \OCA\Kanso\Db\CardLabelMapper&MockObject $cardLabelMapper;
+	private \OCA\Kanso\Db\ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -53,6 +58,11 @@ class CardServiceTest extends TestCase {
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->automationService = $this->createMock(AutomationService::class);
 		$this->mentionService = $this->createMock(\OCA\Kanso\Service\MentionService::class);
+		$this->labelService = $this->createMock(\OCA\Kanso\Service\LabelService::class);
+		$this->checklistService = $this->createMock(\OCA\Kanso\Service\ChecklistService::class);
+		$this->labelMapper = $this->createMock(\OCA\Kanso\Db\LabelMapper::class);
+		$this->cardLabelMapper = $this->createMock(\OCA\Kanso\Db\CardLabelMapper::class);
+		$this->checklistItemMapper = $this->createMock(\OCA\Kanso\Db\ChecklistItemMapper::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -64,7 +74,12 @@ class CardServiceTest extends TestCase {
 			$this->db,
 			$this->subscriptionService,
 			$this->automationService,
-			$this->mentionService
+			$this->mentionService,
+			$this->labelService,
+			$this->checklistService,
+			$this->labelMapper,
+			$this->cardLabelMapper,
+			$this->checklistItemMapper
 		);
 	}
 
@@ -1470,5 +1485,179 @@ class CardServiceTest extends TestCase {
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(9, null, null, null, null, null, 'alice', -1);
+	}
+
+	// ---- copy -------------------------------------------------------------
+
+	private function label(int $id, int $boardId, string $title, ?string $color): \OCA\Kanso\Db\Label {
+		$label = new \OCA\Kanso\Db\Label();
+		$label->setId($id);
+		$label->setBoardId($boardId);
+		$label->setTitle($title);
+		$label->setColor($color);
+		return $label;
+	}
+
+	private function checklistItem(int $id, int $cardId, string $title, bool $done): \OCA\Kanso\Db\ChecklistItem {
+		$item = new \OCA\Kanso\Db\ChecklistItem();
+		$item->setId($id);
+		$item->setCardId($cardId);
+		$item->setTitle($title);
+		$item->setDone($done);
+		$item->setSortKey('I');
+		return $item;
+	}
+
+	/**
+	 * Same-board copy: content (title suffix / description / priority / estimate /
+	 * status) is cloned, labels are re-assigned by id directly, checklist items
+	 * are recreated with their done state, and comments/history/assignees are
+	 * never touched.
+	 */
+	public function testCopySameBoardClonesContentLabelsAndChecklist(): void {
+		$board = $this->board(1);
+		$board->setEstimateScale('fibonacci');
+		$targetStack = $this->stack(7, 1);
+
+		$source = $this->card(9, 5, 1);
+		$source->setTitle('Design the API');
+		$source->setDescription('Full spec here');
+		$source->setPriority(Card::PRIORITY_URGENT);
+		$source->setStartedAt(1000);
+		$source->setDoneAt(0);
+		$source->setEstimate('3');
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+
+		// The create() shell insert + the second update() carrying the content.
+		$inserted = null;
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$inserted): Card {
+			$c->setId(42);
+			$inserted = $c;
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnCallback(static fn (Card $c): Card => $c);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Same-board: source label ids re-assigned directly (no cross-board mapping).
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([11, 12]);
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$assigned = [];
+		$this->labelService->method('assign')->willReturnCallback(function (int $cardId, int $labelId) use (&$assigned): void {
+			$assigned[] = [$cardId, $labelId];
+		});
+
+		// Checklist: two items, second one done → each recreated in a single
+		// addItem call carrying its done state (no separate toggle).
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
+			$this->checklistItem(1, 9, 'Step one', false),
+			$this->checklistItem(2, 9, 'Step two', true),
+		]);
+		$added = [];
+		$this->checklistService->method('addItem')->willReturnCallback(function (int $cardId, string $title, string $uid, bool $done) use (&$added): \OCA\Kanso\Db\ChecklistItem {
+			$added[] = [$title, $done];
+			$new = new \OCA\Kanso\Db\ChecklistItem();
+			$new->setId(count($added) + 100);
+			$new->setCardId($cardId);
+			$new->setTitle($title);
+			$new->setDone($done);
+			return $new;
+		});
+		$this->checklistService->expects(self::never())->method('updateItem');
+
+		$copy = $this->service->copy(9, 7, 'alice');
+
+		self::assertSame(42, $copy->getId());
+		self::assertSame('Design the API (copy)', $copy->getTitle());
+		self::assertSame('Full spec here', $copy->getDescription());
+		self::assertSame(Card::PRIORITY_URGENT, $copy->getPriority());
+		self::assertSame(1000, $copy->getStartedAt());
+		self::assertSame(0, $copy->getDoneAt());
+		self::assertSame('3', $copy->getEstimate());
+		self::assertSame([[42, 11], [42, 12]], $assigned);
+		self::assertSame([['Step one', false], ['Step two', true]], $added);
+	}
+
+	/**
+	 * Cross-board copy: labels map by title+color to the target board's labels;
+	 * a source label with no title+color twin on the target is dropped. An
+	 * estimate token the target scale rejects is likewise dropped.
+	 */
+	public function testCopyCrossBoardMapsLabelsByNameAndColorOrDrops(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetBoard->setEstimateScale('none'); // rejects any estimate token
+		$targetStack = $this->stack(7, 2);
+
+		$source = $this->card(9, 5, 1);
+		$source->setTitle('Cross move');
+		$source->setEstimate('3'); // valid on a fibonacci board, dropped on 'none'
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $c): Card {
+			$c->setId(42);
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnCallback(static fn (Card $c): Card => $c);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([]);
+
+		// Source card carries labels 11 (Bug/e01) and 12 (Secret/abc).
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([11, 12]);
+		$this->labelMapper->method('find')->willReturnMap([
+			[11, $this->label(11, 1, 'Bug', 'e01e01')],
+			[12, $this->label(12, 1, 'Secret', 'abcabc')],
+		]);
+		// Target board has a matching "Bug/e01e01" (id 71) but no "Secret/abcabc".
+		$this->labelMapper->method('findByBoard')->with(2)->willReturn([
+			$this->label(71, 2, 'Bug', 'e01e01'),
+			$this->label(72, 2, 'Other', '000000'),
+		]);
+		$assigned = [];
+		$this->labelService->method('assign')->willReturnCallback(function (int $cardId, int $labelId) use (&$assigned): void {
+			$assigned[] = $labelId;
+		});
+
+		$copy = $this->service->copy(9, 7, 'alice');
+
+		self::assertSame(2, $copy->getBoardId());
+		self::assertNull($copy->getEstimate(), 'off-scale estimate is dropped on the target board');
+		self::assertSame([71], $assigned, 'only the title+color twin is mapped; the unmatched label is dropped');
+	}
+
+	/**
+	 * Copy needs EDIT on the TARGET board: a viewer with EDIT on the source but
+	 * not on the target is rejected and no card is created.
+	 */
+	public function testCopyAssertsEditOnTargetBoard(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetStack = $this->stack(7, 2);
+		$source = $this->card(9, 5, 1);
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+
+		$this->permissionService->method('assertPermission')
+			->willReturnCallback(static function (Board $board, string $uid, int $perm): void {
+				// EDIT on the source (board 1) passes; EDIT on the target (board 2) denied.
+				if ($board->getId() === 2) {
+					throw new NotPermittedException();
+				}
+			});
+
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->labelService->expects(self::never())->method('assign');
+		$this->checklistService->expects(self::never())->method('addItem');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->copy(9, 7, 'bob');
 	}
 }

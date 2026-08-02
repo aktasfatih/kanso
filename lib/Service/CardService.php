@@ -10,10 +10,14 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\EstimateScale;
+use OCA\Kanso\Db\Label;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -40,6 +44,11 @@ class CardService {
 		private SubscriptionService $subscriptionService,
 		private AutomationService $automationService,
 		private MentionService $mentionService,
+		private LabelService $labelService,
+		private ChecklistService $checklistService,
+		private LabelMapper $labelMapper,
+		private CardLabelMapper $cardLabelMapper,
+		private ChecklistItemMapper $checklistItemMapper,
 	) {
 	}
 
@@ -144,6 +153,140 @@ class CardService {
 		}
 
 		return $card;
+	}
+
+	/**
+	 * Duplicates a card's CONTENT into $targetStackId (same board or another
+	 * board the actor can EDIT). What is cloned: title (suffixed " (copy)"),
+	 * description, priority, status (started/done timestamps), estimate, labels
+	 * and checklist items. What is NOT cloned: comments, activity/history,
+	 * relations, subscriptions, parent/children and assignees - a copy is a
+	 * fresh, standalone card. The new card is appended to the target stack via
+	 * {@see self::create()} (fresh id + sort key + its own change row) and the
+	 * per-field/label/checklist writes reuse the existing services.
+	 *
+	 * Labels are board-scoped:
+	 *   - same-board copy re-assigns the source label ids directly;
+	 *   - cross-board copy maps each source label to a target-board label with
+	 *     the SAME title (case-insensitive) AND color, and DROPS any that has no
+	 *     such twin (labels are never auto-created on the target).
+	 *
+	 * Estimate is likewise board-scoped: a source estimate token that the target
+	 * board's scale does not allow is dropped (the copy simply has no estimate).
+	 *
+	 * @throws DoesNotExistException if the source card, either board or the target stack does not exist or is deleted
+	 * @throws NotPermittedException if the actor lacks EDIT on the source OR the target board
+	 * @throws InvalidInputException if the source title is invalid
+	 * @throws \OverflowException if the appended sort key would overflow (target stack needs a rebalance)
+	 */
+	public function copy(int $id, int $targetStackId, string $uid): Card {
+		// Load the source with its description and assert EDIT on its board (read
+		// access to clone the content is gated at EDIT per the card's rule, not
+		// the weaker READ that find() would use).
+		$source = $this->loadCard($id);
+		$sourceBoard = $this->loadBoard($source->getBoardId());
+		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+
+		$targetStack = $this->loadStack($targetStackId);
+		$targetBoard = $this->loadBoard($targetStack->getBoardId());
+		// create() also asserts EDIT on the target board, but assert it up-front
+		// so a permission failure never leaves a half-copied card behind.
+		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
+
+		$sameBoard = $sourceBoard->getId() === $targetBoard->getId();
+
+		// 1. Create the shell at the bottom of the target stack (fresh id + key +
+		//    change row + board-watcher fan-out - all reused from create()).
+		$copy = $this->create($targetStackId, $this->copyTitle($source->getTitle()), $uid);
+
+		// 2. Carry the scalar content the create() shell does not set. Estimate is
+		//    only kept when the TARGET board's scale accepts the token.
+		$copy->setDescription($source->getDescription());
+		$copy->setPriority($source->getPriority());
+		$copy->setStartedAt($source->getStartedAt());
+		$copy->setDoneAt($source->getDoneAt());
+		$estimate = $source->getEstimate();
+		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
+			$copy->setEstimate($estimate);
+		}
+		$copy->setLastModified(time());
+		$copy = $this->cardMapper->update($copy);
+
+		// 3. Labels - same-board re-assigns ids directly; cross-board maps by
+		//    title+color to the target board's labels (unmatched ones drop).
+		$this->copyLabels($source, $copy, $sameBoard, $targetBoard, $uid);
+
+		// 4. Checklist items, in display order (reuses ChecklistService::addItem,
+		//    which appends and writes its own change row). The done state rides
+		//    the same insert, so a done item is a single write - not add+toggle.
+		foreach ($this->checklistItemMapper->findByCard($id) as $item) {
+			$this->checklistService->addItem($copy->getId(), $item->getTitle(), $uid, $item->getDone());
+		}
+
+		return $copy;
+	}
+
+	/**
+	 * Re-labels the copy. Same-board: re-assign every source label id directly.
+	 * Cross-board: for each source label, find a target-board label with the same
+	 * title (case-insensitive, trimmed) AND color and assign that; drop the rest.
+	 */
+	private function copyLabels(Card $source, Card $copy, bool $sameBoard, Board $targetBoard, string $uid): void {
+		$sourceLabelIds = $this->cardLabelMapper->findLabelIdsByCard($source->getId());
+		if ($sourceLabelIds === []) {
+			return;
+		}
+
+		if ($sameBoard) {
+			foreach ($sourceLabelIds as $labelId) {
+				$this->labelService->assign($copy->getId(), $labelId, $uid);
+			}
+			return;
+		}
+
+		// Index the target board's labels by a normalized (title|color) key so a
+		// source label maps to at most one target twin.
+		$targetByKey = [];
+		foreach ($this->labelMapper->findByBoard($targetBoard->getId()) as $targetLabel) {
+			$targetByKey[$this->labelKey($targetLabel)] ??= $targetLabel->getId();
+		}
+
+		foreach ($sourceLabelIds as $labelId) {
+			try {
+				$sourceLabel = $this->labelMapper->find($labelId);
+			} catch (DoesNotExistException) {
+				continue;
+			}
+			$twinId = $targetByKey[$this->labelKey($sourceLabel)] ?? null;
+			if ($twinId !== null) {
+				$this->labelService->assign($copy->getId(), $twinId, $uid);
+			}
+			// else: no title+color twin on the target board - drop this label.
+		}
+	}
+
+	/**
+	 * Normalized identity of a label for cross-board matching: trimmed,
+	 * lower-cased title joined with the color (labels compare equal only when
+	 * BOTH match).
+	 */
+	private function labelKey(Label $label): string {
+		return mb_strtolower(trim((string)$label->getTitle())) . '|' . (string)$label->getColor();
+	}
+
+	/**
+	 * Derives the copy's title, suffixing " (copy)" while respecting the
+	 * MAX_TITLE_LENGTH cap (the suffix wins - the base is truncated to fit).
+	 */
+	private function copyTitle(string $title): string {
+		$suffix = ' (copy)';
+		$title = trim($title);
+		if (mb_strlen($title) + mb_strlen($suffix) > self::MAX_TITLE_LENGTH) {
+			// Re-trim after truncation so we never render "…word (copy)" with a
+			// doubled space at the seam.
+			$title = rtrim(mb_substr($title, 0, self::MAX_TITLE_LENGTH - mb_strlen($suffix)));
+		}
+		return $title . $suffix;
 	}
 
 	/**
