@@ -59,8 +59,27 @@ async function ncLogin(page, user, pass) {
 	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
+// The CI runner sets KANSO_SKIP_NOTIFY_PUSH=1: notify_push is never installed
+// there, so the enable/disable dance is both unnecessary and a hard-failure
+// source (`app:enable notify_push` exits non-zero → the whole spec dies before
+// it can test the poll fallback). When the flag is set we skip the toggling
+// entirely; otherwise we still run occ but never let its failure abort a test
+// that is specifically about the push-OFF poll path.
+const SKIP_NOTIFY_PUSH = process.env.KANSO_SKIP_NOTIFY_PUSH === '1'
+
 function occ(command) {
 	execSync(`docker exec -u www-data kanso-dev php occ ${command}`, { stdio: 'pipe' })
+}
+
+// Best-effort occ: swallow failures (missing app / container down). Used for the
+// notify_push enable/disable dance which must never break the poll-fallback test.
+function occSafe(command) {
+	if (SKIP_NOTIFY_PUSH) return
+	try {
+		occ(command)
+	} catch {
+		// notify_push not installed on this runner - nothing to toggle.
+	}
 }
 
 test.describe('Realtime sync', () => {
@@ -86,15 +105,15 @@ test.describe('Realtime sync', () => {
 	})
 
 	test.afterAll(() => {
-		// Whatever happened above, leave push enabled for the next suite
-		try {
-			occ('app:enable notify_push')
-		} catch {
-			// dev container not running - nothing to restore
-		}
+		// Whatever happened above, leave push enabled for the next suite.
+		// Best-effort: no-op when notify_push is skipped / not installed.
+		occSafe('app:enable notify_push')
 	})
 
 	test('push: tester sees a new card near-instantly without interaction', async ({ browser }) => {
+		// This test genuinely requires notify_push; the CI runner without it
+		// (KANSO_SKIP_NOTIFY_PUSH=1) can only exercise the poll fallback below.
+		test.skip(SKIP_NOTIFY_PUSH, 'notify_push not available on this runner')
 		const adminCtx = await browser.newContext()
 		const testerCtx = await browser.newContext()
 		try {
@@ -121,7 +140,10 @@ test.describe('Realtime sync', () => {
 	})
 
 	test('fallback: tester sees a new card via the 5s poll when push is off', async ({ browser }) => {
-		occ('app:disable notify_push')
+		// Best-effort disable: on KANSO_SKIP_NOTIFY_PUSH runners push is already
+		// off (app never installed), so this is a no-op there and must never
+		// hard-fail the poll-fallback test it guards.
+		occSafe('app:disable notify_push')
 		// Wait until the capabilities endpoint actually stops advertising
 		// notify_push (a fixed sleep here was a flake source: the tester page
 		// could still load with push enabled and take the 60s path).
@@ -151,7 +173,7 @@ test.describe('Realtime sync', () => {
 				testerPage.locator('.card-tile').filter({ hasText: 'poll-card' }),
 			).toBeVisible({ timeout: 15_000 })
 		} finally {
-			occ('app:enable notify_push')
+			occSafe('app:enable notify_push')
 			await testerCtx.close()
 		}
 	})

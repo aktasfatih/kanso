@@ -60,18 +60,40 @@ test.describe('New cards on top', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// Open board settings → General tab → turn on "Add new cards to the top".
+		// The settings dialog is a teleported modal; on the slow runner it takes a
+		// beat to mount, so wait for each control to be actionable before clicking.
 		await page.getByRole('button', { name: /board settings/i }).click()
-		await page.getByRole('tab', { name: 'General' }).click()
-		await page.getByText('Add new cards to the top of a column').click()
+		const generalTab = page.getByRole('tab', { name: 'General' })
+		await expect(generalTab).toBeVisible({ timeout: 10_000 })
+		await generalTab.click()
+
+		const toggle = page.getByText('Add new cards to the top of a column')
+		await expect(toggle).toBeVisible({ timeout: 10_000 })
+
+		// Click the toggle and wait for the board-settings PATCH so the flag is
+		// actually persisted server-side before we create cards (the ordering is
+		// decided server-side from newCardsOnTop, so we must not race it).
+		await Promise.all([
+			page.waitForResponse(
+				(r) => new RegExp(`/api/boards/${state.boardId}(\\?|$)`).test(r.url()) && r.request().method() === 'PATCH',
+				{ timeout: 15_000 },
+			),
+			toggle.click(),
+		])
 
 		// Flag persisted (board fields are nested under `.board`).
 		await expect
-			.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.newCardsOnTop, { timeout: 8_000 })
+			.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.newCardsOnTop, { timeout: 10_000 })
 			.toBe(true)
 
 		// New cards (via the real create path) now land at the top: B above A.
+		// Await each create fully before the next so their sort keys are assigned
+		// in a deterministic order (B created after A → B on top when the toggle is on).
 		await api('POST', '/cards', { stackId: state.stackId, title: 'Card A' })
 		await api('POST', '/cards', { stackId: state.stackId, title: 'Card B' })
-		expect(await stackOrder()).toEqual(['Card B', 'Card A'])
+
+		// Assert the persisted server-side order (source of truth), polling so the
+		// second create's row is visible before we compare on slow infra.
+		await expect.poll(() => stackOrder(), { timeout: 10_000 }).toEqual(['Card B', 'Card A'])
 	})
 })
