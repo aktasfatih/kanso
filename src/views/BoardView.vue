@@ -251,6 +251,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:stack="stack"
 					:cards="cardsForStack(stack.id)"
 					:labels-by-id="labelsById"
+					:new-cards-on-top="boardData.board.newCardsOnTop === true"
 					:on-create-card="handleCreateCard"
 					:on-delete-stack="handleDeleteStack"
 					:on-restore-stack="handleRestoreStack"

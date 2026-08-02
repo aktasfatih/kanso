@@ -140,6 +140,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				type="text"
 				:placeholder="t('kanso', 'Add card…')"
 				:disabled="isPending"
+				@paste="onComposerPaste"
 				@keydown.enter.prevent="submitCard" />
 			<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
 		</form>
@@ -256,6 +257,15 @@ const props = defineProps({
 	labelsById: {
 		type: Map,
 		default: () => new Map(),
+	},
+	/**
+	 * Board's "new cards on top" preference. Governs which end of the stack a
+	 * freshly created card lands on server-side; the multi-add loop uses it to
+	 * decide the create order so the pasted lines read top-to-bottom in order.
+	 */
+	newCardsOnTop: {
+		type: Boolean,
+		default: false,
 	},
 	/**
 	 * Async fn (stackId, role) → Promise - sets the column status/role.
@@ -553,13 +563,41 @@ async function handleDeleteStack() {
 
 defineExpose({ scrollToIndex, focusComposer })
 
-async function submitCard() {
-	const title = newCardTitle.value.trim()
-	if (!title) return
+/**
+ * Multi-line paste → quick multi-add. A single-line `<input>` collapses
+ * embedded newlines, so intercept the paste: if the clipboard holds more than
+ * one non-blank line, create one card per line (in order) instead of pasting
+ * the text into the field. A single-line paste falls through to the default
+ * behaviour (lands in the input, submitted later on Enter) - no regression.
+ */
+function onComposerPaste(event) {
+	const text = event.clipboardData?.getData('text') ?? ''
+	if (splitTitles(text).length < 2) return
+	event.preventDefault()
+	createCardsFromText(text)
+}
+
+/** Split submitted text into trimmed, non-blank card titles, in order. */
+function splitTitles(text) {
+	return text.split(/\r\n|\r|\n/).map((l) => l.trim()).filter((l) => l !== '')
+}
+
+/**
+ * Create one card per non-blank line, in submitted order, reusing the single
+ * onCreateCard path. Each server-side create positions the new card relative to
+ * the current head/tail, so when the board prepends new cards we must submit in
+ * reverse: the last-created card lands on top, leaving the first line topmost.
+ */
+async function createCardsFromText(text) {
+	const titles = splitTitles(text)
+	if (titles.length === 0) return
 	composerError.value = ''
 	isPending.value = true
+	const ordered = props.newCardsOnTop ? [...titles].reverse() : titles
 	try {
-		await props.onCreateCard(props.stack.id, title)
+		for (const title of ordered) {
+			await props.onCreateCard(props.stack.id, title)
+		}
 		newCardTitle.value = ''
 		// Re-focus for rapid entry - the signature UX
 		composerInputRef.value?.focus()
@@ -569,6 +607,11 @@ async function submitCard() {
 	} finally {
 		isPending.value = false
 	}
+}
+
+async function submitCard() {
+	// One card per non-blank line - a single line behaves exactly as before.
+	await createCardsFromText(newCardTitle.value)
 }
 </script>
 
