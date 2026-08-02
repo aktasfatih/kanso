@@ -13,7 +13,7 @@
  *
  * The composable is kept thin: it wraps useMutation and accepts the resolved
  * boardId and cardId as plain values (or refs) so it can be used from both
- * CardModal and the future ArchivedPanel unarchive button without duplication.
+ * CardModal and the archived-cards view's unarchive button without duplication.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/vue-query'

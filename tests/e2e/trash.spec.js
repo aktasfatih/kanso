@@ -59,22 +59,22 @@ async function ncLogin(page) {
 	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
-// ── Helpers for opening/closing the Trash panel ──────────────────────────────
+// ── Helpers for opening the routed Trash page ────────────────────────────────
 
-async function openTrashPanel(page) {
+async function openTrashPage(page) {
 	const trashBtn = page.locator('.board-view__trash-btn')
 	await expect(trashBtn).toBeVisible({ timeout: 8000 })
 	await trashBtn.click()
-	// Wait for the modal to appear
-	await page.waitForSelector('.nc-modal, [class*="modal"]', { timeout: 8000 }).catch(() => {})
-	// Give the query time to resolve
+	// Deep-linkable routed page.
+	await expect(page).toHaveURL(/#\/board\/\d+\/trash/, { timeout: 8000 })
+	await page.waitForSelector('.trash-view', { timeout: 8000 })
+	// Give the trash query time to resolve.
 	await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 }
 
-async function closeTrashPanel(page) {
-	// Press Escape to close the modal
-	await page.keyboard.press('Escape')
-	await page.waitForSelector('.trash-panel', { state: 'hidden', timeout: 5000 }).catch(() => {})
+async function backToBoard(page) {
+	await page.locator('.trash-view__back').click()
+	await page.waitForSelector('.board-view__header', { timeout: 8000 })
 }
 
 // ── Test suite ───────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ test.describe('Trash', () => {
 		} catch {}
 	})
 
-	test('soft-deleted card appears in Trash panel', async ({ page }) => {
+	test('soft-deleted card appears in the Trash page', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
@@ -133,11 +133,22 @@ test.describe('Trash', () => {
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Trashable Card' })
 		await expect(cardTile).not.toBeVisible()
 
-		// Open the Trash panel.
-		await openTrashPanel(page)
+		// Open the routed Trash page.
+		await openTrashPage(page)
 
-		// The card should appear in the trash panel.
-		const trashItem = page.locator('.trash-panel__card-title').filter({ hasText: 'Trashable Card' })
+		// The card should appear in the virtualized trash list.
+		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
+		await expect(trashItem).toBeVisible({ timeout: 8000 })
+	})
+
+	test('the Trash page is deep-linkable via its route', async ({ page }) => {
+		await ncLogin(page)
+		// Navigate straight to the trash URL (deep link, no board visit first).
+		await page.goto(`${state.boardUrl}/trash`)
+		await page.waitForSelector('.trash-view', { timeout: 12_000 })
+		await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
+
+		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
 		await expect(trashItem).toBeVisible({ timeout: 8000 })
 	})
 
@@ -146,15 +157,15 @@ test.describe('Trash', () => {
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
-		// Open the Trash panel.
-		await openTrashPanel(page)
+		// Open the routed Trash page.
+		await openTrashPage(page)
 
-		// The card must be present in the trash panel.
-		const trashItem = page.locator('.trash-panel__card-title').filter({ hasText: 'Trashable Card' })
+		// The card must be present in the trash list.
+		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
 		await expect(trashItem).toBeVisible({ timeout: 8000 })
 
-		// Click the Restore button on the card.
-		const cardItem = page.locator('.trash-panel__card-item').filter({ hasText: 'Trashable Card' })
+		// Click the Restore button on the card row.
+		const cardItem = page.locator('.trash-view__row').filter({ hasText: 'Trashable Card' })
 		const restoreBtn = cardItem.locator('button', { hasText: 'Restore' })
 		await expect(restoreBtn).toBeVisible({ timeout: 5000 })
 		await restoreBtn.click()
@@ -162,8 +173,8 @@ test.describe('Trash', () => {
 		// The item should disappear from the trash list (optimistic removal + invalidation).
 		await expect(trashItem).not.toBeVisible({ timeout: 8000 })
 
-		// Close the panel.
-		await closeTrashPanel(page)
+		// Back to the board via the header affordance.
+		await backToBoard(page)
 
 		// The card should have reappeared on the board.
 		const boardCardTile = page.locator('.card-tile').filter({ hasText: 'Trashable Card' })
@@ -178,21 +189,21 @@ test.describe('Trash', () => {
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
-		// Open the Trash panel.
-		await openTrashPanel(page)
+		// Open the routed Trash page.
+		await openTrashPage(page)
 
 		// The card must appear in the trash.
-		const trashItem = page.locator('.trash-panel__card-title').filter({ hasText: 'Trashable Card' })
+		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
 		await expect(trashItem).toBeVisible({ timeout: 8000 })
 
 		// Click "Delete permanently" to reveal the inline confirm.
-		const cardItem = page.locator('.trash-panel__card-item').filter({ hasText: 'Trashable Card' })
+		const cardItem = page.locator('.trash-view__row').filter({ hasText: 'Trashable Card' })
 		const deleteBtn = cardItem.locator('button', { hasText: 'Delete permanently' })
 		await expect(deleteBtn).toBeVisible({ timeout: 5000 })
 		await deleteBtn.click()
 
 		// The confirm row should appear.
-		const confirmText = cardItem.locator('.trash-panel__confirm-text')
+		const confirmText = cardItem.locator('.trash-view__confirm-text')
 		await expect(confirmText).toBeVisible({ timeout: 3000 })
 
 		// Click "Yes, delete" to confirm purge.
@@ -202,9 +213,6 @@ test.describe('Trash', () => {
 
 		// The item should disappear from the trash list.
 		await expect(trashItem).not.toBeVisible({ timeout: 8000 })
-
-		// Close the panel.
-		await closeTrashPanel(page)
 
 		// Verify via API: GET /boards/{id}/trash must not include this card.
 		const trash = await apiGet(`/boards/${state.boardId}/trash`)

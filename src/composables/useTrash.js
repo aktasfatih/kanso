@@ -5,7 +5,7 @@
  * useTrash - fetch / restore / purge soft-deleted cards for a board.
  *
  * The trash list is NOT part of the board payload - it is fetched separately
- * from GET /api/boards/{id}/trash only when the TrashPanel is open (enabled).
+ * from GET /api/boards/{id}/trash only when the trash view is active (enabled).
  *
  * Mutation strategy:
  *   restore - POST /api/cards/{id}/restore → card reappears on the board.

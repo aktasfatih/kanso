@@ -135,13 +135,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionButton>
 			</NcActions>
 
-			<!-- Archived cards badge button - only shown when ≥1 archived card -->
+			<!-- Archived cards page button - only shown when ≥1 archived card -->
 			<NcButton
 				v-if="boardData && archivedCards.length > 0"
 				class="board-view__archived-btn"
 				:title="t('kanso', 'View archived cards')"
 				:aria-label="t('kanso', 'View archived cards ({count})', { count: archivedCards.length })"
-				@click="showArchived = true">
+				@click="goToArchived">
 				<template #icon>
 					<ArchiveIcon :size="20" />
 				</template>
@@ -167,13 +167,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
-			<!-- Trash button - always visible when board is loaded; panel fetches on open -->
+			<!-- Trash button - always visible when board is loaded; opens the Trash page -->
 			<NcButton
 				v-if="boardData"
 				class="board-view__trash-btn"
 				:title="t('kanso', 'View deleted cards')"
 				:aria-label="t('kanso', 'View deleted cards')"
-				@click="showTrash = true">
+				@click="goToTrash">
 				<template #icon>
 					<DeleteIcon :size="20" />
 				</template>
@@ -219,22 +219,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:cards="boardData.cards ?? []"
 			@close="showSettings = false"
 			@leave="showSettings = false" />
-
-		<!-- Archived cards panel -->
-		<ArchivedPanel
-			v-if="showArchived && boardData"
-			:board-id="props.id"
-			:stacks="sortedStacks"
-			:archived-cards="archivedCards"
-			@close="showArchived = false" />
-
-		<!-- Trash panel (soft-deleted cards) -->
-		<TrashPanel
-			v-if="showTrash && boardData"
-			:board-id="props.id"
-			:stacks="sortedStacks"
-			:permissions="boardData.permissions ?? 0"
-			@close="showTrash = false" />
 
 		<!-- DnD / shortcut error banner -->
 		<div v-if="moveError || shortcutError" class="board-view__move-error">
@@ -395,8 +379,6 @@ import BoardTimelineView from '../components/BoardTimelineView.vue'
 import SearchBox from '../components/SearchBox.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
-import ArchivedPanel from '../components/ArchivedPanel.vue'
-import TrashPanel from '../components/TrashPanel.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { useBoardSubscription } from '../composables/useBoardSubscription.js'
@@ -513,12 +495,6 @@ let boardCleanup = () => {}
 
 // Label settings panel visibility
 const showSettings = ref(false)
-
-// Archived cards panel visibility
-const showArchived = ref(false)
-
-// Trash panel visibility
-const showTrash = ref(false)
 
 // ── Command palette visibility ────────────────────────────────────────────────
 const showCommandPalette = ref(false)
@@ -1099,6 +1075,14 @@ function goBack() {
 
 function goToStats() {
 	router.push({ name: 'board-stats', params: { id: props.id } })
+}
+
+function goToArchived() {
+	router.push({ name: 'board-archived', params: { id: props.id } })
+}
+
+function goToTrash() {
+	router.push({ name: 'board-trash', params: { id: props.id } })
 }
 
 async function submitNewStack() {

@@ -30,6 +30,18 @@ const routes = [
 		props: true,
 	},
 	{
+		path: '/board/:id/archived',
+		name: 'board-archived',
+		component: () => import('../views/ArchivedView.vue'),
+		props: true,
+	},
+	{
+		path: '/board/:id/trash',
+		name: 'board-trash',
+		component: () => import('../views/TrashView.vue'),
+		props: true,
+	},
+	{
 		path: '/my-work',
 		name: 'my-work',
 		component: () => import('../views/MyWorkView.vue'),
