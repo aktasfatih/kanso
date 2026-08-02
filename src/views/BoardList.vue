@@ -56,8 +56,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ t('kanso', 'Kanso export (.json)') }}
 				</NcActionButton>
-				<NcActionButton :disabled="true">
-					{{ t('kanso', 'Trello (coming soon)') }}
+				<NcActionButton close-after-click @click="triggerTrelloImport">
+					<template #icon>
+						<CodeJsonIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Trello (.json)') }}
 				</NcActionButton>
 				<NcActionButton :disabled="true">
 					{{ t('kanso', 'GitHub Projects (coming soon)') }}
@@ -77,6 +80,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@change="onJsonImportChange">
 			<p v-if="jsonImportError" class="board-list__import-error" data-test="kanso-import-error">
 				{{ jsonImportError }}
+			</p>
+
+			<!-- Hidden file input backing the "Trello (.json)" import action -->
+			<input
+				ref="trelloImportInput"
+				type="file"
+				accept="application/json,.json"
+				class="board-list__hidden-file"
+				data-test="trello-import-file"
+				@change="onTrelloImportChange">
+			<p v-if="trelloImportError" class="board-list__import-error" data-test="trello-import-error">
+				{{ trelloImportError }}
 			</p>
 
 			<!-- Create board -->
@@ -252,7 +267,7 @@ import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import BoardTileContent from '../components/BoardTileContent.vue'
 import { useBoards } from '../composables/useBoards.js'
-import { fetchDeckImportBoards, importDeckBoard, importBoard } from '../services/api.js'
+import { fetchDeckImportBoards, importDeckBoard, importBoard, importTrelloBoard } from '../services/api.js'
 
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -391,6 +406,32 @@ async function onJsonImportChange(event) {
 	} catch (err) {
 		jsonImportError.value =
 			err?.response?.data?.error || t('kanso', 'Could not import that file.')
+	}
+}
+
+// ── Import from a Trello export (.json) ───────────────────────────────────────
+const trelloImportInput = ref(null)
+const trelloImportError = ref('')
+
+function triggerTrelloImport() {
+	trelloImportError.value = ''
+	trelloImportInput.value?.click()
+}
+
+async function onTrelloImportChange(event) {
+	const file = event.target.files?.[0]
+	// Reset the input so re-picking the same file fires change again.
+	event.target.value = ''
+	if (!file) return
+	trelloImportError.value = ''
+	try {
+		const text = await file.text()
+		const res = await importTrelloBoard(text)
+		await queryClient.invalidateQueries({ queryKey: ['boards'] })
+		router.push({ name: 'board', params: { id: res.boardId } })
+	} catch (err) {
+		trelloImportError.value =
+			err?.response?.data?.error || t('kanso', 'Could not import that Trello file.')
 	}
 }
 </script>

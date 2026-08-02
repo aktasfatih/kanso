@@ -227,6 +227,10 @@ export const exportBoard = (boardId) =>
 export const importBoard = (document) =>
 	axios.post(url('/api/boards/import'), { document }).then((r) => r.data)
 
+// Trello board JSON import; `document` is the raw uploaded Trello export text.
+export const importTrelloBoard = (document) =>
+	axios.post(url('/api/trello-import'), { document }).then((r) => r.data)
+
 // GitHub webhook config (board-level, MANAGE)
 export const fetchWebhookConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)
