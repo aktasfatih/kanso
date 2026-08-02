@@ -61,7 +61,11 @@ test.describe('Duplicate board (#3543)', () => {
 
 		await page.getByRole('button', { name: /board settings/i }).click()
 
-		// The duplicate action lives in the rail tools, next to Export.
+		// Board actions moved into the General tab; open it first.
+		await page.getByRole('tab', { name: 'General' }).click()
+
+		// The duplicate action lives in the General tab's board-actions block,
+		// next to Export.
 		const dupBtn = page.locator('[data-test="board-duplicate"]')
 		await expect(dupBtn).toBeVisible({ timeout: 8_000 })
 

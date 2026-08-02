@@ -51,67 +51,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</div>
 
-					<!-- Non-destructive board tools, above the danger group. Export
-					     is READ-gated on the server, so it is available to anyone
-					     who can open this board's settings. -->
-					<div class="bs-rail__tools">
-						<button
-							class="bs-rail__item"
-							type="button"
-							:disabled="exporting"
-							data-test="board-export"
-							@click="exportBoardToFile">
-							<DownloadIcon :size="16" class="bs-rail__icon" />
-							<span class="bs-rail__label">
-								{{ exporting ? t('kanso', 'Exporting…') : t('kanso', 'Export board') }}
-							</span>
-						</button>
-						<span v-if="exportError" class="bs-rail__tools-error">{{ exportError }}</span>
-
-						<!-- Duplicate: READ-gated on the server (creates a NEW board the
-						     caller owns), so it lives alongside Export rather than in
-						     the MANAGE-only danger group. -->
-						<button
-							class="bs-rail__item"
-							type="button"
-							:disabled="duplicating"
-							data-test="board-duplicate"
-							@click="duplicateBoardNow">
-							<ContentCopyIcon :size="16" class="bs-rail__icon" />
-							<span class="bs-rail__label">
-								{{ duplicating ? t('kanso', 'Duplicating…') : t('kanso', 'Duplicate board') }}
-							</span>
-						</button>
-						<label class="bs-rail__tools-check">
-							<input
-								type="checkbox"
-								v-model="duplicateWithCards"
-								:disabled="duplicating"
-								data-test="board-duplicate-with-cards">
-							{{ t('kanso', 'Copy cards too') }}
-						</label>
-						<span v-if="duplicateError" class="bs-rail__tools-error">{{ duplicateError }}</span>
-					</div>
-
-					<!-- Destructive actions, pinned to the bottom -->
-					<div v-if="canManage" class="bs-rail__danger">
-						<button
-							class="bs-rail__danger-item"
-							type="button"
-							:disabled="archiving"
-							@click="archiveBoard">
-							<ArchiveArrowDownIcon :size="16" class="bs-rail__icon" />
-							<span class="bs-rail__label">{{ t('kanso', 'Archive board') }}</span>
-						</button>
-						<button
-							class="bs-rail__danger-item bs-rail__danger-item--delete"
-							type="button"
-							:disabled="isDeletingBoard"
-							@click="onDeleteBoardClick">
-							<DeleteIcon :size="16" class="bs-rail__icon" />
-							<span class="bs-rail__label">{{ t('kanso', 'Delete board') }}</span>
-						</button>
-					</div>
 				</nav>
 
 				<!-- Pane area -->
@@ -188,6 +127,88 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</p>
 							<span v-if="prefixError" class="label-settings__error">{{ prefixError }}</span>
 						</template>
+
+						<!-- Board actions: Export / Duplicate are READ-gated on the
+						     server, so they are available to anyone who can open these
+						     settings; Archive / Delete are MANAGE-only (canManage). -->
+						<div class="board-actions">
+							<h4 class="board-actions__heading">{{ t('kanso', 'Board actions') }}</h4>
+
+							<!-- Export -->
+							<div class="board-actions__row">
+								<div class="board-actions__text">
+									<span class="board-actions__label">{{ t('kanso', 'Export board') }}</span>
+									<span class="board-actions__hint">{{ t('kanso', 'Download a JSON backup of this board.') }}</span>
+								</div>
+								<NcButton
+									:disabled="exporting"
+									data-test="board-export"
+									@click="exportBoardToFile">
+									<template #icon>
+										<DownloadIcon :size="20" />
+									</template>
+									{{ exporting ? t('kanso', 'Exporting…') : t('kanso', 'Export') }}
+								</NcButton>
+							</div>
+							<span v-if="exportError" class="label-settings__error">{{ exportError }}</span>
+
+							<!-- Duplicate -->
+							<div class="board-actions__row">
+								<div class="board-actions__text">
+									<span class="board-actions__label">{{ t('kanso', 'Duplicate board') }}</span>
+									<span class="board-actions__hint">{{ t('kanso', 'Create a new board that you own from this one.') }}</span>
+									<label class="board-actions__check">
+										<input
+											type="checkbox"
+											v-model="duplicateWithCards"
+											:disabled="duplicating"
+											data-test="board-duplicate-with-cards">
+										{{ t('kanso', 'Copy cards too') }}
+									</label>
+								</div>
+								<NcButton
+									:disabled="duplicating"
+									data-test="board-duplicate"
+									@click="duplicateBoardNow">
+									<template #icon>
+										<ContentCopyIcon :size="20" />
+									</template>
+									{{ duplicating ? t('kanso', 'Duplicating…') : t('kanso', 'Duplicate') }}
+								</NcButton>
+							</div>
+							<span v-if="duplicateError" class="label-settings__error">{{ duplicateError }}</span>
+
+							<!-- Danger zone: destructive actions, MANAGE only. -->
+							<div v-if="canManage" class="board-actions__danger">
+								<h4 class="board-actions__danger-heading">{{ t('kanso', 'Danger zone') }}</h4>
+
+								<div class="board-actions__row">
+									<div class="board-actions__text">
+										<span class="board-actions__label">{{ t('kanso', 'Archive board') }}</span>
+										<span class="board-actions__hint">{{ t('kanso', 'Hide this board without deleting it. You can restore it later.') }}</span>
+									</div>
+									<NcButton :disabled="archiving" @click="archiveBoard">
+										<template #icon>
+											<ArchiveArrowDownIcon :size="20" />
+										</template>
+										{{ t('kanso', 'Archive') }}
+									</NcButton>
+								</div>
+
+								<div class="board-actions__row">
+									<div class="board-actions__text">
+										<span class="board-actions__label board-actions__label--delete">{{ t('kanso', 'Delete board') }}</span>
+										<span class="board-actions__hint">{{ t('kanso', 'Permanently remove this board and all of its cards for everyone. This cannot be undone.') }}</span>
+									</div>
+									<NcButton type="error" :disabled="isDeletingBoard" @click="onDeleteBoardClick">
+										<template #icon>
+											<DeleteIcon :size="20" />
+										</template>
+										{{ t('kanso', 'Delete') }}
+									</NcButton>
+								</div>
+							</div>
+						</div>
 					</div>
 					</section>
 
@@ -4141,80 +4162,84 @@ async function doDeleteAutoRule(rule) {
 	white-space: nowrap;
 }
 
-/* Danger group pinned to the bottom of the rail. */
-.bs-rail__tools {
-	margin-top: auto;
-	padding-top: 8px;
+/* ── Board actions (Export / Duplicate / Archive / Delete) in the General tab ── */
+.board-actions {
+	margin-top: 24px;
+	padding-top: 20px;
 	border-top: 1px solid var(--color-border);
 	display: flex;
 	flex-direction: column;
+	gap: 4px;
+}
+
+.board-actions__heading {
+	margin: 0 0 8px;
+	font-size: 0.9375rem;
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+.board-actions__row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 0;
+}
+
+.board-actions__row + .board-actions__row {
+	border-top: 1px solid var(--color-border-dark);
+}
+
+.board-actions__text {
+	display: flex;
+	flex-direction: column;
 	gap: 2px;
+	min-width: 0;
 }
 
-.bs-rail__tools-error {
-	color: var(--color-error);
-	font-size: 0.75rem;
-	padding: 0 10px;
+.board-actions__label {
+	font-weight: 600;
+	color: var(--color-main-text);
 }
 
-.bs-rail__tools-check {
+.board-actions__label--delete {
+	color: var(--color-error-text, var(--color-error));
+}
+
+.board-actions__hint {
+	font-size: 0.8125rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.board-actions__check {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 2px 10px 4px;
+	margin-top: 6px;
 	font-size: 0.8125rem;
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
 
-.bs-rail__danger {
-	padding-top: 8px;
+.board-actions__danger {
+	margin-top: 20px;
+	padding: 4px 16px 12px;
+	border: 1px solid var(--color-error);
+	border-radius: var(--border-radius-large);
+	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 6%, transparent));
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 4px;
 }
 
-.bs-rail__danger-item {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	height: 34px;
-	padding: 0 10px;
-	border: none;
-	border-radius: var(--border-radius-large);
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.8rem;
-	text-align: left;
-	cursor: pointer;
-}
-
-.bs-rail__danger-item:hover:not(:disabled) {
-	background: var(--color-background-dark);
-	color: var(--color-main-text);
-}
-
-.bs-rail__danger-item:focus-visible {
-	outline: 2px solid var(--color-primary-element);
-	outline-offset: -2px;
-}
-
-.bs-rail__danger-item:disabled {
-	opacity: 0.6;
-	cursor: default;
-}
-
-.bs-rail__danger-item--delete {
+.board-actions__danger-heading {
+	margin: 12px 0 0;
+	font-size: 0.875rem;
+	font-weight: 600;
 	color: var(--color-error-text, var(--color-error));
-}
-
-.bs-rail__danger-item--delete .bs-rail__icon {
-	color: var(--color-error-text, var(--color-error));
-}
-
-.bs-rail__danger-item--delete:hover:not(:disabled) {
-	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 12%, transparent));
-	color: var(--color-error-text, var(--color-error));
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 /* ── Pane area ─────────────────────────────────────────────────────────────── */

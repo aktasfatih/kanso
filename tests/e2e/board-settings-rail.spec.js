@@ -46,7 +46,7 @@ test.describe('Board settings section rail', () => {
 		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('rail switches panes and pins Archive/Delete in a danger group at the bottom', async ({ page }) => {
+	test('rail switches panes; Archive/Delete live in the General tab danger zone', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
@@ -72,10 +72,17 @@ test.describe('Board settings section rail', () => {
 		await page.getByRole('tab', { name: /automation/i }).click()
 		await expect(page.locator('#bs-pane-automation')).toBeVisible()
 
-		// Archive + Delete live in the rail's danger group, after the section tabs.
-		const danger = page.locator('.bs-rail__danger')
-		await expect(danger.getByRole('button', { name: 'Archive board' })).toBeVisible()
-		const deleteBtn = danger.getByRole('button', { name: 'Delete board' })
+		// Board actions (Export/Duplicate/Archive/Delete) now live in the General
+		// tab; Archive + Delete sit in a visually distinct danger zone.
+		await page.getByRole('tab', { name: 'General' }).click()
+		await expect(page.locator('#bs-pane-general')).toBeVisible()
+		const general = page.locator('#bs-pane-general')
+		await expect(general.locator('[data-test="board-export"]')).toBeVisible()
+		await expect(general.locator('[data-test="board-duplicate"]')).toBeVisible()
+
+		const danger = general.locator('.board-actions__danger')
+		await expect(danger.getByRole('button', { name: 'Archive' })).toBeVisible()
+		const deleteBtn = danger.getByRole('button', { name: 'Delete' })
 		await expect(deleteBtn).toBeVisible()
 
 		// Delete asks for confirmation instead of firing immediately.
