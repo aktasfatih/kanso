@@ -154,6 +154,8 @@ class ImportServiceTest extends TestCase {
 		$this->checklistItemMapper->method('insert')->willReturnCallback($this->autoId('cl', 60));
 		$this->cardReviewMapper->method('insert')->willReturnCallback($this->autoId('rv', 80));
 
+		// Fresh import target starts its human-id counter at 1.
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
 		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c): Card {
 			$this->seq['card'] ??= 100;
 			$c->setId($this->seq['card']++);
@@ -252,6 +254,11 @@ class ImportServiceTest extends TestCase {
 
 		// Parent remap: the child card's parent became the new parent card id (100).
 		self::assertSame(100, $this->cardsById[101]->getParentCardId());
+
+		// Human-id numbers assigned locally in import order, seeded from 1 (no
+		// per-card query): the two imported cards get board_seq 1 and 2.
+		self::assertSame(1, $this->cardsById[100]->getBoardSeq());
+		self::assertSame(2, $this->cardsById[101]->getBoardSeq());
 
 		// Comment author remap: "ghost" reply falls back to importer; threading preserved.
 		self::assertSame('carol', $capturedComments[0]->getAuthor());

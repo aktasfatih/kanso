@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
@@ -117,12 +118,16 @@ class BoardService {
 		$now = time();
 
 		$board = new Board();
-		$board->setTitle($this->validateTitle($title));
+		$validTitle = $this->validateTitle($title);
+		$board->setTitle($validTitle);
 		$board->setColor(ColorValidator::assertValid($color));
 		$board->setOwner($uid);
 		$board->setArchived(false);
 		$board->setLastModified($now);
 		$board->setDeletedAt(0);
+		// Default the human-id prefix from the title (e.g. "My Project" → "MYPRO").
+		// Editable later in board settings; the number is per-card (kanso_cards.board_seq).
+		$board->setPrefix(BoardPrefix::fromTitle($validTitle));
 		$board = $this->boardMapper->insert($board);
 
 		$this->changeNotifier->notify(
@@ -142,9 +147,9 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title, color or estimate scale
+	 * @throws InvalidInputException on invalid title, color, estimate scale or prefix
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -165,6 +170,17 @@ class BoardService {
 		}
 		if ($newCardsOnTop !== null) {
 			$board->setNewCardsOnTop($newCardsOnTop);
+		}
+		if ($prefix !== null) {
+			// Normalize to the stored shape (uppercased, alnum, capped). A value
+			// that reduces to nothing is invalid - the caller must pick real chars.
+			// Changing the prefix only re-displays existing cards; their assigned
+			// numbers (board_seq) are immutable and unaffected.
+			$normalized = BoardPrefix::normalize($prefix);
+			if ($normalized === null) {
+				throw new InvalidInputException('Prefix must contain at least one letter or digit');
+			}
+			$board->setPrefix($normalized);
 		}
 
 		$now = time();

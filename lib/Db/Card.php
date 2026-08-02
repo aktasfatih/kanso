@@ -55,6 +55,8 @@ use OCP\DB\Types;
  * @method void setPriority(int $priority)
  * @method string|null getEstimate()
  * @method void setEstimate(?string $estimate)
+ * @method int|null getBoardSeq()
+ * @method void setBoardSeq(?int $boardSeq)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
@@ -81,6 +83,10 @@ class Card extends Entity implements \JsonSerializable {
 	protected ?int $parentCardId = null;
 	protected ?int $priority = null;
 	protected ?string $estimate = null;
+	// The board-scoped sequence number - the numeric half of the card's
+	// human-readable id (prefix + '-' + board_seq). Assigned once on create and
+	// immutable thereafter; a DISPLAY/reference id only (ordering stays sortKey).
+	protected ?int $boardSeq = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -101,13 +107,14 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('parentCardId', Types::INTEGER);
 		$this->addType('priority', Types::INTEGER);
 		$this->addType('estimate', Types::STRING);
+		$this->addType('boardSeq', Types::INTEGER);
 	}
 
 	/**
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -128,6 +135,9 @@ class Card extends Entity implements \JsonSerializable {
 			'parentCardId' => $this->parentCardId,
 			'priority' => $this->priority ?? 0,
 			'estimate' => $this->estimate,
+			// The numeric half of the human id; the board supplies the prefix.
+			// Null only for a card not yet backfilled (pre-migration rows).
+			'boardSeq' => $this->boardSeq,
 		];
 	}
 

@@ -46,10 +46,34 @@ class CardMapper extends QBMapper {
 		'parent_card_id',
 		'priority',
 		'estimate',
+		'board_seq',
 	];
 
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'kanso_cards', Card::class);
+	}
+
+	/**
+	 * The next per-board human-id sequence number: MAX(board_seq) + 1 for the
+	 * board, or 1 when the board has no numbered card yet. Deleted cards still
+	 * count so a number is never reused after a card is trashed (the id stays
+	 * stable and unambiguous). The (board_id, board_seq) unique index guards the
+	 * actual assignment against a concurrent create deriving the same value -
+	 * {@see \OCA\Kanso\Service\CardService::create} retries on that collision.
+	 *
+	 * @throws Exception
+	 */
+	public function nextBoardSeq(int $boardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->max('board_seq'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$max = $result->fetchOne();
+		$result->closeCursor();
+
+		return ((int)$max) + 1;
 	}
 
 	/**

@@ -138,6 +138,32 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
 						</p>
 						<span v-if="newCardsOnTopError" class="label-settings__error">{{ newCardsOnTopError }}</span>
+
+						<template v-if="canManage">
+							<label class="board-settings__prefix-label" for="bs-card-prefix">
+								{{ t('kanso', 'Card ID prefix') }}
+							</label>
+							<div class="board-settings__prefix-row">
+								<input
+									id="bs-card-prefix"
+									v-model="prefixDraft"
+									class="board-settings__prefix-input"
+									type="text"
+									maxlength="5"
+									:disabled="prefixSaving"
+									:placeholder="t('kanso', 'e.g. KAN')"
+									@keydown.enter.prevent="savePrefix">
+								<NcButton
+									:disabled="prefixSaving || !prefixDirty"
+									@click="savePrefix">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+							</div>
+							<p class="board-settings__general-hint">
+								{{ t('kanso', 'Cards get a readable reference like {example}. Changing the prefix only changes how existing cards are displayed; their numbers stay the same.', { example: (boardPrefix || 'KAN') + '-123' }) }}
+							</p>
+							<span v-if="prefixError" class="label-settings__error">{{ prefixError }}</span>
+						</template>
 					</div>
 					</section>
 
@@ -1523,7 +1549,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
@@ -1893,6 +1919,35 @@ async function onNewCardsOnTopChange(checked) {
 		newCardsOnTopError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		newCardsOnTopSaving.value = false
+	}
+}
+
+// ── Card ID prefix (per-board) ───────────────────────────────────────────────
+// The prefix is the shared half of every card's human id (PREFIX-<n>). Editing
+// it only changes how existing cards are displayed; their assigned numbers are
+// immutable. The draft mirrors the cache value and is re-seeded whenever the
+// board payload changes (e.g. after a save invalidates + refetches).
+const boardPrefix = computed(() => boardQueryData.value?.board?.prefix || '')
+const prefixDraft = ref('')
+const prefixSaving = ref(false)
+const prefixError = ref('')
+watch(boardPrefix, (val) => { prefixDraft.value = val }, { immediate: true })
+// Dirty when the trimmed, uppercased draft differs from the stored prefix and is
+// non-empty (an empty prefix is rejected server-side).
+const prefixDirty = computed(() => {
+	const draft = prefixDraft.value.trim().toUpperCase()
+	return draft !== '' && draft !== boardPrefix.value
+})
+async function savePrefix() {
+	if (!prefixDirty.value) return
+	prefixSaving.value = true
+	prefixError.value = ''
+	try {
+		await updateBoard.mutateAsync({ prefix: prefixDraft.value.trim() })
+	} catch (err) {
+		prefixError.value = err?.response?.data?.error || t('kanso', 'Failed to update prefix.')
+	} finally {
+		prefixSaving.value = false
 	}
 }
 
@@ -2904,6 +2959,25 @@ async function doDeleteAutoRule(rule) {
 </script>
 
 <style scoped>
+/* ── Card ID prefix field ─────────────────────────────────────────────────── */
+.board-settings__prefix-label {
+	display: block;
+	margin-top: 12px;
+	margin-bottom: 4px;
+	font-weight: 600;
+}
+.board-settings__prefix-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.board-settings__prefix-input {
+	width: 120px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-family: var(--font-face-monospace, monospace);
+}
+
 /* ── Reused label styles (same as original LabelSettingsPanel) ─────────────── */
 
 .label-settings__list {

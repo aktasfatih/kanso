@@ -113,6 +113,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="card-modal__header-main">
 						<div class="card-modal__breadcrumb">
 							<span class="card-modal__crumb">{{ boardName }}</span>
+							<!-- Copyable human-readable reference id (e.g. KAN-123) -->
+							<button
+								v-if="cardHumanId"
+								class="card-modal__ref"
+								type="button"
+								:title="t('kanso', 'Copy reference {ref}', { ref: cardHumanId })"
+								@click="copyCardRef">
+								{{ cardHumanId }}
+							</button>
 							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
 							<span class="card-modal__attr card-modal__status-wrap">
 								<button
@@ -1440,6 +1449,7 @@ import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
+import { humanId } from '../services/humanId.js'
 import { renderMarkdown } from '../services/markdown.js'
 
 /**
@@ -2807,6 +2817,25 @@ const viewMode = ref('card')
 
 // Breadcrumb board name + uppercase status chip
 const boardName = computed(() => boardData.value?.board?.title || t('kanso', 'Board'))
+
+// Human-readable reference id (prefix + '-' + boardSeq), e.g. "KAN-123".
+// Null for a not-yet-numbered card (pre-migration row) so we hide the chip.
+const cardHumanId = computed(() => humanId(boardData.value?.board?.prefix, cardData.value?.boardSeq))
+
+// Copy the human id to the clipboard - the card's shareable reference.
+async function copyCardRef() {
+	if (!cardHumanId.value) return
+	try {
+		if (!navigator.clipboard?.writeText) {
+			showError(t('kanso', 'Clipboard is not available in this context.'))
+			return
+		}
+		await navigator.clipboard.writeText(cardHumanId.value)
+		showSuccess(t('kanso', 'Reference {ref} copied.', { ref: cardHumanId.value }))
+	} catch (err) {
+		showError(t('kanso', 'Could not copy to clipboard.'))
+	}
+}
 const statusChipLabel = computed(() =>
 	(STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase(),
 )
@@ -3167,6 +3196,27 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__crumb {
 	white-space: nowrap;
+}
+/* Copyable human-id reference chip in the breadcrumb */
+.card-modal__ref {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 6px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.card-modal__ref:hover {
+	color: var(--color-main-text);
+	border-color: var(--color-primary-element);
 }
 .card-modal__crumb-chevron,
 .card-modal__crumb-dot {

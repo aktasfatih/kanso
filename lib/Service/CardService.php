@@ -32,6 +32,10 @@ use OCP\IDBConnection;
 class CardService {
 	private const MAX_TITLE_LENGTH = 100;
 
+	// Max insert attempts in create(): absorbs sort-key AND board-wide board_seq
+	// unique collisions under concurrency before surfacing a retryable 409.
+	private const MAX_CREATE_ATTEMPTS = 5;
+
 	public function __construct(
 		private CardMapper $cardMapper,
 		private StackMapper $stackMapper,
@@ -87,7 +91,9 @@ class CardService {
 		// concurrent create into the same stack can derive the same key; the
 		// (stack_id, sort_key, deleted_at) unique index rejects the loser, so
 		// re-read the now-current neighbour and re-derive once before giving up
-		// with a retryable 409.
+		// with a retryable 409. The same retry also covers a per-board sequence
+		// collision (two creates on one board deriving the same board_seq): the
+		// (board_id, board_seq) unique index rejects the loser and we recompute.
 		$onTop = $board->getNewCardsOnTop() === true;
 		for ($attempt = 0; ; $attempt++) {
 			if ($onTop) {
@@ -102,11 +108,17 @@ class CardService {
 					: $this->sortKeyService->after($lastCard->getSortKey());
 			}
 
+			// Assign the next per-board number atomically-ish: MAX+1 guarded by the
+			// (board_id, board_seq) unique index. Recomputed each attempt so a retry
+			// after a collision picks up the winner's number.
+			$boardSeq = $this->cardMapper->nextBoardSeq($stack->getBoardId());
+
 			$card = new Card();
 			$card->setBoardId($stack->getBoardId());
 			$card->setStackId($stackId);
 			$card->setTitle($title);
 			$card->setSortKey($sortKey);
+			$card->setBoardSeq($boardSeq);
 			// Creating a card directly in a role-bearing stack adopts that
 			// column's status - matching move()'s status-automation for a
 			// dragged-in card. Done-role → done; in-progress/review-role →
@@ -128,8 +140,14 @@ class CardService {
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
 				}
-				if ($attempt >= 1) {
-					throw new \OverflowException('sort key conflict on create after retry', 0, $e);
+				// A unique violation here is either a sort-key collision (≤2 writers
+				// on the same stack head/tail) or a board_seq collision. The latter
+				// contends board-wide (every concurrent create derives the same
+				// MAX+1), so allow a few more re-derives before surfacing a
+				// retryable 409 - each retry re-reads the now-current neighbour and
+				// the now-current max.
+				if ($attempt >= self::MAX_CREATE_ATTEMPTS - 1) {
+					throw new \OverflowException('card create key conflict (sort key or board_seq) after retries', 0, $e);
 				}
 			}
 		}

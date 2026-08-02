@@ -13,6 +13,9 @@ use OCP\DB\Types;
 /**
  * A kanban board (table `kanso_boards`).
  *
+ * A board's `prefix` is the shared half of every card's human-readable id
+ * ({@see BoardPrefix}); the card's `board_seq` supplies the number.
+ *
  * @method string getTitle()
  * @method void setTitle(string $title)
  * @method string getOwner()
@@ -31,6 +34,8 @@ use OCP\DB\Types;
  * @method void setEstimateScale(string $estimateScale)
  * @method bool|null getNewCardsOnTop()
  * @method void setNewCardsOnTop(?bool $newCardsOnTop)
+ * @method string|null getPrefix()
+ * @method void setPrefix(?string $prefix)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -46,6 +51,9 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?string $webhookSecret = null;
 	protected ?string $estimateScale = null;
 	protected ?bool $newCardsOnTop = null;
+	// The per-board human-id prefix (e.g. "KAN"); a card's reference is
+	// prefix + '-' + board_seq. Derived from the title, editable in settings.
+	protected ?string $prefix = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -57,10 +65,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('webhookSecret', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);
 		$this->addType('newCardsOnTop', Types::BOOLEAN);
+		$this->addType('prefix', Types::STRING);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -73,6 +82,9 @@ class Board extends Entity implements \JsonSerializable {
 			'lastModified' => $this->lastModified ?? 0,
 			'estimateScale' => $this->estimateScale ?? EstimateScale::NONE,
 			'newCardsOnTop' => $this->newCardsOnTop ?? false,
+			// The human-id prefix; falls back to the shared default for boards
+			// that predate the column and haven't been backfilled yet.
+			'prefix' => $this->prefix ?? BoardPrefix::DEFAULT,
 		];
 	}
 }

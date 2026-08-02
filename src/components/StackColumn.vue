@@ -188,6 +188,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CardTile
 						:card="cards[vRow.index]"
 						:labels-by-id="labelsById"
+						:board-prefix="boardPrefix"
 						@click="openCard(cards[vRow.index].id)" />
 				</div>
 			</div>
@@ -257,6 +258,11 @@ const props = defineProps({
 	labelsById: {
 		type: Map,
 		default: () => new Map(),
+	},
+	/** Board human-id prefix (e.g. "KAN") - passed down to CardTile for the KAN-<n> badge. */
+	boardPrefix: {
+		type: String,
+		default: '',
 	},
 	/**
 	 * Board's "new cards on top" preference. Governs which end of the stack a

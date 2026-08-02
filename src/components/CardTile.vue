@@ -25,6 +25,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
+			<!-- Human-readable reference id (e.g. KAN-123) - a stable display id -->
+			<span v-if="cardHumanId" class="card-tile__ref">{{ cardHumanId }}</span>
 			<!-- Card title - max 2 lines with ellipsis overflow -->
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
@@ -154,6 +156,7 @@ import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { cssColor, readableColor } from '../services/color.js'
+import { humanId } from '../services/humanId.js'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 
 const props = defineProps({
@@ -165,7 +168,15 @@ const props = defineProps({
 		type: Map,
 		default: () => new Map(),
 	},
+	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq for the ref badge. */
+	boardPrefix: {
+		type: String,
+		default: '',
+	},
 })
+
+// Human-readable reference id (prefix + '-' + boardSeq), null when unassigned.
+const cardHumanId = computed(() => humanId(props.boardPrefix, props.card.boardSeq))
 
 defineEmits(['click'])
 
@@ -307,6 +318,15 @@ const extraAssigneeCount = computed(() => {
 .card-tile:focus-visible {
 	outline: 2px solid var(--color-primary);
 	outline-offset: 1px;
+}
+
+/* Human-id reference badge - small, muted, monospace so it reads as an id */
+.card-tile__ref {
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--color-text-maxcontrast);
+	font-family: var(--font-face-monospace, monospace);
 }
 
 .card-tile__title {

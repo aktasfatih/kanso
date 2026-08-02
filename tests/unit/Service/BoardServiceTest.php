@@ -63,6 +63,8 @@ class BoardServiceTest extends TestCase {
 				self::assertFalse($board->getArchived());
 				self::assertSame(0, $board->getDeletedAt());
 				self::assertGreaterThan(0, $board->getLastModified());
+				// Prefix defaults to the first letters of the title, uppercased.
+				self::assertSame('MYBOA', $board->getPrefix());
 				$board->setId(42);
 				return $board;
 			});
@@ -151,6 +153,27 @@ class BoardServiceTest extends TestCase {
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(1, null, null, null, 'alice', 'made-up-scale');
+	}
+
+	public function testUpdateNormalizesPrefix(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Lower-case + spaces + over-length are normalized (uppercased, alnum, capped at 5).
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, 'my proj');
+		self::assertSame('MYPRO', $updated->getPrefix());
+	}
+
+	public function testUpdateRejectsEmptyPrefix(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		// A prefix that reduces to nothing (only punctuation) is invalid.
+		$this->service->update(1, null, null, null, 'alice', null, null, '---');
 	}
 
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {

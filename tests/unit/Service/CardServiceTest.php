@@ -285,7 +285,9 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('findLastInStack')->with(5)
 			->willReturn($this->card(8, 5, 1, 'J'));
-		$this->cardMapper->expects(self::exactly(2))
+		// Every attempt collides on the unique index; after MAX_CREATE_ATTEMPTS (5)
+		// tries the create surfaces a retryable 409 (OverflowException).
+		$this->cardMapper->expects(self::exactly(5))
 			->method('insert')
 			->willReturnCallback(fn (Card $card): Card => throw $this->uniqueViolation());
 		$this->changeNotifier->expects(self::never())->method('notify');
@@ -309,6 +311,71 @@ class CardServiceTest extends TestCase {
 		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$this->service->create(5, 'A card', 'alice');
+	}
+
+	// ---- create: human-id (board_seq) -------------------------------------
+
+	public function testCreateAssignsNextBoardSequence(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		// The board already has 41 numbered cards → the next is 42.
+		$this->cardMapper->method('nextBoardSeq')->with(1)->willReturn(42);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame(42, $card->getBoardSeq());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$card = $this->service->create(5, 'A card', 'alice');
+		self::assertSame(42, $card->getBoardSeq());
+	}
+
+	public function testCreateStartsSequenceAtOneOnEmptyBoard(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->with(1)->willReturn(1);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame(1, $card->getBoardSeq());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	public function testCreateRecomputesSequenceAfterUniqueCollision(): void {
+		// A concurrent create grabs seq 7 first; our insert of 7 collides, we
+		// recompute (now 8) and succeed - no duplicate number is ever persisted.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->with(1)
+			->willReturnOnConsecutiveCalls(7, 8);
+		$attempt = 0;
+		$this->cardMapper->expects(self::exactly(2))
+			->method('insert')
+			->willReturnCallback(function (Card $card) use (&$attempt): Card {
+				$attempt++;
+				if ($attempt === 1) {
+					self::assertSame(7, $card->getBoardSeq());
+					throw $this->uniqueViolation();
+				}
+				self::assertSame(8, $card->getBoardSeq());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$card = $this->service->create(5, 'A card', 'alice');
+		self::assertSame(8, $card->getBoardSeq());
 	}
 
 	// ---- find -------------------------------------------------------------
