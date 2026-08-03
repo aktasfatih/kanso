@@ -943,6 +943,59 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
+				<!-- Calendar feed group (read-only ICS of card due dates) (#3541) -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.calendarFeed ? 'true' : 'false'"
+						aria-controls="bs-automation-calendar-feed"
+						@click="toggleAutomationGroup('calendarFeed')">
+						<CalendarIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Calendar feed') }}</span>
+						<span v-if="calendarFeed.enabled" class="automation__group-badge">{{ t('kanso', 'Feed active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.calendarFeed" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.calendarFeed" id="bs-automation-calendar-feed" class="automation__group-body">
+						<p v-if="!canManage" class="workflow__readonly-notice">
+							{{ t('kanso', 'You need manage permission to configure the calendar feed.') }}
+						</p>
+						<template v-else>
+							<p class="github-webhook__hint">
+								{{ t('kanso', 'Subscribe to this board\'s card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.') }}
+							</p>
+
+							<div class="github-webhook__actions">
+								<NcCheckboxRadioSwitch
+									type="switch"
+									:checked="calendarFeed.enabled"
+									:disabled="calendarFeedBusy"
+									@update:checked="toggleCalendarFeed">
+									{{ t('kanso', 'Enable calendar feed') }}
+								</NcCheckboxRadioSwitch>
+							</div>
+
+							<template v-if="calendarFeed.enabled && calendarFeed.url">
+								<label class="github-webhook__label">{{ t('kanso', 'Feed URL') }}</label>
+								<div class="github-webhook__row">
+									<input class="github-webhook__input" type="text" readonly :value="calendarFeed.url">
+									<NcButton :disabled="!calendarFeed.url" @click="copyText(calendarFeed.url)">
+										{{ t('kanso', 'Copy') }}
+									</NcButton>
+								</div>
+								<div class="github-webhook__actions">
+									<NcButton :disabled="calendarFeedBusy" @click="handleRotateCalendarFeed">
+										{{ t('kanso', 'Rotate feed URL') }}
+									</NcButton>
+									<span class="github-webhook__status">{{ t('kanso', 'Anyone with the link can subscribe to this board\'s due dates.') }}</span>
+								</div>
+							</template>
+							<span v-if="calendarFeedError" class="label-settings__error">{{ calendarFeedError }}</span>
+						</template>
+					</div>
+				</div>
+
 				<!-- Auto-archive group -->
 				<div class="automation__group">
 					<button
@@ -1672,6 +1725,7 @@ import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
+import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import { useLabels } from '../composables/useLabels.js'
@@ -1692,6 +1746,9 @@ import {
 	fetchPublicShareConfig,
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
+	fetchCalendarFeedConfig,
+	enableCalendarFeed as apiEnableCalendarFeed,
+	disableCalendarFeed as apiDisableCalendarFeed,
 	getSettings,
 	updateSettings,
 	exportBoard as apiExportBoard,
@@ -1880,8 +1937,65 @@ async function disablePublicLink() {
 	}
 }
 
+// ── Calendar feed (read-only ICS of card due dates) (#3541) ───────────────────
+const calendarFeed = ref({ enabled: false, url: null })
+const calendarFeedError = ref('')
+const calendarFeedBusy = ref(false)
+
+async function loadCalendarFeedConfig() {
+	if (!canManage.value) return
+	try {
+		calendarFeed.value = await fetchCalendarFeedConfig(props.boardId)
+		// An active feed should be visible without a click.
+		if (calendarFeed.value.enabled) {
+			automationGroups.value.calendarFeed = true
+		}
+	} catch (e) {
+		calendarFeedError.value = t('kanso', 'Failed to load the calendar feed config.')
+	}
+}
+
+async function toggleCalendarFeed(checked) {
+	if (checked) {
+		await enableCalendarFeed()
+	} else {
+		await disableCalendarFeed()
+	}
+}
+
+async function enableCalendarFeed() {
+	calendarFeedError.value = ''
+	calendarFeedBusy.value = true
+	try {
+		calendarFeed.value = await apiEnableCalendarFeed(props.boardId)
+	} catch (e) {
+		calendarFeedError.value = e?.response?.data?.error || t('kanso', 'Could not enable the calendar feed.')
+	} finally {
+		calendarFeedBusy.value = false
+	}
+}
+
+// Rotate = mint a fresh token; the previously-shared feed URL stops working at once.
+async function handleRotateCalendarFeed() {
+	await enableCalendarFeed()
+}
+
+async function disableCalendarFeed() {
+	calendarFeedError.value = ''
+	calendarFeedBusy.value = true
+	try {
+		await apiDisableCalendarFeed(props.boardId)
+		calendarFeed.value = { enabled: false, url: null }
+	} catch (e) {
+		calendarFeedError.value = e?.response?.data?.error || t('kanso', 'Could not disable the calendar feed.')
+	} finally {
+		calendarFeedBusy.value = false
+	}
+}
+
 onMounted(loadWebhookConfig)
 onMounted(loadPublicShareConfig)
+onMounted(loadCalendarFeedConfig)
 
 function hasBit(mask, bit) {
 	return (mask & bit) !== 0
@@ -1954,6 +2068,7 @@ const automationGroups = ref({
 	recurring: false,
 	github: false,
 	publicLink: false,
+	calendarFeed: false,
 })
 function toggleAutomationGroup(key) {
 	automationGroups.value[key] = !automationGroups.value[key]

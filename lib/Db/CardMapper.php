@@ -194,6 +194,32 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Summaries (no description) of the non-deleted, non-archived, non-template
+	 * cards on a board that HAVE a due date - the source for the read-only ICS /
+	 * iCal due-date feed (#3541). One board-scoped query (no N+1); a card without
+	 * a `duedate` is filtered out in SQL. Ordered by due date so the feed reads
+	 * chronologically. Board-scoped like every board query, so the feed can only
+	 * ever expose one board's due cards.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findWithDuedateByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->isNotNull('duedate'))
+			->orderBy('duedate', 'ASC')
+			->addOrderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Summaries (no description) of all non-deleted cards in a stack, in
 	 * display order.
 	 *

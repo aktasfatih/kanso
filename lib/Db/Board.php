@@ -40,6 +40,8 @@ use OCP\DB\Types;
  * @method void setPublicShareToken(?string $publicShareToken)
  * @method int|null getPublicShareExpiresAt()
  * @method void setPublicShareExpiresAt(?int $publicShareExpiresAt)
+ * @method string|null getIcalFeedToken()
+ * @method void setIcalFeedToken(?string $icalFeedToken)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -68,6 +70,13 @@ class Board extends Entity implements \JsonSerializable {
 	// Optional unix-ts expiry for the public link (NULL / 0 = never). v1 defaults
 	// to no expiry (revocable-until-disabled).
 	protected ?int $publicShareExpiresAt = null;
+	// iCal / ICS read-only due-date feed (#3541). MANAGE-only, OFF by default. NULL
+	// = no feed; a non-null value is a long ISecureRandom token that lets any
+	// calendar client subscribe to a read-only VCALENDAR of this board's due cards.
+	// A DISTINCT token from publicShareToken - the two share features have
+	// independent lifecycles. Deliberately NEVER emitted by jsonSerialize(); the
+	// token is only ever returned by the dedicated MANAGE feed-config endpoints.
+	protected ?string $icalFeedToken = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -82,6 +91,7 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('prefix', Types::STRING);
 		$this->addType('publicShareToken', Types::STRING);
 		$this->addType('publicShareExpiresAt', Types::INTEGER);
+		$this->addType('icalFeedToken', Types::STRING);
 	}
 
 	/**

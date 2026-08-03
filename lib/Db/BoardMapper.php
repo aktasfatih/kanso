@@ -81,6 +81,30 @@ class BoardMapper extends QBMapper {
 	}
 
 	/**
+	 * The single non-deleted board whose `ical_feed_token` equals the given token
+	 * (#3541). The token column is UNIQUE, so this is one indexed probe that can
+	 * only ever resolve to exactly one board - a token can never pivot to a
+	 * different board. An empty token is rejected up-front so a board with a NULL
+	 * token can never be reached with a blank input.
+	 *
+	 * @throws DoesNotExistException if no live board carries that exact token
+	 * @throws MultipleObjectsReturnedException
+	 * @throws Exception
+	 */
+	public function findByIcalFeedToken(string $token): Board {
+		if ($token === '') {
+			throw new DoesNotExistException('Empty iCal feed token');
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('ical_feed_token', $qb->createNamedParameter($token)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+
+		return $this->findEntity($qb);
+	}
+
+	/**
 	 * All non-deleted boards owned by the given user, most recently
 	 * modified first.
 	 *

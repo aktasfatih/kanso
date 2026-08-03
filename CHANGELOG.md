@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **iCal / ICS calendar feed of card due dates.** A board manager can now expose
+  a read-only calendar feed of the board's card due dates (Board settings →
+  Automation → Calendar feed), subscribable in any calendar client (Nextcloud
+  Calendar, Thunderbird, phone). It is OFF by default; enabling mints a long,
+  unguessable token, and the feed URL is revocable (disable) and rotatable
+  (rotate mints a fresh one, invalidating the old URL immediately). The feed is
+  deliberately minimal: one event per card that has a due date, carrying only the
+  card title, the due date (honouring the all-day flag) and a link back to the
+  card — never descriptions, assignees or any other data, and never cards from
+  another board. It is read-only (no write-back); full two-way CalDAV sync is a
+  separate feature. The public feed endpoint is brute-force throttled so tokens
+  can't be enumerated.
+
 - **Public / read-only board share links.** A board manager can now mint a
   public, unauthenticated, read-only link to a whole board (Board settings →
   Automation → Public link). It is OFF by default; enabling mints a long,

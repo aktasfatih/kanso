@@ -324,6 +324,17 @@ export const enablePublicShare = (boardId) =>
 export const disablePublicShare = (boardId) =>
 	axios.delete(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)
 
+// Read-only iCal / ICS feed of card due dates (board-level, MANAGE)
+export const fetchCalendarFeedConfig = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/calendar-feed`)).then((r) => r.data)
+
+// Enable or rotate (both mint a fresh token, invalidating any old feed URL).
+export const enableCalendarFeed = (boardId) =>
+	axios.post(url(`/api/boards/${boardId}/calendar-feed`)).then((r) => r.data)
+
+export const disableCalendarFeed = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/calendar-feed`)).then((r) => r.data)
+
 // Subscriptions (board watchers)
 export const subscribeBoard = (boardId) =>
 	axios.put(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)

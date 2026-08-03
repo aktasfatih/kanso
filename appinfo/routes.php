@@ -16,6 +16,13 @@ return [
 		['name' => 'publicShare#show', 'url' => '/p/{token}', 'verb' => 'GET'],
 		['name' => 'publicShare#data', 'url' => '/api/public/{token}', 'verb' => 'GET'],
 
+		// Read-only iCal / ICS feed of a board's card due dates (#3541).
+		// UNAUTHENTICATED: `/feed/{token}.ics` returns a `text/calendar` VCALENDAR
+		// with one VEVENT per due card. #[PublicPage] + brute-force throttled; a bad
+		// token is a 404. The {token} is an opaque 64-char alnum string; the `.ics`
+		// suffix lets calendar clients recognise the URL by extension.
+		['name' => 'calendarFeed#feed', 'url' => '/feed/{token}.ics', 'verb' => 'GET'],
+
 		['name' => 'search#index', 'url' => '/api/search', 'verb' => 'GET'],
 
 		['name' => 'settings#index', 'url' => '/api/settings', 'verb' => 'GET'],
@@ -149,6 +156,12 @@ return [
 		['name' => 'publicShare#config', 'url' => '/api/boards/{id}/public-share', 'verb' => 'GET'],
 		['name' => 'publicShare#enable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'POST'],
 		['name' => 'publicShare#disable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'DELETE'],
+
+		// Calendar-feed config (MANAGE, authenticated). Nested under a board id,
+		// distinct from board#show. Enable/rotate = POST, disable = DELETE.
+		['name' => 'calendarFeed#config', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'GET'],
+		['name' => 'calendarFeed#enable', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'POST'],
+		['name' => 'calendarFeed#disable', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'DELETE'],
 
 		['name' => 'webhook#github', 'url' => '/api/boards/{id}/github-webhook', 'verb' => 'POST'],
 		['name' => 'webhook#config', 'url' => '/api/boards/{id}/webhook', 'verb' => 'GET'],
