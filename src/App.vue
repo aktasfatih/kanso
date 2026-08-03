@@ -7,32 +7,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<NcAppNavigation>
 			<template #list>
 				<NcAppNavigationItem
-					:name="t('kanso', 'Boards')"
-					:to="{ name: 'board-list' }"
-					:active="route.name === 'board-list'"
-					:allow-collapse="boards.length > 0"
-					:open="true">
-					<template #icon>
-						<ViewDashboardIcon :size="20" />
-					</template>
-					<!-- The user's boards, so you can jump between them without
-					     returning to the board list. -->
-					<template #default>
-						<NcAppNavigationItem
-							v-for="board in boards"
-							:key="board.id"
-							:name="board.title"
-							:to="{ name: 'board', params: { id: String(board.id) } }"
-							:active="isBoardActive(board.id)">
-							<template #icon>
-								<span
-									class="app-nav__board-dot"
-									:style="{ background: board.color ? '#' + board.color : 'var(--color-primary-element)' }" />
-							</template>
-						</NcAppNavigationItem>
-					</template>
-				</NcAppNavigationItem>
-				<NcAppNavigationItem
 					:name="t('kanso', 'My Tasks')"
 					:to="{ name: 'my-cards' }"
 					:active="isMyTasksActive">
@@ -71,6 +45,32 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:active="isProjectsActive">
 					<template #icon>
 						<FolderMultipleOutlineIcon :size="20" />
+					</template>
+				</NcAppNavigationItem>
+				<NcAppNavigationItem
+					:name="t('kanso', 'Boards')"
+					:to="{ name: 'board-list' }"
+					:active="route.name === 'board-list'"
+					:allow-collapse="boards.length > 0"
+					:open="true">
+					<template #icon>
+						<ViewDashboardIcon :size="20" />
+					</template>
+					<!-- The user's boards, so you can jump between them without
+					     returning to the board list. -->
+					<template #default>
+						<NcAppNavigationItem
+							v-for="board in boards"
+							:key="board.id"
+							:name="board.title"
+							:to="{ name: 'board', params: { id: String(board.id) } }"
+							:active="isBoardActive(board.id)">
+							<template #icon>
+								<span
+									class="app-nav__board-dot"
+									:style="{ background: board.color ? '#' + board.color : 'var(--color-primary-element)' }" />
+							</template>
+						</NcAppNavigationItem>
 					</template>
 				</NcAppNavigationItem>
 			</template>
