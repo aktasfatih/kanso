@@ -12,6 +12,9 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\Files\AppData\IAppDataFactory;
+use OCP\Files\IAppData;
+use Psr\Container\ContainerInterface;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'kanso';
@@ -23,6 +26,13 @@ class Application extends App implements IBootstrap {
 	#[\Override]
 	public function register(IRegistrationContext $context): void {
 		$context->registerNotifierService(Notifier::class);
+
+		// Kanso's own app-data folder, so services (card attachments, #3526) can
+		// type-hint IAppData directly. Scoped to this app id - the bytes live in
+		// Kanso's app-data, never in a user's personal Files.
+		$context->registerService(IAppData::class, static function (ContainerInterface $c): IAppData {
+			return $c->get(IAppDataFactory::class)->get(self::APP_ID);
+		});
 	}
 
 	#[\Override]

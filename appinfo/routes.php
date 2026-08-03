@@ -105,6 +105,11 @@ return [
 		['name' => 'cardLink#create', 'url' => '/api/cards/{cardId}/links', 'verb' => 'POST'],
 		['name' => 'cardLink#destroy', 'url' => '/api/cards/{cardId}/links/{linkId}', 'verb' => 'DELETE'],
 
+		['name' => 'cardAttachment#index', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'GET'],
+		['name' => 'cardAttachment#create', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'POST'],
+		['name' => 'cardAttachment#download', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'GET'],
+		['name' => 'cardAttachment#destroy', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'DELETE'],
+
 		['name' => 'cardRelation#index', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'GET'],
 		['name' => 'cardRelation#create', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'POST'],
 		['name' => 'cardRelation#destroy', 'url' => '/api/cards/{cardId}/relations/{relationId}', 'verb' => 'DELETE'],

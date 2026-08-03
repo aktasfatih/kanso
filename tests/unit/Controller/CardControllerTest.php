@@ -10,6 +10,7 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 use OCA\Kanso\Controller\CardController;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -44,6 +45,7 @@ class CardControllerTest extends TestCase {
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardRelationService&MockObject $relationService;
 	private ProjectCardMapper&MockObject $projectCardMapper;
+	private CardAttachmentMapper&MockObject $cardAttachmentMapper;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -68,6 +70,8 @@ class CardControllerTest extends TestCase {
 		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
 		$this->projectCardMapper->method('findProjectIdsByCard')
 			->willReturn([]);
+		$this->cardAttachmentMapper = $this->createMock(CardAttachmentMapper::class);
+		$this->cardAttachmentMapper->method('countByCard')->willReturn(0);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -88,7 +92,8 @@ class CardControllerTest extends TestCase {
 			$this->commentMapper,
 			$this->subscriptionService,
 			$this->relationService,
-			$this->projectCardMapper
+			$this->projectCardMapper,
+			$this->cardAttachmentMapper
 		);
 	}
 

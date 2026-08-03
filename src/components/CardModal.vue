@@ -1035,6 +1035,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
 						</section>
 
+						<!-- File attachments (#3526) -->
+						<section class="card-modal__section card-modal__section--tight">
+							<div class="card-modal__section-inline">
+								<PaperclipIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Attachments') }}</span>
+								<template v-if="canEdit">
+									<input
+										ref="attachmentInput"
+										type="file"
+										class="card-modal__file-input"
+										@change="handleAttachmentPick">
+									<NcButton
+										type="secondary"
+										:disabled="uploadAttachment.isPending.value"
+										@click="triggerAttachmentPick">
+										{{ uploadAttachment.isPending.value ? t('kanso', 'Uploading…') : t('kanso', 'Upload') }}
+									</NcButton>
+								</template>
+							</div>
+							<ul v-if="cardAttachments.length > 0" class="card-modal__links-list">
+								<li v-for="att in cardAttachments" :key="att.id" class="card-modal__link-row">
+									<a :href="attachmentHref(att.id)" class="card-modal__link" download>
+										<PaperclipIcon :size="14" class="card-modal__eyebrow-icon" />
+										<span class="card-modal__link-text">{{ att.filename }}</span>
+										<span class="card-modal__attachment-size">{{ formatBytes(att.size) }}</span>
+									</a>
+									<button
+										v-if="canEdit"
+										class="card-modal__child-remove"
+										:title="t('kanso', 'Remove attachment')"
+										@click="handleRemoveAttachment(att.id)">
+										<CloseIcon :size="14" />
+									</button>
+								</li>
+							</ul>
+							<span v-if="attachmentError" class="card-modal__save-error">{{ attachmentError }}</span>
+						</section>
+
 						<!-- Relations - shown only when the card has relations, or the
 						     editor was opened from the ⋯ menu -->
 						<section
@@ -1423,6 +1461,7 @@ import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
+import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -1449,6 +1488,8 @@ import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
+import { useCardAttachments } from '../composables/useCardAttachments.js'
+import { cardAttachmentUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
@@ -2727,6 +2768,56 @@ async function copyBranchName() {
 		setTimeout(() => { branchCopied.value = false }, 1500)
 	} catch (e) {
 		linkError.value = t('kanso', 'Could not copy to clipboard')
+	}
+}
+
+// ── File attachments (#3526) ─────────────────────────────────────────────────
+const { attachments: cardAttachmentsData, uploadAttachment, removeAttachment } = useCardAttachments(computed(() => props.cardId))
+const cardAttachments = computed(() => cardAttachmentsData.value ?? [])
+const attachmentInput = ref(null)
+const attachmentError = ref('')
+
+function attachmentHref(attachmentId) {
+	return cardAttachmentUrl(props.cardId, attachmentId)
+}
+
+function formatBytes(bytes) {
+	const n = Number(bytes) || 0
+	if (n < 1024) return `${n} B`
+	const units = ['KB', 'MB', 'GB', 'TB']
+	let value = n / 1024
+	let i = 0
+	while (value >= 1024 && i < units.length - 1) {
+		value /= 1024
+		i++
+	}
+	return `${value.toFixed(value < 10 ? 1 : 0)} ${units[i]}`
+}
+
+function triggerAttachmentPick() {
+	attachmentError.value = ''
+	attachmentInput.value?.click()
+}
+
+async function handleAttachmentPick(event) {
+	const file = event.target.files?.[0]
+	// Reset so picking the same file again re-fires change.
+	event.target.value = ''
+	if (!file) return
+	attachmentError.value = ''
+	try {
+		await uploadAttachment.mutateAsync(file)
+	} catch (e) {
+		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to upload attachment.')
+	}
+}
+
+async function handleRemoveAttachment(attachmentId) {
+	attachmentError.value = ''
+	try {
+		await removeAttachment.mutateAsync(attachmentId)
+	} catch (e) {
+		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to remove attachment.')
 	}
 }
 
@@ -4350,6 +4441,16 @@ async function handleToggleProject(projectId) {
 .card-modal__link-ext {
 	margin-left: auto;
 	color: var(--color-text-maxcontrast);
+}
+.card-modal__file-input {
+	display: none;
+}
+.card-modal__attachment-size {
+	margin-left: auto;
+	padding-left: 8px;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8125rem;
+	white-space: nowrap;
 }
 .card-modal__link-add {
 	display: flex;

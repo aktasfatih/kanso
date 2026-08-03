@@ -9,6 +9,7 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -53,6 +54,7 @@ class CardController extends Controller {
 		private SubscriptionService $subscriptionService,
 		private CardRelationService $relationService,
 		private ProjectCardMapper $projectCardMapper,
+		private CardAttachmentMapper $cardAttachmentMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -138,6 +140,7 @@ class CardController extends Controller {
 			+ ['parent' => $parent]
 			+ ['children' => $children]
 			+ ['commentCount' => $this->commentMapper->countByCard($id)]
+			+ ['attachmentCount' => $this->cardAttachmentMapper->countByCard($id)]
 			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
 			+ ['relations' => $this->relationService->groupedForCard($id)]
 			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)];

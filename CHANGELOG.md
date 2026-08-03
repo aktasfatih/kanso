@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **File attachments on cards.** A card now has an Attachments section: upload a
+  file (picker), see it listed with its name and size, download it, and delete it
+  (EDIT-gated). Files are stored in Kanso's own app-data — not in anyone's
+  personal Files — and served through a board-permission-gated endpoint (READ to
+  view/download, EDIT to upload/delete). The on-disk name is server-generated
+  (the client filename is kept only as a display label, so path traversal is
+  impossible), uploads are size-capped, and downloads are always forced as an
+  attachment with `nosniff` so an uploaded HTML/SVG can never render inline. The
+  card detail payload carries an attachment count, and add/delete emit a
+  change-log row so delta-sync and ETags stay correct.
+
 - **Project discussion log (owner-only comments on a project).** The project page
   now carries a comment thread — post, edit, delete, with one-level replies and
   the same markdown toolbar + rendering as card comments. Because projects are

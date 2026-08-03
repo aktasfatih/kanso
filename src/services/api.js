@@ -222,6 +222,27 @@ export const addCardLink = (cardId, linkUrl) =>
 export const deleteCardLink = (cardId, linkId) =>
 	axios.delete(url(`/api/cards/${cardId}/links/${linkId}`)).then((r) => r.data)
 
+// Card file attachments (#3526). Bytes live in Kanso's app-data, gated by
+// board permission; metadata only over JSON, bytes via the download URL.
+export const fetchCardAttachments = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/attachments`)).then((r) => r.data)
+
+export const uploadCardAttachment = (cardId, file) => {
+	const form = new FormData()
+	form.append('file', file)
+	return axios.post(url(`/api/cards/${cardId}/attachments`), form, {
+		headers: { 'Content-Type': 'multipart/form-data' },
+	}).then((r) => r.data)
+}
+
+export const deleteCardAttachment = (cardId, attachmentId) =>
+	axios.delete(url(`/api/cards/${cardId}/attachments/${attachmentId}`)).then((r) => r.data)
+
+// Direct download URL (browser navigates to it; server sets
+// Content-Disposition: attachment). Board-READ gated server-side.
+export const cardAttachmentUrl = (cardId, attachmentId) =>
+	url(`/api/cards/${cardId}/attachments/${attachmentId}`)
+
 // Deck import
 export const fetchDeckImportBoards = () =>
 	axios.get(url('/api/deck-import/boards')).then((r) => r.data)
