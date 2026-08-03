@@ -307,6 +307,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
+					<!-- Type (#3402): exactly one built-in issue type, icon-first -->
+					<div class="card-modal__attr">
+						<button
+							class="card-modal__pill"
+							:class="currentType ? `card-modal__pill--type-${currentType.value}` : 'card-modal__pill--dashed'"
+							:aria-expanded="openPicker === 'type'"
+							@click="togglePicker('type')">
+							<component :is="typeIcon(currentType?.value)" :size="14" />
+							{{ currentType ? t('kanso', currentType.label) : t('kanso', 'Type') }}
+						</button>
+						<div v-if="openPicker === 'type'" class="card-modal__popover">
+							<button
+								class="card-modal__popover-opt"
+								:class="{ 'card-modal__popover-opt--active': !currentType }"
+								:disabled="setType.isPending.value"
+								@click="handleSetType(''); openPicker = null">
+								{{ t('kanso', 'None') }}
+							</button>
+							<button
+								v-for="tp in CARD_TYPES"
+								:key="tp.value"
+								class="card-modal__popover-opt"
+								:class="{ 'card-modal__popover-opt--active': currentTypeValue === tp.value }"
+								:disabled="setType.isPending.value"
+								@click="handleSetType(tp.value); openPicker = null">
+								<component :is="typeIcon(tp.value)" :size="14" />
+								{{ t('kanso', tp.label) }}
+							</button>
+							<span v-if="typeError" class="card-modal__save-error">{{ typeError }}</span>
+						</div>
+					</div>
+
 					<!-- Dates (due + start) -->
 					<div class="card-modal__attr">
 						<button
@@ -1547,6 +1579,11 @@ import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOut
 import DragIcon from 'vue-material-design-icons/Drag.vue'
 import FlagIcon from 'vue-material-design-icons/Flag.vue'
 import FlagOutlineIcon from 'vue-material-design-icons/FlagOutline.vue'
+import BugIcon from 'vue-material-design-icons/Bug.vue'
+import StarIcon from 'vue-material-design-icons/Star.vue'
+import CheckboxMarkedCircleOutlineIcon from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
+import BroomIcon from 'vue-material-design-icons/Broom.vue'
+import TagOutlineIcon from 'vue-material-design-icons/TagOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
@@ -1580,6 +1617,7 @@ import { useCard } from '../composables/useCard.js'
 import { useProjects } from '../composables/useProjects.js'
 import { addCardToProject as apiAddCardToProject, removeCardFromProject as apiRemoveCardFromProject } from '../services/api.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
+import { useCardType, CARD_TYPES } from '../composables/useCardType.js'
 import { useBoard } from '../composables/useBoard.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
@@ -1954,6 +1992,34 @@ async function handleSetPriority(priority) {
 		await setPriority.mutateAsync({ priority })
 	} catch (err) {
 		priorityError.value = err?.response?.data?.error || t('kanso', 'Failed to update priority.')
+	}
+}
+
+// ── Type (#3402) ─────────────────────────────────────────────────────────────
+const { setType } = useCardType(boardId, computed(() => props.cardId))
+const typeError = ref('')
+
+const currentTypeValue = computed(() => cardData.value?.type ?? '')
+const currentType = computed(() => CARD_TYPES.find((tp) => tp.value === currentTypeValue.value) ?? null)
+
+/** Icon component for a built-in type value ('' → the "no type" outline icon). */
+function typeIcon(value) {
+	switch (value) {
+	case 'bug': return BugIcon
+	case 'feature': return StarIcon
+	case 'task': return CheckboxMarkedCircleOutlineIcon
+	case 'chore': return BroomIcon
+	default: return TagOutlineIcon
+	}
+}
+
+async function handleSetType(type) {
+	if (type === currentTypeValue.value) return
+	typeError.value = ''
+	try {
+		await setType.mutateAsync({ type })
+	} catch (err) {
+		typeError.value = err?.response?.data?.error || t('kanso', 'Failed to update type.')
 	}
 }
 
@@ -3817,6 +3883,10 @@ async function handleToggleProject(projectId) {
 .card-modal__pill--priority-2 { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
 .card-modal__pill--priority-3 { border-color: #e07b00; color: #e07b00; font-weight: 600; }
 .card-modal__pill--priority-4 { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
+.card-modal__pill--type-bug { border-color: #e74c3c; color: #e74c3c; font-weight: 600; }
+.card-modal__pill--type-feature { border-color: #27ae60; color: #27ae60; font-weight: 600; }
+.card-modal__pill--type-task { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
+.card-modal__pill--type-chore { border-color: #7f8c8d; color: #7f8c8d; font-weight: 600; }
 .card-modal__pill--overdue { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
 .card-modal__pill--soon { border-color: var(--color-warning-text); color: var(--color-warning-text); font-weight: 600; }
 

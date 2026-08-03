@@ -124,7 +124,7 @@ class PublicShareService {
 	 * @return array{
 	 *   board: array{title: ?string, color: ?string, prefix: string},
 	 *   stacks: list<array{id: int, title: ?string, color: ?string}>,
-	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, allDay: bool, priority: int, status: string, humanId: ?string, checklist: array{total: int, done: int}}>
+	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}}>
 	 * }
 	 * @throws DoesNotExistException if the token is unknown, disabled, or expired
 	 */
@@ -203,6 +203,7 @@ class PublicShareService {
 				'duedate' => $card->getDuedate()?->format(\DateTimeInterface::ATOM),
 				'allDay' => $card->getAllDay() ?? false,
 				'priority' => $card->getPriority() ?? 0,
+				'type' => $card->getType() ?? '',
 				'status' => ($card->getDoneAt() ?? 0) > 0 ? 'done' : (($card->getStartedAt() ?? 0) > 0 ? 'in_progress' : 'open'),
 				'humanId' => $seq !== null ? $prefix . '-' . $seq : null,
 				'checklist' => $checklistByCard[$cardId] ?? ['total' => 0, 'done' => 0],

@@ -51,6 +51,7 @@ class CardMapper extends QBMapper {
 		'day_before_reminder_sent',
 		'due_reminder_day_before',
 		'cover_color',
+		'type',
 	];
 
 	public function __construct(IDBConnection $db) {

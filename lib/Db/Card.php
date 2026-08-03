@@ -65,10 +65,18 @@ use OCP\DB\Types;
  * @method void setDueReminderDayBefore(?bool $dueReminderDayBefore)
  * @method string|null getCoverColor()
  * @method void setCoverColor(?string $coverColor)
+ * @method string|null getType()
+ * @method void setType(?string $type)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
 	public const PRIORITY_URGENT = 4;
+
+	// Card type (#3402): a fixed, built-in "issue type" - exactly one per card,
+	// icon-first, lighter than a label. '' is the implicit "none"; the built-in
+	// set is fixed (no custom-type editor). Validated in CardService::update().
+	public const TYPE_NONE = '';
+	public const TYPES = ['bug', 'feature', 'task', 'chore'];
 
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
@@ -106,6 +114,9 @@ class Card extends Entity implements \JsonSerializable {
 	// convention as label/stack/board colours) rendered as a band on the tile,
 	// or null for no cover. In the summary payload so the tile renders it.
 	protected ?string $coverColor = null;
+	// Card type (#3402): one of Card::TYPES or '' for none. In the summary
+	// payload so the board/stack tile renders the type icon without the detail.
+	protected ?string $type = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -131,13 +142,14 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('dayBeforeReminderSent', Types::INTEGER);
 		$this->addType('dueReminderDayBefore', Types::BOOLEAN);
 		$this->addType('coverColor', Types::STRING);
+		$this->addType('type', Types::STRING);
 	}
 
 	/**
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -168,6 +180,9 @@ class Card extends Entity implements \JsonSerializable {
 			// Card cover colour (#3549): bare 6-hex or null. In the summary so the
 			// board/stack tile can render the cover band without the detail fetch.
 			'coverColor' => $this->coverColor,
+			// Card type (#3402): one of Card::TYPES or '' for none. In the summary
+			// so the tile renders the type icon without the detail fetch.
+			'type' => $this->type ?? self::TYPE_NONE,
 		];
 	}
 

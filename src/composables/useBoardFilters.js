@@ -15,6 +15,9 @@
  *   - assignees:   Set<string>  → OR within (uid), plus the sentinel '__none__'
  *                                 which matches cards with NO assignee.
  *   - priorities:  Set<number>  → OR within (0..4). 0 = "No priority".
+ *   - types:       Set<string>  → OR within (built-in card type: bug/feature/
+ *                                 task/chore). '' (none) is expressed by leaving
+ *                                 the dimension unfiltered (#3402).
  *   - due:         string|null  → one of 'overdue' | 'week' | 'none' | null.
  *   - done:        string|null  → 'done' | 'open' | null (tri-state).
  *
@@ -32,6 +35,9 @@ import { reactive, computed } from 'vue'
 
 /** Sentinel assignee id meaning "no assignee". */
 export const UNASSIGNED = '__none__'
+
+/** Built-in card types selectable as a filter facet (#3402). */
+export const FILTERABLE_TYPES = ['bug', 'feature', 'task', 'chore']
 
 /** Due-date filter options (value + i18n label key). */
 export const DUE_OPTIONS = [
@@ -55,6 +61,7 @@ export function createFilterState() {
 		labels: new Set(),
 		assignees: new Set(),
 		priorities: new Set(),
+		types: new Set(),
 		due: null,
 		done: null,
 	})
@@ -71,6 +78,7 @@ export function serializeFilter(s) {
 	if (s.labels.size) out.labels = [...s.labels].sort((a, b) => a - b)
 	if (s.assignees.size) out.assignees = [...s.assignees].sort()
 	if (s.priorities.size) out.priorities = [...s.priorities].sort((a, b) => a - b)
+	if (s.types.size) out.types = [...s.types].sort()
 	if (s.due) out.due = s.due
 	if (s.done) out.done = s.done
 	return out
@@ -87,6 +95,7 @@ export function applyFilter(state, obj) {
 	state.labels.clear()
 	state.assignees.clear()
 	state.priorities.clear()
+	state.types.clear()
 	state.due = null
 	state.done = null
 	if (!obj || typeof obj !== 'object') return
@@ -107,6 +116,11 @@ export function applyFilter(state, obj) {
 			if (Number.isInteger(n) && n >= 0 && n <= 4) state.priorities.add(n)
 		}
 	}
+	if (Array.isArray(obj.types)) {
+		for (const tp of obj.types) {
+			if (FILTERABLE_TYPES.includes(tp)) state.types.add(tp)
+		}
+	}
 	if (DUE_OPTIONS.some((o) => o.value === obj.due)) state.due = obj.due
 	if (DONE_OPTIONS.some((o) => o.value === obj.done)) state.done = obj.done
 }
@@ -125,6 +139,7 @@ export function filterToQuery(ser) {
 	if (ser.labels?.length) q.fl = ser.labels.join(',')
 	if (ser.assignees?.length) q.fa = ser.assignees.join(',')
 	if (ser.priorities?.length) q.fp = ser.priorities.join(',')
+	if (ser.types?.length) q.ft = ser.types.join(',')
 	if (ser.due) q.fd = ser.due
 	if (ser.done) q.fs = ser.done
 	return q
@@ -143,6 +158,7 @@ export function queryToFilter(query) {
 	if (query.fl != null) out.labels = csv(query.fl)
 	if (query.fa != null) out.assignees = csv(query.fa)
 	if (query.fp != null) out.priorities = csv(query.fp)
+	if (query.ft != null) out.types = csv(query.ft)
 	if (query.fd != null) out.due = String(first(query.fd))
 	if (query.fs != null) out.done = String(first(query.fs))
 	return out
@@ -156,6 +172,7 @@ export function filterIsEmpty(ser) {
 	return !ser.labels?.length
 		&& !ser.assignees?.length
 		&& !ser.priorities?.length
+		&& !ser.types?.length
 		&& !ser.due
 		&& !ser.done
 }
@@ -174,6 +191,7 @@ export function makePredicate(s, now = Date.now()) {
 	const hasLabels = s.labels.size > 0
 	const hasAssignees = s.assignees.size > 0
 	const hasPriorities = s.priorities.size > 0
+	const hasTypes = s.types.size > 0
 	const due = s.due
 	const done = s.done
 
@@ -199,6 +217,11 @@ export function makePredicate(s, now = Date.now()) {
 		// Priorities (OR within): card.priority (0..4) in the selected set.
 		if (hasPriorities) {
 			if (!s.priorities.has(Number(card.priority ?? 0))) return false
+		}
+		// Types (OR within): card's built-in type in the selected set (#3402).
+		// A typeless card ('') never matches a type facet.
+		if (hasTypes) {
+			if (!s.types.has(card.type ?? '')) return false
 		}
 		// Due (single-select): overdue / this-week / no-due-date.
 		if (due) {
@@ -232,6 +255,7 @@ export function useFilterCount(s) {
 		s.labels.size
 		+ s.assignees.size
 		+ s.priorities.size
+		+ s.types.size
 		+ (s.due ? 1 : 0)
 		+ (s.done ? 1 : 0),
 	)

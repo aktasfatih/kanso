@@ -54,6 +54,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:model-value="state.priorities.has(level.value)"
 				@update:model-value="toggleSet('priorities', level.value)">{{ t('kanso', level.label) }}</NcActionCheckbox>
 
+			<!-- Type (OR within) - built-in card types (#3402) -->
+			<NcActionCaption :name="t('kanso', 'Type')" />
+			<NcActionCheckbox
+				v-for="tp in cardTypes"
+				:key="'t-' + tp.value"
+				class="board-filter-bar__type-item"
+				:class="`board-filter-bar__type-item--${tp.value}`"
+				:model-value="state.types.has(tp.value)"
+				@update:model-value="toggleSet('types', tp.value)">{{ t('kanso', tp.label) }}</NcActionCheckbox>
+
 			<!-- Due (single-select radio; a re-click of the active one clears it) -->
 			<NcActionCaption :name="t('kanso', 'Due date')" />
 			<NcActionRadio
@@ -160,6 +170,7 @@ import CheckIcon from 'vue-material-design-icons/Check.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
+import { CARD_TYPES } from '../composables/useCardType.js'
 import {
 	UNASSIGNED,
 	DUE_OPTIONS,
@@ -186,6 +197,10 @@ const emit = defineEmits(['save', 'apply-saved', 'delete-saved'])
 // priority; offering an explicit "None" checkbox would be redundant AND would
 // mean "priority == 0" which is better expressed by leaving priority unfiltered.
 const priorityLevels = computed(() => PRIORITY_LEVELS.filter((l) => l.value > 0))
+
+// Built-in card types facet (#3402). "None" is expressed by leaving the type
+// dimension unfiltered - no explicit "None" checkbox (mirrors the priority facet).
+const cardTypes = CARD_TYPES
 
 const count = useFilterCount(props.state)
 
@@ -267,6 +282,25 @@ watch(saveName, () => { saveError.value = '' })
 .board-filter-bar__priority-item--2:deep(.action-checkbox__text)::before { background: var(--color-primary-element, #0082c9); }
 .board-filter-bar__priority-item--3:deep(.action-checkbox__text)::before { background: #e07b00; }
 .board-filter-bar__priority-item--4:deep(.action-checkbox__text)::before { background: var(--color-error, #e30000); }
+
+/* Type facet colour dots (#3402) - matches the tile/pill type colours. */
+.board-filter-bar__type-item--bug:deep(.action-checkbox__text)::before,
+.board-filter-bar__type-item--feature:deep(.action-checkbox__text)::before,
+.board-filter-bar__type-item--task:deep(.action-checkbox__text)::before,
+.board-filter-bar__type-item--chore:deep(.action-checkbox__text)::before {
+	content: '';
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	border-radius: 50%;
+	margin-right: 6px;
+	vertical-align: middle;
+}
+.board-filter-bar__type-item--bug:deep(.action-checkbox__text)::before { background: #e74c3c; }
+.board-filter-bar__type-item--feature:deep(.action-checkbox__text)::before { background: #27ae60; }
+.board-filter-bar__type-item--task:deep(.action-checkbox__text)::before { background: var(--color-primary-element, #0082c9); }
+.board-filter-bar__type-item--chore:deep(.action-checkbox__text)::before { background: #7f8c8d; }
 
 .board-filter-bar__saved-item--active {
 	font-weight: 600;

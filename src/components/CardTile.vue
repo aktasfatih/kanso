@@ -39,7 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
+				v-if="isInProgress || card.blocked || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -56,6 +56,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:aria-label="t('kanso', 'Blocked by another card')">
 					<CancelIcon :size="12" />
 					{{ t('kanso', 'Blocked') }}
+				</span>
+				<!-- Type icon (#3402) - icon-first built-in issue type -->
+				<span
+					v-if="cardType"
+					class="card-tile__type"
+					:class="`card-tile__type--${cardType.value}`"
+					:aria-label="t('kanso', 'Type: {type}', { type: t('kanso', cardType.label) })"
+					:title="t('kanso', cardType.label)">
+					<BugIcon v-if="cardType.value === 'bug'" :size="14" />
+					<StarIcon v-else-if="cardType.value === 'feature'" :size="14" />
+					<CheckboxMarkedCircleOutlineIcon v-else-if="cardType.value === 'task'" :size="14" />
+					<BroomIcon v-else :size="14" />
 				</span>
 				<!-- Priority indicator - only when priority > 0 -->
 				<span
@@ -157,9 +169,14 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import CancelIcon from 'vue-material-design-icons/Cancel.vue'
+import BugIcon from 'vue-material-design-icons/Bug.vue'
+import StarIcon from 'vue-material-design-icons/Star.vue'
+import CheckboxMarkedCircleOutlineIcon from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
+import BroomIcon from 'vue-material-design-icons/Broom.vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
+import { CARD_TYPES } from '../composables/useCardType.js'
 
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -271,6 +288,9 @@ const priorityLabel = computed(() => {
 	const level = PRIORITY_LEVELS.find((l) => l.value === Number(props.card.priority ?? 0))
 	return level?.shortLabel ?? ''
 })
+
+// Card type (#3402) metadata for the tile icon, or null for the implicit "none".
+const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.type) ?? null)
 
 // Assignee avatar stack: max 3 visible + overflow count
 const MAX_VISIBLE_ASSIGNEES = 3
@@ -521,6 +541,16 @@ const extraAssigneeCount = computed(() => {
 	border-radius: 10px;
 	padding: 1px 7px;
 }
+
+/* Type icon (#3402) - icon-first, colour-coded per built-in type */
+.card-tile__type {
+	display: inline-flex;
+	align-items: center;
+}
+.card-tile__type--bug { color: #e74c3c; }
+.card-tile__type--feature { color: #27ae60; }
+.card-tile__type--task { color: var(--color-primary-element, #0082c9); }
+.card-tile__type--chore { color: #7f8c8d; }
 
 /* Priority indicator badge */
 .card-tile__priority {

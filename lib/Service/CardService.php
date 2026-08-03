@@ -221,8 +221,8 @@ class CardService {
 	/**
 	 * Duplicates a card's CONTENT into $targetStackId (same board or another
 	 * board the actor can EDIT). What is cloned: title (suffixed " (copy)"),
-	 * description, priority, status (started/done timestamps), estimate, labels
-	 * and checklist items. What is NOT cloned: comments, activity/history,
+	 * description, priority, type, status (started/done timestamps), estimate,
+	 * labels and checklist items. What is NOT cloned: comments, activity/history,
 	 * relations, subscriptions, parent/children and assignees - a copy is a
 	 * fresh, standalone card. The new card is appended to the target stack via
 	 * {@see self::create()} (fresh id + sort key + its own change row) and the
@@ -266,6 +266,7 @@ class CardService {
 		//    only kept when the TARGET board's scale accepts the token.
 		$copy->setDescription($source->getDescription());
 		$copy->setPriority($source->getPriority());
+		$copy->setType($source->getType());
 		$copy->setStartedAt($source->getStartedAt());
 		$copy->setDoneAt($source->getDoneAt());
 		$estimate = $source->getEstimate();
@@ -360,10 +361,12 @@ class CardService {
 	 * (#3545) by clearing their "already sent" markers; $dueReminderDayBefore
 	 * toggles the optional "1 day before" reminder. An empty $coverColor string
 	 * clears the cover colour; a non-empty one must be a bare 6-hex value (#3549).
+	 * $type sets the card's built-in issue type (#3402): '' clears it (none), a
+	 * non-empty value must be one of Card::TYPES.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title, duedate or cover colour
+	 * @throws InvalidInputException on invalid title, duedate, cover colour or type
 	 */
 	public function update(
 		int $id,
@@ -380,6 +383,7 @@ class CardService {
 		?bool $allDay = null,
 		?bool $dueReminderDayBefore = null,
 		?string $coverColor = null,
+		?string $type = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -409,6 +413,14 @@ class CardService {
 			// Shared colour validation ('' clears the cover; a non-empty value must
 			// be a bare 6-hex string, same as label/stack/board colours).
 			$card->setCoverColor(ColorValidator::assertValid($coverColor));
+		}
+		if ($type !== null) {
+			// '' clears the type (none); any other value must be a built-in type.
+			// The built-in set is fixed (no custom-type editor - #3402's trap).
+			if ($type !== Card::TYPE_NONE && !in_array($type, Card::TYPES, true)) {
+				throw new InvalidInputException('Unknown card type: ' . $type);
+			}
+			$card->setType($type);
 		}
 		$descriptionChanged = false;
 		if ($description !== null && $description !== $card->getDescription()) {

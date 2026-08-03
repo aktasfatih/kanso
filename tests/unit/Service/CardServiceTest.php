@@ -1743,6 +1743,56 @@ class CardServiceTest extends TestCase {
 		$this->service->update(9, null, null, null, null, null, 'alice', -1);
 	}
 
+	// ---- update type (#3402) ----------------------------------------------
+
+	public function testUpdateSetsType(): void {
+		$card = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$result = $this->service->update(9, null, null, null, null, null, 'alice', type: 'bug');
+		self::assertSame('bug', $result->getType());
+	}
+
+	public function testUpdateClearsTypeWithEmptyString(): void {
+		$card = $this->card(9, 5, 1);
+		$card->setType('feature');
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$result = $this->service->update(9, null, null, null, null, null, 'alice', type: '');
+		self::assertSame('', $result->getType());
+	}
+
+	public function testUpdateRejectsUnknownType(): void {
+		$card = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', type: 'epic');
+	}
+
+	public function testUpdateTypeDeniedWithoutEditPermission(): void {
+		$card = $this->card(9, 5, 1);
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, null, null, null, null, 'mallory', type: 'bug');
+	}
+
 	// ---- copy -------------------------------------------------------------
 
 	private function label(int $id, int $boardId, string $title, ?string $color): \OCA\Kanso\Db\Label {
