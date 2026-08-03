@@ -823,9 +823,19 @@ async function onTrelloImportChange(event) {
 
 /* Board tile with an overlaid folder menu (#3529): the whole tile navigates,
    the menu button in the corner intercepts its own clicks. */
-.board-list__tile-wrap {
+/* Compound selector so it overrides .board-tile's own padding/gap (defined
+   later in source order). The wrapper is only a positioning context + card
+   frame; the inner .board-tile__hit carries the padding. */
+.board-tile.board-list__tile-wrap {
 	position: relative;
 	padding: 0;
+	gap: 0;
+}
+
+/* The wrapper is a <div>, so button.board-tile:hover doesn't reach it. */
+.board-list__tile-wrap:hover {
+	border-color: var(--color-primary-element);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .board-tile__hit {
@@ -833,7 +843,8 @@ async function onTrelloImportChange(event) {
 	width: 100%;
 	border: none;
 	background: transparent;
-	padding: 16px 20px;
+	/* Extra right padding reserves the corner for the absolute folder menu. */
+	padding: 16px 48px 16px 20px;
 	text-align: left;
 	cursor: pointer;
 	border-radius: var(--border-radius-large);

@@ -10,15 +10,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="board-tile__color-dot"
 				:style="{ background: dotColor }" />
 			<span class="board-tile__title">{{ board.title }}</span>
-			<!-- Non-functional star until per-user pinning ships (#3572). -->
+			<!-- Filled star marks a pinned board; the non-functional outline
+			     placeholder was dropped (it collided with the folder menu and
+			     does nothing until per-user pinning ships, #3572). -->
 			<StarIcon
 				v-if="pinned"
 				:size="16"
 				class="board-tile__star board-tile__star--on" />
-			<StarOutlineIcon
-				v-else
-				:size="16"
-				class="board-tile__star" />
 		</div>
 
 		<!-- Meta line: card count + progress + badges + relative time -->
@@ -61,7 +59,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { computed } from 'vue'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import StarIcon from 'vue-material-design-icons/Star.vue'
-import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import { cssColor } from '../services/color.js'
 
 const props = defineProps({

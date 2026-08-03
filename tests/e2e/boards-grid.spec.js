@@ -73,7 +73,9 @@ test.describe('Boards page — grid v1', () => {
 		await expect(page.locator('.board-tile', { hasText: 'Grid Active ' + state.stamp }).first())
 			.toBeVisible({ timeout: 6_000 })
 		await searchBox.fill('zzz-no-such-board-' + state.stamp)
-		await expect(page.locator('.board-section__empty')).toBeVisible({ timeout: 6_000 })
+		// Target the search-empty message specifically: a leftover empty folder
+		// (from board-groups.spec) also renders a .board-section__empty node.
+		await expect(page.getByText('No boards match your search.')).toBeVisible({ timeout: 6_000 })
 		await searchBox.fill('')
 
 		// The Active/Archived toggle switches the visible set.
