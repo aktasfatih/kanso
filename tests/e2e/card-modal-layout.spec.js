@@ -141,9 +141,10 @@ test.describe('Card modal two-column layout', () => {
 		// Priority is set to High (3) via API in beforeAll - the pill carries the modifier
 		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible()
 
-		// The due-date pill is the second pill in the attribute bar (priority, then
-		// due). Opening it reveals the padded date popover with the date input.
-		await attrbar.locator('button.card-modal__pill').nth(1).click()
+		// The due-date pill is targeted by its stable data-pill hook (robust to
+		// other attribute pills being added/reordered). Opening it reveals the
+		// padded date popover with the date input.
+		await attrbar.locator('button.card-modal__pill[data-pill="due"]').click()
 		await expect(page.locator('.card-modal__popover--pad .card-modal__date-input').first()).toBeVisible({ timeout: 5_000 })
 	})
 
@@ -175,7 +176,7 @@ test.describe('Card modal two-column layout', () => {
 
 		const attrbar = page.locator('.card-modal__attrbar')
 		// The priority pill is the first pill in the attribute bar (has the flag icon).
-		const priorityPill = attrbar.locator('button.card-modal__pill').first()
+		const priorityPill = attrbar.locator('button.card-modal__pill[data-pill="priority"]')
 		await expect(priorityPill).toBeVisible()
 
 		// Open the priority popover
@@ -218,9 +219,9 @@ test.describe('Card modal two-column layout', () => {
 
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
-		// Open the due-date pill (2nd pill; the card has a due date set in beforeAll)
-		// to reveal its round clear (×) button.
-		await page.locator('.card-modal__attrbar button.card-modal__pill').nth(1).click()
+		// Open the due-date pill (targeted by its stable data-pill hook; the card
+		// has a due date set in beforeAll) to reveal its round clear (×) button.
+		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
 		const clearBtn = page.locator('.card-modal__field-clear').first()
 		await expect(clearBtn).toBeVisible({ timeout: 5_000 })
 
@@ -237,7 +238,7 @@ test.describe('Card modal two-column layout', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		// Open an attribute popover (the due-date pill).
-		await page.locator('.card-modal__attrbar button.card-modal__pill').nth(1).click()
+		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
 		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 5_000 })
 
 		// First Escape closes ONLY the popover — the modal stays open.

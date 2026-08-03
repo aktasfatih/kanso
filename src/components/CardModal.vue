@@ -296,6 +296,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="card-modal__attr">
 						<button
 							class="card-modal__pill"
+							data-pill="priority"
 							:class="currentPriority > 0 ? `card-modal__pill--priority-${currentPriority}` : 'card-modal__pill--dashed'"
 							:aria-expanded="openPicker === 'priority'"
 							@click="togglePicker('priority')">
@@ -321,6 +322,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="card-modal__attr">
 						<button
 							class="card-modal__pill"
+							data-pill="type"
 							:class="currentType ? `card-modal__pill--type-${currentType.value}` : 'card-modal__pill--dashed'"
 							:aria-expanded="openPicker === 'type'"
 							@click="togglePicker('type')">
@@ -353,6 +355,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="card-modal__attr">
 						<button
 							class="card-modal__pill"
+							data-pill="due"
 							:class="cardData.duedate ? dueDateClass : 'card-modal__pill--dashed'"
 							:aria-expanded="openPicker === 'due'"
 							@click="togglePicker('due')">

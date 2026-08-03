@@ -62,8 +62,9 @@ test.describe('All-day due dates', () => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
-		// Open the due-date popover (2nd attribute pill; the card has a due date).
-		await page.locator('.card-modal__attrbar button.card-modal__pill').nth(1).click()
+		// Open the due-date popover (targeted by its stable data-pill hook, so the
+		// locator is robust to other attribute pills being added/reordered).
+		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
 		const dateInput = page.locator('.card-modal__popover .card-modal__date-input').first()
 		await expect(dateInput).toHaveAttribute('type', 'datetime-local')
 
