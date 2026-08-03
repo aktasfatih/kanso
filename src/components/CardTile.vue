@@ -181,6 +181,16 @@ const props = defineProps({
 		type: String,
 		default: '',
 	},
+	/**
+	 * Swimlane key this tile is rendered in (#3406), or '' when swimlanes are
+	 * off. Threaded into the drag/drop payload so the BoardView monitor can
+	 * reject cross-lane drops (which would imply a reassignment — a documented
+	 * v1 stretch). Empty string means "no lane" and leaves DnD unchanged.
+	 */
+	laneKey: {
+		type: String,
+		default: '',
+	},
 })
 
 // Human-readable reference id (prefix + '-' + boardSeq), null when unassigned.
@@ -203,6 +213,7 @@ onMounted(() => {
 				cardId: props.card.id,
 				stackId: props.card.stackId,
 				sortKey: props.card.sortKey,
+				laneKey: props.laneKey,
 			}),
 			onDragStart: () => { isDragging.value = true },
 			onDrop: () => { isDragging.value = false },
@@ -211,7 +222,7 @@ onMounted(() => {
 			element: el.value,
 			canDrop: ({ source }) => source.data.type === 'card' && source.data.cardId !== props.card.id,
 			getData: ({ input, element: el2 }) => attachClosestEdge(
-				{ type: 'card', cardId: props.card.id, stackId: props.card.stackId, sortKey: props.card.sortKey },
+				{ type: 'card', cardId: props.card.id, stackId: props.card.stackId, sortKey: props.card.sortKey, laneKey: props.laneKey },
 				{ input, element: el2, allowedEdges: ['top', 'bottom'] },
 			),
 			onDrag: ({ self }) => {

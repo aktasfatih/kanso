@@ -189,6 +189,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:card="cards[vRow.index]"
 						:labels-by-id="labelsById"
 						:board-prefix="boardPrefix"
+						:lane-key="laneKey"
 						@click="openCard(cards[vRow.index].id)"
 						@hover="(id) => onCardHover?.(id)" />
 				</div>
@@ -262,6 +263,16 @@ const props = defineProps({
 	},
 	/** Board human-id prefix (e.g. "KAN") - passed down to CardTile for the KAN-<n> badge. */
 	boardPrefix: {
+		type: String,
+		default: '',
+	},
+	/**
+	 * Swimlane key this column instance belongs to (#3406), or '' when swimlanes
+	 * are off. Threaded into the column-level drop-target data and down to each
+	 * CardTile so the BoardView monitor can keep drops within a lane (cross-lane
+	 * drag = reassignment, a documented v1 stretch that is disabled).
+	 */
+	laneKey: {
 		type: String,
 		default: '',
 	},
@@ -494,12 +505,12 @@ function measureVirtualEl(el, index) {
 // ── Drop targets & auto-scroll ────────────────────────────────────────────────
 onMounted(() => {
 	if (!cardListRef.value) return
-	cleanup = combine(
+	const registrations = [
 		// Column-level drop target: catches drops on the empty space below all cards
 		dropTargetForElements({
 			element: cardListRef.value,
 			canDrop: ({ source }) => source.data.type === 'card',
-			getData: () => ({ type: 'column', stackId: props.stack.id }),
+			getData: () => ({ type: 'column', stackId: props.stack.id, laneKey: props.laneKey }),
 			onDragEnter: () => { isDropOver.value = true },
 			onDragLeave: () => { isDropOver.value = false },
 			onDrop: () => { isDropOver.value = false },
@@ -508,28 +519,39 @@ onMounted(() => {
 		autoScrollForElements({
 			element: cardListRef.value,
 		}),
-		// Stack reordering: only the header is the drag handle …
-		draggable({
-			element: headerRef.value,
-			getInitialData: () => ({ type: 'stack', stackId: props.stack.id }),
-			onDragStart: () => { isStackDragging.value = true },
-			onDrop: () => { isStackDragging.value = false },
-		}),
-		// … but the whole column is the drop target (left/right edges).
-		dropTargetForElements({
-			element: columnRef.value,
-			canDrop: ({ source }) => source.data.type === 'stack' && source.data.stackId !== props.stack.id,
-			getData: ({ input, element: el }) => attachClosestEdge(
-				{ type: 'stack', stackId: props.stack.id },
-				{ input, element: el, allowedEdges: ['left', 'right'] },
-			),
-			onDrag: ({ self }) => {
-				stackDropEdge.value = extractClosestEdge(self.data)
-			},
-			onDragLeave: () => { stackDropEdge.value = null },
-			onDrop: () => { stackDropEdge.value = null },
-		}),
-	)
+	]
+
+	// Stack reordering is a board-level operation on a shared stack, so it is
+	// only wired when NOT inside a swimlane (a stack renders once per lane; per-
+	// lane reorder handles would be duplicative and ambiguous). Within a lane
+	// only card drag survives — the swimlane requirement.
+	if (!props.laneKey && headerRef.value && columnRef.value) {
+		registrations.push(
+			// Stack reordering: only the header is the drag handle …
+			draggable({
+				element: headerRef.value,
+				getInitialData: () => ({ type: 'stack', stackId: props.stack.id }),
+				onDragStart: () => { isStackDragging.value = true },
+				onDrop: () => { isStackDragging.value = false },
+			}),
+			// … but the whole column is the drop target (left/right edges).
+			dropTargetForElements({
+				element: columnRef.value,
+				canDrop: ({ source }) => source.data.type === 'stack' && source.data.stackId !== props.stack.id,
+				getData: ({ input, element: el }) => attachClosestEdge(
+					{ type: 'stack', stackId: props.stack.id },
+					{ input, element: el, allowedEdges: ['left', 'right'] },
+				),
+				onDrag: ({ self }) => {
+					stackDropEdge.value = extractClosestEdge(self.data)
+				},
+				onDragLeave: () => { stackDropEdge.value = null },
+				onDrop: () => { stackDropEdge.value = null },
+			}),
+		)
+	}
+
+	cleanup = combine(...registrations)
 })
 
 onUnmounted(() => {

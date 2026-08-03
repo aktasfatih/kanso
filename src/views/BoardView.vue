@@ -59,6 +59,42 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
+			<!-- Swimlanes - client-side grouping of the Board view into horizontal
+			     lanes by assignee / label / priority. View-only over the summary
+			     payload; persisted per board per user. Only shown in Board view. -->
+			<NcActions
+				v-if="boardData && viewMode === 'board'"
+				class="board-view__swimlane-menu"
+				:menu-name="swimlaneModeLabel">
+				<template #icon>
+					<ViewAgendaOutlineIcon :size="20" />
+				</template>
+				<NcActionRadio
+					:model-value="swimlaneMode === 'none'"
+					name="kanso-swimlane"
+					@change="setSwimlaneMode('none')">
+					{{ t('kanso', 'No swimlanes') }}
+				</NcActionRadio>
+				<NcActionRadio
+					:model-value="swimlaneMode === 'assignee'"
+					name="kanso-swimlane"
+					@change="setSwimlaneMode('assignee')">
+					{{ t('kanso', 'Group by assignee') }}
+				</NcActionRadio>
+				<NcActionRadio
+					:model-value="swimlaneMode === 'label'"
+					name="kanso-swimlane"
+					@change="setSwimlaneMode('label')">
+					{{ t('kanso', 'Group by label') }}
+				</NcActionRadio>
+				<NcActionRadio
+					:model-value="swimlaneMode === 'priority'"
+					name="kanso-swimlane"
+					@change="setSwimlaneMode('priority')">
+					{{ t('kanso', 'Group by priority') }}
+				</NcActionRadio>
+			</NcActions>
+
 			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
 			<NcActions
 				v-if="boardData"
@@ -233,7 +269,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Stacks row (Board view). Kept mounted under v-show so its drag-and-drop
 		     monitors stay attached when the List view is showing. -->
-		<div v-show="viewMode === 'board'" ref="stacksWrapRef" class="board-view__stacks-wrap">
+		<div v-show="viewMode === 'board' && swimlaneMode === 'none'" ref="stacksWrapRef" class="board-view__stacks-wrap">
 			<!-- Skeleton stacks on cold load -->
 			<template v-if="isLoading">
 				<div v-for="n in 3" :key="n" class="stack-skeleton">
@@ -242,8 +278,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</template>
 
-			<!-- Actual stacks -->
-			<template v-else-if="boardData">
+			<!-- Actual stacks (flat board - no swimlanes) -->
+			<template v-else-if="boardData && swimlaneMode === 'none'">
 				<StackColumn
 					v-for="stack in sortedStacks"
 					:key="stack.id"
@@ -276,6 +312,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<p v-if="stackError" class="add-stack__error">{{ stackError }}</p>
 					</form>
 				</div>
+			</template>
+		</div>
+
+		<!-- Swimlane (grouped) board: horizontal lanes, each holding the full
+		     stacks row for the lane's cards. Its own vertical scroll region so
+		     lanes stack top-to-bottom while each lane scrolls horizontally. -->
+		<div
+			v-show="viewMode === 'board' && swimlaneMode !== 'none'"
+			class="board-view__swimlanes-wrap">
+			<template v-if="boardData && swimlaneMode !== 'none'">
+				<SwimlaneRow
+					v-for="lane in lanes"
+					:key="lane.key"
+					:lane="lane"
+					:stacks="sortedStacks"
+					:labels-by-id="labelsById"
+					:board-prefix="boardData.board.prefix"
+					:register-column-ref="registerLaneColumnRef"
+					:on-create-card="handleCreateCard"
+					:on-card-focus="(cardId) => { focusedCardId = cardId }"
+					:on-card-hover="(cardId) => { hoveredCardId = cardId }" />
+				<p v-if="lanes.length === 0" class="board-view__swimlanes-empty">
+					{{ t('kanso', 'No cards to group.') }}
+				</p>
 			</template>
 		</div>
 
@@ -395,7 +455,10 @@ import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted
 import SortIcon from 'vue-material-design-icons/Sort.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
+import ViewAgendaOutlineIcon from 'vue-material-design-icons/ViewAgendaOutline.vue'
 import StackColumn from '../components/StackColumn.vue'
+import SwimlaneRow from '../components/SwimlaneRow.vue'
+import { buildLanes, SWIMLANE_MODES } from '../composables/useSwimlanes.js'
 import BoardListView from '../components/BoardListView.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
 import SearchBox from '../components/SearchBox.vue'
@@ -470,6 +533,28 @@ const sortModeLabel = computed(() => ({
 	due: t('kanso', 'Due date'),
 	title: t('kanso', 'Title'),
 }[sortMode.value] ?? t('kanso', 'Manual')))
+
+// Swimlanes - client-side grouping of the Board view into horizontal lanes by
+// assignee / label / priority (#3406). Purely a view over the board summary
+// payload (cards already carry labelIds / assigneeIds / priority) - NO extra
+// endpoint. Persisted per board per user, mirroring viewMode / sortMode.
+const swimlaneMode = ref('none')
+try {
+	const saved = localStorage.getItem(`kanso.swimlaneMode.${props.id}`)
+	if (saved && SWIMLANE_MODES.includes(saved)) swimlaneMode.value = saved
+} catch (e) { /* default to none */ }
+function setSwimlaneMode(mode) {
+	swimlaneMode.value = mode
+	try {
+		localStorage.setItem(`kanso.swimlaneMode.${props.id}`, mode)
+	} catch (e) { /* ignore persistence failure */ }
+}
+const swimlaneModeLabel = computed(() => ({
+	none: t('kanso', 'No swimlanes'),
+	assignee: t('kanso', 'By assignee'),
+	label: t('kanso', 'By label'),
+	priority: t('kanso', 'By priority'),
+}[swimlaneMode.value] ?? t('kanso', 'No swimlanes')))
 
 /**
  * View-only comparator for the active display sort. Every non-manual mode falls
@@ -559,6 +644,21 @@ function registerColumnRef(stackId, el) {
 	}
 }
 
+/**
+ * Lane-scoped column-ref registrar (swimlane mode). Keyboard card-navigation is
+ * flat-board only, so lane columns are stored under a composite key that never
+ * collides with the flat stackId keys - keeping the flat map clean while still
+ * letting the components mount/unmount their refs cleanly.
+ */
+function registerLaneColumnRef(laneKey, stackId, el) {
+	const key = `${laneKey}::${stackId}`
+	if (el) {
+		columnRefs.set(key, el)
+	} else {
+		columnRefs.delete(key)
+	}
+}
+
 // ── Label computed helpers ────────────────────────────────────────────────────
 
 /** All board-level labels from the board payload. */
@@ -644,6 +744,18 @@ const allVisibleCards = computed(() => {
 function cardsForStack(stackId) {
 	return cardsByStack.value.get(stackId) ?? []
 }
+
+// Swimlane partition of the (already filtered + display-sorted) cardsByStack.
+// Empty array when swimlanes are off, so the flat board path is untouched.
+const lanes = computed(() => {
+	if (swimlaneMode.value === 'none') return []
+	return buildLanes(
+		swimlaneMode.value,
+		cardsByStack.value,
+		boardLabels.value,
+		participants.data.value ?? [],
+	)
+})
 
 // ── Quick-look preview helpers ────────────────────────────────────────────────
 // The preview reads its meta straight from the board summary card already in the
@@ -980,6 +1092,15 @@ onMounted(() => {
 				// Find card-level target (innermost) and column-level target
 				const cardTarget = targets.find((t) => t.data.type === 'card')
 				const columnTarget = targets.find((t) => t.data.type === 'column')
+
+				// Swimlane guard (#3406): within-lane card reordering / cross-stack
+				// moves are allowed, but a CROSS-LANE drop would change the grouping
+				// field (reassign label/assignee/priority) - a documented v1 stretch
+				// that is disabled. laneKey is '' when swimlanes are off, so this is a
+				// no-op on the flat board. Reject when source and target lanes differ.
+				const sourceLaneKey = source.data.laneKey ?? ''
+				const targetLaneKey = (cardTarget?.data.laneKey ?? columnTarget?.data.laneKey) ?? ''
+				if (sourceLaneKey !== targetLaneKey) return
 
 				if (cardTarget) {
 					const edge = extractClosestEdge(cardTarget.data)
@@ -1424,6 +1545,32 @@ async function handleSetColor(stackId, color) {
 	overflow-x: auto;
 	overflow-y: hidden;
 	flex: 1;
+}
+
+/* Swimlanes (grouped board): vertical scroll region holding stacked lanes.
+   Each lane scrolls horizontally on its own; this wrapper scrolls vertically. */
+.board-view__swimlanes-wrap {
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+	overflow-x: hidden;
+	flex: 1;
+	min-height: 0;
+}
+
+/* Give each lane's stacks row its own horizontal scroll so lanes stay aligned
+   to the left edge while long boards scroll sideways independently. */
+.board-view__swimlanes-wrap :deep(.swimlane__stacks) {
+	overflow-x: auto;
+}
+
+.board-view__swimlanes-empty {
+	padding: 24px;
+	color: var(--color-text-maxcontrast);
+}
+
+.board-view__swimlane-menu {
+	flex-shrink: 0;
 }
 
 /* Skeleton stacks */
