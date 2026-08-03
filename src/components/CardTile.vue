@@ -416,14 +416,33 @@ const extraAssigneeCount = computed(() => {
 	border: 1px solid var(--color-border);
 }
 
-/* Done state */
+/* Done state
+ *
+ * The "muted/done" cue is applied to the tile chrome (background + the
+ * struck-through title) rather than as a blanket opacity on the whole tile.
+ * A tile-wide `opacity` would fade the meta/label chips on top of their
+ * already-muted foreground tokens, dropping their text contrast below WCAG AA
+ * and dimming the readableColor() text on dynamic label chips until it is
+ * illegible. Keeping the chips at full opacity preserves their designed
+ * contrast (NC color tokens + readableColor) in both light and dark themes,
+ * while the greyed background and struck title still read clearly as "done".
+ */
 .card-tile--done {
-	opacity: 0.6;
+	background: var(--color-background-dark);
 }
 
 .card-tile__title--done {
 	text-decoration: line-through;
 	color: var(--color-text-maxcontrast);
+}
+
+/* Colorless chips default to --color-background-dark, which now matches the
+ * done tile background - lift them onto the main background so they stay
+ * distinguishable against a done tile. */
+.card-tile--done .card-tile__label-chip--no-color,
+.card-tile--done .card-tile__estimate,
+.card-tile--done .card-tile__avatar-overflow {
+	background: var(--color-main-background);
 }
 
 /* Checklist progress badge */
