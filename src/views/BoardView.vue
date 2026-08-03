@@ -267,6 +267,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:board-prefix="boardData.board.prefix"
 					:new-cards-on-top="boardData.board.newCardsOnTop === true"
 					:on-create-card="handleCreateCard"
+					:on-fetch-templates="handleFetchTemplates"
+					:on-create-from-template="handleCreateFromTemplate"
 					:on-delete-stack="handleDeleteStack"
 					:on-restore-stack="handleRestoreStack"
 					:on-rename-stack="handleRenameStack"
@@ -485,7 +487,7 @@ import { useCardMove } from '../composables/useCardMove.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
 import { initial, between, after, before } from '../services/sortKey.js'
-import { updateCard as apiUpdateCard, moveStack as apiMoveStack } from '../services/api.js'
+import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -1411,6 +1413,19 @@ async function submitNewStack() {
 
 async function handleCreateCard(stackId, title) {
 	await createCard.mutateAsync({ stackId, title })
+}
+
+// Fetch the board's card templates for the composer picker (#3409). Lazily
+// called when a column's "from template" menu opens.
+async function handleFetchTemplates() {
+	return apiFetchCardTemplates(boardId.value)
+}
+
+// Create a new card in stackId pre-filled from a template (#3409), then refetch
+// the board so the fresh card appears (database-first).
+async function handleCreateFromTemplate(stackId, templateId) {
+	await apiCreateCardFromTemplate(templateId, stackId)
+	queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 }
 
 async function handleDeleteStack(stackId) {

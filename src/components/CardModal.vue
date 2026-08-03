@@ -250,6 +250,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</template>
 								{{ t('kanso', 'Copy to…') }}
 							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
+								:disabled="templatePending"
+								@click="handleTemplateToggle">
+								<template #icon>
+									<FileDocumentOutlineIcon :size="20" />
+								</template>
+								{{ cardData.isTemplate ? t('kanso', 'Unmark as template') : t('kanso', 'Mark as template') }}
+							</NcActionButton>
 							<NcActionSeparator v-if="canEdit" />
 							<NcActionButton
 								:close-after-click="true"
@@ -1567,6 +1577,7 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
+import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
@@ -1634,7 +1645,7 @@ import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
@@ -1721,6 +1732,31 @@ async function handleArchiveToggle() {
 		}
 	} catch (err) {
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
+	}
+}
+
+// Per-board card templates (#3409). Flag / unflag this card as a template. A
+// template is excluded from the live board render, so on marking we close the
+// modal (the card leaves the columns) and invalidate the board so the list drops
+// it; on unmarking it returns to its column. Database-first: the server flips the
+// flag + writes a change row, then the board/card caches refetch.
+const templatePending = ref(false)
+async function handleTemplateToggle() {
+	if (templatePending.value) return
+	actionError.value = ''
+	const isTemplate = !cardData.value?.isTemplate
+	templatePending.value = true
+	try {
+		await apiSetCardTemplate(props.cardId, isTemplate)
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		if (isTemplate) {
+			closeModal()
+		}
+	} catch (err) {
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
+	} finally {
+		templatePending.value = false
 	}
 }
 

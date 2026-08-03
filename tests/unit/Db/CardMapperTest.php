@@ -193,4 +193,34 @@ class CardMapperTest extends TestCase {
 
 		self::assertNull($this->mapper->findByBoardAndSeq(7, 999));
 	}
+
+	// ---- findTemplatesByBoard (per-board template picker, #3409) -----------
+
+	public function testFindTemplatesByBoardHydratesTemplateRows(): void {
+		// The picker query returns the board's template cards as hydrated summaries
+		// carrying the is_template flag (the WHERE is_template = true filter itself
+		// is exercised against a live DB by the e2e test).
+		$this->stubQuery([
+			[
+				'id' => 42,
+				'board_id' => 7,
+				'stack_id' => 3,
+				'title' => 'Bug report template',
+				'sort_key' => 'aa',
+				'deleted_at' => 0,
+				'is_template' => true,
+			],
+		]);
+
+		$templates = $this->mapper->findTemplatesByBoard(7);
+		self::assertCount(1, $templates);
+		self::assertSame(42, $templates[0]->getId());
+		self::assertSame('Bug report template', $templates[0]->getTitle());
+		self::assertTrue($templates[0]->getIsTemplate());
+	}
+
+	public function testFindTemplatesByBoardReturnsEmptyWhenNoTemplates(): void {
+		$this->stubQuery([]);
+		self::assertSame([], $this->mapper->findTemplatesByBoard(7));
+	}
 }

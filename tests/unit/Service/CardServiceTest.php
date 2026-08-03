@@ -1966,4 +1966,194 @@ class CardServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->copy(9, 7, 'bob');
 	}
+
+	// ---- templates (#3409) ------------------------------------------------
+
+	private function templateCard(int $id = 9, int $stackId = 5, int $boardId = 1): Card {
+		$card = $this->card($id, $stackId, $boardId);
+		$card->setIsTemplate(true);
+		return $card;
+	}
+
+	public function testSetTemplateFlagsCardAndWritesChangeRow(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn (Card $c): bool => $c->getIsTemplate() === true))
+			->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->setTemplate(9, true, 'alice');
+		self::assertTrue($updated->getIsTemplate());
+	}
+
+	public function testSetTemplateUnflagsCard(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->templateCard());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->setTemplate(9, false, 'alice');
+		self::assertFalse($updated->getIsTemplate());
+	}
+
+	public function testSetTemplateAssertsEditPermission(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setTemplate(9, true, 'bob');
+	}
+
+	public function testListTemplatesAssertsReadPermissionAndReturnsTemplates(): void {
+		$board = $this->board();
+		$templates = [$this->templateCard(9), $this->templateCard(10)];
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'alice', PermissionService::PERMISSION_READ);
+		$this->cardMapper->expects(self::once())
+			->method('findTemplatesByBoard')->with(1)->willReturn($templates);
+
+		self::assertSame($templates, $this->service->listTemplates(1, 'alice'));
+	}
+
+	public function testListTemplatesDeniedForNonReader(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('findTemplatesByBoard');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->listTemplates(1, 'bob');
+	}
+
+	/**
+	 * create-from-template clones EXACTLY title / description / labels / checklist
+	 * (+ priority / type / status / estimate) into a fresh LIVE card; the new card
+	 * is never itself a template, and comments/assignees/history are never touched.
+	 */
+	public function testCreateFromTemplateClonesContentIntoFreshLiveCard(): void {
+		$board = $this->board(1);
+		$board->setEstimateScale('fibonacci');
+		$targetStack = $this->stack(7, 1);
+
+		$template = $this->templateCard(9, 5, 1);
+		$template->setTitle('Bug report template');
+		$template->setDescription('## Steps to reproduce');
+		$template->setPriority(Card::PRIORITY_URGENT);
+		$template->setType('bug');
+		$template->setEstimate('3');
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $template]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $c): Card {
+			$c->setId(42);
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnCallback(static fn (Card $c): Card => $c);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Same board → source label ids re-assigned directly.
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([11, 12]);
+		$assigned = [];
+		$this->labelService->method('assign')->willReturnCallback(function (int $cardId, int $labelId) use (&$assigned): void {
+			$assigned[] = [$cardId, $labelId];
+		});
+
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
+			$this->checklistItem(1, 9, 'Reproduce', false),
+			$this->checklistItem(2, 9, 'Attach logs', true),
+		]);
+		$added = [];
+		$this->checklistService->method('addItem')->willReturnCallback(function (int $cardId, string $title, string $uid, bool $done) use (&$added): \OCA\Kanso\Db\ChecklistItem {
+			$added[] = [$title, $done];
+			$item = new \OCA\Kanso\Db\ChecklistItem();
+			$item->setId(count($added) + 100);
+			return $item;
+		});
+
+		$card = $this->service->createFromTemplate(9, 7, 'alice');
+
+		self::assertSame(42, $card->getId());
+		// Title is cloned verbatim (no " (copy)" suffix - this is a fresh card).
+		self::assertSame('Bug report template', $card->getTitle());
+		self::assertSame('## Steps to reproduce', $card->getDescription());
+		self::assertSame(Card::PRIORITY_URGENT, $card->getPriority());
+		self::assertSame('bug', $card->getType());
+		self::assertSame('3', $card->getEstimate());
+		// The new card is a LIVE card, never a template.
+		self::assertFalse($card->getIsTemplate());
+		self::assertSame([[42, 11], [42, 12]], $assigned);
+		self::assertSame([['Reproduce', false], ['Attach logs', true]], $added);
+	}
+
+	public function testCreateFromTemplateRejectsNonTemplateCard(): void {
+		// A plain (non-template) card cannot back a create-from-template.
+		$plain = $this->card(9, 5, 1); // isTemplate defaults false
+		$this->cardMapper->method('find')->willReturnMap([[9, $plain]]);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->createFromTemplate(9, 7, 'alice');
+	}
+
+	public function testCreateFromTemplateRejectsTargetStackOnAnotherBoard(): void {
+		// Templates are per-board: a template cannot spawn a card on a stack that
+		// belongs to a different board.
+		$template = $this->templateCard(9, 5, 1);
+		$otherBoardStack = $this->stack(7, 2);
+		$this->cardMapper->method('find')->willReturnMap([[9, $template]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($otherBoardStack);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1));
+		$this->cardMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->createFromTemplate(9, 7, 'alice');
+	}
+
+	public function testCreateFromTemplateAssertsEditPermission(): void {
+		$board = $this->board();
+		$template = $this->templateCard(9, 5, 1);
+		$this->cardMapper->method('find')->willReturnMap([[9, $template]]);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('insert');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->createFromTemplate(9, 7, 'bob');
+	}
+
+	public function testIsTemplateSerializedInSummaryAndDetail(): void {
+		$card = $this->templateCard();
+
+		$summary = $card->jsonSerializeSummary();
+		self::assertArrayHasKey('isTemplate', $summary);
+		self::assertTrue($summary['isTemplate']);
+
+		$detail = $card->jsonSerialize();
+		self::assertTrue($detail['isTemplate']);
+
+		// A plain card serializes false.
+		self::assertFalse($this->card()->jsonSerializeSummary()['isTemplate']);
+	}
 }

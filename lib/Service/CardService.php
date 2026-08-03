@@ -71,6 +71,22 @@ class CardService {
 	}
 
 	/**
+	 * Summaries of the per-board template cards (#3409) - the template picker
+	 * source. READ on the board is enough (same gate as the board payload): the
+	 * picker only reveals blueprint titles the reader can already see the board
+	 * for. Creating FROM a template is separately EDIT-gated.
+	 *
+	 * @return Card[]
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the user may not read the board
+	 */
+	public function listTemplates(int $boardId, string $uid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+		return $this->cardMapper->findTemplatesByBoard($boardId);
+	}
+
+	/**
 	 * Board-scoped resolution of a `PREFIX-<board_seq>` human reference (e.g.
 	 * "KAN-123") to a card on the given board (#3611). Per-board prefixes make a
 	 * reference unambiguous only WITHIN a board, so this is deliberately scoped to
@@ -177,6 +193,10 @@ class CardService {
 			$card->setCreatedAt($now);
 			$card->setLastModified($now);
 			$card->setDeletedAt(0);
+			// New cards are always ordinary live cards, never templates (#3409) -
+			// a card is only flagged a template later via setTemplate(). Explicit so
+			// the column is set on INSERT (the DB default backs pre-migration rows).
+			$card->setIsTemplate(false);
 
 			try {
 				$card = $this->cardMapper->insert($card);
@@ -256,38 +276,126 @@ class CardService {
 		// so a permission failure never leaves a half-copied card behind.
 		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
 
-		$sameBoard = $sourceBoard->getId() === $targetBoard->getId();
-
 		// 1. Create the shell at the bottom of the target stack (fresh id + key +
 		//    change row + board-watcher fan-out - all reused from create()).
 		$copy = $this->create($targetStackId, $this->copyTitle($source->getTitle()), $uid);
 
-		// 2. Carry the scalar content the create() shell does not set. Estimate is
-		//    only kept when the TARGET board's scale accepts the token.
-		$copy->setDescription($source->getDescription());
-		$copy->setPriority($source->getPriority());
-		$copy->setType($source->getType());
-		$copy->setStartedAt($source->getStartedAt());
-		$copy->setDoneAt($source->getDoneAt());
-		$estimate = $source->getEstimate();
-		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
-			$copy->setEstimate($estimate);
-		}
-		$copy->setLastModified(time());
-		$copy = $this->cardMapper->update($copy);
-
-		// 3. Labels - same-board re-assigns ids directly; cross-board maps by
-		//    title+color to the target board's labels (unmatched ones drop).
-		$this->copyLabels($source, $copy, $sameBoard, $targetBoard, $uid);
-
-		// 4. Checklist items, in display order (reuses ChecklistService::addItem,
-		//    which appends and writes its own change row). The done state rides
-		//    the same insert, so a done item is a single write - not add+toggle.
-		foreach ($this->checklistItemMapper->findByCard($id) as $item) {
-			$this->checklistService->addItem($copy->getId(), $item->getTitle(), $uid, $item->getDone());
-		}
+		// 2. Clone the content (description / priority / type / status / estimate /
+		//    labels / checklist) into the shell - shared with createFromTemplate().
+		$this->cloneContentInto($source, $copy, $sourceBoard, $targetBoard, $uid);
 
 		return $copy;
+	}
+
+	/**
+	 * Creates a NEW card in $targetStackId pre-filled from a per-board template
+	 * (#3409). The template must be a template card (`is_template = true`) on the
+	 * SAME board as the target stack - templates are per-board only (no
+	 * cross-board gallery). The new card is an ordinary, live card (never itself a
+	 * template) and gets the template's title/description/labels/checklist/
+	 * priority/type/estimate cloned via the SAME content clone {@see self::copy()}
+	 * uses; comments, assignees, history, relations and parent/children are NOT
+	 * cloned. EDIT on the board is required.
+	 *
+	 * @throws DoesNotExistException if the template, the board or the target stack does not exist or is deleted
+	 * @throws NotPermittedException if the actor lacks EDIT on the board
+	 * @throws InvalidInputException if the source is not a template, is on another board, or its title is invalid
+	 * @throws \OverflowException if the appended sort key would overflow (target stack needs a rebalance)
+	 */
+	public function createFromTemplate(int $templateId, int $targetStackId, string $uid): Card {
+		$template = $this->loadCard($templateId);
+		$board = $this->loadBoard($template->getBoardId());
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		if (!$template->getIsTemplate()) {
+			throw new InvalidInputException('Card ' . $templateId . ' is not a template');
+		}
+
+		$targetStack = $this->loadStack($targetStackId);
+		if ($targetStack->getBoardId() !== $template->getBoardId()) {
+			throw new InvalidInputException('A template can only create a card on its own board');
+		}
+
+		// Fresh live card at the bottom of the target stack (fresh id + key + change
+		// row + watcher fan-out). Same-board, so the content clone re-assigns labels
+		// by id and keeps the estimate as-is.
+		$card = $this->create($targetStackId, $this->validateTitle($template->getTitle()), $uid);
+		$this->cloneContentInto($template, $card, $board, $board, $uid);
+
+		return $card;
+	}
+
+	/**
+	 * Clones a source card's CONTENT into an already-created shell $target -
+	 * description, priority, type, status timestamps, estimate, labels and
+	 * checklist items. Comments, assignees, history, relations and parent/children
+	 * are deliberately NOT touched. Shared by {@see self::copy()} and
+	 * {@see self::createFromTemplate()}. The `is_template` flag is never carried:
+	 * a card made FROM a template (or a copy) is always an ordinary live card.
+	 *
+	 * Estimate is board-scoped: a source token the TARGET board's scale rejects is
+	 * dropped. Labels are board-scoped too (see {@see self::copyLabels()}).
+	 */
+	private function cloneContentInto(Card $source, Card $target, Board $sourceBoard, Board $targetBoard, string $uid): void {
+		$sameBoard = $sourceBoard->getId() === $targetBoard->getId();
+
+		// Carry the scalar content the create() shell does not set. Estimate is
+		// only kept when the TARGET board's scale accepts the token.
+		$target->setDescription($source->getDescription());
+		$target->setPriority($source->getPriority());
+		$target->setType($source->getType());
+		$target->setStartedAt($source->getStartedAt());
+		$target->setDoneAt($source->getDoneAt());
+		$estimate = $source->getEstimate();
+		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
+			$target->setEstimate($estimate);
+		}
+		$target->setLastModified(time());
+		$this->cardMapper->update($target);
+
+		// Labels - same-board re-assigns ids directly; cross-board maps by
+		// title+color to the target board's labels (unmatched ones drop).
+		$this->copyLabels($source, $target, $sameBoard, $targetBoard, $uid);
+
+		// Checklist items, in display order (reuses ChecklistService::addItem,
+		// which appends and writes its own change row). The done state rides the
+		// same insert, so a done item is a single write - not add+toggle.
+		foreach ($this->checklistItemMapper->findByCard($source->getId()) as $item) {
+			$this->checklistService->addItem($target->getId(), $item->getTitle(), $uid, $item->getDone());
+		}
+	}
+
+	/**
+	 * Flags ($isTemplate true) or unflags ($isTemplate false) a card as a
+	 * per-board template (#3409). EDIT on the card's board is required. A flagged
+	 * card is excluded from the live board render (the board query filters it out)
+	 * and offered in the per-board template picker. A no-op (already in the
+	 * requested state) still writes a change row so the board ETag advances and
+	 * clients drop/re-add the card from the live list. Marking is a pure flag flip
+	 * - the card keeps its stack, sort key and content untouched.
+	 *
+	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
+	 * @throws NotPermittedException if the user may not edit the board
+	 */
+	public function setTemplate(int $id, bool $isTemplate, string $uid): Card {
+		$card = $this->loadCard($id);
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		$card->setIsTemplate($isTemplate);
+		$card->setLastModified(time());
+		$card = $this->cardMapper->update($card);
+
+		$this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			$id,
+			Change::ACTION_UPDATE,
+			$uid,
+			verb: Change::VERB_UPDATED,
+		);
+
+		return $card;
 	}
 
 	/**

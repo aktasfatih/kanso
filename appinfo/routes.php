@@ -70,6 +70,10 @@ return [
 		// backs the markdown cross-reference renderer (#3611). The literal
 		// /cards/by-ref segment is distinct from every card CRUD path.
 		['name' => 'card#resolveRef', 'url' => '/api/boards/{id}/cards/by-ref/{ref}', 'verb' => 'GET'],
+		// Per-board template picker (#3409): the board's template cards, which the
+		// live board render excludes. Literal /cards/templates, distinct from the
+		// card CRUD paths.
+		['name' => 'card#templates', 'url' => '/api/boards/{id}/cards/templates', 'verb' => 'GET'],
 		['name' => 'board#update', 'url' => '/api/boards/{id}', 'verb' => 'PATCH'],
 		['name' => 'board#destroy', 'url' => '/api/boards/{id}', 'verb' => 'DELETE'],
 
@@ -102,6 +106,10 @@ return [
 		['name' => 'card#destroy', 'url' => '/api/cards/{id}', 'verb' => 'DELETE'],
 		['name' => 'card#move', 'url' => '/api/cards/{id}/move', 'verb' => 'POST'],
 		['name' => 'card#copy', 'url' => '/api/cards/{id}/copy', 'verb' => 'POST'],
+		// Per-board card templates (#3409). Flag/unflag a card as a template
+		// (EDIT-gated), and create a new live card pre-filled from a template.
+		['name' => 'card#setTemplate', 'url' => '/api/cards/{id}/template', 'verb' => 'PUT'],
+		['name' => 'card#createFromTemplate', 'url' => '/api/cards/{id}/create-from-template', 'verb' => 'POST'],
 		['name' => 'card#setParent', 'url' => '/api/cards/{id}/parent', 'verb' => 'PUT'],
 		['name' => 'card#assignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'DELETE'],

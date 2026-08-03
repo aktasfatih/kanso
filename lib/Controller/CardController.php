@@ -225,6 +225,54 @@ class CardController extends Controller {
 	}
 
 	/**
+	 * Per-board template picker (#3409): summaries of the board's template cards
+	 * (the complement of the live board render, which excludes them). Requires
+	 * READ on the board (same gate as the board payload). Returns a flat list of
+	 * card summaries (id + title etc.); the client shows title as the picker label.
+	 */
+	#[NoAdminRequired]
+	public function templates(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			$templates = $this->cardService->listTemplates($id, $this->currentUserId());
+			return new JSONResponse(array_map(
+				static fn (Card $card): array => $card->jsonSerializeSummary(),
+				$templates
+			));
+		});
+	}
+
+	/**
+	 * Flags (isTemplate=true) or unflags (false) the card as a per-board template
+	 * (#3409). EDIT-gated on the board. Returns the full updated card detail so
+	 * the client patches its cache (and drops/re-adds it from the live board list).
+	 */
+	#[NoAdminRequired]
+	public function setTemplate(int $id, bool $isTemplate = false): JSONResponse {
+		return $this->respond(function () use ($id, $isTemplate): JSONResponse {
+			$uid = $this->currentUserId();
+			$card = $this->cardService->setTemplate($id, $isTemplate, $uid);
+			return new JSONResponse($this->detailPayload($card, $uid));
+		});
+	}
+
+	/**
+	 * Creates a NEW card in $targetStackId pre-filled from the per-board template
+	 * $id (#3409): title/description/labels/checklist/priority/type/estimate are
+	 * cloned; comments/assignees/history are NOT. The template must be a template
+	 * card on the same board as the target stack. EDIT-gated. Returns the full
+	 * detail payload of the new (live) card. A sort-key overflow surfaces as
+	 * 409 {"error": "rebalance_required"} via ApiErrorTrait.
+	 */
+	#[NoAdminRequired]
+	public function createFromTemplate(int $id, int $targetStackId = 0): JSONResponse {
+		return $this->respond(function () use ($id, $targetStackId): JSONResponse {
+			$uid = $this->currentUserId();
+			$card = $this->cardService->createFromTemplate($id, $targetStackId, $uid);
+			return new JSONResponse($this->detailPayload($card, $uid));
+		});
+	}
+
+	/**
 	 * Assigns a label of the card's board to the card. Idempotent - PUT of
 	 * an already assigned label succeeds without writing anything.
 	 */

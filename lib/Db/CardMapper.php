@@ -52,6 +52,7 @@ class CardMapper extends QBMapper {
 		'due_reminder_day_before',
 		'cover_color',
 		'type',
+		'is_template',
 	];
 
 	public function __construct(IDBConnection $db) {
@@ -122,8 +123,11 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Summaries (no description) of all non-deleted cards on a board,
-	 * grouped by stack and in display order.
+	 * Summaries (no description) of all non-deleted, NON-TEMPLATE cards on a
+	 * board, grouped by stack and in display order. Template cards (#3409) are
+	 * EXCLUDED here at the query level so a per-board template never enters the
+	 * board payload or the virtualized list - templates are blueprints, not live
+	 * work. {@see self::findTemplatesByBoard()} lists them separately for the picker.
 	 *
 	 * @return Card[]
 	 * @throws Exception
@@ -134,8 +138,32 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('stack_id', 'ASC')
 			->addOrderBy('sort_key', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Summaries (no description) of the non-deleted TEMPLATE cards of a board -
+	 * the per-board template picker source (#3409). The exact complement of
+	 * {@see self::findSummariesByBoard()}'s template exclusion. Ordered by title
+	 * so the picker lists blueprints alphabetically; templates are per-board only
+	 * (no cross-board gallery), so this is board-scoped like every board query.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findTemplatesByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)))
+			->orderBy('title', 'ASC')
+			->addOrderBy('id', 'ASC');
 
 		return $this->findEntities($qb);
 	}
@@ -156,6 +184,9 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			// Templates (#3409) are excluded from the public snapshot for the same
+			// reason as the live board render: they are blueprints, not board content.
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('stack_id', 'ASC')
 			->addOrderBy('sort_key', 'ASC');
 

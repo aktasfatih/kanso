@@ -67,6 +67,8 @@ use OCP\DB\Types;
  * @method void setCoverColor(?string $coverColor)
  * @method string|null getType()
  * @method void setType(?string $type)
+ * @method bool getIsTemplate()
+ * @method void setIsTemplate(bool $isTemplate)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
@@ -117,6 +119,11 @@ class Card extends Entity implements \JsonSerializable {
 	// Card type (#3402): one of Card::TYPES or '' for none. In the summary
 	// payload so the board/stack tile renders the type icon without the detail.
 	protected ?string $type = null;
+	// Per-board card template flag (#3409): a flagged card is a reusable content
+	// blueprint for its own board, EXCLUDED from the live board render (the board
+	// card query filters it out) and offered in a small picker. In the summary
+	// payload so the template picker (which reads summaries) can read the flag.
+	protected ?bool $isTemplate = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -143,13 +150,14 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('dueReminderDayBefore', Types::BOOLEAN);
 		$this->addType('coverColor', Types::STRING);
 		$this->addType('type', Types::STRING);
+		$this->addType('isTemplate', Types::BOOLEAN);
 	}
 
 	/**
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string, isTemplate: bool}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -183,6 +191,10 @@ class Card extends Entity implements \JsonSerializable {
 			// Card type (#3402): one of Card::TYPES or '' for none. In the summary
 			// so the tile renders the type icon without the detail fetch.
 			'type' => $this->type ?? self::TYPE_NONE,
+			// Per-board template flag (#3409). Templates are excluded from the live
+			// board render; the flag is surfaced so the template picker and the
+			// card detail can tell a template apart from a normal card.
+			'isTemplate' => $this->isTemplate ?? false,
 		];
 	}
 

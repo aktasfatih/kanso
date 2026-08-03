@@ -132,18 +132,47 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- Inline card composer at TOP - signature rapid-entry UX -->
-		<form class="card-composer" @submit.prevent="submitCard">
-			<input
-				ref="composerInputRef"
-				v-model="newCardTitle"
-				class="card-composer__input"
-				type="text"
-				:placeholder="t('kanso', 'Add card…')"
-				:disabled="isPending"
-				@paste="onComposerPaste"
-				@keydown.enter.prevent="submitCard" />
-			<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
-		</form>
+		<div class="card-composer-wrap">
+			<form class="card-composer" @submit.prevent="submitCard">
+				<input
+					ref="composerInputRef"
+					v-model="newCardTitle"
+					class="card-composer__input"
+					type="text"
+					:placeholder="t('kanso', 'Add card…')"
+					:disabled="isPending"
+					@paste="onComposerPaste"
+					@keydown.enter.prevent="submitCard" />
+			</form>
+			<!-- "+ from template" picker (#3409): lists the board's card templates
+			     and creates a new card pre-filled from the chosen one. -->
+			<NcActions
+				v-if="onFetchTemplates && onCreateFromTemplate"
+				class="card-composer__templates"
+				:force-menu="true"
+				:aria-label="t('kanso', 'New card from template')"
+				@open="loadTemplates">
+				<template #icon>
+					<FileDocumentOutlineIcon :size="18" />
+				</template>
+				<NcActionCaption :name="t('kanso', 'From template')" />
+				<NcActionButton
+					v-for="tpl in templates"
+					:key="tpl.id"
+					:close-after-click="true"
+					:disabled="isPending"
+					@click="createFromTemplate(tpl.id)">
+					<template #icon>
+						<FileDocumentOutlineIcon :size="20" />
+					</template>
+					{{ tpl.title }}
+				</NcActionButton>
+				<NcActionText v-if="templatesLoaded && templates.length === 0">
+					{{ t('kanso', 'No templates on this board yet') }}
+				</NcActionText>
+			</NcActions>
+		</div>
+		<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
 
 		<!--
 			Card list - own scrollable element.
@@ -211,9 +240,12 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
+import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionText from '@nextcloud/vue/components/NcActionText'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import CardTile from './CardTile.vue'
 import { cssColor } from '../services/color.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
@@ -235,6 +267,23 @@ const props = defineProps({
 	onCreateCard: {
 		type: Function,
 		required: true,
+	},
+	/**
+	 * Async fn () → Promise<Card[]> - lazily fetches the board's card templates
+	 * (#3409) when the composer's "from template" menu opens. When omitted, the
+	 * "from template" affordance is hidden.
+	 */
+	onFetchTemplates: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Async fn (stackId, templateId) → Promise - creates a new card in this stack
+	 * pre-filled from the chosen template. Required for the "from template" picker.
+	 */
+	onCreateFromTemplate: {
+		type: Function,
+		default: null,
 	},
 	/**
 	 * Async fn (stackId) → Promise - called when the user deletes this stack.
@@ -672,6 +721,38 @@ async function submitCard() {
 	// One card per non-blank line - a single line behaves exactly as before.
 	await createCardsFromText(newCardTitle.value)
 }
+
+// ── Card templates (#3409) ──────────────────────────────────────────────────
+const templates = ref([])
+const templatesLoaded = ref(false)
+
+/** Lazily load the board's card templates when the picker menu opens. */
+async function loadTemplates() {
+	if (!props.onFetchTemplates) return
+	try {
+		templates.value = await props.onFetchTemplates()
+	} catch (err) {
+		composerError.value =
+			err?.response?.data?.error || t('kanso', 'Failed to load templates.')
+	} finally {
+		templatesLoaded.value = true
+	}
+}
+
+/** Create a new card in this stack pre-filled from the chosen template. */
+async function createFromTemplate(templateId) {
+	if (!props.onCreateFromTemplate) return
+	composerError.value = ''
+	isPending.value = true
+	try {
+		await props.onCreateFromTemplate(props.stack.id, templateId)
+	} catch (err) {
+		composerError.value =
+			err?.response?.data?.error || t('kanso', 'Failed to create card from template.')
+	} finally {
+		isPending.value = false
+	}
+}
 </script>
 
 <style scoped>
@@ -788,10 +869,22 @@ async function submitCard() {
 }
 
 /* Card composer */
+.card-composer-wrap {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
 .card-composer {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.card-composer__templates {
+	flex: 0 0 auto;
 }
 
 .card-composer__input {

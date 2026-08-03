@@ -61,6 +61,21 @@ export const moveCard = (id, data) =>
 export const copyCard = (id, targetStackId) =>
 	axios.post(url(`/api/cards/${id}/copy`), { targetStackId }).then((r) => r.data)
 
+// Per-board card templates (#3409). A template is an ordinary card flagged as a
+// reusable content blueprint for its own board; it is excluded from the live
+// board render and offered in a small picker.
+export const fetchCardTemplates = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/cards/templates`)).then((r) => r.data)
+
+// Flag/unflag a card as a per-board template (EDIT-gated server-side).
+export const setCardTemplate = (id, isTemplate) =>
+	axios.put(url(`/api/cards/${id}/template`), { isTemplate: !!isTemplate }).then((r) => r.data)
+
+// Create a NEW live card in targetStackId pre-filled from the template's
+// title/description/labels/checklist (comments/assignees/history NOT cloned).
+export const createCardFromTemplate = (templateId, targetStackId) =>
+	axios.post(url(`/api/cards/${templateId}/create-from-template`), { targetStackId }).then((r) => r.data)
+
 // Bulk (multi-select) card actions (#3523). One fixed action applied to a list
 // of card ids server-side; returns { ok: [...], skipped: [{id, reason}] }.
 export const bulkApplyCards = (cardIds, action, params = {}) =>
