@@ -4983,7 +4983,7 @@ async function handleToggleProject(projectId) {
 .card-modal__reaction-chip--mine {
 	border-color: var(--color-primary-element);
 	background: var(--color-primary-element-light);
-	color: var(--color-primary-element-text-dark, var(--color-main-text));
+	color: var(--color-main-text);
 }
 .card-modal__reaction-count { font-variant-numeric: tabular-nums; }
 .card-modal__reaction-add-wrap { position: relative; display: inline-flex; }
