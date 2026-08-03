@@ -3030,6 +3030,58 @@ async function handleToggleWatcher(uid, subscribe) {
 // ── Card relations (blocks / blocked-by / duplicates / relates) ──────────────
 const queryClient = useQueryClient()
 
+// ── Keep the Activity feed live while its tab is open ────────────────────────
+// The activity query (['card-activity', String(cardId)], staleTime 0) only
+// refetches on tab (re)mount. Every change-log-appending mutation already
+// invalidates the card query (['card', id]) and/or the board query, and the
+// realtime path (main.js) invalidates the board — so instead of wiring a
+// card-activity invalidation into all ~15 mutation composables, we listen to
+// the query cache here and refresh the feed whenever the card or its board is
+// updated. This covers both local edits and incoming realtime changes with no
+// extra poll (comments already refresh via useComments; this scopes to the
+// other verbs). The board branch is deliberately coarse: it refetches the feed
+// on ANY board update (the realtime case only invalidates the board, never the
+// card), but this is bounded — it fires only while the Activity tab is open,
+// for a single card.
+//
+// The card query key is NOT uniformly typed: useCard registers ['card', <raw>]
+// (numeric) while other composables use ['card', String(id)]. A hard-coded key
+// match would silently drop half the mutations, so we coerce both sides of the
+// id comparison (cf. #3576 key-type trap). The subscription only lives while
+// the Activity tab is open, and is torn down on close/unmount.
+let stopActivityCacheSync = null
+function startActivityCacheSync() {
+	if (stopActivityCacheSync) return
+	stopActivityCacheSync = queryClient.getQueryCache().subscribe((event) => {
+		// Only react to a query actually settling with new/invalidated data;
+		// ignore observer add/remove churn and the activity query's own events.
+		if (event?.type !== 'updated') return
+		const key = event.query?.queryKey
+		if (!Array.isArray(key) || key.length < 2) return
+		const [kind, id] = key
+		const matchesCard = kind === 'card' && String(id) === String(props.cardId)
+		const matchesBoard = kind === 'board' && String(id) === String(boardId.value)
+		if (!matchesCard && !matchesBoard) return
+		// Rebuild the key at fire time — cardId can change while the modal stays
+		// mounted (navigating parent/child), and the tab may still be open.
+		queryClient.invalidateQueries({ queryKey: ['card-activity', String(props.cardId)] })
+	})
+}
+function stopActivityCacheSyncFn() {
+	if (stopActivityCacheSync) {
+		stopActivityCacheSync()
+		stopActivityCacheSync = null
+	}
+}
+watch(discussionTab, (tab) => {
+	if (tab === 'activity') {
+		startActivityCacheSync()
+	} else {
+		stopActivityCacheSyncFn()
+	}
+}, { immediate: true })
+onBeforeUnmount(stopActivityCacheSyncFn)
+
 // ── Move to top / bottom of the current column (⋯ menu) ──────────────────────
 // Reuses the existing move endpoint: afterCardId=null → top; afterCardId=last
 // card in the stack → bottom. A menu action (not a drag), so we just refetch the

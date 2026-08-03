@@ -71,4 +71,50 @@ test.describe('Card Activity feed', () => {
 		// Newest-first: the most recent row is the priority "updated this card".
 		await expect(rows.first()).toContainText('updated this card')
 	})
+
+	// #3553 — the feed must update live while the Activity tab is open, both for a
+	// change the same client makes and for one arriving via realtime/poll. We drive
+	// the change through the API (an external mutation that broadcasts
+	// kanso_board_changed) and assert the feed grows with NO manual tab switch.
+	test('an external change refreshes the open Activity feed without a tab switch', async ({ page }) => {
+		// A fresh card so this test's row counts are independent of the first test.
+		const stack = await api('POST', '/stacks', { boardId: state.boardId, title: 'Live' })
+		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Live card' })
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+
+		await ncLogin(page)
+		await page.goto(cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// Open the Activity tab and record what's there (just the "created" row).
+		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
+		const rows = page.locator('.card-modal__activity-row')
+		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		const before = await rows.count()
+
+		// Only start watching for console errors now that the app + modal have
+		// booted — a page-lifetime capture would catch unrelated Nextcloud boot
+		// noise. We scope to errors mentioning the feature under test.
+		const activityErrors = []
+		page.on('console', (msg) => {
+			if (msg.type() !== 'error') return
+			const text = msg.text()
+			if (/card-activity|activity|CardModal/i.test(text)) activityErrors.push(text)
+		})
+
+		// Mutate the card via the API WITHOUT touching the tab. This appends to
+		// kanso_changes and broadcasts kanso_board_changed; the open feed must pick
+		// it up through the board-cache → card-activity invalidation (push or poll).
+		await api('PATCH', `/cards/${card.id}`, { priority: 2 })
+
+		// The new "updated this card" row appears on its own — no tab switch.
+		// A single edit may append ≥1 change row, so assert growth (not an exact
+		// count) plus the new verb. Budget covers push and the 5s poll fallback.
+		await expect
+			.poll(async () => await rows.count(), { timeout: 15_000 })
+			.toBeGreaterThan(before)
+		await expect(rows.first()).toContainText('updated this card')
+
+		expect(activityErrors).toEqual([])
+	})
 })
