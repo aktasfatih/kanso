@@ -32,8 +32,19 @@ import {
 	createComment as apiCreateComment,
 	updateComment as apiUpdateComment,
 	deleteComment as apiDeleteComment,
+	reactToComment as apiReactToComment,
+	unreactToComment as apiUnreactToComment,
 } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
+import { getCurrentUser } from '@nextcloud/auth'
+
+/**
+ * The FIXED allowed reaction emoji set — must mirror the server's
+ * CommentReactionService::ALLOWED_EMOJI. Deliberately small; this is NOT an
+ * arbitrary emoji picker.
+ * @type {string[]}
+ */
+export const REACTION_EMOJI = ['👍', '👎', '😄', '🎉', '❤️', '🚀', '👀']
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -291,10 +302,84 @@ export function useComments(cardId, boardId) {
 		},
 	})
 
+	// ── toggleReaction ──────────────────────────────────────────────────────────
+	// Emoji reactions on a comment (#3550). db-first + optimistic: patch the
+	// comment's `reactions` summary in the comments cache immediately, then
+	// invalidate on settle so the server (authoritative counts + reactor names)
+	// wins. `mine` on the summary drives whether a click reacts or unreacts.
+	const currentUid = getCurrentUser()?.uid ?? ''
+
+	function patchCommentReactions(commentId, emoji, adding) {
+		const commentsKey = getCommentsKey()
+		queryClient.setQueryData(commentsKey, (old) => {
+			if (!Array.isArray(old)) return old
+			return old.map((c) => {
+				if (c.id !== commentId) return c
+				const reactions = Array.isArray(c.reactions) ? c.reactions.slice() : []
+				const idx = reactions.findIndex((r) => r.emoji === emoji)
+				if (adding) {
+					if (idx === -1) {
+						reactions.push({ emoji, count: 1, mine: true, reactors: [] })
+					} else if (!reactions[idx].mine) {
+						reactions[idx] = { ...reactions[idx], count: reactions[idx].count + 1, mine: true }
+					}
+				} else if (idx !== -1) {
+					const next = { ...reactions[idx], count: reactions[idx].count - 1, mine: false }
+					if (next.count <= 0) {
+						reactions.splice(idx, 1)
+					} else {
+						reactions[idx] = next
+					}
+				}
+				return { ...c, reactions }
+			})
+		})
+	}
+
+	const toggleReaction = useMutation({
+		mutationFn: ({ commentId, emoji, adding }) =>
+			adding ? apiReactToComment(commentId, emoji) : apiUnreactToComment(commentId, emoji),
+
+		onMutate: async ({ commentId, emoji, adding }) => {
+			const commentsKey = getCommentsKey()
+			await queryClient.cancelQueries({ queryKey: commentsKey })
+			const previousComments = queryClient.getQueryData(commentsKey)
+			patchCommentReactions(commentId, emoji, adding)
+			return { previousComments }
+		},
+
+		onError: (_err, _vars, context) => {
+			if (context?.previousComments !== undefined) {
+				queryClient.setQueryData(getCommentsKey(), context.previousComments)
+			}
+		},
+
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: getCommentsKey() })
+		},
+	})
+
+	/**
+	 * Toggle the current user's reaction with `emoji` on a comment. Reads the
+	 * comment's current summary to decide react vs. unreact.
+	 * @param {object} comment the comment object (carries its `reactions` summary)
+	 * @param {string} emoji one of REACTION_EMOJI
+	 */
+	function toggle(comment, emoji) {
+		const summary = Array.isArray(comment.reactions)
+			? comment.reactions.find((r) => r.emoji === emoji)
+			: undefined
+		const adding = !(summary && summary.mine)
+		return toggleReaction.mutateAsync({ commentId: comment.id, emoji, adding })
+	}
+
 	return {
 		comments,
 		addComment,
 		editComment,
 		deleteComment,
+		toggleReaction,
+		toggleCommentReaction: toggle,
+		currentUid,
 	}
 }

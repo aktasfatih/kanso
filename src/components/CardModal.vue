@@ -1275,6 +1275,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													</button>
 												</template>
 											</div>
+
+											<div class="card-modal__reactions">
+												<button
+													v-for="summary in topComment.reactions"
+													:key="summary.emoji"
+													class="card-modal__reaction-chip"
+													:class="{ 'card-modal__reaction-chip--mine': summary.mine }"
+													:title="reactorTooltip(summary)"
+													:disabled="!canEdit || toggleReaction.isPending.value"
+													@click="onReactionClick(topComment, summary.emoji)">
+													<span class="card-modal__reaction-emoji">{{ summary.emoji }}</span>
+													<span class="card-modal__reaction-count">{{ summary.count }}</span>
+												</button>
+												<div v-if="canEdit" class="card-modal__reaction-add-wrap">
+													<button
+														class="card-modal__reaction-add"
+														:title="t('kanso', 'Add reaction')"
+														@click.stop="toggleReactionPicker(topComment.id)">
+														<EmoticonHappyOutlineIcon :size="14" />
+													</button>
+													<div v-if="reactionPickerFor === topComment.id" class="card-modal__reaction-picker">
+														<button
+															v-for="emoji in reactionEmoji"
+															:key="emoji"
+															class="card-modal__reaction-picker-btn"
+															:title="emoji"
+															@click="onReactionClick(topComment, emoji)">
+															{{ emoji }}
+														</button>
+													</div>
+												</div>
+											</div>
 										</div>
 									</div>
 
@@ -1343,6 +1375,37 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														@click="handleDeleteComment(reply)">
 														<TrashCanIcon :size="14" />
 													</button>
+												</div>
+												<div class="card-modal__reactions">
+													<button
+														v-for="summary in reply.reactions"
+														:key="summary.emoji"
+														class="card-modal__reaction-chip"
+														:class="{ 'card-modal__reaction-chip--mine': summary.mine }"
+														:title="reactorTooltip(summary)"
+														:disabled="!canEdit || toggleReaction.isPending.value"
+														@click="onReactionClick(reply, summary.emoji)">
+															<span class="card-modal__reaction-emoji">{{ summary.emoji }}</span>
+															<span class="card-modal__reaction-count">{{ summary.count }}</span>
+													</button>
+													<div v-if="canEdit" class="card-modal__reaction-add-wrap">
+														<button
+															class="card-modal__reaction-add"
+															:title="t('kanso', 'Add reaction')"
+															@click.stop="toggleReactionPicker(reply.id)">
+																<EmoticonHappyOutlineIcon :size="14" />
+														</button>
+														<div v-if="reactionPickerFor === reply.id" class="card-modal__reaction-picker">
+															<button
+																v-for="emoji in reactionEmoji"
+																:key="emoji"
+																class="card-modal__reaction-picker-btn"
+																:title="emoji"
+																@click="onReactionClick(reply, emoji)">
+																	{{ emoji }}
+															</button>
+														</div>
+													</div>
 												</div>
 											</div>
 										</div>
@@ -1466,6 +1529,7 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import EmoticonHappyOutlineIcon from 'vue-material-design-icons/EmoticonHappyOutline.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
@@ -1523,7 +1587,7 @@ import { useAssignees } from '../composables/useAssignees.js'
 import { useReviews } from '../composables/useReviews.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
-import { useComments, buildCommentTree } from '../composables/useComments.js'
+import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
@@ -2321,7 +2385,34 @@ const {
 	addComment,
 	editComment,
 	deleteComment,
+	toggleReaction,
+	toggleCommentReaction,
 } = useComments(computed(() => props.cardId), boardId)
+
+// Emoji reactions on comments (#3550). The fixed picker set + which comment has
+// its "add reaction" popover open. Toggling reads the comment's own reaction
+// summary (mine flag) to decide react vs. unreact.
+const reactionEmoji = REACTION_EMOJI
+const reactionPickerFor = ref(null)
+
+function toggleReactionPicker(commentId) {
+	reactionPickerFor.value = reactionPickerFor.value === commentId ? null : commentId
+}
+
+async function onReactionClick(comment, emoji) {
+	reactionPickerFor.value = null
+	try {
+		await toggleCommentReaction(comment, emoji)
+	} catch (err) {
+		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to update reaction.')
+	}
+}
+
+function reactorTooltip(summary) {
+	const names = Array.isArray(summary.reactors) ? summary.reactors : []
+	if (names.length === 0) return ''
+	return names.join(', ')
+}
 
 // Current user uid - used to gate edit/delete controls to the comment author
 const currentUserId = getCurrentUser()?.uid ?? ''
@@ -4864,6 +4955,78 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__comment-icon-btn:hover { background: var(--color-background-hover); }
 .card-modal__comment-icon-btn--danger:hover { background: var(--color-error); color: #fff; }
+
+/* Emoji reactions on comments (#3550) */
+.card-modal__reactions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	margin-top: 4px;
+}
+.card-modal__reaction-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: 12px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8rem;
+	line-height: 1;
+	cursor: pointer;
+}
+.card-modal__reaction-chip:hover:not(:disabled) { background: var(--color-background-hover); }
+.card-modal__reaction-chip:disabled { cursor: default; opacity: 0.7; }
+.card-modal__reaction-chip--mine {
+	border-color: var(--color-primary-element);
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-text-dark, var(--color-main-text));
+}
+.card-modal__reaction-count { font-variant-numeric: tabular-nums; }
+.card-modal__reaction-add-wrap { position: relative; display: inline-flex; }
+.card-modal__reaction-add {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 1px solid var(--color-border);
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__reaction-add:hover { background: var(--color-background-hover); color: var(--color-main-text); }
+.card-modal__reaction-picker {
+	position: absolute;
+	bottom: calc(100% + 4px);
+	left: 0;
+	z-index: 10;
+	display: flex;
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--color-border);
+	border-radius: 6px;
+	background: var(--color-main-background);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.2));
+}
+.card-modal__reaction-picker-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+}
+.card-modal__reaction-picker-btn:hover { background: var(--color-background-hover); }
 .card-modal__comment--reply {
 	border-top: 1px solid var(--color-border);
 	background: var(--color-main-background);

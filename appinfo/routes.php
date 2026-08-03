@@ -154,6 +154,12 @@ return [
 		['name' => 'comment#update', 'url' => '/api/comments/{commentId}', 'verb' => 'PATCH'],
 		['name' => 'comment#destroy', 'url' => '/api/comments/{commentId}', 'verb' => 'DELETE'],
 
+		// Emoji reactions on comments (#3550): idempotent toggle. The {emoji}
+		// segment is URL-encoded by the client (a multi-byte emoji); the service
+		// validates it against a FIXED allowed set. React=PUT, unreact=DELETE.
+		['name' => 'commentReaction#react', 'url' => '/api/comments/{commentId}/reactions/{emoji}', 'verb' => 'PUT'],
+		['name' => 'commentReaction#unreact', 'url' => '/api/comments/{commentId}/reactions/{emoji}', 'verb' => 'DELETE'],
+
 		// Project comments — an owner-only personal discussion log (#3563). The
 		// update/destroy paths are scoped under /api/project-comments so they never
 		// collide with the card-comment /api/comments/{commentId} routes above.

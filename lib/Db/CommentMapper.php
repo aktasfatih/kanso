@@ -294,6 +294,30 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
+	 * The ids of every comment on a card (including soft-deleted ones) - used to
+	 * cascade a purge over child rows keyed on comment_id (e.g. reactions) before
+	 * the comments themselves are hard-deleted.
+	 *
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function idsByCard(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$ids = [];
+		while (($row = $result->fetch()) !== false) {
+			$ids[] = (int)$row['id'];
+		}
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
 	 * Hard-deletes every comment of a card (all threads) - cascade for a card
 	 * purge.
 	 *

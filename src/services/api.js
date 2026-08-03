@@ -198,6 +198,15 @@ export const updateComment = (commentId, data) =>
 export const deleteComment = (commentId) =>
 	axios.delete(url(`/api/comments/${commentId}`)).then((r) => r.data)
 
+// Emoji reactions on comments (#3550) — idempotent toggle. The emoji is a
+// multi-byte value, so it is URL-encoded into the path segment. React=PUT,
+// unreact=DELETE.
+export const reactToComment = (commentId, emoji) =>
+	axios.put(url(`/api/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`)).then((r) => r.data)
+
+export const unreactToComment = (commentId, emoji) =>
+	axios.delete(url(`/api/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`)).then((r) => r.data)
+
 // Subscriptions (card watchers)
 export const subscribeCard = (cardId) =>
 	axios.put(url(`/api/cards/${cardId}/subscription`)).then((r) => r.data)

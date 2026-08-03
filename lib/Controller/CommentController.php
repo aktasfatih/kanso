@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Db\Comment;
+use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Service\CommentService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
@@ -19,7 +20,9 @@ use OCP\IUserSession;
 
 /**
  * Card comment (discussion) endpoints. Each serialized comment carries the
- * author's resolved display name (looked up from the uid, not stored).
+ * author's resolved display name (looked up from the uid, not stored) and its
+ * emoji-reaction summary (#3550): per emoji present, the count, whether the
+ * current user reacted, and the reactor display names for a tooltip.
  */
 class CommentController extends Controller {
 	use ApiErrorTrait;
@@ -30,6 +33,7 @@ class CommentController extends Controller {
 		private IUserSession $userSession,
 		private IUserManager $userManager,
 		private CommentService $commentService,
+		private CommentReactionMapper $reactionMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -72,22 +76,85 @@ class CommentController extends Controller {
 	 */
 	private function serializeAll(array $comments): array {
 		$names = [];
-		return array_map(function (Comment $comment) use (&$names): array {
-			return $this->serialize($comment, $names);
+		$reactions = $this->reactionsByComment($comments);
+		return array_map(function (Comment $comment) use (&$names, $reactions): array {
+			return $this->serialize($comment, $names, $reactions[$comment->getId()] ?? []);
 		}, $comments);
 	}
 
 	/**
+	 * Aggregate every reaction on the thread into per-comment, per-emoji summary
+	 * rows in one query. Resolves reactor display names through a shared cache so
+	 * a user shared across many reactions is looked up once. The reactor list is
+	 * bounded by construction: at most one reaction per (comment, uid, emoji), and
+	 * the emoji set is fixed.
+	 *
+	 * @param Comment[] $comments
+	 * @return array<int, list<array{emoji: string, count: int, mine: bool, reactors: list<string>}>> map of commentId => ordered reaction summaries (insertion order of emoji)
+	 */
+	private function reactionsByComment(array $comments): array {
+		if ($comments === []) {
+			return [];
+		}
+		$me = $this->currentUserId();
+		$ids = array_map(static fn (Comment $c): int => $c->getId(), $comments);
+		$rows = $this->reactionMapper->findByComments($ids);
+
+		// commentId => emoji => ['count' => int, 'mine' => bool, 'reactors' => uid[]]
+		$agg = [];
+		foreach ($rows as $row) {
+			$cid = $row['commentId'];
+			$emoji = $row['emoji'];
+			if (!isset($agg[$cid][$emoji])) {
+				$agg[$cid][$emoji] = ['count' => 0, 'mine' => false, 'reactors' => []];
+			}
+			$agg[$cid][$emoji]['count']++;
+			$agg[$cid][$emoji]['reactors'][] = $row['uid'];
+			if ($row['uid'] === $me) {
+				$agg[$cid][$emoji]['mine'] = true;
+			}
+		}
+
+		$nameCache = [];
+		$out = [];
+		foreach ($agg as $cid => $byEmoji) {
+			$summaries = [];
+			foreach ($byEmoji as $emoji => $data) {
+				$summaries[] = [
+					'emoji' => (string)$emoji,
+					'count' => $data['count'],
+					'mine' => $data['mine'],
+					'reactors' => array_map(
+						fn (string $uid): string => $this->displayName($uid, $nameCache),
+						$data['reactors'],
+					),
+				];
+			}
+			$out[$cid] = $summaries;
+		}
+		return $out;
+	}
+
+	/**
 	 * @param array<string, string> $nameCache uid => display name, reused across a list
+	 * @param list<array{emoji: string, count: int, mine: bool, reactors: list<string>}> $reactions
 	 * @return array<string, mixed>
 	 */
-	private function serialize(Comment $comment, array &$nameCache = []): array {
-		$uid = (string)$comment->getAuthor();
+	private function serialize(Comment $comment, array &$nameCache = [], array $reactions = []): array {
+		return $comment->jsonSerialize()
+			+ ['authorDisplayName' => $this->displayName((string)$comment->getAuthor(), $nameCache)]
+			+ ['reactions' => $reactions];
+	}
+
+	/**
+	 * @param array<string, string> $nameCache uid => display name, reused across a list
+	 */
+	private function displayName(string $uid, array &$nameCache): string {
 		if (!isset($nameCache[$uid])) {
 			$user = $this->userManager->get($uid);
 			$nameCache[$uid] = $user !== null ? $user->getDisplayName() : $uid;
 		}
-		return $comment->jsonSerialize() + ['authorDisplayName' => $nameCache[$uid]];
+		return $nameCache[$uid];
 	}
 
 	/**

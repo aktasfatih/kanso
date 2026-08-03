@@ -19,6 +19,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
@@ -41,6 +42,7 @@ class TrashServiceTest extends TestCase {
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
+	private CommentReactionMapper&MockObject $commentReactionMapper;
 	private SubscriptionMapper&MockObject $subscriptionMapper;
 	private CardLinkMapper&MockObject $cardLinkMapper;
 	private CardRelationMapper&MockObject $cardRelationMapper;
@@ -59,6 +61,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
+		$this->commentReactionMapper = $this->createMock(CommentReactionMapper::class);
 		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
 		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
@@ -74,6 +77,7 @@ class TrashServiceTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->checklistItemMapper,
 			$this->commentMapper,
+			$this->commentReactionMapper,
 			$this->subscriptionMapper,
 			$this->cardLinkMapper,
 			$this->cardRelationMapper,
@@ -184,6 +188,9 @@ class TrashServiceTest extends TestCase {
 		$this->cardLabelMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->cardAssigneeMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->checklistItemMapper->expects(self::once())->method('deleteByCard')->with(9);
+		// Reactions are dropped by comment id BEFORE the comments themselves (#3550).
+		$this->commentMapper->expects(self::once())->method('idsByCard')->with(9)->willReturn([50, 51]);
+		$this->commentReactionMapper->expects(self::once())->method('deleteByComments')->with([50, 51]);
 		$this->commentMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->subscriptionMapper->expects(self::once())->method('deleteByCard')->with(9);
 		// Attachments cascade through the service (objects + rows), not a mapper.

@@ -19,6 +19,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -50,6 +51,7 @@ class TrashService {
 		private CardReviewMapper $cardReviewMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
+		private CommentReactionMapper $commentReactionMapper,
 		private SubscriptionMapper $subscriptionMapper,
 		private CardLinkMapper $cardLinkMapper,
 		private CardRelationMapper $cardRelationMapper,
@@ -118,6 +120,9 @@ class TrashService {
 		$this->cardAssigneeMapper->deleteByCard($cardId);
 		$this->cardReviewMapper->deleteByCard($cardId);
 		$this->checklistItemMapper->deleteByCard($cardId);
+		// Reactions hang off comment_id, so drop them BEFORE the comments they
+		// point at are hard-deleted, otherwise the rows would be orphaned (#3550).
+		$this->commentReactionMapper->deleteByComments($this->commentMapper->idsByCard($cardId));
 		$this->commentMapper->deleteByCard($cardId);
 		$this->subscriptionMapper->deleteByCard($cardId);
 		$this->cardLinkMapper->deleteByCard($cardId);
