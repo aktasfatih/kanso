@@ -669,6 +669,72 @@ class CardServiceTest extends TestCase {
 		self::assertNull($updated->getEstimate());
 	}
 
+	// ---- update: cover colour (#3549) -------------------------------------
+
+	public function testUpdateSetsCoverColor(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		// Positional: …, uid, priority, startDate, status, estimate, allDay,
+		// dueReminderDayBefore, coverColor.
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, null, null, null, null, '3498db');
+		self::assertSame('3498db', $updated->getCoverColor());
+	}
+
+	public function testUpdateClearsCoverColorOnEmptyString(): void {
+		$card = $this->card();
+		$card->setCoverColor('e74c3c');
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, null, null, null, null, '');
+		self::assertNull($updated->getCoverColor());
+	}
+
+	public function testUpdateRejectsInvalidCoverColor(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		// Not a bare 6-hex value (a leading '#' is rejected by ColorValidator).
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, null, null, null, null, '#fff');
+	}
+
+	public function testUpdateLeavesCoverColorUnchangedOnNull(): void {
+		$card = $this->card();
+		$card->setCoverColor('2ecc71');
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// coverColor omitted (null) → the existing cover colour is preserved.
+		$updated = $this->service->update(9, 'Renamed', null, null, null, null, 'alice');
+		self::assertSame('2ecc71', $updated->getCoverColor());
+	}
+
+	public function testCoverColorIsSerializedInSummaryAndDetail(): void {
+		$card = $this->card();
+		$card->setCoverColor('9b59b6');
+
+		$summary = $card->jsonSerializeSummary();
+		self::assertArrayHasKey('coverColor', $summary);
+		self::assertSame('9b59b6', $summary['coverColor']);
+
+		// The detail payload is the summary + description, so it carries it too.
+		$detail = $card->jsonSerialize();
+		self::assertSame('9b59b6', $detail['coverColor']);
+	}
+
 	public function testUpdateParsesAtomDuedateAndNormalizesToUtc(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());

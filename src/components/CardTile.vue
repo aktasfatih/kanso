@@ -15,6 +15,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@click="$emit('click')"
 			@mouseenter="$emit('hover', card.id)"
 			@mouseleave="$emit('hover', null)">
+			<!-- Cover band - a solid colour strip at the top of the tile (#3549) -->
+			<span
+				v-if="card.coverColor"
+				class="card-tile__cover"
+				:style="{ background: cssColor(card.coverColor) }"
+				aria-hidden="true" />
 			<!-- Label chips row - only rendered when the card has assigned labels -->
 			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
 				<span
@@ -320,6 +326,18 @@ const extraAssigneeCount = computed(() => {
 .card-tile:focus-visible {
 	outline: 2px solid var(--color-primary);
 	outline-offset: 1px;
+}
+
+/* Cover band - a solid-colour strip bleeding to the tile edges at the top.
+ * Negative margins cancel the tile's 10px/12px padding so the band spans the
+ * full width and sits flush with the rounded top corners. */
+.card-tile__cover {
+	display: block;
+	height: 8px;
+	width: calc(100% + 24px);
+	margin: -10px -12px 2px;
+	border-top-left-radius: var(--border-radius);
+	border-top-right-radius: var(--border-radius);
 }
 
 /* Human-id reference badge - small, muted, monospace so it reads as an id */

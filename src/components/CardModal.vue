@@ -383,6 +383,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
+					<!-- Cover colour -->
+					<div v-if="canEdit" class="card-modal__attr">
+						<button
+							class="card-modal__pill"
+							:class="currentCoverColor ? '' : 'card-modal__pill--dashed'"
+							:style="currentCoverColor ? { borderColor: cssColor(currentCoverColor), color: cssColor(currentCoverColor) } : {}"
+							:aria-expanded="openPicker === 'cover'"
+							@click="togglePicker('cover')">
+							<PaletteIcon :size="14" />
+							{{ t('kanso', 'Cover') }}
+						</button>
+						<div v-if="openPicker === 'cover'" class="card-modal__popover card-modal__popover--pad">
+							<div class="card-modal__cover-swatches">
+								<button
+									v-for="opt in COVER_COLOR_OPTIONS"
+									:key="opt.hex"
+									class="card-modal__cover-swatch"
+									:class="{ 'card-modal__cover-swatch--active': currentCoverColor === opt.hex }"
+									:style="{ background: cssColor(opt.hex) }"
+									:title="opt.name"
+									:aria-label="opt.name"
+									:disabled="updateCard.isPending.value"
+									@click="handleSetCoverColor(opt.hex)" />
+							</div>
+							<button
+								v-if="currentCoverColor"
+								class="card-modal__popover-opt"
+								:disabled="updateCard.isPending.value"
+								@click="handleSetCoverColor('')">
+								{{ t('kanso', 'No cover') }}
+							</button>
+							<span v-if="coverColorError" class="card-modal__save-error">{{ coverColorError }}</span>
+						</div>
+					</div>
+
 					<!-- Assignees -->
 					<span
 						v-for="uid in cardAssigneeIds"
@@ -1460,6 +1495,7 @@ import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
+import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
@@ -1865,6 +1901,34 @@ async function handleSetEstimate(token) {
 		await updateCard.mutateAsync({ data: { estimate: newToken } })
 	} catch (err) {
 		estimateError.value = err?.response?.data?.error || t('kanso', 'Failed to update estimate.')
+	}
+}
+
+// ── Cover colour (#3549) ─────────────────────────────────────────────────────
+// Named palette for the cover swatches (shares the label preset hexes so the
+// swatches stay consistent with labels/columns everywhere).
+const COVER_COLOR_OPTIONS = [
+	{ hex: 'e74c3c', name: t('kanso', 'Red') },
+	{ hex: 'e67e22', name: t('kanso', 'Orange') },
+	{ hex: 'f1c40f', name: t('kanso', 'Yellow') },
+	{ hex: '2ecc71', name: t('kanso', 'Green') },
+	{ hex: '1abc9c', name: t('kanso', 'Teal') },
+	{ hex: '3498db', name: t('kanso', 'Blue') },
+	{ hex: '9b59b6', name: t('kanso', 'Purple') },
+	{ hex: '34495e', name: t('kanso', 'Slate') },
+]
+const currentCoverColor = computed(() => cardData.value?.coverColor ?? '')
+const coverColorError = ref('')
+
+async function handleSetCoverColor(hex) {
+	// Toggle: clicking the active swatch clears it; '' also clears.
+	const next = hex !== '' && hex === currentCoverColor.value ? '' : hex
+	coverColorError.value = ''
+	try {
+		await updateCard.mutateAsync({ data: { coverColor: next } })
+		openPicker.value = null
+	} catch (err) {
+		coverColorError.value = err?.response?.data?.error || t('kanso', 'Failed to update cover.')
 	}
 }
 
@@ -3800,6 +3864,25 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__label-swatch--no-color {
 	background: var(--color-background-hover);
+}
+/* Cover-colour swatches (#3549) - a small grid of preset colours in the picker */
+.card-modal__cover-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+.card-modal__cover-swatch {
+	width: 24px;
+	height: 24px;
+	border: 1px solid var(--color-border);
+	border-radius: 6px;
+	cursor: pointer;
+	padding: 0;
+}
+.card-modal__cover-swatch--active {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
 }
 .card-modal__label-color-grid {
 	flex: 1 1 100%;

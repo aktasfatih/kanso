@@ -358,11 +358,12 @@ class CardService {
 	 * description. done=true stamps done_at only once (idempotent),
 	 * done=false clears it. Moving the due date re-arms the due-date reminders
 	 * (#3545) by clearing their "already sent" markers; $dueReminderDayBefore
-	 * toggles the optional "1 day before" reminder.
+	 * toggles the optional "1 day before" reminder. An empty $coverColor string
+	 * clears the cover colour; a non-empty one must be a bare 6-hex value (#3549).
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title or duedate
+	 * @throws InvalidInputException on invalid title, duedate or cover colour
 	 */
 	public function update(
 		int $id,
@@ -378,6 +379,7 @@ class CardService {
 		?string $estimate = null,
 		?bool $allDay = null,
 		?bool $dueReminderDayBefore = null,
+		?string $coverColor = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -402,6 +404,11 @@ class CardService {
 				throw new InvalidInputException('Priority must be between 0 and 4');
 			}
 			$card->setPriority($priority);
+		}
+		if ($coverColor !== null) {
+			// Shared colour validation ('' clears the cover; a non-empty value must
+			// be a bare 6-hex string, same as label/stack/board colours).
+			$card->setCoverColor(ColorValidator::assertValid($coverColor));
 		}
 		$descriptionChanged = false;
 		if ($description !== null && $description !== $card->getDescription()) {

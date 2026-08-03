@@ -63,6 +63,8 @@ use OCP\DB\Types;
  * @method void setDayBeforeReminderSent(int $dayBeforeReminderSent)
  * @method bool|null getDueReminderDayBefore()
  * @method void setDueReminderDayBefore(?bool $dueReminderDayBefore)
+ * @method string|null getCoverColor()
+ * @method void setCoverColor(?string $coverColor)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
@@ -100,6 +102,10 @@ class Card extends Entity implements \JsonSerializable {
 	// Fixed, card-level opt-in for the "1 day before" reminder (the at-due one
 	// always fires). Not a board setting, not a per-user preference.
 	protected ?bool $dueReminderDayBefore = null;
+	// Card cover colour (#3549): a bare 6-hex string (no leading '#', same
+	// convention as label/stack/board colours) rendered as a band on the tile,
+	// or null for no cover. In the summary payload so the tile renders it.
+	protected ?string $coverColor = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -124,13 +130,14 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('dueReminderSent', Types::INTEGER);
 		$this->addType('dayBeforeReminderSent', Types::INTEGER);
 		$this->addType('dueReminderDayBefore', Types::BOOLEAN);
+		$this->addType('coverColor', Types::STRING);
 	}
 
 	/**
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -158,6 +165,9 @@ class Card extends Entity implements \JsonSerializable {
 			// always on when a card has a due date). The sent-markers are
 			// internal bookkeeping and deliberately not exposed.
 			'dueReminderDayBefore' => $this->dueReminderDayBefore ?? false,
+			// Card cover colour (#3549): bare 6-hex or null. In the summary so the
+			// board/stack tile can render the cover band without the detail fetch.
+			'coverColor' => $this->coverColor,
 		];
 	}
 
