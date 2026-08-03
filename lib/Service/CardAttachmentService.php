@@ -207,6 +207,59 @@ class CardAttachmentService {
 	}
 
 	/**
+	 * RASTER image mimes that are safe to serve INLINE (Content-Disposition:
+	 * inline) so a pasted screenshot can be embedded in a description/comment.
+	 *
+	 * DELIBERATELY excludes image/svg+xml: an SVG is an XML document that can
+	 * carry <script>/on* handlers and would be executed if rendered inline, so it
+	 * stays download-only. Only these four bitmap formats are ever inlined; the
+	 * exact stored mime must be one of them or the inline endpoint 404s.
+	 */
+	private const INLINE_IMAGE_MIMES = [
+		'image/png',
+		'image/jpeg',
+		'image/gif',
+		'image/webp',
+	];
+
+	/**
+	 * Resolves an attachment for INLINE display (embedding a pasted raster image
+	 * in a description/comment). Same gating as {@see self::download()} - READ on
+	 * the card's board + the IDOR guard - but ONLY returns bytes for the strict
+	 * raster-image allow-list ({@see self::INLINE_IMAGE_MIMES}). Any other
+	 * attachment (svg, html, txt, pdf, …) is treated as not-found: a 404, never
+	 * inlined. The caller sets Content-Disposition: inline + nosniff + the exact
+	 * allow-listed Content-Type from the returned metadata.
+	 *
+	 * @return array{0: CardAttachment, 1: string}
+	 * @throws DoesNotExistException if the card/board/attachment does not exist, is deleted, is on another card, or is not an allow-listed raster image
+	 * @throws NotPermittedException if the actor may not read the board
+	 */
+	public function inline(int $cardId, int $attachmentId, string $actorUid): array {
+		$card = $this->loadCard($cardId);
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+
+		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
+
+		// The gate: only bitmap images the browser cannot script are inlined.
+		// Everything else is a 404 here (still reachable via the download
+		// endpoint, which forces Content-Disposition: attachment).
+		if (!in_array($attachment->getMime(), self::INLINE_IMAGE_MIMES, true)) {
+			throw new DoesNotExistException('Attachment ' . $attachmentId . ' is not an inline-serveable image');
+		}
+
+		try {
+			$file = $this->cardFolder($cardId)->getFile($attachment->getStorageKey());
+			$bytes = $file->getContent();
+		} catch (NotFoundException $e) {
+			throw new DoesNotExistException('Attachment object missing');
+		}
+
+		return [$attachment, $bytes];
+	}
+
+	/**
 	 * Removes an attachment (object + row) from the card. Requires EDIT.
 	 *
 	 * @throws DoesNotExistException if the card/board/attachment does not exist, is deleted, or the attachment is on another card

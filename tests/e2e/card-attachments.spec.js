@@ -46,6 +46,29 @@ async function uploadFile(cardId, filename, content, contentType = 'text/plain')
 	return { ok: r.ok, status: r.status, body: text ? JSON.parse(text) : null }
 }
 
+// A minimal valid 1x1 PNG (so upload keeps image/png and the inline endpoint
+// serves it) as a Uint8Array.
+const PNG_1x1 = new Uint8Array([
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+	0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+	0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+])
+
+async function uploadBytes(cardId, filename, bytes, contentType) {
+	const form = new FormData()
+	form.append('file', new Blob([bytes], { type: contentType }), filename)
+	const r = await fetch(API + `/cards/${cardId}/attachments`, {
+		method: 'POST',
+		headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		body: form,
+	})
+	const text = await r.text()
+	return { ok: r.ok, status: r.status, body: text ? JSON.parse(text) : null }
+}
+
 // Card file attachments (#3526): app-storage, board-ACL-gated. Upload/list/
 // download/delete over the API, plus the security cases (IDOR, oversized,
 // path-traversal filename doesn't escape, download is Content-Disposition:
@@ -135,6 +158,53 @@ test.describe('Card file attachments', () => {
 		await api('DELETE', `/cards/${cardId}/attachments/${attId}`)
 	})
 
+	// Inline raster-image serve (#3525): only png/jpeg/gif/webp are served
+	// Content-Disposition: inline with the exact type + nosniff; everything else
+	// (txt, svg, cross-card IDOR) 404s and stays download-only.
+	test('inline endpoint serves a png inline with nosniff; non-images and IDOR 404', async () => {
+		const png = await uploadBytes(cardId, 'shot.png', PNG_1x1, 'image/png')
+		expect(png.ok).toBe(true)
+		expect(png.body.mime).toBe('image/png')
+		const pngId = png.body.id
+
+		// The png serves INLINE with the exact allow-listed type + nosniff.
+		const inline = await fetch(API + `/cards/${cardId}/attachments/${pngId}/inline`, {
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		})
+		expect(inline.ok).toBe(true)
+		expect(inline.headers.get('content-type')).toContain('image/png')
+		expect((inline.headers.get('content-disposition') || '')).toContain('inline')
+		expect(inline.headers.get('x-content-type-options')).toBe('nosniff')
+		const buf = new Uint8Array(await inline.arrayBuffer())
+		expect(buf.length).toBe(PNG_1x1.length)
+
+		// A .txt attachment is NOT inline-serveable → 404 (download-only).
+		const txt = await uploadFile(cardId, 'notes.txt', 'plain', 'text/plain')
+		const txtInline = await fetch(API + `/cards/${cardId}/attachments/${txt.body.id}/inline`, {
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		})
+		expect(txtInline.status).toBe(404)
+
+		// An SVG (scriptable) uploaded is coerced to octet-stream and is NOT
+		// inline-serveable → 404.
+		const svg = await uploadFile(cardId, 'x.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'image/svg+xml')
+		const svgInline = await fetch(API + `/cards/${cardId}/attachments/${svg.body.id}/inline`, {
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		})
+		expect(svgInline.status).toBe(404)
+
+		// IDOR: the png cannot be inlined through the OTHER card's URL.
+		const idor = await fetch(API + `/cards/${otherCardId}/attachments/${pngId}/inline`, {
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		})
+		expect(idor.status).toBe(404)
+
+		// Cleanup.
+		await api('DELETE', `/cards/${cardId}/attachments/${pngId}`)
+		await api('DELETE', `/cards/${cardId}/attachments/${txt.body.id}`)
+		await api('DELETE', `/cards/${cardId}/attachments/${svg.body.id}`)
+	})
+
 	test('an empty upload is rejected', async () => {
 		const up = await uploadFile(cardId, 'empty.txt', '', 'text/plain')
 		expect(up.ok).toBe(false)
@@ -168,4 +238,54 @@ test.describe('Card file attachments', () => {
 		await expect(page.locator('.card-modal__link-row', { hasText: 'ui-upload.txt' }))
 			.toHaveCount(0, { timeout: 8000 })
 	})
+
+	// Paste an image into the description textarea (#3525): it uploads via the
+	// attachment endpoint and the saved description renders an <img> pointing at
+	// the inline endpoint.
+	test('paste an image into the description uploads it and renders an inline <img>', async ({ page }) => {
+		await ncLogin(page)
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
+		await page.goto(cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// Enter description edit mode (empty description shows a placeholder button).
+		await page.click('.card-modal__desc-placeholder')
+		const textarea = page.locator('.card-modal__desc-textarea')
+		await expect(textarea).toBeVisible({ timeout: 5000 })
+		await textarea.focus()
+
+		// Dispatch a real paste event carrying a PNG File on the textarea. The
+		// composable reads clipboardData.items, uploads, then rewrites the markdown.
+		const pngArray = Array.from(PNG_1x1)
+		await textarea.evaluate((el, bytes) => {
+			const file = new File([new Uint8Array(bytes)], 'clip.png', { type: 'image/png' })
+			const dt = new DataTransfer()
+			dt.items.add(file)
+			el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+		}, pngArray)
+
+		// The upload completes and the markdown gets the inline-endpoint URL.
+		await expect(textarea).toHaveValue(/!\[[^\]]*\]\(.*\/attachments\/\d+\/inline\)/, { timeout: 10_000 })
+
+		// Save, then the rendered description shows the same-origin inline <img>.
+		await page.locator('.card-modal__desc-actions button', { hasText: 'Save' }).click()
+		const img = page.locator('.card-modal__desc-rendered img')
+		await expect(img).toHaveCount(1, { timeout: 8000 })
+		const src = await img.first().getAttribute('src')
+		expect(src).toContain(`/api/cards/${cardId}/attachments/`)
+		expect(src).toContain('/inline')
+
+		// Clean up the pasted attachment so the shared card resets.
+		await apiPatch(`/cards/${cardId}`, { description: '' })
+	})
 })
+
+async function apiPatch(path, body) {
+	const r = await fetch(API + path, {
+		method: 'PATCH',
+		headers: { ...HEADERS, Authorization: AUTH },
+		body: JSON.stringify(body),
+	})
+	return { ok: r.ok, status: r.status }
+}

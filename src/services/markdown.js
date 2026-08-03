@@ -124,13 +124,44 @@ const ALLOWED_TAGS = [
 	'hr', 'br',
 	'del',
 	'span', // only used for the mention chip (class="kanso-mention")
+	'img', // ONLY same-origin inline card-attachment images (see IMG hook below)
 ]
+
+// A pasted image is embedded as `![alt](<inline-endpoint-url>)`. We permit <img>
+// but LOCK its `src` to the app's own inline-attachment endpoint — a SAME-ORIGIN,
+// path-only URL of the exact shape produced by cardAttachmentInlineUrl():
+//   [/<anything>]/apps/kanso/api/cards/<digits>/attachments/<digits>/inline
+// This deliberately allows NO external host (SSRF / tracking-pixel / exfil
+// surface), NO data: URI, NO svg, NO scheme at all. The `.../inline` server
+// endpoint itself only ever serves raster png/jpeg/gif/webp bytes; anything else
+// 404s there. The regex is anchored end-to-end and the whole src must be a
+// server-relative path (leading single "/", never "//" which is a
+// protocol-relative external URL, never a scheme).
+const INLINE_ATTACHMENT_SRC_RE =
+	/^\/(?:[^/\\][^\\]*\/)*apps\/kanso\/api\/cards\/\d+\/attachments\/\d+\/inline$/
+
+/**
+ * True iff `src` is a safe same-origin inline card-attachment path. Rejects
+ * absolute/external URLs, protocol-relative `//host`, data:/javascript: URIs,
+ * backslashes, query strings, and fragments — only the exact app path passes.
+ *
+ * @param {string} src the raw img src attribute value
+ * @returns {boolean}
+ */
+function isInlineAttachmentSrc(src) {
+	if (typeof src !== 'string') return false
+	const s = src.trim()
+	// Must be a server-relative path, not "//host" (protocol-relative) and not a
+	// scheme (http:, data:, javascript:). A single leading slash is required.
+	if (!s.startsWith('/') || s.startsWith('//')) return false
+	return INLINE_ATTACHMENT_SRC_RE.test(s)
+}
 
 // `class` is allowed through here so it can survive to the afterSanitizeAttributes
 // hook, which then strips it from everything except the mention chip and card-ref
 // anchor (below). `data-kanso-card-id` carries the numeric target of an internal
 // card cross-reference; the hook drops it from anything that is not the ref anchor.
-const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class', 'data-kanso-card-id']
+const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class', 'data-kanso-card-id', 'src', 'alt']
 
 const FORBID_TAGS = ['style', 'script']
 
@@ -164,6 +195,41 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 	// arbitrary elements.
 	if (node.hasAttribute?.('data-kanso-card-id') && !isCardRef) {
 		node.removeAttribute('data-kanso-card-id')
+	}
+
+	// `src`/`alt` are only legitimate on an <img>. Strip them from anything else
+	// so the app-wide allowlist entries can't be carried on other elements.
+	if (node.tagName !== 'IMG') {
+		if (node.hasAttribute?.('src')) node.removeAttribute('src')
+		if (node.hasAttribute?.('alt')) node.removeAttribute('alt')
+	}
+
+	if (node.tagName === 'IMG') {
+		// An embedded pasted image. Its src MUST be the app's own inline
+		// card-attachment path (same-origin, path-only, exact shape). Anything
+		// else — external host, protocol-relative //host, data:/javascript: URI,
+		// svg, or a malformed value — means the whole <img> is dropped, never
+		// rendered. No other attribute survives (no srcset/style/on*/width/…), so
+		// there is no external-fetch, tracking-pixel, or handler surface.
+		const src = node.getAttribute('src') || ''
+		if (!isInlineAttachmentSrc(src)) {
+			node.remove?.()
+			return
+		}
+		const alt = node.getAttribute('alt') || ''
+		// Rebuild the attribute set from scratch: only the validated src + a plain
+		// text alt. removeAttribute over the live map while iterating is avoided by
+		// snapshotting the names first.
+		const names = node.getAttributeNames?.() || []
+		for (const name of names) {
+			if (name !== 'src') node.removeAttribute(name)
+		}
+		if (alt) node.setAttribute('alt', alt)
+		// Loading is lazy + referrer suppressed as defence in depth (the src is
+		// already same-origin, so no cross-origin referrer leaks, but keep it tight).
+		node.setAttribute('loading', 'lazy')
+		node.setAttribute('referrerpolicy', 'no-referrer')
+		return
 	}
 
 	if (node.tagName === 'A') {

@@ -149,6 +149,65 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		expect(descHtml).not.toMatch(/<script[\s>]/i)
 	})
 
+	// Inline card-attachment images (#3525): a same-origin inline-endpoint <img>
+	// renders; any OTHER img src (external host, data:, javascript:, svg,
+	// protocol-relative) is stripped by the sanitiser — no external fetch, no XSS.
+	test('renders a same-origin inline-attachment image and strips every other img', async ({ page }) => {
+		let alertFired = false
+		page.on('dialog', async (dialog) => {
+			alertFired = true
+			await dialog.dismiss()
+		})
+
+		// A description mixing a legit inline-attachment image with hostile ones.
+		// The inline path is what cardAttachmentInlineUrl() produces for this card.
+		const inlineSrc = `/apps/kanso/api/cards/${state.cardId}/attachments/1/inline`
+		const md = [
+			`![ok](${inlineSrc})`,
+			'![ext](https://evil.example.com/pixel.png)',
+			'![data](data:image/png;base64,AAAA)',
+			'![proto](//evil.example.com/x.png)',
+			'![svg](/apps/kanso/api/cards/1/attachments/1/inline.svg)',
+			'![js](javascript:alert(1))',
+			'<img src=x onerror=alert(1)>',
+		].join('\n\n')
+		await apiPatch(`/cards/${state.cardId}`, { description: md })
+
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
+
+		// Exactly ONE img element survives: the same-origin inline-attachment one.
+		// Every hostile img markdown produced NO rendered <img> (external/data:/
+		// protocol-relative/svg src stripped by the hook; javascript:/raw-<img>
+		// never became an element at all — they stay inert, escaped plain text).
+		const imgs = page.locator('.card-modal__desc-rendered img')
+		await expect(imgs).toHaveCount(1, { timeout: 5000 })
+		const src = await imgs.first().getAttribute('src')
+		expect(src).toContain(`/api/cards/${state.cardId}/attachments/1/inline`)
+
+		// The surviving img carries NO on* handler and its src is same-origin only.
+		const onerror = await imgs.first().getAttribute('onerror')
+		expect(onerror).toBeNull()
+		expect(src).not.toContain('evil.example.com')
+		expect(src).not.toContain('data:')
+
+		// No img element anywhere points at an external / data: / javascript: src
+		// (i.e. nothing hostile was rendered as an actual <img>).
+		expect(await page.locator('.card-modal__desc-rendered img[src*="evil.example.com"]').count()).toBe(0)
+		expect(await page.locator('.card-modal__desc-rendered img[src^="data:"]').count()).toBe(0)
+		expect(await page.locator('.card-modal__desc-rendered img[src^="//"]').count()).toBe(0)
+		expect(await page.locator('.card-modal__desc-rendered img[onerror]').count()).toBe(0)
+
+		// The onerror payload survives only as INERT escaped text, never as a live
+		// attribute/element — so no dialog fires.
+		expect(alertFired).toBe(false)
+
+		// Restore the original description for the reload test below.
+		await apiPatch(`/cards/${state.cardId}`, { description: DESCRIPTION })
+	})
+
 	test('markdown is still safe after page reload', async ({ page }) => {
 		let alertFired = false
 		page.on('dialog', async (dialog) => {

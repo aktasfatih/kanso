@@ -11,6 +11,7 @@ use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
@@ -80,6 +81,41 @@ class CardAttachmentController extends Controller {
 		} catch (\Throwable $e) {
 			// Reuse the shared error mapping (403/404/400) for the failure paths;
 			// on success we already returned the download above.
+			return $this->respond(function () use ($e): JSONResponse {
+				throw $e;
+			});
+		}
+	}
+
+	/**
+	 * Serves an attachment's bytes INLINE (Content-Disposition: inline) so a
+	 * pasted raster image can render in a description/comment. Board-READ gated +
+	 * IDOR-guarded exactly like download(), but the service only returns bytes for
+	 * a strict raster-image allow-list (png/jpeg/gif/webp) - any other attachment
+	 * (svg/html/txt/pdf/…) is a 404 here and stays download-only.
+	 *
+	 * The Content-Type is set from the allow-listed mime (never client-echoed) and
+	 * X-Content-Type-Options: nosniff is kept so the browser cannot re-interpret
+	 * the bytes as a scriptable type.
+	 */
+	#[NoAdminRequired]
+	public function inline(int $cardId, int $attachmentId): DataDisplayResponse|JSONResponse {
+		try {
+			[$attachment, $bytes] = $this->attachmentService->inline(
+				$cardId,
+				$attachmentId,
+				$this->currentUserId()
+			);
+			$response = new DataDisplayResponse(
+				$bytes,
+				\OCP\AppFramework\Http::STATUS_OK,
+				['Content-Type' => $attachment->getMime()]
+			);
+			$response->addHeader('Content-Disposition', 'inline');
+			$response->addHeader('X-Content-Type-Options', 'nosniff');
+			return $response;
+		} catch (\Throwable $e) {
+			// Reuse the shared error mapping (403/404/400) for the failure paths.
 			return $this->respond(function () use ($e): JSONResponse {
 				throw $e;
 			});

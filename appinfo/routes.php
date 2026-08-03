@@ -127,6 +127,11 @@ return [
 		['name' => 'cardAttachment#index', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'GET'],
 		['name' => 'cardAttachment#create', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'POST'],
 		['name' => 'cardAttachment#download', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'GET'],
+		// INLINE raster-image serve (#3525). Distinct trailing /inline segment,
+		// board-READ gated + IDOR-guarded; only png/jpeg/gif/webp are served
+		// Content-Disposition: inline (everything else 404s), so a pasted image
+		// can be embedded in a description/comment without opening an XSS/SSRF hole.
+		['name' => 'cardAttachment#inline', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}/inline', 'verb' => 'GET'],
 		['name' => 'cardAttachment#destroy', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'DELETE'],
 
 		['name' => 'cardRelation#index', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'GET'],

@@ -789,6 +789,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:placeholder="t('kanso', 'Add a description…')"
 										rows="8"
 										@keydown="onDescKeydown"
+										@paste="onDescPaste"
 										@input="mentionDesc.onInput()" />
 									<ul
 										v-if="mentionDesc.isOpen.value && mentionDesc.matches.value.length > 0"
@@ -821,7 +822,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										{{ t('kanso', 'Cancel') }}
 									</NcButton>
 									<span class="card-modal__hint">{{ t('kanso', 'Esc cancel · Ctrl+Enter save') }}</span>
+									<span v-if="uploadAttachment.isPending.value" class="card-modal__hint">{{ t('kanso', 'Uploading image…') }}</span>
 									<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
+									<span v-if="descPasteError" class="card-modal__save-error">{{ descPasteError }}</span>
 								</div>
 							</template>
 
@@ -1369,6 +1372,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										rows="2"
 										:disabled="addComment.isPending.value"
 										@keydown="onCommentKeydown"
+										@paste="onCommentPaste"
 										@input="mentionComment.onInput()" />
 									<ul
 										v-if="mentionComment.isOpen.value && mentionComment.matches.value.length > 0"
@@ -1394,6 +1398,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										{{ t('kanso', 'Post') }}
 									</NcButton>
 									<span class="card-modal__hint">{{ t('kanso', 'Ctrl+Enter to post') }}</span>
+									<span v-if="uploadAttachment.isPending.value" class="card-modal__hint">{{ t('kanso', 'Uploading image…') }}</span>
 								</div>
 								<span v-if="commentError" class="card-modal__save-error">{{ commentError }}</span>
 							</div>
@@ -1525,7 +1530,8 @@ import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
-import { cardAttachmentUrl } from '../services/api.js'
+import { useImagePaste } from '../composables/useImagePaste.js'
+import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
@@ -3099,6 +3105,25 @@ const mdToolbar = useMarkdownToolbar({
 	setText: (v) => { draftDescription.value = v },
 	textareaRef: descTextareaRef,
 })
+
+// Paste-a-clipboard-image → upload as attachment → embed inline (#3525). Reuses
+// the attachment upload mutation + the inline-URL builder; the sanitiser only
+// renders <img> whose src is that same-origin inline path.
+const descPasteError = ref('')
+const descImagePaste = useImagePaste({
+	getText: () => draftDescription.value,
+	setText: (v) => { draftDescription.value = v },
+	textareaRef: descTextareaRef,
+	upload: (file) => uploadAttachment.mutateAsync(file),
+	inlineUrl: (attachmentId) => cardAttachmentInlineUrl(props.cardId, attachmentId),
+	onError: (msg) => { descPasteError.value = msg || t('kanso', 'Failed to upload image.') },
+})
+
+function onDescPaste(event) {
+	descPasteError.value = ''
+	descImagePaste.onPaste(event)
+}
+
 const showDescPreview = ref(false)
 // Debounced source for the live preview. renderMarkdown (markdown-it + DOMPurify)
 // is expensive, so we don't re-parse on every keystroke: instead we mirror
@@ -3160,6 +3185,22 @@ const mentionComment = useMentionAutocomplete({
 	textareaRef: newCommentTextareaRef,
 	getParticipants,
 })
+
+// Paste-a-clipboard-image into the comment composer → upload + embed inline
+// (#3525), same pipeline as the description composer above.
+const commentImagePaste = useImagePaste({
+	getText: () => newCommentBody.value,
+	setText: (v) => { newCommentBody.value = v },
+	textareaRef: newCommentTextareaRef,
+	upload: (file) => uploadAttachment.mutateAsync(file),
+	inlineUrl: (attachmentId) => cardAttachmentInlineUrl(props.cardId, attachmentId),
+	onError: (msg) => { commentError.value = msg || t('kanso', 'Failed to upload image.') },
+})
+
+function onCommentPaste(event) {
+	commentError.value = ''
+	commentImagePaste.onPaste(event)
+}
 
 /**
  * Unified keydown handler for the description textarea.

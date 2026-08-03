@@ -243,6 +243,13 @@ export const deleteCardAttachment = (cardId, attachmentId) =>
 export const cardAttachmentUrl = (cardId, attachmentId) =>
 	url(`/api/cards/${cardId}/attachments/${attachmentId}`)
 
+// INLINE image URL (#3525). Server serves Content-Disposition: inline ONLY for
+// the raster-image allow-list (png/jpeg/gif/webp), everything else 404s. Used
+// as the src of an embedded pasted image; the markdown sanitiser only permits
+// <img> whose src matches exactly this path shape (see services/markdown.js).
+export const cardAttachmentInlineUrl = (cardId, attachmentId) =>
+	url(`/api/cards/${cardId}/attachments/${attachmentId}/inline`)
+
 // Deck import
 export const fetchDeckImportBoards = () =>
 	axios.get(url('/api/deck-import/boards')).then((r) => r.data)

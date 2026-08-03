@@ -340,6 +340,116 @@ class CardAttachmentServiceTest extends TestCase {
 		$this->service->download(9, 5, 'bob');
 	}
 
+	// ---- inline (#3525) ---------------------------------------------------
+
+	public function testInlineRequiresRead(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'stranger', PermissionService::PERMISSION_READ)
+			->willThrowException(new NotPermittedException());
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->inline(9, 1, 'stranger');
+	}
+
+	public function testInlineRejectsCrossCardAttachment(): void {
+		$this->expectCardLoaded();
+		$other = new CardAttachment();
+		$other->setId(5);
+		$other->setCardId(99); // different card - IDOR guard
+		$other->setMime('image/png');
+		$this->attachmentMapper->method('find')->with(5)->willReturn($other);
+		$this->folder->expects(self::never())->method('getFile');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->inline(9, 5, 'bob');
+	}
+
+	/**
+	 * @dataProvider inlineImageMimeProvider
+	 */
+	public function testInlineServesAllowListedRasterImage(string $mime): void {
+		$this->expectCardLoaded();
+		$a = new CardAttachment();
+		$a->setId(5);
+		$a->setCardId(9);
+		$a->setStorageKey('deadbeefdeadbeefdeadbeefdeadbeef');
+		$a->setFilename('shot.png');
+		$a->setMime($mime);
+		$this->attachmentMapper->method('find')->with(5)->willReturn($a);
+
+		$file = $this->createMock(ISimpleFile::class);
+		$file->method('getContent')->willReturn('IMGBYTES');
+		$this->folder->method('getFile')
+			->with('deadbeefdeadbeefdeadbeefdeadbeef')
+			->willReturn($file);
+
+		[$meta, $bytes] = $this->service->inline(9, 5, 'bob');
+		self::assertSame($mime, $meta->getMime());
+		self::assertSame('IMGBYTES', $bytes);
+	}
+
+	/** @return array<string, array{0: string}> */
+	public static function inlineImageMimeProvider(): array {
+		return [
+			'png' => ['image/png'],
+			'jpeg' => ['image/jpeg'],
+			'gif' => ['image/gif'],
+			'webp' => ['image/webp'],
+		];
+	}
+
+	/**
+	 * A non-raster / scriptable / arbitrary attachment is NOT inlined: a 404,
+	 * bytes are never read. Covers svg (scriptable), html, txt, pdf and a mime
+	 * that only *contains* an allow-listed token.
+	 *
+	 * @dataProvider nonInlineMimeProvider
+	 */
+	public function testInlineRejectsNonAllowListedMime(string $mime): void {
+		$this->expectCardLoaded();
+		$a = new CardAttachment();
+		$a->setId(5);
+		$a->setCardId(9);
+		$a->setStorageKey('deadbeefdeadbeefdeadbeefdeadbeef');
+		$a->setMime($mime);
+		$this->attachmentMapper->method('find')->with(5)->willReturn($a);
+		// The gate is checked BEFORE any bytes are touched.
+		$this->folder->expects(self::never())->method('getFile');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->inline(9, 5, 'bob');
+	}
+
+	/** @return array<string, array{0: string}> */
+	public static function nonInlineMimeProvider(): array {
+		return [
+			'svg' => ['image/svg+xml'],
+			'html' => ['text/html'],
+			'txt' => ['text/plain'],
+			'pdf' => ['application/pdf'],
+			'octet-stream' => ['application/octet-stream'],
+			'empty' => [''],
+			'png-with-suffix' => ['image/png; charset=utf-8'],
+			'not-a-mime' => ['image/png-evil'],
+		];
+	}
+
+	public function testInlineMissingObjectIs404(): void {
+		$this->expectCardLoaded();
+		$a = new CardAttachment();
+		$a->setId(5);
+		$a->setCardId(9);
+		$a->setStorageKey('deadbeefdeadbeefdeadbeefdeadbeef');
+		$a->setMime('image/png');
+		$this->attachmentMapper->method('find')->with(5)->willReturn($a);
+		$this->folder->method('getFile')->willThrowException(new NotFoundException());
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->inline(9, 5, 'bob');
+	}
+
 	// ---- delete -----------------------------------------------------------
 
 	public function testDeleteRequiresEdit(): void {
