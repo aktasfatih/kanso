@@ -52,7 +52,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:to="{ name: 'board-list' }"
 					:active="route.name === 'board-list'"
 					:allow-collapse="boards.length > 0"
-					:open="true">
+					:open="boardsOpen"
+					@update:open="setBoardsOpen">
 					<template #icon>
 						<ViewDashboardIcon :size="20" />
 					</template>
@@ -192,13 +193,24 @@ const ungroupedBoards = computed(() =>
 // Collapse state persisted per user (NC IConfig via settings). Loaded once on
 // mount; each toggle writes the new collapsed-id set back.
 const collapsedIds = ref(new Set())
+// Whether the whole Boards section is shown (true) or hidden (false). Toggled by
+// the Boards nav item's disclosure caret; persisted per user. Defaults to open.
+const boardsOpen = ref(true)
 async function loadCollapsed() {
 	try {
 		const s = await getSettings()
 		collapsedIds.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
+		if (typeof s.boardsNavOpen === 'boolean') {
+			boardsOpen.value = s.boardsNavOpen
+		}
 	} catch {
-		// Non-fatal: folders just start expanded.
+		// Non-fatal: folders just start expanded and the Boards section open.
 	}
+}
+function setBoardsOpen(open) {
+	boardsOpen.value = open
+	// Fire-and-forget persist; the local ref already reflects the change.
+	updateSettings({ boardsNavOpen: open }).catch(() => {})
 }
 function setGroupOpen(groupId, open) {
 	const next = new Set(collapsedIds.value)
