@@ -26,7 +26,7 @@ Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
 roles, a command palette with full-text search, trash with restore, GitHub
 links and webhook, and one-click Import from Deck.
 	]]></description>
-	<version>0.9.10</version>
+	<version>0.9.11</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>
@@ -46,7 +46,12 @@ links and webhook, and one-click Import from Deck.
 		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>
 		<job>OCA\Kanso\Cron\SpawnRecurringCards</job>
 		<job>OCA\Kanso\Cron\SendDueReminders</job>
+		<job>OCA\Kanso\Cron\BackupBoards</job>
 	</background-jobs>
+	<settings>
+		<admin>OCA\Kanso\Settings\BackupAdmin</admin>
+		<admin-section>OCA\Kanso\Settings\AdminSection</admin-section>
+	</settings>
 	<navigations>
 		<navigation>
 			<name>Kanso</name>

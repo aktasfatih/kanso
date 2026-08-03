@@ -7,6 +7,10 @@ export default createAppConfig({
 	// The unauthenticated read-only public-share app (#3531) - a separate, small
 	// entry so the public page ships none of the authenticated app.
 	public: 'src/public.js',
+	// Kanso's admin settings panel (#3615) - a tiny vanilla entry, no Vue, that
+	// only wires up the backup-config form. Kept separate so the admin page
+	// ships none of the board app.
+	'admin-backup': 'src/admin-backup.js',
 }, {
 	// Styles must ship inside the JS bundle: the page only loads the script
 	// via Util::addScript, and the alternative is a hash-named CSS chunk

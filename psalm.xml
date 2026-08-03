@@ -20,4 +20,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	<extraFiles>
 		<directory name="vendor/nextcloud/ocp" />
 	</extraFiles>
+	<stubs>
+		<!-- OC\Hooks\Emitter is a private server interface that OCP\Files\IRootFolder
+		     extends but that the ocp package does not ship; stub it so psalm can
+		     resolve the IRootFolder dependency graph (mirrors tests/stubs/hooks.php). -->
+		<file name="tests/stubs/hooks.php" />
+	</stubs>
 </psalm>

@@ -21,6 +21,12 @@ return [
 		['name' => 'settings#index', 'url' => '/api/settings', 'verb' => 'GET'],
 		['name' => 'settings#update', 'url' => '/api/settings', 'verb' => 'PUT'],
 
+		// Admin-only backup config + on-demand run (#3615). No #[NoAdminRequired]
+		// on the controller, so Nextcloud gates these to admins.
+		['name' => 'backupAdmin#index', 'url' => '/api/admin/backup', 'verb' => 'GET'],
+		['name' => 'backupAdmin#update', 'url' => '/api/admin/backup', 'verb' => 'PUT'],
+		['name' => 'backupAdmin#run', 'url' => '/api/admin/backup/run', 'verb' => 'POST'],
+
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 		// Full-board portability. The literal /import segment is a distinct POST

@@ -39,6 +39,24 @@ class BoardMapper extends QBMapper {
 	}
 
 	/**
+	 * Every non-deleted board across the whole instance, oldest id first - the
+	 * system-wide work list for instance-level cron jobs (e.g. the scheduled
+	 * backup sweep). Not user-scoped: the caller runs as the system.
+	 *
+	 * @return Board[]
+	 * @throws Exception
+	 */
+	public function findAll(): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * The single non-deleted board whose `public_share_token` equals the given
 	 * token (#3531). The token column is UNIQUE, so this is one indexed probe
 	 * that can only ever resolve to exactly one board - a token can never pivot
