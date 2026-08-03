@@ -100,7 +100,7 @@ test.describe('Labels', () => {
 
 		// Opening the filter menu shows a checkbox row for the new label
 		await filterBtn.click()
-		await expect(page.locator('.board-view__filter-label-item .action-checkbox__text', { hasText: 'ColoredE2E' })).toHaveCount(1)
+		await expect(page.locator('.board-filter-bar__label-item .action-checkbox__text', { hasText: 'ColoredE2E' })).toHaveCount(1)
 	})
 
 	test('inline create from the card view: new label is assigned + present on the board', async ({ page }) => {

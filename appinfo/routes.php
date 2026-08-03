@@ -21,6 +21,13 @@ return [
 		['name' => 'settings#index', 'url' => '/api/settings', 'verb' => 'GET'],
 		['name' => 'settings#update', 'url' => '/api/settings', 'verb' => 'PUT'],
 
+		// Per-user, per-board saved filter views (#3407). Personal preference in
+		// user config, keyed by board id; the {name} path segment identifies a
+		// view for deletion (URL-encoded by the client).
+		['name' => 'savedFilter#index', 'url' => '/api/boards/{boardId}/saved-filters', 'verb' => 'GET'],
+		['name' => 'savedFilter#create', 'url' => '/api/boards/{boardId}/saved-filters', 'verb' => 'PUT'],
+		['name' => 'savedFilter#destroy', 'url' => '/api/boards/{boardId}/saved-filters/{name}', 'verb' => 'DELETE'],
+
 		// Admin-only backup config + on-demand run (#3615). No #[NoAdminRequired]
 		// on the controller, so Nextcloud gates these to admins.
 		['name' => 'backupAdmin#index', 'url' => '/api/admin/backup', 'verb' => 'GET'],

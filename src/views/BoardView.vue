@@ -117,59 +117,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
-			<!-- Filter dropdown - compact NcActions menu replacing the old chip row.
-			     Only rendered when the board has at least one label OR always when
-			     priority filtering is desired (priority filter is always available).
-			     Filter dimensions: labels (OR within), priority levels (OR within).
-			     AND is applied across the two filter types. -->
-			<NcActions
+			<!-- Composable filter bar (#3407) — labels / assignees / due / done /
+			     priority, AND across dimensions & OR within, plus saved named views
+			     (per-user NC config) and URL-query sharing. Generalizes the old
+			     label/priority dropdown. Purely client-side over the summary payload. -->
+			<BoardFilterBar
 				v-if="boardData"
 				class="board-view__filter-menu"
-				:aria-label="t('kanso', 'Filter cards')"
-				:menu-name="totalActiveFilters > 0
-					? t('kanso', 'Filter · {count}', { count: totalActiveFilters })
-					: t('kanso', 'Filter')"
-				:primary="totalActiveFilters > 0">
-				<template #icon>
-					<FilterVariantIcon :size="20" />
-				</template>
-
-				<!-- ── Label filter section ───────────────────────────────────────
-				     One NcActionCheckbox per board label.
-				     NcActionCheckbox (NC Vue 9) reads the default slot as plain text
-				     via ActionGlobalMixin.getText(); a wrapper span would be silently
-				     dropped. The color dot is therefore injected via a CSS custom
-				     property (--filter-dot-color) set on the root li element and a
-				     :deep(::before) pseudo-element that draws the circle. -->
-				<NcActionCheckbox
-					v-for="label in boardLabels"
-					:key="label.id"
-					class="board-view__filter-label-item"
-					:style="label.color ? { '--filter-dot-color': '#' + label.color } : { '--filter-dot-color': 'var(--color-border)' }"
-					:model-value="activeFilterIds.has(label.id)"
-					@update:model-value="toggleFilterLabel(label.id)">{{ label.title }}</NcActionCheckbox>
-
-				<!-- ── Priority filter section ────────────────────────────────────
-				     One checkbox per priority level > 0 (None is implicit when all
-				     priority filters are inactive). OR within the priority set. -->
-				<NcActionCheckbox
-					v-for="level in PRIORITY_LEVELS.filter((l) => l.value > 0)"
-					:key="'priority-' + level.value"
-					class="board-view__filter-priority-item"
-					:class="`board-view__filter-priority-item--${level.value}`"
-					:model-value="activePriorityLevels.has(level.value)"
-					@update:model-value="toggleFilterPriority(level.value)">{{ t('kanso', level.label) }}</NcActionCheckbox>
-
-				<!-- ── Clear action (hidden when no filters active) ───────────── -->
-				<NcActionButton
-					v-if="totalActiveFilters > 0"
-					@click="clearAllFilters">
-					<template #icon>
-						<FilterVariantRemoveIcon :size="20" />
-					</template>
-					{{ t('kanso', 'Clear filters') }}
-				</NcActionButton>
-			</NcActions>
+				:state="filterState"
+				:labels="boardLabels"
+				:participants="participants.data.value ?? []"
+				:saved-filters="savedFilters"
+				:active-saved-name="activeSavedName"
+				@save="handleSaveFilter"
+				@apply-saved="handleApplySavedFilter"
+				@delete-saved="handleDeleteSavedFilter" />
+			<div v-if="filterError" class="board-view__filter-error">{{ filterError }}</div>
 
 			<!-- Archived cards page button - only shown when ≥1 archived card -->
 			<NcButton
@@ -433,21 +396,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
-import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
-import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
-import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
-import FilterVariantRemoveIcon from 'vue-material-design-icons/FilterVariantRemove.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
@@ -462,7 +421,21 @@ import { buildLanes, SWIMLANE_MODES } from '../composables/useSwimlanes.js'
 import BoardListView from '../components/BoardListView.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
 import SearchBox from '../components/SearchBox.vue'
-import { PRIORITY_LEVELS } from '../composables/usePriority.js'
+import BoardFilterBar from '../components/BoardFilterBar.vue'
+import {
+	createFilterState,
+	serializeFilter,
+	applyFilter,
+	makePredicate,
+	filterToQuery,
+	queryToFilter,
+	filterIsEmpty,
+} from '../composables/useBoardFilters.js'
+import {
+	fetchSavedFilters as apiFetchSavedFilters,
+	saveSavedFilter as apiSaveSavedFilter,
+	deleteSavedFilter as apiDeleteSavedFilter,
+} from '../services/api.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
@@ -673,22 +646,112 @@ const labelsById = computed(() => {
 	return map
 })
 
-// ── Label filter state ────────────────────────────────────────────────────────
-// ANY-of semantics: a card passes if it carries at least one of the active
-// filter labels. This matches Deck's behaviour - "show me cards with any of
-// these selected tags". If no filter is active, all cards are visible.
-// Uses a reactive Set so individual .has() calls remain reactive.
-const activeFilterIds = reactive(new Set())
+// ── Composable filter state (#3407) ───────────────────────────────────────────
+// A generalization of the old label/priority dropdown into a multi-dimension
+// filter bar: labels / assignees / due / done / priority. AND across dimensions,
+// OR within each (see useBoardFilters). Purely client-side over the summary
+// payload. The active filter is mirrored to the URL query (shareable links) and
+// can be saved as a named per-user view.
+const filterState = createFilterState()
+// A live predicate rebuilt whenever the filter changes. `now` is captured once
+// per rebuild so the "this week" / "overdue" windows stay stable across a pass.
+const filterPredicate = computed(() => makePredicate(filterState, Date.now()))
+const totalActiveFilters = computed(() => {
+	const s = filterState
+	return s.labels.size + s.assignees.size + s.priorities.size
+		+ (s.due ? 1 : 0) + (s.done ? 1 : 0)
+})
 
-// ── Priority filter state ─────────────────────────────────────────────────────
-// ANY-of semantics within priority: a card passes if its priority is in the
-// selected set. AND is applied across label and priority filters.
-const activePriorityLevels = reactive(new Set())
+// ── Saved views (#3407) ───────────────────────────────────────────────────────
+// Per-user, per-board named filter snapshots persisted in NC user config.
+const savedFilters = ref([])
+const filterError = ref('')
 
-// Total active filter count - used for the filter button badge.
-const totalActiveFilters = computed(
-	() => activeFilterIds.size + activePriorityLevels.size,
-)
+// Load this board's saved views once the board id is known / changes.
+watch(boardId, async (id) => {
+	savedFilters.value = []
+	if (!id) return
+	try {
+		const res = await apiFetchSavedFilters(id)
+		savedFilters.value = Array.isArray(res?.filters) ? res.filters : []
+	} catch { /* non-fatal: saved views just stay empty */ }
+}, { immediate: true })
+
+// The name of the saved view the current filter equals (for the highlight), or
+// '' when the live filter matches no saved view.
+const activeSavedName = computed(() => {
+	const current = JSON.stringify(serializeFilter(filterState))
+	const match = savedFilters.value.find(
+		(v) => JSON.stringify(v.filter ?? {}) === current,
+	)
+	return match?.name ?? ''
+})
+
+async function handleSaveFilter(name) {
+	filterError.value = ''
+	const filter = serializeFilter(filterState)
+	try {
+		const res = await apiSaveSavedFilter(props.id, name, filter)
+		savedFilters.value = Array.isArray(res?.filters) ? res.filters : []
+	} catch (err) {
+		filterError.value = err?.response?.data?.error || t('kanso', 'Failed to save the filter.')
+	}
+}
+
+function handleApplySavedFilter(view) {
+	applyFilter(filterState, view?.filter ?? {})
+	// The filterState watcher below reflects it into the URL.
+}
+
+async function handleDeleteSavedFilter(name) {
+	filterError.value = ''
+	try {
+		const res = await apiDeleteSavedFilter(props.id, name)
+		savedFilters.value = Array.isArray(res?.filters) ? res.filters : []
+	} catch (err) {
+		filterError.value = err?.response?.data?.error || t('kanso', 'Failed to delete the filter.')
+	}
+}
+
+// ── URL ↔ filter sync (shareable links) ───────────────────────────────────────
+// Two watchers keep the live filter and the URL query in lock-step. There is NO
+// mutation guard flag: the feedback loop is broken purely by value-equality —
+// each watcher no-ops when the two sides already encode the same filter, so an
+// edit propagates exactly one hop and then settles. Only the five filter keys
+// (fl/fa/fp/fd/fs) are owned here; other query params are preserved untouched.
+const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'fd', 'fs']
+
+// Apply the URL's filter params onto the state (shared link / back-forward).
+function applyUrlToFilter() {
+	applyFilter(filterState, queryToFilter(route.query))
+}
+
+// Push the live filter into the URL query (replace, so filtering doesn't spam
+// browser history). No-ops when the URL already reflects the filter.
+watch(filterState, () => {
+	const q = filterToQuery(serializeFilter(filterState))
+	// Preserve any non-filter query params already on the route.
+	const preserved = {}
+	for (const [k, v] of Object.entries(route.query)) {
+		if (!FILTER_QUERY_KEYS.includes(k)) preserved[k] = v
+	}
+	const next = { ...preserved, ...q }
+	if (JSON.stringify(next) !== JSON.stringify(route.query)) {
+		router.replace({ query: next }).catch(() => {})
+	}
+}, { deep: true })
+
+// External URL changes (shared link load, back/forward): re-apply onto state,
+// but only when the URL encodes a different filter than the live state — else
+// this would fight the watcher above. Compare on the canonical query form so a
+// hand-typed order or string/number difference doesn't count as a change.
+watch(() => route.query, () => {
+	const desired = JSON.stringify(queryToFilter(route.query))
+	const currentAsQuery = JSON.stringify(queryToFilter(filterToQuery(serializeFilter(filterState))))
+	if (desired !== currentAsQuery) {
+		applyUrlToFilter()
+	}
+}, { deep: true })
 
 const bySortKey = (a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)
 
@@ -710,23 +773,12 @@ const archivedCards = computed(() =>
 
 const cardsByStack = computed(() => {
 	const map = new Map()
-	const labelFilterActive = activeFilterIds.size > 0
-	const priorityFilterActive = activePriorityLevels.size > 0
+	const passes = filterPredicate.value
 	for (const card of boardData.value?.cards ?? []) {
 		if (card.archived) continue
-		// Label filter (OR within): skip cards that don't carry at least one
-		// of the selected filter labels when a label filter is active.
-		if (labelFilterActive) {
-			const cardLabelIds = Array.isArray(card.labelIds) ? card.labelIds : []
-			const passes = cardLabelIds.some((id) => activeFilterIds.has(id))
-			if (!passes) continue
-		}
-		// Priority filter (OR within): skip cards whose priority is not in the
-		// selected set. AND'd with the label filter above.
-		if (priorityFilterActive) {
-			const cardPriority = Number(card.priority ?? 0)
-			if (!activePriorityLevels.has(cardPriority)) continue
-		}
+		// Composable filter (#3407): AND across dimensions, OR within each.
+		// filter-first, then group (swimlanes read this already-filtered map).
+		if (!passes(card)) continue
 		if (!map.has(card.stackId)) map.set(card.stackId, [])
 		map.get(card.stackId).push(card)
 	}
@@ -1064,6 +1116,9 @@ function publishToolbarHeight() {
 }
 
 onMounted(() => {
+	// Apply any filter params already in the URL (a shared link opened cold).
+	applyUrlToFilter()
+
 	document.addEventListener('keydown', handleKeydown)
 
 	if (headerRef.value && typeof ResizeObserver !== 'undefined') {
@@ -1286,27 +1341,6 @@ onUnmounted(() => {
 	document.documentElement.style.removeProperty('--kanso-board-toolbar-height')
 })
 
-function toggleFilterLabel(labelId) {
-	if (activeFilterIds.has(labelId)) {
-		activeFilterIds.delete(labelId)
-	} else {
-		activeFilterIds.add(labelId)
-	}
-}
-
-function toggleFilterPriority(level) {
-	if (activePriorityLevels.has(level)) {
-		activePriorityLevels.delete(level)
-	} else {
-		activePriorityLevels.add(level)
-	}
-}
-
-function clearAllFilters() {
-	activeFilterIds.clear()
-	activePriorityLevels.clear()
-}
-
 function goBack() {
 	router.push({ name: 'board-list' })
 }
@@ -1428,79 +1462,16 @@ async function handleSetColor(stackId, color) {
 	flex-shrink: 0;
 }
 
-/* Filter dropdown button - sits after the search box */
+/* Filter bar - sits after the search box. The dropdown internals (label dots,
+   priority dots) now live in BoardFilterBar.vue. */
 .board-view__filter-menu {
 	flex-shrink: 0;
 }
 
-/* Color dot injected as a ::before pseudo-element on the NcActionCheckbox text span.
-   NcActionCheckbox (NC Vue 9) only accepts plain text in its default slot (the slot
-   content is extracted with getText() as a string); rich HTML is silently dropped.
-   Instead we set --filter-dot-color on each NcActionCheckbox root and draw the dot
-   via :deep() targeting the inner .action-checkbox__text span.
-
-   The dot is a true circle: width == height, border-radius:50%, flex-shrink is N/A
-   because it uses display:inline-block with explicit fixed dimensions. */
-.board-view__filter-label-item:deep(.action-checkbox__text)::before {
-	content: '';
-	display: inline-block;
-	width: 12px;
-	height: 12px;
-	min-width: 12px;
-	border-radius: 50%;
-	background: var(--filter-dot-color, var(--color-border));
-	margin-right: 6px;
-	vertical-align: middle;
+.board-view__filter-error {
+	color: var(--color-error);
+	font-size: 0.8rem;
 	flex-shrink: 0;
-}
-
-/* Priority filter items - color-coded dot via ::before, mirroring label dot pattern */
-.board-view__filter-priority-item--1:deep(.action-checkbox__text)::before {
-	content: '';
-	display: inline-block;
-	width: 12px;
-	height: 12px;
-	min-width: 12px;
-	border-radius: 50%;
-	background: #888;
-	margin-right: 6px;
-	vertical-align: middle;
-}
-
-.board-view__filter-priority-item--2:deep(.action-checkbox__text)::before {
-	content: '';
-	display: inline-block;
-	width: 12px;
-	height: 12px;
-	min-width: 12px;
-	border-radius: 50%;
-	background: var(--color-primary-element, #0082c9);
-	margin-right: 6px;
-	vertical-align: middle;
-}
-
-.board-view__filter-priority-item--3:deep(.action-checkbox__text)::before {
-	content: '';
-	display: inline-block;
-	width: 12px;
-	height: 12px;
-	min-width: 12px;
-	border-radius: 50%;
-	background: #e07b00;
-	margin-right: 6px;
-	vertical-align: middle;
-}
-
-.board-view__filter-priority-item--4:deep(.action-checkbox__text)::before {
-	content: '';
-	display: inline-block;
-	width: 12px;
-	height: 12px;
-	min-width: 12px;
-	border-radius: 50%;
-	background: var(--color-error, #e30000);
-	margin-right: 6px;
-	vertical-align: middle;
 }
 
 /* Settings gear button */

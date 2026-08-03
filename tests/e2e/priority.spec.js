@@ -175,13 +175,13 @@ test.describe('Card priorities', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'Urgent Priority Card' }))
 			.toBeVisible({ timeout: 5000 })
 
-		// Open the filter menu
-		const filterMenu = page.locator('.board-view__filter-menu')
+		// Open the filter menu (the filter toggle, not the adjacent saved-views one)
+		const filterMenu = page.locator('.board-filter-bar__filter button').first()
 		await expect(filterMenu).toBeVisible({ timeout: 5000 })
 		await filterMenu.click()
 
 		// Click the "Urgent" priority filter checkbox (level 4)
-		const urgentFilterCheckbox = page.locator('.board-view__filter-priority-item--4')
+		const urgentFilterCheckbox = page.locator('.board-filter-bar__priority-item--4')
 		await expect(urgentFilterCheckbox).toBeVisible({ timeout: 5000 })
 		await urgentFilterCheckbox.click()
 
@@ -198,7 +198,7 @@ test.describe('Card priorities', () => {
 		// Clear the filter by reopening the menu and unchecking Urgent (robust -
 		// avoids the teleported "Clear filters" NcActionButton).
 		await filterMenu.click()
-		const urgentAgain = page.locator('.board-view__filter-priority-item--4')
+		const urgentAgain = page.locator('.board-filter-bar__priority-item--4')
 		await expect(urgentAgain).toBeVisible({ timeout: 5000 })
 		await urgentAgain.click()
 		await page.keyboard.press('Escape')

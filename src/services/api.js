@@ -350,6 +350,16 @@ export const getSettings = () =>
 export const updateSettings = (data) =>
 	axios.put(url('/api/settings'), data).then((r) => r.data)
 
+// Saved filter views (#3407) — per-user, per-board named filter snapshots.
+export const fetchSavedFilters = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/saved-filters`)).then((r) => r.data)
+
+export const saveSavedFilter = (boardId, name, filter) =>
+	axios.put(url(`/api/boards/${boardId}/saved-filters`), { name, filter }).then((r) => r.data)
+
+export const deleteSavedFilter = (boardId, name) =>
+	axios.delete(url(`/api/boards/${boardId}/saved-filters/${encodeURIComponent(name)}`)).then((r) => r.data)
+
 // Projects (cross-board card collections)
 export const getProjects = () =>
 	axios.get(url('/api/projects')).then((r) => r.data)
