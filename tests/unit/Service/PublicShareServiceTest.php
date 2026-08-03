@@ -244,8 +244,10 @@ class PublicShareServiceTest extends TestCase {
 		// Card: exactly the whitelisted, people-free field set.
 		$cardKeys = array_keys($payload['cards'][0]);
 		sort($cardKeys);
+		// `type` is a public-safe display attribute (renders as a tile icon like a
+		// label/cover - no PII, no internal identifier), so it is a permitted key.
 		self::assertSame(
-			['allDay', 'checklist', 'description', 'duedate', 'humanId', 'id', 'labels', 'priority', 'stackId', 'status', 'title'],
+			['allDay', 'checklist', 'description', 'duedate', 'humanId', 'id', 'labels', 'priority', 'stackId', 'status', 'title', 'type'],
 			$cardKeys
 		);
 
