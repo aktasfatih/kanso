@@ -21,6 +21,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
+use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -44,6 +45,7 @@ class TrashServiceTest extends TestCase {
 	private CardLinkMapper&MockObject $cardLinkMapper;
 	private CardRelationMapper&MockObject $cardRelationMapper;
 	private ProjectCardMapper&MockObject $projectCardMapper;
+	private CardAttachmentService&MockObject $cardAttachmentService;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -61,6 +63,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
+		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -75,6 +78,7 @@ class TrashServiceTest extends TestCase {
 			$this->cardLinkMapper,
 			$this->cardRelationMapper,
 			$this->projectCardMapper,
+			$this->cardAttachmentService,
 		);
 	}
 
@@ -182,11 +186,27 @@ class TrashServiceTest extends TestCase {
 		$this->checklistItemMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->commentMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->subscriptionMapper->expects(self::once())->method('deleteByCard')->with(9);
+		// Attachments cascade through the service (objects + rows), not a mapper.
+		$this->cardAttachmentService->expects(self::once())->method('deleteAllForCard')->with(9);
 		$this->cardMapper->expects(self::once())->method('delete')->with($card);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_DELETE, 'alice')
 			->willReturn(new Change());
+
+		$this->service->purge(9, 'alice');
+	}
+
+	public function testPurgeCleansUpAttachmentsBeforeHardDeletingCard(): void {
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+
+		// The attachment cascade must fire (it removes both the app-data objects
+		// and the rows) so a purge never leaks stored bytes (#3526).
+		$this->cardAttachmentService->expects(self::once())
+			->method('deleteAllForCard')
+			->with(9);
 
 		$this->service->purge(9, 'alice');
 	}
@@ -211,6 +231,7 @@ class TrashServiceTest extends TestCase {
 			->willThrowException(new NotPermittedException());
 		$this->cardMapper->expects(self::never())->method('delete');
 		$this->commentMapper->expects(self::never())->method('deleteByCard');
+		$this->cardAttachmentService->expects(self::never())->method('deleteAllForCard');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->purge(9, 'editor');

@@ -385,4 +385,92 @@ class CardAttachmentServiceTest extends TestCase {
 
 		$this->service->delete(9, 5, 'bob');
 	}
+
+	// ---- deleteAllForCard (cascade on card purge) -------------------------
+
+	private function attachment(int $id, string $key): CardAttachment {
+		$a = new CardAttachment();
+		$a->setId($id);
+		$a->setCardId(9);
+		$a->setStorageKey($key);
+		return $a;
+	}
+
+	public function testDeleteAllForCardRemovesEveryObjectAndAllRows(): void {
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([
+			$this->attachment(1, 'aaaa'),
+			$this->attachment(2, 'bbbb'),
+		]);
+
+		// Both stored objects are removed...
+		$fileA = $this->createMock(ISimpleFile::class);
+		$fileA->expects(self::once())->method('delete');
+		$fileB = $this->createMock(ISimpleFile::class);
+		$fileB->expects(self::once())->method('delete');
+		$this->folder->method('getFile')->willReturnMap([
+			['aaaa', $fileA],
+			['bbbb', $fileB],
+		]);
+		// ...the per-card folder is torn down...
+		$this->folder->expects(self::once())->method('delete');
+		// ...and every row is dropped in one shot.
+		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
+		// No permission check and no realtime notification on an internal cascade.
+		$this->permissionService->expects(self::never())->method('assertPermission');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->service->deleteAllForCard(9);
+	}
+
+	public function testDeleteAllForCardIsSafeWithNoAttachments(): void {
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([]);
+		// No object deletes to attempt, but the folder + rows are still cleaned
+		// up defensively, and the call must not blow up.
+		$this->folder->expects(self::once())->method('delete');
+		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
+
+		$this->service->deleteAllForCard(9);
+	}
+
+	public function testDeleteAllForCardContinuesWhenOneObjectDeleteFails(): void {
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([
+			$this->attachment(1, 'aaaa'),
+			$this->attachment(2, 'bbbb'),
+		]);
+
+		// The first object delete blows up; the second must still be attempted,
+		// and the rows must still be dropped.
+		$fileA = $this->createMock(ISimpleFile::class);
+		$fileA->method('delete')->willThrowException(new \RuntimeException('storage hiccup'));
+		$fileB = $this->createMock(ISimpleFile::class);
+		$fileB->expects(self::once())->method('delete');
+		$this->folder->method('getFile')->willReturnMap([
+			['aaaa', $fileA],
+			['bbbb', $fileB],
+		]);
+		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
+
+		$this->service->deleteAllForCard(9);
+	}
+
+	public function testDeleteAllForCardStillDropsRowsWhenFolderMissing(): void {
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([]);
+		// A card that never had a folder: getFolder throws NotFound - the rows
+		// must still be dropped and the call must not surface the error.
+		$this->appData = $this->createMock(IAppData::class);
+		$this->appData->method('getFolder')->willThrowException(new NotFoundException());
+		$this->appData->method('newFolder')->willReturn($this->folder);
+		$this->service = new CardAttachmentService(
+			$this->attachmentMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->permissionService,
+			$this->changeNotifier,
+			$this->appData,
+			$this->secureRandom,
+		);
+		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
+
+		$this->service->deleteAllForCard(9);
+	}
 }

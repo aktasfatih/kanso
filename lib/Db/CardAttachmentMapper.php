@@ -55,6 +55,23 @@ class CardAttachmentMapper extends QBMapper {
 	}
 
 	/**
+	 * Removes every attachment ROW of a card - the DB half of the cascade when a
+	 * card is permanently purged. The bytes are removed separately (the
+	 * app-data objects), so callers must drop those too; see
+	 * {@see \OCA\Kanso\Service\CardAttachmentService::deleteAllForCard()}.
+	 *
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteByCard(int $cardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Number of attachments on a card - powers the card-detail count without
 	 * loading the rows.
 	 *

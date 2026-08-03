@@ -234,6 +234,41 @@ class CardAttachmentService {
 	}
 
 	/**
+	 * Cascade cleanup when a card is PERMANENTLY removed (trash purge). Removes
+	 * BOTH the stored bytes (the per-card app-data objects) AND the metadata
+	 * rows, so a purged card never leaves orphaned storage behind.
+	 *
+	 * No permission check and no change notification: this is an internal
+	 * cascade invoked by callers ({@see TrashService::purge()}) that have
+	 * already authorized the destructive card removal and emit their own card
+	 * DELETE change row. It intentionally does NOT gate on the card/board being
+	 * live - the card is being torn down.
+	 *
+	 * Robustness: each object delete is best-effort and independent - one
+	 * missing/failing object does not abort the rest, and the folder itself is
+	 * removed at the end (a no-op if it never existed). The rows are dropped in a
+	 * single set-based statement. Safe to call for a card with zero attachments.
+	 */
+	public function deleteAllForCard(int $cardId): void {
+		$attachments = $this->attachmentMapper->findByCard($cardId);
+		foreach ($attachments as $attachment) {
+			// Best-effort per object - a failure on one must not strand the others.
+			$this->deleteObjectQuietly($cardId, $attachment->getStorageKey());
+		}
+
+		// Drop the whole per-card folder too, so nothing (including any object
+		// whose row was already gone) is left in app-data. Best-effort: a missing
+		// folder is fine.
+		try {
+			$this->appData->getFolder(self::FOLDER_PREFIX . $cardId)->delete();
+		} catch (\Throwable) {
+			// Nothing to clean up.
+		}
+
+		$this->attachmentMapper->deleteByCard($cardId);
+	}
+
+	/**
 	 * Loads an attachment and asserts it belongs to $cardId - the IDOR guard.
 	 * A mismatch is a 404 (not found on THIS card), never a leak.
 	 *

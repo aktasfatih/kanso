@@ -32,8 +32,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *   - listTrash needs READ on the board;
  *   - restore needs EDIT (it puts a card back into play);
  *   - purge needs MANAGE - it is the one irreversible, hard delete in the app,
- *     cascading to the card's labels, assignees, reviews, checklist items and
- *     comments.
+ *     cascading to the card's labels, assignees, reviews, checklist items,
+ *     comments and file attachments (both the app-data objects and the rows).
  *
  * Restore/purge only ever act on an ALREADY-trashed card (deleted_at > 0); a
  * live card is rejected as invalid input. Both append a card-targeted row to
@@ -54,6 +54,7 @@ class TrashService {
 		private CardLinkMapper $cardLinkMapper,
 		private CardRelationMapper $cardRelationMapper,
 		private ProjectCardMapper $projectCardMapper,
+		private CardAttachmentService $cardAttachmentService,
 	) {
 	}
 
@@ -122,6 +123,10 @@ class TrashService {
 		$this->cardLinkMapper->deleteByCard($cardId);
 		$this->cardRelationMapper->deleteByCard($cardId);
 		$this->projectCardMapper->deleteByCard($cardId);
+		// Attachments are stored as app-data OBJECTS plus rows, so the cascade
+		// goes through the service (it removes both) rather than a plain mapper
+		// deleteByCard - otherwise a purge would leak the bytes on disk (#3526).
+		$this->cardAttachmentService->deleteAllForCard($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(
