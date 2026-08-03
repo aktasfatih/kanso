@@ -364,6 +364,30 @@ export const getSettings = () =>
 export const updateSettings = (data) =>
 	axios.put(url('/api/settings'), data).then((r) => r.data)
 
+// Per-user board folders / groups in the nav (#3529). FLAT, one-level,
+// per-user; distinct from Projects. A board's group is surfaced on the
+// board-list payload (`groupId`); these endpoints manage the folders themselves.
+export const fetchBoardGroups = () =>
+	axios.get(url('/api/board-groups')).then((r) => r.data)
+
+export const createBoardGroup = (name) =>
+	axios.post(url('/api/board-groups'), { name }).then((r) => r.data)
+
+export const renameBoardGroup = (id, name) =>
+	axios.patch(url(`/api/board-groups/${id}`), { name }).then((r) => r.data)
+
+export const deleteBoardGroup = (id) =>
+	axios.delete(url(`/api/board-groups/${id}`)).then((r) => r.data)
+
+export const reorderBoardGroups = (groupIds) =>
+	axios.post(url('/api/board-groups/reorder'), { groupIds }).then((r) => r.data)
+
+export const assignBoardToGroup = (groupId, boardId) =>
+	axios.put(url(`/api/board-groups/${groupId}/boards/${boardId}`)).then((r) => r.data)
+
+export const unassignBoardFromGroup = (boardId) =>
+	axios.delete(url(`/api/board-groups/boards/${boardId}`)).then((r) => r.data)
+
 // Saved filter views (#3407) — per-user, per-board named filter snapshots.
 export const fetchSavedFilters = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/saved-filters`)).then((r) => r.data)

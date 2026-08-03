@@ -36,6 +36,20 @@ return [
 
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
+
+		// Per-user board folders / groups in the nav (#3529). FLAT, one-level,
+		// per-user - personal nav organization, distinct from Projects. All
+		// literal /board-groups segments, declared before the /api/boards/{id}
+		// CRUD so the router never captures "board-groups" as a board id.
+		['name' => 'boardGroup#index', 'url' => '/api/board-groups', 'verb' => 'GET'],
+		['name' => 'boardGroup#create', 'url' => '/api/board-groups', 'verb' => 'POST'],
+		['name' => 'boardGroup#reorder', 'url' => '/api/board-groups/reorder', 'verb' => 'POST'],
+		['name' => 'boardGroup#rename', 'url' => '/api/board-groups/{id}', 'verb' => 'PATCH'],
+		['name' => 'boardGroup#destroy', 'url' => '/api/board-groups/{id}', 'verb' => 'DELETE'],
+		['name' => 'boardGroup#assign', 'url' => '/api/board-groups/{id}/boards/{boardId}', 'verb' => 'PUT'],
+		// Unfile a board from whatever folder it's in - not nested under a folder
+		// id (the caller need not know which folder holds it).
+		['name' => 'boardGroup#unassign', 'url' => '/api/board-groups/boards/{boardId}', 'verb' => 'DELETE'],
 		// Full-board portability. The literal /import segment is a distinct POST
 		// path (board#show is GET {id}), and export is nested under an existing
 		// board id - neither collides with the CRUD routes above.

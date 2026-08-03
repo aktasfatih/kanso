@@ -94,6 +94,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ trelloImportError }}
 			</p>
 
+			<!-- New folder (#3529) -->
+			<NcButton v-if="!showArchived" @click="showCreateFolder = !showCreateFolder">
+				<template #icon>
+					<FolderPlusOutlineIcon :size="20" />
+				</template>
+				{{ t('kanso', 'New folder') }}
+			</NcButton>
+
 			<!-- Create board -->
 			<NcButton type="primary" @click="showCreate = !showCreate">
 				<template #icon>
@@ -102,6 +110,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ t('kanso', 'Create board') }}
 			</NcButton>
 		</div>
+
+		<!-- Inline create-folder form (#3529) -->
+		<form v-if="showCreateFolder && !showArchived" class="new-board-form" data-test="new-folder-form" @submit.prevent="submitNewFolder">
+			<input
+				ref="newFolderInput"
+				v-model="newFolderName"
+				class="new-board-form__input"
+				type="text"
+				:placeholder="t('kanso', 'New folder name…')"
+				:disabled="createGroup.isPending.value"
+				data-test="new-folder-input"
+				@keydown.enter.prevent="submitNewFolder">
+			<NcButton
+				type="primary"
+				:disabled="!newFolderName.trim() || createGroup.isPending.value"
+				native-type="submit">
+				{{ t('kanso', 'Create folder') }}
+			</NcButton>
+			<p v-if="folderError" class="new-board-form__error">{{ folderError }}</p>
+		</form>
 
 		<!-- Inline create-board form (revealed by the Create board button) -->
 		<form v-if="showCreate" class="new-board-form" @submit.prevent="submitNewBoard">
@@ -201,47 +229,142 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</section>
 
-				<!-- All boards / Archived -->
-				<section class="board-section">
-					<h2 class="board-section__label">
-						{{ showArchived ? t('kanso', 'Archived') : t('kanso', 'All boards') }}
-					</h2>
+				<!-- Archived list (folders are an active-view concept only). -->
+				<section v-if="showArchived" class="board-section">
+					<h2 class="board-section__label">{{ t('kanso', 'Archived') }}</h2>
 
 					<p v-if="visibleBoards.length === 0" class="board-section__empty">
 						{{ search.trim()
 							? t('kanso', 'No boards match your search.')
-							: (showArchived ? t('kanso', 'No archived boards.') : t('kanso', 'No boards yet.')) }}
+							: t('kanso', 'No archived boards.') }}
 					</p>
 
 					<div v-else class="board-grid">
 						<!-- Archived tiles carry a restore action instead of navigating. -->
-						<template v-if="showArchived">
-							<div
-								v-for="board in visibleBoards"
-								:key="board.id"
-								class="board-tile board-tile--archived board-list__archived-row">
-								<BoardTileContent :board="board" />
-								<div class="board-tile__actions">
-									<NcButton :disabled="updateBoard.isPending.value" @click="unarchiveBoard(board.id)">
-										<template #icon>
-											<ArchiveArrowUpIcon :size="18" />
-										</template>
-										{{ t('kanso', 'Unarchive') }}
-									</NcButton>
+						<div
+							v-for="board in visibleBoards"
+							:key="board.id"
+							class="board-tile board-tile--archived board-list__archived-row">
+							<BoardTileContent :board="board" />
+							<div class="board-tile__actions">
+								<NcButton :disabled="updateBoard.isPending.value" @click="unarchiveBoard(board.id)">
+									<template #icon>
+										<ArchiveArrowUpIcon :size="18" />
+									</template>
+									{{ t('kanso', 'Unarchive') }}
+								</NcButton>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<!-- Active view: one section per folder (#3529), then Ungrouped. -->
+				<template v-else>
+					<section
+						v-for="folder in folderSections"
+						:key="'folder-' + folder.id"
+						class="board-section"
+						:data-test="'folder-section-' + folder.id">
+						<div class="board-section__head">
+							<button
+								class="board-section__toggle"
+								:aria-expanded="!collapsed.has(folder.id)"
+								:data-test="'folder-toggle-' + folder.id"
+								@click="toggleFolder(folder.id)">
+								<ChevronDownIcon v-if="!collapsed.has(folder.id)" :size="18" />
+								<ChevronRightIcon v-else :size="18" />
+								<span class="board-section__label">{{ folder.name }}</span>
+								<span class="board-list-count">{{ folder.boards.length }}</span>
+							</button>
+							<NcActions :menu-name="t('kanso', 'Folder actions')">
+								<NcActionButton close-after-click @click="startRenameFolder(folder)">
+									<template #icon>
+										<PencilIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Rename folder') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="removeFolder(folder)">
+									<template #icon>
+										<DeleteOutlineIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Delete folder') }}
+								</NcActionButton>
+							</NcActions>
+						</div>
+
+						<form
+							v-if="renamingId === folder.id"
+							class="new-board-form"
+							:data-test="'rename-folder-form-' + folder.id"
+							@submit.prevent="submitRenameFolder(folder)">
+							<input
+								v-model="renameName"
+								class="new-board-form__input"
+								type="text"
+								:data-test="'rename-folder-input-' + folder.id"
+								@keydown.enter.prevent="submitRenameFolder(folder)"
+								@keydown.esc="renamingId = null">
+							<NcButton type="primary" native-type="submit" :disabled="!renameName.trim()">
+								{{ t('kanso', 'Save') }}
+							</NcButton>
+							<NcButton @click="renamingId = null">{{ t('kanso', 'Cancel') }}</NcButton>
+						</form>
+
+						<template v-if="!collapsed.has(folder.id)">
+							<p v-if="folder.boards.length === 0" class="board-section__empty">
+								{{ t('kanso', 'No boards in this folder yet.') }}
+							</p>
+							<div v-else class="board-grid">
+								<div
+									v-for="board in folder.boards"
+									:key="board.id"
+									class="board-tile board-list__tile-wrap">
+									<button class="board-tile__hit" @click="openBoard(board.id)">
+										<BoardTileContent :board="board" />
+									</button>
+									<div class="board-tile__menu">
+										<BoardFolderMenu
+											:board="board"
+											:groups="groups"
+											@assign="(gid) => moveBoard(board.id, gid)"
+											@unassign="() => removeFromFolder(board.id)" />
+									</div>
 								</div>
 							</div>
 						</template>
-						<template v-else>
-							<button
-								v-for="board in visibleBoards"
+					</section>
+
+					<!-- Ungrouped -->
+					<section class="board-section" data-test="folder-section-ungrouped">
+						<h2 class="board-section__label">
+							{{ folderSections.length > 0 ? t('kanso', 'Ungrouped') : t('kanso', 'All boards') }}
+						</h2>
+
+						<p v-if="ungroupedBoards.length === 0" class="board-section__empty">
+							{{ search.trim()
+								? t('kanso', 'No boards match your search.')
+								: t('kanso', 'No boards yet.') }}
+						</p>
+
+						<div v-else class="board-grid">
+							<div
+								v-for="board in ungroupedBoards"
 								:key="board.id"
-								class="board-tile"
-								@click="openBoard(board.id)">
-								<BoardTileContent :board="board" />
-							</button>
-						</template>
-					</div>
-				</section>
+								class="board-tile board-list__tile-wrap">
+								<button class="board-tile__hit" @click="openBoard(board.id)">
+									<BoardTileContent :board="board" />
+								</button>
+								<div class="board-tile__menu">
+									<BoardFolderMenu
+										:board="board"
+										:groups="groups"
+										@assign="(gid) => moveBoard(board.id, gid)"
+										@unassign="() => removeFromFolder(board.id)" />
+								</div>
+							</div>
+						</div>
+					</section>
+				</template>
 			</template>
 		</div>
 	</div>
@@ -265,13 +388,30 @@ import CodeJsonIcon from 'vue-material-design-icons/CodeJson.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
+import FolderPlusOutlineIcon from 'vue-material-design-icons/FolderPlusOutline.vue'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import BoardTileContent from '../components/BoardTileContent.vue'
+import BoardFolderMenu from '../components/BoardFolderMenu.vue'
 import { useBoards } from '../composables/useBoards.js'
+import { useBoardGroups } from '../composables/useBoardGroups.js'
+import { getSettings, updateSettings } from '../services/api.js'
 import { fetchDeckImportBoards, importDeckBoard, importBoard, importTrelloBoard } from '../services/api.js'
 
 const router = useRouter()
 const queryClient = useQueryClient()
 const { data: boards, isLoading, isError, createBoard, updateBoard } = useBoards()
+const {
+	data: groupsData,
+	createGroup,
+	renameGroup,
+	deleteGroup,
+	assignBoard,
+	unassignBoard,
+} = useBoardGroups()
+const groups = computed(() => (Array.isArray(groupsData.value) ? groupsData.value : []))
 
 // ── Header controls ──────────────────────────────────────────────────────────
 const search = ref('')
@@ -309,6 +449,96 @@ const visibleBoards = computed(() => {
 		: activeBoards.value.filter((b) => !b.pinned)
 	return base.filter(matchesSearch)
 })
+
+// ── Folders / groups (#3529) ──────────────────────────────────────────────────
+// One section per folder (in stored order), holding its non-pinned active member
+// boards (search-filtered). A board's folder is `board.groupId` on the payload.
+const searchedActive = computed(() =>
+	activeBoards.value.filter((b) => !b.pinned).filter(matchesSearch),
+)
+const folderSections = computed(() =>
+	groups.value.map((g) => ({
+		id: g.id,
+		name: g.name,
+		boards: searchedActive.value.filter((b) => Number(b.groupId) === Number(g.id)),
+	})),
+)
+const ungroupedBoards = computed(() =>
+	searchedActive.value.filter((b) => b.groupId === null || b.groupId === undefined),
+)
+
+// Collapse state, persisted per user via settings (NC IConfig).
+const collapsed = ref(new Set())
+async function loadCollapsed() {
+	try {
+		const s = await getSettings()
+		collapsed.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
+	} catch {
+		// Non-fatal: folders just start expanded.
+	}
+}
+function toggleFolder(id) {
+	const next = new Set(collapsed.value)
+	if (next.has(id)) next.delete(id)
+	else next.add(id)
+	collapsed.value = next
+	updateSettings({ collapsedBoardGroups: [...next] }).catch(() => {})
+}
+loadCollapsed()
+
+// Create folder
+const showCreateFolder = ref(false)
+const newFolderInput = ref(null)
+const newFolderName = ref('')
+const folderError = ref('')
+async function submitNewFolder() {
+	const name = newFolderName.value.trim()
+	if (!name) return
+	folderError.value = ''
+	try {
+		await createGroup.mutateAsync(name)
+		newFolderName.value = ''
+		showCreateFolder.value = false
+	} catch (err) {
+		folderError.value = err?.response?.data?.error || t('kanso', 'Failed to create folder.')
+	}
+}
+watch(showCreateFolder, async (open) => {
+	if (open) {
+		await nextTick()
+		newFolderInput.value?.focus()
+	}
+})
+
+// Rename folder (inline)
+const renamingId = ref(null)
+const renameName = ref('')
+function startRenameFolder(folder) {
+	renamingId.value = folder.id
+	renameName.value = folder.name
+}
+async function submitRenameFolder(folder) {
+	const name = renameName.value.trim()
+	if (!name) return
+	try {
+		await renameGroup.mutateAsync({ id: folder.id, name })
+	} finally {
+		renamingId.value = null
+	}
+}
+
+// Delete folder (ungroups its boards, never deletes the boards).
+async function removeFolder(folder) {
+	await deleteGroup.mutateAsync(folder.id)
+}
+
+// Move a board into a folder / remove it from its folder.
+async function moveBoard(boardId, groupId) {
+	await assignBoard.mutateAsync({ groupId, boardId })
+}
+async function removeFromFolder(boardId) {
+	await unassignBoard.mutateAsync(boardId)
+}
 
 // ── Navigation & mutations ───────────────────────────────────────────────────
 function openBoard(id) {
@@ -564,6 +794,55 @@ async function onTrelloImportChange(event) {
 	text-transform: uppercase;
 	color: var(--color-text-maxcontrast);
 	margin: 0;
+}
+
+/* ── Folder header (#3529) ──────────────────────────────────────────────── */
+.board-section__head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.board-section__toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	border: none;
+	background: transparent;
+	padding: 4px 0;
+	cursor: pointer;
+	color: var(--color-text-maxcontrast);
+	text-align: left;
+}
+
+.board-section__toggle:hover .board-section__label {
+	color: var(--color-main-text);
+}
+
+/* Board tile with an overlaid folder menu (#3529): the whole tile navigates,
+   the menu button in the corner intercepts its own clicks. */
+.board-list__tile-wrap {
+	position: relative;
+	padding: 0;
+}
+
+.board-tile__hit {
+	display: block;
+	width: 100%;
+	border: none;
+	background: transparent;
+	padding: 16px 20px;
+	text-align: left;
+	cursor: pointer;
+	border-radius: var(--border-radius-large);
+}
+
+.board-tile__menu {
+	position: absolute;
+	top: 8px;
+	right: 8px;
 }
 
 .board-section__empty {

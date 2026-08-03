@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -26,6 +27,7 @@ class BoardServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private CardMapper&MockObject $cardMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
+	private BoardGroupMemberMapper&MockObject $boardGroupMemberMapper;
 	private BoardService $service;
 
 	protected function setUp(): void {
@@ -35,12 +37,14 @@ class BoardServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
+		$this->boardGroupMemberMapper = $this->createMock(BoardGroupMemberMapper::class);
 		$this->service = new BoardService(
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->cardMapper,
-			$this->cardReviewMapper
+			$this->cardReviewMapper,
+			$this->boardGroupMemberMapper
 		);
 	}
 
@@ -228,11 +232,16 @@ class BoardServiceTest extends TestCase {
 			->method('overdueCountByBoards')->with([1, 2])->willReturn([1 => 3]);
 		$this->cardReviewMapper->expects(self::once())
 			->method('needsReviewCountByBoards')->with([1, 2])->willReturn([1 => 4]);
+		// The per-user folder map is ONE batched lookup over the same readable set;
+		// board 1 is filed under folder 7, board 2 is Ungrouped (absent).
+		$this->boardGroupMemberMapper->expects(self::once())
+			->method('findGroupIdsByBoards')->with('alice', [1, 2])->willReturn([1 => 7]);
 
 		$result = $this->service->findAllWithStats('alice');
 
 		self::assertCount(2, $result);
 		self::assertSame(1, $result[0]['id']);
+		self::assertSame(7, $result[0]['groupId']);
 		self::assertSame([
 			'cardCount' => 5,
 			'doneCount' => 2,
@@ -242,6 +251,8 @@ class BoardServiceTest extends TestCase {
 		], $result[0]['stats']);
 		// A board absent from every aggregate map defaults to all-zero, 0 %.
 		self::assertSame(2, $result[1]['id']);
+		// A board in no folder is Ungrouped (groupId null).
+		self::assertNull($result[1]['groupId']);
 		self::assertSame([
 			'cardCount' => 0,
 			'doneCount' => 0,
@@ -259,6 +270,7 @@ class BoardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())->method('doneRatioByBoards')->with([])->willReturn([]);
 		$this->cardMapper->expects(self::once())->method('overdueCountByBoards')->with([])->willReturn([]);
 		$this->cardReviewMapper->expects(self::once())->method('needsReviewCountByBoards')->with([])->willReturn([]);
+		$this->boardGroupMemberMapper->expects(self::once())->method('findGroupIdsByBoards')->with('alice', [])->willReturn([]);
 
 		self::assertSame([], $this->service->findAllWithStats('alice'));
 	}

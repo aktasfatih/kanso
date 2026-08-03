@@ -56,11 +56,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<template #icon>
 						<ViewDashboardIcon :size="20" />
 					</template>
-					<!-- The user's boards, so you can jump between them without
-					     returning to the board list. -->
+					<!-- The user's boards, organized into per-user folders (#3529),
+					     so you can jump between them without returning to the board
+					     list. Folders render first (collapsible, collapse state
+					     persisted per user), then any Ungrouped boards. -->
 					<template #default>
 						<NcAppNavigationItem
-							v-for="board in boards"
+							v-for="group in navGroups"
+							:key="'g' + group.id"
+							:name="group.name"
+							:allow-collapse="true"
+							:open="!collapsedIds.has(group.id)"
+							@update:open="(open) => setGroupOpen(group.id, open)">
+							<template #icon>
+								<FolderOutlineIcon :size="20" />
+							</template>
+							<template #counter>
+								<NcCounterBubble :count="group.boards.length" />
+							</template>
+							<template #default>
+								<NcAppNavigationItem
+									v-for="board in group.boards"
+									:key="board.id"
+									:name="board.title"
+									:to="{ name: 'board', params: { id: String(board.id) } }"
+									:active="isBoardActive(board.id)">
+									<template #icon>
+										<span
+											class="app-nav__board-dot"
+											:style="{ background: board.color ? '#' + board.color : 'var(--color-primary-element)' }" />
+									</template>
+								</NcAppNavigationItem>
+								<p v-if="group.boards.length === 0" class="app-nav__folder-empty">
+									{{ t('kanso', 'No boards in this folder') }}
+								</p>
+							</template>
+						</NcAppNavigationItem>
+						<NcAppNavigationItem
+							v-for="board in ungroupedBoards"
 							:key="board.id"
 							:name="board.title"
 							:to="{ name: 'board', params: { id: String(board.id) } }"
@@ -82,10 +115,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
-import { getSettings } from './services/api.js'
+import { getSettings, updateSettings } from './services/api.js'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
@@ -96,7 +129,9 @@ import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
+import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import { useBoards } from './composables/useBoards.js'
+import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
 
 const route = useRoute()
@@ -106,6 +141,8 @@ const router = useRouter()
 // override a deep link). On first load, if the user picked a default board and
 // it still exists (non-archived), redirect there once.
 onMounted(async () => {
+	// Load the per-user folder collapse state (non-blocking for the redirect below).
+	loadCollapsed()
 	// Wait for the router to resolve the initial route before reading its name.
 	await router.isReady()
 	if (route.name !== 'board-list') return
@@ -135,6 +172,46 @@ const { data: boardsData } = useBoards()
 // between them. Reactive to the shared boards query (create/rename/delete reflect).
 const boards = computed(() => (boardsData.value ?? []).filter((b) => !b.archived))
 
+// Per-user folders (#3529). The folder definitions come from their own query;
+// membership rides each board's `groupId` on the boards payload. Folders render
+// in their stored order, each holding its non-archived member boards.
+const { data: groupsData } = useBoardGroups()
+const navGroups = computed(() => {
+	const list = Array.isArray(groupsData.value) ? groupsData.value : []
+	return list.map((g) => ({
+		id: g.id,
+		name: g.name,
+		boards: boards.value.filter((b) => Number(b.groupId) === Number(g.id)),
+	}))
+})
+// Boards in no folder (groupId null/undefined) render after the folders.
+const ungroupedBoards = computed(() =>
+	boards.value.filter((b) => b.groupId === null || b.groupId === undefined),
+)
+
+// Collapse state persisted per user (NC IConfig via settings). Loaded once on
+// mount; each toggle writes the new collapsed-id set back.
+const collapsedIds = ref(new Set())
+async function loadCollapsed() {
+	try {
+		const s = await getSettings()
+		collapsedIds.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
+	} catch {
+		// Non-fatal: folders just start expanded.
+	}
+}
+function setGroupOpen(groupId, open) {
+	const next = new Set(collapsedIds.value)
+	if (open) {
+		next.delete(Number(groupId))
+	} else {
+		next.add(Number(groupId))
+	}
+	collapsedIds.value = next
+	// Fire-and-forget persist; the local set already reflects the change.
+	updateSettings({ collapsedBoardGroups: [...next] }).catch(() => {})
+}
+
 function isBoardActive(boardId) {
 	return (route.name === 'board' || route.name === 'card-modal')
 		&& String(route.params.id) === String(boardId)
@@ -157,5 +234,13 @@ const { tasksCount, reviewsCount, inboxCount } = useMyWorkBadges()
 	height: 14px;
 	border-radius: 50%;
 	border: 1px solid var(--color-border-dark);
+}
+
+.app-nav__folder-empty {
+	margin: 0;
+	padding: 4px 0 4px 44px;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85rem;
+	font-style: italic;
 }
 </style>

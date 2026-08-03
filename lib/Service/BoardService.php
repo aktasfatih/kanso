@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardMapper;
@@ -30,6 +31,7 @@ class BoardService {
 		private PermissionService $permissionService,
 		private CardMapper $cardMapper,
 		private CardReviewMapper $cardReviewMapper,
+		private BoardGroupMemberMapper $boardGroupMemberMapper,
 	) {
 	}
 
@@ -77,6 +79,10 @@ class BoardService {
 		$ratios = $this->cardMapper->doneRatioByBoards($boardIds);
 		$overdue = $this->cardMapper->overdueCountByBoards($boardIds, new \DateTime('@' . time()));
 		$needsReview = $this->cardReviewMapper->needsReviewCountByBoards($boardIds);
+		// Per-user board folder (#3529): ONE batched WHERE uid = ? AND board_id
+		// IN (...) over the same readable set - not one query per board. A board
+		// absent from the map is Ungrouped (groupId null).
+		$groupIds = $this->boardGroupMemberMapper->findGroupIdsByBoards($uid, $boardIds);
 
 		$out = [];
 		foreach ($boards as $board) {
@@ -85,6 +91,8 @@ class BoardService {
 			$total = $ratio['total'];
 			$done = $ratio['done'];
 			$out[] = $board->jsonSerialize() + [
+				// The folder this board sits in for THIS user, or null (Ungrouped).
+				'groupId' => $groupIds[$id] ?? null,
 				'stats' => [
 					'cardCount' => $counts[$id] ?? 0,
 					'doneCount' => $done,

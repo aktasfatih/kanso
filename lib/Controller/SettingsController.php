@@ -24,6 +24,11 @@ class SettingsController extends Controller {
 	use ApiErrorTrait;
 
 	private const KEY_DEFAULT_BOARD = 'default_board';
+	// Collapsed board-folder ids (#3529): a JSON list of the folder ids the user
+	// has collapsed in the nav / boards page. A pure per-user view preference.
+	private const KEY_COLLAPSED_GROUPS = 'collapsed_board_groups';
+	// Bound the value so a scripted client can't bloat the user-config row.
+	private const MAX_COLLAPSED = 200;
 
 	public function __construct(
 		string $appName,
@@ -40,9 +45,11 @@ class SettingsController extends Controller {
 	#[NoAdminRequired]
 	public function index(): JSONResponse {
 		return $this->respond(function (): JSONResponse {
-			$raw = $this->config->getUserValue($this->currentUserId(), 'kanso', self::KEY_DEFAULT_BOARD, '');
+			$uid = $this->currentUserId();
+			$raw = $this->config->getUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, '');
 			return new JSONResponse([
 				'defaultBoardId' => $raw === '' ? null : (int)$raw,
+				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
 			]);
 		});
 	}
@@ -51,16 +58,56 @@ class SettingsController extends Controller {
 	 * Sets the default-board-on-start preference. A null/0 value clears it (the
 	 * app opens to the board list). Board existence is NOT validated here - the
 	 * client falls back to the board list if the stored board is gone.
+	 *
+	 * `collapsedBoardGroups`, when provided, replaces the set of nav folders the
+	 * user has collapsed (#3529); omitting it leaves that preference untouched.
+	 *
+	 * @param ?int[] $collapsedBoardGroups
 	 */
 	#[NoAdminRequired]
-	public function update(?int $defaultBoardId = null): JSONResponse {
-		return $this->respond(function () use ($defaultBoardId): JSONResponse {
+	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null): JSONResponse {
+		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups): JSONResponse {
+			$uid = $this->currentUserId();
 			$value = ($defaultBoardId === null || $defaultBoardId <= 0) ? '' : (string)$defaultBoardId;
-			$this->config->setUserValue($this->currentUserId(), 'kanso', self::KEY_DEFAULT_BOARD, $value);
+			$this->config->setUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, $value);
+
+			if ($collapsedBoardGroups !== null) {
+				$this->writeCollapsedGroups($uid, $collapsedBoardGroups);
+			}
+
 			return new JSONResponse([
 				'defaultBoardId' => $value === '' ? null : (int)$value,
+				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
 			]);
 		});
+	}
+
+	/**
+	 * The user's collapsed folder ids, tolerating a corrupt/legacy value.
+	 *
+	 * @return int[]
+	 */
+	private function readCollapsedGroups(string $uid): array {
+		$raw = $this->config->getUserValue($uid, 'kanso', self::KEY_COLLAPSED_GROUPS, '');
+		if ($raw === '') {
+			return [];
+		}
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+		return array_values(array_unique(array_map('intval', $decoded)));
+	}
+
+	/**
+	 * @param int[] $ids
+	 */
+	private function writeCollapsedGroups(string $uid, array $ids): void {
+		$clean = array_values(array_unique(array_map('intval', $ids)));
+		if (count($clean) > self::MAX_COLLAPSED) {
+			$clean = array_slice($clean, 0, self::MAX_COLLAPSED);
+		}
+		$this->config->setUserValue($uid, 'kanso', self::KEY_COLLAPSED_GROUPS, json_encode($clean) ?: '[]');
 	}
 
 	/**
