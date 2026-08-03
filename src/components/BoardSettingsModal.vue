@@ -890,6 +890,59 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
+				<!-- Public / read-only link group (#3531) -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.publicLink ? 'true' : 'false'"
+						aria-controls="bs-automation-public-link"
+						@click="toggleAutomationGroup('publicLink')">
+						<LinkVariantIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Public link') }}</span>
+						<span v-if="publicShare.enabled" class="automation__group-badge">{{ t('kanso', 'Link active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.publicLink" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.publicLink" id="bs-automation-public-link" class="automation__group-body">
+						<p v-if="!canManage" class="workflow__readonly-notice">
+							{{ t('kanso', 'You need manage permission to configure the public link.') }}
+						</p>
+						<template v-else>
+							<p class="github-webhook__hint">
+								{{ t('kanso', 'Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Assignees, comments, activity and members are never shown.') }}
+							</p>
+
+							<div class="github-webhook__actions">
+								<NcCheckboxRadioSwitch
+									type="switch"
+									:checked="publicShare.enabled"
+									:disabled="publicShareBusy"
+									@update:checked="togglePublicShare">
+									{{ t('kanso', 'Enable public link') }}
+								</NcCheckboxRadioSwitch>
+							</div>
+
+							<template v-if="publicShare.enabled && publicShare.url">
+								<label class="github-webhook__label">{{ t('kanso', 'Public link') }}</label>
+								<div class="github-webhook__row">
+									<input class="github-webhook__input" type="text" readonly :value="publicShare.url">
+									<NcButton :disabled="!publicShare.url" @click="copyText(publicShare.url)">
+										{{ t('kanso', 'Copy') }}
+									</NcButton>
+								</div>
+								<div class="github-webhook__actions">
+									<NcButton :disabled="publicShareBusy" @click="handleRotatePublicShare">
+										{{ t('kanso', 'Rotate link') }}
+									</NcButton>
+									<span class="github-webhook__status">{{ t('kanso', 'Anyone with the link can view this board read-only.') }}</span>
+								</div>
+							</template>
+							<span v-if="publicShareError" class="label-settings__error">{{ publicShareError }}</span>
+						</template>
+					</div>
+				</div>
+
 				<!-- Auto-archive group -->
 				<div class="automation__group">
 					<button
@@ -1618,6 +1671,7 @@ import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
+import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import { useLabels } from '../composables/useLabels.js'
@@ -1635,6 +1689,9 @@ import {
 	fetchWebhookConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
+	fetchPublicShareConfig,
+	enablePublicShare as apiEnablePublicShare,
+	disablePublicShare as apiDisablePublicShare,
 	getSettings,
 	updateSettings,
 	exportBoard as apiExportBoard,
@@ -1767,7 +1824,64 @@ async function copyText(text) {
 	}
 }
 
+// ── Public / read-only share link (MANAGE) ───────────────────────────────────
+const publicShare = ref({ enabled: false, url: null })
+const publicShareError = ref('')
+const publicShareBusy = ref(false)
+
+async function loadPublicShareConfig() {
+	if (!canManage.value) return
+	try {
+		publicShare.value = await fetchPublicShareConfig(props.boardId)
+		// An active public link should be visible without a click.
+		if (publicShare.value.enabled) {
+			automationGroups.value.publicLink = true
+		}
+	} catch (e) {
+		publicShareError.value = t('kanso', 'Failed to load the public link config.')
+	}
+}
+
+async function togglePublicShare(checked) {
+	if (checked) {
+		await enablePublicLink()
+	} else {
+		await disablePublicLink()
+	}
+}
+
+async function enablePublicLink() {
+	publicShareError.value = ''
+	publicShareBusy.value = true
+	try {
+		publicShare.value = await apiEnablePublicShare(props.boardId)
+	} catch (e) {
+		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not enable the public link.')
+	} finally {
+		publicShareBusy.value = false
+	}
+}
+
+// Rotate = mint a fresh token; the previously-shared link stops working at once.
+async function handleRotatePublicShare() {
+	await enablePublicLink()
+}
+
+async function disablePublicLink() {
+	publicShareError.value = ''
+	publicShareBusy.value = true
+	try {
+		await apiDisablePublicShare(props.boardId)
+		publicShare.value = { enabled: false, url: null }
+	} catch (e) {
+		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not disable the public link.')
+	} finally {
+		publicShareBusy.value = false
+	}
+}
+
 onMounted(loadWebhookConfig)
+onMounted(loadPublicShareConfig)
 
 function hasBit(mask, bit) {
 	return (mask & bit) !== 0
@@ -1839,6 +1953,7 @@ const automationGroups = ref({
 	autoArchive: false,
 	recurring: false,
 	github: false,
+	publicLink: false,
 })
 function toggleAutomationGroup(key) {
 	automationGroups.value[key] = !automationGroups.value[key]

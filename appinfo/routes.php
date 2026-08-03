@@ -9,6 +9,13 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
+		// Public / read-only board share (#3531). UNAUTHENTICATED: `/p/{token}`
+		// renders the read-only SPA shell and `/api/public/{token}` returns the
+		// STRIPPED payload. Both are #[PublicPage] + brute-force throttled; a bad
+		// token is a 404. The {token} is an opaque 64-char alnum string.
+		['name' => 'publicShare#show', 'url' => '/p/{token}', 'verb' => 'GET'],
+		['name' => 'publicShare#data', 'url' => '/api/public/{token}', 'verb' => 'GET'],
+
 		['name' => 'search#index', 'url' => '/api/search', 'verb' => 'GET'],
 
 		['name' => 'settings#index', 'url' => '/api/settings', 'verb' => 'GET'],
@@ -95,6 +102,12 @@ return [
 		['name' => 'subscription#unsubscribeOther', 'url' => '/api/cards/{cardId}/subscription/{userId}', 'verb' => 'DELETE'],
 		['name' => 'deckImport#index', 'url' => '/api/deck-import/boards', 'verb' => 'GET'],
 		['name' => 'deckImport#import', 'url' => '/api/deck-import/boards/{deckBoardId}', 'verb' => 'POST'],
+
+		// Public-share config (MANAGE, authenticated). Nested under a board id,
+		// distinct from board#show. Enable/rotate = POST, disable = DELETE.
+		['name' => 'publicShare#config', 'url' => '/api/boards/{id}/public-share', 'verb' => 'GET'],
+		['name' => 'publicShare#enable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'POST'],
+		['name' => 'publicShare#disable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'DELETE'],
 
 		['name' => 'webhook#github', 'url' => '/api/boards/{id}/github-webhook', 'verb' => 'POST'],
 		['name' => 'webhook#config', 'url' => '/api/boards/{id}/webhook', 'verb' => 'GET'],

@@ -36,6 +36,10 @@ use OCP\DB\Types;
  * @method void setNewCardsOnTop(?bool $newCardsOnTop)
  * @method string|null getPrefix()
  * @method void setPrefix(?string $prefix)
+ * @method string|null getPublicShareToken()
+ * @method void setPublicShareToken(?string $publicShareToken)
+ * @method int|null getPublicShareExpiresAt()
+ * @method void setPublicShareExpiresAt(?int $publicShareExpiresAt)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -54,6 +58,16 @@ class Board extends Entity implements \JsonSerializable {
 	// The per-board human-id prefix (e.g. "KAN"); a card's reference is
 	// prefix + '-' + board_seq. Derived from the title, editable in settings.
 	protected ?string $prefix = null;
+	// Public / read-only share (#3531). MANAGE-only, OFF by default. NULL = no
+	// public link; a non-null value is a long ISecureRandom token that grants an
+	// unauthenticated reader the STRIPPED read-only board view. Deliberately
+	// NEVER emitted by jsonSerialize() - it must not leak into the authenticated
+	// board payload; the token is only ever returned by the dedicated MANAGE
+	// config endpoints. Rotating replaces it, disabling clears it.
+	protected ?string $publicShareToken = null;
+	// Optional unix-ts expiry for the public link (NULL / 0 = never). v1 defaults
+	// to no expiry (revocable-until-disabled).
+	protected ?int $publicShareExpiresAt = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -66,6 +80,8 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('estimateScale', Types::STRING);
 		$this->addType('newCardsOnTop', Types::BOOLEAN);
 		$this->addType('prefix', Types::STRING);
+		$this->addType('publicShareToken', Types::STRING);
+		$this->addType('publicShareExpiresAt', Types::INTEGER);
 	}
 
 	/**

@@ -139,6 +139,28 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * All non-deleted cards on a board WITH their descriptions, grouped by stack
+	 * and in display order - the source for the public read-only share snapshot
+	 * (#3531), where descriptions are part of the exposed board content. This
+	 * mirrors {@see self::findSummariesByBoard()} but adds `description`; it is
+	 * deliberately separate so the summary hot-path stays description-free.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findPublicByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(array_merge(self::SUMMARY_COLUMNS, ['description']))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('stack_id', 'ASC')
+			->addOrderBy('sort_key', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Summaries (no description) of all non-deleted cards in a stack, in
 	 * display order.
 	 *

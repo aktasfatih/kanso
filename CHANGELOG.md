@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Public / read-only board share links.** A board manager can now mint a
+  public, unauthenticated, read-only link to a whole board (Board settings →
+  Automation → Public link). It is OFF by default; enabling mints a long,
+  unguessable token, and the link is revocable (disable clears it) and rotatable
+  (rotate mints a fresh one, invalidating the old link immediately). The public
+  view is deliberately stripped: it shows only the board title, columns and
+  per-card title, description, labels, due date, checklist progress, priority,
+  status and human id — never assignees, comments, activity, members, owners or
+  any other people/internal data. The public endpoints are brute-force throttled
+  so tokens can't be enumerated.
+
 - **File attachments on cards.** A card now has an Attachments section: upload a
   file (picker), see it listed with its name and size, download it, and delete it
   (EDIT-gated). Files are stored in Kanso's own app-data — not in anyone's

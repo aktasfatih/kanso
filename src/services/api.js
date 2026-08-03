@@ -277,6 +277,17 @@ export const rotateWebhookSecret = (boardId) =>
 export const disableWebhook = (boardId) =>
 	axios.delete(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)
 
+// Public / read-only board share link (board-level, MANAGE)
+export const fetchPublicShareConfig = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)
+
+// Enable or rotate (both mint a fresh token, invalidating any old link).
+export const enablePublicShare = (boardId) =>
+	axios.post(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)
+
+export const disablePublicShare = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)
+
 // Subscriptions (board watchers)
 export const subscribeBoard = (boardId) =>
 	axios.put(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)
