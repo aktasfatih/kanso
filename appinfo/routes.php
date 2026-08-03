@@ -77,6 +77,12 @@ return [
 		['name' => 'trash#purge', 'url' => '/api/cards/{id}/purge', 'verb' => 'DELETE'],
 
 		['name' => 'card#create', 'url' => '/api/cards', 'verb' => 'POST'],
+		// Bulk (multi-select) card actions (#3523). One fixed action applied to a
+		// list of card ids, looping the existing per-card services (board ACL per
+		// card, each mutation appends kanso_changes). The literal /cards/bulk
+		// segment is declared before the numeric card CRUD routes so the router
+		// never captures "bulk" as a card id.
+		['name' => 'bulkCard#apply', 'url' => '/api/cards/bulk', 'verb' => 'POST'],
 		['name' => 'card#show', 'url' => '/api/cards/{id}', 'verb' => 'GET'],
 		['name' => 'card#update', 'url' => '/api/cards/{id}', 'verb' => 'PATCH'],
 		['name' => 'card#destroy', 'url' => '/api/cards/{id}', 'verb' => 'DELETE'],

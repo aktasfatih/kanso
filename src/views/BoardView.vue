@@ -190,6 +190,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
+			<!-- Multi-select mode toggle -->
+			<NcButton
+				v-if="boardData"
+				class="board-view__multiselect-btn"
+				:type="bulk.selectionMode.value ? 'secondary' : 'tertiary'"
+				:title="t('kanso', 'Select multiple cards')"
+				:aria-label="t('kanso', 'Select multiple cards')"
+				:aria-pressed="bulk.selectionMode.value ? 'true' : 'false'"
+				@click="bulk.selectionMode.value ? bulk.exitMode() : bulk.enterMode()">
+				<template #icon>
+					<SelectMultipleIcon :size="20" />
+				</template>
+			</NcButton>
+
 			<!-- Settings (gear) button - toggles the right-docked settings panel -->
 			<NcButton
 				v-if="boardData"
@@ -260,7 +274,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-set-wip="handleSetWip"
 					:on-set-color="handleSetColor"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
-					:on-card-hover="(cardId) => { hoveredCardId = cardId }" />
+					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
+					:selection-mode="bulk.selectionMode.value"
+					:selected-ids="bulk.selected.value"
+					:on-card-select="handleCardSelect" />
 
 				<!-- Add stack inline input -->
 				<div class="add-stack">
@@ -392,6 +409,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Child route: CardModal renders over this view -->
 		<router-view />
+
+		<!-- Bulk action bar - shown when multi-select mode is active -->
+		<BulkActionBar
+			v-if="bulk.selectionMode.value"
+			:count="bulk.selectedCount.value"
+			:stacks="sortedStacks"
+			:labels="boardLabels"
+			:participants="participants.data.value ?? []"
+			:applying="bulk.applying.value"
+			@move="onBulkMove"
+			@add-label="onBulkAddLabel"
+			@remove-label="onBulkRemoveLabel"
+			@assign="onBulkAssign"
+			@set-due="onBulkSetDue"
+			@archive="onBulkArchive"
+			@delete="onBulkDelete"
+			@close="bulk.exitMode()" />
 	</div>
 </template>
 
@@ -399,6 +433,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
+import { showSuccess, showWarning } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -415,7 +450,10 @@ import SortIcon from 'vue-material-design-icons/Sort.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import ViewAgendaOutlineIcon from 'vue-material-design-icons/ViewAgendaOutline.vue'
+import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
 import StackColumn from '../components/StackColumn.vue'
+import BulkActionBar from '../components/BulkActionBar.vue'
+import { useBulkSelect } from '../composables/useBulkSelect.js'
 import SwimlaneRow from '../components/SwimlaneRow.vue'
 import { buildLanes, SWIMLANE_MODES } from '../composables/useSwimlanes.js'
 import BoardListView from '../components/BoardListView.vue'
@@ -464,6 +502,7 @@ const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
+const bulk = useBulkSelect(boardId, queryClient)
 
 // View mode (Board columns / List table / Timeline), persisted per board per user.
 const VIEW_MODES = ['board', 'list', 'timeline']
@@ -1397,6 +1436,56 @@ async function handleSetWip(stackId, wipLimit) {
 async function handleSetColor(stackId, color) {
 	await updateStack.mutateAsync({ stackId, data: { color } })
 }
+
+// ── Multi-select / bulk actions ───────────────────────────────────────────────
+
+/**
+ * Called by StackColumn when a card tile emits 'select' in multi-select mode.
+ * Shift-click selects the range from the last selection to this card; plain
+ * click toggles the card in/out of the selection.
+ *
+ * @param {{ id: number, shiftKey: boolean }} payload
+ */
+function handleCardSelect({ id, shiftKey }) {
+	if (shiftKey) {
+		const orderedIds = allVisibleCards.value.map((c) => c.id)
+		bulk.selectRange(orderedIds, id)
+	} else {
+		bulk.toggle(id)
+	}
+}
+
+/**
+ * Run one bulk action over the current selection. On success, surface a short
+ * toast summarizing how many cards were applied vs. skipped (cards the caller
+ * can't edit / that vanished are skipped server-side, not fatal); on failure,
+ * show the server error in the board's error banner.
+ *
+ * @param {string} action - one of the fixed bulk actions
+ * @param {object} params - action-specific params
+ */
+async function runBulkAction(action, params) {
+	try {
+		const result = await bulk.apply(action, params)
+		const okCount = result?.ok?.length ?? 0
+		const skippedCount = result?.skipped?.length ?? 0
+		if (skippedCount > 0) {
+			showWarning(t('kanso', '{ok} updated, {skipped} skipped', { ok: okCount, skipped: skippedCount }))
+		} else if (okCount > 0) {
+			showSuccess(t('kanso', '{ok} cards updated', { ok: okCount }))
+		}
+	} catch (err) {
+		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+	}
+}
+
+const onBulkMove = (stackId) => runBulkAction('move', { targetStackId: stackId })
+const onBulkAddLabel = (labelId) => runBulkAction('add_label', { labelId })
+const onBulkRemoveLabel = (labelId) => runBulkAction('remove_label', { labelId })
+const onBulkAssign = (userId) => runBulkAction('assign_user', { userId })
+const onBulkSetDue = (due) => runBulkAction('set_due_date', { duedate: due })
+const onBulkArchive = () => runBulkAction('archive', {})
+const onBulkDelete = () => runBulkAction('delete', {})
 </script>
 
 <style scoped>

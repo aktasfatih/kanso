@@ -61,6 +61,11 @@ export const moveCard = (id, data) =>
 export const copyCard = (id, targetStackId) =>
 	axios.post(url(`/api/cards/${id}/copy`), { targetStackId }).then((r) => r.data)
 
+// Bulk (multi-select) card actions (#3523). One fixed action applied to a list
+// of card ids server-side; returns { ok: [...], skipped: [{id, reason}] }.
+export const bulkApplyCards = (cardIds, action, params = {}) =>
+	axios.post(url('/api/cards/bulk'), { cardIds, action, params }).then((r) => r.data)
+
 // Labels
 export const createLabel = (data) =>
 	axios.post(url('/api/labels'), data).then((r) => r.data)

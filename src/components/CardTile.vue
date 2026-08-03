@@ -10,11 +10,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<button
 			ref="el"
 			class="card-tile"
-			:class="{ 'card-tile--done': isDone }"
+			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected }"
 			:data-card-id="card.id"
-			@click="$emit('click')"
+			@click="onTileClick"
 			@mouseenter="$emit('hover', card.id)"
 			@mouseleave="$emit('hover', null)">
+			<!-- Selection checkbox - shown in multi-select mode -->
+			<input
+				v-if="selectionMode"
+				type="checkbox"
+				class="card-tile__select"
+				:checked="selected"
+				tabindex="-1"
+				@click.stop />
 			<!-- Cover band - a solid colour strip at the top of the tile (#3549) -->
 			<span
 				v-if="card.coverColor"
@@ -208,12 +216,30 @@ const props = defineProps({
 		type: String,
 		default: '',
 	},
+	/** Multi-select mode: when true, clicking the tile emits 'select' instead of 'click'. */
+	selectionMode: {
+		type: Boolean,
+		default: false,
+	},
+	/** Whether this tile is currently in the multi-select selection. */
+	selected: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 // Human-readable reference id (prefix + '-' + boardSeq), null when unassigned.
 const cardHumanId = computed(() => humanId(props.boardPrefix, props.card.boardSeq))
 
-defineEmits(['click', 'hover'])
+const emit = defineEmits(['click', 'hover', 'select'])
+
+function onTileClick(event) {
+	if (props.selectionMode) {
+		emit('select', { id: props.card.id, shiftKey: event.shiftKey })
+	} else {
+		emit('click')
+	}
+}
 
 const el = ref(null)
 const isDragging = ref(false)
@@ -332,6 +358,24 @@ const extraAssigneeCount = computed(() => {
 
 .card-tile__drop-line--bottom {
 	bottom: -1px;
+}
+
+/* Selected state - outline highlight when card is in multi-select selection */
+.card-tile--selected {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+
+/* Selection checkbox - positioned top-right within the tile */
+.card-tile__select {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+	accent-color: var(--color-primary-element);
+	pointer-events: none;
 }
 
 .card-tile {

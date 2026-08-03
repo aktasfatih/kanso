@@ -190,8 +190,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:labels-by-id="labelsById"
 						:board-prefix="boardPrefix"
 						:lane-key="laneKey"
+						:selection-mode="selectionMode"
+						:selected="selectedIds.has(cards[vRow.index].id)"
 						@click="openCard(cards[vRow.index].id)"
-						@hover="(id) => onCardHover?.(id)" />
+						@hover="(id) => onCardHover?.(id)"
+						@select="(p) => onCardSelect?.(p)" />
 				</div>
 			</div>
 		</div>
@@ -320,6 +323,24 @@ const props = defineProps({
 	 * hovered card for the Space quick-preview.
 	 */
 	onCardHover: {
+		type: Function,
+		default: null,
+	},
+	/** Whether multi-select mode is active - passed down to each CardTile. */
+	selectionMode: {
+		type: Boolean,
+		default: false,
+	},
+	/** Set of selected card ids - passed down to each CardTile for highlight. */
+	selectedIds: {
+		type: Set,
+		default: () => new Set(),
+	},
+	/**
+	 * Optional callback ({ id, shiftKey }) → void - called when a card tile
+	 * emits 'select' in multi-select mode.
+	 */
+	onCardSelect: {
 		type: Function,
 		default: null,
 	},
