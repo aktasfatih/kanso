@@ -843,8 +843,9 @@ async function onTrelloImportChange(event) {
 	width: 100%;
 	border: none;
 	background: transparent;
-	/* Extra right padding reserves the corner for the absolute folder menu. */
-	padding: 16px 48px 16px 20px;
+	/* Extra right padding reserves the corner for the absolute folder menu
+	   (~44px trigger at right:8 → clear it with room to spare). */
+	padding: 16px 56px 16px 20px;
 	text-align: left;
 	cursor: pointer;
 	border-radius: var(--border-radius-large);

@@ -8,7 +8,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	/ `unassign` - the parent owns the mutation + cache invalidation.
 -->
 <template>
-	<NcActions :menu-name="t('kanso', 'Move to folder')" :data-test="'board-folder-menu-' + board.id">
+	<!-- Icon-only trigger (no menu-name) so it stays a compact corner button and
+	     doesn't overrun the board title; the label lives on aria-label + the caption. -->
+	<NcActions :aria-label="t('kanso', 'Move to folder')" :data-test="'board-folder-menu-' + board.id">
 		<template #icon>
 			<FolderMoveOutlineIcon :size="20" />
 		</template>
