@@ -282,10 +282,13 @@ class DeckImportService {
 	 * inserted. The user-Files reference kind (`file`) is not handled here (it is
 	 * counted separately and reported as skipped).
 	 *
-	 * A `deck_attachment` row whose source object is MISSING is skipped and NOT
-	 * counted, never failing the whole import. Every object we do write is
-	 * appended to $writtenObjects so the caller can clean it up if a later step
-	 * throws (app-data writes are not covered by the DB transaction).
+	 * A `deck_attachment` row whose source object is MISSING - or whose source
+	 * exceeds {@see AttachmentSanitizer::MAX_SIZE} - is skipped and NOT counted,
+	 * never failing the whole import. The copied filename/MIME run through
+	 * {@see AttachmentSanitizer} for the same hardening as the upload path (an
+	 * imported `.html`/`.svg` can never become stored XSS). Every object we do
+	 * write is appended to $writtenObjects so the caller can clean it up if a
+	 * later step throws (app-data writes are not covered by the DB transaction).
 	 *
 	 * @param int[] $deckCardIds
 	 * @param array<int, int> $cardIdMap deck card id → kanso card id
@@ -306,14 +309,21 @@ class DeckImportService {
 				continue;
 			}
 
-			// Read the source bytes from Deck's app-data. A missing source object
-			// (row present but file gone) is skipped, not fatal.
+			// Resolve the source object from Deck's app-data. A missing source
+			// object (row present but file gone) is skipped, not fatal.
 			try {
 				$sourceFile = $deckAppData->getFolder((string)$att['cardId'])->getFile($att['data']);
-				$bytes = $sourceFile->getContent();
 			} catch (NotFoundException) {
 				continue;
 			}
+
+			// Cap the source size BEFORE reading any bytes (mirrors the upload +
+			// Files-copy paths). An oversized source is skipped-and-not-counted,
+			// exactly like a missing source - never fatal to the whole import.
+			if ((int)$sourceFile->getSize() > AttachmentSanitizer::MAX_SIZE) {
+				continue;
+			}
+			$bytes = $sourceFile->getContent();
 
 			$card = $this->cardMapper->find($newCardId);
 			$boardId = $card->getBoardId();
@@ -336,8 +346,8 @@ class DeckImportService {
 			$attachment = new CardAttachment();
 			$attachment->setCardId($newCardId);
 			$attachment->setBoardId($boardId);
-			$attachment->setFilename($att['data']);
-			$attachment->setMime($sourceFile->getMimeType());
+			$attachment->setFilename(AttachmentSanitizer::filename($att['data']));
+			$attachment->setMime(AttachmentSanitizer::mime($sourceFile->getMimeType()));
 			$attachment->setSize((int)$sourceFile->getSize());
 			$attachment->setStorageKey($storageKey);
 			$attachment->setUploadedBy($author);

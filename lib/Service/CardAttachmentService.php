@@ -46,7 +46,7 @@ use OCP\Security\ISecureRandom;
  */
 class CardAttachmentService {
 	/** Hard cap on a single upload. Oversized uploads are rejected. */
-	public const MAX_SIZE = 100 * 1024 * 1024; // 100 MiB
+	public const MAX_SIZE = AttachmentSanitizer::MAX_SIZE;
 
 	/** Per-card app-data subfolder holding that card's attachment objects. */
 	private const FOLDER_PREFIX = 'card-';
@@ -464,55 +464,20 @@ class CardAttachmentService {
 	}
 
 	/**
-	 * Normalizes the client filename into a safe display label: strips any path
-	 * component (defence in depth - it is never a path, but keep the label
-	 * clean), collapses control chars, caps length, and falls back to a generic
-	 * name when empty.
+	 * Normalizes the client filename into a safe display label. Delegates to the
+	 * shared {@see AttachmentSanitizer} so every store path (upload, Files copy,
+	 * Deck import) applies the identical coercion.
 	 */
 	private function sanitizeFilename(string $name): string {
-		$name = basename(str_replace('\\', '/', $name));
-		$name = preg_replace('/[\x00-\x1f\x7f]/', '', $name) ?? '';
-		$name = trim($name);
-		if (strlen($name) > 255) {
-			$name = substr($name, 0, 255);
-		}
-		return $name === '' ? 'attachment' : $name;
+		return AttachmentSanitizer::filename($name);
 	}
 
 	/**
-	 * MIME types that could be rendered/scripted inline by a browser if the
-	 * download header were ever weakened. We never serve these as their own
-	 * Content-Type - they are stored (and downloaded) as a generic binary so an
-	 * uploaded `.html`/`.svg` can never become stored XSS. Defence in depth: the
-	 * download is ALSO forced Content-Disposition: attachment + nosniff.
-	 */
-	private const UNSAFE_MIME_PREFIXES = [
-		'text/html',
-		'application/xhtml',
-		'image/svg',
-		'application/xml',
-		'text/xml',
-		'application/javascript',
-		'text/javascript',
-	];
-
-	/**
-	 * Keeps only a plausible `type/subtype` MIME, coercing anything a browser
-	 * might render/script inline to a generic binary. The value is
-	 * client-supplied and is never trusted for rendering.
+	 * Coerces a client-supplied MIME to a browser-safe value via the shared
+	 * {@see AttachmentSanitizer}. The value is never trusted for rendering.
 	 */
 	private function sanitizeMime(string $mime): string {
-		$mime = strtolower(trim($mime));
-		if (preg_match('~^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$~', $mime) !== 1
-			|| strlen($mime) > 255) {
-			return 'application/octet-stream';
-		}
-		foreach (self::UNSAFE_MIME_PREFIXES as $prefix) {
-			if (str_starts_with($mime, $prefix)) {
-				return 'application/octet-stream';
-			}
-		}
-		return $mime;
+		return AttachmentSanitizer::mime($mime);
 	}
 
 	/**

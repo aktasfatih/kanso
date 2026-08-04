@@ -20,6 +20,7 @@ use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\AttachmentSanitizer;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\DeckImportService;
 use OCA\Kanso\Service\DeckReader;
@@ -379,6 +380,119 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame('objkey123', $captured->getStorageKey());
 		self::assertSame('bob', $captured->getUploadedBy());
 		self::assertSame(333, $captured->getCreatedAt());
+	}
+
+	public function testImportCoercesScriptableAttachmentMime(): void {
+		// A deck_file whose source reports a scriptable MIME (text/html) must be
+		// stored as application/octet-stream - the same coercion the upload path
+		// applies - so an imported .html can never become stored XSS.
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => 'page.html', 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+		$this->secureRandom->method('generate')->willReturn('objkey123');
+
+		$sourceFile = $this->createMock(ISimpleFile::class);
+		$sourceFile->method('getContent')->willReturn('<script>alert(1)</script>');
+		$sourceFile->method('getMimeType')->willReturn('text/html');
+		$sourceFile->method('getSize')->willReturn(25);
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		$deckFolder->method('getFile')->with('page.html')->willReturn($sourceFile);
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		$kansoFolder = $this->createMock(ISimpleFolder::class);
+		$this->appData->method('getFolder')->with('card-500')->willReturn($kansoFolder);
+
+		$captured = null;
+		$this->cardAttachmentMapper->expects(self::once())->method('insert')
+			->willReturnCallback(function (CardAttachment $a) use (&$captured): CardAttachment {
+				$captured = $a;
+				$a->setId(1);
+				return $a;
+			});
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame(1, $result['attachments']);
+		self::assertNotNull($captured);
+		self::assertSame('application/octet-stream', $captured->getMime());
+	}
+
+	public function testImportSanitizesAttachmentFilename(): void {
+		// A control-char / path-laden source filename is normalized on the stored
+		// attachment (defence in depth - it never selects a storage path).
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => "../../ev\x00il.txt", 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+		$this->secureRandom->method('generate')->willReturn('objkey123');
+
+		$sourceFile = $this->createMock(ISimpleFile::class);
+		$sourceFile->method('getContent')->willReturn('DATA');
+		$sourceFile->method('getMimeType')->willReturn('text/plain');
+		$sourceFile->method('getSize')->willReturn(4);
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		$deckFolder->method('getFile')->willReturn($sourceFile);
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		$kansoFolder = $this->createMock(ISimpleFolder::class);
+		$this->appData->method('getFolder')->with('card-500')->willReturn($kansoFolder);
+
+		$captured = null;
+		$this->cardAttachmentMapper->expects(self::once())->method('insert')
+			->willReturnCallback(function (CardAttachment $a) use (&$captured): CardAttachment {
+				$captured = $a;
+				$a->setId(1);
+				return $a;
+			});
+
+		$this->service->importBoard(2, 'alice');
+
+		self::assertNotNull($captured);
+		// basename() strips the path, the NUL byte is collapsed.
+		self::assertSame('evil.txt', $captured->getFilename());
+	}
+
+	public function testImportSkipsOversizedAttachmentButFinishesImport(): void {
+		// An oversized source (getSize() > MAX_SIZE) is skipped-and-not-counted,
+		// never read, and never fatal - the rest of the import still succeeds.
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => 'huge.bin', 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+
+		$sourceFile = $this->createMock(ISimpleFile::class);
+		// Oversized: its bytes must never be read.
+		$sourceFile->method('getSize')->willReturn(AttachmentSanitizer::MAX_SIZE + 1);
+		$sourceFile->expects(self::never())->method('getContent');
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		$deckFolder->method('getFile')->with('huge.bin')->willReturn($sourceFile);
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		// Nothing is written and no row is inserted for the skipped attachment.
+		$this->appData->expects(self::never())->method('getFolder');
+		$this->cardAttachmentMapper->expects(self::never())->method('insert');
+
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		// The whole import still succeeds; the oversized attachment is not counted.
+		self::assertSame(0, $result['attachments']);
+		self::assertSame(1, $result['cards']);
 	}
 
 	public function testImportSkipsAndCountsFileReferenceAttachment(): void {
