@@ -29,7 +29,7 @@ class SendDueReminders extends TimedJob {
 	}
 
 	#[\Override]
-	protected function run($argument): void {
+	protected function run(mixed $argument): void {
 		$this->dueReminderService->runDueReminders();
 	}
 }

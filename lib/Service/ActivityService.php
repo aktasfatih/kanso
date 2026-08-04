@@ -53,7 +53,7 @@ class ActivityService {
 		$rows = $this->changeMapper->findByEntity($card->getBoardId(), Change::ENTITY_CARD, $cardId, $limit);
 
 		$names = [];
-		return array_map(function (Change $change) use (&$names): array {
+		return array_values(array_map(function (Change $change) use (&$names): array {
 			$actor = $change->getActor();
 			if ($actor !== null && !array_key_exists($actor, $names)) {
 				$user = $this->userManager->get($actor);
@@ -67,7 +67,7 @@ class ActivityService {
 				'action' => $change->getAction() ?? Change::ACTION_UPDATE,
 				'timestamp' => $change->getCreatedAt() ?? 0,
 			];
-		}, $rows);
+		}, $rows));
 	}
 
 	/**

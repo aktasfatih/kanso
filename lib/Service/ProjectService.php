@@ -50,10 +50,10 @@ class ProjectService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function findMine(string $uid): array {
-		return array_map(
+		return array_values(array_map(
 			static fn (Project $project): array => $project->jsonSerialize(),
 			$this->projectMapper->findByOwner($uid)
-		);
+		));
 	}
 
 	/**

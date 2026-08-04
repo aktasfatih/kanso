@@ -30,7 +30,7 @@ class ArchiveDoneCards extends TimedJob {
 	}
 
 	#[\Override]
-	protected function run($argument): void {
+	protected function run(mixed $argument): void {
 		$this->archiveService->runEnabledRules();
 	}
 }

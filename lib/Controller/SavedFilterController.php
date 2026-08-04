@@ -77,7 +77,7 @@ class SavedFilterController extends Controller {
 	 * list for the board.
 	 */
 	#[NoAdminRequired]
-	public function create(int $boardId, string $name = '', $filter = null): JSONResponse {
+	public function create(int $boardId, string $name = '', mixed $filter = null): JSONResponse {
 		return $this->respond(function () use ($boardId, $name, $filter): JSONResponse {
 			$name = trim($name);
 			if ($name === '') {

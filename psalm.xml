@@ -4,7 +4,8 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <psalm
-	errorLevel="4"
+	errorLevel="3"
+	errorBaseline="tests/psalm-baseline.xml"
 	findUnusedBaselineEntry="true"
 	findUnusedCode="false"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -26,4 +27,47 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     resolve the IRootFolder dependency graph (mirrors tests/stubs/hooks.php). -->
 		<file name="tests/stubs/hooks.php" />
 	</stubs>
+	<issueHandlers>
+		<!-- Psalm wants every class marked `final`. We deliberately do NOT: the
+		     PHPUnit suite mocks ~87 Service/Mapper classes via createMock(), and
+		     PHPUnit cannot mock a final class. Keeping these open is a testability
+		     requirement, not an oversight. This is an opinionated psalm stance
+		     (psalm.dev/361), not a type-safety bug. -->
+		<ClassMustBeFinal>
+			<errorLevel type="suppress">
+				<directory name="lib" />
+			</errorLevel>
+		</ClassMustBeFinal>
+		<!-- Nextcloud AppFramework Entity objects are hydrated field-by-field via
+		     setX()/addType() after construction (the mapper populates them from a
+		     DB row), never fully initialised in the constructor. Psalm's
+		     "property not set in constructor" check is a false positive for this
+		     framework pattern, so we suppress it for the entity layer only. -->
+		<PropertyNotSetInConstructor>
+			<errorLevel type="suppress">
+				<directory name="lib/Db" />
+			</errorLevel>
+		</PropertyNotSetInConstructor>
+		<!--
+		Not suppressed here, by design: the remaining psalm info-severity issues
+		(MissingClassConstType, RedundantCastGivenDocblockType, DeprecatedMethod,
+		RedundantConditionGivenDocblockType, DocblockTypeContradiction,
+		RiskyTruthyFalsyComparison). At this errorLevel they are informational, so
+		they never fail CI. We intentionally do NOT add issueHandler suppressions
+		for them because psalm 6 then raises UnusedIssueHandlerSuppression (an
+		un-suppressible config-integrity error) for info-severity suppressions.
+		Instead the CI/composer `psalm` step runs without show-info, so these info
+		lines stay out of the log while the exit code still gates every
+		error-severity issue. They are tracked, deferred debt:
+		  * MissingClassConstType: PHP 8.3 typed class constants; pure style, no
+		    type-safety gain, ~178 sites, not worth the churn.
+		  * DeprecatedMethod: OCP\IConfig to IAppConfig/IUserConfig migration for
+		    NC34; a real follow-up, but a behaviour-touching change out of scope
+		    for a types/config pass.
+		  * RedundantCast / DocblockType noise: defensive (int)/(string) casts and
+		    ?? guards on AppFramework entity getters (the property is nullable pre
+		    hydration though the @method docblock is not); removing them would
+		    change serialized output on the null path, so they are left as-is.
+		-->
+	</issueHandlers>
 </psalm>

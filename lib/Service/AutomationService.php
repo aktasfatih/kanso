@@ -82,7 +82,7 @@ class AutomationService {
 		$rule->setBoardId($boardId);
 		$rule->setTrigger($trigger);
 		$rule->setAction($action);
-		$rule->setParams(json_encode($normalized));
+		$rule->setParams((string)json_encode($normalized));
 		$rule->setEnabled(true);
 		$rule->setCreatedAt(time());
 		return $this->ruleMapper->insert($rule);

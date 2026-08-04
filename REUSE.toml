@@ -10,6 +10,7 @@ path = [
     "composer.lock",
     "package.json",
     "package-lock.json",
+    "tests/psalm-baseline.xml",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"

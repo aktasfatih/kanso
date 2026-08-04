@@ -37,7 +37,7 @@ class PruneChanges extends TimedJob {
 	}
 
 	#[\Override]
-	protected function run($argument): void {
+	protected function run(mixed $argument): void {
 		$cutoff = $this->time->getTime() - self::RETENTION_SECONDS;
 		for ($batch = 0; $batch < self::MAX_BATCHES; $batch++) {
 			$ids = $this->changeMapper->findPrunableIds($cutoff, self::BATCH_SIZE);
