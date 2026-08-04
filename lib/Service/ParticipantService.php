@@ -22,6 +22,14 @@ use OCP\IUserManager;
  * so the user/group directory dependencies stay local to this one concern.
  */
 class ParticipantService {
+	/**
+	 * Result cap for the participants payload. Mirrors AclService::SEARCH_LIMIT
+	 * so both member-facing pickers bound their payload the same way - a board
+	 * shared with a several-thousand-member group must never serialize every
+	 * member into the assignee picker.
+	 */
+	private const RESULT_LIMIT = 25;
+
 	public function __construct(
 		private BoardMapper $boardMapper,
 		private AclMapper $aclMapper,
@@ -32,38 +40,106 @@ class ParticipantService {
 	}
 
 	/**
-	 * All users with access to the board (owner, user ACLs, members of group
-	 * ACLs), deduplicated by uid and sorted by display name. Unresolvable
+	 * Users with access to the board (owner, user ACLs, members of group ACLs),
+	 * deduplicated by uid, filtered by an optional query, and capped. Unresolvable
 	 * uids fall back to the uid as display name rather than disappearing -
 	 * ACL rows can outlive their users.
 	 *
+	 * The payload is bounded so a board shared with a very large group cannot
+	 * balloon the assignee picker. Directly-reachable members (the owner and
+	 * every user-type ACL) are selected AHEAD of group-expanded members, so the
+	 * cap only ever sheds people reachable purely through a large group. That
+	 * ordering matters because the frontend consumes this same list as its
+	 * uid->displayName resolution map (assignees, reviewers, swimlane titles):
+	 * a directly-shared member always survives the cap and resolves to a real
+	 * name; only a group-only member past the cap degrades to a bare-uid label.
+	 *
+	 * When $q is given, both tiers are filtered server-side (case-insensitive
+	 * substring match against display name or uid) before the cap is applied.
+	 *
+	 * @param string|null $q optional case-insensitive filter over display name / uid
 	 * @return list<array{uid: string, displayName: string}>
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not read the board
 	 */
-	public function getParticipants(int $boardId, string $uid): array {
+	public function getParticipants(int $boardId, string $uid, ?string $q = null): array {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
 
-		// Keyed by uid for deduplication; a user reachable both directly and
-		// through a group appears once.
-		$byUid = [];
-		$byUid[$board->getOwner()] = $this->resolve($board->getOwner());
+		$needle = $q !== null ? mb_strtolower(trim($q)) : '';
 
+		// Directly-reachable members first (owner + user ACLs). These are the
+		// ones the cap must never shed, so they are gathered as their own tier.
+		// $seen dedups across both tiers - a user reachable both directly and
+		// through a group appears once, and always from the direct tier.
+		$seen = [];
+		$direct = [];
+		$this->collect($direct, $seen, $this->resolve($board->getOwner()), $needle);
+
+		$groupAcls = [];
 		foreach ($this->aclMapper->findByBoard($boardId) as $acl) {
 			if ($acl->getParticipantType() === Acl::TYPE_USER) {
-				$byUid[$acl->getParticipant()] ??= $this->resolve($acl->getParticipant());
+				$this->collect($direct, $seen, $this->resolve($acl->getParticipant()), $needle);
 			} elseif ($acl->getParticipantType() === Acl::TYPE_GROUP) {
-				foreach ($this->groupManager->get($acl->getParticipant())?->getUsers() ?? [] as $user) {
-					$byUid[$user->getUID()] ??= [
-						'uid' => $user->getUID(),
-						'displayName' => $user->getDisplayName(),
-					];
-				}
+				$groupAcls[] = $acl->getParticipant();
 			}
 		}
 
-		$participants = array_values($byUid);
+		$selected = $this->sortByDisplayName($direct);
+		if (count($selected) >= self::RESULT_LIMIT) {
+			return array_slice($selected, 0, self::RESULT_LIMIT);
+		}
+
+		// Fill the remaining slots from group members, skipping anyone already
+		// reachable directly (dedup). The group tier is sorted by display name
+		// and sliced to the remaining budget, so a several-thousand-member group
+		// contributes at most a handful of rows to the serialized payload.
+		$group = [];
+		foreach ($groupAcls as $gid) {
+			foreach ($this->groupManager->get($gid)?->getUsers() ?? [] as $user) {
+				$this->collect($group, $seen, [
+					'uid' => $user->getUID(),
+					'displayName' => $user->getDisplayName(),
+				], $needle);
+			}
+		}
+
+		$remaining = self::RESULT_LIMIT - count($selected);
+		$group = array_slice($this->sortByDisplayName($group), 0, $remaining);
+
+		return array_merge($selected, $group);
+	}
+
+	/**
+	 * Deduplicates by uid (via the shared $seen set, so the first tier to reach
+	 * a user wins - the direct tier before the group tier) and, for a first
+	 * sighting, appends the participant to $bucket when it passes the optional
+	 * $needle filter (case-insensitive substring over display name or uid). An
+	 * empty needle passes everyone. A uid is marked seen on first sighting even
+	 * when the filter rejects it, so it can never re-enter through another tier.
+	 *
+	 * @param list<array{uid: string, displayName: string}> $bucket
+	 * @param array<string, true> $seen uids already accounted for
+	 * @param array{uid: string, displayName: string} $participant
+	 */
+	private function collect(array &$bucket, array &$seen, array $participant, string $needle): void {
+		if (isset($seen[$participant['uid']])) {
+			return;
+		}
+		$seen[$participant['uid']] = true;
+		if ($needle !== ''
+			&& !str_contains(mb_strtolower($participant['displayName']), $needle)
+			&& !str_contains(mb_strtolower($participant['uid']), $needle)) {
+			return;
+		}
+		$bucket[] = $participant;
+	}
+
+	/**
+	 * @param list<array{uid: string, displayName: string}> $participants
+	 * @return list<array{uid: string, displayName: string}>
+	 */
+	private function sortByDisplayName(array $participants): array {
 		usort(
 			$participants,
 			static fn (array $a, array $b): int

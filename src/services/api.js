@@ -107,8 +107,13 @@ export const unassignLabel = (cardId, labelId) =>
 	axios.delete(url(`/api/cards/${cardId}/labels/${labelId}`)).then((r) => r.data)
 
 // Assignees
-export const fetchParticipants = (boardId) =>
-	axios.get(url(`/api/boards/${boardId}/participants`)).then((r) => r.data)
+// The participants payload is capped server-side. `q` (optional) filters by
+// display name / uid server-side for boards shared with large groups; today's
+// callers pass no q and receive the capped full list unchanged.
+export const fetchParticipants = (boardId, q) =>
+	axios
+		.get(url(`/api/boards/${boardId}/participants`), q ? { params: { q } } : undefined)
+		.then((r) => r.data)
 
 export const assignUser = (cardId, userId) =>
 	axios.put(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)

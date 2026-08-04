@@ -273,10 +273,22 @@ class BoardControllerTest extends TestCase {
 			['uid' => 'bob', 'displayName' => 'Bob Baker'],
 		];
 		$this->participantService->method('getParticipants')
-			->with(1, 'alice')
+			->with(1, 'alice', null)
 			->willReturn($participants);
 
 		$response = $this->controller->participants(1);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($participants, $response->getData());
+	}
+
+	public function testParticipantsPassesQueryThrough(): void {
+		$participants = [['uid' => 'bob', 'displayName' => 'Bob Baker']];
+		$this->participantService->expects(self::once())
+			->method('getParticipants')
+			->with(1, 'alice', 'bob')
+			->willReturn($participants);
+
+		$response = $this->controller->participants(1, 'bob');
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame($participants, $response->getData());
 	}

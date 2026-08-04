@@ -97,11 +97,16 @@ class ParticipantServiceTest extends TestCase {
 		]);
 		$this->groupManager->method('get')->with('devs')->willReturn($group);
 
+		// Directly-reachable members (owner + user ACLs) form the first tier,
+		// sorted by display name, ahead of the group-expanded tier - so bob (a
+		// direct user ACL, "Zed Bobson") precedes carol (group-only) even though
+		// his name sorts later. This tiering is what keeps directly-shared
+		// members inside the result cap on large-group boards.
 		$participants = $this->service->getParticipants(1, 'alice');
 		self::assertSame([
 			['uid' => 'alice', 'displayName' => 'Alice Adams'],
-			['uid' => 'carol', 'displayName' => 'Carol Chen'],
 			['uid' => 'bob', 'displayName' => 'Zed Bobson'],
+			['uid' => 'carol', 'displayName' => 'Carol Chen'],
 		], $participants);
 	}
 
@@ -158,5 +163,108 @@ class ParticipantServiceTest extends TestCase {
 
 		$this->expectException(DoesNotExistException::class);
 		$this->service->getParticipants(1, 'alice');
+	}
+
+	public function testQueryFiltersByDisplayNameAndUidCaseInsensitively(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->aclMapper->method('findByBoard')->with(1)
+			->willReturn([$this->userAcl('bob'), $this->groupAcl('devs')]);
+
+		$this->userManager->method('get')->willReturnMap([
+			['alice', $this->user('alice', 'Alice Adams')],
+			['bob', $this->user('bob', 'Bob Baker')],
+		]);
+
+		$group = $this->createMock(IGroup::class);
+		$group->method('getUsers')->willReturn([
+			$this->user('carol', 'Carol Chen'),
+			// uid matches "bob" even though the display name does not.
+			$this->user('bobby', 'Robert Roe'),
+		]);
+		$this->groupManager->method('get')->with('devs')->willReturn($group);
+
+		// "bob" matches Bob Baker (display name) and bobby (uid), not the others.
+		$participants = $this->service->getParticipants(1, 'alice', 'BOB');
+		self::assertSame([
+			['uid' => 'bob', 'displayName' => 'Bob Baker'],
+			['uid' => 'bobby', 'displayName' => 'Robert Roe'],
+		], $participants);
+	}
+
+	public function testEmptyQueryReturnsCappedSet(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->aclMapper->method('findByBoard')->with(1)
+			->willReturn([$this->groupAcl('devs')]);
+		$this->userManager->method('get')->with('alice')
+			->willReturn($this->user('alice', 'Alice Adams'));
+
+		// A 40-member group; with the owner that is 41 candidates, capped to 25.
+		$members = [];
+		for ($i = 0; $i < 40; $i++) {
+			$members[] = $this->user(sprintf('m%02d', $i), sprintf('Member %02d', $i));
+		}
+		$group = $this->createMock(IGroup::class);
+		$group->method('getUsers')->willReturn($members);
+		$this->groupManager->method('get')->with('devs')->willReturn($group);
+
+		// Empty q (null) still applies the cap.
+		$participants = $this->service->getParticipants(1, 'alice', null);
+		self::assertCount(25, $participants);
+	}
+
+	public function testDirectMembersSurviveTheCapAheadOfLargeGroup(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// A directly-shared user whose name sorts LAST must still survive the cap
+		// - the frontend relies on this list to resolve their display name.
+		$this->aclMapper->method('findByBoard')->with(1)
+			->willReturn([$this->userAcl('zoe'), $this->groupAcl('devs')]);
+
+		$this->userManager->method('get')->willReturnMap([
+			['alice', $this->user('alice', 'Alice Adams')],
+			['zoe', $this->user('zoe', 'Zoe Zimmer')],
+		]);
+
+		// 100 group members whose names all sort before "Zoe Zimmer".
+		$members = [];
+		for ($i = 0; $i < 100; $i++) {
+			$members[] = $this->user(sprintf('g%03d', $i), sprintf('Group %03d', $i));
+		}
+		$group = $this->createMock(IGroup::class);
+		$group->method('getUsers')->willReturn($members);
+		$this->groupManager->method('get')->with('devs')->willReturn($group);
+
+		$participants = $this->service->getParticipants(1, 'alice', null);
+		self::assertCount(25, $participants);
+		$uids = array_column($participants, 'uid');
+		// Owner and the directly-shared user are present despite 100 group members.
+		self::assertContains('alice', $uids);
+		self::assertContains('zoe', $uids);
+		self::assertSame(
+			['uid' => 'zoe', 'displayName' => 'Zoe Zimmer'],
+			$participants[array_search('zoe', $uids, true)]
+		);
+	}
+
+	public function testQueryMatchingManyGroupMembersIsCapped(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->aclMapper->method('findByBoard')->with(1)
+			->willReturn([$this->groupAcl('devs')]);
+		$this->userManager->method('get')->with('alice')
+			->willReturn($this->user('alice', 'Alice Adams'));
+
+		$members = [];
+		for ($i = 0; $i < 50; $i++) {
+			$members[] = $this->user(sprintf('dev%02d', $i), sprintf('Developer %02d', $i));
+		}
+		$group = $this->createMock(IGroup::class);
+		$group->method('getUsers')->willReturn($members);
+		$this->groupManager->method('get')->with('devs')->willReturn($group);
+
+		// All 50 match "developer"; result is still capped at 25.
+		$participants = $this->service->getParticipants(1, 'alice', 'developer');
+		self::assertCount(25, $participants);
+		foreach ($participants as $p) {
+			self::assertStringContainsStringIgnoringCase('developer', $p['displayName']);
+		}
 	}
 }

@@ -134,12 +134,15 @@ class BoardController extends Controller {
 
 	/**
 	 * All users with access to the board - the assignee-picker data source.
+	 * Bounded server-side: an optional `?q` filters by display name / uid and
+	 * the result is always capped, so a board shared with a very large group
+	 * cannot balloon the picker payload.
 	 */
 	#[NoAdminRequired]
-	public function participants(int $id): JSONResponse {
-		return $this->respond(function () use ($id): JSONResponse {
+	public function participants(int $id, ?string $q = null): JSONResponse {
+		return $this->respond(function () use ($id, $q): JSONResponse {
 			return new JSONResponse(
-				$this->participantService->getParticipants($id, $this->currentUserId())
+				$this->participantService->getParticipants($id, $this->currentUserId(), $q)
 			);
 		});
 	}
