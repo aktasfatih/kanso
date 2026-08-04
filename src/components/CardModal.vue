@@ -1754,7 +1754,12 @@ async function handleTemplateToggle() {
 		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
 		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 		if (isTemplate) {
+			// The card leaves the board (templates aren't live cards), so tell the
+			// user where it went and how to reuse it — otherwise it just "vanishes".
+			showSuccess(t('kanso', 'Saved as a template. Add a card from it with the "+ From template" button on any column.'))
 			closeModal()
+		} else {
+			showSuccess(t('kanso', 'Template turned back into a normal card.'))
 		}
 	} catch (err) {
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')

@@ -168,7 +168,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ tpl.title }}
 				</NcActionButton>
 				<NcActionText v-if="templatesLoaded && templates.length === 0">
-					{{ t('kanso', 'No templates on this board yet') }}
+					{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 				</NcActionText>
 			</NcActions>
 		</div>
