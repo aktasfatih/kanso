@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="my-cards-view">
-		<div v-if="!embedded" class="my-cards-view__header">
+		<div v-if="!embedded" class="my-cards-view__header kanso-page-header">
 			<h1 class="my-cards-view__title">{{ t('kanso', 'My tasks') }}</h1>
 		</div>
 

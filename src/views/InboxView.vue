@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="inbox-view">
-		<div v-if="!embedded" class="inbox-view__header">
+		<div v-if="!embedded" class="inbox-view__header kanso-page-header">
 			<h1 class="inbox-view__title">{{ t('kanso', 'Inbox') }}</h1>
 		</div>
 

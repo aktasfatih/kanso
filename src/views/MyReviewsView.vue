@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="my-reviews-view">
-		<div v-if="!embedded" class="my-reviews-view__header">
+		<div v-if="!embedded" class="my-reviews-view__header kanso-page-header">
 			<h1 class="my-reviews-view__title">{{ t('kanso', 'My Reviews') }}</h1>
 		</div>
 

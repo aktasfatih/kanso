@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="board-stats">
+	<div class="board-stats kanso-page-view">
 		<!-- Header -->
 		<div class="board-stats__header">
 			<NcButton class="board-stats__back" @click="goBack">
@@ -445,7 +445,7 @@ function goBack() {
 	display: flex;
 	align-items: center;
 	gap: 16px;
-	padding: 12px 24px 12px 52px;
+	padding: 12px 24px;
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
 	flex-shrink: 0;

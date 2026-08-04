@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="trash-view">
+	<div class="trash-view kanso-page-view">
 		<!-- Header: back affordance + title + in-view filter -->
 		<div class="trash-view__header">
 			<NcButton class="trash-view__back" @click="goBack">
@@ -317,7 +317,7 @@ function formatDeletedAt(deletedAt) {
 	display: flex;
 	align-items: center;
 	gap: 16px;
-	padding: 12px 24px 12px 52px;
+	padding: 12px 24px;
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
 	flex-shrink: 0;
@@ -437,7 +437,7 @@ function formatDeletedAt(deletedAt) {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: 8px 24px 24px 52px;
+	padding: 8px 24px 24px;
 }
 
 .trash-view__host {
@@ -525,7 +525,7 @@ function formatDeletedAt(deletedAt) {
 /* ── Action error ─────────────────────────────────────────────────────────────── */
 .trash-view__action-error {
 	flex-shrink: 0;
-	padding: 8px 24px 8px 52px;
+	padding: 8px 24px;
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
 	color: var(--color-error);
 	font-size: 0.875rem;
