@@ -126,7 +126,7 @@ jobs:
       # the dev stack uses.
       - name: Install Deck (for the import spec)
         run: |
-          curl -fsSL https://github.com/nextcloud-releases/deck/releases/download/v1.16.7/deck-v1.16.7.tar.gz -o /tmp/deck.tar.gz
+          curl -fsSL https://github.com/nextcloud-releases/deck/releases/download/v1.18.3/deck-v1.18.3.tar.gz -o /tmp/deck.tar.gz
           docker cp /tmp/deck.tar.gz kanso-dev:/tmp/deck.tar.gz
           docker exec kanso-dev bash -c 'tar -xzf /tmp/deck.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/deck'
           docker exec -u www-data kanso-dev php occ app:enable deck
