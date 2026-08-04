@@ -4291,6 +4291,10 @@ async function doDeleteAutoRule(rule) {
 	flex-direction: column;
 	gap: 2px;
 	min-width: 0;
+	/* Fill the header row so the close button is pushed flush to the top-right
+	   corner. We can't rely on `margin-left: auto` on .bs-modal__close alone —
+	   a global button margin reset overrides it — so let the heading grow. */
+	flex: 1 1 auto;
 }
 
 .bs-modal__title {
