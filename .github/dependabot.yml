@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Dependabot keeps Kanso aware of new releases. Notably `nextcloud/ocp` tracks
+# the Nextcloud major line, so an ocp-major PR is the signal that a new
+# Nextcloud is out — raise appinfo/info.xml max-version and re-verify the app
+# (see CONTRIBUTING.md, "Staying current with Nextcloud"). Minor/patch updates
+# are grouped into one weekly PR per ecosystem; majors get their own PR so they
+# get real review. Nothing auto-merges — every PR runs the full CI first.
+version: 2
+updates:
+  # PHP / Nextcloud (nextcloud/ocp = NC-version radar) + dev tooling
+  # (psalm, phpunit, coding-standard, sabre/vobject).
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      composer-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # Frontend (Vue, @nextcloud/*, @tanstack/*, Vite, Playwright, …).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions pinned in the CI + release workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"

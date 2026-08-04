@@ -29,6 +29,17 @@ php-cs-fixer). Before opening a PR:
   the README and `CLAUDE.md` (fractional sort keys, summary-only board reads,
   the `kanso_changes` delta log, ETags) — don't regress these.
 
+## Staying current with Nextcloud
+
+[Dependabot](.github/dependabot.yml) opens weekly PRs for our composer, npm and
+GitHub-Actions dependencies. The one to watch is **`nextcloud/ocp`**: its major
+version tracks the Nextcloud major line, so an `ocp` **major** PR (e.g. `^34 →
+^35`) means a new Nextcloud is out. That is the cue to run the compatibility
+pass — verify the app on the new version, then raise `max-version` in
+`appinfo/info.xml` and bump the CI/dev images (Dependabot can't edit those). No
+Dependabot PR auto-merges; each one runs the full CI (psalm, PHPUnit, e2e) and
+is reviewed before merge.
+
 ## Commit messages
 
 Conventional-ish messages (`fix:`, `feat:`, `docs:`, `chore:`…), one logical
