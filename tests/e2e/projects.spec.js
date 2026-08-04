@@ -257,9 +257,10 @@ test.describe('Projects — cross-board card collections', () => {
 		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
 
 		await page.locator('.project-view__add-btn').click()
-		await page.locator('.project-view__picker-input').fill(uniqueTitle)
+		// The picker was extracted into the shared CardSearchPicker component (#3645).
+		await page.locator('.card-search-picker__input').fill(uniqueTitle)
 
-		const result = page.locator('.project-view__picker-item', { hasText: uniqueTitle }).first()
+		const result = page.locator('.card-search-picker__item', { hasText: uniqueTitle }).first()
 		await expect(result).toBeVisible({ timeout: 8_000 })
 		await result.click()
 

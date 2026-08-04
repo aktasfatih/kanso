@@ -17,6 +17,7 @@
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
     "@nextcloud/axios": "^2.5.0",
     "@nextcloud/dialogs": "^7.4.1",
+    "@nextcloud/files": "^4.0.0",
     "@nextcloud/l10n": "^3.1.0",
     "@nextcloud/notify_push": "^1.4.0",
     "@nextcloud/router": "^3.0.0",

@@ -15,7 +15,9 @@ use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\Files\File;
 use OCP\Files\IAppData;
+use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\Security\ISecureRandom;
@@ -57,6 +59,7 @@ class CardAttachmentService {
 		private ChangeNotifier $changeNotifier,
 		private IAppData $appData,
 		private ISecureRandom $secureRandom,
+		private IRootFolder $rootFolder,
 	) {
 	}
 
@@ -166,6 +169,106 @@ class CardAttachmentService {
 		} catch (\Throwable $e) {
 			// Roll back the orphaned object so a failed insert leaves no dangling
 			// bytes.
+			$this->deleteObjectQuietly($cardId, $storageKey);
+			throw $e;
+		}
+
+		$this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			$cardId,
+			Change::ACTION_UPDATE,
+			$actorUid
+		);
+
+		return $attachment;
+	}
+
+	/**
+	 * Attaches a file from the actor's own Nextcloud Files ("Share from Files",
+	 * #3645) by COPYING its bytes into Kanso's app-data - a copied file is an
+	 * ordinary attachment row, indistinguishable from an upload. Requires EDIT.
+	 *
+	 * Security posture (why a fileId + the actor's OWN userfolder, never a path):
+	 *  - The node is resolved via {@see IRootFolder::getUserFolder()} for
+	 *    $actorUid and {@see \OCP\Files\Folder::getById()} - so the actor can only
+	 *    source a file THEY can already read (their own files + files shared TO
+	 *    them). A client-supplied numeric id that the actor cannot reach yields no
+	 *    node → not-found; there is no path to traverse.
+	 *  - Size is capped ({@see self::MAX_SIZE}) against the node's real size BEFORE
+	 *    any bytes are streamed.
+	 *  - The bytes are COPIED (a stream read into a server-generated storage_key),
+	 *    never referenced: a later edit/delete/unshare of the private source node
+	 *    can never retroactively leak to (or break for) board members.
+	 *
+	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws InvalidInputException if the fileId is not a readable file of the actor, empty, or oversized
+	 */
+	public function attachFromFileNode(int $cardId, int $fileId, string $actorUid): CardAttachment {
+		$card = $this->loadCard($cardId);
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+
+		// Resolve the node from the ACTOR'S OWN userfolder - the actor can only
+		// source a file they can already read. First match wins (a file can appear
+		// under several mount points for the same user).
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($actorUid);
+		} catch (\Throwable $e) {
+			throw new InvalidInputException('File not found');
+		}
+		$nodes = $userFolder->getById($fileId);
+		$node = $nodes[0] ?? null;
+		if (!$node instanceof File) {
+			throw new InvalidInputException('File not found');
+		}
+
+		// The node's real size, capped BEFORE streaming (mirror the upload cap).
+		// getSize() is float|int for very large files; a cast is safe as the value
+		// is immediately range-checked against the cap.
+		$size = (int)$node->getSize();
+		if ($size <= 0) {
+			throw new InvalidInputException('Empty file');
+		}
+		if ($size > self::MAX_SIZE) {
+			throw new InvalidInputException('File too large');
+		}
+
+		$stream = $node->fopen('rb');
+		if ($stream === false) {
+			throw new InvalidInputException('Could not read file');
+		}
+
+		// SERVER-GENERATED opaque object name - the source filename never touches
+		// the storage path (identical to the upload path).
+		$storageKey = $this->secureRandom->generate(
+			32,
+			ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
+		);
+		$folder = $this->cardFolder($cardId);
+		try {
+			$folder->newFile($storageKey, $stream);
+		} finally {
+			/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
+			if (is_resource($stream)) {
+				fclose($stream);
+			}
+		}
+
+		$attachment = new CardAttachment();
+		$attachment->setCardId($cardId);
+		$attachment->setBoardId($card->getBoardId());
+		$attachment->setFilename($this->sanitizeFilename($node->getName()));
+		$attachment->setMime($this->sanitizeMime($node->getMimetype()));
+		$attachment->setSize($size);
+		$attachment->setStorageKey($storageKey);
+		$attachment->setUploadedBy($actorUid);
+		$attachment->setCreatedAt(time());
+
+		try {
+			$attachment = $this->attachmentMapper->insert($attachment);
+		} catch (\Throwable $e) {
 			$this->deleteObjectQuietly($cardId, $storageKey);
 			throw $e;
 		}

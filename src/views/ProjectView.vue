@@ -141,40 +141,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Add card') }}
 				</button>
 
-				<div v-if="showPicker" class="project-view__picker">
-					<input
-						ref="searchInputRef"
-						v-model="searchTerm"
-						class="project-view__picker-input"
-						type="text"
-						:placeholder="t('kanso', 'Search cards across all boards…')"
-						@keydown.escape.stop="closePicker">
-					<div v-if="isFetching" class="project-view__picker-searching">
-						{{ t('kanso', 'Searching…') }}
-					</div>
-					<ul v-else-if="pickerResults.length" class="project-view__picker-list">
-						<li
-							v-for="result in pickerResults"
-							:key="result.cardId"
-							class="project-view__picker-item"
-							:class="{ 'project-view__picker-item--added': isCardInProject(result.cardId) }"
-							tabindex="0"
-							role="button"
-							@click="handlePickCard(result)"
-							@keydown.enter="handlePickCard(result)">
-							<span class="project-view__picker-card-title">{{ result.title }}</span>
-							<span v-if="result.snippet" class="project-view__picker-meta">{{ result.snippet }}</span>
-							<CheckIcon v-if="isCardInProject(result.cardId)" :size="16" class="project-view__picker-check" />
-						</li>
-					</ul>
-					<div v-else-if="debouncedTerm.length >= 2" class="project-view__picker-empty">
-						{{ t('kanso', 'No cards found.') }}
-					</div>
-					<div v-else class="project-view__picker-hint">
-						{{ t('kanso', 'Type at least 2 characters to search.') }}
-					</div>
-					<span v-if="addError" class="project-view__picker-error">{{ addError }}</span>
-				</div>
+				<CardSearchPicker
+					v-if="showPicker"
+					class="project-view__picker"
+					:disabled-card-ids="cardIdsInProject"
+					:error="addError"
+					@pick="handlePickCard"
+					@close="closePicker" />
 			</div>
 
 			<!-- Empty state -->
@@ -494,7 +467,6 @@ import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
-import CheckIcon from 'vue-material-design-icons/Check.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
 import FormatItalicIcon from 'vue-material-design-icons/FormatItalic.vue'
@@ -508,7 +480,7 @@ import { useProjects } from '../composables/useProjects.js'
 import { useProjectCards } from '../composables/useProject.js'
 import { useProjectComments } from '../composables/useProjectComments.js'
 import { buildCommentTree } from '../composables/useComments.js'
-import { useSearch } from '../composables/useSearch.js'
+import CardSearchPicker from '../components/CardSearchPicker.vue'
 import { renderMarkdown } from '../services/markdown.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 
@@ -570,41 +542,18 @@ function goToStats() {
 }
 
 // ── Card picker (cross-board search) ────────────────────────────────────────
+// The picker UI + global readable search now live in the shared CardSearchPicker
+// component (#3645); this view only owns the popover open state and the
+// project-add mutation.
 const showPicker = ref(false)
-const searchTerm = ref('')
-const searchInputRef = ref(null)
 const addError = ref('')
 
-// useSearch expects a ref for term; boardId null = global search
-const searchTermRef = computed(() => searchTerm.value)
-const { results: searchResults, isFetching, debouncedTerm } = useSearch(searchTermRef, ref(null))
-
-// Search returns mixed card + comment rows shaped {type, cardId, boardId, title,
-// snippet}; the picker only offers cards, de-duplicated by cardId (a card can be
-// matched by both its title and a comment).
-const pickerResults = computed(() => {
-	const seen = new Set()
-	const out = []
-	for (const r of searchResults.value) {
-		if (r.type !== 'card' || seen.has(r.cardId)) continue
-		seen.add(r.cardId)
-		out.push(r)
-	}
-	return out
-})
-
 const cardIdsInProject = computed(() => new Set((cardsData.value ?? []).map((c) => c.id)))
-
-function isCardInProject(cardId) {
-	return cardIdsInProject.value.has(cardId)
-}
 
 function togglePicker() {
 	showPicker.value = !showPicker.value
 	if (showPicker.value) {
-		searchTerm.value = ''
 		addError.value = ''
-		nextTick(() => searchInputRef.value?.focus())
 	}
 }
 
@@ -613,7 +562,7 @@ function closePicker() {
 }
 
 async function handlePickCard(result) {
-	if (isCardInProject(result.cardId)) return
+	if (cardIdsInProject.value.has(result.cardId)) return
 	addError.value = ''
 	try {
 		await addCard.mutateAsync(result.cardId)
@@ -1144,6 +1093,9 @@ async function handleDeleteComment(comment) {
 	background: var(--color-background-hover);
 }
 
+/* The popover shell around the shared CardSearchPicker (its inner list/input
+   styles live in the component). This class is applied to the component root, so
+   the scoped rule still reaches it. */
 .project-view__picker {
 	position: absolute;
 	top: calc(100% + 6px);
@@ -1156,92 +1108,6 @@ async function handleDeleteComment(comment) {
 	border-radius: var(--border-radius-large, 8px);
 	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
 	padding: 8px;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.project-view__picker-input {
-	width: 100%;
-	padding: 8px 10px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	font-size: 0.9rem;
-}
-
-.project-view__picker-input:focus {
-	outline: none;
-	border-color: var(--color-primary-element);
-}
-
-.project-view__picker-searching,
-.project-view__picker-empty,
-.project-view__picker-hint {
-	padding: 8px 4px;
-	font-size: 0.85rem;
-	color: var(--color-text-maxcontrast);
-}
-
-.project-view__picker-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	max-height: 260px;
-	overflow-y: auto;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.project-view__picker-item {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	padding: 8px 10px;
-	border-radius: var(--border-radius);
-	cursor: pointer;
-	transition: background 0.1s;
-	position: relative;
-}
-
-.project-view__picker-item:hover,
-.project-view__picker-item:focus-visible {
-	background: var(--color-background-hover);
-	outline: none;
-}
-
-.project-view__picker-item--added {
-	opacity: 0.55;
-	cursor: default;
-}
-
-.project-view__picker-card-title {
-	font-weight: 500;
-	font-size: 0.9rem;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.project-view__picker-meta {
-	font-size: 0.75rem;
-	color: var(--color-text-maxcontrast);
-}
-
-.project-view__picker-check {
-	position: absolute;
-	right: 10px;
-	top: 50%;
-	transform: translateY(-50%);
-	color: var(--color-success);
-}
-
-.project-view__picker-error {
-	color: var(--color-error);
-	font-size: 0.85rem;
-	padding: 0 4px;
 }
 
 .project-view__section {

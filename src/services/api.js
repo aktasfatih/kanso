@@ -273,6 +273,12 @@ export const uploadCardAttachment = (cardId, file) => {
 	}).then((r) => r.data)
 }
 
+// "Share from Files" (#3645): attach a file from the actor's own Nextcloud
+// Files by COPYING its bytes into the card. The server resolves the fileId
+// through the actor's OWN userfolder (never a path) and EDIT-gates the card.
+export const attachCardFileFromFiles = (cardId, fileId) =>
+	axios.post(url(`/api/cards/${cardId}/attachments/from-file`), { fileId }).then((r) => r.data)
+
 export const deleteCardAttachment = (cardId, attachmentId) =>
 	axios.delete(url(`/api/cards/${cardId}/attachments/${attachmentId}`)).then((r) => r.data)
 

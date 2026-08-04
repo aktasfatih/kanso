@@ -19,7 +19,10 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IAppData;
+use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
@@ -35,6 +38,7 @@ class CardAttachmentServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private IAppData&MockObject $appData;
 	private ISecureRandom&MockObject $secureRandom;
+	private IRootFolder&MockObject $rootFolder;
 	private ISimpleFolder&MockObject $folder;
 	private CardAttachmentService $service;
 
@@ -50,6 +54,7 @@ class CardAttachmentServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->appData = $this->createMock(IAppData::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
+		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->folder = $this->createMock(ISimpleFolder::class);
 
 		// A card's folder resolves (or is created) transparently.
@@ -65,7 +70,37 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->appData,
 			$this->secureRandom,
+			$this->rootFolder,
 		);
+	}
+
+	/**
+	 * A File node in the actor's userfolder, resolved by id. `$readable` false
+	 * makes fopen() fail (an unreadable node).
+	 */
+	private function fileNode(int $id = 42, int $size = 11, string $name = 'notes.txt', string $mime = 'text/plain'): File&MockObject {
+		$node = $this->createMock(File::class);
+		$node->method('getSize')->willReturn($size);
+		$node->method('getName')->willReturn($name);
+		$node->method('getMimetype')->willReturn($mime);
+		$node->method('fopen')->willReturnCallback(static function () use ($size, $name) {
+			$stream = fopen('php://temp', 'rb+');
+			fwrite($stream, str_pad($name, $size));
+			rewind($stream);
+			return $stream;
+		});
+		return $node;
+	}
+
+	/**
+	 * Wires the actor's userfolder to return $nodes for getById($fileId).
+	 *
+	 * @param array<int, \OCP\Files\Node> $nodes
+	 */
+	private function expectUserFolderById(int $fileId, array $nodes, string $uid = 'bob'): void {
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getById')->with($fileId)->willReturn($nodes);
+		$this->rootFolder->method('getUserFolder')->with($uid)->willReturn($userFolder);
 	}
 
 	protected function tearDown(): void {
@@ -578,9 +613,136 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->appData,
 			$this->secureRandom,
+			$this->rootFolder,
 		);
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
 
 		$this->service->deleteAllForCard(9);
+	}
+
+	// ---- attachFromFileNode ("Share from Files", #3645) -------------------
+
+	public function testAttachFromFileRequiresEdit(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'stranger', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		// Bail before ever touching the actor's files or storage.
+		$this->rootFolder->expects(self::never())->method('getUserFolder');
+		$this->folder->expects(self::never())->method('newFile');
+		$this->attachmentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->attachFromFileNode(9, 42, 'stranger');
+	}
+
+	public function testAttachFromFileCopiesBytesUnderServerKeyAndRecordsRow(): void {
+		$this->expectCardLoaded();
+		$this->expectUserFolderById(42, [$this->fileNode(42, 11, 'notes.txt', 'text/plain')]);
+
+		// Copied under the SERVER-GENERATED key, never the source filename.
+		$this->folder->expects(self::once())
+			->method('newFile')
+			->with('deadbeefdeadbeefdeadbeefdeadbeef', self::anything())
+			->willReturn($this->createMock(ISimpleFile::class));
+
+		$captured = null;
+		$this->attachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$captured): CardAttachment {
+				$a->setId(12);
+				$captured = $a;
+				return $a;
+			}
+		);
+		// The mutation appends a change row (realtime/delta-sync stays correct).
+		$this->changeNotifier->expects(self::once())->method('notify');
+
+		$result = $this->service->attachFromFileNode(9, 42, 'bob');
+
+		self::assertSame(12, $result->getId());
+		self::assertSame('notes.txt', $captured->getFilename());
+		self::assertSame('text/plain', $captured->getMime());
+		self::assertSame(11, $captured->getSize());
+		self::assertSame('deadbeefdeadbeefdeadbeefdeadbeef', $captured->getStorageKey());
+		self::assertSame(9, $captured->getCardId());
+		self::assertSame(1, $captured->getBoardId());
+		self::assertSame('bob', $captured->getUploadedBy());
+	}
+
+	public function testAttachFromFileRejectsUnreadableFileId(): void {
+		$this->expectCardLoaded();
+		// getById returns nothing - the actor cannot reach this node.
+		$this->expectUserFolderById(42, []);
+		$this->folder->expects(self::never())->method('newFile');
+		$this->attachmentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->attachFromFileNode(9, 42, 'bob');
+	}
+
+	public function testAttachFromFileRejectsFolderNode(): void {
+		$this->expectCardLoaded();
+		// A directory id is not a File - rejected, never streamed.
+		$this->expectUserFolderById(42, [$this->createMock(Folder::class)]);
+		$this->folder->expects(self::never())->method('newFile');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->attachFromFileNode(9, 42, 'bob');
+	}
+
+	public function testAttachFromFileRejectsOversizedNodeBeforeStreaming(): void {
+		$this->expectCardLoaded();
+		$big = $this->createMock(File::class);
+		$big->method('getSize')->willReturn(CardAttachmentService::MAX_SIZE + 1);
+		// The size cap is checked BEFORE any bytes are opened or written.
+		$big->expects(self::never())->method('fopen');
+		$this->expectUserFolderById(42, [$big]);
+		$this->folder->expects(self::never())->method('newFile');
+		$this->attachmentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->attachFromFileNode(9, 42, 'bob');
+	}
+
+	public function testAttachFromFileRejectsEmptyNode(): void {
+		$this->expectCardLoaded();
+		$empty = $this->createMock(File::class);
+		$empty->method('getSize')->willReturn(0);
+		$empty->expects(self::never())->method('fopen');
+		$this->expectUserFolderById(42, [$empty]);
+		$this->folder->expects(self::never())->method('newFile');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->attachFromFileNode(9, 42, 'bob');
+	}
+
+	public function testAttachFromFileSanitizesSourceNameAndMime(): void {
+		$this->expectCardLoaded();
+		// A path-y name is basename-stripped; a scriptable mime is coerced binary.
+		$this->expectUserFolderById(42, [$this->fileNode(42, 8, '../../evil.svg', 'image/svg+xml')]);
+		$this->folder->method('newFile')->willReturn($this->createMock(ISimpleFile::class));
+
+		$captured = null;
+		$this->attachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$captured): CardAttachment {
+				$captured = $a;
+				return $a;
+			}
+		);
+
+		$this->service->attachFromFileNode(9, 42, 'bob');
+		self::assertSame('evil.svg', $captured->getFilename());
+		self::assertSame('application/octet-stream', $captured->getMime());
+	}
+
+	public function testAttachFromFileRejectsDeletedCard(): void {
+		$deleted = $this->card();
+		$deleted->setDeletedAt(time());
+		$this->cardMapper->method('find')->with(9)->willReturn($deleted);
+		$this->rootFolder->expects(self::never())->method('getUserFolder');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->attachFromFileNode(9, 42, 'bob');
 	}
 }

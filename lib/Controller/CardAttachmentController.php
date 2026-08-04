@@ -54,6 +54,21 @@ class CardAttachmentController extends Controller {
 	}
 
 	/**
+	 * "Share from Files" (#3645): attach a file from the actor's own Nextcloud
+	 * Files by COPYING its bytes into the card. Body: {fileId}. EDIT-gated; the
+	 * node is resolved only through the actor's own userfolder (never a
+	 * client-supplied path), size-capped before streaming.
+	 */
+	#[NoAdminRequired]
+	public function createFromFile(int $cardId, int $fileId = 0): JSONResponse {
+		return $this->respond(function () use ($cardId, $fileId): JSONResponse {
+			return new JSONResponse(
+				$this->attachmentService->attachFromFileNode($cardId, $fileId, $this->currentUserId())
+			);
+		});
+	}
+
+	/**
 	 * Streams an attachment's bytes. Always Content-Disposition: attachment
 	 * (DownloadResponse) so an untrusted file is never rendered inline.
 	 */

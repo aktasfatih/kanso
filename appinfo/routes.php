@@ -179,6 +179,11 @@ return [
 
 		['name' => 'cardAttachment#index', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'GET'],
 		['name' => 'cardAttachment#create', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'POST'],
+		// "Share from Files" (#3645): copy a file from the actor's own Nextcloud
+		// Files into the card. Distinct literal /from-file segment, declared before
+		// the numeric {attachmentId} routes so the router never captures
+		// "from-file" as an attachment id. Body: {fileId}. EDIT-gated server-side.
+		['name' => 'cardAttachment#createFromFile', 'url' => '/api/cards/{cardId}/attachments/from-file', 'verb' => 'POST'],
 		['name' => 'cardAttachment#download', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'GET'],
 		// INLINE raster-image serve (#3525). Distinct trailing /inline segment,
 		// board-READ gated + IDOR-guarded; only png/jpeg/gif/webp are served

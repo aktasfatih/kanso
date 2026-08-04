@@ -26,6 +26,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     extends but that the ocp package does not ship; stub it so psalm can
 		     resolve the IRootFolder dependency graph (mirrors tests/stubs/hooks.php). -->
 		<file name="tests/stubs/hooks.php" />
+		<!-- OCA\Files\Event\LoadAdditionalScriptsEvent is a Files-app class (not in
+		     the ocp public package); stub it so psalm can resolve the "Share from
+		     Files" (#3645) event listener. The real class is autoloaded at runtime
+		     (the Files app is always enabled). -->
+		<file name="tests/stubs/files.php" />
 	</stubs>
 	<issueHandlers>
 		<!-- Psalm wants every class marked `final`. We deliberately do NOT: the
