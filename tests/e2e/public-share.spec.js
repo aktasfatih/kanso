@@ -94,6 +94,10 @@ test.describe('Public read-only board share', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		await expect(page.locator('.public-board__title')).toHaveText('Public Share E2E')
 		await expect(page.locator('.public-board__badge')).toContainText('Read-only')
+		// The board CSS must actually load (it ships in public.php, since the build
+		// merges all entry CSS into the authenticated main bundle the public page
+		// never loads). Assert the kanban layout, not a plain text list.
+		await expect(page.locator('.public-board__columns')).toHaveCSS('display', 'flex')
 		await expect(page.locator('.public-card__title').filter({ hasText: 'Public visible card' })).toBeVisible()
 		// No comment box, no assignee avatars, no comment text.
 		await expect(page.locator('body')).not.toContainText('SHOULD NOT LEAK')
