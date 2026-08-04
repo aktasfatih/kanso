@@ -23,6 +23,7 @@ use OCP\IGroup;
 use OCP\IGroupManager;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCP\Share\IManager as IShareManager;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -34,6 +35,7 @@ class AclServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private IUserManager&MockObject $userManager;
 	private IGroupManager&MockObject $groupManager;
+	private IShareManager&MockObject $shareManager;
 	private AclService $service;
 
 	protected function setUp(): void {
@@ -45,6 +47,16 @@ class AclServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->groupManager = $this->createMock(IGroupManager::class);
+		$this->shareManager = $this->createMock(IShareManager::class);
+		// Default to a fully open instance (enumeration on, no group-only
+		// restriction, group sharing allowed) - the pre-hardening behaviour.
+		// Individual tests override these to drive the config-flag matrix.
+		$this->shareManager->method('allowEnumeration')->willReturn(true);
+		$this->shareManager->method('allowEnumerationFullMatch')->willReturn(true);
+		$this->shareManager->method('limitEnumerationToGroups')->willReturn(false);
+		$this->shareManager->method('shareWithGroupMembersOnly')->willReturn(false);
+		$this->shareManager->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$this->shareManager->method('allowGroupSharing')->willReturn(true);
 		$this->service = new AclService(
 			$this->aclMapper,
 			$this->boardMapper,
@@ -52,7 +64,8 @@ class AclServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->userManager,
-			$this->groupManager
+			$this->groupManager,
+			$this->shareManager
 		);
 	}
 
@@ -645,17 +658,17 @@ class AclServiceTest extends TestCase {
 			$this->acl(40, 1, 'bob', Acl::TYPE_USER),
 			$this->acl(41, 1, 'devs', Acl::TYPE_GROUP),
 		]);
-		$this->userManager->method('searchDisplayName')->with('a', 25)->willReturn([
+		$this->userManager->method('searchDisplayName')->with('al', 25)->willReturn([
 			$this->user('alice', 'Alice Adams'), // owner
 			$this->user('bob', 'Bob Baker'), // already shared
 			$this->user('carol', 'Carol Cook'),
 		]);
-		$this->groupManager->method('search')->with('a', 25)->willReturn([
+		$this->groupManager->method('search')->with('al', 25)->willReturn([
 			$this->group('devs', 'Developers'), // already shared
 			$this->group('qa', 'QA Team'),
 		]);
 
-		$results = $this->service->search(1, 'a', 'alice');
+		$results = $this->service->search(1, 'al', 'alice');
 		self::assertSame([
 			['id' => 'carol', 'displayName' => 'Carol Cook', 'type' => 'user'],
 			['id' => 'qa', 'displayName' => 'QA Team', 'type' => 'group'],
@@ -687,5 +700,248 @@ class AclServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->search(1, 'bo', 'mallory');
+	}
+
+	public function testSearchReturnsEmptyBelowMinQueryLength(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		// The SHARE assertion still runs, but no enumeration happens.
+		$this->permissionService->expects(self::exactly(2))
+			->method('assertPermission')
+			->with($board, 'alice', PermissionService::PERMISSION_SHARE);
+		$this->aclMapper->expects(self::never())->method('findByBoard');
+		$this->userManager->expects(self::never())->method('searchDisplayName');
+		$this->groupManager->expects(self::never())->method('search');
+
+		// One char (after trim) and empty both fall under the floor.
+		self::assertSame([], $this->service->search(1, ' a ', 'alice'));
+		self::assertSame([], $this->service->search(1, '', 'alice'));
+	}
+
+	public function testSearchReturnsNothingWhenEnumerationDisabledAndNoFullMatch(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		// Enumeration off, full-match off, group sharing off: nothing at all.
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(false);
+		$share->method('allowEnumerationFullMatch')->willReturn(false);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(false);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(false);
+		$service = $this->serviceWithShareManager($share);
+		$this->userManager->expects(self::never())->method('searchDisplayName');
+		$this->groupManager->expects(self::never())->method('search');
+
+		self::assertSame([], $service->search(1, 'bo', 'alice'));
+	}
+
+	public function testSearchAllowsExactFullMatchWhenEnumerationDisabled(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(false);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(false);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(true);
+		$service = $this->serviceWithShareManager($share);
+		// 'bob' is an exact uid match; 'bobby' is only a prefix hit and must
+		// be dropped because wide enumeration is off.
+		$this->userManager->method('searchDisplayName')->with('bob', 25)->willReturn([
+			$this->user('bob', 'Bob Baker'),
+			$this->user('bobby', 'Bobby Tables'),
+		]);
+		$this->groupManager->method('search')->with('bob', 25)->willReturn([]);
+
+		self::assertSame([
+			['id' => 'bob', 'displayName' => 'Bob Baker', 'type' => 'user'],
+		], $service->search(1, 'bob', 'alice'));
+	}
+
+	public function testSearchAllowsExactDisplayNameMatchWhenEnumerationDisabled(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(false);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(false);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(true);
+		$service = $this->serviceWithShareManager($share);
+		// Query matches the display name exactly (case-insensitive), not the uid.
+		$this->userManager->method('searchDisplayName')->with('bob baker', 25)->willReturn([
+			$this->user('bob', 'Bob Baker'),
+		]);
+		$this->groupManager->method('search')->willReturn([]);
+
+		self::assertSame([
+			['id' => 'bob', 'displayName' => 'Bob Baker', 'type' => 'user'],
+		], $service->search(1, 'bob baker', 'alice'));
+	}
+
+	public function testSearchRestrictsUsersToActorGroupsWhenShareWithGroupMembersOnly(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(true);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(true);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(true);
+		$service = $this->serviceWithShareManager($share);
+
+		$actor = $this->user('alice', 'Alice Adams');
+		$bob = $this->user('bob', 'Bob Baker'); // shares 'devs'
+		$carol = $this->user('carol', 'Carol Cook'); // no overlap
+		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->groupManager->method('getUserGroupIds')->willReturnMap([
+			[$actor, ['devs', 'qa']],
+			[$bob, ['devs']],
+			[$carol, ['ops']],
+		]);
+		$this->userManager->method('searchDisplayName')->with('co', 25)->willReturn([$bob, $carol]);
+		$this->groupManager->method('search')->with('co', 25)->willReturn([]);
+
+		self::assertSame([
+			['id' => 'bob', 'displayName' => 'Bob Baker', 'type' => 'user'],
+		], $service->search(1, 'co', 'alice'));
+	}
+
+	public function testSearchLimitEnumerationToGroupsExemptsExactMatch(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(true);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		// Enumeration is narrowed to the actor's groups, but an EXACT full
+		// match is exempt from that narrowing (mirrors core UserPlugin).
+		$share->method('limitEnumerationToGroups')->willReturn(true);
+		$share->method('shareWithGroupMembersOnly')->willReturn(false);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(true);
+		$service = $this->serviceWithShareManager($share);
+
+		$actor = $this->user('alice', 'Alice Adams');
+		// 'carol' is an exact uid match but shares no group with alice - still
+		// returned. 'carla' is only a wide hit outside alice's groups - dropped.
+		$carol = $this->user('carol', 'Carol Cook');
+		$carla = $this->user('carla', 'Carla King');
+		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->groupManager->method('getUserGroupIds')->willReturnMap([
+			[$actor, ['devs']],
+			[$carol, ['ops']],
+			[$carla, ['ops']],
+		]);
+		$this->userManager->method('searchDisplayName')->with('carol', 25)->willReturn([$carol, $carla]);
+		$this->groupManager->method('search')->with('carol', 25)->willReturn([]);
+
+		self::assertSame([
+			['id' => 'carol', 'displayName' => 'Carol Cook', 'type' => 'user'],
+		], $service->search(1, 'carol', 'alice'));
+	}
+
+	public function testSearchExcludesActorGroupFromRestrictionExcludeList(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(true);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(true);
+		// 'devs' is excluded from the group-members-only restriction, so it no
+		// longer counts as a shared group - bob (only in devs) drops out.
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn(['devs']);
+		$share->method('allowGroupSharing')->willReturn(true);
+		$service = $this->serviceWithShareManager($share);
+
+		$actor = $this->user('alice', 'Alice Adams');
+		$bob = $this->user('bob', 'Bob Baker');
+		$dave = $this->user('dave', 'Dave Doe');
+		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->groupManager->method('getUserGroupIds')->willReturnMap([
+			[$actor, ['devs', 'qa']],
+			[$bob, ['devs']],
+			[$dave, ['qa']],
+		]);
+		$this->userManager->method('searchDisplayName')->with('da', 25)->willReturn([$bob, $dave]);
+		$this->groupManager->method('search')->with('da', 25)->willReturn([]);
+
+		self::assertSame([
+			['id' => 'dave', 'displayName' => 'Dave Doe', 'type' => 'user'],
+		], $service->search(1, 'da', 'alice'));
+	}
+
+	public function testSearchReturnsNoGroupsWhenGroupSharingDisabled(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(true);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(false);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(false);
+		$service = $this->serviceWithShareManager($share);
+		$this->userManager->method('searchDisplayName')->with('bo', 25)->willReturn([
+			$this->user('bob', 'Bob Baker'),
+		]);
+		// Group sharing disabled: groupManager->search must not even be called.
+		$this->groupManager->expects(self::never())->method('search');
+
+		self::assertSame([
+			['id' => 'bob', 'displayName' => 'Bob Baker', 'type' => 'user'],
+		], $service->search(1, 'bo', 'alice'));
+	}
+
+	public function testSearchRestrictsGroupsToActorGroupsWhenGroupMembersOnly(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$share = $this->createMock(IShareManager::class);
+		$share->method('allowEnumeration')->willReturn(true);
+		$share->method('allowEnumerationFullMatch')->willReturn(true);
+		$share->method('limitEnumerationToGroups')->willReturn(false);
+		$share->method('shareWithGroupMembersOnly')->willReturn(true);
+		$share->method('shareWithGroupMembersOnlyExcludeGroupsList')->willReturn([]);
+		$share->method('allowGroupSharing')->willReturn(true);
+		$service = $this->serviceWithShareManager($share);
+
+		$actor = $this->user('alice', 'Alice Adams');
+		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->groupManager->method('getUserGroupIds')->with($actor)->willReturn(['devs']);
+		$this->userManager->method('searchDisplayName')->with('de', 25)->willReturn([]);
+		// 'devs' is the actor's group and passes; 'design' is not and is dropped.
+		$this->groupManager->method('search')->with('de', 25)->willReturn([
+			$this->group('devs', 'Developers'),
+			$this->group('design', 'Design Team'),
+		]);
+
+		self::assertSame([
+			['id' => 'devs', 'displayName' => 'Developers', 'type' => 'group'],
+		], $service->search(1, 'de', 'alice'));
+	}
+
+	private function serviceWithShareManager(IShareManager $share): AclService {
+		return new AclService(
+			$this->aclMapper,
+			$this->boardMapper,
+			$this->cardAssigneeMapper,
+			$this->changeNotifier,
+			$this->permissionService,
+			$this->userManager,
+			$this->groupManager,
+			$share
+		);
 	}
 }
