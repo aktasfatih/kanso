@@ -916,9 +916,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="github-webhook__actions">
 								<NcCheckboxRadioSwitch
 									type="switch"
-									:checked="publicShare.enabled"
+									:model-value="publicShare.enabled"
 									:disabled="publicShareBusy"
-									@update:checked="togglePublicShare">
+									@update:model-value="togglePublicShare">
 									{{ t('kanso', 'Enable public link') }}
 								</NcCheckboxRadioSwitch>
 							</div>
@@ -969,9 +969,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="github-webhook__actions">
 								<NcCheckboxRadioSwitch
 									type="switch"
-									:checked="calendarFeed.enabled"
+									:model-value="calendarFeed.enabled"
 									:disabled="calendarFeedBusy"
-									@update:checked="toggleCalendarFeed">
+									@update:model-value="toggleCalendarFeed">
 									{{ t('kanso', 'Enable calendar feed') }}
 								</NcCheckboxRadioSwitch>
 							</div>
