@@ -163,9 +163,9 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title, color, estimate scale or prefix
+	 * @throws InvalidInputException on invalid title, color, background, estimate scale or prefix
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -174,6 +174,9 @@ class BoardService {
 		}
 		if ($color !== null) {
 			$board->setColor(ColorValidator::assertValid($color));
+		}
+		if ($background !== null) {
+			$board->setBackground(BackgroundValidator::assertValid($background));
 		}
 		if ($archived !== null) {
 			$board->setArchived($archived);

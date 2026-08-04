@@ -22,6 +22,8 @@ use OCP\DB\Types;
  * @method void setOwner(string $owner)
  * @method string|null getColor()
  * @method void setColor(?string $color)
+ * @method string|null getBackground()
+ * @method void setBackground(?string $background)
  * @method bool getArchived()
  * @method void setArchived(bool $archived)
  * @method int getLastModified()
@@ -50,6 +52,9 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?string $title = null;
 	protected ?string $owner = null;
 	protected ?string $color = null;
+	// A CURATED preset KEY (validated by BackgroundValidator) rendered as the
+	// board's full-view background. NULL = no background. Never free-form CSS.
+	protected ?string $background = null;
 	protected ?bool $archived = null;
 	protected ?int $lastModified = null;
 	protected ?int $deletedAt = null;
@@ -82,6 +87,7 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('title', Types::STRING);
 		$this->addType('owner', Types::STRING);
 		$this->addType('color', Types::STRING);
+		$this->addType('background', Types::STRING);
 		$this->addType('archived', Types::BOOLEAN);
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
@@ -95,7 +101,7 @@ class Board extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -104,6 +110,7 @@ class Board extends Entity implements \JsonSerializable {
 			'title' => $this->title,
 			'owner' => $this->owner,
 			'color' => $this->color,
+			'background' => $this->background,
 			'archived' => $this->archived ?? false,
 			'lastModified' => $this->lastModified ?? 0,
 			'estimateScale' => $this->estimateScale ?? EstimateScale::NONE,

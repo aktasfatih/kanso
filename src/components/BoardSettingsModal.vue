@@ -128,6 +128,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="prefixError" class="label-settings__error">{{ prefixError }}</span>
 						</template>
 
+						<!-- Board background (#3528): a curated preset gradient rendered
+						     behind the board view. MANAGE only; presets only (no free-form
+						     CSS / image upload). -->
+						<template v-if="canManage">
+							<label class="board-settings__bg-label">
+								{{ t('kanso', 'Board background') }}
+							</label>
+							<div
+								class="board-settings__bg-grid"
+								role="group"
+								:aria-label="t('kanso', 'Board background')">
+								<button
+									type="button"
+									class="board-settings__bg-option board-settings__bg-option--none"
+									:class="{ 'board-settings__bg-option--active': !boardBackground }"
+									:title="t('kanso', 'No background')"
+									:aria-pressed="!boardBackground"
+									:disabled="backgroundSaving"
+									data-test="board-bg-none"
+									@click="applyBackground('')">
+									<span class="board-settings__bg-none-icon">✕</span>
+								</button>
+								<button
+									v-for="preset in BACKGROUND_PRESETS"
+									:key="preset.key"
+									type="button"
+									class="board-settings__bg-option"
+									:style="{ background: preset.css }"
+									:class="{ 'board-settings__bg-option--active': boardBackground === preset.key }"
+									:title="preset.label"
+									:aria-pressed="boardBackground === preset.key"
+									:disabled="backgroundSaving"
+									:data-test="`board-bg-${preset.key}`"
+									@click="applyBackground(preset.key)" />
+							</div>
+							<span v-if="backgroundError" class="label-settings__error">{{ backgroundError }}</span>
+						</template>
+
 						<!-- Board actions: Export / Duplicate are READ-gated on the
 						     server, so they are available to anyone who can open these
 						     settings; Archive / Delete are MANAGE-only (canManage). -->
@@ -1738,6 +1776,7 @@ import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
+import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
 import { getScaleOptions } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
@@ -2196,6 +2235,29 @@ async function onNewCardsOnTopChange(checked) {
 		newCardsOnTopError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		newCardsOnTopSaving.value = false
+	}
+}
+
+// ── Board background (per-board, #3528) ──────────────────────────────────────
+// A curated preset gradient rendered behind the board view. Stored server-side
+// as a preset KEY (BackgroundValidator allow-lists it); '' clears it. The cache
+// value is the source of truth (updateBoard invalidates on settle).
+const boardBackground = computed(() => boardQueryData.value?.board?.background || null)
+const backgroundSaving = ref(false)
+const backgroundError = ref('')
+async function applyBackground(key) {
+	// No-op if the current selection is re-picked.
+	if ((boardBackground.value || '') === key) {
+		return
+	}
+	backgroundError.value = ''
+	backgroundSaving.value = true
+	try {
+		await updateBoard.mutateAsync({ background: key })
+	} catch (err) {
+		backgroundError.value = err?.response?.data?.error || t('kanso', 'Failed to update background.')
+	} finally {
+		backgroundSaving.value = false
 	}
 }
 
@@ -3277,6 +3339,49 @@ async function doDeleteAutoRule(rule) {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	font-family: var(--font-face-monospace, monospace);
+}
+
+/* ── Board background palette (#3528) ─────────────────────────────────────── */
+.board-settings__bg-label {
+	display: block;
+	margin-top: 16px;
+	margin-bottom: 6px;
+	font-weight: 600;
+}
+.board-settings__bg-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.board-settings__bg-option {
+	width: 40px;
+	height: 28px;
+	border-radius: var(--border-radius, 6px);
+	border: 2px solid var(--color-border);
+	cursor: pointer;
+	padding: 0;
+}
+.board-settings__bg-option:hover:not(:disabled) {
+	border-color: var(--color-primary-element);
+}
+.board-settings__bg-option--active {
+	border-color: var(--color-primary-element);
+	box-shadow: 0 0 0 2px var(--color-primary-element);
+}
+.board-settings__bg-option--none {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+}
+.board-settings__bg-option:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.board-settings__bg-none-icon {
+	font-size: 0.9rem;
+	line-height: 1;
 }
 
 /* ── Reused label styles (same as original LabelSettingsPanel) ─────────────── */

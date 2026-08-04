@@ -184,6 +184,56 @@ class BoardServiceTest extends TestCase {
 		$this->service->update(1, null, null, null, 'alice', null, null, '---');
 	}
 
+	public function testUpdateSetsValidBackgroundAndWritesChangeRow(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		// The background change still appends a kanso_changes row (ETag/realtime).
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_BOARD, 1, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, 'ocean');
+		self::assertSame('ocean', $updated->getBackground());
+	}
+
+	public function testUpdateClearsBackgroundWithEmptyString(): void {
+		$board = $this->board();
+		$board->setBackground('ocean');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// An empty string clears the background (stored as null).
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, '');
+		self::assertNull($updated->getBackground());
+	}
+
+	public function testUpdateRejectsUnknownBackground(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		// A token outside the curated allow-list is rejected (no CSS-injection surface).
+		$this->service->update(1, null, null, null, 'alice', null, null, null, 'url(javascript:alert(1))');
+	}
+
+	public function testUpdateBackgroundAssertsManagePermission(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		// A non-MANAGE user cannot set the background.
+		$this->service->update(1, null, null, null, 'bob', null, null, null, 'ocean');
+	}
+
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);

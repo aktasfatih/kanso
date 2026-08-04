@@ -3,7 +3,10 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="board-view">
+	<div
+		class="board-view"
+		:class="{ 'board-view--has-background': boardBackground }"
+		:style="boardBackground ? { '--board-background': boardBackground } : {}">
 		<!-- Header -->
 		<div ref="headerRef" class="board-view__header">
 			<NcButton class="board-view__back" @click="goBack">
@@ -500,6 +503,7 @@ import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
+import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
 import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
@@ -609,6 +613,9 @@ function sortCards(cards) {
 const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
+// The chosen background preset resolved to its CSS gradient (null = none). The
+// key → CSS mapping lives client-side; an unknown key resolves to null.
+const boardBackground = computed(() => backgroundCss(boardData.value?.board?.background))
 const isBoardSubscribed = computed(() => boardData.value?.subscription?.subscribed ?? false)
 function toggleBoardWatch() {
 	boardWatchToggle.mutate({ subscribed: !isBoardSubscribed.value })
@@ -1544,6 +1551,14 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
+}
+
+/* Board background (#3528): the chosen preset gradient sits BEHIND everything.
+   The header is opaque (its own --color-main-background) and columns/cards ride
+   on their own opaque surfaces, so the gradient only shows in the gutters while
+   text stays readable. --board-background is set inline from the preset CSS. */
+.board-view--has-background {
+	background: var(--board-background);
 }
 
 .board-view__header {
