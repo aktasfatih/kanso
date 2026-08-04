@@ -163,6 +163,11 @@ return [
 		['name' => 'calendarFeed#enable', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'POST'],
 		['name' => 'calendarFeed#disable', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'DELETE'],
 
+		// Per-user board pinning (#3632). Nested under a board id, distinct from
+		// board#show. Pin = PUT (READ-gated), unpin = DELETE (own pin only).
+		['name' => 'boardPin#pin', 'url' => '/api/boards/{id}/pin', 'verb' => 'PUT'],
+		['name' => 'boardPin#unpin', 'url' => '/api/boards/{id}/pin', 'verb' => 'DELETE'],
+
 		['name' => 'webhook#github', 'url' => '/api/boards/{id}/github-webhook', 'verb' => 'POST'],
 		['name' => 'webhook#config', 'url' => '/api/boards/{id}/webhook', 'verb' => 'GET'],
 		['name' => 'webhook#rotate', 'url' => '/api/boards/{id}/webhook/rotate', 'verb' => 'POST'],

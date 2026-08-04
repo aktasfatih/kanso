@@ -7,6 +7,8 @@ import {
 	createBoard as apiCreateBoard,
 	updateBoard as apiUpdateBoard,
 	deleteBoard as apiDeleteBoard,
+	pinBoard as apiPinBoard,
+	unpinBoard as apiUnpinBoard,
 } from '../services/api.js'
 
 export function useBoards() {
@@ -32,10 +34,55 @@ export function useBoards() {
 		onSettled: () => queryClient.invalidateQueries({ queryKey: ['boards'] }),
 	})
 
+	// Per-user board pinning (#3632). Optimistic: the board's `pinned` flag on the
+	// cached boards payload flips immediately, rolls back on error, and the server
+	// truth reconciles on settle (project's db-first pattern).
+	const setPinnedOptimistically = async (id, pinned) => {
+		await queryClient.cancelQueries({ queryKey: ['boards'] })
+		const previous = queryClient.getQueryData(['boards'])
+		if (Array.isArray(previous)) {
+			queryClient.setQueryData(['boards'], previous.map((b) =>
+				Number(b.id) === Number(id) ? { ...b, pinned } : b,
+			))
+		}
+		return { previous }
+	}
+	const rollbackPinned = (_err, _vars, context) => {
+		if (context?.previous !== undefined) {
+			queryClient.setQueryData(['boards'], context.previous)
+		}
+	}
+
+	const pinBoard = useMutation({
+		mutationFn: (id) => apiPinBoard(id),
+		onMutate: (id) => setPinnedOptimistically(id, true),
+		onError: rollbackPinned,
+		onSettled: () => queryClient.invalidateQueries({ queryKey: ['boards'] }),
+	})
+
+	const unpinBoard = useMutation({
+		mutationFn: (id) => apiUnpinBoard(id),
+		onMutate: (id) => setPinnedOptimistically(id, false),
+		onError: rollbackPinned,
+		onSettled: () => queryClient.invalidateQueries({ queryKey: ['boards'] }),
+	})
+
+	// Toggle a board's pin from its current cached state.
+	const togglePin = (board) => {
+		if (board?.pinned) {
+			unpinBoard.mutate(board.id)
+		} else {
+			pinBoard.mutate(board.id)
+		}
+	}
+
 	return {
 		...query,
 		createBoard,
 		updateBoard,
 		deleteBoard,
+		pinBoard,
+		unpinBoard,
+		togglePin,
 	}
 }

@@ -10,13 +10,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="board-tile__color-dot"
 				:style="{ background: dotColor }" />
 			<span class="board-tile__title">{{ board.title }}</span>
-			<!-- Filled star marks a pinned board; the non-functional outline
-			     placeholder was dropped (it collided with the folder menu and
-			     does nothing until per-user pinning ships, #3572). -->
-			<StarIcon
-				v-if="pinned"
-				:size="16"
-				class="board-tile__star board-tile__star--on" />
+			<!-- Per-user pin toggle (#3632): filled star = pinned, outline = not.
+			     Clicking toggles the pin (optimistic) and must NOT bubble to the
+			     tile's open-board click. Hidden for archived tiles (no pinning
+			     there). -->
+			<button
+				v-if="showStar"
+				type="button"
+				class="board-tile__star-btn"
+				:class="{ 'board-tile__star-btn--on': isPinned }"
+				:aria-pressed="isPinned"
+				:title="isPinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board')"
+				:aria-label="isPinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board')"
+				data-test="board-pin-star"
+				@click.stop.prevent="$emit('toggle-pin')">
+				<StarIcon v-if="isPinned" :size="16" class="board-tile__star board-tile__star--on" />
+				<StarOutlineIcon v-else :size="16" class="board-tile__star" />
+			</button>
 		</div>
 
 		<!-- Meta line: card count + progress + badges + relative time -->
@@ -59,12 +69,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { computed } from 'vue'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import { cssColor } from '../services/color.js'
 
 const props = defineProps({
 	board: { type: Object, required: true },
+	// Force the pinned look regardless of payload (used by the dedicated Pinned
+	// section, which only renders already-pinned boards).
 	pinned: { type: Boolean, default: false },
+	// Whether to render the interactive pin star. Off for archived tiles.
+	pinnable: { type: Boolean, default: false },
 })
+
+defineEmits(['toggle-pin'])
+
+// A board is pinned when the payload says so, OR when the parent forces it (the
+// dedicated Pinned section).
+const isPinned = computed(() => props.pinned || !!props.board.pinned)
+// Show the interactive star only when the parent opts in (pinnable). The
+// forced-pinned section also shows it so the user can unpin from there.
+const showStar = computed(() => props.pinnable || props.pinned)
 
 const dotColor = computed(() => cssColor(props.board.color) || 'var(--color-primary-element)')
 
@@ -137,10 +161,33 @@ const fullTime = computed(() => {
 	min-width: 0;
 }
 
-.board-tile__star {
+.board-tile__star-btn {
 	margin-left: auto;
 	flex-shrink: 0;
-	color: var(--color-border-dark);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	cursor: pointer;
+	color: var(--color-text-maxcontrast);
+}
+
+.board-tile__star-btn:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+.board-tile__star-btn--on {
+	color: var(--color-primary-element);
+}
+
+.board-tile__star {
+	color: inherit;
 }
 
 .board-tile__star--on {

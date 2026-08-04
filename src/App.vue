@@ -51,16 +51,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:name="t('kanso', 'Boards')"
 					:to="{ name: 'board-list' }"
 					:active="route.name === 'board-list'"
-					:allow-collapse="boards.length > 0"
-					:open="boardsOpen"
-					@update:open="setBoardsOpen">
+					:allow-collapse="navBoards.length > 0"
+					:open="boardsSectionOpen"
+					@update:open="boardsSectionOpen = $event">
 					<template #icon>
 						<ViewDashboardIcon :size="20" />
 					</template>
-					<!-- The user's boards, organized into per-user folders (#3529),
-					     so you can jump between them without returning to the board
-					     list. Folders render first (collapsible, collapse state
-					     persisted per user), then any Ungrouped boards. -->
+					<!-- The user's PINNED boards (#3632), organized into per-user
+					     folders (#3529), so you can jump between the ones you care
+					     about without returning to the board list. Folders render
+					     first (collapsible, collapse state persisted per user), then
+					     any Ungrouped boards. A star toggle on each item pins/unpins.
+					     Zero-pins fallback: a user with no pins sees ALL boards. -->
 					<template #default>
 						<NcAppNavigationItem
 							v-for="group in navGroups"
@@ -87,6 +89,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											class="app-nav__board-dot"
 											:style="{ background: board.color ? '#' + board.color : 'var(--color-primary-element)' }" />
 									</template>
+									<template #actions>
+										<NcActionButton close-after-click @click="togglePin(board)">
+											<template #icon>
+												<StarIcon v-if="board.pinned" :size="20" />
+												<StarOutlineIcon v-else :size="20" />
+											</template>
+											{{ board.pinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board') }}
+										</NcActionButton>
+									</template>
 								</NcAppNavigationItem>
 								<p v-if="group.boards.length === 0" class="app-nav__folder-empty">
 									{{ t('kanso', 'No boards in this folder') }}
@@ -103,6 +114,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<span
 									class="app-nav__board-dot"
 									:style="{ background: board.color ? '#' + board.color : 'var(--color-primary-element)' }" />
+							</template>
+							<template #actions>
+								<NcActionButton close-after-click @click="togglePin(board)">
+									<template #icon>
+										<StarIcon v-if="board.pinned" :size="20" />
+										<StarOutlineIcon v-else :size="20" />
+									</template>
+									{{ board.pinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board') }}
+								</NcActionButton>
 							</template>
 						</NcAppNavigationItem>
 					</template>
@@ -123,6 +143,7 @@ import { getSettings, updateSettings } from './services/api.js'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
@@ -131,6 +152,8 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
+import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
@@ -168,49 +191,50 @@ onMounted(async () => {
 	)
 })
 
-const { data: boardsData } = useBoards()
+const { data: boardsData, togglePin } = useBoards()
 // Non-archived boards, listed under the Boards nav entry so the user can jump
 // between them. Reactive to the shared boards query (create/rename/delete reflect).
 const boards = computed(() => (boardsData.value ?? []).filter((b) => !b.archived))
 
+// The curated nav set (#3632): the user's PINNED boards. Zero-pins fallback — a
+// user who has pinned nothing sees ALL their boards, so the nav is never empty
+// for a new user. Pinning drives which boards appear here.
+const navBoards = computed(() => {
+	const pinned = boards.value.filter((b) => b.pinned)
+	return pinned.length > 0 ? pinned : boards.value
+})
+
 // Per-user folders (#3529). The folder definitions come from their own query;
 // membership rides each board's `groupId` on the boards payload. Folders render
-// in their stored order, each holding its non-archived member boards.
+// in their stored order, each holding its member boards from the curated nav set.
 const { data: groupsData } = useBoardGroups()
 const navGroups = computed(() => {
 	const list = Array.isArray(groupsData.value) ? groupsData.value : []
 	return list.map((g) => ({
 		id: g.id,
 		name: g.name,
-		boards: boards.value.filter((b) => Number(b.groupId) === Number(g.id)),
+		boards: navBoards.value.filter((b) => Number(b.groupId) === Number(g.id)),
 	}))
 })
 // Boards in no folder (groupId null/undefined) render after the folders.
 const ungroupedBoards = computed(() =>
-	boards.value.filter((b) => b.groupId === null || b.groupId === undefined),
+	navBoards.value.filter((b) => b.groupId === null || b.groupId === undefined),
 )
 
 // Collapse state persisted per user (NC IConfig via settings). Loaded once on
 // mount; each toggle writes the new collapsed-id set back.
 const collapsedIds = ref(new Set())
-// Whether the whole Boards section is shown (true) or hidden (false). Toggled by
-// the Boards nav item's disclosure caret; persisted per user. Defaults to open.
-const boardsOpen = ref(true)
+// Whether the Boards nav section is expanded. Transient (not persisted) and
+// defaults to open, so the curated nav is always visible on load. The #3628
+// persisted collapse-all was removed in favour of pinning (#3632).
+const boardsSectionOpen = ref(true)
 async function loadCollapsed() {
 	try {
 		const s = await getSettings()
 		collapsedIds.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
-		if (typeof s.boardsNavOpen === 'boolean') {
-			boardsOpen.value = s.boardsNavOpen
-		}
 	} catch {
-		// Non-fatal: folders just start expanded and the Boards section open.
+		// Non-fatal: folders just start expanded.
 	}
-}
-function setBoardsOpen(open) {
-	boardsOpen.value = open
-	// Fire-and-forget persist; the local ref already reflects the change.
-	updateSettings({ boardsNavOpen: open }).catch(() => {})
 }
 function setGroupOpen(groupId, open) {
 	const next = new Set(collapsedIds.value)

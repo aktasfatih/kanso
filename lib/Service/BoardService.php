@@ -10,6 +10,7 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardPinMapper;
 use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -32,6 +33,7 @@ class BoardService {
 		private CardMapper $cardMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private BoardGroupMemberMapper $boardGroupMemberMapper,
+		private BoardPinMapper $boardPinMapper,
 	) {
 	}
 
@@ -83,6 +85,10 @@ class BoardService {
 		// IN (...) over the same readable set - not one query per board. A board
 		// absent from the map is Ungrouped (groupId null).
 		$groupIds = $this->boardGroupMemberMapper->findGroupIdsByBoards($uid, $boardIds);
+		// Per-user board pinning (#3632): ONE batched WHERE uid = ? AND board_id
+		// IN (...) over the same readable set - not one query per board. A board
+		// absent from the map is not pinned by this user.
+		$pinned = $this->boardPinMapper->pinnedMap($uid, $boardIds);
 
 		$out = [];
 		foreach ($boards as $board) {
@@ -93,6 +99,8 @@ class BoardService {
 			$out[] = $board->jsonSerialize() + [
 				// The folder this board sits in for THIS user, or null (Ungrouped).
 				'groupId' => $groupIds[$id] ?? null,
+				// Whether THIS user has pinned this board (#3632).
+				'pinned' => $pinned[$id] ?? false,
 				'stats' => [
 					'cardCount' => $counts[$id] ?? 0,
 					'doneCount' => $done,

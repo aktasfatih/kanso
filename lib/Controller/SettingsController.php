@@ -27,9 +27,6 @@ class SettingsController extends Controller {
 	// Collapsed board-folder ids (#3529): a JSON list of the folder ids the user
 	// has collapsed in the nav / boards page. A pure per-user view preference.
 	private const KEY_COLLAPSED_GROUPS = 'collapsed_board_groups';
-	// Whether the "Boards" section in the left nav is expanded (shows all boards)
-	// or collapsed (hidden). A pure per-user view preference; defaults to open.
-	private const KEY_BOARDS_NAV_OPEN = 'boards_nav_open';
 	// Bound the value so a scripted client can't bloat the user-config row.
 	private const MAX_COLLAPSED = 200;
 
@@ -53,7 +50,6 @@ class SettingsController extends Controller {
 			return new JSONResponse([
 				'defaultBoardId' => $raw === '' ? null : (int)$raw,
 				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
-				'boardsNavOpen' => $this->readBoardsNavOpen($uid),
 			]);
 		});
 	}
@@ -66,14 +62,11 @@ class SettingsController extends Controller {
 	 * `collapsedBoardGroups`, when provided, replaces the set of nav folders the
 	 * user has collapsed (#3529); omitting it leaves that preference untouched.
 	 *
-	 * `boardsNavOpen`, when provided, sets whether the left-nav Boards section is
-	 * expanded; omitting it leaves that preference untouched.
-	 *
 	 * @param ?int[] $collapsedBoardGroups
 	 */
 	#[NoAdminRequired]
-	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?bool $boardsNavOpen = null): JSONResponse {
-		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups, $boardsNavOpen): JSONResponse {
+	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null): JSONResponse {
+		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups): JSONResponse {
 			$uid = $this->currentUserId();
 			$value = ($defaultBoardId === null || $defaultBoardId <= 0) ? '' : (string)$defaultBoardId;
 			$this->config->setUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, $value);
@@ -82,24 +75,11 @@ class SettingsController extends Controller {
 				$this->writeCollapsedGroups($uid, $collapsedBoardGroups);
 			}
 
-			if ($boardsNavOpen !== null) {
-				$this->config->setUserValue($uid, 'kanso', self::KEY_BOARDS_NAV_OPEN, $boardsNavOpen ? '1' : '0');
-			}
-
 			return new JSONResponse([
 				'defaultBoardId' => $value === '' ? null : (int)$value,
 				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
-				'boardsNavOpen' => $this->readBoardsNavOpen($uid),
 			]);
 		});
-	}
-
-	/**
-	 * Whether the left-nav Boards section is expanded. Defaults to true (open)
-	 * when the user has never set it, preserving the original always-open nav.
-	 */
-	private function readBoardsNavOpen(string $uid): bool {
-		return $this->config->getUserValue($uid, 'kanso', self::KEY_BOARDS_NAV_OPEN, '1') !== '0';
 	}
 
 	/**

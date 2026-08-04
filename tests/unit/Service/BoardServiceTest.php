@@ -10,6 +10,7 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardPinMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
@@ -28,6 +29,7 @@ class BoardServiceTest extends TestCase {
 	private CardMapper&MockObject $cardMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private BoardGroupMemberMapper&MockObject $boardGroupMemberMapper;
+	private BoardPinMapper&MockObject $boardPinMapper;
 	private BoardService $service;
 
 	protected function setUp(): void {
@@ -38,13 +40,15 @@ class BoardServiceTest extends TestCase {
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->boardGroupMemberMapper = $this->createMock(BoardGroupMemberMapper::class);
+		$this->boardPinMapper = $this->createMock(BoardPinMapper::class);
 		$this->service = new BoardService(
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->cardMapper,
 			$this->cardReviewMapper,
-			$this->boardGroupMemberMapper
+			$this->boardGroupMemberMapper,
+			$this->boardPinMapper
 		);
 	}
 
@@ -236,12 +240,17 @@ class BoardServiceTest extends TestCase {
 		// board 1 is filed under folder 7, board 2 is Ungrouped (absent).
 		$this->boardGroupMemberMapper->expects(self::once())
 			->method('findGroupIdsByBoards')->with('alice', [1, 2])->willReturn([1 => 7]);
+		// The per-user pin map is ONE batched lookup over the same readable set;
+		// board 1 is pinned, board 2 is not (absent from the map → false).
+		$this->boardPinMapper->expects(self::once())
+			->method('pinnedMap')->with('alice', [1, 2])->willReturn([1 => true]);
 
 		$result = $this->service->findAllWithStats('alice');
 
 		self::assertCount(2, $result);
 		self::assertSame(1, $result[0]['id']);
 		self::assertSame(7, $result[0]['groupId']);
+		self::assertTrue($result[0]['pinned']);
 		self::assertSame([
 			'cardCount' => 5,
 			'doneCount' => 2,
@@ -253,6 +262,8 @@ class BoardServiceTest extends TestCase {
 		self::assertSame(2, $result[1]['id']);
 		// A board in no folder is Ungrouped (groupId null).
 		self::assertNull($result[1]['groupId']);
+		// A board absent from the pin map is not pinned by this user.
+		self::assertFalse($result[1]['pinned']);
 		self::assertSame([
 			'cardCount' => 0,
 			'doneCount' => 0,
@@ -271,6 +282,7 @@ class BoardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())->method('overdueCountByBoards')->with([])->willReturn([]);
 		$this->cardReviewMapper->expects(self::once())->method('needsReviewCountByBoards')->with([])->willReturn([]);
 		$this->boardGroupMemberMapper->expects(self::once())->method('findGroupIdsByBoards')->with('alice', [])->willReturn([]);
+		$this->boardPinMapper->expects(self::once())->method('pinnedMap')->with('alice', [])->willReturn([]);
 
 		self::assertSame([], $this->service->findAllWithStats('alice'));
 	}

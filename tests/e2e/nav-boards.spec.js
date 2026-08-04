@@ -43,8 +43,6 @@ test.describe('Boards in the left navigation', () => {
 		if (state.boardId) {
 			await apiSend('DELETE', `/boards/${state.boardId}`).catch(() => {})
 		}
-		// Restore the default (open) Boards nav so we don't hide boards for other specs.
-		await apiSend('PUT', '/settings', { boardsNavOpen: true }).catch(() => {})
 	})
 
 	test('the board is listed in the nav and navigates when clicked', async ({ page }) => {
@@ -59,33 +57,5 @@ test.describe('Boards in the left navigation', () => {
 		await item.first().click()
 		await expect(page).toHaveURL(new RegExp(`#/board/${state.boardId}`), { timeout: 10_000 })
 		await page.waitForSelector('.board-view__header', { timeout: 10_000 })
-	})
-
-	test('the Boards section toggles show/hide all boards and the choice persists', async ({ page }) => {
-		await ncLogin(page)
-		await page.goto(`${BASE}/index.php/apps/kanso#/`)
-		await page.waitForSelector('.app-navigation', { timeout: 15_000 })
-
-		const boardLink = page.locator('.app-navigation .app-navigation-entry-link', { hasText: state.title })
-		// The Boards disclosure caret is the FIRST collapse control on the nav (the
-		// top-level Boards section, before any folder carets). Its accessible name
-		// flips between "Collapse menu" (open) and "Open menu" (collapsed).
-
-		// Boards start expanded — our board is listed.
-		await expect(boardLink.first()).toBeVisible({ timeout: 10_000 })
-
-		// Hide all boards (NcAppNavigationItem keeps children in the DOM but hidden,
-		// so assert visibility, not element count).
-		await page.getByRole('button', { name: 'Collapse menu' }).first().click()
-		await expect(boardLink.first()).toBeHidden({ timeout: 6_000 })
-
-		// The choice persists across a reload.
-		await page.reload()
-		await page.waitForSelector('.app-navigation', { timeout: 15_000 })
-		await expect(boardLink.first()).toBeHidden({ timeout: 6_000 })
-
-		// Show all boards again (the caret now reads "Open menu").
-		await page.getByRole('button', { name: 'Open menu' }).first().click()
-		await expect(boardLink.first()).toBeVisible({ timeout: 6_000 })
 	})
 })

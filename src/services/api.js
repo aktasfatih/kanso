@@ -22,6 +22,15 @@ export const updateBoard = (id, data) =>
 export const deleteBoard = (id) =>
 	axios.delete(url(`/api/boards/${id}`)).then((r) => r.data)
 
+// Per-user board pinning (#3632). Pinning is READ-gated server-side (you may
+// pin any board you can read); unpinning removes your own pin. Both return the
+// new { pinned } state.
+export const pinBoard = (id) =>
+	axios.put(url(`/api/boards/${id}/pin`)).then((r) => r.data)
+
+export const unpinBoard = (id) =>
+	axios.delete(url(`/api/boards/${id}/pin`)).then((r) => r.data)
+
 // Resolve a board-scoped PREFIX-<board_seq> human reference (e.g. "KAN-123") to
 // { cardId, title } (#3611). Used to open a card by its human id from a URL when
 // the board cache is not already loaded; the in-app renderer resolves from cache

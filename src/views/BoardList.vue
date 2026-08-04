@@ -213,19 +213,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 
 			<template v-else>
-				<!-- Pinned section — scaffolding only; hidden until per-user
-				     pinning ships (#3572). No pin API exists yet, so pinnedBoards
-				     is always empty and this block never renders today. -->
+				<!-- Pinned section (#3632): the user's pinned boards, rendered at the
+				     top in their own section. Each tile's star unpins (optimistic).
+				     The star click stops propagation so it never opens the board. -->
 				<section v-if="!showArchived && pinnedBoards.length > 0" class="board-section">
 					<h2 class="board-section__label">{{ t('kanso', 'Pinned') }}</h2>
 					<div class="board-grid">
-						<button
+						<div
 							v-for="board in pinnedBoards"
 							:key="board.id"
-							class="board-tile board-tile--pinned"
-							@click="openBoard(board.id)">
-							<BoardTileContent :board="board" pinned />
-						</button>
+							class="board-tile board-tile--pinned board-tile--clickable"
+							role="button"
+							tabindex="0"
+							@click="openBoard(board.id)"
+							@keydown.enter.prevent="openBoard(board.id)"
+							@keydown.space.prevent="openBoard(board.id)">
+							<BoardTileContent :board="board" pinned pinnable @toggle-pin="togglePin(board)" />
+						</div>
 					</div>
 				</section>
 
@@ -319,9 +323,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-for="board in folder.boards"
 									:key="board.id"
 									class="board-tile board-list__tile-wrap">
-									<button class="board-tile__hit" @click="openBoard(board.id)">
-										<BoardTileContent :board="board" />
-									</button>
+									<div
+										class="board-tile__hit"
+										role="button"
+										tabindex="0"
+										@click="openBoard(board.id)"
+										@keydown.enter.prevent="openBoard(board.id)"
+										@keydown.space.prevent="openBoard(board.id)">
+										<BoardTileContent :board="board" pinnable @toggle-pin="togglePin(board)" />
+									</div>
 									<div class="board-tile__menu">
 										<BoardFolderMenu
 											:board="board"
@@ -351,9 +361,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								v-for="board in ungroupedBoards"
 								:key="board.id"
 								class="board-tile board-list__tile-wrap">
-								<button class="board-tile__hit" @click="openBoard(board.id)">
-									<BoardTileContent :board="board" />
-								</button>
+								<div
+									class="board-tile__hit"
+									role="button"
+									tabindex="0"
+									@click="openBoard(board.id)"
+									@keydown.enter.prevent="openBoard(board.id)"
+									@keydown.space.prevent="openBoard(board.id)">
+									<BoardTileContent :board="board" pinnable @toggle-pin="togglePin(board)" />
+								</div>
 								<div class="board-tile__menu">
 									<BoardFolderMenu
 										:board="board"
@@ -402,7 +418,7 @@ import { fetchDeckImportBoards, importDeckBoard, importBoard, importTrelloBoard 
 
 const router = useRouter()
 const queryClient = useQueryClient()
-const { data: boards, isLoading, isError, createBoard, updateBoard } = useBoards()
+const { data: boards, isLoading, isError, createBoard, updateBoard, togglePin } = useBoards()
 const {
 	data: groupsData,
 	createGroup,
@@ -430,8 +446,8 @@ const archivedBoards = computed(() =>
 	boards.value ? boards.value.filter((b) => b.archived) : [],
 )
 
-// Per-user pinning ships separately (#3572); there's no pin state on the
-// payload yet, so this is always empty and the Pinned section stays hidden.
+// The user's pinned active boards (#3632), surfaced in their own top section.
+// A board's pin state rides the payload `pinned` boolean (one batched lookup).
 const pinnedBoards = computed(() =>
 	activeBoards.value.filter((b) => b.pinned),
 )
@@ -885,9 +901,14 @@ async function onTrelloImportChange(event) {
 	box-sizing: border-box;
 }
 
-button.board-tile:hover {
+button.board-tile:hover,
+.board-tile--clickable:hover {
 	border-color: var(--color-primary-element);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.board-tile--clickable {
+	cursor: pointer;
 }
 
 .board-tile--pinned {

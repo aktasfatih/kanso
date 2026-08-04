@@ -46,7 +46,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue(['default_board' => '42']);
 
 		self::assertSame(
-			['defaultBoardId' => 42, 'collapsedBoardGroups' => [], 'boardsNavOpen' => true],
+			['defaultBoardId' => 42, 'collapsedBoardGroups' => []],
 			$this->controller->index()->getData()
 		);
 	}
@@ -55,7 +55,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue([]);
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'boardsNavOpen' => true],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => []],
 			$this->controller->index()->getData()
 		);
 	}
@@ -68,7 +68,7 @@ class SettingsControllerTest extends TestCase {
 
 		// Deduped and int-cast.
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7], 'boardsNavOpen' => true],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7]],
 			$this->controller->index()->getData()
 		);
 	}
@@ -80,7 +80,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '7');
 
 		self::assertSame(
-			['defaultBoardId' => 7, 'collapsedBoardGroups' => [], 'boardsNavOpen' => true],
+			['defaultBoardId' => 7, 'collapsedBoardGroups' => []],
 			$this->controller->update(7)->getData()
 		);
 	}
@@ -92,7 +92,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'boardsNavOpen' => true],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => []],
 			$this->controller->update(null)->getData()
 		);
 	}
@@ -104,7 +104,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'boardsNavOpen' => true],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => []],
 			$this->controller->update(0)->getData()
 		);
 	}
@@ -135,45 +135,5 @@ class SettingsControllerTest extends TestCase {
 
 		$result = $this->controller->update(3)->getData();
 		self::assertSame([1, 2], $result['collapsedBoardGroups']);
-	}
-
-	public function testIndexReturnsBoardsNavOpenFalseWhenStoredZero(): void {
-		$this->stubGetUserValue(['boards_nav_open' => '0']);
-
-		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'boardsNavOpen' => false],
-			$this->controller->index()->getData()
-		);
-	}
-
-	public function testUpdatePersistsBoardsNavOpen(): void {
-		$stored = [];
-		$this->config->method('getUserValue')
-			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
-				return $stored[$key] ?? $default;
-			});
-		$this->config->method('setUserValue')
-			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
-				$stored[$key] = $value;
-			});
-
-		$result = $this->controller->update(null, null, false)->getData();
-		self::assertFalse($result['boardsNavOpen']);
-		self::assertSame('0', $stored['boards_nav_open']);
-
-		$result = $this->controller->update(null, null, true)->getData();
-		self::assertTrue($result['boardsNavOpen']);
-		self::assertSame('1', $stored['boards_nav_open']);
-	}
-
-	public function testUpdateLeavesBoardsNavOpenUntouchedWhenOmitted(): void {
-		$this->stubGetUserValue(['boards_nav_open' => '0']);
-		// Only default_board is written; boards_nav_open is left as-is.
-		$this->config->expects(self::once())
-			->method('setUserValue')
-			->with('alice', 'kanso', 'default_board', '3');
-
-		$result = $this->controller->update(3)->getData();
-		self::assertFalse($result['boardsNavOpen']);
 	}
 }
