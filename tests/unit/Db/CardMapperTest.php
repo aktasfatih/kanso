@@ -46,6 +46,74 @@ class CardMapperTest extends TestCase {
 	}
 
 	/**
+	 * A spying expression builder that records the column name of every comparison
+	 * (eq/gt/gte/lt/lte/in/isNotNull) into a shared collector. Lets a test assert
+	 * that an aggregate actually emits an `is_template` filter WHERE clause - which
+	 * a plain row-feeding mock (rows come back regardless of the SQL) cannot verify.
+	 * This is the regression guard for the template-exclusion pattern (#3626): drop
+	 * the `is_template` filter from any aggregate and its assertion here goes red.
+	 *
+	 * @param array<int, string> $collector filled with the first argument (column) of each comparison
+	 */
+	private static function spyExpr(array &$collector): object {
+		return new class($collector) {
+			/** @param array<int, string> $seen */
+			public function __construct(
+				private array &$seen,
+			) {
+			}
+
+			public function __call(string $name, array $args): string {
+				if ($args !== [] && \is_string($args[0])) {
+					$this->seen[] = $args[0];
+				}
+				return '';
+			}
+		};
+	}
+
+	/**
+	 * Runs $call against a mapper whose query builder records every filtered column,
+	 * and asserts `is_template` is among them - i.e. the aggregate excludes template
+	 * cards. The fed rows are irrelevant to the assertion; the point is the WHERE.
+	 *
+	 * @param callable(CardMapper): mixed $call
+	 */
+	private function assertFiltersTemplates(callable $call): void {
+		$columns = [];
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach ([
+			'select', 'selectAlias', 'addSelect', 'from', 'where', 'andWhere', 'groupBy',
+			'orderBy', 'addOrderBy', 'setMaxResults',
+		] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$spy = self::spyExpr($columns);
+		$qb->method('expr')->willReturn($spy);
+		$qb->method('func')->willReturn(self::exprSink());
+		$qb->method('createNamedParameter')->willReturn('?');
+		$qb->method('createFunction')->willReturn('fn');
+
+		$result = $this->createMock(IResult::class);
+		$result->method('fetch')->willReturn(false);
+		$result->method('fetchOne')->willReturn(0);
+		$result->method('fetchAll')->willReturn([]);
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		$mapper = new CardMapper($db);
+
+		$call($mapper);
+
+		self::assertContains(
+			'is_template',
+			$columns,
+			'aggregate must filter out template cards with an is_template WHERE clause'
+		);
+	}
+
+	/**
 	 * Builds a fluent query-builder mock that ignores every chained call and, on
 	 * executeQuery(), returns a result iterating the given rows once.
 	 *
@@ -222,5 +290,84 @@ class CardMapperTest extends TestCase {
 	public function testFindTemplatesByBoardReturnsEmptyWhenNoTemplates(): void {
 		$this->stubQuery([]);
 		self::assertSame([], $this->mapper->findTemplatesByBoard(7));
+	}
+
+	// ---- template exclusion from analytics aggregates (#3626) --------------
+	//
+	// Template cards (is_template = true) are ordinary rows with real priority,
+	// created_at, done_at, estimate and can be overdue - so every board/project
+	// stats aggregate must filter them out, exactly like archived/deleted cards,
+	// or a board that defines templates reports inflated counts/velocity/throughput.
+	// Each case asserts the aggregate emits the is_template WHERE clause; if a future
+	// change drops it from the shared pattern, the matching assertion fails.
+
+	public function testCountByStackExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByStack(7));
+	}
+
+	public function testCountByPriorityExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByPriority(7));
+	}
+
+	public function testAgingCountExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->agingCount(7, 1000));
+	}
+
+	public function testOverdueCountExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->overdueCount(7, new \DateTime('@1000')));
+	}
+
+	public function testDoneTimelineExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneTimeline(7, 0, 1000));
+	}
+
+	public function testDoneCycleTimesExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneCycleTimes(7, 0, 1000));
+	}
+
+	public function testCreatedTimelineExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->createdTimeline(7, 0, 1000));
+	}
+
+	public function testEstimateByStackExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->estimateByStack(7));
+	}
+
+	public function testCountByBoardsExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByBoards([7]));
+	}
+
+	public function testOverdueCountByBoardsExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->overdueCountByBoards([7], new \DateTime('@1000')));
+	}
+
+	public function testCountByPriorityForCardsExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByPriorityForCards([1, 2, 3]));
+	}
+
+	public function testDoneTimelineForCardsExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneTimelineForCards([1, 2, 3], 0, 1000));
+	}
+
+	public function testDoneCycleTimesForCardsExcludesTemplates(): void {
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneCycleTimesForCards([1, 2, 3], 0, 1000));
+	}
+
+	/**
+	 * End-to-end contract at the mapper's PHP layer: with the template row already
+	 * filtered out by SQL (the DB returns only the N live rows), the per-stack count
+	 * reflects the live cards only - here 3 live cards in stack 5, no phantom from a
+	 * template. Complements the WHERE-clause assertions above (which prove the filter
+	 * is emitted) by pinning the reported figure to the live set.
+	 */
+	public function testCountByStackReportsLiveCardsOnly(): void {
+		// The template card never reaches this result set (filtered in SQL); only the
+		// 3 live cards of stack 5 are grouped and counted.
+		$this->stubQuery([['stack_id' => 5, 'cnt' => 3]]);
+
+		self::assertSame(
+			[['stackId' => 5, 'count' => 3]],
+			$this->mapper->countByStack(7)
+		);
 	}
 }

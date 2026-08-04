@@ -597,9 +597,11 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Open (non-deleted) card counts grouped by stack for a board - the
-	 * "cards per column" board-stats aggregate. One grouped query; stacks with
+	 * Open (non-deleted, non-template) card counts grouped by stack for a board -
+	 * the "cards per column" board-stats aggregate. One grouped query; stacks with
 	 * no open cards are simply absent from the list (the frontend defaults 0).
+	 * Template cards (#3409/#3626) are excluded like everywhere they would inflate
+	 * a board figure - they are blueprints, not live work.
 	 *
 	 * @return list<array{stackId: int, count: int}>
 	 * @throws Exception
@@ -612,6 +614,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('stack_id');
 
 		$result = $qb->executeQuery();
@@ -625,7 +628,9 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Open (non-deleted) card counts grouped by priority for a board.
+	 * Open (non-deleted, non-template) card counts grouped by priority for a board.
+	 * Template cards (#3409/#3626) are excluded so a board's priority distribution
+	 * reflects live work only.
 	 *
 	 * @return list<array{priority: int, count: int}>
 	 * @throws Exception
@@ -638,6 +643,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('priority');
 
 		$result = $qb->executeQuery();
@@ -656,7 +662,7 @@ class CardMapper extends QBMapper {
 	 * not archived, not soft-deleted; "old" means created at or before the
 	 * cutoff. `created_at` is a plain unix int so this is a direct comparison
 	 * (no per-dialect date SQL). There is no last-moved column, so age is
-	 * measured from creation.
+	 * measured from creation. Template cards (#3409/#3626) never count as aging.
 	 *
 	 * @throws Exception
 	 */
@@ -668,6 +674,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
 
 		$result = $qb->executeQuery();
@@ -682,7 +689,8 @@ class CardMapper extends QBMapper {
 	 * the overdue count. "Open" means not done, not archived, not soft-deleted.
 	 * `duedate` is a DATETIME column, so the comparison binds a DATETIME
 	 * parameter (dialect-clean, same type QBMapper serializes the column as)
-	 * and adds a NOT NULL guard (an undated card is never overdue).
+	 * and adds a NOT NULL guard (an undated card is never overdue). Template cards
+	 * (#3409/#3626) are excluded - a blueprint's due date is not real work overdue.
 	 *
 	 * @throws Exception
 	 */
@@ -694,6 +702,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
 
@@ -709,6 +718,7 @@ class CardMapper extends QBMapper {
 	 * [$sinceTs, $untilTs] - the throughput timeline source. Bucketing into
 	 * per-day counts is done in PHP (dialect-safe: no per-dialect date SQL);
 	 * only cards actually done (`done_at > 0`) inside the window are returned.
+	 * Template cards (#3409/#3626) are excluded so they never inflate throughput.
 	 *
 	 * @return int[] the done_at unix timestamps (unordered)
 	 * @throws Exception
@@ -719,6 +729,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
@@ -754,6 +765,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
@@ -787,6 +799,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
 
@@ -815,6 +828,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('estimate'));
 
 		$result = $qb->executeQuery();
@@ -847,7 +861,8 @@ class CardMapper extends QBMapper {
 	 * {@see self::countByPriority()}): ARCHIVED cards are EXCLUDED, so the count is
 	 * the board's open (non-archived, non-deleted) card total - the actionable
 	 * "cards remaining" figure, not a historical grand total. Boards with no such
-	 * cards are absent from the map (callers default to 0).
+	 * cards are absent from the map (callers default to 0). Template cards
+	 * (#3409/#3626) are excluded so a per-board template never inflates the signal.
 	 *
 	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
 	 * @return array<int, int> map of boardId => open card count
@@ -865,6 +880,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('board_id');
 
 		$result = $qb->executeQuery();
@@ -921,6 +937,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('board_id');
 
@@ -959,6 +976,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
 			->groupBy('board_id');
@@ -1006,6 +1024,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('priority');
 
 		$result = $qb->executeQuery();
@@ -1037,6 +1056,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
 
 		$result = $qb->executeQuery();
@@ -1065,6 +1085,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
 
@@ -1093,6 +1114,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
@@ -1122,6 +1144,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
 
@@ -1152,6 +1175,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
