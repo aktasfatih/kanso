@@ -378,6 +378,96 @@ class CardServiceTest extends TestCase {
 		self::assertSame(8, $card->getBoardSeq());
 	}
 
+	public function testCreatePersistsOptionalDuedateAndAllDayOnInsert(): void {
+		// A natural-date token (#3416) is resolved client-side to an all-day ISO
+		// datetime; create() persists it (normalized to UTC) on the same INSERT and
+		// appends exactly one change row - no create-then-update round-trip.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame(
+					'2026-08-05T00:00:00+00:00',
+					$card->getDuedate()?->format(\DateTimeInterface::ATOM)
+				);
+				self::assertTrue($card->getAllDay());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_CREATE, 'alice')
+			->willReturn(new Change());
+
+		$card = $this->service->create(5, 'Ship it', 'alice', '2026-08-05T00:00:00.000Z', true);
+		self::assertSame(9, $card->getId());
+	}
+
+	public function testCreateNormalizesDuedateToUtc(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $card): Card {
+			$card->setId(9);
+			return $card;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$card = $this->service->create(5, 'A card', 'alice', '2026-08-01T10:00:00+02:00');
+		self::assertSame(
+			'2026-08-01T08:00:00+00:00',
+			$card->getDuedate()?->format(\DateTimeInterface::ATOM)
+		);
+	}
+
+	public function testCreateWithoutDuedateLeavesItUnset(): void {
+		// Back-compat: the default create path carries no due date (null $duedate).
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertNull($card->getDuedate());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	public function testCreateRejectsInvalidDuedateBeforeInsert(): void {
+		// A malformed due date fails the create cleanly (400) before any INSERT or
+		// change row, matching update()'s validation via parseDuedate.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(5, 'A card', 'alice', 'tomorrow');
+	}
+
+	public function testCreateWithEmptyDuedateStringLeavesItUnset(): void {
+		// '' is "no due date" (parseDuedate returns null), same as update().
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertNull($card->getDuedate());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice', '');
+	}
+
 	// ---- find -------------------------------------------------------------
 
 	public function testFindAssertsReadPermissionAndReturnsCard(): void {

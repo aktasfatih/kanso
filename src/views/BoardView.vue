@@ -1453,8 +1453,15 @@ async function submitNewStack() {
 	}
 }
 
-async function handleCreateCard(stackId, title) {
-	await createCard.mutateAsync({ stackId, title })
+async function handleCreateCard(stackId, title, duedate = null, allDay = false) {
+	// Only carry a due date when a natural-date token resolved to one (#3416);
+	// a plain create stays the exact same payload as before (back-compat).
+	const payload = { stackId, title }
+	if (duedate) {
+		payload.duedate = duedate
+		payload.allDay = allDay
+	}
+	await createCard.mutateAsync(payload)
 }
 
 // Fetch the board's card templates for the composer picker (#3409). Lazily

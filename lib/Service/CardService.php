@@ -133,18 +133,29 @@ class CardService {
 	/**
 	 * Creates a card at the bottom of the stack.
 	 *
+	 * An optional due date can be set on the same INSERT (#3416, the composer's
+	 * natural-date tokens): one clean write + one kanso_changes row, never a
+	 * create-then-update round-trip. $duedate uses the same wire format as
+	 * update() (an ISO 8601 datetime; parsed/normalized to UTC via parseDuedate)
+	 * and $allDay flags a date-only due date, mirroring update()'s duedate/allDay
+	 * coupling. A null $duedate leaves the card with no due date (back-compat).
+	 *
 	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title
+	 * @throws InvalidInputException on invalid title or due date
 	 * @throws \OverflowException if the appended sort key would overflow (stack needs a rebalance)
 	 *                            or a concurrent create keeps colliding after one retry
 	 */
-	public function create(int $stackId, string $title, string $uid): Card {
+	public function create(int $stackId, string $title, string $uid, ?string $duedate = null, ?bool $allDay = null): Card {
 		$stack = $this->loadStack($stackId);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 
 		$title = $this->validateTitle($title);
+		// Parse the optional due date up-front so an invalid value fails the create
+		// cleanly (a 400 via InvalidInputException) before any INSERT is attempted,
+		// matching update()'s validation. '' is treated as "no due date" too.
+		$parsedDue = $duedate === null ? null : $this->parseDuedate($duedate);
 		$now = time();
 
 		// Default: append to the bottom of the stack. When the board opts in,
@@ -193,6 +204,15 @@ class CardService {
 			$card->setCreatedAt($now);
 			$card->setLastModified($now);
 			$card->setDeletedAt(0);
+			// Optional due date from the composer's natural-date tokens (#3416).
+			// Set on the same INSERT; $allDay flags a date-only token so the pill
+			// hides the (midnight) time, mirroring update()'s duedate/allDay pair.
+			if ($parsedDue !== null) {
+				$card->setDuedate($parsedDue);
+				if ($allDay !== null) {
+					$card->setAllDay($allDay);
+				}
+			}
 			// New cards are always ordinary live cards, never templates (#3409) -
 			// a card is only flagged a template later via setTemplate(). Explicit so
 			// the column is set on INSERT (the DB default backs pre-migration rows).

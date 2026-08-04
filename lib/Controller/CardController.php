@@ -64,10 +64,10 @@ class CardController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(int $stackId = 0, string $title = ''): JSONResponse {
-		return $this->respond(function () use ($stackId, $title): JSONResponse {
+	public function create(int $stackId = 0, string $title = '', ?string $duedate = null, ?bool $allDay = null): JSONResponse {
+		return $this->respond(function () use ($stackId, $title, $duedate, $allDay): JSONResponse {
 			return new JSONResponse(
-				$this->cardService->create($stackId, $title, $this->currentUserId())
+				$this->cardService->create($stackId, $title, $this->currentUserId(), $duedate, $allDay)
 			);
 		});
 	}

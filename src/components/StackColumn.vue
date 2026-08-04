@@ -263,6 +263,7 @@ import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutli
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
 import { cssColor } from '../services/color.js'
+import { parseDueToken } from '../utils/dueTokens.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -278,7 +279,10 @@ const props = defineProps({
 		type: Array,
 		default: () => [],
 	},
-	/** Async fn (stackId, title) → Promise - provided by parent BoardView */
+	/**
+	 * Async fn (stackId, title, duedate?, allDay?) → Promise - provided by parent
+	 * BoardView. duedate/allDay carry an optional natural-date token (#3416).
+	 */
 	onCreateCard: {
 		type: Function,
 		required: true,
@@ -728,7 +732,10 @@ async function createCardsFromText(text) {
 	const ordered = props.newCardsOnTop ? [...titles].reverse() : titles
 	try {
 		for (const title of ordered) {
-			await props.onCreateCard(props.stack.id, title)
+			// A recognized trailing natural-date token (#3416) sets the card's due
+			// date and is stripped from the title; anything else leaves it intact.
+			const { title: parsedTitle, duedate, allDay } = parseDueToken(title)
+			await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
 		}
 		newCardTitle.value = ''
 		// Re-focus for rapid entry - the signature UX
