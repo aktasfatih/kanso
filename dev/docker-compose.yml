@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Throwaway development Nextcloud with this app mounted from the checkout.
-# Mirrors production (nextcloud:32-apache + postgres 16). No volumes are
+# Mirrors the newest supported target (nextcloud:34-apache / PHP 8.3 + postgres
+# 16). The app supports NC 30–34; CI e2e boots this same stack. No volumes are
 # persisted: `docker compose down` resets everything.
 #
 #   cd dev && ./setup.sh          # start + enable the app
@@ -41,7 +42,7 @@ services:
       - nextcloud
 
   nextcloud:
-    image: nextcloud:32-apache
+    image: nextcloud:34-apache
     container_name: kanso-dev
     ports:
       - "8891:80"

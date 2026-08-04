@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "00dc42ec432d30a7fdb3426e0aa70585",
+    "content-hash": "5701c2a06444b7b5861af9a4a2e5bfbb",
     "packages": [],
     "packages-dev": [
         {
@@ -1791,29 +1791,30 @@
         },
         {
             "name": "nextcloud/ocp",
-            "version": "v32.0.9",
+            "version": "v34.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nextcloud-deps/ocp.git",
-                "reference": "78e3e2d8dece0cf49a760cee2d2d0fc239c95ebc"
+                "reference": "81cbb2c594afe0fa978885bf7accd0440199520a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nextcloud-deps/ocp/zipball/78e3e2d8dece0cf49a760cee2d2d0fc239c95ebc",
-                "reference": "78e3e2d8dece0cf49a760cee2d2d0fc239c95ebc",
+                "url": "https://api.github.com/repos/nextcloud-deps/ocp/zipball/81cbb2c594afe0fa978885bf7accd0440199520a",
+                "reference": "81cbb2c594afe0fa978885bf7accd0440199520a",
                 "shasum": ""
             },
             "require": {
-                "php": "~8.1 || ~8.2 || ~8.3 || ~8.4",
+                "php": "~8.2 || ~8.3 || ~8.4 || ~8.5",
                 "psr/clock": "^1.0",
                 "psr/container": "^2.0.2",
                 "psr/event-dispatcher": "^1.0",
+                "psr/http-client": "^1.0.3",
                 "psr/log": "^3.0.2"
             },
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-stable32": "32.0.0-dev"
+                    "dev-stable34": "34.0.0-dev"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
@@ -1833,9 +1834,9 @@
             "description": "Composer package containing Nextcloud's public OCP API and the unstable NCU API",
             "support": {
                 "issues": "https://github.com/nextcloud-deps/ocp/issues",
-                "source": "https://github.com/nextcloud-deps/ocp/tree/v32.0.9"
+                "source": "https://github.com/nextcloud-deps/ocp/tree/v34.0.2"
             },
-            "time": "2026-04-28T01:53:22+00:00"
+            "time": "2026-07-16T01:28:13+00:00"
         },
         {
             "name": "nikic/php-parser",
@@ -2851,6 +2852,58 @@
                 "source": "https://github.com/php-fig/event-dispatcher/tree/1.0.0"
             },
             "time": "2019-01-08T18:20:26+00:00"
+        },
+        {
+            "name": "psr/http-client",
+            "version": "1.0.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/http-client.git",
+                "reference": "bb5906edc1c324c9a05aa0873d40117941e5fa90"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/http-client/zipball/bb5906edc1c324c9a05aa0873d40117941e5fa90",
+                "reference": "bb5906edc1c324c9a05aa0873d40117941e5fa90",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.0 || ^8.0",
+                "psr/http-message": "^1.0 || ^2.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Http\\Client\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "https://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for HTTP clients",
+            "homepage": "https://github.com/php-fig/http-client",
+            "keywords": [
+                "http",
+                "http-client",
+                "psr",
+                "psr-18"
+            ],
+            "support": {
+                "source": "https://github.com/php-fig/http-client"
+            },
+            "time": "2023-09-23T14:17:50+00:00"
         },
         {
             "name": "psr/http-factory",

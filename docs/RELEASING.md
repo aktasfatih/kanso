@@ -117,7 +117,7 @@ registered certificate, parses `appinfo/info.xml`, and publishes the release.
 ## Pre-flight checklist
 
 - [ ] `appinfo/info.xml` `<version>` bumped and valid; `<dependencies>` still
-      `min-version="30" max-version="32"`.
+      `min-version="30" max-version="34"`.
 - [ ] `CHANGELOG.md` has a dated entry for the new version.
 - [ ] `README.md` / `info.xml` copy still matches the shipped feature set.
 - [ ] `scripts/build-release.sh` runs clean and the tarball installs on a stock

@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-![Nextcloud 30–32](https://img.shields.io/badge/Nextcloud-30–32-0082c9)
+![Nextcloud 30–34](https://img.shields.io/badge/Nextcloud-30–34-0082c9)
 
 Instant drag & drop, payloads sized for large boards, realtime sync: a
 from-scratch kanban board that stays out of your way.
@@ -102,7 +102,7 @@ your work, on your own Nextcloud, laid out plainly.
 
 ## Installation
 
-Kanso targets **Nextcloud 30–32** and **PHP 8.2+**. It isn't on the Nextcloud
+Kanso targets **Nextcloud 30–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
 App Store yet, so install it from source (you'll need **Node 20+**,
 **Composer**, and shell access to your server):
 

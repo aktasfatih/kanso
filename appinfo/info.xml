@@ -26,7 +26,7 @@ Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
 roles, a command palette with full-text search, trash with restore, GitHub
 links and webhook, and one-click Import from Deck.
 	]]></description>
-	<version>0.9.22</version>
+	<version>0.9.23</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>
@@ -39,7 +39,7 @@ links and webhook, and one-click Import from Deck.
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-timeline.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-analytics.png</screenshot>
 	<dependencies>
-		<nextcloud min-version="30" max-version="32"/>
+		<nextcloud min-version="30" max-version="34"/>
 	</dependencies>
 	<background-jobs>
 		<job>OCA\Kanso\Cron\PruneChanges</job>

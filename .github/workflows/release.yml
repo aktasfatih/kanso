@@ -28,7 +28,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           tools: composer
 
       # Nextcloud occ is only needed to embed appinfo/signature.json. We fetch a
@@ -39,7 +39,7 @@ jobs:
         id: occ
         if: env.HAVE_SIGNING_KEY == 'yes'
         run: |
-          git clone --depth=1 --branch=v32.0.12 https://github.com/nextcloud/server.git "$RUNNER_TEMP/server"
+          git clone --depth=1 --branch=v34.0.2 https://github.com/nextcloud/server.git "$RUNNER_TEMP/server"
           echo "path=$RUNNER_TEMP/server/occ" >> "$GITHUB_OUTPUT"
 
       - name: Build release tarball

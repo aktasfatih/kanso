@@ -66,6 +66,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and rejects unknown/future export versions. This is Kanso's own round-trippable
   format, distinct from the one-click Deck importer.
 
+### Changed
+
+- **Nextcloud 34 and PHP 8.3 support.** The supported range is now Nextcloud
+  30–34 on PHP 8.2–8.3 (previously 30–32). Verified against `nextcloud:34`:
+  clean install/upgrade, all migrations apply, full PHPUnit suite and the e2e
+  smoke set pass on PHP 8.3, and realtime push (notify_push) works. Existing
+  NC 30–33 installs are unaffected.
+
 ## [0.9.2] - 2026-08-01
 
 ### Changed
