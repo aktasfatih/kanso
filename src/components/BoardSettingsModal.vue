@@ -935,7 +935,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<NcButton :disabled="publicShareBusy" @click="handleRotatePublicShare">
 										{{ t('kanso', 'Rotate link') }}
 									</NcButton>
-									<span class="github-webhook__status">{{ t('kanso', 'Anyone with the link can view this board read-only.') }}</span>
+									<span class="bs-share__hint">{{ t('kanso', 'Anyone with the link can view this board read-only.') }}</span>
 								</div>
 							</template>
 							<span v-if="publicShareError" class="label-settings__error">{{ publicShareError }}</span>
@@ -988,7 +988,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<NcButton :disabled="calendarFeedBusy" @click="handleRotateCalendarFeed">
 										{{ t('kanso', 'Rotate feed URL') }}
 									</NcButton>
-									<span class="github-webhook__status">{{ t('kanso', 'Anyone with the link can subscribe to this board\'s due dates.') }}</span>
+									<span class="bs-share__hint">{{ t('kanso', 'Anyone with the link can subscribe to this board\'s due dates.') }}</span>
 								</div>
 							</template>
 							<span v-if="calendarFeedError" class="label-settings__error">{{ calendarFeedError }}</span>
@@ -4242,6 +4242,12 @@ async function doDeleteAutoRule(rule) {
 .github-webhook__status {
 	color: var(--color-success, #2fb344);
 	font-weight: 600;
+}
+
+/* Muted descriptive hint under the share/feed rotate actions — NOT a status
+   pill, so it must not reuse the success-green .github-webhook__status. */
+.bs-share__hint {
+	color: var(--color-text-maxcontrast);
 }
 
 .github-webhook__divider {
