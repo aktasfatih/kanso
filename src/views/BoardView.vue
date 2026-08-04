@@ -233,6 +233,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@close="showSettings = false"
 			@leave="showSettings = false" />
 
+		<!-- Card-template manager (#3634): view / edit / delete / unmark / create the
+		     board's templates. Templates are hidden from the board, so this modal is
+		     how they are found and managed. Opened from a column's "＋ From template"
+		     menu. -->
+		<ManageTemplatesModal
+			v-if="showManageTemplates && boardData"
+			:board-id="Number(props.id)"
+			:can-edit="canEditBoard"
+			:new-template-stack-id="firstStackId"
+			@edit="openTemplateForEdit"
+			@close="showManageTemplates = false" />
+
 		<!-- DnD / shortcut error banner -->
 		<div v-if="moveError || shortcutError" class="board-view__move-error">
 			{{ moveError || shortcutError }}
@@ -269,6 +281,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-create-card="handleCreateCard"
 					:on-fetch-templates="handleFetchTemplates"
 					:on-create-from-template="handleCreateFromTemplate"
+					:on-manage-templates="() => { showManageTemplates = true }"
 					:on-delete-stack="handleDeleteStack"
 					:on-restore-stack="handleRestoreStack"
 					:on-rename-stack="handleRenameStack"
@@ -477,6 +490,7 @@ import {
 	deleteSavedFilter as apiDeleteSavedFilter,
 } from '../services/api.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
+import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
@@ -617,6 +631,27 @@ let boardCleanup = () => {}
 
 // Label settings panel visibility
 const showSettings = ref(false)
+
+// ── Card-template manager (#3634) ─────────────────────────────────────────────
+// Board-scoped modal to view / edit / delete / unmark / create templates (which
+// are hidden from the live board). Opened from a column's "＋ From template" menu.
+const showManageTemplates = ref(false)
+
+/** Whether the current user may EDIT this board (bit 2). Gates template mutations. */
+const canEditBoard = computed(() => ((boardData.value?.permissions ?? 0) & 2) !== 0)
+
+/** First (sorted, non-archived) stack id — hosts a freshly created blank template. */
+const firstStackId = computed(() => sortedStacks.value[0]?.id ?? null)
+
+/**
+ * Open a template card in the existing CardModal for editing. Reuses the board's
+ * card-open route path; the manager modal stays closed behind it so returning
+ * from the card lands back on the board.
+ */
+function openTemplateForEdit(cardId) {
+	showManageTemplates.value = false
+	router.push({ name: 'card-modal', params: { id: props.id, cardId } })
+}
 
 // ── Command palette visibility ────────────────────────────────────────────────
 const showCommandPalette = ref(false)

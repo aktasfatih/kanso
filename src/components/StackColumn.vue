@@ -170,6 +170,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcActionText v-if="templatesLoaded && templates.length === 0">
 					{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 				</NcActionText>
+				<!-- Discoverable entry to the board-scoped template manager (view /
+				     edit / delete / create). Templates are hidden from the board, so
+				     this menu is the way to find and manage them. -->
+				<template v-if="onManageTemplates">
+					<NcActionSeparator />
+					<NcActionButton
+						:close-after-click="true"
+						@click="onManageTemplates">
+						<template #icon>
+							<CogOutlineIcon :size="20" />
+						</template>
+						{{ t('kanso', 'Manage templates…') }}
+					</NcActionButton>
+				</template>
 			</NcActions>
 		</div>
 		<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
@@ -246,6 +260,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
 import { cssColor } from '../services/color.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
@@ -282,6 +297,15 @@ const props = defineProps({
 	 * pre-filled from the chosen template. Required for the "from template" picker.
 	 */
 	onCreateFromTemplate: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Fn () → void - opens the board-scoped "Manage templates" surface. Wired only
+	 * on the flat board (alongside the template picker); when omitted the "Manage
+	 * templates…" entry is hidden.
+	 */
+	onManageTemplates: {
 		type: Function,
 		default: null,
 	},
