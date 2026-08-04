@@ -190,6 +190,98 @@ class DeckReader {
 		return $out;
 	}
 
+	/**
+	 * A card's comments, oldest first. Deck stores comments in the CORE
+	 * `oc_comments` table (object_type `deckCard`, object_id = the deck card id
+	 * as a string), not in a `deck_*` table - so this reads the core table
+	 * directly, filtered to the given cards.
+	 *
+	 * @param int[] $cardIds
+	 * @return list<array{id: int, cardId: int, author: string, message: string, createdAt: int, parentId: int}>
+	 */
+	public function readComments(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+		// object_id is stored as a string in oc_comments; compare as strings.
+		$idStrings = array_map(static fn (int $id): string => (string)$id, $cardIds);
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'object_id', 'actor_id', 'message', 'creation_timestamp', 'parent_id')
+			->from('comments')
+			->where($qb->expr()->eq('object_type', $qb->createNamedParameter('deckCard')))
+			->andWhere($qb->expr()->in('object_id', $qb->createNamedParameter($idStrings, IQueryBuilder::PARAM_STR_ARRAY)));
+		$rows = $this->fetchAll($qb);
+
+		$out = [];
+		foreach ($rows as $r) {
+			$out[] = [
+				'id' => (int)$r['id'],
+				'cardId' => (int)$r['object_id'],
+				'author' => (string)($r['actor_id'] ?? ''),
+				'message' => (string)($r['message'] ?? ''),
+				'createdAt' => $this->toTimestamp($r['creation_timestamp'] ?? null) ?? 0,
+				'parentId' => (int)($r['parent_id'] ?? 0),
+			];
+		}
+		// Oldest-first so a reply's parent is always inserted before it.
+		usort($out, static fn (array $a, array $b): int => [$a['createdAt'], $a['id']] <=> [$b['createdAt'], $b['id']]);
+		return $out;
+	}
+
+	/**
+	 * A card's file attachments (`deck_file` kind only), non-deleted. The `data`
+	 * column holds the stored FILENAME (not the bytes) - the bytes live in Deck's
+	 * app-data, read separately by {@see DeckImportService}. The user-Files
+	 * reference kind (`file`) is intentionally NOT returned here; the caller
+	 * counts those skips separately.
+	 *
+	 * @param int[] $cardIds
+	 * @return list<array{id: int, cardId: int, type: string, data: string, createdBy: string, createdAt: int}>
+	 */
+	public function readAttachments(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'card_id', 'type', 'data', 'created_by', 'created_at')
+			->from('deck_attachment')
+			->where($qb->expr()->in('card_id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter('deck_file')))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		return array_map(fn (array $r): array => [
+			'id' => (int)$r['id'],
+			'cardId' => (int)$r['card_id'],
+			'type' => (string)$r['type'],
+			'data' => (string)($r['data'] ?? ''),
+			'createdBy' => (string)($r['created_by'] ?? ''),
+			'createdAt' => (int)($r['created_at'] ?? 0),
+		], $this->fetchAll($qb));
+	}
+
+	/**
+	 * Count of non-deleted user-Files reference attachments (`file` kind) on the
+	 * given cards. These are deliberately NOT imported (re-linking user Files is
+	 * out of scope); the importer surfaces this count in its result summary.
+	 *
+	 * @param int[] $cardIds
+	 */
+	public function countFileReferenceAttachments(array $cardIds): int {
+		if ($cardIds === []) {
+			return 0;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('id', 'cnt'))
+			->from('deck_attachment')
+			->where($qb->expr()->in('card_id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter('file')))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return (int)($row['cnt'] ?? 0);
+	}
+
 	// -------------------------------------------------------------------------
 
 	/**
