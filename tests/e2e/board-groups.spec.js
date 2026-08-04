@@ -73,7 +73,7 @@ test.describe('Board grouping / folders (#3529)', () => {
 		const ungrouped = page.locator('[data-test="folder-section-ungrouped"]')
 		const tile = ungrouped.locator('.board-list__tile-wrap', { hasText: state.title })
 		await expect(tile.first()).toBeVisible({ timeout: 10_000 })
-		await tile.first().locator('[data-test^="board-folder-menu-"] button').first().click()
+		await tile.first().locator('[data-test^="board-options-menu-"] button').first().click()
 
 		// Pick the folder from the move menu.
 		await page.locator('[data-test^="move-to-folder-"]', { hasText: state.folderName })

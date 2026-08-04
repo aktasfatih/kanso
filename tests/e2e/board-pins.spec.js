@@ -50,7 +50,7 @@ test.describe('Board pinning (#3632)', () => {
 		}
 	})
 
-	test('pin a board via its tile star → it shows in the Pinned section and the nav; unpin removes it; persists across reload', async ({ page }) => {
+	test('pin a board via its tile options menu → it shows in the Pinned section and the nav; unpin removes it; persists across reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/`)
 		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
@@ -67,8 +67,9 @@ test.describe('Board pinning (#3632)', () => {
 		const pinnedSection = page.locator('.board-section', { hasText: 'Pinned' })
 		await expect(pinnedSection.locator('.board-tile', { hasText: state.title })).toHaveCount(0)
 
-		// Click the tile's star to pin it — must NOT navigate to the board.
-		await tile.locator('[data-test="board-pin-star"]').click()
+		// Open the tile's options (⋯) menu and click Pin — must NOT navigate.
+		await tile.locator(`[data-test="board-options-menu-${state.boardId}"] button`).first().click()
+		await page.locator(`[data-test="toggle-pin-${state.boardId}"]`).first().click()
 		await expect(page).toHaveURL(/#\/$|apps\/kanso#\/$|apps\/kanso#\//, { timeout: 3_000 })
 
 		// The board now appears in the Pinned section.
@@ -85,10 +86,11 @@ test.describe('Board pinning (#3632)', () => {
 		// Still listed in the nav.
 		await expect(navLink.first()).toBeVisible({ timeout: 10_000 })
 
-		// Unpin from the Pinned section tile's star.
-		await page.locator('.board-section', { hasText: 'Pinned' })
-			.locator('.board-tile', { hasText: state.title })
-			.locator('[data-test="board-pin-star"]').first().click()
+		// Unpin from the Pinned section tile's options menu.
+		const pinnedTile = page.locator('.board-section', { hasText: 'Pinned' })
+			.locator('.board-tile', { hasText: state.title }).first()
+		await pinnedTile.locator(`[data-test="board-options-menu-${state.boardId}"] button`).first().click()
+		await page.locator(`[data-test="toggle-pin-${state.boardId}"]`).first().click()
 
 		// It leaves the Pinned section.
 		await expect(page.locator('.board-section', { hasText: 'Pinned' })

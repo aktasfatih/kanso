@@ -214,21 +214,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<template v-else>
 				<!-- Pinned section (#3632): the user's pinned boards, rendered at the
-				     top in their own section. Each tile's star unpins (optimistic).
-				     The star click stops propagation so it never opens the board. -->
+				     top in their own section. Each tile carries the same options (⋯)
+				     menu as the other tiles (#3642); the menu lives in a sibling
+				     .board-tile__menu so opening it / unpinning never opens the board. -->
 				<section v-if="!showArchived && pinnedBoards.length > 0" class="board-section">
 					<h2 class="board-section__label">{{ t('kanso', 'Pinned') }}</h2>
 					<div class="board-grid">
 						<div
 							v-for="board in pinnedBoards"
 							:key="board.id"
-							class="board-tile board-tile--pinned board-tile--clickable"
-							role="button"
-							tabindex="0"
-							@click="openBoard(board.id)"
-							@keydown.enter.prevent="openBoard(board.id)"
-							@keydown.space.prevent="openBoard(board.id)">
-							<BoardTileContent :board="board" pinned pinnable @toggle-pin="togglePin(board)" />
+							class="board-tile board-tile--pinned board-list__tile-wrap">
+							<div
+								class="board-tile__hit"
+								role="button"
+								tabindex="0"
+								@click="openBoard(board.id)"
+								@keydown.enter.prevent="openBoard(board.id)"
+								@keydown.space.prevent="openBoard(board.id)">
+								<BoardTileContent :board="board" />
+							</div>
+							<div class="board-tile__menu">
+								<BoardTileMenu
+									:board="board"
+									:groups="groups"
+									pinned
+									@toggle-pin="togglePin(board)"
+									@assign="(gid) => moveBoard(board.id, gid)"
+									@unassign="() => removeFromFolder(board.id)" />
+							</div>
 						</div>
 					</div>
 				</section>
@@ -330,12 +343,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="openBoard(board.id)"
 										@keydown.enter.prevent="openBoard(board.id)"
 										@keydown.space.prevent="openBoard(board.id)">
-										<BoardTileContent :board="board" pinnable @toggle-pin="togglePin(board)" />
+										<BoardTileContent :board="board" />
 									</div>
 									<div class="board-tile__menu">
-										<BoardFolderMenu
+										<BoardTileMenu
 											:board="board"
 											:groups="groups"
+											@toggle-pin="togglePin(board)"
 											@assign="(gid) => moveBoard(board.id, gid)"
 											@unassign="() => removeFromFolder(board.id)" />
 									</div>
@@ -368,12 +382,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									@click="openBoard(board.id)"
 									@keydown.enter.prevent="openBoard(board.id)"
 									@keydown.space.prevent="openBoard(board.id)">
-									<BoardTileContent :board="board" pinnable @toggle-pin="togglePin(board)" />
+									<BoardTileContent :board="board" />
 								</div>
 								<div class="board-tile__menu">
-									<BoardFolderMenu
+									<BoardTileMenu
 										:board="board"
 										:groups="groups"
+										@toggle-pin="togglePin(board)"
 										@assign="(gid) => moveBoard(board.id, gid)"
 										@unassign="() => removeFromFolder(board.id)" />
 								</div>
@@ -410,7 +425,7 @@ import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import BoardTileContent from '../components/BoardTileContent.vue'
-import BoardFolderMenu from '../components/BoardFolderMenu.vue'
+import BoardTileMenu from '../components/BoardTileMenu.vue'
 import { useBoards } from '../composables/useBoards.js'
 import { useBoardGroups } from '../composables/useBoardGroups.js'
 import { getSettings, updateSettings } from '../services/api.js'
