@@ -59,6 +59,8 @@ class Change extends Entity {
 	public const VERB_REVIEW_REQUESTED = 10;
 	public const VERB_REVIEW_VERDICT = 11;
 	public const VERB_CHECKLIST = 12;
+	public const VERB_CONTACT_LINKED = 13;
+	public const VERB_CONTACT_UNLINKED = 14;
 
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of

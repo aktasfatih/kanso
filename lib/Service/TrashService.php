@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -48,6 +49,7 @@ class TrashService {
 		private PermissionService $permissionService,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private CardContactMapper $cardContactMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
@@ -118,6 +120,7 @@ class TrashService {
 
 		$this->cardLabelMapper->deleteByCard($cardId);
 		$this->cardAssigneeMapper->deleteByCard($cardId);
+		$this->cardContactMapper->deleteByCard($cardId);
 		$this->cardReviewMapper->deleteByCard($cardId);
 		$this->checklistItemMapper->deleteByCard($cardId);
 		// Reactions hang off comment_id, so drop them BEFORE the comments they

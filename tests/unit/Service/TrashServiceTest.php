@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -39,6 +40,7 @@ class TrashServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private CardContactMapper&MockObject $cardContactMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
@@ -58,6 +60,7 @@ class TrashServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
+		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
@@ -74,6 +77,7 @@ class TrashServiceTest extends TestCase {
 			$this->permissionService,
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
+			$this->cardContactMapper,
 			$this->cardReviewMapper,
 			$this->checklistItemMapper,
 			$this->commentMapper,
@@ -187,6 +191,7 @@ class TrashServiceTest extends TestCase {
 
 		$this->cardLabelMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->cardAssigneeMapper->expects(self::once())->method('deleteByCard')->with(9);
+		$this->cardContactMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->checklistItemMapper->expects(self::once())->method('deleteByCard')->with(9);
 		// Reactions are dropped by comment id BEFORE the comments themselves (#3550).
 		$this->commentMapper->expects(self::once())->method('idsByCard')->with(9)->willReturn([50, 51]);

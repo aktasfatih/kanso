@@ -121,6 +121,21 @@ export const assignUser = (cardId, userId) =>
 export const unassignUser = (cardId, userId) =>
 	axios.delete(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)
 
+// Contacts (#3530 - link Nextcloud Contacts to a card, read-only)
+// Returns [] when the optional Contacts app is disabled, so the picker hides
+// itself gracefully. `q` (optional) filters the address-book search.
+export const fetchCardContacts = (boardId, q) =>
+	axios
+		.get(url(`/api/boards/${boardId}/contacts`), q ? { params: { q } } : undefined)
+		.then((r) => r.data)
+
+// The CardDAV URI travels in the body (it contains '/' and ':', not path-safe).
+export const linkContact = (cardId, contactUri, displayName) =>
+	axios.post(url(`/api/cards/${cardId}/contacts`), { contactUri, displayName }).then((r) => r.data)
+
+export const unlinkContact = (cardId, contactUri) =>
+	axios.delete(url(`/api/cards/${cardId}/contacts`), { data: { contactUri } }).then((r) => r.data)
+
 // ACL (board sharing)
 export const searchSharees = (boardId, q) =>
 	axios.get(url(`/api/boards/${boardId}/acl/search`), { params: { q } }).then((r) => r.data)

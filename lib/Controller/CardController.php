@@ -10,6 +10,7 @@ namespace OCA\Kanso\Controller;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -20,6 +21,7 @@ use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\SubscriptionService;
@@ -45,8 +47,10 @@ class CardController extends Controller {
 		private CardService $cardService,
 		private LabelService $labelService,
 		private AssigneeService $assigneeService,
+		private ContactService $contactService,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private CardContactMapper $cardContactMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardMapper $cardMapper,
@@ -134,6 +138,7 @@ class CardController extends Controller {
 		return $card->jsonSerialize()
 			+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
 			+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
+			+ ['contacts' => $this->cardContactMapper->findContactsByCard($id)]
 			+ ['reviews' => $this->cardReviewMapper->findByCard($id)]
 			+ ['checklistItems' => $checklistItems]
 			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
@@ -316,6 +321,35 @@ class CardController extends Controller {
 	public function unassignUser(int $id, string $userId): JSONResponse {
 		return $this->respond(function () use ($id, $userId): JSONResponse {
 			$this->assigneeService->unassign($id, $userId, $this->currentUserId());
+			return new JSONResponse([]);
+		});
+	}
+
+	/**
+	 * Links a Nextcloud Contacts entry to the card as a read-only reference
+	 * (#3530). The CardDAV URI + display name travel in the body (the URI is not
+	 * path-safe). Idempotent - re-linking succeeds without writing anything.
+	 * Returns the persisted {contactUri, displayName} (the display name is the
+	 * server-resolved snapshot).
+	 */
+	#[NoAdminRequired]
+	public function linkContact(int $id, string $contactUri = '', string $displayName = ''): JSONResponse {
+		return $this->respond(function () use ($id, $contactUri, $displayName): JSONResponse {
+			return new JSONResponse(
+				$this->contactService->link($id, $contactUri, $displayName, $this->currentUserId())
+			);
+		});
+	}
+
+	/**
+	 * Unlinks a contact from the card. Idempotent - DELETE of an absent link
+	 * succeeds without writing anything. Works even when the Contacts app is
+	 * later disabled, so a dangling link is always removable.
+	 */
+	#[NoAdminRequired]
+	public function unlinkContact(int $id, string $contactUri = ''): JSONResponse {
+		return $this->respond(function () use ($id, $contactUri): JSONResponse {
+			$this->contactService->unlink($id, $contactUri, $this->currentUserId());
 			return new JSONResponse([]);
 		});
 	}

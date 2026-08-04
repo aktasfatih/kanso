@@ -13,6 +13,7 @@ use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
@@ -26,6 +27,7 @@ use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
@@ -44,12 +46,14 @@ class BoardControllerTest extends TestCase {
 	private IUserSession&MockObject $userSession;
 	private BoardService&MockObject $boardService;
 	private ParticipantService&MockObject $participantService;
+	private ContactService&MockObject $contactService;
 	private ChangeMapper&MockObject $changeMapper;
 	private StackMapper&MockObject $stackMapper;
 	private CardMapper&MockObject $cardMapper;
 	private LabelMapper&MockObject $labelMapper;
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private CardContactMapper&MockObject $cardContactMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
@@ -66,12 +70,14 @@ class BoardControllerTest extends TestCase {
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->participantService = $this->createMock(ParticipantService::class);
+		$this->contactService = $this->createMock(ContactService::class);
 		$this->changeMapper = $this->createMock(ChangeMapper::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
+		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
@@ -91,12 +97,14 @@ class BoardControllerTest extends TestCase {
 			$this->userSession,
 			$this->boardService,
 			$this->participantService,
+			$this->contactService,
 			$this->changeMapper,
 			$this->stackMapper,
 			$this->cardMapper,
 			$this->labelMapper,
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
+			$this->cardContactMapper,
 			$this->cardReviewMapper,
 			$this->reviewTypeMapper,
 			$this->checklistItemMapper,

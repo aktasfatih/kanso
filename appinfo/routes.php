@@ -72,6 +72,9 @@ return [
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
 		['name' => 'boardStats#show', 'url' => '/api/boards/{id}/stats', 'verb' => 'GET'],
 		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],
+		// Contact picker data source (#3530): searches the user's address books.
+		// Returns [] when the optional Contacts app is disabled.
+		['name' => 'board#contacts', 'url' => '/api/boards/{id}/contacts', 'verb' => 'GET'],
 		// Resolve a board-scoped PREFIX-<board_seq> human reference (e.g. KAN-123)
 		// to a card {cardId, title} - opens a card by its human id from a URL and
 		// backs the markdown cross-reference renderer (#3611). The literal
@@ -122,6 +125,10 @@ return [
 		['name' => 'card#unassignLabel', 'url' => '/api/cards/{id}/labels/{labelId}', 'verb' => 'DELETE'],
 		['name' => 'card#assignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'PUT'],
 		['name' => 'card#unassignUser', 'url' => '/api/cards/{id}/assignees/{userId}', 'verb' => 'DELETE'],
+		// Contact links carry a CardDAV URI (contains '/' and ':'), so it travels
+		// in the body rather than the path.
+		['name' => 'card#linkContact', 'url' => '/api/cards/{id}/contacts', 'verb' => 'POST'],
+		['name' => 'card#unlinkContact', 'url' => '/api/cards/{id}/contacts', 'verb' => 'DELETE'],
 
 		['name' => 'inbox#index', 'url' => '/api/inbox', 'verb' => 'GET'],
 

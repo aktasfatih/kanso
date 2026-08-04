@@ -10,6 +10,7 @@ namespace OCA\Kanso\Controller;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
@@ -21,6 +22,7 @@ use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
 use OCA\Kanso\Service\PermissionService;
@@ -41,12 +43,14 @@ class BoardController extends Controller {
 		private IUserSession $userSession,
 		private BoardService $boardService,
 		private ParticipantService $participantService,
+		private ContactService $contactService,
 		private ChangeMapper $changeMapper,
 		private StackMapper $stackMapper,
 		private CardMapper $cardMapper,
 		private LabelMapper $labelMapper,
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
+		private CardContactMapper $cardContactMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
 		private ChecklistItemMapper $checklistItemMapper,
@@ -98,6 +102,7 @@ class BoardController extends Controller {
 
 			$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($id);
 			$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($id);
+			$contactsByCard = $this->cardContactMapper->findContactsByBoard($id);
 			$checklistByCard = $this->checklistItemMapper->progressByBoard($id);
 			$childProgressByCard = $this->cardMapper->childProgressByBoard($id);
 			$commentCountByCard = $this->commentMapper->countsByBoard($id);
@@ -111,6 +116,7 @@ class BoardController extends Controller {
 					static fn (Card $card): array => $card->jsonSerializeSummary()
 						+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
 						+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
+						+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
 						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 						+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 						+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
@@ -143,6 +149,21 @@ class BoardController extends Controller {
 		return $this->respond(function () use ($id, $q): JSONResponse {
 			return new JSONResponse(
 				$this->participantService->getParticipants($id, $this->currentUserId(), $q)
+			);
+		});
+	}
+
+	/**
+	 * Contact-picker data source (#3530): searches the requester's address books
+	 * for the card contact picker. Requires READ on the board (board-scoped, same
+	 * gate as the assignee picker). Returns an empty list when the optional
+	 * Contacts app is disabled - the picker hides itself rather than erroring.
+	 */
+	#[NoAdminRequired]
+	public function contacts(int $id, ?string $q = null): JSONResponse {
+		return $this->respond(function () use ($id, $q): JSONResponse {
+			return new JSONResponse(
+				$this->contactService->search($id, $this->currentUserId(), $q)
 			);
 		});
 	}

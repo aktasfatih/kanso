@@ -11,6 +11,7 @@ use OCA\Kanso\Controller\CardController;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -20,6 +21,7 @@ use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -36,8 +38,10 @@ class CardControllerTest extends TestCase {
 	private CardService&MockObject $cardService;
 	private LabelService&MockObject $labelService;
 	private AssigneeService&MockObject $assigneeService;
+	private ContactService&MockObject $contactService;
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private CardContactMapper&MockObject $cardContactMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CardMapper&MockObject $cardMapper;
@@ -55,8 +59,11 @@ class CardControllerTest extends TestCase {
 		$this->cardService = $this->createMock(CardService::class);
 		$this->labelService = $this->createMock(LabelService::class);
 		$this->assigneeService = $this->createMock(AssigneeService::class);
+		$this->contactService = $this->createMock(ContactService::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
+		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
+		$this->cardContactMapper->method('findContactsByCard')->willReturn([]);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
@@ -84,8 +91,10 @@ class CardControllerTest extends TestCase {
 			$this->cardService,
 			$this->labelService,
 			$this->assigneeService,
+			$this->contactService,
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
+			$this->cardContactMapper,
 			$this->cardReviewMapper,
 			$this->checklistItemMapper,
 			$this->cardMapper,

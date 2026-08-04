@@ -510,6 +510,71 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
 
+						<!-- Contacts (#3530) - read-only Contacts links, only when the Contacts app is available -->
+						<template v-if="contactsAvailable">
+							<span
+								v-for="c in cardContacts"
+								:key="c.contactUri"
+								class="card-modal__assignee-pill">
+								<NcAvatar
+									:display-name="c.displayName"
+									:size="22"
+									:show-user-status="false"
+									:disable-tooltip="false" />
+								<span class="card-modal__assignee-name">{{ c.displayName }}</span>
+								<button
+									class="card-modal__pill-x"
+									:title="t('kanso', 'Unlink contact')"
+									:disabled="toggleContact.isPending.value"
+									@click="handleToggleContact(c, false)">
+									<CloseIcon :size="12" />
+								</button>
+							</span>
+							<div class="card-modal__attr">
+								<button
+									class="card-modal__pill card-modal__pill--dashed"
+									:aria-expanded="openPicker === 'contact'"
+									@click="toggleContactPicker()">
+									<AccountBoxIcon :size="14" />
+									{{ t('kanso', 'Link contact') }}
+								</button>
+								<div v-if="openPicker === 'contact'" class="card-modal__popover">
+									<input
+										ref="contactSearchInput"
+										v-model="contactQuery"
+										type="text"
+										class="card-modal__contact-search"
+										:placeholder="t('kanso', 'Search contacts…')"
+										@input="onContactSearch">
+									<div
+										v-for="c in contactResults"
+										:key="c.contactUri"
+										class="card-modal__assign-option-wrap">
+										<button
+											class="card-modal__assign-option"
+											:disabled="toggleContact.isPending.value || cardContactUris.has(c.contactUri)"
+											@click="handleToggleContact(c, true)">
+											<NcAvatar
+												:display-name="c.displayName"
+												:size="24"
+												:show-user-status="false"
+												:disable-tooltip="true" />
+											<span class="card-modal__contact-option-text">
+												<span>{{ c.displayName }}</span>
+												<span v-if="c.email" class="card-modal__contact-email">{{ c.email }}</span>
+											</span>
+										</button>
+									</div>
+									<span
+										v-if="!contactSearching && contactResults.length === 0"
+										class="card-modal__contact-empty">
+										{{ contactQuery ? t('kanso', 'No contacts found.') : t('kanso', 'Type to search your contacts.') }}
+									</span>
+								</div>
+							</div>
+							<span v-if="contactError" class="card-modal__save-error">{{ contactError }}</span>
+						</template>
+
 						<span class="card-modal__attr-divider" />
 
 						<!-- Watchers -->
@@ -1581,6 +1646,7 @@ import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
@@ -1636,6 +1702,8 @@ import { useBoard } from '../composables/useBoard.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
+import { useContacts } from '../composables/useContacts.js'
+import { fetchCardContacts } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
@@ -1887,6 +1955,108 @@ async function handleToggleAssignee(uid, assign) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
 	}
 }
+
+// ── Contacts (#3530) ─────────────────────────────────────────────────────────
+// Read-only Contacts links. The board summary/card detail carry a `contacts`
+// array of {contactUri, displayName}. The picker searches the address book live
+// (fetchCardContacts, capped + [] when the Contacts app is disabled), so the
+// whole feature self-hides when Contacts is unavailable.
+const { toggleContact } = useContacts(boardId)
+const contactError = ref('')
+const contactQuery = ref('')
+const contactResults = ref([])
+const contactSearching = ref(false)
+const contactsAvailable = ref(false)
+const contactSearchInput = ref(null)
+let contactSearchTimer = null
+let contactSearchSeq = 0
+
+const cardContacts = computed(() =>
+	Array.isArray(cardData.value?.contacts) ? cardData.value.contacts : [],
+)
+const cardContactUris = computed(() => new Set(cardContacts.value.map((c) => c.contactUri)))
+
+// Probe Contacts availability once (a search returns [] when disabled, but an
+// empty-query search on an enabled instance also returns [] - so we treat a
+// successful call as "available" and only hide on a hard failure). We surface
+// the picker whenever the card already has contacts, or the probe succeeded.
+async function runContactSearch(query) {
+	const seq = ++contactSearchSeq
+	contactSearching.value = true
+	try {
+		const results = await fetchCardContacts(resolveContactBoardId(), query)
+		if (seq !== contactSearchSeq) return
+		contactResults.value = Array.isArray(results) ? results : []
+		contactsAvailable.value = true
+	} catch (err) {
+		if (seq !== contactSearchSeq) return
+		contactResults.value = []
+		// A 4xx/5xx here means Contacts is effectively unavailable - hide it,
+		// unless the card already carries links (then keep it visible read-path).
+		if (cardContacts.value.length === 0) {
+			contactsAvailable.value = false
+		}
+		contactError.value = err?.response?.data?.error || ''
+	} finally {
+		if (seq === contactSearchSeq) contactSearching.value = false
+	}
+}
+
+function resolveContactBoardId() {
+	const b = boardId
+	if (typeof b === 'function') return b()
+	if (b !== null && typeof b === 'object' && b.value !== undefined) return b.value
+	return b
+}
+
+function onContactSearch() {
+	if (contactSearchTimer) clearTimeout(contactSearchTimer)
+	contactSearchTimer = setTimeout(() => {
+		runContactSearch(contactQuery.value)
+	}, 200)
+}
+
+async function toggleContactPicker() {
+	if (openPicker.value === 'contact') {
+		openPicker.value = null
+		return
+	}
+	openPicker.value = 'contact'
+	contactError.value = ''
+	contactResults.value = []
+	contactQuery.value = ''
+	await nextTick()
+	contactSearchInput.value?.focus?.()
+	runContactSearch('')
+}
+
+async function handleToggleContact(contact, link) {
+	contactError.value = ''
+	openPicker.value = null
+	try {
+		await toggleContact.mutateAsync({
+			cardId: Number(props.cardId),
+			contact,
+			link,
+		})
+	} catch (err) {
+		contactError.value = err?.response?.data?.error || t('kanso', 'Failed to update contact.')
+	}
+}
+
+// A card that already carries contact links keeps the section visible (so an
+// existing link can always be unlinked) regardless of the probe outcome.
+watch(cardContacts, (list) => {
+	if (list.length > 0) contactsAvailable.value = true
+}, { immediate: true })
+
+// Probe availability on mount so the picker shows for an enabled instance even
+// before the user interacts (an empty-query search doubles as the probe).
+runContactSearch('')
+
+onBeforeUnmount(() => {
+	if (contactSearchTimer) clearTimeout(contactSearchTimer)
+})
 
 // ── Reviews ──────────────────────────────────────────────────────────────────
 const { requestReview, withdrawReview, setReviewState } = useReviews(boardId)
@@ -2469,6 +2639,8 @@ const ACTIVITY_VERBS = {
 	10: () => t('kanso', 'requested a review'),
 	11: () => t('kanso', 'gave a review verdict'),
 	12: () => t('kanso', 'updated the checklist'),
+	13: () => t('kanso', 'linked a contact'),
+	14: () => t('kanso', 'unlinked a contact'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
@@ -4105,6 +4277,39 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__assign-option:hover {
 	background: var(--color-background-hover);
+}
+.card-modal__assign-option:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+/* Contacts picker (#3530) */
+.card-modal__contact-search {
+	width: 100%;
+	margin-bottom: 4px;
+	padding: 4px 8px;
+	border: 1px solid var(--color-border);
+	border-radius: 6px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8125rem;
+}
+.card-modal__contact-option-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.card-modal__contact-email {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.6875rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__contact-empty {
+	display: block;
+	padding: 6px 8px;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
 }
 .card-modal__label-toggle {
 	display: inline-flex;
