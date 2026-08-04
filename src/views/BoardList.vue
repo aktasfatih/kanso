@@ -482,10 +482,13 @@ const visibleBoards = computed(() => {
 })
 
 // ── Folders / groups (#3529) ──────────────────────────────────────────────────
-// One section per folder (in stored order), holding its non-pinned active member
-// boards (search-filtered). A board's folder is `board.groupId` on the payload.
+// One section per folder (in stored order), holding its active member boards
+// (search-filtered). A board's folder is `board.groupId` on the payload. Pinning
+// is an ADDITIVE shortcut (like Files favourites): a pinned board still shows in
+// its folder / All-boards section AND is surfaced at the top under Pinned — so
+// pinning a foldered board never empties its folder (#3643).
 const searchedActive = computed(() =>
-	activeBoards.value.filter((b) => !b.pinned).filter(matchesSearch),
+	activeBoards.value.filter(matchesSearch),
 )
 const folderSections = computed(() =>
 	groups.value.map((g) => ({

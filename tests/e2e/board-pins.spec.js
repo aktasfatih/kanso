@@ -96,4 +96,41 @@ test.describe('Board pinning (#3632)', () => {
 		await expect(page.locator('.board-section', { hasText: 'Pinned' })
 			.locator('.board-tile', { hasText: state.title })).toHaveCount(0, { timeout: 10_000 })
 	})
+
+	// #3643 — pinning is an ADDITIVE shortcut: a board that lives in a folder must
+	// stay in its folder AND also appear under Pinned (the folder must NOT empty).
+	test('pinning a foldered board keeps it in its folder and also surfaces it under Pinned', async ({ page }) => {
+		const stamp = Math.floor(Date.now() / 1000)
+		const folder = await api('POST', '/board-groups', { name: 'Pin Folder ' + stamp })
+		const board = await api('POST', '/boards', { title: 'Foldered Pin ' + stamp, color: '3498db' })
+		await api('PUT', `/board-groups/${folder.id}/boards/${board.id}`)
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/`)
+			await page.waitForSelector('.board-list-view', { timeout: 15_000 })
+
+			const folderSection = page.locator(`[data-test="folder-section-${folder.id}"]`)
+			// The board sits in its folder and is not pinned yet.
+			await expect(folderSection.locator('.board-tile', { hasText: board.title }).first())
+				.toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.board-section', { hasText: 'Pinned' })
+				.locator('.board-tile', { hasText: board.title })).toHaveCount(0)
+
+			// Pin it from the folder tile's options menu.
+			await folderSection.locator(`[data-test="board-options-menu-${board.id}"] button`).first().click()
+			await page.locator(`[data-test="toggle-pin-${board.id}"]`).first().click()
+
+			// It now appears under Pinned AND remains in its folder — folder not emptied.
+			await expect(page.locator('.board-section', { hasText: 'Pinned' })
+				.locator('.board-tile', { hasText: board.title }).first())
+				.toBeVisible({ timeout: 10_000 })
+			await expect(folderSection.locator('.board-tile', { hasText: board.title }).first())
+				.toBeVisible()
+			await expect(folderSection.locator('.board-section__empty')).toHaveCount(0)
+		} finally {
+			await api('DELETE', `/boards/${board.id}/pin`).catch(() => {})
+			await api('DELETE', `/boards/${board.id}`).catch(() => {})
+			await api('DELETE', `/board-groups/${folder.id}`).catch(() => {})
+		}
+	})
 })
