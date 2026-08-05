@@ -1,7 +1,7 @@
 # Kanso
 
 Kanso is an open-source kanban app for Nextcloud (app id `kanso`) — a from-scratch,
-performance-first kanban board. AGPL, targets Nextcloud 30–32.
+performance-first kanban board. AGPL, targets Nextcloud 30–34.
 
 ## Stack & conventions
 - Backend: PHP 8.2+, Nextcloud app framework (`OCA\Kanso`), own tables prefixed `kanso_`.
@@ -14,8 +14,8 @@ performance-first kanban board. AGPL, targets Nextcloud 30–32.
 - Realtime: notify_push custom events when available; cheap delta-polling fallback otherwise.
 - State pattern: database-first — server is source of truth, realtime deltas patch the client cache, local mutations are optimistic with rollback.
 - Tests: PHPUnit for API/services (happy path + permission denial), Playwright smoke tests for board interactions, psalm + php-cs-fixer clean.
-- Branch strategy: work directly on `main` until v0.1; conventional-ish commit messages.
-- Git: published at https://github.com/aktasfatih/kanso (`origin`). Commit after each completed card; push to `origin/main` as a deliberate release step. (Development was local-only before the initial public release; `.claude/` — local PM/agent tooling — is gitignored and kept out of the repo.)
+- Branch strategy: **`main` is protected — all changes land via pull request.** Work on a short-lived branch → open a PR → merge only when every required CI check is green. No direct pushes to `main` (admins can bypass for a genuine emergency hotfix only). Conventional-ish commit messages.
+- Git: published at https://github.com/aktasfatih/kanso (`origin`). **Required checks — all must pass to merge:** `cs-check`, `psalm`, `unit-php (8.2)`, `unit-php (8.3)`, `build-frontend`, `e2e` (the full suite, ~1.5h). `.claude/` — local PM/agent tooling — is gitignored and kept out of the repo.
 
 ## Dev workflow
 - NEVER test against prod (sv1). Use the local docker dev stack in `dev/` (copied from ../deck_recurrence/dev). Prod only gets tagged releases via the scoped deploy playbook.

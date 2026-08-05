@@ -29,6 +29,11 @@ php-cs-fixer). Before opening a PR:
   the README and `CLAUDE.md` (fractional sort keys, summary-only board reads,
   the `kanso_changes` delta log, ETags) — don't regress these.
 
+`main` is a protected branch: every change lands through a pull request and can
+only be merged once **all** CI checks pass — `cs-check`, `psalm`, `unit-php` (on
+PHP 8.2 and 8.3), `build-frontend`, and the full `e2e` suite. Open your PR
+against `main`; CI runs automatically on push.
+
 ## Staying current with Nextcloud
 
 [Dependabot](.github/dependabot.yml) opens weekly PRs for our composer, npm and
