@@ -26,12 +26,34 @@ function rectsOverlap(a, b) {
 		&& b.y < a.y + a.height
 }
 
+/**
+ * Assert the page <h1> clears the NC nav toggle in the current nav state:
+ *  - no bounding-box overlap, and
+ *  - the title starts to the right of the toggle (the reserved space cleared it), and
+ *  - the title is not pushed absurdly far past the toggle (no ugly gap).
+ */
+async function expectTitleClearsToggle(page, title, toggle, label) {
+	const titleBox = await title.boundingBox()
+	const toggleBox = await toggle.boundingBox()
+	expect(titleBox, `${label}: title box`).not.toBeNull()
+	expect(toggleBox, `${label}: toggle box`).not.toBeNull()
+
+	expect(rectsOverlap(titleBox, toggleBox), `${label}: title/toggle overlap`).toBe(false)
+	expect(titleBox.x, `${label}: title left vs toggle right`)
+		.toBeGreaterThanOrEqual(toggleBox.x + toggleBox.width)
+	// Guard against a runaway inset: the title should sit just right of the
+	// toggle, within ~40px of its right edge, not floated far into the page.
+	expect(titleBox.x - (toggleBox.x + toggleBox.width), `${label}: gap after toggle`)
+		.toBeLessThanOrEqual(40)
+}
+
 test.describe('NC nav-toggle vs page title (#3651)', () => {
-	// When Nextcloud's app navigation is collapsed it keeps the toggle button
-	// (.app-navigation-toggle) pinned to the top-left of the content area. Our
-	// shared page-header treatment reserves left space in that state so the
-	// toggle never lands on top of the page <h1>.
-	test('collapsed nav toggle does not overlap the My tasks title', async ({ page }) => {
+	// Nextcloud renders the app-navigation toggle (.app-navigation-toggle) pinned
+	// to the leading edge of the content area in BOTH nav states (open and
+	// collapsed) on NC34. Our shared page-header treatment reserves left space
+	// unconditionally so the toggle never lands on top of the page <h1> in either
+	// state. "My tasks" (MyCardsView) always renders its <h1>, so we use it.
+	test('nav toggle does not overlap the My tasks title (open AND collapsed)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/my-tasks`)
 
@@ -42,24 +64,18 @@ test.describe('NC nav-toggle vs page title (#3651)', () => {
 		const toggle = page.locator('.app-navigation-toggle')
 		await expect(toggle).toBeVisible({ timeout: 10_000 })
 
-		// Collapse the navigation if it is currently open.
-		if (!(await nav.evaluate((el) => el.classList.contains('app-navigation--closed')))) {
+		// Ensure the nav is OPEN first (the common case the user reported).
+		if (await nav.evaluate((el) => el.classList.contains('app-navigation--closed'))) {
 			await toggle.click()
-			await expect(nav).toHaveClass(/app-navigation--closed/, { timeout: 5000 })
+			await expect(nav).not.toHaveClass(/app-navigation--closed/, { timeout: 5000 })
 		}
-
-		// Let the collapse transition settle so the measured boxes are final.
 		await page.waitForTimeout(400)
+		await expectTitleClearsToggle(page, title, toggle, 'nav open')
 
-		const titleBox = await title.boundingBox()
-		const toggleBox = await toggle.boundingBox()
-		expect(titleBox).not.toBeNull()
-		expect(toggleBox).not.toBeNull()
-
-		// The core acceptance check: the toggle and the title must not overlap
-		// while the nav is collapsed, and the title must start to the right of
-		// the toggle (i.e. the reserved space actually cleared it).
-		expect(rectsOverlap(titleBox, toggleBox)).toBe(false)
-		expect(titleBox.x).toBeGreaterThanOrEqual(toggleBox.x + toggleBox.width)
+		// Now COLLAPSE the nav and re-check.
+		await toggle.click()
+		await expect(nav).toHaveClass(/app-navigation--closed/, { timeout: 5000 })
+		await page.waitForTimeout(400)
+		await expectTitleClearsToggle(page, title, toggle, 'nav collapsed')
 	})
 })

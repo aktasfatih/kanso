@@ -6,32 +6,47 @@
 /*
  * Shared page-header treatment for Kanso's full-width content views.
  *
- * When Nextcloud's app navigation is COLLAPSED it adds `.app-navigation--closed`
- * to `.app-navigation` and keeps its toggle button (`.app-navigation-toggle`,
- * ~34px, absolutely positioned at the top-left ~x=[16,50] of `#app-content-vue`)
- * visible so the user can re-open the sidebar. Our hand-rolled page headers put
- * their title flush at x=0, so the toggle overlaps it.
+ * Nextcloud renders the app-navigation toggle button (`.app-navigation-toggle`,
+ * inside `.app-navigation-toggle-wrapper`) pinned to the trailing edge of the
+ * sidebar, which lands it at the LEADING edge of `#app-content-vue` — the
+ * content area. On Nextcloud 34 this is true in BOTH nav states: the toggle is
+ * shown whether the sidebar is open (`.app-navigation`) or collapsed
+ * (`.app-navigation--closed`), roughly at x=[content-left .. content-left+34px].
  *
- * The fix keys off NC's own collapsed-state class (the platform convention): in
- * the NcContent DOM, `.app-navigation--closed` is the immediate previous sibling
- * of `#app-content-vue`, which contains every view. Any header opted into the
- * shared `.kanso-page-header` class reserves just enough left space to clear the
- * toggle — and ONLY while the nav is collapsed, so there is no wasted gap when
- * the nav is open. This must live in a global (non-scoped) stylesheet because
- * scoped component styles cannot reach the sibling `.app-navigation` element.
+ * Our hand-rolled page headers put their title flush at the content's left edge,
+ * so the toggle overlaps the title in either state. NcAppContent normally leaves
+ * clearance for the toggle, but our full-width views render titles flush and
+ * strip that clearance.
  *
- * 52px = toggle right edge (~50px) + a small gutter, matching the left inset the
- * board sub-views (Archived / Trash / Analytics) previously hard-coded.
+ * There is no platform-provided "toggle is present" class or CSS var on
+ * `#app-content-vue`/`#content` to key off (the toggle lives on the navigation
+ * element and is always rendered on NC34), so we reserve the clearance
+ * UNCONDITIONALLY on the shared classes whenever a view is inside
+ * `#app-content-vue`. A title indented ~50px from the far-left edge reads fine,
+ * and since the toggle is always there this leaves no case uncovered. This must
+ * live in a global (non-scoped) stylesheet because scoped component styles
+ * cannot reach the ancestor `#app-content-vue` element.
  *
- * `.kanso-page-header` shifts a single header row (used by the full-width list
- * views whose title sat flush at x=0). `.kanso-page-view` shifts an entire view
- * so a header and the body beneath it stay aligned (used by the board sub-views
- * whose header, list and footers share one left inset).
+ * The toggle sits ~42px in from the content's leading edge, so a title needs to
+ * start ~52px in to clear it with a small gutter. The two classes live at
+ * different depths, and their host views already carry some left padding, so the
+ * added inset differs to land both titles at the same ~52px effective offset:
+ *
+ * `.kanso-page-header` is a header row inside a list view whose root already
+ * pads 24px 32px (My tasks / My Reviews / Inbox); its 32px root inset only
+ * partly clears the toggle, so we add 24px more (32 + 24 ≈ 56px in). It shifts
+ * just the header row.
+ *
+ * `.kanso-page-view` is the ROOT of a board sub-view (Archived / Trash /
+ * Analytics) that has no left padding of its own but whose inner header/list/
+ * footer rows carry 24px; adding 28px on the root brings the effective title
+ * inset to ~52px and keeps header and body aligned. These views previously
+ * hard-coded that inset unconditionally.
  */
-.app-navigation--closed + #app-content-vue .kanso-page-header {
-	padding-left: 52px;
+#app-content-vue .kanso-page-header {
+	padding-left: 24px;
 }
 
-.app-navigation--closed + #app-content-vue .kanso-page-view {
+#app-content-vue .kanso-page-view {
 	padding-left: 28px;
 }
