@@ -3,7 +3,11 @@
 name: CI
 
 on:
+  # Feature branches are covered by pull_request; scoping push to main (+ release
+  # tags) stops every PR commit triggering two full runs (push AND pull_request).
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
 
 # Cancel an in-progress run when a newer commit is pushed to the same branch
