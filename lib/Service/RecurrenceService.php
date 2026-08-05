@@ -125,7 +125,11 @@ class RecurrenceService {
 		if (!$iterator->valid()) {
 			return 0;
 		}
-		return $iterator->current()->getTimestamp();
+		// vobject 5 typed current() as nullable (?DateTimeImmutable); the valid()
+		// guard above already ensures a current occurrence, but psalm can't narrow
+		// that, so coalesce defensively.
+		$occurrence = $iterator->current();
+		return $occurrence?->getTimestamp() ?? 0;
 	}
 
 	/**
