@@ -251,4 +251,84 @@ test.describe('Card modal two-column layout', () => {
 		await page.locator('.card-modal').press('Escape')
 		await expect(page).not.toHaveURL(new RegExp(`/card/${state.cardId}`), { timeout: 8_000 })
 	})
+
+	// The dark backdrop is the strip of the .modal-wrapper to the LEFT of the centred
+	// .modal-container. The wrapper's own top band is covered by NcModal's .modal-header,
+	// so the corner is NOT backdrop — compute a point midway between the wrapper's left
+	// edge and the container's left edge, at the container's vertical centre. That point
+	// resolves to the .modal-wrapper itself (the element our close-on-backdrop handler
+	// keys off), which is what a user clicking "outside the card" actually hits.
+	async function backdropPoint(page) {
+		return page.evaluate(() => {
+			const wrapper = document.querySelector('.modal-wrapper')
+			const container = document.querySelector('.modal-container')
+			const wb = wrapper.getBoundingClientRect()
+			const cb = container.getBoundingClientRect()
+			return { x: (wb.x + cb.x) / 2, y: cb.y + cb.height / 2 }
+		})
+	}
+
+	test('clicking the backdrop closes the card modal (#3656)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+		await expect(page).toHaveURL(new RegExp(`/card/${state.cardId}`))
+
+		// A genuine backdrop press closes the card, same effect as the X.
+		const pt = await backdropPoint(page)
+		await page.mouse.click(pt.x, pt.y)
+
+		await expect(page).not.toHaveURL(new RegExp(`/card/${state.cardId}`), { timeout: 8_000 })
+	})
+
+	test('with a popover open, a backdrop click closes only the popover, not the modal (#3656)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+
+		// Open an attribute popover (the due-date pill).
+		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
+		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 5_000 })
+
+		// A backdrop press while a popover is open dismisses the popover first,
+		// mirroring the Escape precedence — the modal must stay open.
+		let pt = await backdropPoint(page)
+		await page.mouse.click(pt.x, pt.y)
+
+		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
+		await expect(page.locator('.card-modal')).toBeVisible()
+		await expect(page).toHaveURL(new RegExp(`/card/${state.cardId}`))
+
+		// A second backdrop press (no popover open) now closes the modal.
+		pt = await backdropPoint(page)
+		await page.mouse.click(pt.x, pt.y)
+		await expect(page).not.toHaveURL(new RegExp(`/card/${state.cardId}`), { timeout: 8_000 })
+	})
+
+	test('a text-selection drag that ends on the backdrop does NOT close the modal (#3656)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal__content', { timeout: 15_000 })
+		await expect(page).toHaveURL(new RegExp(`/card/${state.cardId}`))
+
+		// Press down INSIDE the modal content (on the title), drag out to the
+		// backdrop, and release there — as when selecting text. The close-on-backdrop
+		// handler keys off the mousedown TARGET being the wrapper, so a press that
+		// STARTED inside the content never triggers a close.
+		const titleBox = await page.locator('.card-modal__title').boundingBox()
+		expect(titleBox).not.toBeNull()
+		const pt = await backdropPoint(page)
+
+		await page.mouse.move(titleBox.x + 4, titleBox.y + titleBox.height / 2)
+		await page.mouse.down()
+		await page.mouse.move(pt.x, pt.y, { steps: 12 })
+		await page.mouse.up()
+
+		// The modal must still be open — the drag started inside, not on the backdrop.
+		await expect(page.locator('.card-modal')).toBeVisible()
+		await expect(page).toHaveURL(new RegExp(`/card/${state.cardId}`))
+	})
 })

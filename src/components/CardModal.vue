@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:name="cardTitle"
 		size="large"
 		class="card-modal-modal"
-		@close="closeModal">
+		@close="onModalClose">
 		<div
 			class="card-modal"
 			:class="`card-modal--tab-${viewMode}`"
@@ -1626,7 +1626,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
@@ -2989,6 +2989,44 @@ function closeModal() {
 // it, not the whole card (which would discard an in-progress edit). Inline edits
 // (title/description/comment) stop propagation themselves, so they never reach here.
 function onModalEscape() {
+	if (openPicker.value !== null) {
+		openPicker.value = null
+		return
+	}
+	closeModal()
+}
+
+// Close the card when the dark backdrop is clicked (not just the X). NcModal's own
+// close-on-click-outside prop is unreliable in @nextcloud/vue 9, and its teleported
+// wrapper mounts a tick later than this component, so a direct listener attach races
+// the transition. Instead we listen on `document` (capture) and act only when the
+// mousedown TARGET is our modal's own .modal-wrapper (the dark backdrop). The
+// target-is-wrapper check is the drag guard: a text-selection drag that STARTS on
+// inner content has target inside .modal-container, so releasing on the backdrop
+// never closes the card. The handler funnels through onModalClose so it obeys the
+// same picker-first precedence as Escape.
+function onDocumentMousedown(event) {
+	const target = event.target
+	if (!(target instanceof Element) || !target.classList.contains('modal-wrapper')) {
+		return
+	}
+	// Scope to THIS card's modal (guard against other stacked NcModals on the page).
+	if (!target.closest('.card-modal-modal')) {
+		return
+	}
+	onModalClose()
+}
+onMounted(() => {
+	document.addEventListener('mousedown', onDocumentMousedown, true)
+})
+onBeforeUnmount(() => {
+	document.removeEventListener('mousedown', onDocumentMousedown, true)
+})
+
+// NcModal emits `close` from the X button; the backdrop handler above funnels here
+// too. Mirror onModalEscape's precedence: if an attribute popover is open, dismiss
+// it first rather than closing the whole card (which would drop the picker context).
+function onModalClose() {
 	if (openPicker.value !== null) {
 		openPicker.value = null
 		return
