@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:name="cardTitle"
 		size="large"
 		class="card-modal-modal"
-		@close="closeModal">
+		@close="onModalClose">
 		<div
 			class="card-modal"
 			:class="`card-modal--tab-${viewMode}`"
@@ -181,18 +181,82 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span class="card-modal__done-label">{{ isDone ? t('kanso', 'Done') : t('kanso', 'Mark done') }}</span>
 						</button>
 
-						<button
-							class="card-modal__watch-btn"
-							:class="{ 'card-modal__watch-btn--active': isWatching }"
-							:aria-pressed="isWatching"
-							:disabled="toggleSubscription.isPending.value"
-							:title="isWatching ? t('kanso', 'Stop watching this card') : t('kanso', 'Watch this card')"
-							@click="handleWatchToggle">
-							<EyeOffOutlineIcon v-if="isWatching" :size="18" />
-							<EyeOutlineIcon v-else :size="18" />
-							<span v-if="watcherCount > 0" class="card-modal__watch-count">{{ watcherCount }}</span>
-							<span v-else class="card-modal__watch-label">{{ t('kanso', 'Watch') }}</span>
-						</button>
+						<span class="card-modal__watch-wrap">
+							<button
+								class="card-modal__watch-btn"
+								:class="{ 'card-modal__watch-btn--active': isWatching }"
+								:aria-pressed="isWatching"
+								:disabled="toggleSubscription.isPending.value"
+								:title="isWatching ? t('kanso', 'Stop watching this card') : t('kanso', 'Watch this card')"
+								@click="handleWatchToggle">
+								<EyeOffOutlineIcon v-if="isWatching" :size="18" />
+								<EyeOutlineIcon v-else :size="18" />
+								<span v-if="watcherCount > 0" class="card-modal__watch-count">{{ watcherCount }}</span>
+								<span v-else class="card-modal__watch-label">{{ t('kanso', 'Watch') }}</span>
+							</button>
+							<button
+								class="card-modal__watch-caret"
+								:class="{ 'card-modal__watch-caret--active': isWatching }"
+								:aria-expanded="openPicker === 'watchers'"
+								:aria-label="t('kanso', 'Show watchers')"
+								:title="t('kanso', 'Show watchers')"
+								@click="togglePicker('watchers')">
+								<ChevronDownIcon :size="16" />
+							</button>
+							<div
+								v-if="openPicker === 'watchers'"
+								class="card-modal__popover card-modal__popover--right card-modal__watch-panel"
+								role="dialog"
+								:aria-label="t('kanso', 'Watchers')">
+								<span class="card-modal__watch-panel-title">
+									{{ n('kanso', '%n watcher', '%n watchers', watcherCount) }}
+								</span>
+								<span
+									v-for="uid in displayedWatcherIds"
+									:key="'watch-panel-' + uid"
+									class="card-modal__watch-row">
+									<NcAvatar
+										:user="uid"
+										:display-name="participantName(uid)"
+										:size="24"
+										:show-user-status="false"
+										:disable-tooltip="true" />
+									<span class="card-modal__watch-row-name">{{ participantName(uid) }}</span>
+									<button
+										v-if="canEdit"
+										class="card-modal__pill-x"
+										:title="t('kanso', 'Remove watcher')"
+										:disabled="toggleOtherSubscription.isPending.value"
+										@click="handleToggleWatcher(uid, false)">
+										<CloseIcon :size="12" />
+									</button>
+								</span>
+								<span
+									v-if="displayedWatcherIds.length === 0 && !isWatching"
+									class="card-modal__watch-panel-empty">
+									{{ t('kanso', 'No one is watching this card yet.') }}
+								</span>
+								<template v-if="canEdit && unwatchedParticipants.length > 0">
+									<span class="card-modal__watch-panel-divider" />
+									<span class="card-modal__watch-panel-subtitle">{{ t('kanso', 'Add watcher') }}</span>
+									<button
+										v-for="p in unwatchedParticipants"
+										:key="'watch-add-' + p.uid"
+										class="card-modal__assign-option"
+										:disabled="toggleOtherSubscription.isPending.value"
+										@click="handleToggleWatcher(p.uid, true)">
+										<NcAvatar
+											:user="p.uid"
+											:display-name="p.displayName"
+											:size="24"
+											:show-user-status="false"
+											:disable-tooltip="true" />
+										<span>{{ p.displayName }}</span>
+									</button>
+								</template>
+								<span v-if="watcherError" class="card-modal__save-error">{{ watcherError }}</span>
+							</div>
+						</span>
 
 						<NcActions class="card-modal__actions-menu" :force-menu="true">
 							<NcActionButton
@@ -574,56 +638,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 							<span v-if="contactError" class="card-modal__save-error">{{ contactError }}</span>
 						</template>
-
-						<span class="card-modal__attr-divider" />
-
-						<!-- Watchers -->
-						<span
-							v-for="uid in displayedWatcherIds"
-							:key="'watch-' + uid"
-							class="card-modal__assignee-pill">
-							<NcAvatar
-								:user="uid"
-								:display-name="participantName(uid)"
-								:size="22"
-								:show-user-status="false"
-								:disable-tooltip="false" />
-							<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
-							<button
-								v-if="canEdit"
-								class="card-modal__pill-x"
-								:title="t('kanso', 'Remove watcher')"
-								:disabled="toggleOtherSubscription.isPending.value"
-								@click="handleToggleWatcher(uid, false)">
-								<CloseIcon :size="12" />
-							</button>
-						</span>
-						<div v-if="canEdit && unwatchedParticipants.length > 0" class="card-modal__attr">
-							<button
-								class="card-modal__pill card-modal__pill--dashed"
-								:aria-expanded="openPicker === 'watch'"
-								@click="togglePicker('watch')">
-								<EyeOutlineIcon :size="14" />
-								{{ t('kanso', 'Add watcher') }}
-							</button>
-							<div v-if="openPicker === 'watch'" class="card-modal__popover">
-								<button
-									v-for="p in unwatchedParticipants"
-									:key="p.uid"
-									class="card-modal__assign-option"
-									:disabled="toggleOtherSubscription.isPending.value"
-									@click="handleToggleWatcher(p.uid, true)">
-									<NcAvatar
-										:user="p.uid"
-										:display-name="p.displayName"
-										:size="24"
-										:show-user-status="false"
-										:disable-tooltip="true" />
-									<span>{{ p.displayName }}</span>
-								</button>
-							</div>
-						</div>
-						<span v-if="watcherError" class="card-modal__save-error">{{ watcherError }}</span>
 
 					<span class="card-modal__attr-divider" />
 
@@ -1626,7 +1640,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
@@ -2996,6 +3010,44 @@ function onModalEscape() {
 	closeModal()
 }
 
+// Close the card when the dark backdrop is clicked (not just the X). NcModal's own
+// close-on-click-outside prop is unreliable in @nextcloud/vue 9, and its teleported
+// wrapper mounts a tick later than this component, so a direct listener attach races
+// the transition. Instead we listen on `document` (capture) and act only when the
+// mousedown TARGET is our modal's own .modal-wrapper (the dark backdrop). The
+// target-is-wrapper check is the drag guard: a text-selection drag that STARTS on
+// inner content has target inside .modal-container, so releasing on the backdrop
+// never closes the card. The handler funnels through onModalClose so it obeys the
+// same picker-first precedence as Escape.
+function onDocumentMousedown(event) {
+	const target = event.target
+	if (!(target instanceof Element) || !target.classList.contains('modal-wrapper')) {
+		return
+	}
+	// Scope to THIS card's modal (guard against other stacked NcModals on the page).
+	if (!target.closest('.card-modal-modal')) {
+		return
+	}
+	onModalClose()
+}
+onMounted(() => {
+	document.addEventListener('mousedown', onDocumentMousedown, true)
+})
+onBeforeUnmount(() => {
+	document.removeEventListener('mousedown', onDocumentMousedown, true)
+})
+
+// NcModal emits `close` from the X button; the backdrop handler above funnels here
+// too. Mirror onModalEscape's precedence: if an attribute popover is open, dismiss
+// it first rather than closing the whole card (which would drop the picker context).
+function onModalClose() {
+	if (openPicker.value !== null) {
+		openPicker.value = null
+		return
+	}
+	closeModal()
+}
+
 // ── Card hierarchy (parent / sub-cards) ─────────────────────────────────────
 const { setParent, clearParent, addChild, setParentMutation, addChildMutation } =
 	useCardHierarchy(boardId)
@@ -4008,6 +4060,76 @@ async function handleToggleProject(projectId) {
 	border-color: var(--color-primary-element);
 	background: var(--color-primary-light);
 	color: var(--color-primary-element);
+}
+.card-modal__watch-wrap {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+.card-modal__watch-caret {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 36px;
+	border: 1px solid var(--color-border);
+	border-radius: 100px;
+	background: var(--color-main-background);
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__watch-caret:hover {
+	border-color: var(--color-primary-element);
+	color: var(--color-primary-element);
+}
+.card-modal__watch-caret--active {
+	border-color: var(--color-primary-element);
+	background: var(--color-primary-light);
+	color: var(--color-primary-element);
+}
+.card-modal__watch-panel {
+	min-width: 240px;
+	gap: 4px;
+}
+.card-modal__watch-panel-title {
+	padding: 4px 8px 2px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__watch-panel-subtitle {
+	padding: 2px 8px;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__watch-panel-empty {
+	padding: 4px 8px 6px;
+	font-size: 0.8125rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__watch-panel-divider {
+	height: 1px;
+	margin: 4px 0;
+	background: var(--color-border);
+}
+.card-modal__watch-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+	padding: 2px 8px;
+}
+.card-modal__watch-row-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.8125rem;
 }
 .card-modal__icon-btn {
 	display: flex;

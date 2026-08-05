@@ -244,6 +244,97 @@ test.describe('Card Subscriptions / Watchers', () => {
 	})
 })
 
+test.describe('Watchers dropdown UI (caret panel)', () => {
+	// #3654: watchers are managed from a dropdown under the top-right Watch button
+	// (no standalone body section). Drive the panel through the UI.
+	const BOB = 'kanso_watch_ui_bob'
+	const BOB_PASS = 'SubUiWatcher#2026'
+	const state = { boardId: 0, stackId: 0, cardId: 0, cardUrl: '' }
+
+	test.beforeAll(async () => {
+		await provisionUser(BOB, BOB_PASS)
+		for (const b of await apiGet('/boards')) {
+			if (b.title === 'Watchers UI E2E Board') await apiDelete(`/boards/${b.id}`)
+		}
+		const board = await apiPost('/boards', { title: 'Watchers UI E2E Board' })
+		state.boardId = board.id
+		await shareBoardWith(board.id, BOB, 3) // READ | EDIT — becomes a board participant
+		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		state.stackId = stack.id
+		const card = await apiPost('/cards', { stackId: stack.id, title: 'Dropdown Watchers' })
+		state.cardId = card.id
+		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		await deleteUser(BOB)
+	})
+
+	test('no standalone watchers section remains in the modal body', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// The old "Add watcher" pill lived in the attribute bar; it must be gone.
+		await expect(page.locator('.card-modal__attrbar')).not.toContainText('Add watcher', { timeout: 3000 })
+		// The dropdown panel is closed until the caret is clicked.
+		await expect(page.locator('.card-modal__watch-panel')).toHaveCount(0)
+	})
+
+	test('caret opens the panel; add + remove a watcher from it', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		const caret = page.locator('.card-modal__watch-caret')
+		await expect(caret).toBeVisible({ timeout: 5000 })
+		await expect(caret).toHaveAttribute('aria-expanded', 'false', { timeout: 3000 })
+
+		// Open the dropdown.
+		await caret.click()
+		const panel = page.locator('.card-modal__watch-panel')
+		await expect(panel).toBeVisible({ timeout: 4000 })
+		await expect(caret).toHaveAttribute('aria-expanded', 'true', { timeout: 3000 })
+
+		// Add BOB via the "Add watcher" picker inside the panel.
+		const addOption = panel.locator('.card-modal__assign-option', { hasText: BOB })
+		await expect(addOption).toBeVisible({ timeout: 4000 })
+		await addOption.click()
+
+		// Reopen (adding closes the popover) and verify BOB is now a listed watcher.
+		await caret.click()
+		await expect(panel).toBeVisible({ timeout: 4000 })
+		const bobRow = panel.locator('.card-modal__watch-row', { hasText: BOB })
+		await expect(bobRow).toBeVisible({ timeout: 4000 })
+
+		// Count badge should now reflect at least one watcher.
+		await expect(page.locator('.card-modal__watch-count')).toBeVisible({ timeout: 4000 })
+
+		// Remove BOB via the × on his row.
+		await bobRow.locator('.card-modal__pill-x').click()
+		await expect(panel.locator('.card-modal__watch-row', { hasText: BOB })).toHaveCount(0, { timeout: 4000 })
+	})
+
+	test('Escape closes the dropdown before the modal', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		const caret = page.locator('.card-modal__watch-caret')
+		await caret.click()
+		await expect(page.locator('.card-modal__watch-panel')).toBeVisible({ timeout: 4000 })
+
+		// First Escape dismisses the panel but keeps the card open.
+		await page.keyboard.press('Escape')
+		await expect(page.locator('.card-modal__watch-panel')).toHaveCount(0, { timeout: 3000 })
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 3000 })
+	})
+})
+
 test.describe('Watcher management — add / remove OTHER users', () => {
 	const BOB = 'kanso_watch_bob'
 	const BOB_PASS = 'Sub2Watcher#2026'
