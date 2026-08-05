@@ -3,10 +3,11 @@
 name: CI
 
 on:
-  # Feature branches are covered by pull_request; scoping push to main (+ release
-  # tags) stops every PR commit triggering two full runs (push AND pull_request).
+  # Every change lands via a PR, and the pull_request run is the merge gate — so we
+  # deliberately do NOT re-run CI on main after a merge. That post-merge run would
+  # just repeat the ~1.5h suite the PR already passed, on the slow serial runners.
+  # Push only builds release tags; feature branches are covered by pull_request.
   push:
-    branches: [main]
     tags: ['v*']
   pull_request:
 
