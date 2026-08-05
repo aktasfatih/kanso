@@ -131,6 +131,17 @@ jobs:
           docker exec kanso-dev bash -c 'tar -xzf /tmp/deck.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/deck'
           docker exec -u www-data kanso-dev php occ app:enable deck
 
+      # card-contacts.spec.js exercises the feature-detected contact picker,
+      # which needs the Contacts app installed. Same appstore-unreachable
+      # constraint as Deck above, so side-load the signed release tarball.
+      # Pinned to v8.7.5 (info.xml min-version=33 max-version=34 — NC34-compatible).
+      - name: Install Contacts (for the card-contacts spec)
+        run: |
+          curl -fsSL https://github.com/nextcloud-releases/contacts/releases/download/v8.7.5/contacts-v8.7.5.tar.gz -o /tmp/contacts.tar.gz
+          docker cp /tmp/contacts.tar.gz kanso-dev:/tmp/contacts.tar.gz
+          docker exec kanso-dev bash -c 'tar -xzf /tmp/contacts.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/contacts'
+          docker exec -u www-data kanso-dev php occ app:enable contacts
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
