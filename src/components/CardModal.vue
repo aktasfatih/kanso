@@ -4472,12 +4472,16 @@ async function handleToggleProject(projectId) {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
+	gap: 0;
 }
 .card-modal__watch-btn {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	height: 36px;
+	/* !important — NC core sets `button { margin: 3px 3px 3px 0 }`, which otherwise
+	   pushes a 3px gap between the two halves of the split button. */
+	margin: 0 !important;
 	padding: 0 12px;
 	border: 1px solid var(--color-border);
 	border-radius: 100px 0 0 100px;
@@ -4492,8 +4496,10 @@ async function handleToggleProject(projectId) {
 	justify-content: center;
 	width: 28px;
 	height: 36px;
+	margin: 0 !important;
 	/* The left edge is the shared divider; drop the caret's own left border so the
-	   two halves share a single 1px line rather than stacking two. */
+	   two halves share a single 1px line, and sit flush against the left half
+	   (no margin) so there is no gap between them. */
 	border: 1px solid var(--color-border);
 	border-left: 0;
 	border-radius: 0 100px 100px 0;
