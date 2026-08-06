@@ -50,11 +50,11 @@ services:
     image: mariadb:11
     container_name: kanso-dev-db
     profiles: ["mysql"]
-    # Nextcloud requires these for utf8mb4 + row format on MariaDB.
-    command: >-
-      --transaction-isolation=READ-COMMITTED
-      --log-bin=binlog
-      --binlog-format=ROW
+    # Nextcloud wants READ-COMMITTED isolation on MariaDB. Binary-logging /
+    # row-format are production replication settings, not needed to verify
+    # install + migrations, and their first-boot init occasionally exits the
+    # container in CI, so they are omitted here.
+    command: --transaction-isolation=READ-COMMITTED
     environment:
       MARIADB_DATABASE: nextcloud
       MARIADB_USER: nextcloud
@@ -65,6 +65,7 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+      start_period: 30s
     networks:
       default:
         aliases:
