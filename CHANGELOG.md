@@ -74,6 +74,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   smoke set pass on PHP 8.3, and realtime push (notify_push) works. Existing
   NC 30–33 installs are unaffected.
 
+- **Cross-version install/migration CI matrix.** CI now boots a throwaway
+  Nextcloud on every supported major (30, 31, 32, 33, 34) across SQLite and
+  PostgreSQL — plus MariaDB on NC 34 — enables Kanso, runs `occ upgrade`, and
+  asserts every migration applied and the schema was physically created (the
+  check that guards against the class of migration bug where an over-long,
+  default-named index silently creates zero tables). PHPUnit runs inside each
+  version's bundled PHP runtime. The full Playwright e2e suite continues to run
+  on NC 34 + PostgreSQL only. The dev stack (`dev/setup.sh`) is now
+  version/DB-parametrized via `NC_VERSION` and `KANSO_DB`.
+
 ## [0.9.2] - 2026-08-01
 
 ### Changed
