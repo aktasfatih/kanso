@@ -117,4 +117,52 @@ test.describe('Card Activity feed', () => {
 
 		expect(activityErrors).toEqual([])
 	})
+
+	// #3659 — the Activity feed must not fire a request storm. Every NcAvatar in
+	// the modal used to fetch the actor's user_status per instance (the prop was
+	// `show-user-status`, which @nextcloud/vue 9 doesn't have — the real one is
+	// `hide-status`), so a feed of N rows by the same actor issued ~N presence
+	// lookups. With `:hide-status="true"` the count must be bounded regardless of
+	// how many entries share an actor.
+	test('a multi-entry feed with a repeated actor stays O(actors), not O(entries)', async ({ page }) => {
+		// One card with MANY activity rows, all authored by the same actor (admin).
+		const stack = await api('POST', '/stacks', { boardId: state.boardId, title: 'Storm' })
+		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Storm card' })
+		for (let i = 0; i < 15; i++) {
+			await api('POST', `/cards/${card.id}/comments`, { body: `note ${i}` })
+			await api('PATCH', `/cards/${card.id}`, { priority: i % 3 })
+		}
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+
+		// Count avatar / user-status / displayname network calls. These are the
+		// per-actor lookups that must NOT scale with the number of entries.
+		const perActorReqs = []
+		const perActorRe = /\/avatar\/|\/user_status\/api\/v1\/statuses\/|\/displaynames/
+		page.on('request', (req) => {
+			if (perActorRe.test(req.url())) perActorReqs.push(req.url())
+		})
+
+		await ncLogin(page)
+		await page.goto(cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// Open the Activity tab and wait for a genuinely multi-entry feed.
+		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
+		const rows = page.locator('.card-modal__activity-row')
+		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(10)
+
+		// Let any straggling avatar/status requests settle.
+		await page.waitForTimeout(1500)
+
+		const rowCount = await rows.count()
+		// Dedup by URL: a correct implementation resolves each actor's avatar and
+		// status ONCE and reuses it. Even counting raw (non-deduped) requests, the
+		// total must be far below one-per-row — bound it well under the row count.
+		expect(perActorReqs.length).toBeLessThan(rowCount)
+		// And the DISTINCT per-actor endpoints hit must be a small constant
+		// (a single actor here → a handful of URLs at most), never O(entries).
+		const distinct = new Set(perActorReqs).size
+		expect(distinct).toBeLessThanOrEqual(4)
+	})
 })

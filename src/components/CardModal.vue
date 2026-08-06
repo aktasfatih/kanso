@@ -219,7 +219,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:user="uid"
 										:display-name="participantName(uid)"
 										:size="24"
-										:show-user-status="false"
+										:hide-status="true"
 										:disable-tooltip="true" />
 									<span class="card-modal__watch-row-name">{{ participantName(uid) }}</span>
 									<button
@@ -249,7 +249,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:user="p.uid"
 											:display-name="p.displayName"
 											:size="24"
-											:show-user-status="false"
+											:hide-status="true"
 											:disable-tooltip="true" />
 										<span>{{ p.displayName }}</span>
 									</button>
@@ -536,7 +536,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:user="uid"
 							:display-name="participantName(uid)"
 							:size="22"
-							:show-user-status="false"
+							:hide-status="true"
 							:disable-tooltip="false" />
 						<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
 						<button
@@ -566,7 +566,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:user="p.uid"
 									:display-name="p.displayName"
 									:size="24"
-									:show-user-status="false"
+									:hide-status="true"
 									:disable-tooltip="true" />
 								<span>{{ p.displayName }}</span>
 							</button>
@@ -583,7 +583,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<NcAvatar
 									:display-name="c.displayName"
 									:size="22"
-									:show-user-status="false"
+									:hide-status="true"
 									:disable-tooltip="false" />
 								<span class="card-modal__assignee-name">{{ c.displayName }}</span>
 								<button
@@ -621,7 +621,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											<NcAvatar
 												:display-name="c.displayName"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												:disable-tooltip="true" />
 											<span class="card-modal__contact-option-text">
 												<span>{{ c.displayName }}</span>
@@ -778,7 +778,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:user="review.reviewer"
 								:display-name="participantName(review.reviewer)"
 								:size="22"
-								:show-user-status="false"
+								:hide-status="true"
 								:disable-tooltip="false" />
 							<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
 							<span
@@ -848,7 +848,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:user="p.uid"
 										:display-name="p.displayName"
 										:size="24"
-										:show-user-status="false"
+										:hide-status="true"
 										:disable-tooltip="true" />
 									<span>{{ p.displayName }}</span>
 								</button>
@@ -935,7 +935,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:user="p.uid"
 												:display-name="p.displayName"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												:disable-tooltip="true" />
 											<span>{{ p.displayName }}</span>
 										</li>
@@ -1467,7 +1467,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:user="item.actor || ''"
 										:display-name="item.actorName || item.actor || t('kanso', 'System')"
 										:size="24"
-										:show-user-status="false" />
+										:hide-status="true" />
 									<span class="card-modal__activity-text">
 										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
 										{{ activityVerbText(item) }}
@@ -1492,7 +1492,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:user="topComment.author"
 											:display-name="topComment.authorDisplayName || topComment.author"
 											:size="28"
-											:show-user-status="false"
+											:hide-status="true"
 											class="card-modal__comment-avatar" />
 										<div class="card-modal__comment-main">
 											<div class="card-modal__comment-meta">
@@ -1596,7 +1596,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:user="reply.author"
 												:display-name="reply.authorDisplayName || reply.author"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												class="card-modal__comment-avatar" />
 											<div class="card-modal__comment-main">
 												<div class="card-modal__comment-meta">
@@ -1683,7 +1683,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<NcAvatar
 								:user="currentUserId"
 								:size="28"
-								:show-user-status="false"
+								:hide-status="true"
 								class="card-modal__composer-avatar" />
 							<div class="card-modal__composer-main">
 								<div class="card-modal__mention-wrap">
@@ -1710,7 +1710,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:user="p.uid"
 												:display-name="p.displayName"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												:disable-tooltip="true" />
 											<span>{{ p.displayName }}</span>
 										</li>
