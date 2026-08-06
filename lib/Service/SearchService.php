@@ -10,6 +10,7 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCP\IDBConnection;
 
 /**
  * In-app search over card titles/descriptions and comment bodies. Portable v1:
@@ -37,6 +38,7 @@ class SearchService {
 		private BoardService $boardService,
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -55,7 +57,7 @@ class SearchService {
 			return ['query' => $term, 'total' => 0, 'results' => []];
 		}
 
-		$pattern = '%' . $this->escapeLike($term) . '%';
+		$pattern = '%' . $this->db->escapeLikeParameter($term) . '%';
 		$lowerTerm = mb_strtolower($term);
 
 		$results = [];
@@ -115,14 +117,6 @@ class SearchService {
 			return in_array($boardId, $ids, true) ? [$boardId] : [];
 		}
 		return $ids;
-	}
-
-	/**
-	 * Escapes the LIKE wildcards so a term containing % or _ is matched
-	 * literally rather than as a wildcard.
-	 */
-	private function escapeLike(string $term): string {
-		return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term);
 	}
 
 	private function snippet(string $text): string {

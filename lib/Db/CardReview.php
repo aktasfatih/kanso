@@ -32,8 +32,8 @@ use OCP\DB\Types;
  * @method void setRequestedBy(string $requestedBy)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
- * @method int|null getReviewTypeId()
- * @method void setReviewTypeId(?int $reviewTypeId)
+ * @method int getReviewTypeId()
+ * @method void setReviewTypeId(int $reviewTypeId)
  * @method int|null getNotifiedAt()
  * @method void setNotifiedAt(?int $notifiedAt)
  */
@@ -44,7 +44,10 @@ class CardReview extends Entity implements \JsonSerializable {
 
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
-	// explicit sets of that same value out of INSERT statements.
+	// explicit sets of that same value out of INSERT statements. Note this is
+	// only an INSERT-mechanics default: `review_type_id` is NOT NULL in the
+	// schema (Version001600, 0 = the implicit single-stage review), so a loaded
+	// row always carries a non-null reviewTypeId - hence the non-null getter.
 	protected ?int $cardId = null;
 	protected ?string $reviewer = null;
 	protected ?string $state = null;
@@ -64,7 +67,7 @@ class CardReview extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int, reviewTypeId: ?int, notifiedAt: ?int}
+	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int, reviewTypeId: int, notifiedAt: ?int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -75,7 +78,7 @@ class CardReview extends Entity implements \JsonSerializable {
 			'state' => (string)$this->getState(),
 			'requestedBy' => (string)$this->getRequestedBy(),
 			'createdAt' => (int)$this->getCreatedAt(),
-			'reviewTypeId' => $this->getReviewTypeId() !== null ? (int)$this->getReviewTypeId() : null,
+			'reviewTypeId' => (int)$this->getReviewTypeId(),
 			'notifiedAt' => $this->getNotifiedAt() !== null ? (int)$this->getNotifiedAt() : null,
 		];
 	}

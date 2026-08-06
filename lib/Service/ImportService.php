@@ -511,7 +511,9 @@ class ImportService {
 			$review->setState($this->str($r, 'state', CardReview::STATE_PENDING));
 			$review->setRequestedBy($requestedBy);
 			$review->setCreatedAt((int)($r['createdAt'] ?? $now));
-			$review->setReviewTypeId($newType);
+			// review_type_id is NOT NULL (Version001600); 0 = the implicit
+			// single-stage review, mirroring CardReviewMapper::insertRequest.
+			$review->setReviewTypeId($newType ?? 0);
 			$this->cardReviewMapper->insert($review);
 		}
 	}

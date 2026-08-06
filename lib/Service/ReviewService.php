@@ -246,7 +246,7 @@ class ReviewService {
 	 * @param array<int, int> $stageMap type id => stage
 	 */
 	private function stageOf(CardReview $review, array $stageMap): int {
-		$typeId = $review->getReviewTypeId() ?? 0;
+		$typeId = $review->getReviewTypeId();
 		return $typeId === 0 ? 0 : ($stageMap[$typeId] ?? 0);
 	}
 
