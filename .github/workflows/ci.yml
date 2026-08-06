@@ -82,9 +82,12 @@ jobs:
   # VALIDATES the info.xml claim of NC 30–34: for each (version, db) combo it
   # builds the frontend, boots a throwaway Nextcloud on that DB, enables Kanso
   # (running every migration via the app-enable + `occ upgrade`), then asserts
-  # the schema was really created (dev/smoke.sh) and runs the PHPUnit suite in
-  # the container's runtime. It deliberately does NOT run Playwright — the full
-  # browser e2e is slow and stays on 34+postgres only (the `e2e` job below).
+  # the schema was really created (dev/smoke.sh). It deliberately does NOT run
+  # Playwright — the full browser e2e is slow and stays on 34+postgres only (the
+  # `e2e` job below). PHPUnit is covered separately by the `unit-php` job (across
+  # PHP 8.2 and 8.3); it is NOT re-run inside these containers because the ARC
+  # runner's dind network can't reach the internet from inside a container, so a
+  # container can't fetch composer to install the (gitignored) dev deps.
   #
   # DB coverage rationale:
   #   - sqlite: no service container, cheap, and it's the backend that surfaced
@@ -151,26 +154,6 @@ jobs:
       # the check that would have caught the "zero tables created" migration bug.
       - name: Smoke — schema present
         run: ./dev/smoke.sh
-
-      # Run the PHPUnit suite against THIS NC version's bundled PHP runtime,
-      # inside the container. The unit tests are stub-based (no live DB), so this
-      # proves the app's PHP code parses and its services behave on the exact PHP
-      # each NC ships — complementing the standalone `unit-php` job (8.2/8.3).
-      # The NC image has no composer, and vendor/ is gitignored, so fetch a
-      # pinned composer.phar and install dev deps into the mounted checkout.
-      - name: PHPUnit (in-container, NC ${{ matrix.nc-version }} runtime)
-        run: |
-          docker exec kanso-dev bash -c '
-            set -e
-            cd /var/www/html/custom_apps/kanso
-            if [ ! -f vendor/bin/phpunit ]; then
-              curl -fsSL https://getcomposer.org/download/2.8.4/composer.phar -o /tmp/composer.phar
-              php /tmp/composer.phar install --no-interaction --no-progress
-            fi
-            chown -R www-data:www-data vendor
-          '
-          docker exec -u www-data -w /var/www/html/custom_apps/kanso kanso-dev \
-            php vendor/bin/phpunit -c phpunit.xml
 
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}

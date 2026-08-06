@@ -64,7 +64,10 @@ echo "Booting Nextcloud ${NC_VERSION} on ${KANSO_DB}..."
 docker compose --profile "$COMPOSE_PROFILE" up -d
 
 echo "Waiting for Nextcloud to finish installing..."
-for i in $(seq 1 90); do
+# Generous budget: on a cold, slow CI runner the older NC images pull fresh and
+# their first-boot install (Postgres especially) can take well over 7 minutes.
+# 180 * 5s = 15 min, comfortably inside the install-matrix job's 30-min cap.
+for i in $(seq 1 180); do
 	if curl -sf http://localhost:8891/status.php 2>/dev/null | grep -q '"installed":true'; then
 		break
 	fi
