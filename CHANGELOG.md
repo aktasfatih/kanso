@@ -84,6 +84,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on NC 34 + PostgreSQL only. The dev stack (`dev/setup.sh`) is now
   version/DB-parametrized via `NC_VERSION` and `KANSO_DB`.
 
+### Fixed
+
+- **Install on Nextcloud 30–32 (over-long primary-key names).** Several tables
+  relied on the database's default-generated PRIMARY KEY name, which on NC 30–32
+  can exceed Nextcloud's 23-character index-name limit and abort app install
+  before any table is created (NC 33/34 relaxed the check, so this only affected
+  older versions). Each affected table now declares an explicit short PK name.
+  Surfaced by the new cross-version CI matrix. Existing installs are unaffected
+  (the table-creation migrations are `hasTable`-guarded).
+
 ## [0.9.2] - 2026-08-01
 
 ### Changed
