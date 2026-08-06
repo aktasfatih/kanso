@@ -12,6 +12,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardTimeEntryMapper;
@@ -52,6 +53,7 @@ class CardControllerTest extends TestCase {
 	private ProjectCardMapper&MockObject $projectCardMapper;
 	private CardAttachmentMapper&MockObject $cardAttachmentMapper;
 	private CardTimeEntryMapper&MockObject $cardTimeEntryMapper;
+	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -84,6 +86,8 @@ class CardControllerTest extends TestCase {
 		$this->cardAttachmentMapper->method('countByCard')->willReturn(0);
 		$this->cardTimeEntryMapper = $this->createMock(CardTimeEntryMapper::class);
 		$this->cardTimeEntryMapper->method('sumSecondsByCard')->willReturn(0);
+		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
+		$this->cardFieldValueMapper->method('findByCard')->willReturn([]);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -108,7 +112,8 @@ class CardControllerTest extends TestCase {
 			$this->relationService,
 			$this->projectCardMapper,
 			$this->cardAttachmentMapper,
-			$this->cardTimeEntryMapper
+			$this->cardTimeEntryMapper,
+			$this->cardFieldValueMapper
 		);
 	}
 

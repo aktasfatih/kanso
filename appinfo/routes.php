@@ -247,6 +247,17 @@ return [
 		['name' => 'reviewType#update', 'url' => '/api/review-types/{id}', 'verb' => 'PATCH'],
 		['name' => 'reviewType#destroy', 'url' => '/api/review-types/{id}', 'verb' => 'DELETE'],
 
+		// Per-board custom-field DEFINITIONS (#3537). MANAGE-gated CRUD; the board
+		// payload carries the definition list, so there is no index endpoint
+		// (mirrors review-types). VALUES are set per card below.
+		['name' => 'cardField#create', 'url' => '/api/card-fields', 'verb' => 'POST'],
+		['name' => 'cardField#update', 'url' => '/api/card-fields/{id}', 'verb' => 'PATCH'],
+		['name' => 'cardField#destroy', 'url' => '/api/card-fields/{id}', 'verb' => 'DELETE'],
+		// Per-card custom-field VALUES (#3537). EDIT-gated; a set is an upsert
+		// (one value per card/field). Set = PUT, clear = DELETE.
+		['name' => 'cardFieldValue#set', 'url' => '/api/cards/{cardId}/fields/{fieldId}', 'verb' => 'PUT'],
+		['name' => 'cardFieldValue#clear', 'url' => '/api/cards/{cardId}/fields/{fieldId}', 'verb' => 'DELETE'],
+
 		['name' => 'archiveRule#index', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'GET'],
 		['name' => 'archiveRule#create', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'POST'],
 		['name' => 'archiveRule#update', 'url' => '/api/archive-rules/{id}', 'verb' => 'PATCH'],

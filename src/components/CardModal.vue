@@ -1297,6 +1297,85 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="timeEntryError" class="card-modal__save-error">{{ timeEntryError }}</span>
 						</section>
 
+						<!-- Custom fields (#3537): shown only when the board has fields -->
+						<section
+							v-if="boardCardFields.length > 0"
+							class="card-modal__section card-modal__section--tight"
+							data-test="card-custom-fields">
+							<div class="card-modal__section-inline">
+								<TableColumnIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Custom fields') }}</span>
+							</div>
+							<ul class="card-modal__cf-list">
+								<li
+									v-for="field in boardCardFields"
+									:key="field.id"
+									class="card-modal__cf-row">
+									<label
+										:for="`card-cf-${field.id}`"
+										class="card-modal__cf-label">
+										{{ field.name }}
+									</label>
+									<!-- text -->
+									<input
+										v-if="field.type === 'text'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-input"
+										type="text"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-input-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)"
+										@blur="handleFieldChange(field, $event.target.value)">
+									<!-- number -->
+									<input
+										v-else-if="field.type === 'number'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-input"
+										type="number"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-input-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)"
+										@blur="handleFieldChange(field, $event.target.value)">
+									<!-- date -->
+									<input
+										v-else-if="field.type === 'date'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-input"
+										type="date"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-input-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)">
+									<!-- select -->
+									<select
+										v-else-if="field.type === 'select'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-select"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-select-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)">
+										<option value="">{{ t('kanso', '— none —') }}</option>
+										<option
+											v-for="opt in (field.options ?? [])"
+											:key="opt"
+											:value="opt">
+											{{ opt }}
+										</option>
+									</select>
+									<span v-if="cardFieldErrors[field.id]" class="card-modal__save-error">
+										{{ cardFieldErrors[field.id] }}
+									</span>
+								</li>
+							</ul>
+						</section>
+
 						<!-- Relations - shown only when the card has relations, or the
 						     editor was opened from the ⋯ menu -->
 						<section
@@ -1762,6 +1841,7 @@ import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -1797,6 +1877,7 @@ import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
+import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
@@ -1862,6 +1943,27 @@ const isError = computed(() => cardIsError.value || refResolveError.value)
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
+const boardCardFields = computed(() => boardData.value?.cardFields ?? [])
+
+// ── Card fields: value mutations ──────────────────────────────────────────────
+const { setCardFieldValue, clearCardFieldValue } = useCardFields(boardId)
+const cardFieldErrors = ref({})
+
+async function handleFieldChange(field, value) {
+	cardFieldErrors.value = { ...cardFieldErrors.value, [field.id]: '' }
+	try {
+		if (value === '' || value === null || value === undefined) {
+			await clearCardFieldValue.mutateAsync({ cardId: Number(props.cardId), fieldId: field.id })
+		} else {
+			await setCardFieldValue.mutateAsync({ cardId: Number(props.cardId), fieldId: field.id, value: String(value) })
+		}
+	} catch (err) {
+		cardFieldErrors.value = {
+			...cardFieldErrors.value,
+			[field.id]: err?.response?.data?.error || t('kanso', 'Failed to save field value.'),
+		}
+	}
+}
 
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
 const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
@@ -5926,6 +6028,53 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__assign-option--highlighted {
 	background: var(--color-background-hover);
+}
+
+/* ── Custom fields section (#3537) ──────────────────────────────────────────── */
+
+.card-modal__cf-list {
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.card-modal__cf-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.card-modal__cf-label {
+	flex: 0 0 120px;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.card-modal__cf-input,
+.card-modal__cf-select {
+	flex: 1 1 120px;
+	min-width: 80px;
+	max-width: 260px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	padding: 4px 8px;
+	font-size: 0.875rem;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.card-modal__cf-input:disabled,
+.card-modal__cf-select:disabled {
+	opacity: 0.6;
+	cursor: default;
 }
 </style>
 

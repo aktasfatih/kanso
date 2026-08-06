@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -60,6 +61,7 @@ class TrashService {
 		private ProjectCardMapper $projectCardMapper,
 		private CardAttachmentService $cardAttachmentService,
 		private CardTimeEntryService $cardTimeEntryService,
+		private CardFieldValueMapper $cardFieldValueMapper,
 	) {
 	}
 
@@ -139,6 +141,9 @@ class TrashService {
 		// Manual time-tracking entries (#3536) are plain rows scoped by card_id;
 		// drop them too so a purged card strands no time entries.
 		$this->cardTimeEntryService->deleteAllForCard($cardId);
+		// Custom-field values (#3537) are plain rows scoped by card_id; drop them
+		// so a purged card strands no field values.
+		$this->cardFieldValueMapper->deleteByCard($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(

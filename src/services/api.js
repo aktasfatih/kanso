@@ -430,6 +430,32 @@ export const updateReviewType = (id, data) =>
 export const deleteReviewType = (id) =>
 	axios.delete(url(`/api/review-types/${id}`)).then((r) => r.data)
 
+// Custom fields (#3537): per-board field DEFINITIONS (MANAGE-gated). The board
+// payload carries the definition list; these mutate it.
+export const createCardField = (boardId, name, type, options) =>
+	axios.post(url('/api/card-fields'), {
+		boardId,
+		name,
+		type,
+		...(options != null ? { options } : {}),
+	}).then((r) => r.data)
+
+export const updateCardField = (id, data) =>
+	axios.patch(url(`/api/card-fields/${id}`), data).then((r) => r.data)
+
+export const deleteCardField = (id) =>
+	axios.delete(url(`/api/card-fields/${id}`)).then((r) => r.data)
+
+// Per-card custom-field VALUES (#3537, EDIT-gated). A set is an upsert; an
+// empty/absent value clears it. Values ride the card detail payload.
+export const setCardFieldValue = (cardId, fieldId, value) =>
+	axios.put(url(`/api/cards/${cardId}/fields/${fieldId}`),
+		value != null ? { value } : {},
+	).then((r) => r.data)
+
+export const clearCardFieldValue = (cardId, fieldId) =>
+	axios.delete(url(`/api/cards/${cardId}/fields/${fieldId}`)).then((r) => r.data)
+
 // Per-card activity feed (read-only view over the change log)
 export const getCardActivity = (cardId) =>
 	axios.get(url(`/api/cards/${cardId}/activity`)).then((r) => r.data)

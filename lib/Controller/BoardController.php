@@ -11,6 +11,7 @@ use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
@@ -53,6 +54,7 @@ class BoardController extends Controller {
 		private CardContactMapper $cardContactMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
+		private CardFieldMapper $cardFieldMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
 		private AclMapper $aclMapper,
@@ -126,6 +128,9 @@ class BoardController extends Controller {
 				),
 				'labels' => $this->labelMapper->findByBoard($id),
 				'reviewTypes' => $this->reviewTypeMapper->findByBoard($id),
+				// Custom-field DEFINITIONS ride the board payload (#3537); their
+				// per-card VALUES live only in the card detail payload.
+				'cardFields' => $this->cardFieldMapper->findByBoard($id),
 				'acl' => $this->aclMapper->findByBoard($id),
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.

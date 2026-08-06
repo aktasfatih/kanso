@@ -11,6 +11,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldValue;
+use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardTimeEntryMapper;
@@ -61,6 +63,7 @@ class CardController extends Controller {
 		private ProjectCardMapper $projectCardMapper,
 		private CardAttachmentMapper $cardAttachmentMapper,
 		private CardTimeEntryMapper $cardTimeEntryMapper,
+		private CardFieldValueMapper $cardFieldValueMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -151,7 +154,13 @@ class CardController extends Controller {
 			+ ['timeSpent' => $this->cardTimeEntryMapper->sumSecondsByCard($id)]
 			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
 			+ ['relations' => $this->relationService->groupedForCard($id)]
-			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)];
+			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)]
+			// Custom-field VALUES (#3537): [{fieldId, value}] - detail-only, never
+			// in the board summary (the definitions ride the board payload).
+			+ ['fieldValues' => array_map(
+				static fn (CardFieldValue $v): array => $v->jsonSerialize(),
+				$this->cardFieldValueMapper->findByCard($id)
+			)];
 	}
 
 	/**

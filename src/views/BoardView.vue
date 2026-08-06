@@ -227,6 +227,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:board-id="props.id"
 			:labels="boardLabels"
 			:review-types="boardData.reviewTypes ?? []"
+			:card-fields="boardData.cardFields ?? []"
 			:acl="boardData.acl ?? []"
 			:permissions="boardData.permissions ?? 0"
 			:participants="participants.data.value ?? []"
