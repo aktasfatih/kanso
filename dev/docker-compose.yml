@@ -99,5 +99,8 @@ services:
       REDIS_HOST: redis
     volumes:
       - ..:/var/www/html/custom_apps/kanso
+      # Ensure the bundled apps dir is writable at install time; older NC majors
+      # (30/31) abort the first-boot install otherwise. Runs as root pre-install.
+      - ./hooks/pre-installation:/docker-entrypoint-hooks.d/pre-installation:ro
     depends_on:
       - redis
