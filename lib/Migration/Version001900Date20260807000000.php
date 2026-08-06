@@ -42,7 +42,9 @@ class Version001900Date20260807000000 extends SimpleMigrationStep {
 			// the other rule tables.
 			$table->addColumn('enabled', Types::BOOLEAN, ['notnull' => false, 'default' => true]);
 			$table->addColumn('created_at', Types::BIGINT, ['notnull' => true, 'default' => 0, 'length' => 8]);
-			$table->setPrimaryKey(['id']);
+			// Named short: oc_kanso_automation_rules (25 chars) overflows the
+			// default primary-key name length check, failing install on NC 30-32.
+			$table->setPrimaryKey(['id'], 'kanso_autorule_pk');
 			$table->addIndex(['board_id', 'trigger'], 'kanso_autorules_board_trig');
 		}
 

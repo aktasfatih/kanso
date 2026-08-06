@@ -212,7 +212,10 @@ class Version000100Date20260722000000 extends SimpleMigrationStep {
 				'notnull' => true,
 				'length' => 8,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Named short defensively: oc_kanso_card_labels (20 chars) is at the
+			// edge of the default primary-key name length limit enforced on NC
+			// 30-32; an explicit short name keeps install safe across versions.
+			$table->setPrimaryKey(['id'], 'kanso_clabel_pk');
 			$table->addUniqueIndex(['card_id', 'label_id'], 'kanso_card_labels_uniq');
 		}
 
@@ -236,7 +239,9 @@ class Version000100Date20260722000000 extends SimpleMigrationStep {
 				'notnull' => true,
 				'default' => 0,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Named short: oc_kanso_card_assignees (23 chars) overflows the default
+			// primary-key name length check, failing install on NC 30-32.
+			$table->setPrimaryKey(['id'], 'kanso_cassignee_pk');
 			$table->addUniqueIndex(['card_id', 'participant', 'type'], 'kanso_card_assign_uniq');
 		}
 

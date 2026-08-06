@@ -70,7 +70,9 @@ class Version001100Date20260730000000 extends SimpleMigrationStep {
 			'length' => 8,
 			'default' => 0,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named short: oc_kanso_card_reviews (21 chars) overflows the default
+		// primary-key name length check, failing install on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_creview_pk');
 		// One active review request per reviewer per card (mirrors the assignee
 		// uniqueness). The board-wide aggregate joins through kanso_cards on
 		// card_id, so this unique index serves the card lookup too.

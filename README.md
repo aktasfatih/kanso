@@ -141,6 +141,15 @@ cd dev && ./setup.sh   # boots Nextcloud + Postgres and enables Kanso
 
 Then open <http://localhost:8891> (login `admin` / `admin`).
 
+To try another supported Nextcloud version or database (the same knobs CI's
+cross-version matrix uses):
+
+```sh
+NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on Postgres
+NC_VERSION=30 KANSO_DB=sqlite   ./setup.sh   # NC 30 on SQLite (no db container)
+NC_VERSION=34 KANSO_DB=mysql    ./setup.sh   # NC 34 on MariaDB
+```
+
 ## Development
 
 The dev stack mounts your checkout as `custom_apps/kanso`, so a rebuild

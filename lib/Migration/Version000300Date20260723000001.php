@@ -76,7 +76,9 @@ class Version000300Date20260723000001 extends SimpleMigrationStep {
 			'unsigned' => true,
 			'default' => 0,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named short: oc_kanso_archive_rules (22 chars) overflows the default
+		// primary-key name length check, failing install on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_archrule_pk');
 		$table->addIndex(['board_id'], 'kanso_arch_rules_board');
 
 		return $schema;

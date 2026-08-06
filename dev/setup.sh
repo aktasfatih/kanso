@@ -3,15 +3,71 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Boot the dev Nextcloud and enable kanso. Idempotent — safe to re-run.
+#
+# Configurable for the cross-version / cross-DB CI matrix (and local use):
+#   NC_VERSION  Nextcloud major version → image nextcloud:<NC_VERSION>-apache
+#               (default 34)
+#   KANSO_DB    database driver: postgres (default) | mysql | sqlite
+#
+# Examples:
+#   ./setup.sh                                  # NC 34 + postgres (default)
+#   NC_VERSION=30 KANSO_DB=sqlite ./setup.sh    # NC 30 + sqlite (no db service)
+#   NC_VERSION=32 KANSO_DB=mysql  ./setup.sh    # NC 32 + mariadb
 set -eu
 cd "$(dirname "$0")"
 
+NC_VERSION="${NC_VERSION:-34}"
+KANSO_DB="${KANSO_DB:-postgres}"
+export NC_VERSION
+
 OCC="docker exec -u www-data kanso-dev php occ"
 
-docker compose up -d
+# --- database driver selection ----------------------------------------------
+# Generate dev/.db.env with the driver-specific env the Nextcloud auto-installer
+# reads, and pick the matching compose profile. The nextcloud service always
+# reads .db.env (env_file), so it must exist even for sqlite (empty DB host env,
+# SQLITE_DATABASE set → the image installs SQLite in-container).
+case "$KANSO_DB" in
+	postgres)
+		COMPOSE_PROFILE=postgres
+		cat > .db.env <<-'ENV'
+			POSTGRES_HOST=db
+			POSTGRES_DB=nextcloud
+			POSTGRES_USER=nextcloud
+			POSTGRES_PASSWORD=nextcloud
+		ENV
+		;;
+	mysql|mariadb)
+		COMPOSE_PROFILE=mysql
+		cat > .db.env <<-'ENV'
+			MYSQL_HOST=db
+			MYSQL_DATABASE=nextcloud
+			MYSQL_USER=nextcloud
+			MYSQL_PASSWORD=nextcloud
+		ENV
+		;;
+	sqlite)
+		COMPOSE_PROFILE=sqlite
+		cat > .db.env <<-'ENV'
+			SQLITE_DATABASE=nextcloud
+		ENV
+		;;
+	*)
+		echo "Unknown KANSO_DB='$KANSO_DB' (want: postgres | mysql | sqlite)" >&2
+		exit 2
+		;;
+esac
+
+echo "Booting Nextcloud ${NC_VERSION} on ${KANSO_DB}..."
+# --profile selects which db service (if any) starts; the sqlite profile has no
+# db service so only redis + nextcloud come up.
+docker compose --profile "$COMPOSE_PROFILE" up -d
 
 echo "Waiting for Nextcloud to finish installing..."
-for i in $(seq 1 60); do
+# Generous budget: on a cold, slow CI runner the older NC images pull fresh and
+# their first-boot install (Postgres especially) can take well over 7 minutes.
+# 180 * 5s = 15 min, comfortably inside the install-matrix job's 30-min cap.
+for i in $(seq 1 180); do
 	if curl -sf http://localhost:8891/status.php 2>/dev/null | grep -q '"installed":true'; then
 		break
 	fi
@@ -38,9 +94,10 @@ fi
 # --- notify_push (realtime push) ---------------------------------------------
 # Optional: the app falls back to delta-polling without it, and the e2e suite
 # doesn't need realtime. Skip in CI (KANSO_SKIP_NOTIFY_PUSH=1) so a flaky/absent
-# appstore release can't fail the whole boot.
-if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ]; then
-	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=1)"
+# appstore release can't fail the whole boot. Only wired for postgres (the
+# notify_push service only runs under the postgres profile).
+if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ] || [ "$KANSO_DB" != "postgres" ]; then
+	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=${KANSO_SKIP_NOTIFY_PUSH:-0}, db=${KANSO_DB})"
 else
 # Browsers reach the push daemon through apache at http://localhost:8891/push.
 # Apache additionally listens on 8891 INSIDE the container so the very same

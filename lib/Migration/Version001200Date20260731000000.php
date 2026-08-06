@@ -56,7 +56,9 @@ class Version001200Date20260731000000 extends SimpleMigrationStep {
 				'notnull' => false,
 				'length' => 6,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Named short: oc_kanso_review_types (21 chars) overflows the default
+			// primary-key name length check, failing install on NC 30-32.
+			$table->setPrimaryKey(['id'], 'kanso_rtype_pk');
 			$table->addIndex(['board_id'], 'kanso_review_types_board');
 		}
 

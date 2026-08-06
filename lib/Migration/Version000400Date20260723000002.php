@@ -123,7 +123,9 @@ class Version000400Date20260723000002 extends SimpleMigrationStep {
 			'length' => 8,
 			'default' => 0,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named short defensively: oc_kanso_recur_rules (20 chars) sits at the
+		// edge of the default primary-key name length limit enforced on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_recur_pk');
 		$table->addIndex(['board_id'], 'kanso_recur_board');
 		// The cron scan: enabled rules due to fire (next_occurrence_at <= now).
 		$table->addIndex(['enabled', 'next_occurrence_at'], 'kanso_recur_due');

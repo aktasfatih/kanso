@@ -70,7 +70,9 @@ class Version000500Date20260724000000 extends SimpleMigrationStep {
 			'length' => 8,
 			'default' => 0,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named short: oc_kanso_checklist_items (24 chars) overflows the default
+		// primary-key name length check, failing install on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_chkitem_pk');
 		// The only access path: all items of a card, ordered by sort_key. The
 		// board-wide progress count joins through kanso_cards on card_id, so a
 		// plain card_id index serves both.

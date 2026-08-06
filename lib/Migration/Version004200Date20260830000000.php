@@ -56,7 +56,9 @@ class Version004200Date20260830000000 extends SimpleMigrationStep {
 			'notnull' => true,
 			'length' => 255,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named short: oc_kanso_card_contacts (22 chars) overflows the default
+		// primary-key name length check, failing install on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_ccontact_pk');
 		$table->addUniqueIndex(['card_id', 'contact_uri'], 'kanso_card_contact_uniq');
 
 		return $schema;
