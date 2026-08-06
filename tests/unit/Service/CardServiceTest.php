@@ -1285,6 +1285,24 @@ class CardServiceTest extends TestCase {
 		$this->service->move(9, 6, null, 'alice');
 	}
 
+	public function testMoveToDoneBlockedWhileGatedReviewSitsUpstream(): void {
+		// A gated (deferred) review is still pending, i.e. unapproved, so the
+		// done-gate blocks exactly as it does for any unapproved review (#3588):
+		// the gate consumes hasUnapprovedReviews(), which counts pending rows
+		// regardless of whether they are gated.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_REVIEW),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->db->expects(self::never())->method('beginTransaction');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
 	public function testMoveFromReviewToDoneAllowedWhenAllApproved(): void {
 		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 5, 1, 'V'));
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());

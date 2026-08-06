@@ -769,7 +769,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-for="review in cardReviews"
 							:key="review.id"
 							class="card-modal__review-pill"
-							:class="[`card-modal__review-pill--${review.state}`, { 'card-modal__review-pill--compact': reviewsCompact }]">
+							:class="[`card-modal__review-pill--${review.state}`, {
+								'card-modal__review-pill--compact': reviewsCompact,
+								'card-modal__review-pill--gated': review.gated,
+							}]"
+							:title="review.gated ? reviewGateTooltip(review) : null">
 							<NcAvatar
 								:user="review.reviewer"
 								:display-name="participantName(review.reviewer)"
@@ -785,11 +789,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									: {}">
 								{{ reviewTypeById(review.reviewTypeId).title }}
 							</span>
-							<span class="card-modal__review-state" :class="`card-modal__review-state--${review.state}`">
-								<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
+							<span
+								class="card-modal__review-state"
+								:class="review.gated ? 'card-modal__review-state--gated' : `card-modal__review-state--${review.state}`">
+								<LockOutlineIcon v-if="review.gated" :size="12" />
+								<CheckDecagramIcon v-else-if="review.state === 'approved'" :size="12" />
 								<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
 								<CheckDecagramOutlineIcon v-else :size="12" />
-								<span class="card-modal__review-state-label">{{ reviewStateLabel(review.state) }}</span>
+								<span class="card-modal__review-state-label">{{ review.gated ? t('kanso', 'Waiting') : reviewStateLabel(review.state) }}</span>
 							</span>
 							<button
 								v-if="canEdit"
@@ -1680,6 +1687,7 @@ import BroomIcon from 'vue-material-design-icons/Broom.vue'
 import TagOutlineIcon from 'vue-material-design-icons/TagOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
+import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
@@ -2180,6 +2188,21 @@ function reviewStateLabel(state) {
 	if (state === 'approved') return t('kanso', 'Approved')
 	if (state === 'changes_requested') return t('kanso', 'Changes requested')
 	return t('kanso', 'Pending')
+}
+
+// A gated review is pending but blocked by a lower-stage review that hasn't
+// been approved yet; its reviewer isn't notified until the blocker clears.
+function reviewGateTooltip(review) {
+	if (!review.gated) return ''
+	const blockers = Array.isArray(review.blockedBy) ? review.blockedBy : []
+	// Name the blocking lower-stage review type(s) when we can resolve them.
+	const names = blockers
+		.map((id) => cardReviews.value.find((r) => r.id === id))
+		.filter(Boolean)
+		.map((r) => (reviewTypeById(r.reviewTypeId)?.title) || t('kanso', 'Review'))
+	const unique = [...new Set(names)]
+	if (unique.length === 0) return t('kanso', 'Waiting on an earlier review')
+	return t('kanso', 'Waiting on {type} review', { type: unique.join(', ') })
 }
 
 // ── Done toggle ──────────────────────────────────────────────────────────────
@@ -4293,6 +4316,15 @@ async function handleToggleProject(projectId) {
 .card-modal__review-pill--pending { border-color: var(--color-warning-text); background: rgba(236, 167, 0, 0.08); }
 .card-modal__review-pill--approved { border-color: var(--color-success-text); background: rgba(70, 186, 97, 0.08); }
 .card-modal__review-pill--changes_requested { border-color: var(--color-error-text); background: rgba(233, 50, 45, 0.08); }
+/* A gated (deferred) review reads as inert: greyed out, dashed border, muted
+   colours. The lock icon + hover tooltip explain it's waiting on an earlier
+   review. Wins over the state colour because the class comes later. */
+.card-modal__review-pill--gated {
+	border-color: var(--color-border-dark);
+	border-style: dashed;
+	background: var(--color-background-dark);
+	opacity: 0.7;
+}
 .card-modal__review-name {
 	max-width: 120px;
 	overflow: hidden;
@@ -4318,6 +4350,7 @@ async function handleToggleProject(projectId) {
 .card-modal__review-state--pending { color: var(--color-warning-text); }
 .card-modal__review-state--approved { color: var(--color-success-text); }
 .card-modal__review-state--changes_requested { color: var(--color-error-text); }
+.card-modal__review-state--gated { color: var(--color-text-maxcontrast); }
 /* Compact mode (3+ reviews): drop the reviewer name and the state text so the
    chip shrinks to avatar + type badge + state icon and N reviews stay on one
    row. The reviewer name is still available via the avatar's hover tooltip and

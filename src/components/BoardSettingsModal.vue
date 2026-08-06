@@ -504,6 +504,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</span>
 						</template>
 
+						<!-- Stage: lower stages gate higher ones -->
+						<label class="review-type-stage" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
+							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
+							<input
+								class="review-type-stage__input"
+								type="number"
+								min="0"
+								step="1"
+								:value="rt.stage ?? 0"
+								:disabled="!canManage"
+								:aria-label="t('kanso', 'Stage of review type {title}', { title: rt.title })"
+								@change="saveRtStage(rt, $event)" />
+						</label>
+
 						<!-- Actions (only when canManage) -->
 						<div v-if="canManage" class="label-settings__actions">
 							<button
@@ -592,6 +606,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:disabled="isCreatingRt"
 							:aria-label="t('kanso', 'New review type name')"
 							@keydown.enter.prevent="submitCreateRt" />
+						<label class="review-type-stage review-type-stage--create" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
+							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
+							<input
+								v-model.number="newRtStage"
+								class="review-type-stage__input"
+								type="number"
+								min="0"
+								step="1"
+								:disabled="isCreatingRt"
+								:aria-label="t('kanso', 'Stage for new review type')" />
+						</label>
 						<button
 							class="label-settings__create-btn"
 							type="submit"
@@ -2563,6 +2588,7 @@ async function doDeleteLabel(label) {
 // ── Review types: create state ────────────────────────────────────────────────
 const newRtTitle = ref('')
 const newRtColor = ref('')
+const newRtStage = ref(0)
 const isCreatingRt = ref(false)
 const createRtError = ref('')
 const showNewRtColorPicker = ref(false)
@@ -2574,9 +2600,14 @@ async function submitCreateRt() {
 	createRtError.value = ''
 	showNewRtColorPicker.value = false
 	try {
-		await createReviewType.mutateAsync({ title, color: newRtColor.value || null })
+		await createReviewType.mutateAsync({
+			title,
+			color: newRtColor.value || null,
+			stage: Math.max(0, Number(newRtStage.value) || 0),
+		})
 		newRtTitle.value = ''
 		newRtColor.value = ''
+		newRtStage.value = 0
 	} catch (err) {
 		createRtError.value = err?.response?.data?.error || t('kanso', 'Failed to create review type.')
 	} finally {
@@ -2622,6 +2653,24 @@ async function saveRtRename(rt) {
 		rtError.value = {
 			...rtError.value,
 			[rt.id]: err?.response?.data?.error || t('kanso', 'Failed to rename review type.'),
+		}
+	}
+}
+
+// ── Review types: stage edit ──────────────────────────────────────────────────
+// Lower stages gate higher ones: a review is held (its reviewer un-notified,
+// chip greyed) while the card carries an unapproved review of a lower stage.
+async function saveRtStage(rt, event) {
+	const next = Math.max(0, Number(event.target.value) || 0)
+	// Reflect the clamped value back into the input.
+	event.target.value = String(next)
+	if (next === (rt.stage ?? 0)) return
+	try {
+		await updateReviewType.mutateAsync({ typeId: rt.id, stage: next })
+	} catch (err) {
+		rtError.value = {
+			...rtError.value,
+			[rt.id]: err?.response?.data?.error || t('kanso', 'Failed to update stage.'),
 		}
 	}
 }
@@ -3552,6 +3601,29 @@ async function doDeleteAutoRule(rule) {
 	display: flex;
 	gap: 4px;
 	flex-shrink: 0;
+}
+
+.review-type-stage {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.review-type-stage__label {
+	white-space: nowrap;
+}
+
+.review-type-stage__input {
+	width: 52px;
+	padding: 2px 4px;
+	text-align: center;
+}
+
+.review-type-stage--create {
+	margin-inline: 4px;
 }
 
 .label-settings__action-btn {

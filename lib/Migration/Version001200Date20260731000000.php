@@ -20,9 +20,11 @@ use OCP\Migration\SimpleMigrationStep;
  * nullable `review_type_id` on `kanso_card_reviews` (an untyped review keeps
  * the plain "Review" meaning). Ordered by id, like labels.
  *
- * A review type is deliberately just a tag: it carries NO per-type workflow,
- * gate, or approver rule. The done-gate stays "all requested reviews approved"
- * regardless of type.
+ * A review type started as just a tag; #3588 later adds a `stage` column
+ * ordering types into a review chain (lower stages gate higher ones - a gated
+ * review defers its reviewer notification until the blocking reviews approve).
+ * The done-gate itself stays "all requested reviews approved" regardless of
+ * type - a gated review is simply unapproved, so it still blocks Done.
  *
  * Both changes are guarded (hasTable / hasColumn) so the step is idempotent.
  */

@@ -25,6 +25,15 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * chip updates over the existing realtime/ETag path (ENTITY_CARD/ACTION_UPDATE
  * - no new Change constant). The done-gate that consumes these rows lives in
  * {@see CardService::move()}, not here.
+ *
+ * Stage gating (#3588): review types carry a `stage` ordering them into a
+ * chain; lower stages gate higher ones. A review of type T (stage N) is GATED
+ * while the card carries any OTHER unapproved review of a lower stage - it stays
+ * `pending` (a gated review is deliberately unapproved, so it still trips the
+ * done-gate) but its reviewer is NOT notified yet and it renders greyed. Gating
+ * is DERIVED here from the stage map, never stored. When the blocking
+ * lower-stage reviews approve, the deferred reviewer notification fires once
+ * (guarded by `notified_at`).
  */
 class ReviewService {
 	public function __construct(
@@ -93,7 +102,7 @@ class ReviewService {
 		}
 
 		try {
-			$this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId);
+			$review = $this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				// Concurrent PUT lost the check-then-insert race - the request
@@ -103,8 +112,20 @@ class ReviewService {
 			throw $e;
 		}
 
+		// Always emit the change row so the chip renders (gated or not). The
+		// reviewer notification is DEFERRED while the new review is gated behind a
+		// lower-stage unapproved review; it fires later from setState() when the
+		// blocking reviews approve. notified_at is stamped only when we notify, so
+		// the deferral is idempotent.
 		$this->notify($card, $actorUid, Change::VERB_REVIEW_REQUESTED);
-		$this->notificationService->notifyReviewRequested($cardId, $reviewerUid, $actorUid);
+
+		$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
+		$siblings = $this->cardReviewMapper->findByCard($cardId);
+		if (!$this->isGated($review, $siblings, $stageMap)) {
+			$this->notificationService->notifyReviewRequested($cardId, $reviewerUid, $actorUid);
+			$review->setNotifiedAt(time());
+			$this->cardReviewMapper->update($review);
+		}
 	}
 
 	/**
@@ -171,6 +192,12 @@ class ReviewService {
 			$this->notify($card, $actorUid, Change::VERB_REVIEW_VERDICT);
 			// The reviewer has acted - clear their pending "review requested" bell.
 			$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
+
+			// A flip to APPROVED may un-gate downstream reviews: fire any deferred
+			// reviewer notification for a now-ungated review that was never notified.
+			if ($state === CardReview::STATE_APPROVED) {
+				$this->fireDeferredNotifications($card);
+			}
 		}
 
 		// A "request changes" reason becomes a comment by the reviewer (even if the
@@ -182,6 +209,115 @@ class ReviewService {
 			} catch (\Throwable) {
 				// Reviewer lacks EDIT to comment - the verdict still stands.
 			}
+		}
+	}
+
+	/**
+	 * Serializes a card's reviews for the detail payload, folding the DERIVED
+	 * `gated` flag (and `blockedBy` - the ids of the lower-stage unapproved
+	 * reviews holding it, for the tooltip) into each row. The stage map is
+	 * fetched ONCE (no N+1). Gating is never stored: a review of type T (stage N)
+	 * is gated iff the card holds any OTHER unapproved review of a lower stage.
+	 *
+	 * @return list<array<string, mixed>>
+	 * @throws \OCP\DB\Exception
+	 * @throws DoesNotExistException if the card does not exist or is deleted
+	 */
+	public function serializeReviewsForCard(int $cardId): array {
+		$card = $this->loadCard($cardId);
+		$reviews = $this->cardReviewMapper->findByCard($cardId);
+		$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
+
+		$out = [];
+		foreach ($reviews as $review) {
+			$blockedBy = $this->blockingReviewIds($review, $reviews, $stageMap);
+			$out[] = $review->jsonSerialize() + [
+				'gated' => $blockedBy !== [],
+				'blockedBy' => $blockedBy,
+			];
+		}
+		return $out;
+	}
+
+	/**
+	 * Stage of a review, resolved through the type=>stage map. Untyped reviews
+	 * (review_type_id 0/null) and types absent from the map are stage 0.
+	 *
+	 * @param array<int, int> $stageMap type id => stage
+	 */
+	private function stageOf(CardReview $review, array $stageMap): int {
+		$typeId = $review->getReviewTypeId() ?? 0;
+		return $typeId === 0 ? 0 : ($stageMap[$typeId] ?? 0);
+	}
+
+	/**
+	 * The ids of the reviews that gate $review: every OTHER review on the card
+	 * whose stage is strictly lower AND is not yet approved. A not-yet-requested
+	 * prerequisite does NOT block - only reviews that actually exist on the card
+	 * can gate. Empty list => not gated.
+	 *
+	 * @param CardReview[] $siblings all reviews on the card (may include $review)
+	 * @param array<int, int> $stageMap type id => stage
+	 * @return list<int>
+	 */
+	private function blockingReviewIds(CardReview $review, array $siblings, array $stageMap): array {
+		$myStage = $this->stageOf($review, $stageMap);
+		$blocking = [];
+		foreach ($siblings as $other) {
+			if ($other->getId() === $review->getId()) {
+				continue;
+			}
+			if ($other->getState() === CardReview::STATE_APPROVED) {
+				continue;
+			}
+			if ($this->stageOf($other, $stageMap) < $myStage) {
+				$blocking[] = (int)$other->getId();
+			}
+		}
+		return $blocking;
+	}
+
+	/**
+	 * Whether $review is gated within $siblings under $stageMap.
+	 *
+	 * @param CardReview[] $siblings
+	 * @param array<int, int> $stageMap
+	 */
+	private function isGated(CardReview $review, array $siblings, array $stageMap): bool {
+		return $this->blockingReviewIds($review, $siblings, $stageMap) !== [];
+	}
+
+	/**
+	 * Fires the deferred reviewer notification for every review on the card that
+	 * is now UNGATED but was never notified (`notified_at` null). Idempotent:
+	 * stamping `notified_at` on notify means a re-approval never re-notifies.
+	 * Reuses the SAME gating helper as request-time so the two cannot diverge.
+	 * The stage map + sibling set are fetched ONCE per call.
+	 *
+	 * @throws \OCP\DB\Exception
+	 */
+	private function fireDeferredNotifications(Card $card): void {
+		$cardId = $card->getId();
+		$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
+		$reviews = $this->cardReviewMapper->findByCard($cardId);
+
+		foreach ($reviews as $review) {
+			if ($review->getNotifiedAt() !== null) {
+				continue;
+			}
+			if ($review->getState() === CardReview::STATE_APPROVED) {
+				continue;
+			}
+			if ($this->isGated($review, $reviews, $stageMap)) {
+				continue;
+			}
+			$this->notificationService->notifyReviewRequested(
+				$cardId,
+				$review->getReviewer(),
+				$review->getRequestedBy(),
+			);
+			$review->setNotifiedAt(time());
+			$this->cardReviewMapper->update($review);
 		}
 	}
 

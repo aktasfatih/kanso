@@ -14,7 +14,6 @@ use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
-use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
@@ -25,6 +24,7 @@ use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ReviewService;
 use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -42,7 +42,7 @@ class CardControllerTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardContactMapper&MockObject $cardContactMapper;
-	private CardReviewMapper&MockObject $cardReviewMapper;
+	private ReviewService&MockObject $reviewService;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CardMapper&MockObject $cardMapper;
 	private CommentMapper&MockObject $commentMapper;
@@ -64,7 +64,8 @@ class CardControllerTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
 		$this->cardContactMapper->method('findContactsByCard')->willReturn([]);
-		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
+		$this->reviewService = $this->createMock(ReviewService::class);
+		$this->reviewService->method('serializeReviewsForCard')->willReturn([]);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
@@ -95,7 +96,7 @@ class CardControllerTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
 			$this->cardContactMapper,
-			$this->cardReviewMapper,
+			$this->reviewService,
 			$this->checklistItemMapper,
 			$this->cardMapper,
 			$this->commentMapper,

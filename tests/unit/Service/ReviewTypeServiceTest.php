@@ -100,6 +100,42 @@ class ReviewTypeServiceTest extends TestCase {
 		$this->service->create(1, '   ', null, 'alice');
 	}
 
+	public function testCreatePersistsStage(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->reviewTypeMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (ReviewType $t): ReviewType {
+				self::assertSame(2, $t->getStage());
+				$t->setId(3);
+				return $t;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(1, 'QA', null, 'alice', 2);
+	}
+
+	public function testCreateDefaultsStageToZeroWhenOmitted(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->reviewTypeMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (ReviewType $t): ReviewType {
+				self::assertSame(0, $t->getStage());
+				$t->setId(3);
+				return $t;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->create(1, 'QA', null, 'alice');
+	}
+
+	public function testCreateRejectsNegativeStage(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->reviewTypeMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(1, 'QA', null, 'alice', -1);
+	}
+
 	public function testCreateAssertsManagePermission(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
@@ -132,6 +168,39 @@ class ReviewTypeServiceTest extends TestCase {
 		$updated = $this->service->update(3, 'Code', 'ddeeff', 'alice');
 		self::assertSame('Code', $updated->getTitle());
 		self::assertSame('ddeeff', $updated->getColor());
+	}
+
+	public function testUpdatePersistsStage(): void {
+		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->type());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->reviewTypeMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(3, null, null, 'alice', 5);
+		self::assertSame(5, $updated->getStage());
+	}
+
+	public function testUpdateRejectsNegativeStage(): void {
+		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->type());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->reviewTypeMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(3, null, null, 'alice', -1);
+	}
+
+	public function testUpdateAssertsManagePermissionOnStageEdit(): void {
+		// Permission denial specifically on a stage-only edit.
+		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->type());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with(self::anything(), 'mallory', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->reviewTypeMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(3, null, null, 'mallory', 2);
 	}
 
 	// ---- delete -----------------------------------------------------------

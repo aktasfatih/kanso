@@ -405,8 +405,13 @@ export const getMyCards = () =>
 	axios.get(url('/api/my-cards')).then((r) => r.data)
 
 // Review types
-export const createReviewType = (boardId, title, color) =>
-	axios.post(url('/api/review-types'), { boardId, title, color: color || null }).then((r) => r.data)
+export const createReviewType = (boardId, title, color, stage) =>
+	axios.post(url('/api/review-types'), {
+		boardId,
+		title,
+		color: color || null,
+		...(stage != null ? { stage } : {}),
+	}).then((r) => r.data)
 
 export const updateReviewType = (id, data) =>
 	axios.patch(url(`/api/review-types/${id}`), data).then((r) => r.data)

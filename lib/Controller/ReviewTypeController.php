@@ -33,19 +33,19 @@ class ReviewTypeController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(int $boardId = 0, string $title = '', ?string $color = null): JSONResponse {
-		return $this->respond(function () use ($boardId, $title, $color): JSONResponse {
+	public function create(int $boardId = 0, string $title = '', ?string $color = null, ?int $stage = null): JSONResponse {
+		return $this->respond(function () use ($boardId, $title, $color, $stage): JSONResponse {
 			return new JSONResponse(
-				$this->reviewTypeService->create($boardId, $title, $color, $this->currentUserId())
+				$this->reviewTypeService->create($boardId, $title, $color, $this->currentUserId(), $stage)
 			);
 		});
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $color = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $color): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $color = null, ?int $stage = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $color, $stage): JSONResponse {
 			return new JSONResponse(
-				$this->reviewTypeService->update($id, $title, $color, $this->currentUserId())
+				$this->reviewTypeService->update($id, $title, $color, $this->currentUserId(), $stage)
 			);
 		});
 	}

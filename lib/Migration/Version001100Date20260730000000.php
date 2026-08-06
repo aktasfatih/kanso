@@ -16,10 +16,13 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * Card review requests (`kanso_card_reviews`): a FLAT approval model - one row
  * per (card, reviewer). A reviewer is asked to sign off; their `state` moves
- * pending → approved | changes_requested. Deliberately flat: NO review round /
- * stage columns (multi-stage review chains are an explicit non-goal). The
- * optional done-gate reads these rows to block a REVIEW-role → DONE-role move
- * until every requested review is approved.
+ * pending → approved | changes_requested. The row stays flat: multi-stage
+ * gating (#3588) is layered on later without a per-review stage column - a
+ * review's stage comes from its review type (`kanso_review_types.stage`) and
+ * "gated" is DERIVED at read time, never stored as a fourth state. The optional
+ * done-gate reads these rows to block a REVIEW-role → DONE-role move until every
+ * requested review is approved (a gated review is unapproved, so it still
+ * blocks).
  *
  * Review mutations append a card-targeted row to `kanso_changes` (via
  * {@see \OCA\Kanso\Service\ReviewService}) so the tile chip updates over the
