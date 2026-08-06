@@ -66,7 +66,10 @@ class Version004500Date20260902000000 extends SimpleMigrationStep {
 				'notnull' => true,
 				'length' => 64,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Named short defensively: oc_kanso_card_fields (20 chars) sits at the
+			// edge of the default primary-key name length limit enforced on NC
+			// 30-32; an explicit short name keeps install safe across versions.
+			$table->setPrimaryKey(['id'], 'kanso_cfield_pk');
 			$table->addIndex(['board_id'], 'kanso_card_fields_board');
 		}
 
@@ -88,7 +91,11 @@ class Version004500Date20260902000000 extends SimpleMigrationStep {
 			$table->addColumn('value', Types::TEXT, [
 				'notnull' => false,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Named short: oc_kanso_card_field_values (26 chars) overflows the
+			// default primary-key name length check, failing install on NC 30-32
+			// (the install matrix surfaced: 'Primary index name on
+			// "oc_kanso_card_field_values" is too long.').
+			$table->setPrimaryKey(['id'], 'kanso_cfieldval_pk');
 			// One value per field per card - a set is an upsert.
 			$table->addUniqueIndex(['card_id', 'field_id'], 'kanso_card_field_val_uniq');
 			$table->addIndex(['field_id'], 'kanso_card_field_val_field');
