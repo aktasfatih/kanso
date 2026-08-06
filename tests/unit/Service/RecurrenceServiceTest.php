@@ -361,7 +361,7 @@ class RecurrenceServiceTest extends TestCase {
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, 'alice', false, Change::VERB_UPDATED);
-		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
 
 		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
 
@@ -437,7 +437,7 @@ class RecurrenceServiceTest extends TestCase {
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 10, Change::ACTION_UPDATE, 'alice', false, Change::VERB_UPDATED);
-		$this->changeNotifier->expects(self::once())->method('emitPush')->with(1);
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
 
 		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
 
@@ -604,7 +604,7 @@ class RecurrenceServiceTest extends TestCase {
 		$this->db->method('commit')->willReturnCallback(function () use (&$order): void {
 			$order[] = 'commit';
 		});
-		$this->changeNotifier->method('emitPush')->willReturnCallback(function () use (&$order): void {
+		$this->changeNotifier->method('pushBoardChanged')->willReturnCallback(function () use (&$order): void {
 			$order[] = 'push';
 		});
 

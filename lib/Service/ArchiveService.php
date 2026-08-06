@@ -18,6 +18,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 
 /**
  * Auto-archive rules: board-hygiene automation that archives done cards once
@@ -48,6 +49,7 @@ class ArchiveService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private ITimeFactory $time,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -199,27 +201,56 @@ class ArchiveService {
 
 	/**
 	 * Archives every eligible card in the rule's scope (capped at
-	 * MAX_PER_SWEEP) and emits a per-card change so open clients refetch.
+	 * MAX_PER_SWEEP), recording a per-card change row so open clients refetch.
 	 * Idempotent: cards already archived are excluded by the eligibility
 	 * query, so re-running the sweep is a no-op for them.
+	 *
+	 * Realtime pushes are COALESCED (#3418): each card's UPDATE + its change row
+	 * is written per-item, but the notify_push fan-out (per-recipient, board-wide)
+	 * fires ONCE for the board at the end of the batch instead of once per card.
+	 * The push body is only {boardId}, so a single push is enough - clients delta/
+	 * refetch and collapse the N change rows regardless. A 100-card sweep with M
+	 * recipients thus emits M pushes, not 100xM.
+	 *
+	 * Each card's archive write and its change row are committed atomically (#3579):
+	 * a failed change-row write rolls that card's archive flag back, so no card is
+	 * left archived without a delta-sync row (and no delta row points at a write
+	 * that never landed). A single card that throws aborts this rule's sweep but is
+	 * isolated by {@see self::runEnabledRules()} so the other rules still run; the
+	 * sweep is idempotent, so a retry picks up whatever committed.
 	 *
 	 * @return int number of cards archived
 	 */
 	public function sweep(ArchiveRule $rule): int {
 		$count = 0;
 		foreach ($this->findEligibleCards($rule) as $card) {
-			$card->setArchived(true);
-			$this->cardMapper->update($card);
-			// System actor (null) - the sweep is not attributed to a user.
-			$this->changeNotifier->notify(
-				$rule->getBoardId(),
-				Change::ENTITY_CARD,
-				$card->getId(),
-				Change::ACTION_UPDATE,
-				null,
-			);
+			$this->db->beginTransaction();
+			try {
+				$card->setArchived(true);
+				$this->cardMapper->update($card);
+				// System actor (null) - the sweep is not attributed to a user.
+				// Record the row only; the coalesced push fires once after the loop.
+				$this->changeNotifier->recordChange(
+					$rule->getBoardId(),
+					Change::ENTITY_CARD,
+					$card->getId(),
+					Change::ACTION_UPDATE,
+					null,
+				);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
 			$count++;
 		}
+
+		// One coalesced realtime push for the whole batch (#3418): only broadcast
+		// when at least one card actually changed, so an empty sweep stays a no-op.
+		if ($count > 0) {
+			$this->changeNotifier->pushBoardChanged($rule->getBoardId());
+		}
+
 		return $count;
 	}
 

@@ -56,17 +56,14 @@ class StackService {
 		$stack->setSortKey($sortKey);
 		$stack->setArchived(false);
 		$stack->setDeletedAt(0);
-		$stack = $this->stackMapper->insert($stack);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit.
+		return $this->writeStackChange(
 			$boardId,
-			Change::ENTITY_STACK,
-			$stack->getId(),
 			Change::ACTION_CREATE,
-			$uid
+			$uid,
+			fn (): Stack => $this->stackMapper->insert($stack),
 		);
-
-		return $stack;
 	}
 
 	/**
@@ -109,17 +106,13 @@ class StackService {
 			$stack->setColor($color === '' ? null : ColorValidator::assertValid($color));
 		}
 
-		$stack = $this->stackMapper->update($stack);
-
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit.
+		return $this->writeStackChange(
 			$stack->getBoardId(),
-			Change::ENTITY_STACK,
-			$id,
 			Change::ACTION_UPDATE,
-			$uid
+			$uid,
+			fn (): Stack => $this->stackMapper->update($stack),
 		);
-
-		return $stack;
 	}
 
 	/**
@@ -135,17 +128,14 @@ class StackService {
 
 		$now = time();
 		$stack->setDeletedAt($now);
-		$stack = $this->stackMapper->update($stack);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit.
+		return $this->writeStackChange(
 			$stack->getBoardId(),
-			Change::ENTITY_STACK,
-			$id,
 			Change::ACTION_DELETE,
-			$uid
+			$uid,
+			fn (): Stack => $this->stackMapper->update($stack),
 		);
-
-		return $stack;
 	}
 
 	/**
@@ -167,17 +157,15 @@ class StackService {
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 
 		$stack->setDeletedAt(0);
-		$stack = $this->stackMapper->update($stack);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit. Emits an
+		// ACTION_CREATE so clients re-add the restored column.
+		return $this->writeStackChange(
 			$stack->getBoardId(),
-			Change::ENTITY_STACK,
-			$id,
 			Change::ACTION_CREATE,
-			$uid
+			$uid,
+			fn (): Stack => $this->stackMapper->update($stack),
 		);
-
-		return $stack;
 	}
 
 	/**
@@ -208,17 +196,19 @@ class StackService {
 		));
 		$anchor = $afterStackId === null ? null : $this->resolveAnchor($afterStackId, $id, $siblings);
 
+		// Change row is written inside the transaction (delta-sync source of
+		// truth); the realtime push is deferred until after commit.
 		$this->db->beginTransaction();
 		try {
 			$stack->setSortKey($this->deriveMoveKey($siblings, $anchor));
 			$stack = $this->stackMapper->update($stack);
 
-			$this->changeNotifier->notify(
+			$this->changeNotifier->recordChange(
 				$stack->getBoardId(),
 				Change::ENTITY_STACK,
 				$id,
 				Change::ACTION_MOVE,
-				$uid
+				$uid,
 			);
 
 			$this->db->commit();
@@ -226,6 +216,43 @@ class StackService {
 			$this->db->rollBack();
 			throw $e;
 		}
+
+		// Commit succeeded - now it is safe to broadcast the move.
+		$this->changeNotifier->pushBoardChanged($stack->getBoardId());
+
+		return $stack;
+	}
+
+	/**
+	 * Runs a single stack entity write and its `kanso_changes` row atomically
+	 * (#3579): the mapper write in $write and the change-row insert commit
+	 * together, or roll back together on any failure - so no stack mutation is
+	 * visible without its delta-sync row. The realtime push is emitted only AFTER
+	 * commit. Mirrors {@see self::move()}'s pattern for the non-move stack
+	 * mutators (create/update/delete/restore).
+	 *
+	 * @param callable():Stack $write performs the entity write and returns the row
+	 * @throws \Throwable rethrows whatever the write or the change-row insert throws
+	 */
+	private function writeStackChange(int $boardId, int $action, ?string $uid, callable $write): Stack {
+		$this->db->beginTransaction();
+		try {
+			$stack = $write();
+			$this->changeNotifier->recordChange(
+				$boardId,
+				Change::ENTITY_STACK,
+				$stack->getId(),
+				$action,
+				$uid,
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Commit succeeded - now it is safe to broadcast.
+		$this->changeNotifier->pushBoardChanged($boardId);
 
 		return $stack;
 	}

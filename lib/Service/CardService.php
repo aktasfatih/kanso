@@ -218,10 +218,27 @@ class CardService {
 			// the column is set on INSERT (the DB default backs pre-migration rows).
 			$card->setIsTemplate(false);
 
+			// Insert the card AND its CREATE change row atomically (#3579): a
+			// failed change-row write must roll the card INSERT back, never leave
+			// a card without its delta-sync row. The realtime push is deferred to
+			// after commit - a pre-commit push could surface a card the retry then
+			// rolls back. A unique violation (sort-key or board_seq collision)
+			// rolls the transaction back and drives the re-derive/retry.
+			$this->db->beginTransaction();
 			try {
 				$card = $this->cardMapper->insert($card);
+				$this->changeNotifier->recordChange(
+					$stack->getBoardId(),
+					Change::ENTITY_CARD,
+					$card->getId(),
+					Change::ACTION_CREATE,
+					$uid,
+					Change::VERB_CREATED,
+				);
+				$this->db->commit();
 				break;
 			} catch (\OCP\DB\Exception $e) {
+				$this->db->rollBack();
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
 				}
@@ -234,17 +251,16 @@ class CardService {
 				if ($attempt >= self::MAX_CREATE_ATTEMPTS - 1) {
 					throw new \OverflowException('card create key conflict (sort key or board_seq) after retries', 0, $e);
 				}
+			} catch (\Throwable $e) {
+				// Any other failure (e.g. the change-row insert throwing) also rolls
+				// back the card INSERT so no orphan card lands without a delta row.
+				$this->db->rollBack();
+				throw $e;
 			}
 		}
 
-		$this->changeNotifier->notify(
-			$stack->getBoardId(),
-			Change::ENTITY_CARD,
-			$card->getId(),
-			Change::ACTION_CREATE,
-			$uid,
-			verb: Change::VERB_CREATED,
-		);
+		// Commit succeeded - now it is safe to broadcast the create.
+		$this->changeNotifier->pushBoardChanged($stack->getBoardId());
 
 		// Fan a "new card on a board you watch" notification out to board
 		// watchers. Best-effort - a notification hiccup must never fail the
@@ -404,15 +420,15 @@ class CardService {
 
 		$card->setIsTemplate($isTemplate);
 		$card->setLastModified(time());
-		$card = $this->cardMapper->update($card);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit.
+		$card = $this->writeCardChange(
 			$card->getBoardId(),
-			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_UPDATE,
 			$uid,
-			verb: Change::VERB_UPDATED,
+			Change::VERB_UPDATED,
+			fn (): Card => $this->cardMapper->update($card),
 		);
 
 		return $card;
@@ -601,15 +617,18 @@ class CardService {
 
 		$now = time();
 		$card->setLastModified($now);
-		$card = $this->cardMapper->update($card);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
+		// row commit together (or roll back together); the realtime push fires only
+		// after commit. Side effects below (mentions, parent auto-complete) run
+		// after the card + its change row have landed.
+		$card = $this->writeCardChange(
 			$card->getBoardId(),
-			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_UPDATE,
 			$uid,
-			verb: Change::VERB_UPDATED,
+			Change::VERB_UPDATED,
+			fn (): Card => $this->cardMapper->update($card),
 		);
 
 		// A new @mention in the description pings + auto-subscribes readable-board
@@ -641,23 +660,26 @@ class CardService {
 
 		$now = time();
 
-		foreach ($this->cardMapper->findChildren($id) as $child) {
-			$child->setParentCardId(null);
-			$child->setLastModified($now);
-			$this->cardMapper->update($child);
-		}
-
-		$card->setDeletedAt($now);
-		$card->setLastModified($now);
-		$this->cardMapper->update($card);
-
-		$this->changeNotifier->notify(
+		// Detach children, soft-delete the card and append the DELETE change row
+		// atomically (#3579): the child clears, the delete and its delta-sync row
+		// commit together, so a client never sees a detached child without the
+		// parent's DELETE row (or vice versa). Push after commit.
+		$this->writeCardChange(
 			$card->getBoardId(),
-			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_DELETE,
 			$uid,
-			verb: Change::VERB_DELETED,
+			Change::VERB_DELETED,
+			function () use ($id, $card, $now): Card {
+				foreach ($this->cardMapper->findChildren($id) as $child) {
+					$child->setParentCardId(null);
+					$child->setLastModified($now);
+					$this->cardMapper->update($child);
+				}
+				$card->setDeletedAt($now);
+				$card->setLastModified($now);
+				return $this->cardMapper->update($card);
+			},
 		);
 	}
 
@@ -766,13 +788,12 @@ class CardService {
 			// truth), but DEFER the realtime push until after commit - otherwise a
 			// client could refetch pre-commit state, or get an event for a move
 			// that the unique-key retry then rolls back.
-			$this->changeNotifier->notify(
+			$this->changeNotifier->recordChange(
 				$card->getBoardId(),
 				Change::ENTITY_CARD,
 				$card->getId(),
 				Change::ACTION_MOVE,
 				$uid,
-				false,
 				Change::VERB_MOVED,
 			);
 
@@ -783,7 +804,7 @@ class CardService {
 		}
 
 		// Commit succeeded - now it is safe to broadcast the move.
-		$this->changeNotifier->emitPush($card->getBoardId());
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
 
 		return $card;
 	}
@@ -838,15 +859,15 @@ class CardService {
 		}
 
 		$card->setLastModified(time());
-		$card = $this->cardMapper->update($card);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit.
+		$card = $this->writeCardChange(
 			$card->getBoardId(),
-			Change::ENTITY_CARD,
 			$id,
 			Change::ACTION_UPDATE,
 			$uid,
-			verb: Change::VERB_UPDATED,
+			Change::VERB_UPDATED,
+			fn (): Card => $this->cardMapper->update($card),
 		);
 
 		return $card;
@@ -980,16 +1001,53 @@ class CardService {
 		$now = time();
 		$parent->setDoneAt($now);
 		$parent->setLastModified($now);
-		$this->cardMapper->update($parent);
 
-		$this->changeNotifier->notify(
+		// Atomic entity-write + change-row (#3579); push after commit.
+		$this->writeCardChange(
 			$parent->getBoardId(),
-			Change::ENTITY_CARD,
 			$parentId,
 			Change::ACTION_UPDATE,
 			$uid,
-			verb: Change::VERB_UPDATED,
+			Change::VERB_UPDATED,
+			fn (): Card => $this->cardMapper->update($parent),
 		);
+	}
+
+	/**
+	 * Runs a single-card entity write and its `kanso_changes` row atomically
+	 * (#3579): the mapper write in $write and the change-row insert commit
+	 * together, or roll back together on any failure - so no card mutation is ever
+	 * visible without its delta-sync row, and no delta row points at a write that
+	 * was rolled back. The realtime push is emitted only AFTER commit (never inside
+	 * the transaction - a pre-commit push could make a client refetch state a
+	 * rollback then discards). Mirrors {@see self::persistMove()}'s pattern for the
+	 * non-move single-entity mutators (create/update/delete/setParent/…).
+	 *
+	 * @param callable():Card $write performs the entity write and returns the row
+	 * @throws \Throwable rethrows whatever the write or the change-row insert throws
+	 */
+	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write): Card {
+		$this->db->beginTransaction();
+		try {
+			$card = $write();
+			$this->changeNotifier->recordChange(
+				$boardId,
+				Change::ENTITY_CARD,
+				$entityId,
+				$action,
+				$uid,
+				$verb,
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Commit succeeded - now it is safe to broadcast.
+		$this->changeNotifier->pushBoardChanged($boardId);
+
+		return $card;
 	}
 
 	/**

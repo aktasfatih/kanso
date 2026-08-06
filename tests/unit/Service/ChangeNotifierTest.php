@@ -97,6 +97,51 @@ class ChangeNotifierTest extends TestCase {
 		self::assertSame($change, $this->notifier->notify(1, Change::ENTITY_CARD, 7, Change::ACTION_UPDATE, 'alice'));
 	}
 
+	public function testRecordChangeInsertsRowAndEmitsNoPush(): void {
+		$change = new Change();
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				7,
+				Change::ACTION_UPDATE,
+				'alice',
+				self::greaterThan(0),
+				Change::VERB_UPDATED
+			)
+			->willReturn($change);
+		// recordChange must NOT touch the push path at all - no queue lookup, no
+		// recipient resolution (that is pushBoardChanged's job).
+		$this->container->expects(self::never())->method('get');
+		$this->boardMapper->expects(self::never())->method('find');
+
+		self::assertSame(
+			$change,
+			$this->notifier->recordChange(1, Change::ENTITY_CARD, 7, Change::ACTION_UPDATE, 'alice', Change::VERB_UPDATED)
+		);
+	}
+
+	public function testPushBoardChangedFansOutWithoutRecordingAChangeRow(): void {
+		// pushBoardChanged is push-only: it never writes a change row.
+		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$this->userAcl('bob')]);
+
+		$pushed = [];
+		$queue = $this->createMock(IQueue::class);
+		$queue->expects(self::exactly(2))
+			->method('push')
+			->willReturnCallback(static function (string $channel, $event) use (&$pushed): void {
+				$pushed[] = $event['user'];
+			});
+		$this->container->method('get')->willReturn($queue);
+
+		$this->notifier->pushBoardChanged(1);
+
+		self::assertSame(['alice', 'bob'], $pushed);
+	}
+
 	public function testEmitsOnePushPerRecipientIncludingExpandedGroups(): void {
 		$this->changeMapper->method('insertChange')->willReturn(new Change());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));

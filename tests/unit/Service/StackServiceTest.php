@@ -79,7 +79,7 @@ class StackServiceTest extends TestCase {
 				return $stack;
 			});
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(
 				1,
 				Change::ENTITY_STACK,
@@ -108,7 +108,7 @@ class StackServiceTest extends TestCase {
 				return $stack;
 			});
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->willReturn(new Change());
 
 		$this->service->create(1, 'Done', 'alice');
@@ -122,7 +122,7 @@ class StackServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->stackMapper->expects(self::never())->method('insert');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(1, 'To do', 'bob');
@@ -135,7 +135,7 @@ class StackServiceTest extends TestCase {
 			->method('update')
 			->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(
 				1,
 				Change::ENTITY_STACK,
@@ -157,7 +157,7 @@ class StackServiceTest extends TestCase {
 			->method('update')
 			->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_STACK, 5, Change::ACTION_UPDATE, 'alice')
 			->willReturn(new Change());
 
@@ -169,7 +169,7 @@ class StackServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		// Positional: id, title, archived, role, wipLimit, uid, color.
 		$set = $this->service->update(5, null, null, null, null, 'alice', 'e74c3c');
@@ -192,7 +192,7 @@ class StackServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(5, null, null, 6, null, 'alice');
@@ -211,7 +211,7 @@ class StackServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$updated = $this->service->update(5, null, null, null, 3, 'alice');
 		self::assertSame(3, $updated->getWipLimit());
@@ -223,7 +223,7 @@ class StackServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(5)->willReturn($stack);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$updated = $this->service->update(5, null, null, null, 0, 'alice');
 		self::assertSame(0, $updated->getWipLimit());
@@ -247,7 +247,7 @@ class StackServiceTest extends TestCase {
 			->with($board, 'bob', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->stackMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->update(5, null, null, Stack::ROLE_DONE, null, 'bob');
@@ -261,7 +261,7 @@ class StackServiceTest extends TestCase {
 			->with(self::callback(static fn (Stack $s): bool => $s->getDeletedAt() > 0))
 			->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(
 				1,
 				Change::ENTITY_STACK,
@@ -290,7 +290,7 @@ class StackServiceTest extends TestCase {
 			->with(self::callback(static fn (Stack $s): bool => $s->getDeletedAt() === 0))
 			->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_STACK, 5, Change::ACTION_CREATE, 'alice')
 			->willReturn(new Change());
 
@@ -302,7 +302,7 @@ class StackServiceTest extends TestCase {
 		// A live stack must not be resurrected by a stale undo.
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->stackMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(DoesNotExistException::class);
 		$this->service->restore(5, 'alice');
@@ -337,7 +337,7 @@ class StackServiceTest extends TestCase {
 			->method('update')
 			->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(
 				1,
 				Change::ENTITY_STACK,
@@ -364,7 +364,7 @@ class StackServiceTest extends TestCase {
 		]);
 		$this->stackMapper->method('update')->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_STACK, 7, Change::ACTION_MOVE, 'alice')
 			->willReturn(new Change());
 
@@ -381,7 +381,7 @@ class StackServiceTest extends TestCase {
 			$this->stack(6, 1, 'J'),
 		]);
 		$this->stackMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$moved = $this->service->move(5, 6, 'alice');
 		// after('J') === 'K'
@@ -398,7 +398,7 @@ class StackServiceTest extends TestCase {
 			->willThrowException(new NotPermittedException());
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->stackMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->move(5, null, 'bob');
@@ -444,7 +444,7 @@ class StackServiceTest extends TestCase {
 		$this->db->expects(self::once())->method('rollBack');
 		$this->db->expects(self::never())->method('commit');
 		$this->stackMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(\OverflowException::class);
 		$this->service->move(5, 6, 'alice');
@@ -462,7 +462,7 @@ class StackServiceTest extends TestCase {
 		$this->db->expects(self::once())->method('beginTransaction');
 		$this->db->expects(self::once())->method('rollBack');
 		$this->db->expects(self::never())->method('commit');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(\RuntimeException::class);
 		$this->service->move(7, 5, 'alice');

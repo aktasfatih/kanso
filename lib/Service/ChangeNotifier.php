@@ -51,14 +51,22 @@ class ChangeNotifier {
 	 * Appends a change row for the mutation and broadcasts it to everyone
 	 * with access to the board.
 	 *
+	 * Convenience wrapper over {@see self::recordChange()} + {@see self::pushBoardChanged()}
+	 * for the simple case: a single mutation that is NOT inside a caller-managed
+	 * transaction and wants one push right away. Callers that write the change row
+	 * inside a DB transaction (so the push must be deferred until after commit), or
+	 * that write many change rows in one batch (so only one push should fire),
+	 * should instead call {@see self::recordChange()} and {@see self::pushBoardChanged()}
+	 * separately.
+	 *
 	 * @param int $entityType one of the Change::ENTITY_* constants
 	 * @param int $action one of the Change::ACTION_* constants
 	 * @param string|null $actor uid of the acting user, null for system actions
 	 * @param bool $push whether to broadcast the push now. Pass false when the
 	 *                   change row is written INSIDE a transaction, and call
-	 *                   {@see self::emitPush()} yourself after commit - otherwise a client
-	 *                   could refetch pre-commit state, or (on rollback) get an event for a
-	 *                   change that never landed.
+	 *                   {@see self::pushBoardChanged()} yourself after commit - otherwise a
+	 *                   client could refetch pre-commit state, or (on rollback) get an event
+	 *                   for a change that never landed.
 	 * @param int|null $verb one of the Change::VERB_* constants for the per-card
 	 *                       Activity feed, or null (renders as a generic "updated"). Additive -
 	 *                       delta-sync keys on (entity_type, action), not the verb.
@@ -66,7 +74,31 @@ class ChangeNotifier {
 	 * @throws \OCP\DB\Exception if inserting the change row fails
 	 */
 	public function notify(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, bool $push = true, ?int $verb = null): Change {
-		$change = $this->changeMapper->insertChange(
+		$change = $this->recordChange($boardId, $entityType, $entityId, $action, $actor, $verb);
+
+		if ($push) {
+			$this->pushBoardChanged($boardId);
+		}
+
+		return $change;
+	}
+
+	/**
+	 * Appends the `kanso_changes` row for a mutation - the delta-sync / ETag
+	 * source of truth - and NOTHING else. No realtime push is emitted. Use this
+	 * (paired with {@see self::pushBoardChanged()}) when the change row is written
+	 * inside a caller-managed transaction, or when many rows are written in one
+	 * batch and only one push should fire for the board.
+	 *
+	 * @param int $entityType one of the Change::ENTITY_* constants
+	 * @param int $action one of the Change::ACTION_* constants
+	 * @param string|null $actor uid of the acting user, null for system actions
+	 * @param int|null $verb one of the Change::VERB_* constants, or null
+	 * @return Change the inserted entry with its id set
+	 * @throws \OCP\DB\Exception if inserting the change row fails
+	 */
+	public function recordChange(int $boardId, int $entityType, int $entityId, int $action, ?string $actor, ?int $verb = null): Change {
+		return $this->changeMapper->insertChange(
 			$boardId,
 			$entityType,
 			$entityId,
@@ -75,20 +107,17 @@ class ChangeNotifier {
 			time(),
 			$verb
 		);
-
-		if ($push) {
-			$this->emitPush($boardId);
-		}
-
-		return $change;
 	}
 
 	/**
-	 * Best-effort notify_push broadcast for a board - never throws. Public so a
-	 * caller that wrote the change row inside a transaction can defer the push
-	 * until after commit (see {@see \OCA\Kanso\Service\CardService::persistMove}).
+	 * Best-effort notify_push broadcast for a board - never throws. The
+	 * per-participant fan-out: one `kanso_board_changed` event per board recipient.
+	 * Public so a caller that deferred the push (change row written inside a
+	 * transaction - see {@see \OCA\Kanso\Service\CardService::persistMove}) or that
+	 * coalesced a batch (many change rows, one push - see
+	 * {@see \OCA\Kanso\Service\ArchiveService::sweep}) can emit it explicitly.
 	 */
-	public function emitPush(int $boardId): void {
+	public function pushBoardChanged(int $boardId): void {
 		try {
 			$queue = $this->getQueue();
 			if ($queue === null) {

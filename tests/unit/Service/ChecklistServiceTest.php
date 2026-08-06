@@ -21,6 +21,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -30,6 +31,7 @@ class ChecklistServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private IDBConnection&MockObject $db;
 	private ChecklistService $service;
 
 	protected function setUp(): void {
@@ -39,6 +41,7 @@ class ChecklistServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		// A real SortKeyService - the fractional-key maths is deterministic and
 		// central to reorder behaviour, so exercise it rather than mock it.
 		$this->service = new ChecklistService(
@@ -48,6 +51,7 @@ class ChecklistServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			new SortKeyService(),
+			$this->db,
 		);
 	}
 
@@ -106,7 +110,7 @@ class ChecklistServiceTest extends TestCase {
 				return $item;
 			});
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
 			->willReturn(new Change());
 
@@ -124,7 +128,7 @@ class ChecklistServiceTest extends TestCase {
 				self::assertGreaterThan(0, strcmp($item->getSortKey(), 'I'));
 				return $item;
 			});
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$this->service->addItem(9, 'Second', 'alice');
 	}
@@ -132,7 +136,7 @@ class ChecklistServiceTest extends TestCase {
 	public function testAddItemRejectsEmptyTitle(): void {
 		$this->expectCardLoaded();
 		$this->itemMapper->expects(self::never())->method('insert');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->addItem(9, '   ', 'alice');
@@ -153,7 +157,7 @@ class ChecklistServiceTest extends TestCase {
 			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
 			->willThrowException(new NotPermittedException());
 		$this->itemMapper->expects(self::never())->method('insert');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->addItem(9, 'Nope', 'mallory');
@@ -200,7 +204,7 @@ class ChecklistServiceTest extends TestCase {
 				return $i;
 			});
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
 			->willReturn(new Change());
 
@@ -218,7 +222,7 @@ class ChecklistServiceTest extends TestCase {
 				self::assertSame('new title', $i->getTitle());
 				return $i;
 			});
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$this->service->updateItem(50, '  new title  ', null, 'alice');
 	}
@@ -229,7 +233,7 @@ class ChecklistServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->itemMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
 
 		// Same title, same done state → nothing to persist.
 		$result = $this->service->updateItem(50, 'todo', true, 'alice');
@@ -280,7 +284,7 @@ class ChecklistServiceTest extends TestCase {
 				self::assertLessThan(0, strcmp($i->getSortKey(), 'M'));
 				return $i;
 			});
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$this->service->moveItem(3, null, 'alice');
 	}
@@ -301,7 +305,7 @@ class ChecklistServiceTest extends TestCase {
 				self::assertLessThan(0, strcmp($i->getSortKey(), 'T'));
 				return $i;
 			});
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$this->service->moveItem(3, 1, 'alice');
 	}
@@ -320,7 +324,7 @@ class ChecklistServiceTest extends TestCase {
 				self::assertGreaterThan(0, strcmp($i->getSortKey(), 'T'));
 				return $i;
 			});
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$this->service->moveItem(3, 2, 'alice');
 	}
@@ -375,7 +379,7 @@ class ChecklistServiceTest extends TestCase {
 			->with($board, 'alice', PermissionService::PERMISSION_EDIT);
 		$this->itemMapper->expects(self::once())->method('delete')->with($item);
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
 			->willReturn(new Change());
 

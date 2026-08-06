@@ -17,6 +17,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 
 /**
  * Per-board automation: a deliberately small, FIXED trigger→action menu (no
@@ -41,6 +42,7 @@ class AutomationService {
 		private LabelMapper $labelMapper,
 		private CardLabelMapper $cardLabelMapper,
 		private ChangeNotifier $changeNotifier,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -154,14 +156,23 @@ class AutomationService {
 		if ($action === AutomationRule::ACTION_ADD_LABEL) {
 			$labelId = (int)($params['label'] ?? 0);
 			if ($labelId > 0 && !$this->cardLabelMapper->exists($card->getId(), $labelId)) {
-				$this->cardLabelMapper->insertAssignment($card->getId(), $labelId);
-				$this->changeNotifier->notify(
-					$card->getBoardId(),
-					Change::ENTITY_CARD,
-					$card->getId(),
-					Change::ACTION_UPDATE,
-					$actorUid
-				);
+				// Atomic label-assignment + change-row (#3579); push after commit.
+				$this->db->beginTransaction();
+				try {
+					$this->cardLabelMapper->insertAssignment($card->getId(), $labelId);
+					$this->changeNotifier->recordChange(
+						$card->getBoardId(),
+						Change::ENTITY_CARD,
+						$card->getId(),
+						Change::ACTION_UPDATE,
+						$actorUid,
+					);
+					$this->db->commit();
+				} catch (\Throwable $e) {
+					$this->db->rollBack();
+					throw $e;
+				}
+				$this->changeNotifier->pushBoardChanged($card->getBoardId());
 			}
 		}
 	}
