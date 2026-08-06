@@ -35,6 +35,13 @@ services:
       POSTGRES_DB: nextcloud
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: nextcloud
+    # So the nextcloud service can wait for the DB to actually accept
+    # connections before it starts installing (avoids a first-boot race).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextcloud -d nextcloud"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
 
   # MariaDB is Nextcloud's MySQL-compatible target. Same logical hostname alias
   # ("db") as postgres so the nextcloud service's *_HOST wiring is uniform; only
@@ -53,6 +60,11 @@ services:
       MARIADB_USER: nextcloud
       MARIADB_PASSWORD: nextcloud
       MARIADB_ROOT_PASSWORD: nextcloud
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
     networks:
       default:
         aliases:
@@ -103,4 +115,15 @@ services:
       # (30/31) abort the first-boot install otherwise. Runs as root pre-install.
       - ./hooks/pre-installation:/docker-entrypoint-hooks.d/pre-installation:ro
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      # Wait for whichever DB profile is active to be *healthy* (accepting
+      # connections), not merely started — the NC first-boot installer races the
+      # DB otherwise. required:false so the sqlite profile (no db service) is
+      # unaffected; only the active profile's db is waited on.
+      db:
+        condition: service_healthy
+        required: false
+      db-mysql:
+        condition: service_healthy
+        required: false
