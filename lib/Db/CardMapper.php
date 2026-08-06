@@ -146,6 +146,36 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Summaries (no description) of the given non-deleted, NON-TEMPLATE cards of a
+	 * board - the delta-sync counterpart of {@see self::findSummariesByBoard()},
+	 * restricted to an explicit id set (the cards a `?since=` window touched). Same
+	 * summary shape and same live-card filters (not deleted, not a template) so a
+	 * card that was deleted or turned into a template between the client's cursor
+	 * and now is simply absent from the result - the controller then emits it as a
+	 * `cards.remove`. Board-scoped like every board query. An empty id set
+	 * short-circuits (never emit `IN ()`, which is invalid SQL).
+	 *
+	 * @param int[] $ids
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findSummariesByIds(int $boardId, array $ids): array {
+		if ($ids === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Summaries (no description) of the non-deleted TEMPLATE cards of a board -
 	 * the per-board template picker source (#3409). The exact complement of
 	 * {@see self::findSummariesByBoard()}'s template exclusion. Ordered by title

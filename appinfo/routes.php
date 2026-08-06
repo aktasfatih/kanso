@@ -69,6 +69,11 @@ return [
 		// Trello board JSON import → a fresh Kanso board owned by the importer.
 		// A distinct literal POST path, alongside boardPortability#import above.
 		['name' => 'trelloImport#import', 'url' => '/api/trello-import', 'verb' => 'POST'],
+		// Delta-sync read (#3675): board changes since the client's cursor, so a
+		// single edit patches the client cache instead of a whole-board refetch.
+		// Declared BEFORE board#show so the router never captures "changes" as a
+		// board id (same ordering rule as card#templates / card#resolveRef above).
+		['name' => 'board#changes', 'url' => '/api/boards/{id}/changes', 'verb' => 'GET'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
 		['name' => 'boardStats#show', 'url' => '/api/boards/{id}/stats', 'verb' => 'GET'],
 		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],

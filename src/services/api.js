@@ -13,6 +13,12 @@ export const fetchBoards = () =>
 export const fetchBoard = (id) =>
 	axios.get(url(`/api/boards/${id}`)).then((r) => r.data)
 
+// Delta-sync read (#3675): the board's changes since `since` (the client's
+// cursor). Returns { cursor, resync, cards:{upsert,remove}, stacks:{upsert,remove} }.
+// When resync is true the client drops its cursor and does a full fetchBoard.
+export const fetchBoardChanges = (id, since) =>
+	axios.get(url(`/api/boards/${id}/changes`), { params: { since } }).then((r) => r.data)
+
 export const createBoard = (data) =>
 	axios.post(url('/api/boards'), data).then((r) => r.data)
 

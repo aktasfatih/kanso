@@ -56,6 +56,33 @@ class StackMapper extends QBMapper {
 	}
 
 	/**
+	 * The given non-deleted stacks of a board - the delta-sync counterpart of
+	 * {@see self::findByBoard()}, restricted to an explicit id set (the stacks a
+	 * `?since=` window touched). Board-scoped and non-deleted like the full-board
+	 * read, so a stack deleted between the client's cursor and now is simply
+	 * absent from the result - the controller then emits it as a `stacks.remove`.
+	 * An empty id set short-circuits (never emit `IN ()`, which is invalid SQL).
+	 *
+	 * @param int[] $ids
+	 * @return Stack[]
+	 * @throws Exception
+	 */
+	public function findByIds(int $boardId, array $ids): array {
+		if ($ids === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * The first non-deleted stack of a board carrying the given workflow role
 	 * (in display order), or null. Used to resolve auto-move targets (e.g. the
 	 * "In review" or "Done" column) without a separate config surface.
