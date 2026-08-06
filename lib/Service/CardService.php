@@ -236,7 +236,30 @@ class CardService {
 					Change::VERB_CREATED,
 				);
 				$this->db->commit();
-				break;
+
+				// Commit succeeded - now it is safe to broadcast the create.
+				$this->changeNotifier->pushBoardChanged($stack->getBoardId());
+
+				// Surface the create in the Nextcloud Activity stream (best-effort,
+				// never fatal to the create). User-initiated only - $uid is the actor.
+				$this->changeNotifier->publishCardActivity(
+					$stack->getBoardId(),
+					'card_created',
+					$card->getId(),
+					(string)$card->getTitle(),
+					$uid,
+				);
+
+				// Fan a "new card on a board you watch" notification out to board
+				// watchers. Best-effort - a notification hiccup must never fail the
+				// create (the card + its change row are already committed).
+				try {
+					$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card->getId(), $uid);
+				} catch (\Throwable) {
+					// Ignore - board-activity fan-out is a non-critical side effect.
+				}
+
+				return $card;
 			} catch (\OCP\DB\Exception $e) {
 				$this->db->rollBack();
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
@@ -258,20 +281,6 @@ class CardService {
 				throw $e;
 			}
 		}
-
-		// Commit succeeded - now it is safe to broadcast the create.
-		$this->changeNotifier->pushBoardChanged($stack->getBoardId());
-
-		// Fan a "new card on a board you watch" notification out to board
-		// watchers. Best-effort - a notification hiccup must never fail the
-		// create (the card + its change row are already committed).
-		try {
-			$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card->getId(), $uid);
-		} catch (\Throwable) {
-			// Ignore - board-activity fan-out is a non-critical side effect.
-		}
-
-		return $card;
 	}
 
 	/**
@@ -778,10 +787,15 @@ class CardService {
 			$sortKey = $this->deriveMoveKey($targetStackId, $afterCard);
 
 			$now = time();
+			// Whether THIS move flips the card into the done state (was open before,
+			// lands in a done-role column). Drives the "marked done" Activity subject
+			// below - a plain reshuffle or a move between open columns is "moved".
+			$wasDone = ($card->getDoneAt() ?? 0) > 0;
 			$card->setStackId($targetStackId);
 			$card->setSortKey($sortKey);
 			$card->setLastModified($now);
 			$this->applyDoneAutomation($card, $sourceStack, $targetStack, $now);
+			$becameDone = !$wasDone && ($card->getDoneAt() ?? 0) > 0;
 			$card = $this->cardMapper->update($card);
 
 			// Write the change row inside the transaction (delta-sync source of
@@ -805,6 +819,16 @@ class CardService {
 
 		// Commit succeeded - now it is safe to broadcast the move.
 		$this->changeNotifier->pushBoardChanged($card->getBoardId());
+
+		// Surface the move in the Nextcloud Activity stream (best-effort). A move
+		// that completes the card reads as "marked done", any other move as "moved".
+		$this->changeNotifier->publishCardActivity(
+			$card->getBoardId(),
+			$becameDone ? 'card_done' : 'card_moved',
+			$card->getId(),
+			(string)$card->getTitle(),
+			$uid,
+		);
 
 		return $card;
 	}

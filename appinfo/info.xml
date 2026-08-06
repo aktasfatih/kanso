@@ -52,6 +52,14 @@ links and webhook, and one-click Import from Deck.
 		<admin>OCA\Kanso\Settings\BackupAdmin</admin>
 		<admin-section>OCA\Kanso\Settings\AdminSection</admin-section>
 	</settings>
+	<activity>
+		<settings>
+			<setting>OCA\Kanso\Activity\Setting</setting>
+		</settings>
+		<providers>
+			<provider>OCA\Kanso\Activity\Provider</provider>
+		</providers>
+	</activity>
 	<navigations>
 		<navigation>
 			<name>Kanso</name>

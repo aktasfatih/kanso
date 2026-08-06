@@ -9,6 +9,8 @@ namespace OCA\Kanso\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Kanso\Notification\Notifier;
+use OCA\Kanso\Service\ActivityPublisher;
+use OCP\Activity\IManager as IActivityManager;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -16,8 +18,10 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\IAppData;
+use OCP\IURLGenerator;
 use OCP\Util;
 use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
 
 /**
  * @implements IEventListener<LoadAdditionalScriptsEvent>
@@ -38,6 +42,24 @@ class Application extends App implements IBootstrap, IEventListener {
 		// Kanso's app-data, never in a user's personal Files.
 		$context->registerService(IAppData::class, static function (ContainerInterface $c): IAppData {
 			return $c->get(IAppDataFactory::class)->get(self::APP_ID);
+		});
+
+		// Activity-stream bridge (#3439): construct the publisher with a nullable
+		// Activity IManager - the Activity app is optional, so feature-detect it
+		// here and hand the publisher null when it is absent (it then no-ops). The
+		// container cannot auto-wire an optional dependency, hence the factory.
+		$context->registerService(ActivityPublisher::class, static function (ContainerInterface $c): ActivityPublisher {
+			$manager = null;
+			try {
+				$manager = $c->get(IActivityManager::class);
+			} catch (\Throwable) {
+				// Activity app not installed - publisher runs as a no-op.
+			}
+			return new ActivityPublisher(
+				$manager,
+				$c->get(IURLGenerator::class),
+				$c->get(LoggerInterface::class),
+			);
 		});
 
 		// "Share from Files" (#3645): inject Kanso's Files-integration bundle into

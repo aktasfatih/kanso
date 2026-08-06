@@ -44,6 +44,7 @@ class ChangeNotifier {
 		private IGroupManager $groupManager,
 		private ContainerInterface $container,
 		private LoggerInterface $logger,
+		private ActivityPublisher $activityPublisher,
 	) {
 	}
 
@@ -135,6 +136,54 @@ class ChangeNotifier {
 				'kanso: failed to emit notify_push event for board ' . $boardId,
 				['exception' => $e]
 			);
+		}
+	}
+
+	/**
+	 * Publishes ONE of the four coarse Activity-stream milestones (card created /
+	 * moved / done, board shared) to everyone with access to the board - the same
+	 * board-scoped audience the realtime push fans out to. This is the choke point
+	 * that keeps Activity consistent with the change log: services call it right
+	 * next to their {@see self::recordChange()} write for these four user-initiated
+	 * events, and never for the fine-grained field edits or the system/cron sweeps.
+	 *
+	 * Best-effort and never throws - the Activity app may be absent (the publisher
+	 * no-ops) and any publish error is swallowed there.
+	 *
+	 * @param 'card_created'|'card_moved'|'card_done' $subject
+	 */
+	public function publishCardActivity(int $boardId, string $subject, int $cardId, string $cardTitle, ?string $actor): void {
+		// System/cron-driven changes carry a null actor (auto-archive sweep,
+		// recurrence spawns, due reminders). Activity is only for user-initiated
+		// milestones, so skip those - it avoids the batch/cron activity spam.
+		if ($actor === null) {
+			return;
+		}
+		try {
+			$recipients = $this->resolveRecipients($boardId);
+			match ($subject) {
+				'card_created' => $this->activityPublisher->cardCreated($boardId, $cardId, $cardTitle, $actor, $recipients),
+				'card_moved' => $this->activityPublisher->cardMoved($boardId, $cardId, $cardTitle, $actor, $recipients),
+				'card_done' => $this->activityPublisher->cardDone($boardId, $cardId, $cardTitle, $actor, $recipients),
+				default => null,
+			};
+		} catch (\Throwable $e) {
+			$this->logger->debug('kanso: failed to publish card activity for board ' . $boardId, ['exception' => $e]);
+		}
+	}
+
+	/**
+	 * Publishes the "board shared" Activity milestone to everyone with access to
+	 * the board (the new participant included). Best-effort, never throws.
+	 */
+	public function publishBoardShared(int $boardId, string $boardTitle, ?string $actor): void {
+		if ($actor === null) {
+			return;
+		}
+		try {
+			$this->activityPublisher->boardShared($boardId, $boardTitle, $actor, $this->resolveRecipients($boardId));
+		} catch (\Throwable $e) {
+			$this->logger->debug('kanso: failed to publish board-shared activity for board ' . $boardId, ['exception' => $e]);
 		}
 	}
 
