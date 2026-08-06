@@ -77,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:user="uid"
 					:display-name="participantName(uid)"
 					:size="22"
-					:show-user-status="false"
+					:hide-status="true"
 					:disable-tooltip="false"
 					class="card-preview__avatar" />
 			</div>
