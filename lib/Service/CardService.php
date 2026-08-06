@@ -1075,6 +1075,145 @@ class CardService {
 	}
 
 	/**
+	 * Rewrites every live card in $stackId to a fresh, short, evenly-spaced
+	 * `sort_key`, preserving the current display order (#3379). This is the
+	 * recovery for the pathological case the move endpoint reports as 409
+	 * `rebalance_required`: repeated bisection between the same neighbours grows
+	 * a fractional key past {@see SortKeyService::MAX_KEY_LENGTH}, at which point
+	 * no new key fits between them. A rebalance resets the whole stack to
+	 * two-character keys, restoring generous gaps so subsequent between()/after()
+	 * inserts no longer overflow.
+	 *
+	 * Concurrency: the stack's rows are read with SELECT ... FOR UPDATE inside a
+	 * single transaction (no new global lock - it matches the app's
+	 * READ-COMMITTED move posture used by {@see self::persistMove()}, just
+	 * pessimistically for this rare maintenance path), so a concurrent move
+	 * blocks on the same rows until the rebalance commits.
+	 *
+	 * The (stack_id, sort_key, deleted_at) unique index forbids two live rows in
+	 * a stack sharing a key even transiently, so the rewrite runs in two passes:
+	 * pass 1 parks every row at a distinct three-character temporary key that is
+	 * disjoint from all current keys (and, by length, from the two-character
+	 * finals), pass 2 writes the final evenly-spaced keys. A single stack-level
+	 * MOVE change row (delta-sync) is recorded inside the transaction and the
+	 * board push emitted after commit, mirroring persistMove().
+	 *
+	 * @return int the number of cards rewritten (0 if the stack was empty)
+	 * @throws DoesNotExistException if the stack does not exist or is deleted
+	 * @throws \OCP\DB\Exception on a DB error
+	 * @throws \RuntimeException if the stack is too large for the temporary
+	 *                           three-character key grid (pathological only)
+	 */
+	public function rebalanceStack(int $stackId): int {
+		$stack = $this->loadStack($stackId);
+		$boardId = $stack->getBoardId();
+
+		$this->db->beginTransaction();
+		try {
+			$cards = $this->cardMapper->findByStackForUpdate($stackId);
+			$count = count($cards);
+			if ($count === 0) {
+				$this->db->commit();
+				return 0;
+			}
+
+			$freshKeys = $this->sortKeyService->evenlySpaced($count);
+			$currentKeys = [];
+			foreach ($cards as $card) {
+				$currentKeys[$card->getSortKey()] = true;
+			}
+			$tempKeys = $this->temporaryKeys($currentKeys, $count);
+
+			// Pass 1: park each row at a distinct temporary key that is disjoint
+			// from every current key, so no UPDATE collides with a
+			// not-yet-rewritten row.
+			foreach ($cards as $index => $card) {
+				$this->cardMapper->updateSortKeyById($card->getId(), $tempKeys[$index]);
+			}
+			// Pass 2: write the final evenly-spaced keys, order preserved. The
+			// finals are the short two-character grid and the temp band the
+			// three-character grid, so the two are disjoint and this pass never
+			// collides either.
+			foreach ($cards as $index => $card) {
+				$this->cardMapper->updateSortKeyById($card->getId(), $freshKeys[$index]);
+			}
+
+			// One stack-level MOVE change row is enough for delta-sync clients to
+			// know the stack reordered and refetch it - cheaper than one row per
+			// card.
+			$this->changeNotifier->recordChange(
+				$boardId,
+				Change::ENTITY_STACK,
+				$stackId,
+				Change::ACTION_MOVE,
+				null,
+				Change::VERB_MOVED,
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Commit succeeded - now it is safe to broadcast the reordering.
+		$this->changeNotifier->pushBoardChanged($boardId);
+
+		return $count;
+	}
+
+	/**
+	 * Rebalances every stack on $boardId (the `occ kanso:rebalance --board`
+	 * path). Each stack is rebalanced in its own transaction, so one empty or
+	 * failing stack does not roll back the others.
+	 *
+	 * @return array<int,int> map of stack id => number of cards rewritten
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws \OCP\DB\Exception on a DB error
+	 */
+	public function rebalanceBoard(int $boardId): array {
+		$board = $this->loadBoard($boardId);
+		$result = [];
+		foreach ($this->stackMapper->findByBoard($board->getId()) as $stack) {
+			$result[$stack->getId()] = $this->rebalanceStack($stack->getId());
+		}
+		return $result;
+	}
+
+	/**
+	 * $count distinct temporary sort keys for a rebalance's pass 1, drawn from
+	 * the three-character base-36 grid and disjoint from every key currently in
+	 * the stack. Three-character keys are always length-safe (well under
+	 * MAX_KEY_LENGTH) and, by length alone, disjoint from the two-character final
+	 * keys - so parking here never collides with a not-yet-rewritten row and the
+	 * final pass never collides with the parking band. Any grid slot already used
+	 * by a current key is skipped; with 36^3 = 46656 slots this always yields
+	 * enough keys for a realistic stack.
+	 *
+	 * @param array<string,true> $currentKeys the stack's current keys as a set
+	 * @return list<string>
+	 * @throws \RuntimeException if the three-character grid cannot supply $count
+	 *                           free keys (only for a pathologically huge stack)
+	 */
+	private function temporaryKeys(array $currentKeys, int $count): array {
+		$alphabet = SortKeyService::ALPHABET;
+		$base = SortKeyService::BASE;
+		$keys = [];
+		for ($slot = 0; $slot < $base * $base * $base && count($keys) < $count; $slot++) {
+			$key = $alphabet[intdiv($slot, $base * $base) % $base]
+				. $alphabet[intdiv($slot, $base) % $base]
+				. $alphabet[$slot % $base];
+			if (!isset($currentKeys[$key])) {
+				$keys[] = $key;
+			}
+		}
+		if (count($keys) < $count) {
+			throw new \RuntimeException('Stack too large to rebalance: exhausted the temporary sort-key grid');
+		}
+		return $keys;
+	}
+
+	/**
 	 * New sort key for a card landing in $targetStackId after $afterCard
 	 * (null = top of the stack). The moved card may itself be one of the
 	 * neighbours - its still-current key then bounds the result, which is

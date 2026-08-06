@@ -41,6 +41,9 @@ links and webhook, and one-click Import from Deck.
 	<dependencies>
 		<nextcloud min-version="30" max-version="34"/>
 	</dependencies>
+	<commands>
+		<command>OCA\Kanso\Command\Rebalance</command>
+	</commands>
 	<background-jobs>
 		<job>OCA\Kanso\Cron\PruneChanges</job>
 		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>

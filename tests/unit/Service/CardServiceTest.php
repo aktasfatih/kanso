@@ -2300,4 +2300,132 @@ class CardServiceTest extends TestCase {
 		// A plain card serializes false.
 		self::assertFalse($this->card()->jsonSerializeSummary()['isTemplate']);
 	}
+
+	// ---- rebalanceStack (409 rebalance_required recovery) -----------------
+
+	public function testRebalanceStackRewritesToShortStrictlyIncreasingKeysOrderPreserved(): void {
+		// A stack whose keys have grown pathologically long (the overflow case).
+		$long = str_repeat('I', 40);
+		$cards = [
+			$this->card(9, 5, 1, $long . 'A'),
+			$this->card(10, 5, 1, $long . 'B'),
+			$this->card(11, 5, 1, $long . 'C'),
+		];
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
+		$this->cardMapper->expects(self::once())
+			->method('findByStackForUpdate')
+			->with(5)
+			->willReturn($cards);
+
+		// Capture every sort-key write in order (pass 1 temp keys + pass 2 finals).
+		$writes = [];
+		$this->cardMapper->method('updateSortKeyById')
+			->willReturnCallback(static function (int $id, string $key) use (&$writes): void {
+				$writes[] = [$id, $key];
+			});
+
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_STACK, 5, Change::ACTION_MOVE, null, Change::VERB_MOVED)
+			->willReturn(new Change());
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$count = $this->service->rebalanceStack(5);
+		self::assertSame(3, $count);
+
+		// Two passes of 3 writes each.
+		self::assertCount(6, $writes);
+
+		// Pass 1 parks each row at a distinct three-character temporary key,
+		// disjoint from the current keys and (by length) from the finals, so no
+		// write collides with a not-yet-rewritten row.
+		$sortKeyService = new SortKeyService();
+		$oldKeys = [$long . 'A', $long . 'B', $long . 'C'];
+		$tempWrites = array_slice($writes, 0, 3);
+		$tempKeys = array_map(static fn (array $w): string => $w[1], $tempWrites);
+		self::assertSame([9, 10, 11], array_map(static fn (array $w): int => $w[0], $tempWrites));
+		self::assertSame($tempKeys, array_unique($tempKeys), 'temp keys must be distinct');
+		self::assertSame([], array_intersect($tempKeys, $oldKeys), 'temp keys must not reuse a current key');
+		foreach ($tempKeys as $k) {
+			self::assertSame(3, strlen($k), 'temp keys are three characters');
+			self::assertMatchesRegularExpression('/^[0-9A-Z]{3}$/', $k);
+		}
+
+		// Pass 2 writes the final evenly-spaced keys, same row order preserved.
+		$finalWrites = array_slice($writes, 3, 3);
+		self::assertSame([9, 10, 11], array_map(static fn (array $w): int => $w[0], $finalWrites));
+		$finalKeys = array_map(static fn (array $w): string => $w[1], $finalWrites);
+
+		// Short, strictly increasing, and no final key collides with a temp key.
+		for ($i = 0; $i < 3; $i++) {
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($finalKeys[$i]));
+			self::assertStringEndsNotWith('0', $finalKeys[$i]);
+			if ($i > 0) {
+				self::assertLessThan(0, strcmp($finalKeys[$i - 1], $finalKeys[$i]));
+			}
+		}
+		self::assertSame([], array_intersect($finalKeys, $tempKeys));
+
+		// The recovery invariant: a between() at any gap of the fresh keys no
+		// longer overflows (the very thing the 409 could not do before).
+		$mid = $sortKeyService->between($finalKeys[0], $finalKeys[1]);
+		self::assertLessThan(0, strcmp($finalKeys[0], $mid));
+		self::assertLessThan(0, strcmp($mid, $finalKeys[1]));
+	}
+
+	public function testRebalanceStackOnEmptyStackIsANoOpButStillCommits(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
+		$this->cardMapper->method('findByStackForUpdate')->with(5)->willReturn([]);
+		$this->cardMapper->expects(self::never())->method('updateSortKeyById');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+
+		self::assertSame(0, $this->service->rebalanceStack(5));
+	}
+
+	public function testRebalanceStackRollsBackOnWriteFailure(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
+		$this->cardMapper->method('findByStackForUpdate')->with(5)
+			->willReturn([$this->card(9, 5, 1, 'I')]);
+		$this->cardMapper->method('updateSortKeyById')
+			->willThrowException(new \RuntimeException('boom'));
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->rebalanceStack(5);
+	}
+
+	public function testRebalanceStackRejectsDeletedStack(): void {
+		$stack = $this->stack(5);
+		$stack->setDeletedAt(123);
+		$this->stackMapper->method('find')->with(5)->willReturn($stack);
+		$this->db->expects(self::never())->method('beginTransaction');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->rebalanceStack(5);
+	}
+
+	public function testRebalanceBoardRebalancesEveryStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1));
+		$this->stackMapper->method('findByBoard')->with(1)
+			->willReturn([$this->stack(5, 1), $this->stack(6, 1)]);
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => $this->stack($id, 1));
+		$this->cardMapper->method('findByStackForUpdate')->willReturnCallback(
+			fn (int $stackId): array => $stackId === 5
+				? [$this->card(9, 5, 1, 'I'), $this->card(10, 5, 1, 'J')]
+				: [$this->card(11, 6, 1, 'I')]
+		);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$result = $this->service->rebalanceBoard(1);
+		self::assertSame([5 => 2, 6 => 1], $result);
+	}
 }

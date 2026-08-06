@@ -60,6 +60,63 @@ class SortKeyService {
 	}
 
 	/**
+	 * Returns $n short, strictly-increasing, evenly-spaced keys - the fresh key
+	 * set for a stack {@see rebalance}. Used to reset a stack whose fractional
+	 * keys have grown pathologically long (repeated bisection between the same
+	 * neighbours), restoring generous gaps for future inserts.
+	 *
+	 * The keys are drawn from the two-character space (base-36 squared = 1296
+	 * slots) as evenly-spaced offsets from that range, formatted as a fixed
+	 * two-character prefix plus, only when $n exceeds the 1296 two-char slots, a
+	 * short suffix. In practice a stack is never that large, so every returned
+	 * key is exactly two characters: short, collision-free within the set, and
+	 * strictly increasing. None ends in the minimum digit '0' (that would block
+	 * future before()-insertion), matching the invariant the other generators
+	 * uphold.
+	 *
+	 * @param int $n how many keys to produce (>= 0)
+	 * @return list<string> $n keys, strictly increasing, each <= MAX_KEY_LENGTH
+	 * @throws InvalidInputException if $n is negative
+	 */
+	public function evenlySpaced(int $n): array {
+		if ($n < 0) {
+			throw new InvalidInputException('evenlySpaced() requires n >= 0, got ' . $n);
+		}
+		if ($n === 0) {
+			return [];
+		}
+
+		// Reserve the two-character grid (BASE*BASE slots) and hand out evenly
+		// spaced interior positions, leaving a margin at both ends so before()
+		// and after() still have room. Position i maps to a fraction in (0,1)
+		// via (i+1)/(n+1), scaled across the grid.
+		$slots = self::BASE * self::BASE;
+		$keys = [];
+		$previous = '';
+		for ($i = 0; $i < $n; $i++) {
+			$position = intdiv(($i + 1) * ($slots - 1), $n + 1);
+			$high = intdiv($position, self::BASE);
+			$low = $position % self::BASE;
+			$key = self::ALPHABET[$high] . self::ALPHABET[$low];
+			if ($key[1] === '0') {
+				// Never end in '0' (blocks before()); bump the low digit. Since
+				// position < slots-1 the +1 cannot overflow the low digit into a
+				// new character, and even spacing keeps it below the next slot.
+				$key = self::ALPHABET[$high] . self::ALPHABET[$low + 1];
+			}
+			if ($key === $previous) {
+				// Two positions collapsed onto the same slot (only possible when
+				// $n approaches the grid size). Nudge past the previous key so the
+				// sequence stays strictly increasing.
+				$key = $this->after($previous);
+			}
+			$previous = $key;
+			$keys[] = $this->guardLength($key);
+		}
+		return $keys;
+	}
+
+	/**
 	 * Returns a key k with $a < k < $b (byte comparison).
 	 *
 	 * The result is at most one character longer than the longer input.

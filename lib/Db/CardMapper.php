@@ -268,6 +268,46 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Live cards of a stack in display order, taking a row-level write lock
+	 * (SELECT ... FOR UPDATE) on each returned row - the read half of a
+	 * {@see \OCA\Kanso\Service\CardService::rebalanceStack()} inside a
+	 * transaction. Locking the stack's rows serialises the rebalance against a
+	 * concurrent move deriving a key from the same neighbours, without a new
+	 * global lock: it matches the app's READ-COMMITTED move posture, just
+	 * pessimistically for the (rare) rebalance path.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findByStackForUpdate(int $stackId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('stack_id', $qb->createNamedParameter($stackId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('sort_key', 'ASC')
+			->forUpdate();
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Rewrites a single card's `sort_key` in place - the write half of a
+	 * rebalance. A targeted UPDATE (not a full-entity update) so it touches
+	 * only the reordering column and never clobbers fields absent from the
+	 * summary payload.
+	 *
+	 * @throws Exception
+	 */
+	public function updateSortKeyById(int $cardId, string $sortKey): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('sort_key', $qb->createNamedParameter($sortKey))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	/**
 	 * Summary (no description) of the non-deleted card directly after the
 	 * given sort key in a stack - the lower neighbour of a move target
 	 * position. Null when the position is at the end of the stack.
