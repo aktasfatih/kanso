@@ -1539,9 +1539,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														<TrashCanIcon :size="14" />
 													</button>
 												</template>
-											</div>
-
-											<div class="card-modal__reactions">
 												<button
 													v-for="summary in topComment.reactions"
 													:key="summary.emoji"
@@ -1627,21 +1624,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
 												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
-												<div
-													v-if="canEdit && currentUserId === reply.author"
-													class="card-modal__comment-controls">
-													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
-														<PencilIcon :size="14" />
-													</button>
-													<button
-														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
-														:title="t('kanso', 'Delete comment')"
-														:disabled="deleteComment.isPending.value"
-														@click="handleDeleteComment(reply)">
-														<TrashCanIcon :size="14" />
-													</button>
-												</div>
-												<div class="card-modal__reactions">
+												<div v-if="canEdit" class="card-modal__comment-controls">
+													<template v-if="currentUserId === reply.author">
+														<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
+															<PencilIcon :size="14" />
+														</button>
+														<button
+															class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+															:title="t('kanso', 'Delete comment')"
+															:disabled="deleteComment.isPending.value"
+															@click="handleDeleteComment(reply)">
+															<TrashCanIcon :size="14" />
+														</button>
+													</template>
 													<button
 														v-for="summary in reply.reactions"
 														:key="summary.emoji"
@@ -5724,6 +5719,7 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__comment-controls {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 4px;
 	margin-top: 2px;
@@ -5795,7 +5791,7 @@ async function handleToggleProject(projectId) {
 	justify-content: center;
 	width: 24px;
 	height: 24px;
-	border: 1px solid var(--color-border);
+	border: none;
 	border-radius: 50%;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
@@ -5805,7 +5801,10 @@ async function handleToggleProject(projectId) {
 .card-modal__reaction-picker {
 	position: absolute;
 	bottom: calc(100% + 4px);
-	left: 0;
+	/* Anchor to the right: the add button sits at the right end of the comment
+	   controls row, so open leftward into the comment to avoid the popover being
+	   clipped by the scroll container's / comment group's overflow. */
+	right: 0;
 	z-index: 10;
 	display: flex;
 	gap: 2px;
@@ -5943,6 +5942,7 @@ async function handleToggleProject(projectId) {
 .card-modal__field-clear,
 .card-modal__checklist-item-delete,
 .card-modal__comment-icon-btn,
+.card-modal__reaction-add,
 .card-modal__child-remove,
 .card-modal__icon-btn,
 .card-modal__child-dot,
