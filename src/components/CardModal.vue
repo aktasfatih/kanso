@@ -887,7 +887,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 
 				<!-- Body: content (left) | discussion (right) -->
-				<div class="card-modal__body">
+				<div ref="bodyRef" class="card-modal__body" :style="discussionWidthStyle">
 					<!-- LEFT: description · checklist · sub-cards · github · relations -->
 					<div class="card-modal__content">
 						<!-- Description -->
@@ -1446,6 +1446,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 							<span v-if="relationError" class="card-modal__save-error">{{ relationError }}</span>
 						</section>
+					</div>
+
+					<!-- Drag handle: resizes the split between the main pane and the
+					     discussion pane. Inert below the 680px breakpoint (panes stack). -->
+					<div
+						class="card-modal__resizer"
+						role="separator"
+						aria-orientation="vertical"
+						:aria-label="t('kanso', 'Resize discussion panel')"
+						:aria-valuenow="discussionWidth"
+						:aria-valuemin="DISCUSSION_MIN_WIDTH"
+						:aria-valuemax="DISCUSSION_MAX_WIDTH"
+						tabindex="0"
+						@pointerdown="onResizePointerDown"
+						@keydown="onResizeKeydown">
+						<span class="card-modal__resizer-grip" />
 					</div>
 
 					<!-- RIGHT: discussion pane -->
@@ -3822,6 +3838,87 @@ async function handleRemoveRelation(relationId) {
 // Mobile splits the card and discussion into tabs; desktop shows both panes.
 const viewMode = ref('card')
 
+// Resizable discussion/activity pane (#3661). The body is a two-column grid whose
+// right (discussion) track width is driven by a CSS var; a drag handle updates it
+// live and persists the chosen width per user in localStorage. Below the 680px
+// breakpoint the panes stack and the var/handle are ignored (see <style>).
+const DISCUSSION_WIDTH_KEY = 'kanso.cardDiscussionWidth'
+const DISCUSSION_MIN_WIDTH = 280
+const DISCUSSION_MAX_WIDTH = 720
+const DISCUSSION_DEFAULT_WIDTH = 400
+const DISCUSSION_KEY_STEP = 24
+function clampDiscussionWidth(px) {
+	return Math.min(DISCUSSION_MAX_WIDTH, Math.max(DISCUSSION_MIN_WIDTH, Math.round(px)))
+}
+const discussionWidth = ref(DISCUSSION_DEFAULT_WIDTH)
+try {
+	const saved = parseInt(localStorage.getItem(DISCUSSION_WIDTH_KEY), 10)
+	if (Number.isFinite(saved)) discussionWidth.value = clampDiscussionWidth(saved)
+} catch (e) { /* localStorage unavailable - default width */ }
+const discussionWidthStyle = computed(() => ({ '--kanso-discussion-width': discussionWidth.value + 'px' }))
+function persistDiscussionWidth() {
+	try {
+		localStorage.setItem(DISCUSSION_WIDTH_KEY, String(discussionWidth.value))
+	} catch (e) { /* ignore persistence failure */ }
+}
+const bodyRef = ref(null)
+let resizePointerId = null
+function onResizePointerMove(e) {
+	if (!bodyRef.value) return
+	// The handle sits on the left edge of the discussion pane; width grows as the
+	// pointer moves left, so measure from the body's right edge.
+	const rect = bodyRef.value.getBoundingClientRect()
+	discussionWidth.value = clampDiscussionWidth(rect.right - e.clientX)
+}
+function onResizePointerUp(e) {
+	if (resizePointerId !== null && e.pointerId !== resizePointerId) return
+	window.removeEventListener('pointermove', onResizePointerMove)
+	window.removeEventListener('pointerup', onResizePointerUp)
+	window.removeEventListener('pointercancel', onResizePointerUp)
+	document.body.style.userSelect = ''
+	document.body.style.cursor = ''
+	resizePointerId = null
+	persistDiscussionWidth()
+}
+function onResizePointerDown(e) {
+	// Only resize on desktop layout; below 680px the panes stack.
+	if (window.matchMedia('(max-width: 680px)').matches) return
+	e.preventDefault()
+	resizePointerId = e.pointerId
+	window.addEventListener('pointermove', onResizePointerMove)
+	window.addEventListener('pointerup', onResizePointerUp)
+	window.addEventListener('pointercancel', onResizePointerUp)
+	// Suppress text selection / show a resize cursor for the whole drag.
+	document.body.style.userSelect = 'none'
+	document.body.style.cursor = 'col-resize'
+}
+function onResizeKeydown(e) {
+	if (window.matchMedia('(max-width: 680px)').matches) return
+	// Left arrow shrinks the main pane (grows discussion); Right grows the main pane.
+	if (e.key === 'ArrowLeft') {
+		discussionWidth.value = clampDiscussionWidth(discussionWidth.value + DISCUSSION_KEY_STEP)
+	} else if (e.key === 'ArrowRight') {
+		discussionWidth.value = clampDiscussionWidth(discussionWidth.value - DISCUSSION_KEY_STEP)
+	} else if (e.key === 'Home') {
+		discussionWidth.value = DISCUSSION_MAX_WIDTH
+	} else if (e.key === 'End') {
+		discussionWidth.value = DISCUSSION_MIN_WIDTH
+	} else {
+		return
+	}
+	e.preventDefault()
+	persistDiscussionWidth()
+}
+onBeforeUnmount(() => {
+	if (resizePointerId !== null) {
+		window.removeEventListener('pointermove', onResizePointerMove)
+		window.removeEventListener('pointerup', onResizePointerUp)
+		window.removeEventListener('pointercancel', onResizePointerUp)
+		document.body.style.userSelect = ''
+		document.body.style.cursor = ''
+	}
+})
+
 // Breadcrumb board name + uppercase status chip
 const boardName = computed(() => boardData.value?.board?.title || t('kanso', 'Board'))
 
@@ -4985,10 +5082,39 @@ async function handleToggleProject(projectId) {
 /* ── Body grid ───────────────────────────────────────────────────────────── */
 .card-modal__body {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 400px;
+	/* main pane | drag handle | discussion pane (width from a persisted CSS var, #3661) */
+	grid-template-columns: minmax(0, 1fr) 0 var(--kanso-discussion-width, 400px);
 	align-items: stretch;
 	min-height: 0;
 	flex: 1;
+}
+/* Drag handle straddling the border between the two panes. Zero-width in the grid
+   track; widened visually via padding so it's easy to grab without shifting layout. */
+.card-modal__resizer {
+	position: relative;
+	z-index: 5;
+	width: 0;
+	margin: 0 -5px;
+	padding: 0 5px;
+	cursor: col-resize;
+	touch-action: none;
+	display: flex;
+	align-items: stretch;
+	justify-content: center;
+}
+.card-modal__resizer-grip {
+	width: 1px;
+	background: var(--color-border);
+	transition: background 0.12s ease, width 0.12s ease;
+}
+.card-modal__resizer:hover .card-modal__resizer-grip,
+.card-modal__resizer:focus-visible .card-modal__resizer-grip {
+	width: 3px;
+	background: var(--color-primary-element);
+}
+.card-modal__resizer:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
 }
 .card-modal__content {
 	display: flex;
@@ -6048,6 +6174,8 @@ async function handleToggleProject(projectId) {
 	.card-modal__attrbar { flex-wrap: nowrap; overflow-x: auto; padding: 10px 16px; }
 	.card-modal__attr-right { margin-left: 0; }
 	.card-modal__body { grid-template-columns: 1fr; }
+	/* Panes stack: the persisted split width and its drag handle are ignored. */
+	.card-modal__resizer { display: none; }
 	.card-modal__content,
 	.card-modal__discussion { max-height: none; }
 	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }
