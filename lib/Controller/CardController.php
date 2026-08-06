@@ -13,6 +13,7 @@ use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -59,6 +60,7 @@ class CardController extends Controller {
 		private CardRelationService $relationService,
 		private ProjectCardMapper $projectCardMapper,
 		private CardAttachmentMapper $cardAttachmentMapper,
+		private CardTimeEntryMapper $cardTimeEntryMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -146,6 +148,7 @@ class CardController extends Controller {
 			+ ['children' => $children]
 			+ ['commentCount' => $this->commentMapper->countByCard($id)]
 			+ ['attachmentCount' => $this->cardAttachmentMapper->countByCard($id)]
+			+ ['timeSpent' => $this->cardTimeEntryMapper->sumSecondsByCard($id)]
 			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
 			+ ['relations' => $this->relationService->groupedForCard($id)]
 			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)];

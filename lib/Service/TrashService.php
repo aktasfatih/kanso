@@ -59,6 +59,7 @@ class TrashService {
 		private CardRelationMapper $cardRelationMapper,
 		private ProjectCardMapper $projectCardMapper,
 		private CardAttachmentService $cardAttachmentService,
+		private CardTimeEntryService $cardTimeEntryService,
 	) {
 	}
 
@@ -135,6 +136,9 @@ class TrashService {
 		// goes through the service (it removes both) rather than a plain mapper
 		// deleteByCard - otherwise a purge would leak the bytes on disk (#3526).
 		$this->cardAttachmentService->deleteAllForCard($cardId);
+		// Manual time-tracking entries (#3536) are plain rows scoped by card_id;
+		// drop them too so a purged card strands no time entries.
+		$this->cardTimeEntryService->deleteAllForCard($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(

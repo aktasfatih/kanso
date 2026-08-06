@@ -199,6 +199,13 @@ return [
 		['name' => 'cardAttachment#inline', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}/inline', 'verb' => 'GET'],
 		['name' => 'cardAttachment#destroy', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'DELETE'],
 
+		// Manual time tracking on a card (#3536): list (READ), add a manual entry
+		// (EDIT) and delete an entry (EDIT). Seconds + optional note; the per-card
+		// total lives only in the card detail payload (never the summaries).
+		['name' => 'cardTimeEntry#index', 'url' => '/api/cards/{cardId}/time-entries', 'verb' => 'GET'],
+		['name' => 'cardTimeEntry#create', 'url' => '/api/cards/{cardId}/time-entries', 'verb' => 'POST'],
+		['name' => 'cardTimeEntry#destroy', 'url' => '/api/cards/{cardId}/time-entries/{entryId}', 'verb' => 'DELETE'],
+
 		['name' => 'cardRelation#index', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'GET'],
 		['name' => 'cardRelation#create', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'POST'],
 		['name' => 'cardRelation#destroy', 'url' => '/api/cards/{cardId}/relations/{relationId}', 'verb' => 'DELETE'],

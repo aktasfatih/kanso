@@ -1242,6 +1242,61 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="attachmentError" class="card-modal__save-error">{{ attachmentError }}</span>
 						</section>
 
+						<!-- Time tracking (#3536): manual entries + per-card total -->
+						<section class="card-modal__section card-modal__section--tight">
+							<div class="card-modal__section-inline">
+								<ClockOutlineIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Time tracking') }}</span>
+								<span v-if="timeSpentTotal > 0" class="card-modal__attachment-size">{{ formatDuration(timeSpentTotal) }}</span>
+							</div>
+
+							<form v-if="canEdit" class="card-modal__time-add" @submit.prevent="handleAddTimeEntry">
+								<input
+									v-model="timeDurationInput"
+									type="text"
+									class="card-modal__time-duration"
+									:placeholder="t('kanso', 'e.g. 1h 30m')"
+									:disabled="addEntry.isPending.value">
+								<input
+									v-model="timeNoteInput"
+									type="text"
+									class="card-modal__time-note"
+									:placeholder="t('kanso', 'Note (optional)')"
+									:disabled="addEntry.isPending.value">
+								<NcButton
+									type="secondary"
+									native-type="submit"
+									:disabled="addEntry.isPending.value">
+									{{ addEntry.isPending.value ? t('kanso', 'Adding…') : t('kanso', 'Add time') }}
+								</NcButton>
+							</form>
+
+							<ul v-if="cardTimeEntries.length > 0" class="card-modal__links-list">
+								<li v-for="entry in cardTimeEntries" :key="entry.id" class="card-modal__link-row">
+									<div class="card-modal__time-entry">
+										<span class="card-modal__time-entry-duration">{{ formatDuration(entry.seconds) }}</span>
+										<span v-if="entry.note" class="card-modal__time-entry-note">{{ entry.note }}</span>
+										<span class="card-modal__time-entry-meta">
+											<NcAvatar
+												:user="entry.createdBy || ''"
+												:display-name="entry.createdBy || ''"
+												:size="16"
+												:disable-menu="true" />
+											<span class="card-modal__activity-time">{{ relativeTime(entry.createdAt) }}</span>
+										</span>
+									</div>
+									<button
+										v-if="canEdit"
+										class="card-modal__child-remove"
+										:title="t('kanso', 'Remove time entry')"
+										@click="handleRemoveTimeEntry(entry.id)">
+										<CloseIcon :size="14" />
+									</button>
+								</li>
+							</ul>
+							<span v-if="timeEntryError" class="card-modal__save-error">{{ timeEntryError }}</span>
+						</section>
+
 						<!-- Relations - shown only when the card has relations, or the
 						     editor was opened from the ⋯ menu -->
 						<section
@@ -1706,6 +1761,7 @@ import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -1736,6 +1792,7 @@ import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
+import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
@@ -3336,6 +3393,83 @@ async function handleRemoveAttachment(attachmentId) {
 		await removeAttachment.mutateAsync(attachmentId)
 	} catch (e) {
 		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to remove attachment.')
+	}
+}
+
+// ── Time tracking (#3536) ────────────────────────────────────────────────────
+const { timeEntries: cardTimeEntriesData, addEntry, removeEntry } = useCardTimeEntries(computed(() => props.cardId))
+const cardTimeEntries = computed(() => cardTimeEntriesData.value ?? [])
+const timeDurationInput = ref('')
+const timeNoteInput = ref('')
+const timeEntryError = ref('')
+
+// The per-card total comes from the card DETAIL payload (kept off the board
+// summaries); the entries list only backs the breakdown and the delete buttons.
+const timeSpentTotal = computed(() => Number(cardData.value?.timeSpent) || 0)
+
+// Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
+function formatDuration(totalSeconds) {
+	const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
+	if (secs === 0) return '0m'
+	const h = Math.floor(secs / 3600)
+	const m = Math.floor((secs % 3600) / 60)
+	const s = secs % 60
+	const parts = []
+	if (h > 0) parts.push(`${h}h`)
+	if (m > 0) parts.push(`${m}m`)
+	// Only surface bare seconds when there is no hour/minute component.
+	if (s > 0 && h === 0 && m === 0) parts.push(`${s}s`)
+	return parts.join(' ')
+}
+
+// Parses "1h 30m", "90m", "1.5h", "45s", or a bare number (minutes) into
+// seconds. Returns 0 for anything unparseable.
+function parseDuration(raw) {
+	const input = String(raw ?? '').trim().toLowerCase()
+	if (input === '') return 0
+	// A bare number is interpreted as minutes.
+	if (/^\d+(\.\d+)?$/.test(input)) {
+		return Math.round(parseFloat(input) * 60)
+	}
+	const re = /(\d+(?:\.\d+)?)\s*(h|m|s)/g
+	let match
+	let seconds = 0
+	let matched = false
+	while ((match = re.exec(input)) !== null) {
+		matched = true
+		const value = parseFloat(match[1])
+		if (match[2] === 'h') seconds += value * 3600
+		else if (match[2] === 'm') seconds += value * 60
+		else seconds += value
+	}
+	return matched ? Math.round(seconds) : 0
+}
+
+async function handleAddTimeEntry() {
+	timeEntryError.value = ''
+	const seconds = parseDuration(timeDurationInput.value)
+	if (seconds <= 0) {
+		timeEntryError.value = t('kanso', 'Enter a duration, e.g. 1h 30m.')
+		return
+	}
+	try {
+		await addEntry.mutateAsync({ seconds, note: timeNoteInput.value.trim() || null })
+		timeDurationInput.value = ''
+		timeNoteInput.value = ''
+		// Refresh the card detail so the total (timeSpent) reflects the new entry.
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+	} catch (e) {
+		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to add time entry.')
+	}
+}
+
+async function handleRemoveTimeEntry(entryId) {
+	timeEntryError.value = ''
+	try {
+		await removeEntry.mutateAsync(entryId)
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+	} catch (e) {
+		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to remove time entry.')
 	}
 }
 
@@ -5197,6 +5331,46 @@ async function handleToggleProject(projectId) {
 	display: flex;
 	gap: 8px;
 	align-items: center;
+}
+/* Time tracking (#3536) */
+.card-modal__time-add {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+	margin-top: 4px;
+}
+.card-modal__time-duration {
+	width: 110px;
+	flex: 0 0 auto;
+}
+.card-modal__time-note {
+	flex: 1 1 120px;
+	min-width: 120px;
+}
+.card-modal__time-entry {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex: 1;
+	min-width: 0;
+}
+.card-modal__time-entry-duration {
+	font-weight: 600;
+	white-space: nowrap;
+}
+.card-modal__time-entry-note {
+	color: var(--color-text-maxcontrast);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__time-entry-meta {
+	margin-left: auto;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	white-space: nowrap;
 }
 .card-modal__link-add .card-modal__dashed-input {
 	flex: 1;

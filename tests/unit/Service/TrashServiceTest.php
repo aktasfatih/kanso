@@ -24,6 +24,7 @@ use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
+use OCA\Kanso\Service\CardTimeEntryService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -50,6 +51,7 @@ class TrashServiceTest extends TestCase {
 	private CardRelationMapper&MockObject $cardRelationMapper;
 	private ProjectCardMapper&MockObject $projectCardMapper;
 	private CardAttachmentService&MockObject $cardAttachmentService;
+	private CardTimeEntryService&MockObject $cardTimeEntryService;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -70,6 +72,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
 		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
+		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -87,6 +90,7 @@ class TrashServiceTest extends TestCase {
 			$this->cardRelationMapper,
 			$this->projectCardMapper,
 			$this->cardAttachmentService,
+			$this->cardTimeEntryService,
 		);
 	}
 
@@ -200,6 +204,8 @@ class TrashServiceTest extends TestCase {
 		$this->subscriptionMapper->expects(self::once())->method('deleteByCard')->with(9);
 		// Attachments cascade through the service (objects + rows), not a mapper.
 		$this->cardAttachmentService->expects(self::once())->method('deleteAllForCard')->with(9);
+		// Manual time-tracking entries are cascaded too (#3536).
+		$this->cardTimeEntryService->expects(self::once())->method('deleteAllForCard')->with(9);
 		$this->cardMapper->expects(self::once())->method('delete')->with($card);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')

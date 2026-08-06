@@ -314,6 +314,17 @@ export const cardAttachmentUrl = (cardId, attachmentId) =>
 export const cardAttachmentInlineUrl = (cardId, attachmentId) =>
 	url(`/api/cards/${cardId}/attachments/${attachmentId}/inline`)
 
+// Card time tracking (#3536). Manual entries (seconds + optional note); the
+// per-card total lives in the card detail payload's `timeSpent`.
+export const fetchCardTimeEntries = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/time-entries`)).then((r) => r.data)
+
+export const addCardTimeEntry = (cardId, seconds, note) =>
+	axios.post(url(`/api/cards/${cardId}/time-entries`), { seconds, note }).then((r) => r.data)
+
+export const deleteCardTimeEntry = (cardId, entryId) =>
+	axios.delete(url(`/api/cards/${cardId}/time-entries/${entryId}`)).then((r) => r.data)
+
 // Deck import
 export const fetchDeckImportBoards = () =>
 	axios.get(url('/api/deck-import/boards')).then((r) => r.data)
