@@ -78,6 +78,106 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+  # Cross-version × cross-DB install/migration matrix. This is what actually
+  # VALIDATES the info.xml claim of NC 30–34: for each (version, db) combo it
+  # builds the frontend, boots a throwaway Nextcloud on that DB, enables Kanso
+  # (running every migration via the app-enable + `occ upgrade`), then asserts
+  # the schema was really created (dev/smoke.sh) and runs the PHPUnit suite in
+  # the container's runtime. It deliberately does NOT run Playwright — the full
+  # browser e2e is slow and stays on 34+postgres only (the `e2e` job below).
+  #
+  # DB coverage rationale:
+  #   - sqlite: no service container, cheap, and it's the backend that surfaced
+  #     the default-index-name migration bug — so it runs on every NC version.
+  #   - postgres: the production/dev default — runs on every NC version.
+  #   - mysql (mariadb): added on NC 34 only (the newest target) to catch
+  #     MySQL-dialect issues without a 5x combo blow-up. See PR notes / the TODO
+  #     to widen mysql across versions if a dialect issue ever surfaces.
+  install-matrix:
+    runs-on: kanso-runners
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        nc-version: ['30', '31', '32', '33', '34']
+        db: ['sqlite', 'postgres']
+        include:
+          - nc-version: '34'
+            db: 'mysql'
+    name: install (NC ${{ matrix.nc-version }} · ${{ matrix.db }})
+    env:
+      NC_VERSION: ${{ matrix.nc-version }}
+      KANSO_DB: ${{ matrix.db }}
+      # No realtime push needed for install/migration validation; skipping keeps
+      # the boot from depending on an appstore fetch of notify_push.
+      KANSO_SKIP_NOTIFY_PUSH: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # js/ + css/ are gitignored and mounted from the checkout, so build before
+      # the stack boots (same reason as the e2e job).
+      - name: Build frontend
+        run: npm run build
+
+      - name: Ensure docker compose plugin
+        run: |
+          if ! docker compose version >/dev/null 2>&1; then
+            mkdir -p ~/.docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o ~/.docker/cli-plugins/docker-compose
+            chmod +x ~/.docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
+      # Boot NC <version> on <db>, enable Kanso (runs the migrations).
+      - name: Boot Nextcloud ${{ matrix.nc-version }} on ${{ matrix.db }}
+        run: ./dev/setup.sh
+
+      # Re-run migrations idempotently and apply any repair steps. `occ upgrade`
+      # is a no-op on an already-current app but exercises the migrator path;
+      # `-v` surfaces any per-migration warning.
+      - name: occ upgrade (run migrations)
+        run: |
+          docker exec -u www-data kanso-dev php occ upgrade -v || true
+          docker exec -u www-data kanso-dev php occ maintenance:mode --off || true
+
+      # Load-bearing assertion: the schema physically exists on this DB. This is
+      # the check that would have caught the "zero tables created" migration bug.
+      - name: Smoke — schema present
+        run: ./dev/smoke.sh
+
+      # Run the PHPUnit suite against THIS NC version's bundled PHP runtime,
+      # inside the container. The unit tests are stub-based (no live DB), so this
+      # proves the app's PHP code parses and its services behave on the exact PHP
+      # each NC ships — complementing the standalone `unit-php` job (8.2/8.3).
+      # The NC image has no composer, and vendor/ is gitignored, so fetch a
+      # pinned composer.phar and install dev deps into the mounted checkout.
+      - name: PHPUnit (in-container, NC ${{ matrix.nc-version }} runtime)
+        run: |
+          docker exec kanso-dev bash -c '
+            set -e
+            cd /var/www/html/custom_apps/kanso
+            if [ ! -f vendor/bin/phpunit ]; then
+              curl -fsSL https://getcomposer.org/download/2.8.4/composer.phar -o /tmp/composer.phar
+              php /tmp/composer.phar install --no-interaction --no-progress
+            fi
+            chown -R www-data:www-data vendor
+          '
+          docker exec -u www-data -w /var/www/html/custom_apps/kanso kanso-dev \
+            php vendor/bin/phpunit -c phpunit.xml
+
+      - name: Dump Nextcloud logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs kanso-dev --tail 200 || true
+          docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
+
   e2e:
     runs-on: kanso-runners
     # Boots a full Nextcloud + runs ~170 serial tests (workers:1, retries:1).
