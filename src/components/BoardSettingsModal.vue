@@ -434,7 +434,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					class="bs-pane"
 					role="tabpanel"
 					aria-labelledby="bs-rail-tab-review-types">
-				<ul class="rt-settings__list" role="list">
+					<div class="rt-settings__intro">
+						<p>
+							{{ t('kanso', 'Review types label the kind of sign-off a card needs — for example Code, QA, or Security. Request one from the Reviews section of a card.') }}
+						</p>
+						<p>
+							{{ t('kanso', 'Stage turns them into a pipeline: a review is held — its reviewer is not notified and its chip shows greyed with a lock — until every lower-stage review on the card is approved. Types on the same stage run in parallel. Keep every stage at 0 to notify all reviewers at once.') }}
+						</p>
+					</div>
+					<ul class="rt-settings__list" role="list">
 					<li v-if="reviewTypes.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No review types yet. Create one below.') }}
 					</li>
@@ -5005,6 +5013,21 @@ async function doDeleteAutoRule(rule) {
 	margin: 0 0 16px;
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+
+.rt-settings__intro {
+	margin: 0 0 16px;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	color: var(--color-text-maxcontrast);
+}
+
+.rt-settings__intro p {
+	margin: 0 0 8px;
+}
+
+.rt-settings__intro p:last-child {
+	margin-bottom: 0;
 }
 
 .automation__group {
