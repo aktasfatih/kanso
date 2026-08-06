@@ -4368,6 +4368,14 @@ async function handleToggleProject(projectId) {
 	color: var(--color-success-text, var(--color-success));
 	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 10%, var(--color-main-background)));
 }
+/* Watch control: a single split-button pill — the watch toggle (left half) and
+   the watchers caret (right half) sit flush, sharing one border with a thin 1px
+   divider between them. Only the outer corners are rounded. */
+.card-modal__watch-wrap {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+}
 .card-modal__watch-btn {
 	display: inline-flex;
 	align-items: center;
@@ -4375,22 +4383,11 @@ async function handleToggleProject(projectId) {
 	height: 36px;
 	padding: 0 12px;
 	border: 1px solid var(--color-border);
-	border-radius: 100px;
+	border-radius: 100px 0 0 100px;
 	background: var(--color-main-background);
 	color: var(--color-text-maxcontrast);
 	font-size: 0.875rem;
 	cursor: pointer;
-}
-.card-modal__watch-btn--active {
-	border-color: var(--color-primary-element);
-	background: var(--color-primary-light);
-	color: var(--color-primary-element);
-}
-.card-modal__watch-wrap {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	gap: 2px;
 }
 .card-modal__watch-caret {
 	display: inline-flex;
@@ -4398,20 +4395,40 @@ async function handleToggleProject(projectId) {
 	justify-content: center;
 	width: 28px;
 	height: 36px;
+	/* The left edge is the shared divider; drop the caret's own left border so the
+	   two halves share a single 1px line rather than stacking two. */
 	border: 1px solid var(--color-border);
-	border-radius: 100px;
+	border-left: 0;
+	border-radius: 0 100px 100px 0;
 	background: var(--color-main-background);
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
+.card-modal__watch-btn:hover,
 .card-modal__watch-caret:hover {
 	border-color: var(--color-primary-element);
 	color: var(--color-primary-element);
 }
+/* Keep focus rings on top and the hovered/focused half's border above its
+   neighbour so the shared divider reads correctly. */
+.card-modal__watch-btn:hover,
+.card-modal__watch-btn:focus-visible,
+.card-modal__watch-caret:hover,
+.card-modal__watch-caret:focus-visible {
+	position: relative;
+	z-index: 1;
+}
+/* Active (watching) state styles the whole pill as one control. */
+.card-modal__watch-btn--active,
 .card-modal__watch-caret--active {
 	border-color: var(--color-primary-element);
 	background: var(--color-primary-light);
 	color: var(--color-primary-element);
+}
+.card-modal__watch-caret--active {
+	/* Re-add a left border so the divider stays visible in the active state,
+	   tinted to match the active pill. */
+	border-left: 1px solid var(--color-primary-element);
 }
 .card-modal__watch-panel {
 	min-width: 240px;
