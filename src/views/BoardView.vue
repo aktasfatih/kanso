@@ -255,9 +255,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<button class="board-view__move-error-dismiss" @click="dismissActionError">×</button>
 		</div>
 
-		<!-- Error -->
+		<!-- Error - status-aware (#3662): a gone/forbidden board explains itself and
+		     links back to the boards list; a transient failure offers a retry. -->
 		<div v-if="isError" class="board-view__error">
-			{{ t('kanso', 'Failed to load board.') }}
+			<p class="board-view__error-msg">{{ boardErrorMessage }}</p>
+			<div class="board-view__error-actions">
+				<NcButton v-if="!boardIsGoneOrForbidden" type="primary" @click="boardRefetch">
+					{{ t('kanso', 'Retry') }}
+				</NcButton>
+				<NcButton :type="boardIsGoneOrForbidden ? 'primary' : 'tertiary'" @click="router.push({ name: 'board-list' })">
+					{{ t('kanso', 'Go to boards') }}
+				</NcButton>
+			</div>
 		</div>
 
 		<!-- Stacks row (Board view). Kept mounted under v-show so its drag-and-drop
@@ -611,7 +620,24 @@ function sortCards(cards) {
 	}
 	return arr.sort(bySortKey)
 }
-const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+
+// Status-aware board error copy (#3662). A dead deep-link/notification to a
+// deleted board 404s; a revoked share 403s. Both should read as an explanatory
+// message with a way back to the boards list - not the generic error box. A
+// transient network/5xx failure stays retryable.
+const boardErrorStatus = computed(() => boardError.value?.response?.status ?? null)
+const boardIsGoneOrForbidden = computed(() =>
+	boardErrorStatus.value === 404 || boardErrorStatus.value === 403)
+const boardErrorMessage = computed(() => {
+	if (boardErrorStatus.value === 403) {
+		return t('kanso', 'This board no longer exists or you no longer have access.')
+	}
+	if (boardErrorStatus.value === 404) {
+		return t('kanso', 'This board no longer exists.')
+	}
+	return t('kanso', 'Couldn\'t load this board. Please try again.')
+})
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
@@ -1643,8 +1669,22 @@ const onBulkDelete = () => runBulkAction('delete', {})
 }
 
 .board-view__error {
-	padding: 16px 24px;
+	padding: 40px 24px;
+	text-align: center;
 	color: var(--color-error);
+}
+
+.board-view__error-msg {
+	margin: 0 0 20px;
+	color: var(--color-main-text);
+	font-size: 1.05rem;
+}
+
+.board-view__error-actions {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 10px;
 }
 
 .board-view__move-error {

@@ -44,9 +44,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</div>
 
-			<!-- Error state -->
+			<!-- Error state - status-aware, with a way out (#3662). A 404/403 from a
+			     dead deep-link/inbox/notification reads as "gone"/"no access" and is a
+			     dead end; a transient failure offers a retry. -->
 			<div v-else-if="isError" class="card-modal__error">
-				{{ t('kanso', 'Failed to load card details.') }}
+				<p class="card-modal__error-msg">{{ cardErrorMessage }}</p>
+				<div class="card-modal__error-actions">
+					<NcButton v-if="cardErrorRetryable" type="primary" @click="retryCardLoad">
+						{{ t('kanso', 'Retry') }}
+					</NcButton>
+					<NcButton v-if="boardData" @click="closeModal">
+						{{ t('kanso', 'Back to board') }}
+					</NcButton>
+					<NcButton :type="boardData ? 'tertiary' : 'primary'" @click="goToBoards">
+						{{ t('kanso', 'Go to boards') }}
+					</NcButton>
+				</div>
 			</div>
 
 			<!-- Card content -->
@@ -1922,7 +1935,7 @@ watch([() => props.cardId, boardId], async ([cardId, bId]) => {
 	}
 }, { immediate: true })
 
-const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, updateCard } = useCard(
+const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, error: cardError, refetch: cardRefetch, updateCard } = useCard(
 	computed(() => props.cardId),
 	// Only fetch once the id is numeric (a human ref is redirected first).
 	computed(() => isOpen.value && isNumericCardId.value),
@@ -1933,6 +1946,36 @@ const isLoading = computed(() => cardIsLoading.value || (!isNumericCardId.value 
 // Surface a failed human-ref resolution through the same error path as a failed
 // card fetch, so the template's not-found branch covers both.
 const isError = computed(() => cardIsError.value || refResolveError.value)
+
+// Distinguish "the card is gone / forbidden" from a transient load failure so the
+// error slot can show friendly, actionable copy instead of a raw failure (#3662).
+// A failed human-ref resolution (refResolveError) means the reference didn't
+// resolve to a live card - treat it as a 404 (gone). Otherwise read the real HTTP
+// status off the axios rejection: 404 = deleted, 403 = access revoked, anything
+// else (incl. a network error with no response) = transient/retryable.
+const cardErrorStatus = computed(() => {
+	if (refResolveError.value) return 404
+	return cardError.value?.response?.status ?? null
+})
+const cardIsGone = computed(() => cardErrorStatus.value === 404)
+const cardIsForbidden = computed(() => cardErrorStatus.value === 403)
+const cardErrorMessage = computed(() => {
+	if (cardIsGone.value) {
+		return t('kanso', 'This card no longer exists — it may have been deleted.')
+	}
+	if (cardIsForbidden.value) {
+		return t('kanso', 'You no longer have access to this card.')
+	}
+	return t('kanso', 'Couldn\'t load this card. Please try again.')
+})
+// A gone/forbidden card is a dead end - there is nothing to retry. A transient
+// failure can be retried by refetching the query. (refResolveError always maps to
+// 404, so a retryable error is always a real numeric-id fetch failure.)
+const cardErrorRetryable = computed(() => !cardIsGone.value && !cardIsForbidden.value)
+
+function retryCardLoad() {
+	cardRefetch()
+}
 
 // Read board data from cache (same queryKey as BoardView - no extra request).
 const { data: boardData } = useBoard(boardId)
@@ -3176,6 +3219,21 @@ function closeModal() {
 	router.push({ name: 'board', params: { id: route.params.id } })
 }
 
+// Escape hatch from a dead card link (#3662): leave the (possibly gone) board
+// entirely. Return to the My Work hub if that's where the user came from,
+// otherwise fall back to the boards list - never route back into a board that
+// may itself no longer exist.
+function goToBoards() {
+	isOpen.value = false
+	const from = route.query.from
+	if (MY_WORK_RETURN_ROUTES.includes(from)) {
+		const query = from === 'my-work' && route.query.tab ? { tab: route.query.tab } : undefined
+		router.push({ name: from, query })
+		return
+	}
+	router.push({ name: 'board-list' })
+}
+
 // Escape at the modal root: an open attribute popover takes precedence — close
 // it, not the whole card (which would discard an in-progress edit). Inline edits
 // (title/description/comment) stop propagation themselves, so they never reach here.
@@ -4108,6 +4166,19 @@ async function handleToggleProject(projectId) {
 	padding: 40px 24px;
 	text-align: center;
 	color: var(--color-error);
+}
+
+.card-modal__error-msg {
+	margin: 0 0 20px;
+	color: var(--color-main-text);
+	font-size: 1.05rem;
+}
+
+.card-modal__error-actions {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 10px;
 }
 
 /* ── Verdict banner (review requested) ───────────────────────────────────── */
