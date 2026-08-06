@@ -95,7 +95,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
@@ -115,6 +115,28 @@ const ZOOMS = [
 	{ key: 'month', label: t('kanso', 'Month'), pxPerDay: 4, stepDays: 30 },
 ]
 const zoom = ref('week')
+
+// Reactive clock so the "today" marker and overdue flags recompute over time
+// (e.g. a board left open across midnight). A plain Date.now() inside a computed
+// has no reactive dependency and would stay frozen until `cards` changed.
+const now = ref(Date.now())
+let clockTimer = null
+function tickNow() {
+	now.value = Date.now()
+}
+onMounted(() => {
+	clockTimer = setInterval(tickNow, 60_000)
+	document.addEventListener('visibilitychange', tickNow)
+	window.addEventListener('focus', tickNow)
+})
+onBeforeUnmount(() => {
+	if (clockTimer !== null) {
+		clearInterval(clockTimer)
+		clockTimer = null
+	}
+	document.removeEventListener('visibilitychange', tickNow)
+	window.removeEventListener('focus', tickNow)
+})
 const zoomCfg = computed(() => ZOOMS.find((z) => z.key === zoom.value) ?? ZOOMS[1])
 const pxPerDay = computed(() => zoomCfg.value.pxPerDay)
 
@@ -182,7 +204,7 @@ const scheduled = computed(() => {
 		const left = xForMs(r.startMs)
 		const isMilestone = r.startMs === r.endMs
 		const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
-		const overdue = !r.done && r.endMs < Date.now()
+		const overdue = !r.done && r.endMs < now.value
 		const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
 		return { ...r, left, width, isMilestone, overdue, labelInside }
 	})
@@ -201,7 +223,7 @@ const ticks = computed(() => {
 
 const todayX = computed(() => {
 	if (axisStart.value === null) return null
-	const t0 = dayFloor(Date.now())
+	const t0 = dayFloor(now.value)
 	if (t0 < axisStart.value || t0 > axisEnd.value) return null
 	return xForMs(t0)
 })
