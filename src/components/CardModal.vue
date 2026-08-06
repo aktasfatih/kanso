@@ -1583,10 +1583,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													<button
 														class="card-modal__reaction-add"
 														:title="t('kanso', 'Add reaction')"
-														@click.stop="toggleReactionPicker(topComment.id)">
+														@click.stop="toggleReactionPicker(topComment.id, $event)">
 														<EmoticonHappyOutlineIcon :size="14" />
 													</button>
-													<div v-if="reactionPickerFor === topComment.id" class="card-modal__reaction-picker">
+													<div v-if="reactionPickerFor === topComment.id" :style="reactionPickerStyle" class="card-modal__reaction-picker">
 														<button
 															v-for="emoji in reactionEmoji"
 															:key="emoji"
@@ -1681,10 +1681,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														<button
 															class="card-modal__reaction-add"
 															:title="t('kanso', 'Add reaction')"
-															@click.stop="toggleReactionPicker(reply.id)">
+															@click.stop="toggleReactionPicker(reply.id, $event)">
 																<EmoticonHappyOutlineIcon :size="14" />
 														</button>
-														<div v-if="reactionPickerFor === reply.id" class="card-modal__reaction-picker">
+														<div v-if="reactionPickerFor === reply.id" :style="reactionPickerStyle" class="card-modal__reaction-picker">
 															<button
 																v-for="emoji in reactionEmoji"
 																:key="emoji"
@@ -2926,9 +2926,40 @@ const {
 // summary (mine flag) to decide react vs. unreact.
 const reactionEmoji = REACTION_EMOJI
 const reactionPickerFor = ref(null)
+// The emoji picker is positioned `fixed` (coords computed from the trigger button on
+// open) so it escapes the comment thread's `overflow` clipping and the content pane's
+// stacking — a comment lives inside .card-modal__thread-scroll (overflow:auto), which
+// would otherwise clip the popover when it opens sideways. See toggleReactionPicker.
+const reactionPickerStyle = ref({})
 
-function toggleReactionPicker(commentId) {
-	reactionPickerFor.value = reactionPickerFor.value === commentId ? null : commentId
+function toggleReactionPicker(commentId, ev) {
+	if (reactionPickerFor.value === commentId) {
+		reactionPickerFor.value = null
+		return
+	}
+	reactionPickerFor.value = commentId
+	const btn = ev && ev.currentTarget
+	if (btn && typeof btn.getBoundingClientRect === 'function') {
+		const r = btn.getBoundingClientRect()
+		// Open the picker just above the button. Align it to the button's side that
+		// leaves the most room (right-align when the button sits in the right half of
+		// the viewport, so it opens leftward and stays on-screen; left-align otherwise).
+		const style = {
+			position: 'fixed',
+			bottom: (window.innerHeight - r.top + 4) + 'px',
+			top: 'auto',
+		}
+		if (r.left < window.innerWidth / 2) {
+			style.left = Math.round(r.left) + 'px'
+			style.right = 'auto'
+		} else {
+			style.right = Math.round(window.innerWidth - r.right) + 'px'
+			style.left = 'auto'
+		}
+		reactionPickerStyle.value = style
+	} else {
+		reactionPickerStyle.value = {}
+	}
 }
 
 async function onReactionClick(comment, emoji) {
