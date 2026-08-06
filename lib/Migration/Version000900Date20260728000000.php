@@ -72,7 +72,9 @@ class Version000900Date20260728000000 extends SimpleMigrationStep {
 			'length' => 8,
 			'default' => 0,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named short: oc_kanso_subscriptions (22 chars) overflows the default
+		// primary-key name length check, failing install on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_sub_pk');
 		$table->addUniqueIndex(['subscriber', 'card_id', 'comment_thread_id'], 'kanso_subs_unique');
 		// Fan-out: all subscribers of a card (+ its threads).
 		$table->addIndex(['card_id'], 'kanso_subs_card');

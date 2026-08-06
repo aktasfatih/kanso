@@ -42,7 +42,9 @@ class Version002100Date20260809000000 extends SimpleMigrationStep {
 			$table->addColumn('type', Types::STRING, ['notnull' => true, 'length' => 16]);
 			$table->addColumn('board_id', Types::BIGINT, ['notnull' => true, 'length' => 8]);
 			$table->addColumn('created_at', Types::BIGINT, ['notnull' => true, 'default' => 0, 'length' => 8]);
-			$table->setPrimaryKey(['id']);
+			// Named short: oc_kanso_card_relations (23 chars) overflows the default
+			// primary-key name length check, failing install on NC 30-32.
+			$table->setPrimaryKey(['id'], 'kanso_crelation_pk');
 			$table->addUniqueIndex(['card_id', 'other_card_id', 'type'], 'kanso_cardrel_uniq');
 			$table->addIndex(['board_id', 'type'], 'kanso_cardrel_board_type');
 			$table->addIndex(['other_card_id'], 'kanso_cardrel_other');

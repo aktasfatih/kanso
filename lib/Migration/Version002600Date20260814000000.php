@@ -86,7 +86,9 @@ class Version002600Date20260814000000 extends SimpleMigrationStep {
 				'notnull' => true,
 				'length' => 8,
 			]);
-			$table->setPrimaryKey(['id']);
+			// Named short: oc_kanso_project_cards (22 chars) overflows the default
+			// primary-key name length check, failing install on NC 30-32.
+			$table->setPrimaryKey(['id'], 'kanso_pcard_pk');
 			$table->addUniqueIndex(['project_id', 'card_id'], 'kanso_projcards_uniq');
 			$table->addIndex(['card_id'], 'kanso_projcards_card');
 		}

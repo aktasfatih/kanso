@@ -70,7 +70,10 @@ class Version003500Date20260823000000 extends SimpleMigrationStep {
 			'length' => 8,
 			'default' => 0,
 		]);
-		$table->setPrimaryKey(['id']);
+		// Named explicitly: the physical table name (oc_kanso_comment_reactions,
+		// 26 chars) makes the default-derived PK index name exceed Nextcloud's
+		// 23-char limit, which fails app install on NC 30-32.
+		$table->setPrimaryKey(['id'], 'kanso_creact_pk');
 		// A user reacts at most once per emoji per comment - the toggle's
 		// idempotency guarantee, enforced in the schema.
 		$table->addUniqueIndex(['comment_id', 'uid', 'emoji'], 'kanso_creact_unique');
