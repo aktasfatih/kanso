@@ -3270,9 +3270,31 @@ function onModalEscape() {
 // inner content has target inside .modal-container, so releasing on the backdrop
 // never closes the card. The handler funnels through onModalClose so it obeys the
 // same picker-first precedence as Escape.
+//
+// It also carries the click-outside dismiss for the attribute popovers (#3665):
+// when ANY picker is open, a mousedown that lands outside the popover AND outside the
+// picker's own (open) trigger clears openPicker — one shared path keyed on openPicker,
+// no per-picker wiring. This runs BEFORE the backdrop-close check so it holds the same
+// picker-first precedence as Escape: an outside click on the backdrop closes the PICKER,
+// not the whole card. The active trigger is excluded via aria-expanded="true" so the
+// same click that would toggle it shut doesn't get double-handled (mousedown closes,
+// then the trigger's click re-opens); the popover interior (options, date input,
+// mention textareas) is excluded so selecting/typing never closes it prematurely.
 function onDocumentMousedown(event) {
 	const target = event.target
-	if (!(target instanceof Element) || !target.classList.contains('modal-wrapper')) {
+	if (!(target instanceof Element)) {
+		return
+	}
+	if (openPicker.value !== null) {
+		if (!target.closest('.card-modal__popover') && !target.closest('[aria-expanded="true"]')) {
+			openPicker.value = null
+			return
+		}
+		// A picker is open and the click is on its trigger or inside the popover —
+		// leave it to the element's own handler; never fall through to backdrop-close.
+		return
+	}
+	if (!target.classList.contains('modal-wrapper')) {
 		return
 	}
 	// Scope to THIS card's modal (guard against other stacked NcModals on the page).
