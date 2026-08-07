@@ -342,6 +342,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 				<!-- Add stack inline input -->
 				<div class="add-stack">
+					<!-- Empty-board onboarding hint (#3413): when the board has no
+					     stacks yet, point the user at this composer. -->
+					<p
+						v-if="sortedStacks.length === 0"
+						class="add-stack__hint"
+						data-test="empty-board-hint">
+						{{ t('kanso', 'Start by adding a column, e.g. “To do”.') }}
+					</p>
 					<form @submit.prevent="submitNewStack">
 						<input
 							v-model="newStackTitle"
@@ -495,6 +503,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@archive="onBulkArchive"
 			@delete="onBulkDelete"
 			@close="bulk.exitMode()" />
+
+		<!-- One-time keyboard-shortcut discoverability hint (#3413): a subtle,
+		     dismissible nudge shown once after the user first opens a board.
+		     Dismissal is persisted per user (settings key), so it stays hidden. -->
+		<div
+			v-if="showShortcutsHint && boardData"
+			class="board-view__shortcuts-hint"
+			data-test="shortcuts-hint"
+			role="status">
+			<button
+				class="board-view__shortcuts-hint-open"
+				data-test="shortcuts-hint-open"
+				@click="openShortcutsFromHint">
+				{{ t('kanso', 'Tip: press ? for keyboard shortcuts') }}
+			</button>
+			<button
+				class="board-view__shortcuts-hint-dismiss"
+				:aria-label="t('kanso', 'Dismiss')"
+				data-test="shortcuts-hint-dismiss"
+				@click="dismissShortcutsHint">×</button>
+		</div>
 	</div>
 </template>
 
@@ -562,7 +591,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
-import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate } from '../services/api.js'
+import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -820,6 +849,44 @@ const showCommandPalette = ref(false)
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
 const shortcutError = ref('')
+
+// ── One-time "press ? for shortcuts" discoverability hint (#3413) ─────────────
+// A subtle, dismissible nudge shown once after the user first opens a board.
+// Whether it has been dismissed is persisted PER USER via NC config (the shared
+// `dismissed_hints` settings key), so it never re-appears on any device.
+const SHORTCUTS_HINT_ID = 'shortcuts-discoverability'
+const showShortcutsHint = ref(false)
+
+async function loadShortcutsHint() {
+	try {
+		const s = await getSettings()
+		const dismissed = Array.isArray(s?.dismissedHints) ? s.dismissedHints : []
+		if (!dismissed.includes(SHORTCUTS_HINT_ID)) {
+			showShortcutsHint.value = true
+		}
+	} catch {
+		// Non-fatal: just don't show the hint if settings can't be read.
+	}
+}
+
+async function dismissShortcutsHint() {
+	showShortcutsHint.value = false
+	try {
+		const s = await getSettings()
+		const dismissed = Array.isArray(s?.dismissedHints) ? s.dismissedHints : []
+		if (!dismissed.includes(SHORTCUTS_HINT_ID)) {
+			await updateSettings({ dismissedHints: [...dismissed, SHORTCUTS_HINT_ID] })
+		}
+	} catch {
+		// Non-fatal: it will re-appear next load, which is acceptable.
+	}
+}
+
+// Opening the overlay from the hint both shows it and permanently dismisses the hint.
+function openShortcutsFromHint() {
+	showShortcuts.value = true
+	dismissShortcutsHint()
+}
 
 // ── Search box ref (for programmatic focus via '/' shortcut) ─────────────────
 const searchBoxRef = ref(null)
@@ -1355,6 +1422,9 @@ function publishToolbarHeight() {
 onMounted(() => {
 	// Apply any filter params already in the URL (a shared link opened cold).
 	applyUrlToFilter()
+
+	// First-run keyboard-shortcut discoverability nudge (#3413).
+	loadShortcutsHint()
 
 	document.addEventListener('keydown', handleKeydown)
 
@@ -1989,6 +2059,66 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	color: var(--color-error);
 	font-size: 0.8rem;
 	margin: 4px 0 0;
+}
+
+/* Empty-board onboarding hint (#3413): sits above the "Add stack" composer when
+   the board has no columns yet. */
+.add-stack__hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85rem;
+	margin: 0 0 8px;
+}
+
+/* One-time keyboard-shortcut discoverability hint (#3413): a small, unobtrusive
+   pill anchored bottom-left, out of the way of the bulk action bar (centered). */
+.board-view__shortcuts-hint {
+	position: fixed;
+	right: 16px;
+	bottom: 16px;
+	/* Above the app content and the NC left nav so its trigger is clickable. */
+	z-index: 2000;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 4px 4px 12px;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-pill, 100px);
+	box-shadow: var(--shadow-card-hover, 0 1px 4px rgba(0, 0, 0, 0.2));
+	font-size: 0.85rem;
+}
+
+.board-view__shortcuts-hint-open {
+	border: none;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.85rem;
+	cursor: pointer;
+	padding: 2px 0;
+}
+
+.board-view__shortcuts-hint-open:hover {
+	color: var(--color-primary-element);
+}
+
+.board-view__shortcuts-hint-dismiss {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.board-view__shortcuts-hint-dismiss:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
 }
 
 /* Keyboard shortcuts modal */

@@ -210,15 +210,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<p>{{ t('kanso', 'Failed to load boards. Please try again.') }}</p>
 			</div>
 
-			<!-- Empty state (no boards at all) -->
+			<!-- Empty state (no boards at all) — first-run onboarding (#3413):
+			     a primary "Create your first board" CTA plus an optional
+			     "Start with a template" action that seeds a starter board. -->
 			<template v-else-if="!boards || boards.length === 0">
 				<NcEmptyContent
 					:name="t('kanso', 'No boards yet')"
-					:description="t('kanso', 'Create your first board to get started.')">
+					:description="t('kanso', 'Create your first board to get started — or start from a ready-made template.')">
 					<template #icon>
 						<ViewColumnIcon :size="64" />
 					</template>
+					<template #action>
+						<NcButton
+							type="primary"
+							data-test="empty-create-board"
+							@click="showCreate = true">
+							<template #icon>
+								<PlusIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Create your first board') }}
+						</NcButton>
+						<NcButton
+							:disabled="seedingTemplate"
+							data-test="empty-start-template"
+							@click="seedStarterBoard">
+							<template #icon>
+								<ViewDashboardOutlineIcon :size="20" />
+							</template>
+							{{ seedingTemplate ? t('kanso', 'Setting up…') : t('kanso', 'Start with a template') }}
+						</NcButton>
+					</template>
 				</NcEmptyContent>
+				<p v-if="seedError" class="board-list__import-error" data-test="empty-template-error">
+					{{ seedError }}
+				</p>
 			</template>
 
 			<template v-else>
@@ -439,7 +464,7 @@ import BoardTileMenu from '../components/BoardTileMenu.vue'
 import CsvImportModal from '../components/CsvImportModal.vue'
 import { useBoards } from '../composables/useBoards.js'
 import { useBoardGroups } from '../composables/useBoardGroups.js'
-import { getSettings, updateSettings } from '../services/api.js'
+import { getSettings, updateSettings, createStack, createCard } from '../services/api.js'
 import { fetchDeckImportBoards, importDeckBoard, importBoard, importTrelloBoard } from '../services/api.js'
 
 const router = useRouter()
@@ -605,6 +630,59 @@ async function submitNewBoard() {
 	} catch (err) {
 		createError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create board.')
+	}
+}
+
+// ── Starter board template (#3413) ────────────────────────────────────────────
+// First-run onboarding: seed a small "To do / Doing / Done" board with a few
+// sample cards that explain the app. Reuses the plain create APIs (no template
+// gallery — the seeded board is an ordinary board the user can delete). The
+// cards deliberately say they are safe to delete.
+const seedingTemplate = ref(false)
+const seedError = ref('')
+
+async function seedStarterBoard() {
+	if (seedingTemplate.value) return
+	seedingTemplate.value = true
+	seedError.value = ''
+	// Track the board once created: if a later stack/card call fails, the board
+	// itself is still usable, so we navigate to it rather than stranding the user
+	// on an error message that the empty state (now non-empty) would unmount.
+	let boardId = null
+	try {
+		// createBoard.mutateAsync invalidates the ['boards'] query on settle, so
+		// no separate invalidation is needed here.
+		const board = await createBoard.mutateAsync({ title: t('kanso', 'My first board') })
+		boardId = board.id
+
+		// Create the three classic stacks in order.
+		const todo = await createStack({ boardId, title: t('kanso', 'To do') })
+		const doing = await createStack({ boardId, title: t('kanso', 'Doing') })
+		const done = await createStack({ boardId, title: t('kanso', 'Done') })
+
+		// A few friendly sample cards. Kept short; each notes it is deletable.
+		const samples = [
+			{ stackId: todo.id, title: t('kanso', '👋 Welcome to Kanso!') },
+			{ stackId: todo.id, title: t('kanso', 'Drag a card between columns — try it') },
+			{ stackId: todo.id, title: t('kanso', 'Press "n" in a column to add a card') },
+			{ stackId: doing.id, title: t('kanso', 'Press "?" to see keyboard shortcuts') },
+			{ stackId: done.id, title: t('kanso', 'Delete these sample cards whenever you like') },
+		]
+		for (const c of samples) {
+			await createCard(c)
+		}
+
+		router.push({ name: 'board', params: { id: boardId } })
+	} catch (err) {
+		if (boardId !== null) {
+			// The board exists and is usable — take the user to it despite the
+			// partial-seed failure, rather than showing an unreachable error.
+			router.push({ name: 'board', params: { id: boardId } })
+		} else {
+			seedError.value = err?.response?.data?.error || t('kanso', 'Could not set up the starter board.')
+		}
+	} finally {
+		seedingTemplate.value = false
 	}
 }
 

@@ -260,7 +260,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				container keeps its height during the 0→1 card transition and the
 				virtualizer never loses its scrollRect.
 			-->
-			<div v-if="cards.length === 0" class="stack-column__empty-placeholder" />
+			<div v-if="cards.length === 0" class="stack-column__empty-placeholder">
+				<span v-if="!collapsed" class="stack-column__empty-hint">
+					{{ t('kanso', 'Drop cards here · press n') }}
+				</span>
+			</div>
 
 			<!--
 				Virtualized list: always in the DOM (no v-if guard) so that the
@@ -1240,8 +1244,29 @@ async function createFromTemplate(templateId) {
 }
 
 .stack-column__empty-placeholder {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
 	min-height: 48px;
+	padding: 12px 8px;
 	border-radius: var(--border-radius);
+}
+
+/* Subtle onboarding nudge (#3413): shown only while the stack is empty. Faint
+   so it reads as a placeholder, and it strengthens when the column is a drop
+   target (the parent gets --drop-over). */
+.stack-column__empty-hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8rem;
+	opacity: 0.7;
+	text-align: center;
+	pointer-events: none;
+	user-select: none;
+}
+
+.stack-column__cards--drop-over .stack-column__empty-hint {
+	opacity: 1;
+	color: var(--color-primary-element);
 }
 
 /* Role chip - pushed to the right edge of the header row (mockup 1a). */
