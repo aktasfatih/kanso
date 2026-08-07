@@ -20,6 +20,29 @@ async function api(method, path, body) {
 	return method === 'DELETE' ? null : r.json()
 }
 
+// Pragmatic-DnD needs a real pointer gesture with intermediate moves (a single
+// jump won't cross its drag threshold), mirroring dnd.spec.js's dragWithMouse.
+async function dragOnto(page, sourceLocator, targetX, targetY) {
+	const srcBox = await sourceLocator.boundingBox()
+	if (!srcBox) throw new Error('Could not get bounding box for drag source')
+	const srcX = srcBox.x + srcBox.width / 2
+	const srcY = srcBox.y + srcBox.height / 2
+	await page.mouse.move(srcX, srcY)
+	await page.mouse.down()
+	const steps = 15
+	for (let i = 1; i <= steps; i++) {
+		await page.mouse.move(
+			srcX + (targetX - srcX) * (i / steps),
+			srcY + (targetY - srcY) * (i / steps),
+			{ steps: 1 },
+		)
+		await page.waitForTimeout(20)
+	}
+	await page.waitForTimeout(150)
+	await page.mouse.up()
+	await page.waitForTimeout(500)
+}
+
 async function ncLogin(page) {
 	await page.goto(BASE + '/index.php/login')
 	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})

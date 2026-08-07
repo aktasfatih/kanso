@@ -364,6 +364,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:stacks="sortedStacks"
 			:cards-by-stack="cardsByStack"
 			:board-prefix="boardData?.board?.prefix ?? ''"
+			:can-edit="canEditBoard"
 			:board-id="props.id" />
 
 		<!-- Keyboard shortcuts overlay -->

@@ -110,7 +110,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Scrollable track -->
 			<div ref="scrollRef" class="timeline__scroll">
-				<div class="timeline__inner" :style="{ width: `${trackWidth}px` }">
+				<div ref="trackRef" class="timeline__inner" :class="{ 'timeline__inner--drop-active': dropActive }" :style="{ width: `${trackWidth}px` }">
+					<!-- Drop affordance: a vertical guide at the day under the cursor
+					     while an unscheduled card is dragged over the track. -->
+					<div
+						v-if="dropGuideX !== null"
+						class="timeline__drop-guide"
+						:style="{ left: `${dropGuideX}px` }" />
 					<!-- Weekend shading (behind everything) -->
 					<div
 						v-for="wk in weekendBands"
@@ -192,10 +198,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Unscheduled cards -->
 		<details v-if="unscheduled.length > 0" class="timeline__unscheduled">
-			<summary>{{ n('kanso', '%n unscheduled card', '%n unscheduled cards', unscheduled.length) }}</summary>
+			<summary>
+				{{ n('kanso', '%n unscheduled card', '%n unscheduled cards', unscheduled.length) }}
+				<span v-if="canEdit" class="timeline__unscheduled-hint">{{ t('kanso', 'Drag one onto the track to schedule it') }}</span>
+			</summary>
 			<ul class="timeline__unscheduled-list">
 				<li v-for="card in unscheduled" :key="card.id">
-					<button class="timeline__unscheduled-row" @click="openCard(card.id)">{{ card.title }}</button>
+					<button
+						:ref="(el) => registerUnscheduledRef(card.id, el)"
+						class="timeline__unscheduled-row"
+						:class="{ 'timeline__unscheduled-row--draggable': canEdit, 'timeline__unscheduled-row--dragging': draggingCardId === card.id }"
+						@click="openCard(card.id)">{{ card.title }}</button>
 				</li>
 			</ul>
 		</details>
@@ -205,12 +218,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
 import CalendarTodayIcon from 'vue-material-design-icons/CalendarToday.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { updateCard as apiUpdateCard } from '../services/api.js'
+import { boardQueryKey } from '../composables/queryKeys.js'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 
@@ -223,13 +240,19 @@ const props = defineProps({
 	cardsByStack: { type: Object, default: null },
 	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq. */
 	boardPrefix: { type: String, default: '' },
+	/** Whether the current user may edit cards (board permission bit 2). Gates
+	 *  drag-to-schedule: read-only viewers get no draggable footer cards. */
+	canEdit: { type: Boolean, default: false },
 	boardId: { type: [String, Number], required: true },
 })
 
 const router = useRouter()
+const queryClient = useQueryClient()
 
 // The horizontally-scrolling track container (for jump-to-today + page-fill sizing).
 const scrollRef = ref(null)
+// The inner track element (drop target for scheduling unscheduled cards).
+const trackRef = ref(null)
 // Live viewport width of the track, so a short date range can be padded to fill it.
 const viewportWidth = ref(0)
 let resizeObserver = null
@@ -421,6 +444,16 @@ function xForMs(ms) {
 	return LEFT_PAD + Math.round((ms - axisStart.value) / DAY) * pxPerDay.value
 }
 
+// Inverse of xForMs: an x-offset inside the inner track → the day-floor ms under
+// it. Used by drag-to-schedule to turn a drop position into a due date. Clamped
+// to the rendered axis so a drop just past either edge still lands on a real day.
+function msForTrackX(xInTrack) {
+	if (axisStart.value === null) return null
+	const day = Math.floor((xInTrack - LEFT_PAD) / pxPerDay.value)
+	const clampedDay = Math.max(0, Math.min(day, totalDays.value - 1))
+	return axisStart.value + clampedDay * DAY
+}
+
 // Per-group with computed bar geometry, ready to render row-for-row against the pane.
 // A collapsed group keeps its header (with the true card count) but drops its card
 // rows entirely — the SAME reduced `rows` array feeds both the frozen pane and the
@@ -537,6 +570,122 @@ function jumpToToday() {
 		el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
 	})
 }
+
+// ── Drag-to-schedule ────────────────────────────────────────────────────────
+// Unscheduled footer cards are Pragmatic-DnD draggables; the track is a drop
+// target. Dropping a card sets its duedate to the day under the cursor, turning
+// it into a single-date (diamond) card. Scoped to payload type
+// 'timeline-unscheduled' so it never interferes with the board's own card/stack
+// monitors (which use type 'card').
+
+// Which footer card is being dragged (for the drag-visual on the source).
+const draggingCardId = ref(null)
+// x-offset (inside the inner track) of the drop guide line, or null when idle.
+const dropGuideX = ref(null)
+// Whether an unscheduled card is currently hovering the track (subtle highlight).
+const dropActive = ref(false)
+
+// Per-card draggable cleanups, keyed by card id. Rebuilt as the footer's ref
+// callbacks fire; all torn down on unmount.
+const unschedCleanups = new Map()
+
+function boardKey() {
+	return boardQueryKey(props.boardId)
+}
+
+// Optimistically patch the board summary cache with a new duedate for one card,
+// then reconcile with the server. Mirrors useCardActions.setArchived: snapshot →
+// patch → rollback-on-error → invalidate-on-settled. Only this card's duedate is
+// touched, so concurrent in-flight mutations on other cards are never clobbered.
+async function scheduleCard(cardId, dueMs) {
+	if (!props.canEdit || axisStart.value === null) return
+	const iso = new Date(dueMs).toISOString()
+	const key = boardKey()
+	const numericId = Number(cardId)
+
+	await queryClient.cancelQueries({ queryKey: key })
+	const previousBoard = queryClient.getQueryData(key)
+	queryClient.setQueryData(key, (old) => {
+		if (!old || !Array.isArray(old.cards)) return old
+		return {
+			...old,
+			cards: old.cards.map((c) => (c.id === numericId ? { ...c, duedate: iso } : c)),
+		}
+	})
+
+	try {
+		await apiUpdateCard(numericId, { duedate: iso })
+	} catch (e) {
+		if (previousBoard !== undefined) queryClient.setQueryData(key, previousBoard)
+	} finally {
+		queryClient.invalidateQueries({ queryKey: key })
+	}
+}
+
+// Compute the day-floor ms under a drag input (client coords) over the track.
+function dropMsFromInput(clientX) {
+	const inner = trackRef.value
+	if (!inner) return null
+	const rect = inner.getBoundingClientRect()
+	return msForTrackX(clientX - rect.left)
+}
+
+// Update the visual guide to the day under the cursor while dragging over the track.
+function updateGuide(clientX) {
+	const inner = trackRef.value
+	if (!inner || axisStart.value === null) { dropGuideX.value = null; return }
+	const rect = inner.getBoundingClientRect()
+	const ms = msForTrackX(clientX - rect.left)
+	dropGuideX.value = ms === null ? null : xForMs(ms)
+}
+
+// Ref callback for each footer card button: (re)wire it as a draggable. Vue calls
+// this with the element on mount/update and null on unmount.
+function registerUnscheduledRef(cardId, el) {
+	const prev = unschedCleanups.get(cardId)
+	if (prev) { prev(); unschedCleanups.delete(cardId) }
+	if (!el || !props.canEdit) return
+	const cleanup = draggable({
+		element: el,
+		getInitialData: () => ({ type: 'timeline-unscheduled', cardId }),
+		onDragStart: () => { draggingCardId.value = cardId },
+		onDrop: () => { draggingCardId.value = null },
+	})
+	unschedCleanups.set(cardId, cleanup)
+}
+
+let trackDropCleanup = () => {}
+
+// The inner track only renders when there are scheduled cards (the v-else body),
+// so it can mount/unmount as the board's date coverage changes. Wire the drop
+// target whenever the element appears and tear it down when it goes away.
+watch(trackRef, (el) => {
+	trackDropCleanup()
+	trackDropCleanup = () => {}
+	if (!el) return
+	trackDropCleanup = dropTargetForElements({
+		element: el,
+		canDrop: ({ source }) => props.canEdit && source.data.type === 'timeline-unscheduled',
+		onDrag: ({ location }) => {
+			dropActive.value = true
+			updateGuide(location.current.input.clientX)
+		},
+		onDragLeave: () => { dropActive.value = false; dropGuideX.value = null },
+		onDrop: ({ source, location }) => {
+			dropActive.value = false
+			dropGuideX.value = null
+			const cardId = source.data.cardId
+			const dueMs = dropMsFromInput(location.current.input.clientX)
+			if (cardId != null && dueMs !== null) scheduleCard(cardId, dueMs)
+		},
+	})
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+	trackDropCleanup()
+	for (const cleanup of unschedCleanups.values()) cleanup()
+	unschedCleanups.clear()
+})
 </script>
 
 <style scoped>
@@ -1033,6 +1182,13 @@ function jumpToToday() {
 	font-weight: 600;
 }
 
+.timeline__unscheduled-hint {
+	margin-inline-start: 8px;
+	font-weight: 400;
+	font-size: 0.78rem;
+	opacity: 0.85;
+}
+
 .timeline__unscheduled-list {
 	list-style: none;
 	padding: 8px 0 0;
@@ -1053,5 +1209,48 @@ function jumpToToday() {
 
 .timeline__unscheduled-row:hover {
 	background: var(--color-background-hover);
+}
+
+/* Draggable footer card: grab cursor + a faint dashed edge hinting it can be
+ * picked up and dropped onto the track to schedule it. */
+.timeline__unscheduled-row--draggable {
+	cursor: grab;
+	border-style: dashed;
+}
+
+.timeline__unscheduled-row--draggable:active {
+	cursor: grabbing;
+}
+
+.timeline__unscheduled-row--dragging {
+	opacity: 0.4;
+}
+
+/* Subtle track highlight while an unscheduled card hovers over it. */
+.timeline__inner--drop-active {
+	background: color-mix(in srgb, var(--color-primary-element) 6%, transparent);
+}
+
+/* Vertical guide at the day the card would land on. */
+.timeline__drop-guide {
+	position: absolute;
+	top: 52px;
+	bottom: 0;
+	width: 2px;
+	background: var(--color-primary-element);
+	opacity: 0.9;
+	z-index: 5;
+	pointer-events: none;
+}
+
+.timeline__drop-guide::before {
+	content: '';
+	position: absolute;
+	top: -3px;
+	left: 50%;
+	width: 9px;
+	height: 9px;
+	transform: translateX(-50%) rotate(45deg);
+	background: var(--color-primary-element);
 }
 </style>
