@@ -3,11 +3,15 @@
 name: CI
 
 on:
-  # Every change lands via a PR, and the pull_request run is the merge gate — so we
-  # deliberately do NOT re-run CI on main after a merge. That post-merge run would
-  # just repeat the ~1.5h suite the PR already passed, on the slow serial runners.
-  # Push only builds release tags; feature branches are covered by pull_request.
+  # Changes land via PRs (the pull_request run is the merge gate). We ALSO run the
+  # full suite on pushes to main so the repo page shows main's status: each merge
+  # to main re-runs the matrix and stamps that commit green. Feature-branch pushes
+  # are NOT matched here (only main + release tags), so a PR still fires exactly
+  # one run via pull_request — no double-runs. This does repeat the ~1.5h suite the
+  # PR already passed; that is the deliberate cost of an always-visible green
+  # status on main.
   push:
+    branches: [main]
     tags: ['v*']
   pull_request:
 
