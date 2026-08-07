@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Import cards from a CSV / spreadsheet.** The board-list Import menu now has a
+  working "CSV file" entry (#3678): upload or paste a CSV, map its columns
+  (title required; optional description, due date, comma-separated labels and
+  assignees) with sensible header auto-detection, then add the rows as cards to a
+  board and column you choose. Labels are matched-or-created on the target board;
+  assignees are matched-or-dropped, filtered by READ so an import never
+  references someone who cannot see the board. The whole import is a single
+  all-or-nothing transaction (byte-capped before parsing, row-capped, long titles
+  truncated), EDIT on the target board is required, and the cards append to the
+  chosen stack with a single realtime push. This is the "add my spreadsheet of
+  tasks to an existing board" case only — creating a whole new board from a CSV
+  is out of scope (the Deck/Trello importers cover whole-board creation).
 - **iCal / ICS calendar feed of card due dates.** A board manager can now expose
   a read-only calendar feed of the board's card due dates (Board settings →
   Automation → Calendar feed), subscribable in any calendar client (Nextcloud

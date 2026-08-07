@@ -44,6 +44,8 @@ class CardServiceTest extends TestCase {
 	private \OCA\Kanso\Db\LabelMapper&MockObject $labelMapper;
 	private \OCA\Kanso\Db\CardLabelMapper&MockObject $cardLabelMapper;
 	private \OCA\Kanso\Db\ChecklistItemMapper&MockObject $checklistItemMapper;
+	private \OCA\Kanso\Db\CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private \OCA\Kanso\Db\SubscriptionMapper&MockObject $subscriptionMapper;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -63,6 +65,8 @@ class CardServiceTest extends TestCase {
 		$this->labelMapper = $this->createMock(\OCA\Kanso\Db\LabelMapper::class);
 		$this->cardLabelMapper = $this->createMock(\OCA\Kanso\Db\CardLabelMapper::class);
 		$this->checklistItemMapper = $this->createMock(\OCA\Kanso\Db\ChecklistItemMapper::class);
+		$this->cardAssigneeMapper = $this->createMock(\OCA\Kanso\Db\CardAssigneeMapper::class);
+		$this->subscriptionMapper = $this->createMock(\OCA\Kanso\Db\SubscriptionMapper::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -79,7 +83,9 @@ class CardServiceTest extends TestCase {
 			$this->checklistService,
 			$this->labelMapper,
 			$this->cardLabelMapper,
-			$this->checklistItemMapper
+			$this->checklistItemMapper,
+			$this->cardAssigneeMapper,
+			$this->subscriptionMapper
 		);
 	}
 
@@ -2109,6 +2115,226 @@ class CardServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->copy(9, 7, 'bob');
+	}
+
+	// ---- moveToBoard (#3679) ----------------------------------------------
+
+	/**
+	 * Cross-board MOVE happy path: the card is re-created on the target board
+	 * (content + checklist carried), assignees/watchers that can READ the target
+	 * cross over, the source is soft-deleted, and a change row lands on BOTH
+	 * boards (CREATE on target, DELETE on source).
+	 */
+	public function testMoveToBoardRecreatesOnTargetAndSoftDeletesSource(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetBoard->setEstimateScale('fibonacci');
+		$targetStack = $this->stack(7, 2);
+
+		$source = $this->card(9, 5, 1);
+		$source->setTitle('Ship it');
+		$source->setDescription('the spec');
+		$source->setPriority(Card::PRIORITY_URGENT);
+		$source->setEstimate('3');
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->with(2)->willReturn(88);
+		$this->cardMapper->method('findChildren')->with(9)->willReturn([]);
+
+		// Everyone can read the target board here (READ bit set for any uid).
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+
+		// Source carries no labels, one checklist item, one assignee, one watcher.
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([]);
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
+			$this->checklistItem(1, 9, 'Step one', true),
+		]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn(['carol']);
+
+		$inserted = null;
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$inserted): Card {
+			$c->setId(42);
+			$inserted = $c;
+			return $c;
+		});
+		$softDeleted = null;
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$softDeleted): Card {
+			if ($c->getId() === 9) {
+				$softDeleted = $c;
+			}
+			return $c;
+		});
+
+		$assignedTo = [];
+		$this->cardAssigneeMapper->method('insertAssignment')->willReturnCallback(function (int $cardId, string $uid) use (&$assignedTo): \OCA\Kanso\Db\CardAssignee {
+			$assignedTo[] = [$cardId, $uid];
+			return new \OCA\Kanso\Db\CardAssignee();
+		});
+		$watchedBy = [];
+		$this->subscriptionMapper->method('insert')->willReturnCallback(function (\OCA\Kanso\Db\Subscription $s) use (&$watchedBy): \OCA\Kanso\Db\Subscription {
+			$watchedBy[] = $s->getSubscriber();
+			return $s;
+		});
+		$items = [];
+		$this->checklistItemMapper->method('insert')->willReturnCallback(function (\OCA\Kanso\Db\ChecklistItem $i) use (&$items): \OCA\Kanso\Db\ChecklistItem {
+			$items[] = [$i->getTitle(), $i->getDone()];
+			return $i;
+		});
+
+		// A change row on BOTH boards (target CREATE + source DELETE).
+		$changeBoards = [];
+		$this->changeNotifier->method('recordChange')->willReturnCallback(function (int $boardId, int $entity, int $cardId, int $action) use (&$changeBoards): Change {
+			$changeBoards[] = [$boardId, $action];
+			return new Change();
+		});
+		// Both boards pushed after commit.
+		$pushed = [];
+		$this->changeNotifier->method('pushBoardChanged')->willReturnCallback(function (int $boardId) use (&$pushed): void {
+			$pushed[] = $boardId;
+		});
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$moved = $this->service->moveToBoard(9, 7, 'alice');
+
+		self::assertSame(42, $moved->getId());
+		self::assertSame(2, $moved->getBoardId());
+		self::assertSame(7, $moved->getStackId());
+		self::assertSame('Ship it', $moved->getTitle(), 'move keeps the title (no " (copy)" suffix)');
+		self::assertSame('the spec', $moved->getDescription());
+		self::assertSame(88, $moved->getBoardSeq(), 'the KAN-id is re-issued on the target board');
+		self::assertSame('3', $moved->getEstimate());
+		self::assertSame([[42, 'bob']], $assignedTo, 'the readable assignee crosses over');
+		self::assertSame(['carol'], $watchedBy, 'the readable watcher crosses over');
+		self::assertSame([['Step one', true]], $items);
+		self::assertNotNull($softDeleted, 'the source card is soft-deleted');
+		self::assertGreaterThan(0, $softDeleted->getDeletedAt());
+		self::assertSame(
+			[[2, Change::ACTION_CREATE], [1, Change::ACTION_DELETE]],
+			$changeBoards,
+			'a CREATE on the target board and a DELETE on the source board',
+		);
+		self::assertSame([2, 1], $pushed, 'both boards are pushed after commit');
+	}
+
+	/**
+	 * moveToBoard needs EDIT on the TARGET board: a viewer with EDIT on the source
+	 * but not the target is rejected, and the source is NOT soft-deleted (no
+	 * half-move).
+	 */
+	public function testMoveToBoardAssertsEditOnTargetBoard(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetStack = $this->stack(7, 2);
+		$source = $this->card(9, 5, 1);
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+
+		$this->permissionService->method('assertPermission')
+			->willReturnCallback(static function (Board $board, string $uid, int $perm): void {
+				if ($board->getId() === 2) {
+					throw new NotPermittedException();
+				}
+			});
+
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->moveToBoard(9, 7, 'bob');
+	}
+
+	/**
+	 * A "move to board" whose target stack is on the SAME board is rejected (the
+	 * in-board move() is the right tool) - and nothing is written.
+	 */
+	public function testMoveToBoardRejectsSameBoardTarget(): void {
+		$board = $this->board(1);
+		$targetStack = $this->stack(7, 1);
+		$source = $this->card(9, 5, 1);
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
+	/**
+	 * Cross-board move maps labels by title+color to the target board (unmatched
+	 * drop) and DROPS any assignee/watcher who cannot READ the target board - the
+	 * leak guard. Here 'bob' can read the target, 'mallory' cannot.
+	 */
+	public function testMoveToBoardMapsLabelsAndDropsUnreadableParticipants(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetStack = $this->stack(7, 2);
+		$source = $this->card(9, 5, 1);
+		$source->setTitle('Cross move');
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->with(2)->willReturn(5);
+		$this->cardMapper->method('findChildren')->with(9)->willReturn([]);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $c): Card {
+			$c->setId(42);
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([]);
+
+		// 'bob' can read the target; 'mallory' cannot (no permission bits).
+		$this->permissionService->method('getPermissions')
+			->willReturnCallback(static fn (Board $b, string $uid): int => $uid === 'mallory' ? 0 : PermissionService::PERMISSION_ALL);
+
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob', 'mallory']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn(['bob', 'mallory']);
+
+		// Source labels 11 (Bug/e01) + 12 (Secret/abc); target has only the Bug twin.
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([11, 12]);
+		$this->labelMapper->method('find')->willReturnMap([
+			[11, $this->label(11, 1, 'Bug', 'e01e01')],
+			[12, $this->label(12, 1, 'Secret', 'abcabc')],
+		]);
+		$this->labelMapper->method('findByBoard')->with(2)->willReturn([
+			$this->label(71, 2, 'Bug', 'e01e01'),
+		]);
+
+		$labelAssignments = [];
+		$this->cardLabelMapper->method('insertAssignment')->willReturnCallback(function (int $cardId, int $labelId) use (&$labelAssignments): \OCA\Kanso\Db\CardLabel {
+			$labelAssignments[] = $labelId;
+			return new \OCA\Kanso\Db\CardLabel();
+		});
+		$assignees = [];
+		$this->cardAssigneeMapper->method('insertAssignment')->willReturnCallback(function (int $cardId, string $uid) use (&$assignees): \OCA\Kanso\Db\CardAssignee {
+			$assignees[] = $uid;
+			return new \OCA\Kanso\Db\CardAssignee();
+		});
+		$watchers = [];
+		$this->subscriptionMapper->method('insert')->willReturnCallback(function (\OCA\Kanso\Db\Subscription $s) use (&$watchers): \OCA\Kanso\Db\Subscription {
+			$watchers[] = $s->getSubscriber();
+			return $s;
+		});
+
+		$this->service->moveToBoard(9, 7, 'alice');
+
+		self::assertSame([71], $labelAssignments, 'only the title+color twin is mapped; the unmatched label drops');
+		self::assertSame(['bob'], $assignees, 'the unreadable assignee is dropped (leak guard)');
+		self::assertSame(['bob'], $watchers, 'the unreadable watcher is dropped (leak guard)');
 	}
 
 	// ---- templates (#3409) ------------------------------------------------

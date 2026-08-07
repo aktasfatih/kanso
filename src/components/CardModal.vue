@@ -321,11 +321,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<NcActionButton
 								v-if="canEdit"
 								:close-after-click="true"
+								@click="openMovePicker">
+								<template #icon>
+									<DragIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Move card…') }}
+							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
 								@click="openCopyDialog">
 								<template #icon>
 									<ContentDuplicateIcon :size="20" />
 								</template>
 								{{ t('kanso', 'Copy to…') }}
+							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
+								@click="openMoveToBoardDialog">
+								<template #icon>
+									<TransferIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Move to board…') }}
 							</NcActionButton>
 							<NcActionButton
 								v-if="canEdit"
@@ -1761,16 +1779,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 	</NcModal>
 
-	<!-- Copy to… : pick a target board + stack (same or another board the user can edit). -->
+	<!-- Copy to… / Move to board… : pick a target board + stack (a board the user can edit). -->
 	<NcModal
 		v-if="showCopyDialog"
 		size="small"
-		:name="t('kanso', 'Copy card to…')"
+		:name="copyDialogIsMove ? t('kanso', 'Move card to board…') : t('kanso', 'Copy card to…')"
 		@close="showCopyDialog = false">
 		<div class="card-modal__copy-dialog">
-			<h2 class="card-modal__copy-title">{{ t('kanso', 'Copy card to…') }}</h2>
+			<h2 class="card-modal__copy-title">{{ copyDialogIsMove ? t('kanso', 'Move card to board…') : t('kanso', 'Copy card to…') }}</h2>
 			<p class="card-modal__copy-hint">
-				{{ t('kanso', 'Duplicates the title, description, labels, checklist, estimate, priority and status. Comments, activity and assignees are not copied.') }}
+				{{ copyDialogIsMove
+					? t('kanso', 'Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board.')
+					: t('kanso', 'Duplicates the title, description, labels, checklist, estimate, priority and status. Comments, activity and assignees are not copied.') }}
 			</p>
 			<label class="card-modal__copy-field">
 				<span class="card-modal__copy-label">{{ t('kanso', 'Board') }}</span>
@@ -1796,8 +1816,65 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcButton
 					type="primary"
 					:disabled="copyPending || !copyTargetStackId"
-					@click="confirmCopy">
-					{{ copyPending ? t('kanso', 'Copying…') : t('kanso', 'Copy') }}
+					@click="copyDialogIsMove ? confirmMoveToBoard() : confirmCopy()">
+					{{ copyDialogIsMove
+						? (copyPending ? t('kanso', 'Moving…') : t('kanso', 'Move'))
+						: (copyPending ? t('kanso', 'Copying…') : t('kanso', 'Copy')) }}
+				</NcButton>
+			</div>
+		</div>
+	</NcModal>
+
+	<!-- Keyboard / screen-reader "Move card…" picker: the non-pointer
+	     alternative to drag-and-drop. Pick a column + position; confirm funnels
+	     through the shared optimistic move path (useCardMove). -->
+	<NcModal
+		v-if="showMovePicker"
+		size="small"
+		:name="t('kanso', 'Move card')"
+		@close="showMovePicker = false">
+		<div class="card-modal__copy-dialog">
+			<h2 class="card-modal__copy-title">{{ t('kanso', 'Move card') }}</h2>
+			<label class="card-modal__copy-field">
+				<span class="card-modal__copy-label">{{ t('kanso', 'Column') }}</span>
+				<select v-model="movePickerStackId" class="card-modal__relation-target">
+					<option v-for="s in moveTargetStacks" :key="s.id" :value="s.id">{{ s.title }}</option>
+				</select>
+			</label>
+			<fieldset class="card-modal__move-position">
+				<legend class="card-modal__copy-label">{{ t('kanso', 'Position') }}</legend>
+				<label class="card-modal__move-radio">
+					<input v-model="movePickerPosition" type="radio" value="top">
+					<span>{{ t('kanso', 'Top of the column') }}</span>
+				</label>
+				<label class="card-modal__move-radio">
+					<input v-model="movePickerPosition" type="radio" value="bottom">
+					<span>{{ t('kanso', 'Bottom of the column') }}</span>
+				</label>
+				<label class="card-modal__move-radio" :class="{ 'card-modal__move-radio--disabled': movePickerAfterOptions.length === 0 }">
+					<input
+						v-model="movePickerPosition"
+						type="radio"
+						value="after"
+						:disabled="movePickerAfterOptions.length === 0">
+					<span>{{ t('kanso', 'After a specific card') }}</span>
+				</label>
+				<select
+					v-if="movePickerPosition === 'after'"
+					v-model="movePickerAfterCardId"
+					class="card-modal__relation-target"
+					:disabled="movePickerAfterOptions.length === 0">
+					<option v-for="c in movePickerAfterOptions" :key="c.id" :value="c.id">{{ c.title }}</option>
+				</select>
+			</fieldset>
+			<span v-if="moveError" class="card-modal__save-error">{{ moveError }}</span>
+			<div class="card-modal__copy-actions">
+				<NcButton @click="showMovePicker = false">{{ t('kanso', 'Cancel') }}</NcButton>
+				<NcButton
+					type="primary"
+					:disabled="movePickerStackId == null"
+					@click="confirmMovePicker">
+					{{ t('kanso', 'Move') }}
 				</NcButton>
 			</div>
 		</div>
@@ -1824,6 +1901,7 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
+import TransferIcon from 'vue-material-design-icons/Transfer.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
@@ -1893,13 +1971,16 @@ import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/us
 import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
+import { useCardMove } from '../composables/useCardMove.js'
+import { useAnnouncer } from '../composables/useAnnouncer.js'
+import { initial, between, after, before } from '../services/sortKey.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
@@ -2105,6 +2186,9 @@ async function handleToggleLabel(label) {
 			labelId: label.id,
 			assign,
 		})
+		announceMove(assign
+			? t('kanso', 'Label {label} added', { label: label.title })
+			: t('kanso', 'Label {label} removed', { label: label.title }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
 	}
@@ -2186,6 +2270,10 @@ async function handleToggleAssignee(uid, assign) {
 			userId: uid,
 			assign,
 		})
+		const who = participantName(uid)
+		announceMove(assign
+			? t('kanso', '{user} assigned', { user: who })
+			: t('kanso', '{user} unassigned', { user: who }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
 	}
@@ -3138,8 +3226,12 @@ async function copyAsPrompt() {
 	}
 }
 
-// ── Copy to… (duplicate card into a target board/stack) ──────────────────────
+// ── Copy to… / Move to board… (relocate card into a target board/stack) ──────
+// The same picker UI serves both: 'copy' duplicates the card, 'move' relocates
+// it (server-side single-card cross-board move, #3679).
 const showCopyDialog = ref(false)
+const copyDialogMode = ref('copy')
+const copyDialogIsMove = computed(() => copyDialogMode.value === 'move')
 const copyTargetBoardId = ref(null)
 const copyTargetStackId = ref('')
 const copyStackOptions = ref([])
@@ -3147,11 +3239,15 @@ const copyStacksLoading = ref(false)
 const copyPending = ref(false)
 const copyError = ref('')
 
-// All boards the user can see - the picker offers every board; a copy into one
-// the user cannot EDIT is rejected server-side and surfaced as copyError.
+// All boards the user can see - the picker offers every board; a copy/move into
+// one the user cannot EDIT is rejected server-side and surfaced as copyError.
+// Move mode excludes the card's current board (a same-board "move to board" is
+// meaningless - the server rejects it too).
 const { data: allBoardsData } = useBoards()
 const copyBoardOptions = computed(() =>
-	(allBoardsData.value ?? []).filter((b) => !b.archived),
+	(allBoardsData.value ?? [])
+		.filter((b) => !b.archived)
+		.filter((b) => !copyDialogIsMove.value || Number(b.id) !== Number(boardId.value)),
 )
 
 const copyIsCrossBoard = computed(() =>
@@ -3159,6 +3255,7 @@ const copyIsCrossBoard = computed(() =>
 )
 
 async function openCopyDialog() {
+	copyDialogMode.value = 'copy'
 	copyError.value = ''
 	copyTargetStackId.value = ''
 	// Default the target to the card's current board so the common case (copy
@@ -3166,6 +3263,23 @@ async function openCopyDialog() {
 	copyTargetBoardId.value = Number(boardId.value)
 	showCopyDialog.value = true
 	await loadCopyStacks(Number(boardId.value))
+}
+
+async function openMoveToBoardDialog() {
+	copyDialogMode.value = 'move'
+	copyError.value = ''
+	copyTargetStackId.value = ''
+	// Move targets another board; default to the first eligible one (the current
+	// board is excluded from the options). No default when none exist.
+	const first = copyBoardOptions.value[0]
+	copyTargetBoardId.value = first ? Number(first.id) : null
+	showCopyDialog.value = true
+	if (copyTargetBoardId.value != null) {
+		await loadCopyStacks(copyTargetBoardId.value)
+	} else {
+		copyStackOptions.value = []
+		copyError.value = t('kanso', 'There is no other board you can move this card to.')
+	}
 }
 
 function onCopyBoardChange() {
@@ -3226,6 +3340,31 @@ async function confirmCopy() {
 		}
 	} catch (err) {
 		copyError.value = err?.response?.data?.error || t('kanso', 'Failed to copy card.')
+	} finally {
+		copyPending.value = false
+	}
+}
+
+async function confirmMoveToBoard() {
+	const targetStackId = Number(copyTargetStackId.value)
+	if (!targetStackId || copyPending.value) return
+	copyError.value = ''
+	copyPending.value = true
+	try {
+		const targetBoard = Number(copyTargetBoardId.value)
+		await apiMoveCardToBoard(Number(props.cardId), targetStackId)
+		// The card left this board and landed on the target: refresh BOTH boards
+		// (source loses it, target gains it) and the boards list (per-board counts).
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(targetBoard) })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		queryClient.invalidateQueries({ queryKey: ['boards'] })
+		showCopyDialog.value = false
+		showSuccess(t('kanso', 'Card moved.'))
+		// The card no longer exists on this board (its id changed on the target),
+		// so close the modal rather than leave a stale/404 detail open.
+		closeModal()
+	} catch (err) {
+		copyError.value = err?.response?.data?.error || t('kanso', 'Failed to move card.')
 	} finally {
 		copyPending.value = false
 	}
@@ -3797,33 +3936,143 @@ watch(discussionTab, (tab) => {
 }, { immediate: true })
 onBeforeUnmount(stopActivityCacheSyncFn)
 
-// ── Move to top / bottom of the current column (⋯ menu) ──────────────────────
-// Reuses the existing move endpoint: afterCardId=null → top; afterCardId=last
-// card in the stack → bottom. A menu action (not a drag), so we just refetch the
-// board rather than run the DnD optimistic machinery.
+// ── Same-board move (⋯ menu "Move to top/bottom" + keyboard "Move card…") ─────
+// Both the edge shortcuts and the keyboard/SR position picker funnel through the
+// ONE optimistic move path (useCardMove.enqueueMove) — the same code DnD uses —
+// so there is never a second move implementation to keep in sync.
 const moveError = ref('')
-async function moveToEdge(toTop) {
+const { enqueueMove, lastError: enqueueMoveError } = useCardMove(boardId)
+const { announce: announceMove } = useAnnouncer()
+
+/** Non-archived cards in a stack, self excluded, sorted by fractional key. */
+function stackCardsSorted(stackId) {
+	const selfId = Number(props.cardId)
+	return (boardData.value?.cards ?? [])
+		.filter((c) => c.stackId === stackId && !c.archived && c.id !== selfId)
+		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
+}
+
+/**
+ * Move this card within the board via the shared optimistic queue. afterCardId
+ * null → top of the target stack; otherwise land right after that card. Computes
+ * the same optimistic fractional key BoardView derives for a drop, so the card
+ * appears in the right spot before the server responds. Announces to SR.
+ *
+ * @param {number} targetStackId
+ * @param {?number} afterCardId  card to land after, or null for top
+ */
+function moveWithinBoard(targetStackId, afterCardId) {
 	moveError.value = ''
+	const selfId = Number(props.cardId)
+	const inStack = stackCardsSorted(targetStackId)
+
+	// Derive optimisticKey mirroring BoardView's drop math.
+	let optimisticKey
+	try {
+		if (afterCardId == null) {
+			// Top: before the first card, or the only card in an empty stack.
+			const first = inStack[0]
+			optimisticKey = first ? before(first.sortKey) : initial()
+		} else {
+			const idx = inStack.findIndex((c) => c.id === afterCardId)
+			const anchor = inStack[idx]
+			const next = idx >= 0 ? inStack[idx + 1] : null
+			optimisticKey = next ? between(anchor.sortKey, next.sortKey) : after(anchor.sortKey)
+		}
+	} catch {
+		// Keys too close/overflow → let the server truth win on reconcile.
+		optimisticKey = afterCardId == null
+			? (inStack[0]?.sortKey ?? initial())
+			: (inStack.find((c) => c.id === afterCardId)?.sortKey ?? initial())
+	}
+
+	enqueueMove({ cardId: selfId, targetStackId, afterCardId: afterCardId ?? null, optimisticKey })
+	queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+
+	const stackTitle = (boardData.value?.stacks ?? []).find((s) => s.id === targetStackId)?.title ?? ''
+	announceMove(t('kanso', '{card} moved to {stack}', {
+		card: cardData.value?.title || t('kanso', 'Card'),
+		stack: stackTitle,
+	}))
+}
+
+// afterCardId=null → top; last card in the stack → bottom.
+function moveToEdge(toTop) {
 	const stackId = cardData.value?.stackId
 	if (stackId == null) return
-	const selfId = Number(props.cardId)
-	let afterCardId = null
-	if (!toTop) {
-		// Bottom: land after the last non-archived card in this stack (by sortKey).
-		const inStack = (boardData.value?.cards ?? [])
-			.filter((c) => c.stackId === stackId && !c.archived && c.id !== selfId)
-			.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
-		if (inStack.length === 0) return // alone in the stack → already top and bottom
-		afterCardId = inStack[inStack.length - 1].id
-	}
-	try {
-		await apiMoveCard(selfId, { targetStackId: stackId, afterCardId })
-		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-	} catch (err) {
-		moveError.value = err?.response?.data?.error || t('kanso', 'Failed to move card.')
+	const inStack = stackCardsSorted(stackId)
+	if (toTop) {
+		if (inStack.length === 0) return // already the only card → top & bottom
+		moveWithinBoard(stackId, null)
+	} else {
+		if (inStack.length === 0) return
+		moveWithinBoard(stackId, inStack[inStack.length - 1].id)
 	}
 }
+
+// ── Keyboard / SR "Move card…" picker (a11y alternative to drag-and-drop) ─────
+// Reviewers require a non-pointer way to move a card. Pick a target stack and a
+// position (top, bottom, or after a specific card); confirm funnels through
+// moveWithinBoard → enqueueMove (same path as DnD).
+const showMovePicker = ref(false)
+const movePickerStackId = ref(null)
+// 'top' | 'bottom' | 'after'
+const movePickerPosition = ref('bottom')
+const movePickerAfterCardId = ref(null)
+
+/** Editable, non-archived stacks on this board (the move targets). */
+const moveTargetStacks = computed(() =>
+	(boardData.value?.stacks ?? [])
+		.filter((s) => !s.archived)
+		.slice()
+		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)),
+)
+
+/** Cards in the chosen target stack the user can position after (self excluded). */
+const movePickerAfterOptions = computed(() =>
+	movePickerStackId.value == null ? [] : stackCardsSorted(movePickerStackId.value),
+)
+
+function openMovePicker() {
+	moveError.value = ''
+	movePickerStackId.value = cardData.value?.stackId ?? moveTargetStacks.value[0]?.id ?? null
+	movePickerPosition.value = 'bottom'
+	movePickerAfterCardId.value = null
+	showMovePicker.value = true
+}
+
+// Reset the "after" selection whenever the target stack changes so a stale card
+// id from the previous stack can't leak into the move contract.
+watch(movePickerStackId, () => {
+	movePickerAfterCardId.value = movePickerAfterOptions.value[0]?.id ?? null
+})
+
+function confirmMovePicker() {
+	const stackId = movePickerStackId.value
+	if (stackId == null) return
+	let afterCardId = null
+	if (movePickerPosition.value === 'top') {
+		afterCardId = null
+	} else if (movePickerPosition.value === 'bottom') {
+		const cards = stackCardsSorted(stackId)
+		afterCardId = cards.length ? cards[cards.length - 1].id : null
+	} else {
+		// 'after' a specific card. Guard against a stale/empty selection: an empty
+		// target stack or a missing pick degrades to top — never an invalid move.
+		afterCardId = movePickerAfterCardId.value ?? null
+		if (afterCardId != null && !stackCardsSorted(stackId).some((c) => c.id === afterCardId)) {
+			afterCardId = null
+		}
+	}
+	moveWithinBoard(stackId, afterCardId)
+	showMovePicker.value = false
+}
+
+// Surface a queued-move failure (403 review gate / 409 rebalance / generic) in
+// the modal's move-error slot, same as the edge shortcuts.
+watch(enqueueMoveError, (msg) => {
+	if (msg) moveError.value = msg
+})
 
 // The four relation groups from card detail
 const relations = computed(() => cardData.value?.relations ?? { blocks: [], blockedBy: [], duplicates: [], relates: [] })
@@ -4249,6 +4498,27 @@ async function handleToggleProject(projectId) {
 	justify-content: flex-end;
 	gap: 8px;
 	margin-top: 4px;
+}
+
+.card-modal__move-position {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: none;
+	margin: 0;
+	padding: 0;
+}
+
+.card-modal__move-radio {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+
+.card-modal__move-radio--disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 /* ── Modal shell ─────────────────────────────────────────────────────────── */

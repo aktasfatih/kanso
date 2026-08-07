@@ -76,6 +76,9 @@ export const moveCard = (id, data) =>
 export const copyCard = (id, targetStackId) =>
 	axios.post(url(`/api/cards/${id}/copy`), { targetStackId }).then((r) => r.data)
 
+export const moveCardToBoard = (id, targetStackId) =>
+	axios.post(url(`/api/cards/${id}/move-to-board`), { targetStackId }).then((r) => r.data)
+
 // Per-board card templates (#3409). A template is an ordinary card flagged as a
 // reusable content blueprint for its own board; it is excluded from the live
 // board render and offered in a small picker.
@@ -354,6 +357,15 @@ export const duplicateBoard = (boardId, withCards) =>
 // Trello board JSON import; `document` is the raw uploaded Trello export text.
 export const importTrelloBoard = (document) =>
 	axios.post(url('/api/trello-import'), { document }).then((r) => r.data)
+
+// CSV import → append rows as cards into an EXISTING board's stack. `document`
+// is the raw CSV text; `mapping` is { title, description?, duedate?, labels?,
+// assignees? } of 0-based source column indexes (title required). The caller
+// must have EDIT on the target board (enforced server-side).
+export const importCsvCards = (boardId, stackId, document, mapping, hasHeader = true) =>
+	axios
+		.post(url('/api/csv-import'), { boardId, stackId, document, mapping, hasHeader })
+		.then((r) => r.data)
 
 // GitHub webhook config (board-level, MANAGE)
 export const fetchWebhookConfig = (boardId) =>

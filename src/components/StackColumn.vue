@@ -3,18 +3,52 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div ref="columnRef" class="stack-column" :class="{ 'stack-column--dragging': isStackDragging }">
+	<div
+		ref="columnRef"
+		class="stack-column"
+		:class="{ 'stack-column--dragging': isStackDragging, 'stack-column--collapsed': collapsed }">
 		<!-- Left / right stack drop indicators - same visual language as the card tile drop line -->
 		<div v-if="stackDropEdge === 'left'" class="stack-column__drop-line stack-column__drop-line--left" />
 		<div v-if="stackDropEdge === 'right'" class="stack-column__drop-line stack-column__drop-line--right" />
 
+		<!-- Collapsed rail (#3677): a slim vertical strip showing the (rotated)
+		     column title + card count. Clicking anywhere on it expands the column.
+		     Rendered ALONGSIDE the full column (which is hidden via v-show below)
+		     so the virtualizer and drop targets stay mounted the whole time. -->
+		<button
+			v-if="collapsed"
+			type="button"
+			class="stack-column__rail"
+			:aria-label="t('kanso', 'Expand column {name}', { name: stack.title })"
+			:title="t('kanso', 'Expand column')"
+			@click="handleToggleCollapsed">
+			<ChevronRightIcon class="stack-column__rail-chevron" :size="18" />
+			<span class="stack-column__rail-count">{{ props.cards.length }}</span>
+			<span class="stack-column__rail-title">{{ stack.title }}</span>
+		</button>
+
 		<!-- Column header - drag handle for stack reordering -->
 		<div
 			ref="headerRef"
+			v-show="!collapsed"
 			class="stack-column__header"
 			:class="{ 'stack-column__header--colored': !!stack.color }"
 			:style="stack.color ? { '--stack-color': cssColor(stack.color) } : {}">
 			<div class="stack-column__header-row">
+				<!-- Collapse toggle (#3677). A real button that stops propagation so a
+				     click folds the column instead of starting the header drag. -->
+				<button
+					v-if="onToggleCollapsed"
+					type="button"
+					class="stack-column__collapse-btn"
+					:aria-label="t('kanso', 'Collapse column')"
+					:aria-expanded="!collapsed"
+					:title="t('kanso', 'Collapse column')"
+					@click.stop="handleToggleCollapsed"
+					@pointerdown.stop
+					@keydown.enter.stop>
+					<ChevronLeftIcon :size="18" />
+				</button>
 				<input
 					v-if="editingTitle"
 					ref="titleInputRef"
@@ -154,7 +188,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- Inline card composer at TOP - signature rapid-entry UX -->
-		<div class="card-composer-wrap">
+		<div v-show="!collapsed" class="card-composer-wrap">
 			<form class="card-composer" @submit.prevent="submitCard">
 				<input
 					ref="composerInputRef"
@@ -208,7 +242,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcActions>
 		</div>
-		<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
+		<p v-if="composerError && !collapsed" class="card-composer__error">{{ composerError }}</p>
 
 		<!--
 			Card list - own scrollable element.
@@ -226,7 +260,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				container keeps its height during the 0→1 card transition and the
 				virtualizer never loses its scrollRect.
 			-->
-			<div v-if="cards.length === 0" class="stack-column__empty-placeholder" />
+			<div v-if="cards.length === 0" class="stack-column__empty-placeholder">
+				<span v-if="!collapsed" class="stack-column__empty-hint">
+					{{ t('kanso', 'Drop cards here · press n') }}
+				</span>
+			</div>
 
 			<!--
 				Virtualized list: always in the DOM (no v-if guard) so that the
@@ -255,6 +293,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:labels-by-id="labelsById"
 						:board-prefix="boardPrefix"
 						:lane-key="laneKey"
+						:compact="compact"
 						:selection-mode="selectionMode"
 						:selected="selectedIds.has(cards[vRow.index].id)"
 						@click="openCard(cards[vRow.index].id)"
@@ -281,6 +320,7 @@ import NcActionText from '@nextcloud/vue/components/NcActionText'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
@@ -443,6 +483,35 @@ const props = defineProps({
 		type: Function,
 		default: null,
 	},
+	/**
+	 * Whether this column is collapsed to a narrow rail (#3677). Per-user,
+	 * view-only state owned by BoardView. When true the card list is hidden
+	 * (via v-show + a CSS class — NOT v-if, so the virtualizer and drop targets
+	 * stay mounted and the rail remains a valid drop target).
+	 */
+	collapsed: {
+		type: Boolean,
+		default: false,
+	},
+	/**
+	 * (stackId) → void — toggle this column's collapsed state. When provided a
+	 * collapse/expand button appears in the header; omit to disable collapsing.
+	 */
+	onToggleCollapsed: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Compact density (#3415): a per-user, view-only toggle owned by BoardView.
+	 * Threaded down to each CardTile (which renders denser) and used here to feed
+	 * the virtualizer a smaller pre-measure estimateSize. When it flips, a watch
+	 * re-measures the mounted rows so the size cache doesn't hold stale heights
+	 * (which would jump the scroll position on a long, scrolled stack).
+	 */
+	compact: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 const router = useRouter()
@@ -602,7 +671,10 @@ const virtualizerOptions = computed(() => ({
 	// the computed (and re-run the virtualizer's internal watch on getScrollElement)
 	// when cardListRef changes from null → DOM element after mount.
 	getScrollElement: () => cardListRef.value,
-	estimateSize: () => 90,
+	// Pre-measure estimate only — real heights are measured per-row via
+	// measureElement below. Compact tiles are meaningfully shorter, so seed a
+	// smaller estimate so the first paint doesn't over-allocate slots (#3415).
+	estimateSize: () => (props.compact ? 62 : 90),
 	overscan: 6,
 	gap: 8,
 	// Key the size cache by card id, not index: on a same-length reorder an
@@ -618,6 +690,20 @@ const virtualizer = useVirtualizer(virtualizerOptions)
 // after the virtualizer's internal watch fires).
 watch(cardListRef, (el) => {
 	if (el) virtualizer.value._willUpdate()
+})
+
+// Density flip (#3415): the compact ↔ comfortable toggle changes every tile's
+// height, but the virtualizer caches measured heights by card id — those cached
+// heights are now stale, and estimateSize only governs not-yet-measured rows.
+// Force a full re-measure so the total size + row offsets recompute from the new
+// tile heights; without this a long, scrolled stack keeps the old slot heights
+// until each row re-measures lazily, jumping the scroll position. nextTick lets
+// the CardTiles apply their compact class first so measureElement reads the new
+// height. measure() clears the size cache and re-measures the mounted rows.
+watch(() => props.compact, () => {
+	nextTick(() => {
+		virtualizer.value.measure()
+	})
 })
 
 /**
@@ -725,6 +811,11 @@ async function handleDeleteStack() {
 	} catch {
 		// Parent is responsible for surfacing deletion errors
 	}
+}
+
+/** Toggle this column's collapsed state (#3677). */
+function handleToggleCollapsed() {
+	props.onToggleCollapsed?.(props.stack.id)
 }
 
 defineExpose({ scrollToIndex, focusComposer })
@@ -837,6 +928,117 @@ async function createFromTemplate(templateId) {
 
 .stack-column--dragging {
 	opacity: 0.4;
+}
+
+/* ── Collapsed column / rail (#3677) ──────────────────────────────────────────
+   Collapsed = a narrow rail. The full column body (header, composer, card list)
+   stays mounted so the virtualizer + drop targets survive; it's just hidden/
+   shrunk. The card list keeps a box (so cardListRef remains a valid drop target)
+   but its contents are visually hidden behind the rail overlay. Width animates
+   ≤150ms. */
+.stack-column--collapsed {
+	width: 48px;
+	min-width: 48px;
+	/* Fill the board height so every collapsed rail is the same length,
+	   regardless of how many cards its (hidden) list holds — otherwise a
+	   1-card column collapses to a stub while a full one stays tall. Matches
+	   the expanded column's max-height cap. */
+	height: calc(100vh - 140px);
+	padding: 0;
+	gap: 0;
+	overflow: hidden;
+	cursor: pointer;
+}
+.stack-column--collapsed:hover {
+	background: var(--color-background-hover);
+}
+.stack-column--collapsed .stack-column__cards {
+	/* Keep a sized box for the drop target, but hide the cards behind the rail. */
+	visibility: hidden;
+	overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.stack-column {
+		transition: width 0.15s ease, min-width 0.15s ease;
+	}
+}
+
+/* The rail overlay: a full-height button covering the collapsed column. */
+.stack-column__rail {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 0;
+	border: none;
+	/* No own background/border-radius: the parent .stack-column already draws
+	   the card (bg + border + radius) and clips via overflow:hidden, so a
+	   second rounded rect here just produced mismatched corners. The rail is a
+	   transparent overlay that only holds the chevron/count/title + click. */
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+.stack-column__rail:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+.stack-column__rail-chevron {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+.stack-column__rail-count {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: 10px;
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+/* Vertical (bottom-to-top) column title filling the rail. */
+.stack-column__rail-title {
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	font-weight: 600;
+	font-size: 0.85rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-height: 100%;
+}
+
+/* Collapse toggle button in the expanded header. */
+.stack-column__collapse-btn {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	margin: -2px 0 -2px -4px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.stack-column__collapse-btn:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+.stack-column__collapse-btn:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
 }
 
 /* Stack drop indicators - same visual language as .card-tile__drop-line */
@@ -1050,8 +1252,29 @@ async function createFromTemplate(templateId) {
 }
 
 .stack-column__empty-placeholder {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
 	min-height: 48px;
+	padding: 12px 8px;
 	border-radius: var(--border-radius);
+}
+
+/* Subtle onboarding nudge (#3413): shown only while the stack is empty. Faint
+   so it reads as a placeholder, and it strengthens when the column is a drop
+   target (the parent gets --drop-over). */
+.stack-column__empty-hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8rem;
+	opacity: 0.7;
+	text-align: center;
+	pointer-events: none;
+	user-select: none;
+}
+
+.stack-column__cards--drop-over .stack-column__empty-hint {
+	opacity: 1;
+	color: var(--color-primary-element);
 }
 
 /* Role chip - pushed to the right edge of the header row (mockup 1a). */

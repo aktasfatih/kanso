@@ -242,6 +242,25 @@ class CardController extends Controller {
 	}
 
 	/**
+	 * MOVES the card to $targetStackId on ANOTHER board (#3679): the card is
+	 * re-created on the target board and REMOVED from the source, in one
+	 * transaction. Requires EDIT on BOTH boards. Content, checklist, and
+	 * title/status/dates cross over; labels map by title+color or drop; assignees
+	 * and watchers are KEPT only for uids that can READ the target board (dropped
+	 * otherwise). The KAN-id is re-issued on the target. Returns the full detail
+	 * payload of the moved card. A sort-key overflow surfaces as
+	 * 409 {"error": "rebalance_required"} via ApiErrorTrait.
+	 */
+	#[NoAdminRequired]
+	public function moveToBoard(int $id, int $targetStackId = 0): JSONResponse {
+		return $this->respond(function () use ($id, $targetStackId): JSONResponse {
+			$uid = $this->currentUserId();
+			$card = $this->cardService->moveToBoard($id, $targetStackId, $uid);
+			return new JSONResponse($this->detailPayload($card, $uid));
+		});
+	}
+
+	/**
 	 * Per-board template picker (#3409): summaries of the board's template cards
 	 * (the complement of the live board render, which excludes them). Requires
 	 * READ on the board (same gate as the board payload). Returns a flat list of
