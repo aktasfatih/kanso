@@ -19,64 +19,133 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 		</div>
 
-		<div v-if="scheduled.length === 0" class="timeline__empty">
+		<div v-if="scheduledRows.length === 0" class="timeline__empty">
 			<CalendarBlankOutlineIcon :size="40" />
 			<p>{{ t('kanso', 'No cards have a start or due date yet. Add dates on a card to place it on the timeline.') }}</p>
 		</div>
 
-		<!-- Scrollable timeline: sticky date axis + one lane per scheduled card. -->
-		<div v-else class="timeline__scroll">
-			<div class="timeline__inner" :style="{ width: `${trackWidth}px` }">
-				<!-- Gridlines + axis -->
-				<div class="timeline__axis">
+		<!-- Timeline body: a frozen left pane (id/title/assignee) beside a
+		     horizontally-scrollable track (two-tier axis + bars). Both scroll
+		     vertically together as one flex row; only the track scrolls sideways,
+		     so a bar always stays aligned with its row in the frozen pane. -->
+		<div v-else class="timeline__body">
+			<!-- Frozen left pane -->
+			<div class="timeline__pane">
+				<div class="timeline__pane-head">{{ t('kanso', 'Card') }}</div>
+				<template v-for="grp in groups" :key="`p${grp.stack.id}`">
+					<div class="timeline__group-row">
+						<span
+							class="timeline__group-dot"
+							:style="grp.stack.color ? { background: cssColor(grp.stack.color) } : {}" />
+						<span class="timeline__group-title">{{ grp.stack.title }}</span>
+						<span class="timeline__group-count">{{ grp.rows.length }}</span>
+					</div>
+					<div
+						v-for="row in grp.rows"
+						:key="`p${row.card.id}`"
+						class="timeline__pane-row"
+						role="button"
+						tabindex="0"
+						:title="row.card.title"
+						@click="openCard(row.card.id)"
+						@keydown.enter.prevent="openCard(row.card.id)"
+						@keydown.space.prevent="openCard(row.card.id)">
+						<span
+							class="timeline__pane-status"
+							:class="`timeline__pane-status--${statusOf(row)}`" />
+						<span v-if="cardHumanId(row.card)" class="timeline__pane-id">{{ cardHumanId(row.card) }}</span>
+						<span class="timeline__pane-title">{{ row.card.title }}</span>
+						<span
+							v-if="(row.card.assigneeIds || []).length"
+							class="timeline__pane-assignees">
+							<NcAvatar
+								v-for="uid in (row.card.assigneeIds || []).slice(0, 3)"
+								:key="uid"
+								:user="uid"
+								:size="22"
+								:hide-status="true" />
+						</span>
+					</div>
+				</template>
+			</div>
+
+			<!-- Scrollable track -->
+			<div class="timeline__scroll">
+				<div class="timeline__inner" :style="{ width: `${trackWidth}px` }">
+					<!-- Weekend shading (behind everything) -->
+					<div
+						v-for="wk in weekendBands"
+						:key="`w${wk.x}`"
+						class="timeline__weekend"
+						:style="{ left: `${wk.x}px`, width: `${wk.width}px` }" />
+
+					<!-- Gridlines -->
 					<div
 						v-for="tick in ticks"
-						:key="tick.ms"
-						class="timeline__tick"
-						:style="{ left: `${tick.x}px` }">
-						{{ tick.label }}
-					</div>
-				</div>
-				<div
-					v-for="tick in ticks"
-					:key="`g${tick.ms}`"
-					class="timeline__grid"
-					:style="{ left: `${tick.x}px` }" />
+						:key="`g${tick.ms}`"
+						class="timeline__grid"
+						:style="{ left: `${tick.x}px` }" />
 
-				<!-- Today marker -->
-				<div v-if="todayX !== null" class="timeline__today" :style="{ left: `${todayX}px` }" />
+					<!-- Today marker -->
+					<div v-if="todayX !== null" class="timeline__today" :style="{ left: `${todayX}px` }" />
 
-				<!-- Lanes -->
-				<div
-					v-for="row in scheduled"
-					:key="row.card.id"
-					class="timeline__lane"
-					role="button"
-					tabindex="0"
-					:title="row.card.title"
-					:aria-label="row.card.title"
-					@click="openCard(row.card.id)"
-					@keydown.enter.prevent="openCard(row.card.id)"
-					@keydown.space.prevent="openCard(row.card.id)">
-					<div
-						v-if="row.isMilestone"
-						class="timeline__milestone"
-						:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started }"
-						:style="{ left: `${row.left}px` }">
-						<span class="timeline__label timeline__label--after">{{ row.card.title }}</span>
-					</div>
-					<template v-else>
-						<div
-							class="timeline__bar"
-							:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
-							:style="{ left: `${row.left}px`, width: `${row.width}px` }">
-							<span v-if="row.labelInside" class="timeline__label">{{ row.card.title }}</span>
+					<!-- Two-tier axis: months over weeks/days -->
+					<div class="timeline__axis">
+						<div class="timeline__axis-months">
+							<div
+								v-for="m in monthTicks"
+								:key="`m${m.ms}`"
+								class="timeline__axis-month"
+								:style="{ left: `${m.x}px`, width: `${m.width}px` }">
+								{{ m.label }}
+							</div>
 						</div>
-						<!-- Short bars can't hold a legible label; render it beside the bar instead. -->
-						<span
-							v-if="!row.labelInside"
-							class="timeline__bar-outside-label"
-							:style="{ left: `${row.left + row.width + 6}px` }">{{ row.card.title }}</span>
+						<div class="timeline__axis-ticks">
+							<div
+								v-for="tick in ticks"
+								:key="`t${tick.ms}`"
+								class="timeline__tick"
+								:style="{ left: `${tick.x}px` }">
+								{{ tick.label }}
+							</div>
+						</div>
+					</div>
+
+					<!-- Rows, grouped by stack: a group header row then its card rows,
+					     mirroring the frozen pane 1:1 for vertical alignment. -->
+					<template v-for="grp in groups" :key="`t${grp.stack.id}`">
+						<div class="timeline__group-track" />
+						<div
+							v-for="row in grp.rows"
+							:key="`t${row.card.id}`"
+							class="timeline__lane"
+							role="button"
+							tabindex="0"
+							:title="row.card.title"
+							:aria-label="row.card.title"
+							@click="openCard(row.card.id)"
+							@keydown.enter.prevent="openCard(row.card.id)"
+							@keydown.space.prevent="openCard(row.card.id)">
+							<div
+								v-if="row.isMilestone"
+								class="timeline__milestone"
+								:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
+								:style="{ left: `${row.left}px` }">
+								<span class="timeline__label timeline__label--after">{{ row.card.title }}</span>
+							</div>
+							<template v-else>
+								<div
+									class="timeline__bar"
+									:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
+									:style="{ left: `${row.left}px`, width: `${row.width}px` }">
+									<span v-if="row.labelInside" class="timeline__label">{{ row.card.title }}</span>
+								</div>
+								<span
+									v-if="!row.labelInside"
+									class="timeline__bar-outside-label"
+									:style="{ left: `${row.left + row.width + 6}px` }">{{ row.card.title }}</span>
+							</template>
+						</div>
 					</template>
 				</div>
 			</div>
@@ -98,11 +167,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
+import { cssColor } from '../services/color.js'
+import { humanId } from '../services/humanId.js'
 
 const props = defineProps({
 	/** Filtered, non-archived cards (start_date/duedate carried in the summary). */
 	cards: { type: Array, default: () => [] },
+	/** Non-archived stacks in display order (for group headers + row grouping). */
+	stacks: { type: Array, default: () => [] },
+	/** Map<stackId, card[]> from BoardView - same source the List view groups on. */
+	cardsByStack: { type: Object, default: null },
+	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq. */
+	boardPrefix: { type: String, default: '' },
 	boardId: { type: [String, Number], required: true },
 })
 
@@ -153,36 +231,57 @@ function dayFloor(value) {
 	return d.getTime()
 }
 
-// Split into scheduled (has a start and/or due) and unscheduled.
-const scheduledRaw = computed(() => {
-	const out = []
+/** Layout metrics for one card: its ms range + done/started state, or null when unscheduled. */
+function layoutOf(card) {
+	const start = dayFloor(card.startDate)
+	const due = dayFloor(card.duedate)
+	if (start === null && due === null) return null
+	const s = start ?? due
+	const e = due ?? start
+	const done = Number(card.doneAt) > 0
+	return { card, startMs: Math.min(s, e), endMs: Math.max(s, e), done, started: !done && Number(card.startedAt) > 0 }
+}
+
+// Group cards by stack (using the same Map BoardView feeds the List view), keeping
+// stack display order. Each group carries only its scheduled rows; unscheduled
+// cards are collected separately for the footer. Falls back to the flat `cards`
+// prop (single synthetic group) when no stack grouping is supplied.
+const grouped = computed(() => {
+	const groupsOut = []
 	const unsched = []
-	for (const card of props.cards) {
-		const start = dayFloor(card.startDate)
-		const due = dayFloor(card.duedate)
-		if (start === null && due === null) {
-			unsched.push(card)
-			continue
+	if (props.stacks.length && props.cardsByStack) {
+		for (const stack of props.stacks) {
+			const cards = props.cardsByStack.get(stack.id) ?? []
+			const rows = []
+			for (const card of cards) {
+				const l = layoutOf(card)
+				if (l === null) unsched.push(card)
+				else rows.push(l)
+			}
+			if (rows.length) groupsOut.push({ stack, rows })
 		}
-		// A range needs both ends; otherwise it's a single-day milestone.
-		const s = start ?? due
-		const e = due ?? start
-		const done = Number(card.doneAt) > 0
-		out.push({ card, startMs: Math.min(s, e), endMs: Math.max(s, e), done, started: !done && Number(card.startedAt) > 0 })
+	} else {
+		const rows = []
+		for (const card of props.cards) {
+			const l = layoutOf(card)
+			if (l === null) unsched.push(card)
+			else rows.push(l)
+		}
+		if (rows.length) groupsOut.push({ stack: { id: 0, title: t('kanso', 'Cards'), color: null }, rows })
 	}
-	out.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs)
-	return { scheduled: out, unscheduled: unsched }
+	return { groups: groupsOut, unscheduled: unsched }
 })
 
-const unscheduled = computed(() => scheduledRaw.value.unscheduled)
+const scheduledRows = computed(() => grouped.value.groups.flatMap((g) => g.rows))
+const unscheduled = computed(() => grouped.value.unscheduled)
 
 const axisStart = computed(() => {
-	const items = scheduledRaw.value.scheduled
+	const items = scheduledRows.value
 	if (items.length === 0) return null
 	return items.reduce((min, r) => Math.min(min, r.startMs), Infinity)
 })
 const axisEnd = computed(() => {
-	const items = scheduledRaw.value.scheduled
+	const items = scheduledRows.value
 	if (items.length === 0) return null
 	return items.reduce((max, r) => Math.max(max, r.endMs), -Infinity)
 })
@@ -198,16 +297,20 @@ function xForMs(ms) {
 	return LEFT_PAD + Math.round((ms - axisStart.value) / DAY) * pxPerDay.value
 }
 
-const scheduled = computed(() => {
+// Per-group with computed bar geometry, ready to render row-for-row against the pane.
+const groups = computed(() => {
 	if (axisStart.value === null) return []
-	return scheduledRaw.value.scheduled.map((r) => {
-		const left = xForMs(r.startMs)
-		const isMilestone = r.startMs === r.endMs
-		const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
-		const overdue = !r.done && r.endMs < now.value
-		const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
-		return { ...r, left, width, isMilestone, overdue, labelInside }
-	})
+	return grouped.value.groups.map((g) => ({
+		stack: g.stack,
+		rows: g.rows.map((r) => {
+			const left = xForMs(r.startMs)
+			const isMilestone = r.startMs === r.endMs
+			const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
+			const overdue = !r.done && r.endMs < now.value
+			const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
+			return { ...r, left, width, isMilestone, overdue, labelInside }
+		}),
+	}))
 })
 
 const ticks = computed(() => {
@@ -217,6 +320,50 @@ const ticks = computed(() => {
 	for (let day = 0; day < totalDays.value; day += step) {
 		const ms = axisStart.value + day * DAY
 		out.push({ ms, x: LEFT_PAD + day * pxPerDay.value, label: labelForMs(ms) })
+	}
+	return out
+})
+
+// Top axis tier: one band per calendar month spanned by the range, sized to its
+// visible slice of the track.
+const monthTicks = computed(() => {
+	if (axisStart.value === null) return []
+	const out = []
+	const end = axisEnd.value
+	let cursor = new Date(axisStart.value)
+	cursor.setDate(1)
+	cursor.setHours(0, 0, 0, 0)
+	while (cursor.getTime() <= end) {
+		const monthStart = cursor.getTime()
+		const next = new Date(cursor)
+		next.setMonth(next.getMonth() + 1)
+		const monthEnd = next.getTime() - DAY
+		const from = Math.max(monthStart, axisStart.value)
+		const to = Math.min(monthEnd, end)
+		const x = xForMs(from)
+		const width = xForMs(to) - x + pxPerDay.value
+		out.push({
+			ms: monthStart,
+			x,
+			width,
+			label: new Date(monthStart).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+		})
+		cursor = next
+	}
+	return out
+})
+
+// Weekend day columns (Sat/Sun) shaded in the track background. Day zoom paints
+// each weekend day; coarser zooms would produce hairlines, so it's day-zoom only.
+const weekendBands = computed(() => {
+	if (axisStart.value === null || zoom.value !== 'day') return []
+	const out = []
+	for (let day = 0; day < totalDays.value; day++) {
+		const d = new Date(axisStart.value + day * DAY)
+		const dow = d.getDay()
+		if (dow === 0 || dow === 6) {
+			out.push({ x: LEFT_PAD + day * pxPerDay.value, width: pxPerDay.value })
+		}
 	}
 	return out
 })
@@ -232,6 +379,16 @@ function labelForMs(ms) {
 	const d = new Date(ms)
 	if (zoom.value === 'month') return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
 	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function statusOf(row) {
+	if (row.done) return 'done'
+	if (row.started) return 'in_progress'
+	return 'not_started'
+}
+
+function cardHumanId(card) {
+	return humanId(props.boardPrefix, card.boardSeq)
 }
 
 function openCard(cardId) {
@@ -298,53 +455,179 @@ function openCard(cardId) {
 	max-width: 420px;
 }
 
-.timeline__scroll {
+/* Body = frozen pane + scrollable track, scrolling vertically as one unit. */
+.timeline__body {
 	flex: 1;
 	min-height: 0;
-	overflow: auto;
+	display: flex;
+	align-items: stretch;
+	overflow-y: auto;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, var(--border-radius));
+}
+
+/* ── Frozen left pane ── */
+.timeline__pane {
+	flex: 0 0 300px;
+	width: 300px;
+	box-sizing: border-box;
+	border-right: 1px solid var(--color-border-dark);
+	position: sticky;
+	left: 0;
+	z-index: 4;
+	background: var(--color-main-background);
+}
+
+.timeline__pane-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	height: 52px;
+	display: flex;
+	align-items: flex-end;
+	padding: 0 16px 8px;
+	box-sizing: border-box;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--color-text-maxcontrast);
+	background: var(--color-main-background);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.timeline__group-row {
+	height: 32px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 16px;
+	box-sizing: border-box;
+	background: var(--color-background-hover);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.timeline__group-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--color-primary-element);
+	flex: 0 0 auto;
+}
+
+.timeline__group-title {
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.timeline__group-count {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	flex: 0 0 auto;
+}
+
+.timeline__pane-row {
+	height: 36px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 16px;
+	box-sizing: border-box;
+	border-bottom: 1px solid var(--color-border);
+	cursor: pointer;
+}
+
+.timeline__pane-row:hover {
+	background: var(--color-background-hover);
+}
+
+.timeline__pane-status {
+	flex: 0 0 auto;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border-dark);
+	box-sizing: border-box;
+}
+
+.timeline__pane-status--not_started { background: transparent; }
+.timeline__pane-status--in_progress { background: var(--color-primary-element); border-color: var(--color-primary-element); }
+.timeline__pane-status--done { background: var(--color-success, #2fb344); border-color: var(--color-success, #2fb344); }
+
+.timeline__pane-id {
+	flex: 0 0 auto;
+	width: 62px;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.timeline__pane-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.8rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.timeline__pane-assignees {
+	display: inline-flex;
+	flex: 0 0 auto;
+}
+
+.timeline__pane-assignees > * + * {
+	margin-inline-start: -8px;
+}
+
+/* ── Scrollable track ── */
+.timeline__scroll {
+	flex: 1;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
 }
 
 .timeline__inner {
 	position: relative;
-	padding-top: 28px;
 	min-height: 100%;
 }
 
-.timeline__axis {
-	position: sticky;
-	top: 0;
-	height: 28px;
-	z-index: 2;
-}
-
-.timeline__tick {
+.timeline__weekend {
 	position: absolute;
-	top: 0;
-	transform: translateX(-50%);
-	font-size: 0.72rem;
-	color: var(--color-text-maxcontrast);
-	white-space: nowrap;
-	background: var(--color-main-background);
-	padding: 0 3px;
+	top: 52px;
+	bottom: 0;
+	background: var(--color-background-hover);
+	z-index: 0;
 }
 
 .timeline__grid {
 	position: absolute;
-	top: 28px;
+	top: 52px;
 	bottom: 0;
 	width: 1px;
 	background: var(--color-border);
 	opacity: 0.5;
+	z-index: 0;
 }
 
 .timeline__today {
 	position: absolute;
-	top: 28px;
+	top: 48px;
 	bottom: 0;
 	width: 2px;
 	background: var(--color-error);
 	opacity: 0.7;
-	z-index: 1;
+	z-index: 3;
 }
 
 /* A small cap at the top of the today line makes it read as a clear marker. */
@@ -360,10 +643,66 @@ function openCard(cardId) {
 	background: var(--color-error);
 }
 
+/* ── Two-tier axis ── */
+.timeline__axis {
+	position: sticky;
+	top: 0;
+	height: 52px;
+	z-index: 2;
+	background: var(--color-main-background);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.timeline__axis-months {
+	position: relative;
+	height: 24px;
+}
+
+.timeline__axis-month {
+	position: absolute;
+	top: 0;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	padding-left: 8px;
+	box-sizing: border-box;
+	border-right: 1px solid var(--color-border);
+	font-size: 0.75rem;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.timeline__axis-ticks {
+	position: relative;
+	height: 28px;
+}
+
+.timeline__tick {
+	position: absolute;
+	top: 6px;
+	font-size: 0.72rem;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	padding-left: 6px;
+}
+
+/* ── Rows ── */
+.timeline__group-track {
+	position: relative;
+	height: 32px;
+	background: color-mix(in srgb, var(--color-background-hover) 70%, transparent);
+	border-bottom: 1px solid var(--color-border);
+	z-index: 1;
+}
+
 .timeline__lane {
 	position: relative;
-	height: 34px;
+	height: 36px;
+	box-sizing: border-box;
+	border-bottom: 1px solid var(--color-border);
 	cursor: pointer;
+	z-index: 1;
 }
 
 .timeline__lane:hover .timeline__bar,
@@ -373,7 +712,7 @@ function openCard(cardId) {
 
 .timeline__bar {
 	position: absolute;
-	top: 5px;
+	top: 6px;
 	height: 24px;
 	border-radius: 6px;
 	/* Default = scheduled but not started (muted). */
@@ -403,7 +742,7 @@ function openCard(cardId) {
 
 .timeline__milestone {
 	position: absolute;
-	top: 9px;
+	top: 10px;
 	width: 16px;
 	height: 16px;
 	transform: translateX(-8px) rotate(45deg);
@@ -417,6 +756,10 @@ function openCard(cardId) {
 
 .timeline__milestone.timeline__bar--done {
 	background: var(--color-success);
+}
+
+.timeline__milestone.timeline__bar--overdue {
+	background: var(--color-error);
 }
 
 .timeline__label {

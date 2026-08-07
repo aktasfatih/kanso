@@ -76,6 +76,14 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page.locator('.timeline__unscheduled summary')).toContainText('unscheduled')
 		await expect(page.locator('.timeline__unscheduled')).toContainText('Someday task')
 
+		// 2a: the frozen left pane lists each scheduled card by id/title beside a
+		// stack group-header row, aligned with its bar on the right (#3623).
+		await expect(page.locator('.timeline__pane-head')).toBeVisible()
+		await expect(page.locator('.timeline__group-row')).toContainText('To do')
+		await expect(page.locator('.timeline__pane-row', { hasText: 'Ranged task' })).toBeVisible()
+		// Two-tier axis: a month band sits over the week/day ticks.
+		await expect(page.locator('.timeline__axis-month').first()).toBeVisible()
+
 		// Clicking a lane opens the card modal (dispatchEvent avoids a race with
 		// the board poll re-render).
 		await page.locator('.timeline__lane', { hasText: 'Ranged task' }).dispatchEvent('click')

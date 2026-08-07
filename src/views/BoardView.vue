@@ -361,6 +361,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<BoardTimelineView
 			v-if="viewMode === 'timeline' && boardData"
 			:cards="allVisibleCards"
+			:stacks="sortedStacks"
+			:cards-by-stack="cardsByStack"
+			:board-prefix="boardData?.board?.prefix ?? ''"
 			:board-id="props.id" />
 
 		<!-- Keyboard shortcuts overlay -->
