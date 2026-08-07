@@ -55,7 +55,9 @@ class PrimaryKeyNameLengthTest extends TestCase {
 
 			$currentTable = null;
 			foreach ($matches as $m) {
-				$isCreateTable = $m[1] !== '';
+				// A setPrimaryKey(['id']) (no explicit name) match populates neither
+				// capture group, so group 1 is absent — coalesce before comparing.
+				$isCreateTable = ($m[1] ?? '') !== '';
 				if ($isCreateTable) {
 					$currentTable = $m[1];
 					continue;
