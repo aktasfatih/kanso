@@ -84,6 +84,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
+			<!-- Compact density toggle (#3415) — a per-user, view-only switch that
+			     tightens every card tile so more cards fit on screen. Persisted per
+			     board per user. A pressed icon button sits with the other view
+			     controls; aria-pressed reflects the state for assistive tech. -->
+			<NcButton
+				v-if="boardData"
+				class="board-view__density-toggle"
+				type="tertiary"
+				:pressed="isCompact"
+				:aria-pressed="isCompact ? 'true' : 'false'"
+				:aria-label="isCompact ? t('kanso', 'Switch to comfortable density') : t('kanso', 'Switch to compact density')"
+				:title="isCompact ? t('kanso', 'Comfortable density') : t('kanso', 'Compact density')"
+				@click="toggleDensity">
+				<template #icon>
+					<ViewCompactIcon v-if="isCompact" :size="20" />
+					<ViewAgendaIcon v-else :size="20" />
+				</template>
+			</NcButton>
+
 			<!-- Composable filter bar (#3407) — labels / assignees / due / done /
 			     priority, AND across dimensions & OR within, plus saved named views
 			     (per-user NC config) and URL-query sharing. Generalizes the old
@@ -312,7 +331,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:selected-ids="bulk.selected.value"
 					:on-card-select="handleCardSelect"
 					:collapsed="isStackCollapsed(stack.id)"
-					:on-toggle-collapsed="toggleStackCollapsed" />
+					:on-toggle-collapsed="toggleStackCollapsed"
+					:compact="isCompact" />
 
 				<!-- Add stack inline input -->
 				<div class="add-stack">
@@ -349,7 +369,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:collapsed-stacks="collapsedStacks"
-					:on-toggle-collapsed="toggleStackCollapsed" />
+					:on-toggle-collapsed="toggleStackCollapsed"
+					:compact="isCompact" />
 				<p v-if="lanes.length === 0" class="board-view__swimlanes-empty">
 					{{ t('kanso', 'No cards to group.') }}
 				</p>
@@ -493,6 +514,8 @@ import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import SortIcon from 'vue-material-design-icons/Sort.vue'
+import ViewCompactIcon from 'vue-material-design-icons/ViewCompact.vue'
+import ViewAgendaIcon from 'vue-material-design-icons/ViewAgenda.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
@@ -608,6 +631,35 @@ function setSwimlaneMode(mode) {
 		localStorage.setItem(`kanso.swimlaneMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
 }
+
+// Compact density (#3415): a per-user, view-only boolean that tightens every
+// card tile (smaller padding, single-line title, smaller chips) so more cards
+// fit on screen. Purely presentational — no card-data / board-schema change.
+// Persisted per board per user, mirroring viewMode / sortMode / swimlaneMode.
+// Threaded down to StackColumn (which feeds the virtualizer a smaller estimate
+// and re-measures on flip) → CardTile.
+const density = ref('comfortable')
+try {
+	const saved = localStorage.getItem(`kanso.density.${props.id}`)
+	if (saved === 'compact' || saved === 'comfortable') density.value = saved
+} catch (e) { /* default to comfortable */ }
+const isCompact = computed(() => density.value === 'compact')
+function setDensity(mode) {
+	density.value = mode
+	try {
+		localStorage.setItem(`kanso.density.${props.id}`, mode)
+	} catch (e) { /* ignore persistence failure */ }
+}
+function toggleDensity() {
+	setDensity(isCompact.value ? 'comfortable' : 'compact')
+}
+// Reload persisted density when the board changes (component is reused).
+watch(() => props.id, () => {
+	try {
+		const saved = localStorage.getItem(`kanso.density.${props.id}`)
+		density.value = (saved === 'compact' || saved === 'comfortable') ? saved : 'comfortable'
+	} catch (e) { density.value = 'comfortable' }
+})
 
 // Per-user collapsed columns (#3677). A collapsed stack renders as a narrow
 // rail (title + card count) instead of its full card list. Purely presentational
@@ -1715,6 +1767,11 @@ const onBulkDelete = () => runBulkAction('delete', {})
 /* Search box - pushed to the right edge of the title area via margin-left: auto */
 .board-view__search {
 	margin-left: auto;
+	flex-shrink: 0;
+}
+
+/* Compact density toggle (#3415) — an icon button among the view controls. */
+.board-view__density-toggle {
 	flex-shrink: 0;
 }
 

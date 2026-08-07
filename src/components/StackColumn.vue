@@ -289,6 +289,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:labels-by-id="labelsById"
 						:board-prefix="boardPrefix"
 						:lane-key="laneKey"
+						:compact="compact"
 						:selection-mode="selectionMode"
 						:selected="selectedIds.has(cards[vRow.index].id)"
 						@click="openCard(cards[vRow.index].id)"
@@ -496,6 +497,17 @@ const props = defineProps({
 		type: Function,
 		default: null,
 	},
+	/**
+	 * Compact density (#3415): a per-user, view-only toggle owned by BoardView.
+	 * Threaded down to each CardTile (which renders denser) and used here to feed
+	 * the virtualizer a smaller pre-measure estimateSize. When it flips, a watch
+	 * re-measures the mounted rows so the size cache doesn't hold stale heights
+	 * (which would jump the scroll position on a long, scrolled stack).
+	 */
+	compact: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 const router = useRouter()
@@ -655,7 +667,10 @@ const virtualizerOptions = computed(() => ({
 	// the computed (and re-run the virtualizer's internal watch on getScrollElement)
 	// when cardListRef changes from null → DOM element after mount.
 	getScrollElement: () => cardListRef.value,
-	estimateSize: () => 90,
+	// Pre-measure estimate only — real heights are measured per-row via
+	// measureElement below. Compact tiles are meaningfully shorter, so seed a
+	// smaller estimate so the first paint doesn't over-allocate slots (#3415).
+	estimateSize: () => (props.compact ? 62 : 90),
 	overscan: 6,
 	gap: 8,
 	// Key the size cache by card id, not index: on a same-length reorder an
@@ -671,6 +686,20 @@ const virtualizer = useVirtualizer(virtualizerOptions)
 // after the virtualizer's internal watch fires).
 watch(cardListRef, (el) => {
 	if (el) virtualizer.value._willUpdate()
+})
+
+// Density flip (#3415): the compact ↔ comfortable toggle changes every tile's
+// height, but the virtualizer caches measured heights by card id — those cached
+// heights are now stale, and estimateSize only governs not-yet-measured rows.
+// Force a full re-measure so the total size + row offsets recompute from the new
+// tile heights; without this a long, scrolled stack keeps the old slot heights
+// until each row re-measures lazily, jumping the scroll position. nextTick lets
+// the CardTiles apply their compact class first so measureElement reads the new
+// height. measure() clears the size cache and re-measures the mounted rows.
+watch(() => props.compact, () => {
+	nextTick(() => {
+		virtualizer.value.measure()
+	})
 })
 
 /**

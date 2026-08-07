@@ -280,3 +280,24 @@ const { tasksCount, reviewsCount, inboxCount } = useMyWorkBadges()
 	font-style: italic;
 }
 </style>
+
+<!--
+	App-wide reduced-motion guard (#3415). A single global rule (deliberately
+	UNSCOPED) that respects the OS "reduce motion" setting across the whole Kanso
+	app at once: it neutralizes every transition, animation (incl. the shimmer
+	skeletons), and smooth-scroll. This is the canonical place for the app's
+	motion policy — a later a11y card references it, so it is kept clean and
+	global rather than per-component. Individual components no longer need their
+	own reduced-motion guards.
+-->
+<style>
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::before,
+	::after {
+		transition-duration: 0.01ms !important;
+		animation: none !important;
+		scroll-behavior: auto !important;
+	}
+}
+</style>

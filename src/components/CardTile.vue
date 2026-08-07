@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<button
 			ref="el"
 			class="card-tile"
-			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected }"
+			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact }"
 			:data-card-id="card.id"
 			@click="onTileClick"
 			@mouseenter="$emit('hover', card.id)"
@@ -146,7 +146,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						v-for="uid in visibleAssigneeIds"
 						:key="uid"
 						:user="uid"
-						:size="24"
+						:size="compact ? 20 : 24"
 						:hide-status="true"
 						:disable-tooltip="false"
 						class="card-tile__avatar" />
@@ -223,6 +223,15 @@ const props = defineProps({
 	},
 	/** Whether this tile is currently in the multi-select selection. */
 	selected: {
+		type: Boolean,
+		default: false,
+	},
+	/**
+	 * Compact density (#3415): a per-user, view-only toggle that tightens the
+	 * tile — smaller padding, a single-line title, smaller chips — so more cards
+	 * fit on screen. Purely presentational; no card-data change.
+	 */
+	compact: {
 		type: Boolean,
 		default: false,
 	},
@@ -435,7 +444,11 @@ const extraAssigneeCount = computed(() => {
 	overflow: hidden;
 }
 
-/* Meta row - all badges on a single flex line; assignees pushed right */
+/* Meta row - all badges on a single flex line; assignees pushed right.
+ * A min-height reserves the row's vertical space so late-loading chips /
+ * avatars (which render after the summary paint) don't shift the tile height
+ * and jolt the virtualizer's measured rows (#3415). 24px == the avatar height,
+ * the tallest inline meta item. */
 .card-tile__meta {
 	display: flex;
 	flex-wrap: wrap;
@@ -443,6 +456,7 @@ const extraAssigneeCount = computed(() => {
 	gap: 4px;
 	width: 100%;
 	margin-top: 2px;
+	min-height: 24px;
 }
 
 .card-tile__inprogress {
@@ -728,5 +742,71 @@ const extraAssigneeCount = computed(() => {
 	font-size: 0.65rem;
 	font-weight: 700;
 	margin-left: -6px;
+}
+
+/* ── Compact density (#3415) ───────────────────────────────────────────────────
+ * A per-user, view-only toggle that tightens every tile so more cards fit on
+ * screen: less padding, a single-line title, a shorter meta row, and smaller
+ * chips / avatars. Purely presentational — the tile keeps every badge, it just
+ * renders denser. The compact tile is measurably shorter, so StackColumn feeds
+ * the virtualizer a smaller estimateSize and forces a re-measure when density
+ * flips (see StackColumn.vue). */
+.card-tile--compact {
+	gap: 3px;
+	padding: 6px 8px;
+}
+
+.card-tile--compact .card-tile__cover {
+	height: 5px;
+	width: calc(100% + 16px);
+	margin: -6px -8px 1px;
+}
+
+.card-tile--compact .card-tile__title {
+	font-size: 0.83rem;
+	line-height: 1.3;
+	-webkit-line-clamp: 1;
+}
+
+.card-tile--compact .card-tile__labels {
+	margin-bottom: 0;
+}
+
+/* Compact chips read one tick smaller with tighter padding. */
+.card-tile--compact .card-tile__label-chip {
+	font-size: 0.66rem;
+	padding: 2px 6px;
+}
+
+/* A shorter reserved meta row in compact mode; still tall enough for the
+ * (smaller) avatars so late-loading chips don't shift the row. */
+.card-tile--compact .card-tile__meta {
+	margin-top: 0;
+	min-height: 20px;
+}
+
+.card-tile--compact .card-tile__due,
+.card-tile--compact .card-tile__checklist,
+.card-tile--compact .card-tile__children,
+.card-tile--compact .card-tile__comments,
+.card-tile--compact .card-tile__priority,
+.card-tile--compact .card-tile__estimate,
+.card-tile--compact .card-tile__review,
+.card-tile--compact .card-tile__inprogress,
+.card-tile--compact .card-tile__blocked {
+	font-size: 0.68rem;
+	padding: 0 5px;
+}
+
+.card-tile--compact .card-tile__ref {
+	font-size: 0.64rem;
+}
+
+/* Smaller overflow badge to match the 20px compact avatars (NcAvatar itself is
+ * sized via its :size prop above). */
+.card-tile--compact .card-tile__avatar-overflow {
+	width: 20px;
+	height: 20px;
+	font-size: 0.6rem;
 }
 </style>

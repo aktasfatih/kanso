@@ -28,6 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:labels-by-id="labelsById"
 				:board-prefix="boardPrefix"
 				:lane-key="lane.key"
+				:compact="compact"
 				:on-create-card="onCreateCard"
 				:on-card-focus="onCardFocus"
 				:on-card-hover="onCardHover"
@@ -92,6 +93,11 @@ const props = defineProps({
 	onToggleCollapsed: {
 		type: Function,
 		default: null,
+	},
+	/** Compact density (#3415) — threaded down to each lane's StackColumn → CardTile. */
+	compact: {
+		type: Boolean,
+		default: false,
 	},
 })
 
