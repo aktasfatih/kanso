@@ -46,7 +46,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue(['default_board' => '42']);
 
 		self::assertSame(
-			['defaultBoardId' => 42, 'collapsedBoardGroups' => []],
+			['defaultBoardId' => 42, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
 			$this->controller->index()->getData()
 		);
 	}
@@ -55,7 +55,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue([]);
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
 			$this->controller->index()->getData()
 		);
 	}
@@ -68,7 +68,7 @@ class SettingsControllerTest extends TestCase {
 
 		// Deduped and int-cast.
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7]],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7], 'dismissedHints' => []],
 			$this->controller->index()->getData()
 		);
 	}
@@ -80,7 +80,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '7');
 
 		self::assertSame(
-			['defaultBoardId' => 7, 'collapsedBoardGroups' => []],
+			['defaultBoardId' => 7, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
 			$this->controller->update(7)->getData()
 		);
 	}
@@ -92,7 +92,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
 			$this->controller->update(null)->getData()
 		);
 	}
@@ -104,7 +104,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
 			$this->controller->update(0)->getData()
 		);
 	}
@@ -135,5 +135,33 @@ class SettingsControllerTest extends TestCase {
 
 		$result = $this->controller->update(3)->getData();
 		self::assertSame([1, 2], $result['collapsedBoardGroups']);
+	}
+
+	public function testUpdatePersistsDismissedHints(): void {
+		$stored = [];
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
+				return $stored[$key] ?? $default;
+			});
+		$this->config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
+				$stored[$key] = $value;
+			});
+
+		// Dupes are collapsed and malformed/invalid ids are dropped by the shape guard.
+		$result = $this->controller->update(null, null, ['shortcuts', 'shortcuts', 'BAD ID', 'starter-board'])->getData();
+		self::assertSame(['shortcuts', 'starter-board'], $result['dismissedHints']);
+		self::assertSame('["shortcuts","starter-board"]', $stored['dismissed_hints']);
+	}
+
+	public function testUpdateLeavesDismissedHintsUntouchedWhenOmitted(): void {
+		$this->stubGetUserValue(['dismissed_hints' => '["shortcuts"]']);
+		// Only the default_board key is written; dismissed hints are not touched.
+		$this->config->expects(self::once())
+			->method('setUserValue')
+			->with('alice', 'kanso', 'default_board', '3');
+
+		$result = $this->controller->update(3)->getData();
+		self::assertSame(['shortcuts'], $result['dismissedHints']);
 	}
 }
