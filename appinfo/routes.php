@@ -121,6 +121,7 @@ return [
 		['name' => 'card#destroy', 'url' => '/api/cards/{id}', 'verb' => 'DELETE'],
 		['name' => 'card#move', 'url' => '/api/cards/{id}/move', 'verb' => 'POST'],
 		['name' => 'card#copy', 'url' => '/api/cards/{id}/copy', 'verb' => 'POST'],
+		['name' => 'card#moveToBoard', 'url' => '/api/cards/{id}/move-to-board', 'verb' => 'POST'],
 		// Per-board card templates (#3409). Flag/unflag a card as a template
 		// (EDIT-gated), and create a new live card pre-filled from a template.
 		['name' => 'card#setTemplate', 'url' => '/api/cards/{id}/template', 'verb' => 'PUT'],

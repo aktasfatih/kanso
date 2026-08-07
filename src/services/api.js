@@ -76,6 +76,9 @@ export const moveCard = (id, data) =>
 export const copyCard = (id, targetStackId) =>
 	axios.post(url(`/api/cards/${id}/copy`), { targetStackId }).then((r) => r.data)
 
+export const moveCardToBoard = (id, targetStackId) =>
+	axios.post(url(`/api/cards/${id}/move-to-board`), { targetStackId }).then((r) => r.data)
+
 // Per-board card templates (#3409). A template is an ordinary card flagged as a
 // reusable content blueprint for its own board; it is excluded from the live
 // board render and offered in a small picker.

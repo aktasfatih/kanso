@@ -330,6 +330,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<NcActionButton
 								v-if="canEdit"
 								:close-after-click="true"
+								@click="openMoveToBoardDialog">
+								<template #icon>
+									<TransferIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Move to board…') }}
+							</NcActionButton>
+							<NcActionButton
+								v-if="canEdit"
+								:close-after-click="true"
 								:disabled="templatePending"
 								@click="handleTemplateToggle">
 								<template #icon>
@@ -1761,16 +1770,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 	</NcModal>
 
-	<!-- Copy to… : pick a target board + stack (same or another board the user can edit). -->
+	<!-- Copy to… / Move to board… : pick a target board + stack (a board the user can edit). -->
 	<NcModal
 		v-if="showCopyDialog"
 		size="small"
-		:name="t('kanso', 'Copy card to…')"
+		:name="copyDialogIsMove ? t('kanso', 'Move card to board…') : t('kanso', 'Copy card to…')"
 		@close="showCopyDialog = false">
 		<div class="card-modal__copy-dialog">
-			<h2 class="card-modal__copy-title">{{ t('kanso', 'Copy card to…') }}</h2>
+			<h2 class="card-modal__copy-title">{{ copyDialogIsMove ? t('kanso', 'Move card to board…') : t('kanso', 'Copy card to…') }}</h2>
 			<p class="card-modal__copy-hint">
-				{{ t('kanso', 'Duplicates the title, description, labels, checklist, estimate, priority and status. Comments, activity and assignees are not copied.') }}
+				{{ copyDialogIsMove
+					? t('kanso', 'Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board.')
+					: t('kanso', 'Duplicates the title, description, labels, checklist, estimate, priority and status. Comments, activity and assignees are not copied.') }}
 			</p>
 			<label class="card-modal__copy-field">
 				<span class="card-modal__copy-label">{{ t('kanso', 'Board') }}</span>
@@ -1796,8 +1807,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcButton
 					type="primary"
 					:disabled="copyPending || !copyTargetStackId"
-					@click="confirmCopy">
-					{{ copyPending ? t('kanso', 'Copying…') : t('kanso', 'Copy') }}
+					@click="copyDialogIsMove ? confirmMoveToBoard() : confirmCopy()">
+					{{ copyDialogIsMove
+						? (copyPending ? t('kanso', 'Moving…') : t('kanso', 'Move'))
+						: (copyPending ? t('kanso', 'Copying…') : t('kanso', 'Copy')) }}
 				</NcButton>
 			</div>
 		</div>
@@ -1824,6 +1837,7 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
+import TransferIcon from 'vue-material-design-icons/Transfer.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
@@ -1899,7 +1913,7 @@ import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
@@ -3138,8 +3152,12 @@ async function copyAsPrompt() {
 	}
 }
 
-// ── Copy to… (duplicate card into a target board/stack) ──────────────────────
+// ── Copy to… / Move to board… (relocate card into a target board/stack) ──────
+// The same picker UI serves both: 'copy' duplicates the card, 'move' relocates
+// it (server-side single-card cross-board move, #3679).
 const showCopyDialog = ref(false)
+const copyDialogMode = ref('copy')
+const copyDialogIsMove = computed(() => copyDialogMode.value === 'move')
 const copyTargetBoardId = ref(null)
 const copyTargetStackId = ref('')
 const copyStackOptions = ref([])
@@ -3147,11 +3165,15 @@ const copyStacksLoading = ref(false)
 const copyPending = ref(false)
 const copyError = ref('')
 
-// All boards the user can see - the picker offers every board; a copy into one
-// the user cannot EDIT is rejected server-side and surfaced as copyError.
+// All boards the user can see - the picker offers every board; a copy/move into
+// one the user cannot EDIT is rejected server-side and surfaced as copyError.
+// Move mode excludes the card's current board (a same-board "move to board" is
+// meaningless - the server rejects it too).
 const { data: allBoardsData } = useBoards()
 const copyBoardOptions = computed(() =>
-	(allBoardsData.value ?? []).filter((b) => !b.archived),
+	(allBoardsData.value ?? [])
+		.filter((b) => !b.archived)
+		.filter((b) => !copyDialogIsMove.value || Number(b.id) !== Number(boardId.value)),
 )
 
 const copyIsCrossBoard = computed(() =>
@@ -3159,6 +3181,7 @@ const copyIsCrossBoard = computed(() =>
 )
 
 async function openCopyDialog() {
+	copyDialogMode.value = 'copy'
 	copyError.value = ''
 	copyTargetStackId.value = ''
 	// Default the target to the card's current board so the common case (copy
@@ -3166,6 +3189,23 @@ async function openCopyDialog() {
 	copyTargetBoardId.value = Number(boardId.value)
 	showCopyDialog.value = true
 	await loadCopyStacks(Number(boardId.value))
+}
+
+async function openMoveToBoardDialog() {
+	copyDialogMode.value = 'move'
+	copyError.value = ''
+	copyTargetStackId.value = ''
+	// Move targets another board; default to the first eligible one (the current
+	// board is excluded from the options). No default when none exist.
+	const first = copyBoardOptions.value[0]
+	copyTargetBoardId.value = first ? Number(first.id) : null
+	showCopyDialog.value = true
+	if (copyTargetBoardId.value != null) {
+		await loadCopyStacks(copyTargetBoardId.value)
+	} else {
+		copyStackOptions.value = []
+		copyError.value = t('kanso', 'There is no other board you can move this card to.')
+	}
 }
 
 function onCopyBoardChange() {
@@ -3226,6 +3266,31 @@ async function confirmCopy() {
 		}
 	} catch (err) {
 		copyError.value = err?.response?.data?.error || t('kanso', 'Failed to copy card.')
+	} finally {
+		copyPending.value = false
+	}
+}
+
+async function confirmMoveToBoard() {
+	const targetStackId = Number(copyTargetStackId.value)
+	if (!targetStackId || copyPending.value) return
+	copyError.value = ''
+	copyPending.value = true
+	try {
+		const targetBoard = Number(copyTargetBoardId.value)
+		await apiMoveCardToBoard(Number(props.cardId), targetStackId)
+		// The card left this board and landed on the target: refresh BOTH boards
+		// (source loses it, target gains it) and the boards list (per-board counts).
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(targetBoard) })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		queryClient.invalidateQueries({ queryKey: ['boards'] })
+		showCopyDialog.value = false
+		showSuccess(t('kanso', 'Card moved.'))
+		// The card no longer exists on this board (its id changed on the target),
+		// so close the modal rather than leave a stale/404 detail open.
+		closeModal()
+	} catch (err) {
+		copyError.value = err?.response?.data?.error || t('kanso', 'Failed to move card.')
 	} finally {
 		copyPending.value = false
 	}
