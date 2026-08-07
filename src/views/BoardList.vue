@@ -62,11 +62,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ t('kanso', 'Trello (.json)') }}
 				</NcActionButton>
-				<NcActionButton :disabled="true">
-					{{ t('kanso', 'GitHub Projects (coming soon)') }}
+				<NcActionButton close-after-click @click="showCsvImport = true">
+					<template #icon>
+						<TableLargeIcon :size="20" />
+					</template>
+					{{ t('kanso', 'CSV file') }}
 				</NcActionButton>
 				<NcActionButton :disabled="true">
-					{{ t('kanso', 'CSV file (coming soon)') }}
+					{{ t('kanso', 'GitHub Projects (coming soon)') }}
 				</NcActionButton>
 			</NcActions>
 
@@ -149,6 +152,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcButton>
 			<p v-if="createError" class="new-board-form__error">{{ createError }}</p>
 		</form>
+
+		<!-- Import cards from CSV into an existing board/stack (#3678) -->
+		<CsvImportModal
+			v-if="showCsvImport"
+			@close="showCsvImport = false"
+			@imported="onCsvImported" />
 
 		<!-- Import-from-Deck modal -->
 		<NcModal v-if="showImport" size="normal" @close="showImport = false">
@@ -416,6 +425,7 @@ import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDashboardOutlineIcon from 'vue-material-design-icons/ViewDashboardOutline.vue'
 import ImportIcon from 'vue-material-design-icons/Import.vue'
 import CodeJsonIcon from 'vue-material-design-icons/CodeJson.vue'
+import TableLargeIcon from 'vue-material-design-icons/TableLarge.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
@@ -426,6 +436,7 @@ import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import BoardTileContent from '../components/BoardTileContent.vue'
 import BoardTileMenu from '../components/BoardTileMenu.vue'
+import CsvImportModal from '../components/CsvImportModal.vue'
 import { useBoards } from '../composables/useBoards.js'
 import { useBoardGroups } from '../composables/useBoardGroups.js'
 import { getSettings, updateSettings } from '../services/api.js'
@@ -697,6 +708,17 @@ async function onTrelloImportChange(event) {
 		trelloImportError.value =
 			err?.response?.data?.error || t('kanso', 'Could not import that Trello file.')
 	}
+}
+
+// ── Import cards from CSV into an existing board/stack (#3678) ─────────────────
+const showCsvImport = ref(false)
+
+async function onCsvImported({ boardId }) {
+	showCsvImport.value = false
+	// The imported cards land on an existing board; refresh the list stats and
+	// jump the user to the board they just populated.
+	await queryClient.invalidateQueries({ queryKey: ['boards'] })
+	if (boardId) router.push({ name: 'board', params: { id: boardId } })
 }
 </script>
 

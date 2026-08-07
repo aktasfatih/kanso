@@ -358,6 +358,15 @@ export const duplicateBoard = (boardId, withCards) =>
 export const importTrelloBoard = (document) =>
 	axios.post(url('/api/trello-import'), { document }).then((r) => r.data)
 
+// CSV import → append rows as cards into an EXISTING board's stack. `document`
+// is the raw CSV text; `mapping` is { title, description?, duedate?, labels?,
+// assignees? } of 0-based source column indexes (title required). The caller
+// must have EDIT on the target board (enforced server-side).
+export const importCsvCards = (boardId, stackId, document, mapping, hasHeader = true) =>
+	axios
+		.post(url('/api/csv-import'), { boardId, stackId, document, mapping, hasHeader })
+		.then((r) => r.data)
+
 // GitHub webhook config (board-level, MANAGE)
 export const fetchWebhookConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)

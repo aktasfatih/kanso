@@ -69,6 +69,9 @@ return [
 		// Trello board JSON import → a fresh Kanso board owned by the importer.
 		// A distinct literal POST path, alongside boardPortability#import above.
 		['name' => 'trelloImport#import', 'url' => '/api/trello-import', 'verb' => 'POST'],
+		// CSV import → append rows as cards into an EXISTING board's stack (the
+		// caller must have EDIT on that board). A distinct literal POST path.
+		['name' => 'csvImport#import', 'url' => '/api/csv-import', 'verb' => 'POST'],
 		// Delta-sync read (#3675): board changes since the client's cursor, so a
 		// single edit patches the client cache instead of a whole-board refetch.
 		// Declared BEFORE board#show so the router never captures "changes" as a
