@@ -3,18 +3,52 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div ref="columnRef" class="stack-column" :class="{ 'stack-column--dragging': isStackDragging }">
+	<div
+		ref="columnRef"
+		class="stack-column"
+		:class="{ 'stack-column--dragging': isStackDragging, 'stack-column--collapsed': collapsed }">
 		<!-- Left / right stack drop indicators - same visual language as the card tile drop line -->
 		<div v-if="stackDropEdge === 'left'" class="stack-column__drop-line stack-column__drop-line--left" />
 		<div v-if="stackDropEdge === 'right'" class="stack-column__drop-line stack-column__drop-line--right" />
 
+		<!-- Collapsed rail (#3677): a slim vertical strip showing the (rotated)
+		     column title + card count. Clicking anywhere on it expands the column.
+		     Rendered ALONGSIDE the full column (which is hidden via v-show below)
+		     so the virtualizer and drop targets stay mounted the whole time. -->
+		<button
+			v-if="collapsed"
+			type="button"
+			class="stack-column__rail"
+			:aria-label="t('kanso', 'Expand column {name}', { name: stack.title })"
+			:title="t('kanso', 'Expand column')"
+			@click="handleToggleCollapsed">
+			<ChevronRightIcon class="stack-column__rail-chevron" :size="18" />
+			<span class="stack-column__rail-count">{{ props.cards.length }}</span>
+			<span class="stack-column__rail-title">{{ stack.title }}</span>
+		</button>
+
 		<!-- Column header - drag handle for stack reordering -->
 		<div
 			ref="headerRef"
+			v-show="!collapsed"
 			class="stack-column__header"
 			:class="{ 'stack-column__header--colored': !!stack.color }"
 			:style="stack.color ? { '--stack-color': cssColor(stack.color) } : {}">
 			<div class="stack-column__header-row">
+				<!-- Collapse toggle (#3677). A real button that stops propagation so a
+				     click folds the column instead of starting the header drag. -->
+				<button
+					v-if="onToggleCollapsed"
+					type="button"
+					class="stack-column__collapse-btn"
+					:aria-label="t('kanso', 'Collapse column')"
+					:aria-expanded="!collapsed"
+					:title="t('kanso', 'Collapse column')"
+					@click.stop="handleToggleCollapsed"
+					@pointerdown.stop
+					@keydown.enter.stop>
+					<ChevronLeftIcon :size="18" />
+				</button>
 				<input
 					v-if="editingTitle"
 					ref="titleInputRef"
@@ -154,7 +188,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- Inline card composer at TOP - signature rapid-entry UX -->
-		<div class="card-composer-wrap">
+		<div v-show="!collapsed" class="card-composer-wrap">
 			<form class="card-composer" @submit.prevent="submitCard">
 				<input
 					ref="composerInputRef"
@@ -208,7 +242,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcActions>
 		</div>
-		<p v-if="composerError" class="card-composer__error">{{ composerError }}</p>
+		<p v-if="composerError && !collapsed" class="card-composer__error">{{ composerError }}</p>
 
 		<!--
 			Card list - own scrollable element.
@@ -281,6 +315,7 @@ import NcActionText from '@nextcloud/vue/components/NcActionText'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
@@ -440,6 +475,24 @@ const props = defineProps({
 	 * emits 'select' in multi-select mode.
 	 */
 	onCardSelect: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Whether this column is collapsed to a narrow rail (#3677). Per-user,
+	 * view-only state owned by BoardView. When true the card list is hidden
+	 * (via v-show + a CSS class — NOT v-if, so the virtualizer and drop targets
+	 * stay mounted and the rail remains a valid drop target).
+	 */
+	collapsed: {
+		type: Boolean,
+		default: false,
+	},
+	/**
+	 * (stackId) → void — toggle this column's collapsed state. When provided a
+	 * collapse/expand button appears in the header; omit to disable collapsing.
+	 */
+	onToggleCollapsed: {
 		type: Function,
 		default: null,
 	},
@@ -727,6 +780,11 @@ async function handleDeleteStack() {
 	}
 }
 
+/** Toggle this column's collapsed state (#3677). */
+function handleToggleCollapsed() {
+	props.onToggleCollapsed?.(props.stack.id)
+}
+
 defineExpose({ scrollToIndex, focusComposer })
 
 /**
@@ -837,6 +895,109 @@ async function createFromTemplate(templateId) {
 
 .stack-column--dragging {
 	opacity: 0.4;
+}
+
+/* ── Collapsed column / rail (#3677) ──────────────────────────────────────────
+   Collapsed = a narrow rail. The full column body (header, composer, card list)
+   stays mounted so the virtualizer + drop targets survive; it's just hidden/
+   shrunk. The card list keeps a box (so cardListRef remains a valid drop target)
+   but its contents are visually hidden behind the rail overlay. Width animates
+   ≤150ms. */
+.stack-column--collapsed {
+	width: 48px;
+	min-width: 48px;
+	padding: 0;
+	gap: 0;
+	overflow: hidden;
+	cursor: pointer;
+}
+.stack-column--collapsed .stack-column__cards {
+	/* Keep a sized box for the drop target, but hide the cards behind the rail. */
+	visibility: hidden;
+	overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.stack-column {
+		transition: width 0.15s ease, min-width 0.15s ease;
+	}
+}
+
+/* The rail overlay: a full-height button covering the collapsed column. */
+.stack-column__rail {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 0;
+	border: none;
+	border-radius: var(--border-radius-large);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+.stack-column__rail:hover {
+	background: var(--color-background-hover);
+}
+.stack-column__rail:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+.stack-column__rail-chevron {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+.stack-column__rail-count {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: 10px;
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+/* Vertical (bottom-to-top) column title filling the rail. */
+.stack-column__rail-title {
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	font-weight: 600;
+	font-size: 0.85rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-height: 100%;
+}
+
+/* Collapse toggle button in the expanded header. */
+.stack-column__collapse-btn {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	margin: -2px 0 -2px -4px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.stack-column__collapse-btn:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+.stack-column__collapse-btn:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
 }
 
 /* Stack drop indicators - same visual language as .card-tile__drop-line */

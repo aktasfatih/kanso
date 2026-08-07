@@ -310,7 +310,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:selection-mode="bulk.selectionMode.value"
 					:selected-ids="bulk.selected.value"
-					:on-card-select="handleCardSelect" />
+					:on-card-select="handleCardSelect"
+					:collapsed="isStackCollapsed(stack.id)"
+					:on-toggle-collapsed="toggleStackCollapsed" />
 
 				<!-- Add stack inline input -->
 				<div class="add-stack">
@@ -345,7 +347,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:register-column-ref="registerLaneColumnRef"
 					:on-create-card="handleCreateCard"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
-					:on-card-hover="(cardId) => { hoveredCardId = cardId }" />
+					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
+					:collapsed-stacks="collapsedStacks"
+					:on-toggle-collapsed="toggleStackCollapsed" />
 				<p v-if="lanes.length === 0" class="board-view__swimlanes-empty">
 					{{ t('kanso', 'No cards to group.') }}
 				</p>
@@ -603,6 +607,50 @@ function setSwimlaneMode(mode) {
 	try {
 		localStorage.setItem(`kanso.swimlaneMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
+}
+
+// Per-user collapsed columns (#3677). A collapsed stack renders as a narrow
+// rail (title + card count) instead of its full card list. Purely presentational
+// and view-only: no card-data / board-schema change. Persisted per board per user
+// as a Set<stackId>, mirroring the List/Timeline group-collapse convention
+// (kanso.listCollapsed / kanso.timelineCollapsed). Collapse is applied with a CSS
+// class + v-show (never v-if) so each StackColumn keeps its virtualizer and drop
+// targets mounted — a collapsed rail stays a valid card/stack drop target.
+const collapsedStackKey = computed(() => `kanso.stackCollapsed.${props.id}`)
+function loadCollapsedStacks() {
+	try {
+		const saved = localStorage.getItem(collapsedStackKey.value)
+		if (saved) return new Set(JSON.parse(saved))
+	} catch (e) { /* localStorage unavailable - default to all expanded */ }
+	return new Set()
+}
+const collapsedStacks = ref(loadCollapsedStacks())
+// Reload persisted state when the board changes (component is reused across boards).
+watch(() => props.id, () => { collapsedStacks.value = loadCollapsedStacks() })
+
+function isStackCollapsed(stackId) {
+	return collapsedStacks.value.has(stackId)
+}
+
+function toggleStackCollapsed(stackId) {
+	const next = new Set(collapsedStacks.value)
+	if (next.has(stackId)) next.delete(stackId)
+	else next.add(stackId)
+	collapsedStacks.value = next
+	try {
+		localStorage.setItem(collapsedStackKey.value, JSON.stringify([...next]))
+	} catch (e) { /* localStorage unavailable - collapse is in-memory only */ }
+}
+
+/** Expand a collapsed stack (used when a card is dropped onto its rail). */
+function expandStack(stackId) {
+	if (!collapsedStacks.value.has(stackId)) return
+	const next = new Set(collapsedStacks.value)
+	next.delete(stackId)
+	collapsedStacks.value = next
+	try {
+		localStorage.setItem(collapsedStackKey.value, JSON.stringify([...next]))
+	} catch (e) { /* localStorage unavailable - collapse is in-memory only */ }
 }
 /**
  * View-only comparator for the active display sort. Every non-manual mode falls
@@ -1343,6 +1391,11 @@ onMounted(() => {
 					const currentAfterCardId = cardBefore?.id ?? null
 					if (currentAfterCardId === afterCardId) return // already in this position
 				}
+
+				// A card dropped onto a collapsed column's rail lands at the end of
+				// that stack (columnTarget branch above); expand it so the moved card
+				// is visible rather than silently disappearing into a collapsed rail.
+				expandStack(targetStackId)
 
 				enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey })
 			},

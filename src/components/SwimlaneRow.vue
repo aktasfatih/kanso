@@ -30,7 +30,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:lane-key="lane.key"
 				:on-create-card="onCreateCard"
 				:on-card-focus="onCardFocus"
-				:on-card-hover="onCardHover" />
+				:on-card-hover="onCardHover"
+				:collapsed="collapsedStacks.has(stack.id)"
+				:on-toggle-collapsed="onToggleCollapsed" />
 		</div>
 	</section>
 </template>
@@ -74,6 +76,20 @@ const props = defineProps({
 		default: null,
 	},
 	onCardHover: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Set<stackId> of per-user collapsed columns (#3677). Collapse is shared
+	 * across lanes (a stack is one board column rendered once per lane), so the
+	 * same Set drives every lane's copy of the column.
+	 */
+	collapsedStacks: {
+		type: Set,
+		default: () => new Set(),
+	},
+	/** (stackId) → void — toggle a column's collapsed state. */
+	onToggleCollapsed: {
 		type: Function,
 		default: null,
 	},
