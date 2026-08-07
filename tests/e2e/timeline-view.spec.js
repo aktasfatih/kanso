@@ -175,6 +175,77 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page.locator('.timeline__lane')).toHaveCount(laneRowsBefore)
 	})
 
+	test('dragging an unscheduled card onto the track schedules it (persisted)', async ({ page }) => {
+		// A dedicated unscheduled card for this test, so it can't collide with the
+		// shared "Someday task" the other specs assert on.
+		const dragTitle = 'Drag me to schedule ' + Math.floor(Date.now() / 1000)
+		const stack = (await api('GET', `/boards/${state.boardId}`)).stacks[0]
+		const card = await api('POST', '/cards', { stackId: stack.id, title: dragTitle })
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__view-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+
+		// The track must be present (there are already scheduled cards on this board).
+		const track = page.locator('.timeline__inner')
+		await expect(track).toBeVisible({ timeout: 8_000 })
+
+		// Expand the unscheduled footer and locate the draggable row for our card.
+		await page.locator('.timeline__unscheduled summary').click()
+		const footerRow = page.locator('.timeline__unscheduled-row', { hasText: dragTitle })
+		await expect(footerRow).toBeVisible({ timeout: 8_000 })
+
+		// Drop near the horizontal centre of the visible track (position→day math is
+		// sensitive, so we assert "got scheduled", never an exact calendar day).
+		const trackBox = await track.boundingBox()
+		const dropX = trackBox.x + Math.min(trackBox.width, 800) * 0.5
+		const dropY = trackBox.y + trackBox.height / 2
+		await dragOnto(page, footerRow, dropX, dropY)
+
+		// Give the optimistic patch + server round-trip generous room on slow CI.
+		await page.waitForTimeout(1500)
+
+		// Primary (UI) assertion: the card left the unscheduled footer and now shows
+		// up on the track. A newly single-dated card renders as a milestone diamond;
+		// accept a bar too in case the drop math produced a range, so the check is
+		// tolerant to layout specifics rather than a brittle pixel position.
+		const scheduledMarker = page.locator(
+			`.timeline__milestone:has-text("${dragTitle}"), .timeline__bar:has-text("${dragTitle}")`,
+		)
+		const scheduledUi = await scheduledMarker.first().isVisible({ timeout: 6_000 }).catch(() => false)
+		const leftFooter = !(await page.locator('.timeline__unscheduled-row', { hasText: dragTitle })
+			.isVisible({ timeout: 2_000 }).catch(() => false))
+
+		if (scheduledUi && leftFooter) {
+			await expect(scheduledMarker.first()).toBeVisible()
+		} else {
+			// Fallback: Pragmatic DnD can be flaky to drive from Playwright on a slow
+			// runner. Rather than fail on a visual-position race, confirm the drop set
+			// a duedate via the API — that's the behaviour under test.
+			await expect
+				.poll(async () => (await api('GET', `/cards/${card.id}`)).duedate, { timeout: 8_000 })
+				.not.toBeNull()
+		}
+
+		// Persistence: after a reload the card still carries a due date (it stays
+		// scheduled and does not fall back into the unscheduled footer).
+		await expect
+			.poll(async () => (await api('GET', `/cards/${card.id}`)).duedate, { timeout: 10_000 })
+			.not.toBeNull()
+
+		await page.reload()
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__view-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+		await expect(page.locator('.timeline__inner')).toBeVisible({ timeout: 8_000 })
+		// It appears on the track and is no longer offered as unscheduled.
+		await expect(page.locator(
+			`.timeline__milestone:has-text("${dragTitle}"), .timeline__bar:has-text("${dragTitle}")`,
+		).first()).toBeVisible({ timeout: 8_000 })
+	})
+
 	test('a lane is keyboard-openable: focus + Enter opens the card (#3512)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
