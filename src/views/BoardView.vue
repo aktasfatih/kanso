@@ -273,6 +273,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@edit="openTemplateForEdit"
 			@close="showManageTemplates = false" />
 
+		<!-- Screen-reader live region: announces the user's own card moves and
+		     label/assignee changes (drag-and-drop has no visible SR feedback). -->
+		<div class="board-view__sr-only" aria-live="polite" role="status">
+			{{ announceMessage }}
+		</div>
+
 		<!-- DnD / shortcut error banner -->
 		<div v-if="moveError || shortcutError" class="board-view__move-error">
 			{{ moveError || shortcutError }}
@@ -551,6 +557,7 @@ import { useBoardSubscription } from '../composables/useBoardSubscription.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
+import { provideAnnouncer } from '../composables/useAnnouncer.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
 import { backgroundCss } from '../services/backgrounds.js'
@@ -745,6 +752,15 @@ const boardErrorMessage = computed(() => {
 	return t('kanso', 'Couldn\'t load this board. Please try again.')
 })
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
+
+// Screen-reader announcer (aria-live="polite"). Provided here so descendants
+// (CardModal via router-view) can announce their own actions through one region.
+const { message: announceMessage, announce } = provideAnnouncer()
+
+/** Human title of a stack by id, for announcements. */
+function stackTitleById(stackId) {
+	return sortedStacks.value.find((s) => s.id === stackId)?.title ?? ''
+}
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
 // key → CSS mapping lives client-side; an unknown key resolves to null.
@@ -1450,6 +1466,16 @@ onMounted(() => {
 				expandStack(targetStackId)
 
 				enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey })
+
+				// Announce the user's own move to assistive tech.
+				const movedTitle = (cardsByStack.value.get(targetStackId) ?? [])
+					.find((c) => c.id === cardId)?.title
+					|| allVisibleCards.value.find((c) => c.id === cardId)?.title
+					|| t('kanso', 'Card')
+				announce(t('kanso', '{card} moved to {stack}', {
+					card: movedTitle,
+					stack: stackTitleById(targetStackId),
+				}))
 			},
 		}),
 		// Stack reordering: header-dragged columns dropped on another column's
@@ -1696,6 +1722,20 @@ const onBulkDelete = () => runBulkAction('delete', {})
 </script>
 
 <style scoped>
+/* Visually hidden but readable by screen readers (aria-live region). */
+.board-view__sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
 .board-view {
 	display: flex;
 	flex-direction: column;

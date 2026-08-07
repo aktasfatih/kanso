@@ -605,10 +605,12 @@ const extraAssigneeCount = computed(() => {
 	display: inline-flex;
 	align-items: center;
 }
-.card-tile__type--bug { color: #e74c3c; }
-.card-tile__type--feature { color: #27ae60; }
+/* Type icons use theme tokens so they keep WCAG contrast in both light and dark
+   themes (bare #e74c3c/#27ae60/#7f8c8d fail contrast on the dark surface). */
+.card-tile__type--bug { color: var(--color-error, #e74c3c); }
+.card-tile__type--feature { color: var(--color-success, #27ae60); }
 .card-tile__type--task { color: var(--color-primary-element, #0082c9); }
-.card-tile__type--chore { color: #7f8c8d; }
+.card-tile__type--chore { color: var(--color-text-maxcontrast, #7f8c8d); }
 
 /* Priority indicator badge */
 .card-tile__priority {
@@ -622,10 +624,10 @@ const extraAssigneeCount = computed(() => {
 	border: 1px solid currentColor;
 }
 
-/* Low: grey */
+/* Low: grey — token keeps contrast on the dark surface where #888 fails. */
 .card-tile__priority--1 {
-	color: #888;
-	border-color: #888;
+	color: var(--color-text-maxcontrast, #767676);
+	border-color: var(--color-text-maxcontrast, #767676);
 	background: rgba(136, 136, 136, 0.1);
 }
 
@@ -636,10 +638,11 @@ const extraAssigneeCount = computed(() => {
 	background: rgba(0, 130, 201, 0.1);
 }
 
-/* High: orange */
+/* High: orange — --color-warning adapts per theme and keeps ≥4.5:1 text
+   contrast; stays distinct from Urgent's --color-error red. */
 .card-tile__priority--3 {
-	color: #e07b00;
-	border-color: #e07b00;
+	color: var(--color-warning, #e07b00);
+	border-color: var(--color-warning, #e07b00);
 	background: rgba(224, 123, 0, 0.1);
 }
 
