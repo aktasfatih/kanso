@@ -14,10 +14,12 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -56,6 +58,7 @@ class BoardControllerTest extends TestCase {
 	private CardContactMapper&MockObject $cardContactMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
+	private CardFieldMapper&MockObject $cardFieldMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
 	private AclMapper&MockObject $aclMapper;
@@ -80,6 +83,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
+		$this->cardFieldMapper = $this->createMock(CardFieldMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->aclMapper = $this->createMock(AclMapper::class);
@@ -107,6 +111,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardContactMapper,
 			$this->cardReviewMapper,
 			$this->reviewTypeMapper,
+			$this->cardFieldMapper,
 			$this->checklistItemMapper,
 			$this->commentMapper,
 			$this->aclMapper,
@@ -315,6 +320,200 @@ class BoardControllerTest extends TestCase {
 			->willThrowException(new DoesNotExistException('gone'));
 
 		$response = $this->controller->participants(1);
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	// ---- changes() delta-sync (#3675) --------------------------------------
+
+	private function change(int $id, int $entityType, int $entityId, int $action): Change {
+		$change = new Change();
+		$change->setId($id);
+		$change->setBoardId(1);
+		$change->setEntityType($entityType);
+		$change->setEntityId($entityId);
+		$change->setAction($action);
+		return $change;
+	}
+
+	/**
+	 * Stubs the board-wide enrichment maps serializeCardSummaries() reads, so a
+	 * changes() test that expects an upsert gets the full (board-shaped) card.
+	 */
+	private function stubEnrichmentEmpty(): void {
+		$this->cardLabelMapper->method('findLabelIdsByBoard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByBoard')->willReturn([]);
+		$this->cardContactMapper->method('findContactsByBoard')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoard')->willReturn([]);
+		$this->cardMapper->method('childProgressByBoard')->willReturn([]);
+		$this->commentMapper->method('countsByBoard')->willReturn([]);
+		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([]);
+		$this->cardRelationMapper->method('blockedCardIdsByBoard')->willReturn([]);
+	}
+
+	public function testChangesResyncsWhenCursorIsZero(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(9);
+		// No window read at all for a cursorless client.
+		$this->changeMapper->expects(self::never())->method('findSince');
+
+		$response = $this->controller->changes(1, 0);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertTrue($response->getData()['resync']);
+		self::assertSame(9, $response->getData()['cursor']);
+	}
+
+	public function testChangesResyncsWhenCursorBelowRetainedTail(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(50);
+		// Oldest retained change is 20; a cursor of 5 has fallen off the pruned tail.
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(20);
+		$this->changeMapper->expects(self::never())->method('findSince');
+
+		$response = $this->controller->changes(1, 5);
+		self::assertTrue($response->getData()['resync']);
+		self::assertSame(50, $response->getData()['cursor']);
+	}
+
+	public function testChangesResyncsWhenWindowIsSaturated(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(600);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		// A full page (limit=500) of rows means the client is more than one page
+		// behind - a truncated delta, so force a resync.
+		$rows = [];
+		for ($i = 1; $i <= 500; $i++) {
+			$rows[] = $this->change($i, Change::ENTITY_CARD, $i, Change::ACTION_UPDATE);
+		}
+		$this->changeMapper->method('findSince')->with(1, 5, 500)->willReturn($rows);
+
+		$response = $this->controller->changes(1, 5);
+		self::assertTrue($response->getData()['resync']);
+	}
+
+	public function testChangesResyncsOnOutOfScopeEntity(): void {
+		// The MVP scope cut: a label edit in the window → resync rather than
+		// replicate board-wide label/acl enrichment in the delta path.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(9);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+			$this->change(9, Change::ENTITY_LABEL, 7, Change::ACTION_UPDATE),
+		]);
+		// A resync must not even attempt a per-id card re-serialize.
+		$this->cardMapper->expects(self::never())->method('findSummariesByIds');
+
+		$response = $this->controller->changes(1, 5);
+		self::assertTrue($response->getData()['resync']);
+		self::assertSame(9, $response->getData()['cursor']);
+	}
+
+	public function testChangesUpsertsOnlyTheEditedCardWithFullShape(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(3);
+		$card->setTitle('Edited elsewhere');
+		$this->cardMapper->expects(self::once())
+			->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+		// Only the touched cards are re-read - never the whole board.
+		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
+		$this->stackMapper->method('findByIds')->with(1, [])->willReturn([]);
+
+		$response = $this->controller->changes(1, 5);
+		$data = $response->getData();
+		self::assertFalse($data['resync']);
+		self::assertSame(8, $data['cursor']);
+		self::assertCount(1, $data['cards']['upsert']);
+		self::assertSame(42, $data['cards']['upsert'][0]['id']);
+		// Full board-card shape (enrichment keys present, description absent).
+		self::assertSame([], $data['cards']['upsert'][0]['labelIds']);
+		self::assertSame(['total' => 0, 'done' => 0], $data['cards']['upsert'][0]['checklist']);
+		self::assertFalse($data['cards']['upsert'][0]['blocked']);
+		self::assertArrayNotHasKey('description', $data['cards']['upsert'][0]);
+		self::assertSame([], $data['cards']['remove']);
+	}
+
+	public function testChangesCarriesNewPlacementOnMove(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_MOVE),
+		]);
+		$this->stubEnrichmentEmpty();
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(99); // moved to a new stack
+		$card->setSortKey('mm');
+		$card->setTitle('Moved card');
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertSame(99, $data['cards']['upsert'][0]['stackId']);
+		self::assertSame('mm', $data['cards']['upsert'][0]['sortKey']);
+	}
+
+	public function testChangesEmitsRemoveForDeletedCard(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_DELETE),
+		]);
+		$this->stubEnrichmentEmpty();
+
+		// The deleted card is absent from the live summary query → it is a remove.
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertSame([], $data['cards']['upsert']);
+		self::assertSame([42], $data['cards']['remove']);
+	}
+
+	public function testChangesEmptyWindowStillAdvancesCursor(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(5);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		// Client is already caught up: no rows newer than its cursor.
+		$this->changeMapper->method('findSince')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+		$this->cardMapper->method('findSummariesByIds')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertSame(5, $data['cursor']);
+		self::assertSame([], $data['cards']['upsert']);
+		self::assertSame([], $data['cards']['remove']);
+	}
+
+	public function testChangesMapsNotPermittedTo403(): void {
+		$this->boardService->method('find')->willThrowException(new NotPermittedException());
+
+		$response = $this->controller->changes(1, 5);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testChangesMapsDoesNotExistTo404(): void {
+		$this->boardService->method('find')
+			->willThrowException(new DoesNotExistException('gone'));
+
+		$response = $this->controller->changes(1, 5);
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
 	}
 

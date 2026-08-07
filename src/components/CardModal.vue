@@ -44,9 +44,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</div>
 
-			<!-- Error state -->
+			<!-- Error state - status-aware, with a way out (#3662). A 404/403 from a
+			     dead deep-link/inbox/notification reads as "gone"/"no access" and is a
+			     dead end; a transient failure offers a retry. -->
 			<div v-else-if="isError" class="card-modal__error">
-				{{ t('kanso', 'Failed to load card details.') }}
+				<p class="card-modal__error-msg">{{ cardErrorMessage }}</p>
+				<div class="card-modal__error-actions">
+					<NcButton v-if="cardErrorRetryable" type="primary" @click="retryCardLoad">
+						{{ t('kanso', 'Retry') }}
+					</NcButton>
+					<NcButton v-if="boardData" @click="closeModal">
+						{{ t('kanso', 'Back to board') }}
+					</NcButton>
+					<NcButton :type="boardData ? 'tertiary' : 'primary'" @click="goToBoards">
+						{{ t('kanso', 'Go to boards') }}
+					</NcButton>
+				</div>
 			</div>
 
 			<!-- Card content -->
@@ -219,7 +232,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:user="uid"
 										:display-name="participantName(uid)"
 										:size="24"
-										:show-user-status="false"
+										:hide-status="true"
 										:disable-tooltip="true" />
 									<span class="card-modal__watch-row-name">{{ participantName(uid) }}</span>
 									<button
@@ -249,7 +262,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:user="p.uid"
 											:display-name="p.displayName"
 											:size="24"
-											:show-user-status="false"
+											:hide-status="true"
 											:disable-tooltip="true" />
 										<span>{{ p.displayName }}</span>
 									</button>
@@ -536,7 +549,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:user="uid"
 							:display-name="participantName(uid)"
 							:size="22"
-							:show-user-status="false"
+							:hide-status="true"
 							:disable-tooltip="false" />
 						<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
 						<button
@@ -566,7 +579,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:user="p.uid"
 									:display-name="p.displayName"
 									:size="24"
-									:show-user-status="false"
+									:hide-status="true"
 									:disable-tooltip="true" />
 								<span>{{ p.displayName }}</span>
 							</button>
@@ -583,7 +596,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<NcAvatar
 									:display-name="c.displayName"
 									:size="22"
-									:show-user-status="false"
+									:hide-status="true"
 									:disable-tooltip="false" />
 								<span class="card-modal__assignee-name">{{ c.displayName }}</span>
 								<button
@@ -621,7 +634,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											<NcAvatar
 												:display-name="c.displayName"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												:disable-tooltip="true" />
 											<span class="card-modal__contact-option-text">
 												<span>{{ c.displayName }}</span>
@@ -769,12 +782,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-for="review in cardReviews"
 							:key="review.id"
 							class="card-modal__review-pill"
-							:class="[`card-modal__review-pill--${review.state}`, { 'card-modal__review-pill--compact': reviewsCompact }]">
+							:class="[`card-modal__review-pill--${review.state}`, {
+								'card-modal__review-pill--compact': reviewsCompact,
+								'card-modal__review-pill--gated': review.gated,
+							}]"
+							:title="review.gated ? reviewGateTooltip(review) : null">
 							<NcAvatar
 								:user="review.reviewer"
 								:display-name="participantName(review.reviewer)"
 								:size="22"
-								:show-user-status="false"
+								:hide-status="true"
 								:disable-tooltip="false" />
 							<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
 							<span
@@ -785,11 +802,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									: {}">
 								{{ reviewTypeById(review.reviewTypeId).title }}
 							</span>
-							<span class="card-modal__review-state" :class="`card-modal__review-state--${review.state}`">
-								<CheckDecagramIcon v-if="review.state === 'approved'" :size="12" />
+							<span
+								class="card-modal__review-state"
+								:class="review.gated ? 'card-modal__review-state--gated' : `card-modal__review-state--${review.state}`">
+								<LockOutlineIcon v-if="review.gated" :size="12" />
+								<CheckDecagramIcon v-else-if="review.state === 'approved'" :size="12" />
 								<AlertDecagramIcon v-else-if="review.state === 'changes_requested'" :size="12" />
 								<CheckDecagramOutlineIcon v-else :size="12" />
-								<span class="card-modal__review-state-label">{{ reviewStateLabel(review.state) }}</span>
+								<span class="card-modal__review-state-label">{{ review.gated ? t('kanso', 'Waiting') : reviewStateLabel(review.state) }}</span>
 							</span>
 							<button
 								v-if="canEdit"
@@ -841,7 +861,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:user="p.uid"
 										:display-name="p.displayName"
 										:size="24"
-										:show-user-status="false"
+										:hide-status="true"
 										:disable-tooltip="true" />
 									<span>{{ p.displayName }}</span>
 								</button>
@@ -867,7 +887,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 
 				<!-- Body: content (left) | discussion (right) -->
-				<div class="card-modal__body">
+				<div ref="bodyRef" class="card-modal__body" :style="discussionWidthStyle">
 					<!-- LEFT: description · checklist · sub-cards · github · relations -->
 					<div class="card-modal__content">
 						<!-- Description -->
@@ -928,7 +948,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:user="p.uid"
 												:display-name="p.displayName"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												:disable-tooltip="true" />
 											<span>{{ p.displayName }}</span>
 										</li>
@@ -1235,6 +1255,140 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="attachmentError" class="card-modal__save-error">{{ attachmentError }}</span>
 						</section>
 
+						<!-- Time tracking (#3536): manual entries + per-card total -->
+						<section class="card-modal__section card-modal__section--tight">
+							<div class="card-modal__section-inline">
+								<ClockOutlineIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Time tracking') }}</span>
+								<span v-if="timeSpentTotal > 0" class="card-modal__attachment-size">{{ formatDuration(timeSpentTotal) }}</span>
+							</div>
+
+							<form v-if="canEdit" class="card-modal__time-add" @submit.prevent="handleAddTimeEntry">
+								<input
+									v-model="timeDurationInput"
+									type="text"
+									class="card-modal__time-duration"
+									:placeholder="t('kanso', 'e.g. 1h 30m')"
+									:disabled="addEntry.isPending.value">
+								<input
+									v-model="timeNoteInput"
+									type="text"
+									class="card-modal__time-note"
+									:placeholder="t('kanso', 'Note (optional)')"
+									:disabled="addEntry.isPending.value">
+								<NcButton
+									type="secondary"
+									native-type="submit"
+									:disabled="addEntry.isPending.value">
+									{{ addEntry.isPending.value ? t('kanso', 'Adding…') : t('kanso', 'Add time') }}
+								</NcButton>
+							</form>
+
+							<ul v-if="cardTimeEntries.length > 0" class="card-modal__links-list">
+								<li v-for="entry in cardTimeEntries" :key="entry.id" class="card-modal__link-row">
+									<div class="card-modal__time-entry">
+										<span class="card-modal__time-entry-duration">{{ formatDuration(entry.seconds) }}</span>
+										<span v-if="entry.note" class="card-modal__time-entry-note">{{ entry.note }}</span>
+										<span class="card-modal__time-entry-meta">
+											<NcAvatar
+												:user="entry.createdBy || ''"
+												:display-name="entry.createdBy || ''"
+												:size="16"
+												:disable-menu="true" />
+											<span class="card-modal__activity-time">{{ relativeTime(entry.createdAt) }}</span>
+										</span>
+									</div>
+									<button
+										v-if="canEdit"
+										class="card-modal__child-remove"
+										:title="t('kanso', 'Remove time entry')"
+										@click="handleRemoveTimeEntry(entry.id)">
+										<CloseIcon :size="14" />
+									</button>
+								</li>
+							</ul>
+							<span v-if="timeEntryError" class="card-modal__save-error">{{ timeEntryError }}</span>
+						</section>
+
+						<!-- Custom fields (#3537): shown only when the board has fields -->
+						<section
+							v-if="boardCardFields.length > 0"
+							class="card-modal__section card-modal__section--tight"
+							data-test="card-custom-fields">
+							<div class="card-modal__section-inline">
+								<TableColumnIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Custom fields') }}</span>
+							</div>
+							<ul class="card-modal__cf-list">
+								<li
+									v-for="field in boardCardFields"
+									:key="field.id"
+									class="card-modal__cf-row">
+									<label
+										:for="`card-cf-${field.id}`"
+										class="card-modal__cf-label">
+										{{ field.name }}
+									</label>
+									<!-- text -->
+									<input
+										v-if="field.type === 'text'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-input"
+										type="text"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-input-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)"
+										@blur="handleFieldChange(field, $event.target.value)">
+									<!-- number -->
+									<input
+										v-else-if="field.type === 'number'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-input"
+										type="number"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-input-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)"
+										@blur="handleFieldChange(field, $event.target.value)">
+									<!-- date -->
+									<input
+										v-else-if="field.type === 'date'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-input"
+										type="date"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-input-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)">
+									<!-- select -->
+									<select
+										v-else-if="field.type === 'select'"
+										:id="`card-cf-${field.id}`"
+										class="card-modal__cf-select"
+										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:disabled="!canEdit"
+										:aria-label="field.name"
+										:data-test="`cf-select-${field.id}`"
+										@change="handleFieldChange(field, $event.target.value)">
+										<option value="">{{ t('kanso', '— none —') }}</option>
+										<option
+											v-for="opt in (field.options ?? [])"
+											:key="opt"
+											:value="opt">
+											{{ opt }}
+										</option>
+									</select>
+									<span v-if="cardFieldErrors[field.id]" class="card-modal__save-error">
+										{{ cardFieldErrors[field.id] }}
+									</span>
+								</li>
+							</ul>
+						</section>
+
 						<!-- Relations - shown only when the card has relations, or the
 						     editor was opened from the ⋯ menu -->
 						<section
@@ -1294,6 +1448,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</section>
 					</div>
 
+					<!-- Drag handle: resizes the split between the main pane and the
+					     discussion pane. Inert below the 680px breakpoint (panes stack). -->
+					<div
+						class="card-modal__resizer"
+						role="separator"
+						aria-orientation="vertical"
+						:aria-label="t('kanso', 'Resize discussion panel')"
+						:aria-valuenow="discussionWidth"
+						:aria-valuemin="DISCUSSION_MIN_WIDTH"
+						:aria-valuemax="DISCUSSION_MAX_WIDTH"
+						tabindex="0"
+						@pointerdown="onResizePointerDown"
+						@keydown="onResizeKeydown">
+						<span class="card-modal__resizer-grip" />
+					</div>
+
 					<!-- RIGHT: discussion pane -->
 					<aside class="card-modal__discussion">
 						<div class="card-modal__discussion-head card-modal__discussion-tabs" role="tablist">
@@ -1326,7 +1496,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:user="item.actor || ''"
 										:display-name="item.actorName || item.actor || t('kanso', 'System')"
 										:size="24"
-										:show-user-status="false" />
+										:hide-status="true" />
 									<span class="card-modal__activity-text">
 										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
 										{{ activityVerbText(item) }}
@@ -1351,7 +1521,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:user="topComment.author"
 											:display-name="topComment.authorDisplayName || topComment.author"
 											:size="28"
-											:show-user-status="false"
+											:hide-status="true"
 											class="card-modal__comment-avatar" />
 										<div class="card-modal__comment-main">
 											<div class="card-modal__comment-meta">
@@ -1398,9 +1568,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														<TrashCanIcon :size="14" />
 													</button>
 												</template>
-											</div>
-
-											<div class="card-modal__reactions">
 												<button
 													v-for="summary in topComment.reactions"
 													:key="summary.emoji"
@@ -1416,10 +1583,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													<button
 														class="card-modal__reaction-add"
 														:title="t('kanso', 'Add reaction')"
-														@click.stop="toggleReactionPicker(topComment.id)">
+														@click.stop="toggleReactionPicker(topComment.id, $event)">
 														<EmoticonHappyOutlineIcon :size="14" />
 													</button>
-													<div v-if="reactionPickerFor === topComment.id" class="card-modal__reaction-picker">
+													<div v-if="reactionPickerFor === topComment.id" :style="reactionPickerStyle" class="card-modal__reaction-picker">
 														<button
 															v-for="emoji in reactionEmoji"
 															:key="emoji"
@@ -1458,7 +1625,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:user="reply.author"
 												:display-name="reply.authorDisplayName || reply.author"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												class="card-modal__comment-avatar" />
 											<div class="card-modal__comment-main">
 												<div class="card-modal__comment-meta">
@@ -1486,21 +1653,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
 												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
-												<div
-													v-if="canEdit && currentUserId === reply.author"
-													class="card-modal__comment-controls">
-													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
-														<PencilIcon :size="14" />
-													</button>
-													<button
-														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
-														:title="t('kanso', 'Delete comment')"
-														:disabled="deleteComment.isPending.value"
-														@click="handleDeleteComment(reply)">
-														<TrashCanIcon :size="14" />
-													</button>
-												</div>
-												<div class="card-modal__reactions">
+												<div v-if="canEdit" class="card-modal__comment-controls">
+													<template v-if="currentUserId === reply.author">
+														<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
+															<PencilIcon :size="14" />
+														</button>
+														<button
+															class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+															:title="t('kanso', 'Delete comment')"
+															:disabled="deleteComment.isPending.value"
+															@click="handleDeleteComment(reply)">
+															<TrashCanIcon :size="14" />
+														</button>
+													</template>
 													<button
 														v-for="summary in reply.reactions"
 														:key="summary.emoji"
@@ -1516,10 +1681,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														<button
 															class="card-modal__reaction-add"
 															:title="t('kanso', 'Add reaction')"
-															@click.stop="toggleReactionPicker(reply.id)">
+															@click.stop="toggleReactionPicker(reply.id, $event)">
 																<EmoticonHappyOutlineIcon :size="14" />
 														</button>
-														<div v-if="reactionPickerFor === reply.id" class="card-modal__reaction-picker">
+														<div v-if="reactionPickerFor === reply.id" :style="reactionPickerStyle" class="card-modal__reaction-picker">
 															<button
 																v-for="emoji in reactionEmoji"
 																:key="emoji"
@@ -1547,7 +1712,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<NcAvatar
 								:user="currentUserId"
 								:size="28"
-								:show-user-status="false"
+								:hide-status="true"
 								class="card-modal__composer-avatar" />
 							<div class="card-modal__composer-main">
 								<div class="card-modal__mention-wrap">
@@ -1574,7 +1739,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:user="p.uid"
 												:display-name="p.displayName"
 												:size="24"
-												:show-user-status="false"
+												:hide-status="true"
 												:disable-tooltip="true" />
 											<span>{{ p.displayName }}</span>
 										</li>
@@ -1680,6 +1845,7 @@ import BroomIcon from 'vue-material-design-icons/Broom.vue'
 import TagOutlineIcon from 'vue-material-design-icons/TagOutline.vue'
 import LinkOffIcon from 'vue-material-design-icons/LinkOff.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
+import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
@@ -1698,6 +1864,8 @@ import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -1728,10 +1896,12 @@ import { boardQueryKey } from '../composables/queryKeys.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
+import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, moveCard as apiMoveCard, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
+import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
@@ -1781,7 +1951,7 @@ watch([() => props.cardId, boardId], async ([cardId, bId]) => {
 	}
 }, { immediate: true })
 
-const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, updateCard } = useCard(
+const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, error: cardError, refetch: cardRefetch, updateCard } = useCard(
 	computed(() => props.cardId),
 	// Only fetch once the id is numeric (a human ref is redirected first).
 	computed(() => isOpen.value && isNumericCardId.value),
@@ -1793,10 +1963,61 @@ const isLoading = computed(() => cardIsLoading.value || (!isNumericCardId.value 
 // card fetch, so the template's not-found branch covers both.
 const isError = computed(() => cardIsError.value || refResolveError.value)
 
+// Distinguish "the card is gone / forbidden" from a transient load failure so the
+// error slot can show friendly, actionable copy instead of a raw failure (#3662).
+// A failed human-ref resolution (refResolveError) means the reference didn't
+// resolve to a live card - treat it as a 404 (gone). Otherwise read the real HTTP
+// status off the axios rejection: 404 = deleted, 403 = access revoked, anything
+// else (incl. a network error with no response) = transient/retryable.
+const cardErrorStatus = computed(() => {
+	if (refResolveError.value) return 404
+	return cardError.value?.response?.status ?? null
+})
+const cardIsGone = computed(() => cardErrorStatus.value === 404)
+const cardIsForbidden = computed(() => cardErrorStatus.value === 403)
+const cardErrorMessage = computed(() => {
+	if (cardIsGone.value) {
+		return t('kanso', 'This card no longer exists — it may have been deleted.')
+	}
+	if (cardIsForbidden.value) {
+		return t('kanso', 'You no longer have access to this card.')
+	}
+	return t('kanso', 'Couldn\'t load this card. Please try again.')
+})
+// A gone/forbidden card is a dead end - there is nothing to retry. A transient
+// failure can be retried by refetching the query. (refResolveError always maps to
+// 404, so a retryable error is always a real numeric-id fetch failure.)
+const cardErrorRetryable = computed(() => !cardIsGone.value && !cardIsForbidden.value)
+
+function retryCardLoad() {
+	cardRefetch()
+}
+
 // Read board data from cache (same queryKey as BoardView - no extra request).
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
+const boardCardFields = computed(() => boardData.value?.cardFields ?? [])
+
+// ── Card fields: value mutations ──────────────────────────────────────────────
+const { setCardFieldValue, clearCardFieldValue } = useCardFields(boardId)
+const cardFieldErrors = ref({})
+
+async function handleFieldChange(field, value) {
+	cardFieldErrors.value = { ...cardFieldErrors.value, [field.id]: '' }
+	try {
+		if (value === '' || value === null || value === undefined) {
+			await clearCardFieldValue.mutateAsync({ cardId: Number(props.cardId), fieldId: field.id })
+		} else {
+			await setCardFieldValue.mutateAsync({ cardId: Number(props.cardId), fieldId: field.id, value: String(value) })
+		}
+	} catch (err) {
+		cardFieldErrors.value = {
+			...cardFieldErrors.value,
+			[field.id]: err?.response?.data?.error || t('kanso', 'Failed to save field value.'),
+		}
+	}
+}
 
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
 const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
@@ -2180,6 +2401,21 @@ function reviewStateLabel(state) {
 	if (state === 'approved') return t('kanso', 'Approved')
 	if (state === 'changes_requested') return t('kanso', 'Changes requested')
 	return t('kanso', 'Pending')
+}
+
+// A gated review is pending but blocked by a lower-stage review that hasn't
+// been approved yet; its reviewer isn't notified until the blocker clears.
+function reviewGateTooltip(review) {
+	if (!review.gated) return ''
+	const blockers = Array.isArray(review.blockedBy) ? review.blockedBy : []
+	// Name the blocking lower-stage review type(s) when we can resolve them.
+	const names = blockers
+		.map((id) => cardReviews.value.find((r) => r.id === id))
+		.filter(Boolean)
+		.map((r) => (reviewTypeById(r.reviewTypeId)?.title) || t('kanso', 'Review'))
+	const unique = [...new Set(names)]
+	if (unique.length === 0) return t('kanso', 'Waiting on an earlier review')
+	return t('kanso', 'Waiting on {type} review', { type: unique.join(', ') })
 }
 
 // ── Done toggle ──────────────────────────────────────────────────────────────
@@ -2690,9 +2926,40 @@ const {
 // summary (mine flag) to decide react vs. unreact.
 const reactionEmoji = REACTION_EMOJI
 const reactionPickerFor = ref(null)
+// The emoji picker is positioned `fixed` (coords computed from the trigger button on
+// open) so it escapes the comment thread's `overflow` clipping and the content pane's
+// stacking — a comment lives inside .card-modal__thread-scroll (overflow:auto), which
+// would otherwise clip the popover when it opens sideways. See toggleReactionPicker.
+const reactionPickerStyle = ref({})
 
-function toggleReactionPicker(commentId) {
-	reactionPickerFor.value = reactionPickerFor.value === commentId ? null : commentId
+function toggleReactionPicker(commentId, ev) {
+	if (reactionPickerFor.value === commentId) {
+		reactionPickerFor.value = null
+		return
+	}
+	reactionPickerFor.value = commentId
+	const btn = ev && ev.currentTarget
+	if (btn && typeof btn.getBoundingClientRect === 'function') {
+		const r = btn.getBoundingClientRect()
+		// Open the picker just above the button. Align it to the button's side that
+		// leaves the most room (right-align when the button sits in the right half of
+		// the viewport, so it opens leftward and stays on-screen; left-align otherwise).
+		const style = {
+			position: 'fixed',
+			bottom: (window.innerHeight - r.top + 4) + 'px',
+			top: 'auto',
+		}
+		if (r.left < window.innerWidth / 2) {
+			style.left = Math.round(r.left) + 'px'
+			style.right = 'auto'
+		} else {
+			style.right = Math.round(window.innerWidth - r.right) + 'px'
+			style.left = 'auto'
+		}
+		reactionPickerStyle.value = style
+	} else {
+		reactionPickerStyle.value = {}
+	}
 }
 
 async function onReactionClick(comment, emoji) {
@@ -2999,6 +3266,21 @@ function closeModal() {
 	router.push({ name: 'board', params: { id: route.params.id } })
 }
 
+// Escape hatch from a dead card link (#3662): leave the (possibly gone) board
+// entirely. Return to the My Work hub if that's where the user came from,
+// otherwise fall back to the boards list - never route back into a board that
+// may itself no longer exist.
+function goToBoards() {
+	isOpen.value = false
+	const from = route.query.from
+	if (MY_WORK_RETURN_ROUTES.includes(from)) {
+		const query = from === 'my-work' && route.query.tab ? { tab: route.query.tab } : undefined
+		router.push({ name: from, query })
+		return
+	}
+	router.push({ name: 'board-list' })
+}
+
 // Escape at the modal root: an open attribute popover takes precedence — close
 // it, not the whole card (which would discard an in-progress edit). Inline edits
 // (title/description/comment) stop propagation themselves, so they never reach here.
@@ -3019,9 +3301,31 @@ function onModalEscape() {
 // inner content has target inside .modal-container, so releasing on the backdrop
 // never closes the card. The handler funnels through onModalClose so it obeys the
 // same picker-first precedence as Escape.
+//
+// It also carries the click-outside dismiss for the attribute popovers (#3665):
+// when ANY picker is open, a mousedown that lands outside the popover AND outside the
+// picker's own (open) trigger clears openPicker — one shared path keyed on openPicker,
+// no per-picker wiring. This runs BEFORE the backdrop-close check so it holds the same
+// picker-first precedence as Escape: an outside click on the backdrop closes the PICKER,
+// not the whole card. The active trigger is excluded via aria-expanded="true" so the
+// same click that would toggle it shut doesn't get double-handled (mousedown closes,
+// then the trigger's click re-opens); the popover interior (options, date input,
+// mention textareas) is excluded so selecting/typing never closes it prematurely.
 function onDocumentMousedown(event) {
 	const target = event.target
-	if (!(target instanceof Element) || !target.classList.contains('modal-wrapper')) {
+	if (!(target instanceof Element)) {
+		return
+	}
+	if (openPicker.value !== null) {
+		if (!target.closest('.card-modal__popover') && !target.closest('[aria-expanded="true"]')) {
+			openPicker.value = null
+			return
+		}
+		// A picker is open and the click is on its trigger or inside the popover —
+		// leave it to the element's own handler; never fall through to backdrop-close.
+		return
+	}
+	if (!target.classList.contains('modal-wrapper')) {
 		return
 	}
 	// Scope to THIS card's modal (guard against other stacked NcModals on the page).
@@ -3316,6 +3620,83 @@ async function handleRemoveAttachment(attachmentId) {
 	}
 }
 
+// ── Time tracking (#3536) ────────────────────────────────────────────────────
+const { timeEntries: cardTimeEntriesData, addEntry, removeEntry } = useCardTimeEntries(computed(() => props.cardId))
+const cardTimeEntries = computed(() => cardTimeEntriesData.value ?? [])
+const timeDurationInput = ref('')
+const timeNoteInput = ref('')
+const timeEntryError = ref('')
+
+// The per-card total comes from the card DETAIL payload (kept off the board
+// summaries); the entries list only backs the breakdown and the delete buttons.
+const timeSpentTotal = computed(() => Number(cardData.value?.timeSpent) || 0)
+
+// Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
+function formatDuration(totalSeconds) {
+	const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
+	if (secs === 0) return '0m'
+	const h = Math.floor(secs / 3600)
+	const m = Math.floor((secs % 3600) / 60)
+	const s = secs % 60
+	const parts = []
+	if (h > 0) parts.push(`${h}h`)
+	if (m > 0) parts.push(`${m}m`)
+	// Only surface bare seconds when there is no hour/minute component.
+	if (s > 0 && h === 0 && m === 0) parts.push(`${s}s`)
+	return parts.join(' ')
+}
+
+// Parses "1h 30m", "90m", "1.5h", "45s", or a bare number (minutes) into
+// seconds. Returns 0 for anything unparseable.
+function parseDuration(raw) {
+	const input = String(raw ?? '').trim().toLowerCase()
+	if (input === '') return 0
+	// A bare number is interpreted as minutes.
+	if (/^\d+(\.\d+)?$/.test(input)) {
+		return Math.round(parseFloat(input) * 60)
+	}
+	const re = /(\d+(?:\.\d+)?)\s*(h|m|s)/g
+	let match
+	let seconds = 0
+	let matched = false
+	while ((match = re.exec(input)) !== null) {
+		matched = true
+		const value = parseFloat(match[1])
+		if (match[2] === 'h') seconds += value * 3600
+		else if (match[2] === 'm') seconds += value * 60
+		else seconds += value
+	}
+	return matched ? Math.round(seconds) : 0
+}
+
+async function handleAddTimeEntry() {
+	timeEntryError.value = ''
+	const seconds = parseDuration(timeDurationInput.value)
+	if (seconds <= 0) {
+		timeEntryError.value = t('kanso', 'Enter a duration, e.g. 1h 30m.')
+		return
+	}
+	try {
+		await addEntry.mutateAsync({ seconds, note: timeNoteInput.value.trim() || null })
+		timeDurationInput.value = ''
+		timeNoteInput.value = ''
+		// Refresh the card detail so the total (timeSpent) reflects the new entry.
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+	} catch (e) {
+		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to add time entry.')
+	}
+}
+
+async function handleRemoveTimeEntry(entryId) {
+	timeEntryError.value = ''
+	try {
+		await removeEntry.mutateAsync(entryId)
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+	} catch (e) {
+		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to remove time entry.')
+	}
+}
+
 // ── Subscription (Watch / Unwatch) ───────────────────────────────────────────
 const { toggle: toggleSubscription, toggleOther: toggleOtherSubscription } = useSubscription(computed(() => props.cardId))
 
@@ -3509,6 +3890,87 @@ async function handleRemoveRelation(relationId) {
 // ── Redesign view state: header breadcrumb + attribute bar + responsive panes ─
 // Mobile splits the card and discussion into tabs; desktop shows both panes.
 const viewMode = ref('card')
+
+// Resizable discussion/activity pane (#3661). The body is a two-column grid whose
+// right (discussion) track width is driven by a CSS var; a drag handle updates it
+// live and persists the chosen width per user in localStorage. Below the 680px
+// breakpoint the panes stack and the var/handle are ignored (see <style>).
+const DISCUSSION_WIDTH_KEY = 'kanso.cardDiscussionWidth'
+const DISCUSSION_MIN_WIDTH = 280
+const DISCUSSION_MAX_WIDTH = 720
+const DISCUSSION_DEFAULT_WIDTH = 400
+const DISCUSSION_KEY_STEP = 24
+function clampDiscussionWidth(px) {
+	return Math.min(DISCUSSION_MAX_WIDTH, Math.max(DISCUSSION_MIN_WIDTH, Math.round(px)))
+}
+const discussionWidth = ref(DISCUSSION_DEFAULT_WIDTH)
+try {
+	const saved = parseInt(localStorage.getItem(DISCUSSION_WIDTH_KEY), 10)
+	if (Number.isFinite(saved)) discussionWidth.value = clampDiscussionWidth(saved)
+} catch (e) { /* localStorage unavailable - default width */ }
+const discussionWidthStyle = computed(() => ({ '--kanso-discussion-width': discussionWidth.value + 'px' }))
+function persistDiscussionWidth() {
+	try {
+		localStorage.setItem(DISCUSSION_WIDTH_KEY, String(discussionWidth.value))
+	} catch (e) { /* ignore persistence failure */ }
+}
+const bodyRef = ref(null)
+let resizePointerId = null
+function onResizePointerMove(e) {
+	if (!bodyRef.value) return
+	// The handle sits on the left edge of the discussion pane; width grows as the
+	// pointer moves left, so measure from the body's right edge.
+	const rect = bodyRef.value.getBoundingClientRect()
+	discussionWidth.value = clampDiscussionWidth(rect.right - e.clientX)
+}
+function onResizePointerUp(e) {
+	if (resizePointerId !== null && e.pointerId !== resizePointerId) return
+	window.removeEventListener('pointermove', onResizePointerMove)
+	window.removeEventListener('pointerup', onResizePointerUp)
+	window.removeEventListener('pointercancel', onResizePointerUp)
+	document.body.style.userSelect = ''
+	document.body.style.cursor = ''
+	resizePointerId = null
+	persistDiscussionWidth()
+}
+function onResizePointerDown(e) {
+	// Only resize on desktop layout; below 680px the panes stack.
+	if (window.matchMedia('(max-width: 680px)').matches) return
+	e.preventDefault()
+	resizePointerId = e.pointerId
+	window.addEventListener('pointermove', onResizePointerMove)
+	window.addEventListener('pointerup', onResizePointerUp)
+	window.addEventListener('pointercancel', onResizePointerUp)
+	// Suppress text selection / show a resize cursor for the whole drag.
+	document.body.style.userSelect = 'none'
+	document.body.style.cursor = 'col-resize'
+}
+function onResizeKeydown(e) {
+	if (window.matchMedia('(max-width: 680px)').matches) return
+	// Left arrow shrinks the main pane (grows discussion); Right grows the main pane.
+	if (e.key === 'ArrowLeft') {
+		discussionWidth.value = clampDiscussionWidth(discussionWidth.value + DISCUSSION_KEY_STEP)
+	} else if (e.key === 'ArrowRight') {
+		discussionWidth.value = clampDiscussionWidth(discussionWidth.value - DISCUSSION_KEY_STEP)
+	} else if (e.key === 'Home') {
+		discussionWidth.value = DISCUSSION_MAX_WIDTH
+	} else if (e.key === 'End') {
+		discussionWidth.value = DISCUSSION_MIN_WIDTH
+	} else {
+		return
+	}
+	e.preventDefault()
+	persistDiscussionWidth()
+}
+onBeforeUnmount(() => {
+	if (resizePointerId !== null) {
+		window.removeEventListener('pointermove', onResizePointerMove)
+		window.removeEventListener('pointerup', onResizePointerUp)
+		window.removeEventListener('pointercancel', onResizePointerUp)
+		document.body.style.userSelect = ''
+		document.body.style.cursor = ''
+	}
+})
 
 // Breadcrumb board name + uppercase status chip
 const boardName = computed(() => boardData.value?.board?.title || t('kanso', 'Board'))
@@ -3856,6 +4318,19 @@ async function handleToggleProject(projectId) {
 	color: var(--color-error);
 }
 
+.card-modal__error-msg {
+	margin: 0 0 20px;
+	color: var(--color-main-text);
+	font-size: 1.05rem;
+}
+
+.card-modal__error-actions {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
 /* ── Verdict banner (review requested) ───────────────────────────────────── */
 .card-modal__verdict {
 	display: flex;
@@ -4043,29 +4518,30 @@ async function handleToggleProject(projectId) {
 	color: var(--color-success-text, var(--color-success));
 	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 10%, var(--color-main-background)));
 }
+/* Watch control: a single split-button pill — the watch toggle (left half) and
+   the watchers caret (right half) sit flush, sharing one border with a thin 1px
+   divider between them. Only the outer corners are rounded. */
+.card-modal__watch-wrap {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+}
 .card-modal__watch-btn {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	height: 36px;
+	/* !important — NC core sets `button { margin: 3px 3px 3px 0 }`, which otherwise
+	   pushes a 3px gap between the two halves of the split button. */
+	margin: 0 !important;
 	padding: 0 12px;
 	border: 1px solid var(--color-border);
-	border-radius: 100px;
+	border-radius: 100px 0 0 100px;
 	background: var(--color-main-background);
 	color: var(--color-text-maxcontrast);
 	font-size: 0.875rem;
 	cursor: pointer;
-}
-.card-modal__watch-btn--active {
-	border-color: var(--color-primary-element);
-	background: var(--color-primary-light);
-	color: var(--color-primary-element);
-}
-.card-modal__watch-wrap {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	gap: 2px;
 }
 .card-modal__watch-caret {
 	display: inline-flex;
@@ -4073,20 +4549,42 @@ async function handleToggleProject(projectId) {
 	justify-content: center;
 	width: 28px;
 	height: 36px;
+	margin: 0 !important;
+	/* The left edge is the shared divider; drop the caret's own left border so the
+	   two halves share a single 1px line, and sit flush against the left half
+	   (no margin) so there is no gap between them. */
 	border: 1px solid var(--color-border);
-	border-radius: 100px;
+	border-left: 0;
+	border-radius: 0 100px 100px 0;
 	background: var(--color-main-background);
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
+.card-modal__watch-btn:hover,
 .card-modal__watch-caret:hover {
 	border-color: var(--color-primary-element);
 	color: var(--color-primary-element);
 }
+/* Keep focus rings on top and the hovered/focused half's border above its
+   neighbour so the shared divider reads correctly. */
+.card-modal__watch-btn:hover,
+.card-modal__watch-btn:focus-visible,
+.card-modal__watch-caret:hover,
+.card-modal__watch-caret:focus-visible {
+	position: relative;
+	z-index: 1;
+}
+/* Active (watching) state styles the whole pill as one control. */
+.card-modal__watch-btn--active,
 .card-modal__watch-caret--active {
 	border-color: var(--color-primary-element);
 	background: var(--color-primary-light);
 	color: var(--color-primary-element);
+}
+.card-modal__watch-caret--active {
+	/* Re-add a left border so the divider stays visible in the active state,
+	   tinted to match the active pill. */
+	border-left: 1px solid var(--color-primary-element);
 }
 .card-modal__watch-panel {
 	min-width: 240px;
@@ -4293,6 +4791,15 @@ async function handleToggleProject(projectId) {
 .card-modal__review-pill--pending { border-color: var(--color-warning-text); background: rgba(236, 167, 0, 0.08); }
 .card-modal__review-pill--approved { border-color: var(--color-success-text); background: rgba(70, 186, 97, 0.08); }
 .card-modal__review-pill--changes_requested { border-color: var(--color-error-text); background: rgba(233, 50, 45, 0.08); }
+/* A gated (deferred) review reads as inert: greyed out, dashed border, muted
+   colours. The lock icon + hover tooltip explain it's waiting on an earlier
+   review. Wins over the state colour because the class comes later. */
+.card-modal__review-pill--gated {
+	border-color: var(--color-border-dark);
+	border-style: dashed;
+	background: var(--color-background-dark);
+	opacity: 0.7;
+}
 .card-modal__review-name {
 	max-width: 120px;
 	overflow: hidden;
@@ -4318,6 +4825,7 @@ async function handleToggleProject(projectId) {
 .card-modal__review-state--pending { color: var(--color-warning-text); }
 .card-modal__review-state--approved { color: var(--color-success-text); }
 .card-modal__review-state--changes_requested { color: var(--color-error-text); }
+.card-modal__review-state--gated { color: var(--color-text-maxcontrast); }
 /* Compact mode (3+ reviews): drop the reviewer name and the state text so the
    chip shrinks to avatar + type badge + state icon and N reviews stay on one
    row. The reviewer name is still available via the avatar's hover tooltip and
@@ -4633,10 +5141,39 @@ async function handleToggleProject(projectId) {
 /* ── Body grid ───────────────────────────────────────────────────────────── */
 .card-modal__body {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 400px;
+	/* main pane | drag handle | discussion pane (width from a persisted CSS var, #3661) */
+	grid-template-columns: minmax(0, 1fr) 0 var(--kanso-discussion-width, 400px);
 	align-items: stretch;
 	min-height: 0;
 	flex: 1;
+}
+/* Drag handle straddling the border between the two panes. Zero-width in the grid
+   track; widened visually via padding so it's easy to grab without shifting layout. */
+.card-modal__resizer {
+	position: relative;
+	z-index: 5;
+	width: 0;
+	margin: 0 -5px;
+	padding: 0 5px;
+	cursor: col-resize;
+	touch-action: none;
+	display: flex;
+	align-items: stretch;
+	justify-content: center;
+}
+.card-modal__resizer-grip {
+	width: 1px;
+	background: var(--color-border);
+	transition: background 0.12s ease, width 0.12s ease;
+}
+.card-modal__resizer:hover .card-modal__resizer-grip,
+.card-modal__resizer:focus-visible .card-modal__resizer-grip {
+	width: 3px;
+	background: var(--color-primary-element);
+}
+.card-modal__resizer:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
 }
 .card-modal__content {
 	display: flex;
@@ -5165,6 +5702,46 @@ async function handleToggleProject(projectId) {
 	gap: 8px;
 	align-items: center;
 }
+/* Time tracking (#3536) */
+.card-modal__time-add {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+	margin-top: 4px;
+}
+.card-modal__time-duration {
+	width: 110px;
+	flex: 0 0 auto;
+}
+.card-modal__time-note {
+	flex: 1 1 120px;
+	min-width: 120px;
+}
+.card-modal__time-entry {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex: 1;
+	min-width: 0;
+}
+.card-modal__time-entry-duration {
+	font-weight: 600;
+	white-space: nowrap;
+}
+.card-modal__time-entry-note {
+	color: var(--color-text-maxcontrast);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__time-entry-meta {
+	margin-left: auto;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	white-space: nowrap;
+}
 .card-modal__link-add .card-modal__dashed-input {
 	flex: 1;
 	width: auto;
@@ -5415,6 +5992,7 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__comment-controls {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 4px;
 	margin-top: 2px;
@@ -5486,7 +6064,7 @@ async function handleToggleProject(projectId) {
 	justify-content: center;
 	width: 24px;
 	height: 24px;
-	border: 1px solid var(--color-border);
+	border: none;
 	border-radius: 50%;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
@@ -5496,7 +6074,10 @@ async function handleToggleProject(projectId) {
 .card-modal__reaction-picker {
 	position: absolute;
 	bottom: calc(100% + 4px);
-	left: 0;
+	/* Anchor to the right: the add button sits at the right end of the comment
+	   controls row, so open leftward into the comment to avoid the popover being
+	   clipped by the scroll container's / comment group's overflow. */
+	right: 0;
 	z-index: 10;
 	display: flex;
 	gap: 2px;
@@ -5634,6 +6215,7 @@ async function handleToggleProject(projectId) {
 .card-modal__field-clear,
 .card-modal__checklist-item-delete,
 .card-modal__comment-icon-btn,
+.card-modal__reaction-add,
 .card-modal__child-remove,
 .card-modal__icon-btn,
 .card-modal__child-dot,
@@ -5651,6 +6233,8 @@ async function handleToggleProject(projectId) {
 	.card-modal__attrbar { flex-wrap: nowrap; overflow-x: auto; padding: 10px 16px; }
 	.card-modal__attr-right { margin-left: 0; }
 	.card-modal__body { grid-template-columns: 1fr; }
+	/* Panes stack: the persisted split width and its drag handle are ignored. */
+	.card-modal__resizer { display: none; }
 	.card-modal__content,
 	.card-modal__discussion { max-height: none; }
 	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }
@@ -5719,6 +6303,53 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__assign-option--highlighted {
 	background: var(--color-background-hover);
+}
+
+/* ── Custom fields section (#3537) ──────────────────────────────────────────── */
+
+.card-modal__cf-list {
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.card-modal__cf-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.card-modal__cf-label {
+	flex: 0 0 120px;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.card-modal__cf-input,
+.card-modal__cf-select {
+	flex: 1 1 120px;
+	min-width: 80px;
+	max-width: 260px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	padding: 4px 8px;
+	font-size: 0.875rem;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.card-modal__cf-input:disabled,
+.card-modal__cf-select:disabled {
+	opacity: 0.6;
+	cursor: default;
 }
 </style>
 

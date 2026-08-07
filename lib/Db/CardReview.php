@@ -14,9 +14,13 @@ use OCP\DB\Types;
  * One review request on a card (table `kanso_card_reviews`).
  *
  * A FLAT row - (card_id, reviewer) is unique. `state` is the reviewer's
- * verdict: pending until they act, then approved or changes_requested. There
- * is deliberately no round/stage column (multi-stage review chains are a
- * non-goal). `requested_by` records who asked, for display and notifications.
+ * verdict: pending until they act, then approved or changes_requested. The row
+ * itself carries no stage: multi-stage gating is DERIVED at read time from the
+ * review type's `stage` (see {@see ReviewType} and {@see ReviewService}), never
+ * stored as a fourth state. `requested_by` records who asked; `notified_at` is
+ * the unix time the reviewer was pinged, or null while the request is deferred
+ * (gated behind a lower-stage review) - stamped once so a re-approval upstream
+ * never re-notifies.
  *
  * @method int getCardId()
  * @method void setCardId(int $cardId)
@@ -28,8 +32,10 @@ use OCP\DB\Types;
  * @method void setRequestedBy(string $requestedBy)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
- * @method int|null getReviewTypeId()
- * @method void setReviewTypeId(?int $reviewTypeId)
+ * @method int getReviewTypeId()
+ * @method void setReviewTypeId(int $reviewTypeId)
+ * @method int|null getNotifiedAt()
+ * @method void setNotifiedAt(?int $notifiedAt)
  */
 class CardReview extends Entity implements \JsonSerializable {
 	public const STATE_PENDING = 'pending';
@@ -38,13 +44,17 @@ class CardReview extends Entity implements \JsonSerializable {
 
 	// Properties default to null (not to the column defaults): Entity::setter()
 	// skips values equal to the current one, so a non-null default would keep
-	// explicit sets of that same value out of INSERT statements.
+	// explicit sets of that same value out of INSERT statements. Note this is
+	// only an INSERT-mechanics default: `review_type_id` is NOT NULL in the
+	// schema (Version001600, 0 = the implicit single-stage review), so a loaded
+	// row always carries a non-null reviewTypeId - hence the non-null getter.
 	protected ?int $cardId = null;
 	protected ?string $reviewer = null;
 	protected ?string $state = null;
 	protected ?string $requestedBy = null;
 	protected ?int $createdAt = null;
 	protected ?int $reviewTypeId = null;
+	protected ?int $notifiedAt = null;
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
@@ -53,10 +63,11 @@ class CardReview extends Entity implements \JsonSerializable {
 		$this->addType('requestedBy', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('reviewTypeId', Types::INTEGER);
+		$this->addType('notifiedAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int, reviewTypeId: ?int}
+	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int, reviewTypeId: int, notifiedAt: ?int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -67,7 +78,8 @@ class CardReview extends Entity implements \JsonSerializable {
 			'state' => (string)$this->getState(),
 			'requestedBy' => (string)$this->getRequestedBy(),
 			'createdAt' => (int)$this->getCreatedAt(),
-			'reviewTypeId' => $this->getReviewTypeId() !== null ? (int)$this->getReviewTypeId() : null,
+			'reviewTypeId' => (int)$this->getReviewTypeId(),
+			'notifiedAt' => $this->getNotifiedAt() !== null ? (int)$this->getNotifiedAt() : null,
 		];
 	}
 

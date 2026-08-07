@@ -434,7 +434,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					class="bs-pane"
 					role="tabpanel"
 					aria-labelledby="bs-rail-tab-review-types">
-				<ul class="rt-settings__list" role="list">
+					<div class="rt-settings__intro">
+						<p>
+							{{ t('kanso', 'Review types label the kind of sign-off a card needs — for example Code, QA, or Security. Request one from the Reviews section of a card.') }}
+						</p>
+						<p>
+							{{ t('kanso', 'Stage turns them into a pipeline: a review is held — its reviewer is not notified and its chip shows greyed with a lock — until every lower-stage review on the card is approved. Types on the same stage run in parallel. Keep every stage at 0 to notify all reviewers at once.') }}
+						</p>
+					</div>
+					<ul class="rt-settings__list" role="list">
 					<li v-if="reviewTypes.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No review types yet. Create one below.') }}
 					</li>
@@ -503,6 +511,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ rt.title }}
 							</span>
 						</template>
+
+						<!-- Stage: lower stages gate higher ones -->
+						<label class="review-type-stage" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
+							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
+							<input
+								class="review-type-stage__input"
+								type="number"
+								min="0"
+								step="1"
+								:value="rt.stage ?? 0"
+								:disabled="!canManage"
+								:aria-label="t('kanso', 'Stage of review type {title}', { title: rt.title })"
+								@change="saveRtStage(rt, $event)" />
+						</label>
 
 						<!-- Actions (only when canManage) -->
 						<div v-if="canManage" class="label-settings__actions">
@@ -592,6 +614,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:disabled="isCreatingRt"
 							:aria-label="t('kanso', 'New review type name')"
 							@keydown.enter.prevent="submitCreateRt" />
+						<label class="review-type-stage review-type-stage--create" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
+							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
+							<input
+								v-model.number="newRtStage"
+								class="review-type-stage__input"
+								type="number"
+								min="0"
+								step="1"
+								:disabled="isCreatingRt"
+								:aria-label="t('kanso', 'Stage for new review type')" />
+						</label>
 						<button
 							class="label-settings__create-btn"
 							type="submit"
@@ -601,6 +634,174 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</div>
 					<span v-if="createRtError" class="label-settings__error">{{ createRtError }}</span>
+				</form>
+				</section>
+
+				<section
+					v-show="activeTab === 'card-fields'"
+					id="bs-pane-card-fields"
+					class="bs-pane"
+					role="tabpanel"
+					aria-labelledby="bs-rail-tab-card-fields">
+
+				<ul class="rt-settings__list" role="list">
+					<li v-if="cardFields.length === 0" class="label-settings__empty">
+						{{ t('kanso', 'No custom fields yet. Create one below.') }}
+					</li>
+
+					<li
+						v-for="field in cardFields"
+						:key="field.id"
+						class="label-settings__item cf-settings__item">
+
+						<!-- Inline rename input -->
+						<template v-if="editingCfId === field.id">
+							<input
+								:ref="(el) => setCfEditRef(field.id, el)"
+								v-model="editingCfName"
+								class="label-settings__rename-input"
+								type="text"
+								:aria-label="t('kanso', 'Rename field')"
+								@keydown.enter.prevent="saveCfRename(field)"
+								@keydown.escape="cancelCfRename"
+								@blur="saveCfRename(field)" />
+						</template>
+						<template v-else>
+							<span
+								class="label-settings__name"
+								:class="{ 'label-settings__name--readonly': !canManage }"
+								@click="canManage && startCfRename(field)">
+								{{ field.name }}
+							</span>
+						</template>
+
+						<!-- Type badge -->
+						<span class="cf-settings__type-badge">{{ field.type }}</span>
+
+						<!-- Options preview for select fields -->
+						<span v-if="field.type === 'select' && field.options && field.options.length > 0" class="cf-settings__options-preview">
+							{{ field.options.join(', ') }}
+						</span>
+
+						<!-- Options editor for select fields (MANAGE only) -->
+						<div v-if="field.type === 'select' && canManage && editingCfOptionsId === field.id" class="cf-settings__options-editor">
+							<textarea
+								v-model="editingCfOptions"
+								class="cf-settings__options-textarea"
+								:aria-label="t('kanso', 'Options (one per line or comma-separated)')"
+								:placeholder="t('kanso', 'Option 1\nOption 2\nOption 3')"
+								rows="4"
+								@keydown.escape="editingCfOptionsId = null" />
+							<div class="cf-settings__options-actions">
+								<button
+									class="label-settings__create-btn"
+									:disabled="updateCardField.isPending.value"
+									@click="saveCfOptions(field)">
+									{{ t('kanso', 'Save options') }}
+								</button>
+								<button class="label-settings__confirm-no" @click="editingCfOptionsId = null">
+									{{ t('kanso', 'Cancel') }}
+								</button>
+							</div>
+						</div>
+
+						<!-- Actions (only when canManage) -->
+						<div v-if="canManage" class="label-settings__actions">
+							<button
+								class="label-settings__action-btn"
+								:title="t('kanso', 'Rename')"
+								:aria-label="t('kanso', 'Rename field {name}', { name: field.name })"
+								@click="startCfRename(field)">
+								<PencilIcon :size="14" />
+							</button>
+							<button
+								v-if="field.type === 'select'"
+								class="label-settings__action-btn"
+								:title="t('kanso', 'Edit options')"
+								:aria-label="t('kanso', 'Edit options for field {name}', { name: field.name })"
+								@click="startCfOptionsEdit(field)">
+								<ChevronDownIcon :size="14" />
+							</button>
+							<button
+								class="label-settings__action-btn label-settings__action-btn--danger"
+								:title="t('kanso', 'Delete')"
+								:aria-label="t('kanso', 'Delete field {name}', { name: field.name })"
+								:disabled="confirmDeleteCfId === field.id && isDeletingCf"
+								@click="confirmDeleteCf(field)">
+								<DeleteIcon :size="14" />
+							</button>
+						</div>
+
+						<!-- Inline delete confirm -->
+						<div v-if="confirmDeleteCfId === field.id" class="label-settings__confirm">
+							<span>{{ t('kanso', 'Delete "{name}"?', { name: field.name }) }}</span>
+							<button class="label-settings__confirm-yes" :disabled="isDeletingCf" @click="doDeleteCf(field)">
+								{{ t('kanso', 'Delete') }}
+							</button>
+							<button class="label-settings__confirm-no" @click="confirmDeleteCfId = null">
+								{{ t('kanso', 'Cancel') }}
+							</button>
+							<span v-if="deleteCfError" class="label-settings__error">{{ deleteCfError }}</span>
+						</div>
+
+						<!-- Rename error -->
+						<span v-if="cfError[field.id]" class="label-settings__error">
+							{{ cfError[field.id] }}
+						</span>
+					</li>
+				</ul>
+
+				<!-- Create new custom field form (only when canManage) -->
+				<form
+					v-if="canManage"
+					class="label-settings__create cf-settings__create"
+					data-test="cf-create-form"
+					@submit.prevent="submitCreateCf">
+					<h4 class="label-settings__create-heading">{{ t('kanso', 'Add custom field') }}</h4>
+					<div class="label-settings__create-row cf-settings__create-row">
+						<input
+							v-model="newCfName"
+							class="label-settings__create-input"
+							type="text"
+							:placeholder="t('kanso', 'Field name…')"
+							:disabled="isCreatingCf"
+							:aria-label="t('kanso', 'New custom field name')"
+							data-test="cf-name-input"
+							@keydown.enter.prevent="submitCreateCf" />
+						<select
+							v-model="newCfType"
+							class="workflow__select cf-settings__type-select"
+							:disabled="isCreatingCf"
+							:aria-label="t('kanso', 'Field type')"
+							data-test="cf-type-select">
+							<option value="text">{{ t('kanso', 'Text') }}</option>
+							<option value="number">{{ t('kanso', 'Number') }}</option>
+							<option value="date">{{ t('kanso', 'Date') }}</option>
+							<option value="select">{{ t('kanso', 'Select') }}</option>
+						</select>
+						<button
+							class="label-settings__create-btn"
+							type="submit"
+							:disabled="!newCfName.trim() || isCreatingCf"
+							:aria-label="t('kanso', 'Create custom field')">
+							{{ t('kanso', 'Add') }}
+						</button>
+					</div>
+					<!-- Options textarea: only shown for select type -->
+					<div v-if="newCfType === 'select'" class="cf-settings__new-options">
+						<label class="cf-settings__new-options-label" for="bs-cf-new-options">
+							{{ t('kanso', 'Options (one per line or comma-separated)') }}
+						</label>
+						<textarea
+							id="bs-cf-new-options"
+							v-model="newCfOptionsRaw"
+							class="cf-settings__options-textarea"
+							:disabled="isCreatingCf"
+							:placeholder="t('kanso', 'Option 1\nOption 2\nOption 3')"
+							rows="4"
+							data-test="cf-options-textarea" />
+					</div>
+					<span v-if="createCfError" class="label-settings__error">{{ createCfError }}</span>
 				</form>
 				</section>
 
@@ -1755,6 +1956,7 @@ import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
 import TagMultipleIcon from 'vue-material-design-icons/TagMultiple.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
+import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
 import SwapHorizontalIcon from 'vue-material-design-icons/SwapHorizontal.vue'
 import RobotIcon from 'vue-material-design-icons/Robot.vue'
@@ -1768,6 +1970,7 @@ import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import { useLabels } from '../composables/useLabels.js'
 import { useReviewTypes } from '../composables/useReviewTypes.js'
+import { useCardFields } from '../composables/useCardFields.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useBoard } from '../composables/useBoard.js'
@@ -1804,6 +2007,11 @@ const props = defineProps({
 		default: () => [],
 	},
 	reviewTypes: {
+		type: Array,
+		default: () => [],
+	},
+	/** cardFields definitions from board payload */
+	cardFields: {
 		type: Array,
 		default: () => [],
 	},
@@ -2059,6 +2267,7 @@ const railSections = computed(() => {
 		{ id: 'general', name: t('kanso', 'General'), icon: CogIcon },
 		{ id: 'labels', name: t('kanso', 'Labels'), icon: TagMultipleIcon },
 		{ id: 'review-types', name: t('kanso', 'Review types'), icon: CheckDecagramIcon },
+		{ id: 'card-fields', name: t('kanso', 'Custom fields'), icon: TableColumnIcon },
 	]
 	if (canShare.value) {
 		sections.push({ id: 'sharing', name: t('kanso', 'Sharing'), icon: ShareVariantIcon })
@@ -2170,6 +2379,9 @@ const { createLabel, updateLabel, deleteLabel } = useLabels(() => props.boardId)
 
 // ── Review types composable ───────────────────────────────────────────────────
 const { createReviewType, updateReviewType, deleteReviewType } = useReviewTypes(() => props.boardId)
+
+// ── Card fields composable ────────────────────────────────────────────────────
+const { createCardField, updateCardField, deleteCardField } = useCardFields(() => props.boardId)
 
 // ── ACL composable ────────────────────────────────────────────────────────────
 const {
@@ -2563,6 +2775,7 @@ async function doDeleteLabel(label) {
 // ── Review types: create state ────────────────────────────────────────────────
 const newRtTitle = ref('')
 const newRtColor = ref('')
+const newRtStage = ref(0)
 const isCreatingRt = ref(false)
 const createRtError = ref('')
 const showNewRtColorPicker = ref(false)
@@ -2574,9 +2787,14 @@ async function submitCreateRt() {
 	createRtError.value = ''
 	showNewRtColorPicker.value = false
 	try {
-		await createReviewType.mutateAsync({ title, color: newRtColor.value || null })
+		await createReviewType.mutateAsync({
+			title,
+			color: newRtColor.value || null,
+			stage: Math.max(0, Number(newRtStage.value) || 0),
+		})
 		newRtTitle.value = ''
 		newRtColor.value = ''
+		newRtStage.value = 0
 	} catch (err) {
 		createRtError.value = err?.response?.data?.error || t('kanso', 'Failed to create review type.')
 	} finally {
@@ -2626,6 +2844,24 @@ async function saveRtRename(rt) {
 	}
 }
 
+// ── Review types: stage edit ──────────────────────────────────────────────────
+// Lower stages gate higher ones: a review is held (its reviewer un-notified,
+// chip greyed) while the card carries an unapproved review of a lower stage.
+async function saveRtStage(rt, event) {
+	const next = Math.max(0, Number(event.target.value) || 0)
+	// Reflect the clamped value back into the input.
+	event.target.value = String(next)
+	if (next === (rt.stage ?? 0)) return
+	try {
+		await updateReviewType.mutateAsync({ typeId: rt.id, stage: next })
+	} catch (err) {
+		rtError.value = {
+			...rtError.value,
+			[rt.id]: err?.response?.data?.error || t('kanso', 'Failed to update stage.'),
+		}
+	}
+}
+
 // ── Review types: color picker state ─────────────────────────────────────────
 const rtColorPickerFor = ref(null)
 
@@ -2666,6 +2902,125 @@ async function doDeleteRt(rt) {
 		deleteRtError.value = err?.response?.data?.error || t('kanso', 'Failed to delete review type.')
 	} finally {
 		isDeletingRt.value = false
+	}
+}
+
+// ── Card fields: create state ─────────────────────────────────────────────────
+const newCfName = ref('')
+const newCfType = ref('text')
+const newCfOptionsRaw = ref('')
+const isCreatingCf = ref(false)
+const createCfError = ref('')
+
+/** Parse the raw options textarea into a trimmed, deduplicated string array. */
+function parseCfOptions(raw) {
+	return raw
+		.split(/[\n,]+/)
+		.map((s) => s.trim())
+		.filter(Boolean)
+}
+
+async function submitCreateCf() {
+	const name = newCfName.value.trim()
+	if (!name) return
+	isCreatingCf.value = true
+	createCfError.value = ''
+	try {
+		const options = newCfType.value === 'select' ? parseCfOptions(newCfOptionsRaw.value) : undefined
+		await createCardField.mutateAsync({ name, type: newCfType.value, options })
+		newCfName.value = ''
+		newCfType.value = 'text'
+		newCfOptionsRaw.value = ''
+	} catch (err) {
+		createCfError.value = err?.response?.data?.error || t('kanso', 'Failed to create custom field.')
+	} finally {
+		isCreatingCf.value = false
+	}
+}
+
+// ── Card fields: rename state ─────────────────────────────────────────────────
+const editingCfId = ref(null)
+const editingCfName = ref('')
+const cfError = ref({})
+const cfEditRefs = {}
+
+function setCfEditRef(id, el) {
+	if (el) {
+		cfEditRefs[id] = el
+	} else {
+		delete cfEditRefs[id]
+	}
+}
+
+async function startCfRename(field) {
+	editingCfId.value = field.id
+	editingCfName.value = field.name
+	cfError.value = { ...cfError.value, [field.id]: '' }
+	await nextTick()
+	cfEditRefs[field.id]?.focus()
+	cfEditRefs[field.id]?.select()
+}
+
+function cancelCfRename() {
+	editingCfId.value = null
+}
+
+async function saveCfRename(field) {
+	const name = editingCfName.value.trim()
+	editingCfId.value = null
+	if (!name || name === field.name) return
+	try {
+		await updateCardField.mutateAsync({ fieldId: field.id, name })
+	} catch (err) {
+		cfError.value = {
+			...cfError.value,
+			[field.id]: err?.response?.data?.error || t('kanso', 'Failed to rename field.'),
+		}
+	}
+}
+
+// ── Card fields: options editor (select fields only) ─────────────────────────
+const editingCfOptionsId = ref(null)
+const editingCfOptions = ref('')
+
+function startCfOptionsEdit(field) {
+	editingCfOptionsId.value = field.id
+	editingCfOptions.value = Array.isArray(field.options) ? field.options.join('\n') : ''
+}
+
+async function saveCfOptions(field) {
+	const options = parseCfOptions(editingCfOptions.value)
+	editingCfOptionsId.value = null
+	try {
+		await updateCardField.mutateAsync({ fieldId: field.id, options })
+	} catch (err) {
+		cfError.value = {
+			...cfError.value,
+			[field.id]: err?.response?.data?.error || t('kanso', 'Failed to update options.'),
+		}
+	}
+}
+
+// ── Card fields: delete state ─────────────────────────────────────────────────
+const confirmDeleteCfId = ref(null)
+const isDeletingCf = ref(false)
+const deleteCfError = ref('')
+
+function confirmDeleteCf(field) {
+	confirmDeleteCfId.value = field.id
+	deleteCfError.value = ''
+}
+
+async function doDeleteCf(field) {
+	isDeletingCf.value = true
+	deleteCfError.value = ''
+	try {
+		await deleteCardField.mutateAsync({ fieldId: field.id })
+		confirmDeleteCfId.value = null
+	} catch (err) {
+		deleteCfError.value = err?.response?.data?.error || t('kanso', 'Failed to delete field.')
+	} finally {
+		isDeletingCf.value = false
 	}
 }
 
@@ -3552,6 +3907,29 @@ async function doDeleteAutoRule(rule) {
 	display: flex;
 	gap: 4px;
 	flex-shrink: 0;
+}
+
+.review-type-stage {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.review-type-stage__label {
+	white-space: nowrap;
+}
+
+.review-type-stage__input {
+	width: 52px;
+	padding: 2px 4px;
+	text-align: center;
+}
+
+.review-type-stage--create {
+	margin-inline: 4px;
 }
 
 .label-settings__action-btn {
@@ -4637,6 +5015,21 @@ async function doDeleteAutoRule(rule) {
 	color: var(--color-text-maxcontrast);
 }
 
+.rt-settings__intro {
+	margin: 0 0 16px;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	color: var(--color-text-maxcontrast);
+}
+
+.rt-settings__intro p {
+	margin: 0 0 8px;
+}
+
+.rt-settings__intro p:last-child {
+	margin-bottom: 0;
+}
+
 .automation__group {
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);
@@ -4720,5 +5113,74 @@ async function doDeleteAutoRule(rule) {
 .automation__group-body {
 	padding: 12px;
 	border-top: 1px solid var(--color-border);
+}
+
+/* ── Custom fields pane ──────────────────────────────────────────────────────── */
+
+.cf-settings__item {
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.cf-settings__type-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 7px;
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+	background: var(--color-background-dark);
+	flex-shrink: 0;
+}
+
+.cf-settings__options-preview {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	flex: 1 1 100%;
+	padding-left: 2px;
+}
+
+.cf-settings__options-editor {
+	flex: 1 1 100%;
+	margin-top: 4px;
+}
+
+.cf-settings__options-textarea {
+	width: 100%;
+	min-height: 80px;
+	box-sizing: border-box;
+	font-size: 0.875rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	padding: 6px 8px;
+	resize: vertical;
+}
+
+.cf-settings__options-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.cf-settings__create-row {
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.cf-settings__type-select {
+	flex-shrink: 0;
+}
+
+.cf-settings__new-options {
+	margin-top: 8px;
+}
+
+.cf-settings__new-options-label {
+	display: block;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	margin-bottom: 4px;
 }
 </style>

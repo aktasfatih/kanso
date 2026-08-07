@@ -69,6 +69,11 @@ return [
 		// Trello board JSON import → a fresh Kanso board owned by the importer.
 		// A distinct literal POST path, alongside boardPortability#import above.
 		['name' => 'trelloImport#import', 'url' => '/api/trello-import', 'verb' => 'POST'],
+		// Delta-sync read (#3675): board changes since the client's cursor, so a
+		// single edit patches the client cache instead of a whole-board refetch.
+		// Declared BEFORE board#show so the router never captures "changes" as a
+		// board id (same ordering rule as card#templates / card#resolveRef above).
+		['name' => 'board#changes', 'url' => '/api/boards/{id}/changes', 'verb' => 'GET'],
 		['name' => 'board#show', 'url' => '/api/boards/{id}', 'verb' => 'GET'],
 		['name' => 'boardStats#show', 'url' => '/api/boards/{id}/stats', 'verb' => 'GET'],
 		['name' => 'board#participants', 'url' => '/api/boards/{id}/participants', 'verb' => 'GET'],
@@ -199,6 +204,13 @@ return [
 		['name' => 'cardAttachment#inline', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}/inline', 'verb' => 'GET'],
 		['name' => 'cardAttachment#destroy', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'DELETE'],
 
+		// Manual time tracking on a card (#3536): list (READ), add a manual entry
+		// (EDIT) and delete an entry (EDIT). Seconds + optional note; the per-card
+		// total lives only in the card detail payload (never the summaries).
+		['name' => 'cardTimeEntry#index', 'url' => '/api/cards/{cardId}/time-entries', 'verb' => 'GET'],
+		['name' => 'cardTimeEntry#create', 'url' => '/api/cards/{cardId}/time-entries', 'verb' => 'POST'],
+		['name' => 'cardTimeEntry#destroy', 'url' => '/api/cards/{cardId}/time-entries/{entryId}', 'verb' => 'DELETE'],
+
 		['name' => 'cardRelation#index', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'GET'],
 		['name' => 'cardRelation#create', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'POST'],
 		['name' => 'cardRelation#destroy', 'url' => '/api/cards/{cardId}/relations/{relationId}', 'verb' => 'DELETE'],
@@ -239,6 +251,17 @@ return [
 		['name' => 'reviewType#create', 'url' => '/api/review-types', 'verb' => 'POST'],
 		['name' => 'reviewType#update', 'url' => '/api/review-types/{id}', 'verb' => 'PATCH'],
 		['name' => 'reviewType#destroy', 'url' => '/api/review-types/{id}', 'verb' => 'DELETE'],
+
+		// Per-board custom-field DEFINITIONS (#3537). MANAGE-gated CRUD; the board
+		// payload carries the definition list, so there is no index endpoint
+		// (mirrors review-types). VALUES are set per card below.
+		['name' => 'cardField#create', 'url' => '/api/card-fields', 'verb' => 'POST'],
+		['name' => 'cardField#update', 'url' => '/api/card-fields/{id}', 'verb' => 'PATCH'],
+		['name' => 'cardField#destroy', 'url' => '/api/card-fields/{id}', 'verb' => 'DELETE'],
+		// Per-card custom-field VALUES (#3537). EDIT-gated; a set is an upsert
+		// (one value per card/field). Set = PUT, clear = DELETE.
+		['name' => 'cardFieldValue#set', 'url' => '/api/cards/{cardId}/fields/{fieldId}', 'verb' => 'PUT'],
+		['name' => 'cardFieldValue#clear', 'url' => '/api/cards/{cardId}/fields/{fieldId}', 'verb' => 'DELETE'],
 
 		['name' => 'archiveRule#index', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'GET'],
 		['name' => 'archiveRule#create', 'url' => '/api/boards/{id}/archive-rules', 'verb' => 'POST'],

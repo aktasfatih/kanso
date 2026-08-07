@@ -40,9 +40,9 @@ class ReviewTypeService {
 	/**
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title or color
+	 * @throws InvalidInputException on invalid title, color, or negative stage
 	 */
-	public function create(int $boardId, string $title, ?string $color, string $uid): ReviewType {
+	public function create(int $boardId, string $title, ?string $color, string $uid, ?int $stage = null): ReviewType {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -50,6 +50,8 @@ class ReviewTypeService {
 		$type->setBoardId($boardId);
 		$type->setTitle($this->validateTitle($title));
 		$type->setColor(ColorValidator::assertValid($color));
+		$this->assertStageValid($stage);
+		$type->setStage($stage ?? 0);
 		$type = $this->reviewTypeMapper->insert($type);
 
 		$this->changeNotifier->notify(
@@ -66,9 +68,9 @@ class ReviewTypeService {
 	/**
 	 * @throws DoesNotExistException if the type or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title or color
+	 * @throws InvalidInputException on invalid title, color, or negative stage
 	 */
-	public function update(int $id, ?string $title, ?string $color, string $uid): ReviewType {
+	public function update(int $id, ?string $title, ?string $color, string $uid, ?int $stage = null): ReviewType {
 		$type = $this->reviewTypeMapper->find($id);
 		$board = $this->loadBoard($type->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
@@ -78,6 +80,10 @@ class ReviewTypeService {
 		}
 		if ($color !== null) {
 			$type->setColor(ColorValidator::assertValid($color));
+		}
+		if ($stage !== null) {
+			$this->assertStageValid($stage);
+			$type->setStage($stage);
 		}
 
 		$type = $this->reviewTypeMapper->update($type);
@@ -149,5 +155,17 @@ class ReviewTypeService {
 			);
 		}
 		return $title;
+	}
+
+	/**
+	 * A stage is a non-negative integer ordering the type in the review chain.
+	 * Null (caller keeps the existing / default stage) passes validation.
+	 *
+	 * @throws InvalidInputException on a negative stage
+	 */
+	private function assertStageValid(?int $stage): void {
+		if ($stage !== null && $stage < 0) {
+			throw new InvalidInputException('Stage must not be negative');
+		}
 	}
 }

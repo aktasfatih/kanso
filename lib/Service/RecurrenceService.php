@@ -410,7 +410,7 @@ class RecurrenceService {
 
 		// Commit succeeded - now it is safe to broadcast the enrichment UPDATE
 		// row that spawnClone deferred (push=false inside the transaction).
-		$this->changeNotifier->emitPush($card->getBoardId());
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
 
 		return $card;
 	}

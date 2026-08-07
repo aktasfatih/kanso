@@ -101,6 +101,14 @@ class ReviewServiceTest extends TestCase {
 		return $board;
 	}
 
+	/**
+	 * @param CardReview[] $siblings the findByCard() result the gating fold sees
+	 */
+	private function expectInsertReturns(CardReview $inserted, array $siblings): void {
+		$this->cardReviewMapper->method('insertRequest')->willReturn($inserted);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn($siblings);
+	}
+
 	// ---- requestReview ----------------------------------------------------
 
 	public function testRequestInsertsRowWritesChangeAndNotifies(): void {
@@ -112,9 +120,15 @@ class ReviewServiceTest extends TestCase {
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 0)->willReturn(false);
+		$inserted = $this->review('bob');
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
-			->with(9, 'bob', 'alice', null);
+			->with(9, 'bob', 'alice', null)
+			->willReturn($inserted);
+		// No lower-stage review exists → not gated → the notification fires and
+		// notified_at is stamped (one update).
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$inserted]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([]);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
@@ -122,8 +136,62 @@ class ReviewServiceTest extends TestCase {
 		$this->notificationService->expects(self::once())
 			->method('notifyReviewRequested')
 			->with(9, 'bob', 'alice');
+		$this->cardReviewMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (CardReview $r): CardReview {
+				self::assertNotNull($r->getNotifiedAt());
+				return $r;
+			});
 
 		$this->service->requestReview(9, 'bob', 'alice');
+	}
+
+	public function testRequestDefersNotificationWhenGated(): void {
+		// A stage-1 QA review requested while a stage-0 Code review sits unapproved
+		// on the card: the change row still fires (chip renders) but the reviewer
+		// notification is suppressed and notified_at is left null.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->reviewTypeMapper->method('find')->with(2)->willReturn($this->reviewType(2, 1));
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 2)->willReturn(false);
+
+		$code = $this->review('carol', CardReview::STATE_PENDING, 1, 9);
+		$code->setReviewTypeId(1); // stage 0
+		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1
+		$this->cardReviewMapper->method('insertRequest')->willReturn($qa);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+		$this->notificationService->expects(self::never())->method('notifyReviewRequested');
+		$this->cardReviewMapper->expects(self::never())->method('update');
+
+		$this->service->requestReview(9, 'bob', 'alice', 2);
+	}
+
+	public function testRequestNotifiesWhenPrerequisiteNotYetRequested(): void {
+		// A stage-1 review whose stage-0 prerequisite has NOT been requested is
+		// NOT gated - a not-yet-requested prerequisite must not block.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->reviewTypeMapper->method('find')->with(2)->willReturn($this->reviewType(2, 1));
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 2)->willReturn(false);
+
+		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1, alone on the card
+		$this->cardReviewMapper->method('insertRequest')->willReturn($qa);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->notificationService->expects(self::once())
+			->method('notifyReviewRequested')->with(9, 'bob', 'alice');
+		$this->cardReviewMapper->expects(self::once())->method('update');
+
+		$this->service->requestReview(9, 'bob', 'alice', 2);
 	}
 
 	public function testRequestSameReviewerDifferentTypeIsAllowed(): void {
@@ -133,7 +201,12 @@ class ReviewServiceTest extends TestCase {
 		$this->reviewTypeMapper->method('find')->with(5)->willReturn($this->reviewType(5, 1));
 		// bob already has an untyped review (type 0) but not a type-5 one.
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 5)->willReturn(false);
-		$this->cardReviewMapper->expects(self::once())->method('insertRequest')->with(9, 'bob', 'alice', 5);
+		$inserted = $this->review('bob', CardReview::STATE_PENDING, 7, 9);
+		$inserted->setReviewTypeId(5);
+		$this->cardReviewMapper->expects(self::once())->method('insertRequest')->with(9, 'bob', 'alice', 5)
+			->willReturn($inserted);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$inserted]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([5 => 0]);
 		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$this->service->requestReview(9, 'bob', 'alice', 5);
@@ -216,9 +289,14 @@ class ReviewServiceTest extends TestCase {
 			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
 		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->reviewType(3, 1));
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 3)->willReturn(false);
+		$inserted = $this->review('bob', CardReview::STATE_PENDING, 7, 9);
+		$inserted->setReviewTypeId(3);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
-			->with(9, 'bob', 'alice', 3);
+			->with(9, 'bob', 'alice', 3)
+			->willReturn($inserted);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$inserted]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([3 => 0]);
 		$this->changeNotifier->method('notify')->willReturn(new Change());
 
 		$this->service->requestReview(9, 'bob', 'alice', 3);
@@ -289,7 +367,8 @@ class ReviewServiceTest extends TestCase {
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
-		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		$review = $this->review('bob');
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($review);
 		$this->cardReviewMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static function (CardReview $r): CardReview {
@@ -300,6 +379,70 @@ class ReviewServiceTest extends TestCase {
 		$this->notificationService->expects(self::once())
 			->method('dismissReviewRequested')
 			->with(9, 'bob');
+		// The approve triggers a deferred-notification sweep; nothing downstream
+		// to un-gate here (the approved review is skipped).
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$review]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([]);
+		$this->notificationService->expects(self::never())->method('notifyReviewRequested');
+
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+	}
+
+	public function testApprovingBlockerFiresDeferredNotificationOnce(): void {
+		// Card holds a stage-0 Code review (bob, pending) and a deferred stage-1 QA
+		// review (carol, pending, notified_at null). When bob approves, the QA
+		// review un-gates and its reviewer is notified exactly once, with
+		// notified_at stamped so a re-approval never re-fires.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+
+		$code = $this->review('bob', CardReview::STATE_PENDING, 1, 9);
+		$code->setReviewTypeId(1); // stage 0
+		$qa = $this->review('carol', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1
+		$qa->setRequestedBy('alice');
+		$qa->setNotifiedAt(null); // deferred at request time
+
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($code);
+		// After bob's verdict is written, findByCard returns the now-approved code
+		// review plus the still-pending QA one.
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// QA notified exactly once (targeting carol, from requester alice).
+		$this->notificationService->expects(self::once())
+			->method('notifyReviewRequested')->with(9, 'carol', 'alice');
+		// Two updates: bob's verdict flip + stamping QA's notified_at.
+		$stamped = false;
+		$this->cardReviewMapper->expects(self::exactly(2))
+			->method('update')
+			->willReturnCallback(function (CardReview $r) use (&$stamped): CardReview {
+				if ($r->getReviewer() === 'carol') {
+					self::assertNotNull($r->getNotifiedAt());
+					$stamped = true;
+				}
+				return $r;
+			});
+
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+		self::assertTrue($stamped, 'QA review notified_at must be stamped');
+	}
+
+	public function testReApprovingBlockerDoesNotReNotify(): void {
+		// Idempotency: the QA review was already notified (notified_at set). A
+		// no-op re-approve of the (already-approved) blocker must not re-notify.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+
+		// The blocker is ALREADY approved, so setState is a no-op (no flip) and the
+		// deferred-notification sweep never runs.
+		$code = $this->review('bob', CardReview::STATE_APPROVED, 1, 9);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($code);
+		$this->cardReviewMapper->expects(self::never())->method('update');
+		$this->notificationService->expects(self::never())->method('notifyReviewRequested');
 
 		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
@@ -392,6 +535,81 @@ class ReviewServiceTest extends TestCase {
 		$this->commentService->expects(self::never())->method('addComment');
 
 		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', '   ');
+	}
+
+	// ---- serializeReviewsForCard (derived gating) -------------------------
+
+	public function testSerializeFoldsGatedAndBlockedByForDownstreamReview(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		$code = $this->review('carol', CardReview::STATE_PENDING, 1, 9);
+		$code->setReviewTypeId(1); // stage 0
+		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+
+		$out = $this->service->serializeReviewsForCard(9);
+
+		// stage-0 Code review: not gated (nothing lower).
+		self::assertFalse($out[0]['gated']);
+		self::assertSame([], $out[0]['blockedBy']);
+		// stage-1 QA review: gated by the unapproved stage-0 Code review (id 1).
+		self::assertTrue($out[1]['gated']);
+		self::assertSame([1], $out[1]['blockedBy']);
+	}
+
+	public function testSerializeUngatesWhenLowerStageApproved(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		$code = $this->review('carol', CardReview::STATE_APPROVED, 1, 9);
+		$code->setReviewTypeId(1); // stage 0, approved
+		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+
+		$out = $this->service->serializeReviewsForCard(9);
+
+		self::assertFalse($out[1]['gated'], 'QA un-gates once the stage-0 Code review is approved');
+		self::assertSame([], $out[1]['blockedBy']);
+	}
+
+	public function testSerializeUntypedReviewIsStageZeroAndNeverGated(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		// An untyped review (type 0) alongside a stage-1 QA review: the untyped one
+		// is stage 0, never gated; the QA one is gated by the untyped (id 1).
+		$untyped = $this->review('carol', CardReview::STATE_PENDING, 1, 9);
+		$untyped->setReviewTypeId(0);
+		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$untyped, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([2 => 1]);
+
+		$out = $this->service->serializeReviewsForCard(9);
+
+		self::assertFalse($out[0]['gated']);
+		self::assertTrue($out[1]['gated']);
+		self::assertSame([1], $out[1]['blockedBy']);
+	}
+
+	public function testSerializeSameStageReviewsDoNotGateEachOther(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		// Two stage-0 reviews: neither is strictly lower than the other, so neither
+		// gates.
+		$a = $this->review('carol', CardReview::STATE_PENDING, 1, 9);
+		$a->setReviewTypeId(1);
+		$b = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$b->setReviewTypeId(2);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$a, $b]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 0]);
+
+		$out = $this->service->serializeReviewsForCard(9);
+
+		self::assertFalse($out[0]['gated']);
+		self::assertFalse($out[1]['gated']);
 	}
 
 	// ---- findMine ---------------------------------------------------------

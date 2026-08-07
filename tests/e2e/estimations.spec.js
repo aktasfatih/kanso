@@ -108,7 +108,9 @@ test.describe('Card estimations (#3443)', () => {
 	test('the board settings Workflow tab switches the scale', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /workflow/i }).click()
 
 		const select = page.locator(`#estimate-scale-${state.boardId}`)

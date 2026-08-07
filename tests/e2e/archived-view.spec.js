@@ -63,12 +63,19 @@ test.describe('Archived cards page', () => {
 		await page.reload()
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
-		// The card tile is gone from the board.
+		// The board has re-hydrated (the ⋯ menu trigger is present) and the card
+		// tile is gone from the board.
+		await page.waitForSelector('.board-view__more-menu', { timeout: 10_000 })
 		await expect(page.locator('.card-tile').filter({ hasText: 'Archivable Card' })).not.toBeVisible()
 
-		// The archived badge button appears (count ≥ 1) — click it to open the page.
-		const archivedBtn = page.locator('.board-view__archived-btn')
-		await expect(archivedBtn).toBeVisible({ timeout: 8000 })
+		// The archived action lives in the consolidated ⋯ More overflow menu and is
+		// only offered when ≥1 archived card exists. Open the menu, then assert the
+		// item is present (carrying the count) — the item renders reactively once
+		// the board GET (which carries the archived count) resolves, so the menu can
+		// stay open while it appears.
+		await page.getByRole('button', { name: 'More' }).click()
+		const archivedBtn = page.getByRole('menuitem', { name: /Archived cards \(\d+\)/ })
+		await expect(archivedBtn).toBeVisible({ timeout: 10_000 })
 		await archivedBtn.click()
 
 		// Routed, deep-linkable page.

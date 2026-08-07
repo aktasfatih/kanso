@@ -13,6 +13,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\SearchService;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -20,6 +21,7 @@ class SearchServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
 	private CardMapper&MockObject $cardMapper;
 	private CommentMapper&MockObject $commentMapper;
+	private IDBConnection&MockObject $db;
 	private SearchService $service;
 
 	protected function setUp(): void {
@@ -27,10 +29,16 @@ class SearchServiceTest extends TestCase {
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
+		$this->db = $this->createMock(IDBConnection::class);
+		// Mirror the platform helper's backslash-escaping of LIKE wildcards.
+		$this->db->method('escapeLikeParameter')->willReturnCallback(
+			static fn (string $s): string => str_replace(['\\', '_', '%'], ['\\\\', '\\_', '\\%'], $s),
+		);
 		$this->service = new SearchService(
 			$this->boardService,
 			$this->cardMapper,
 			$this->commentMapper,
+			$this->db,
 		);
 	}
 

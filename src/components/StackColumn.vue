@@ -14,37 +14,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			class="stack-column__header"
 			:class="{ 'stack-column__header--colored': !!stack.color }"
 			:style="stack.color ? { '--stack-color': cssColor(stack.color) } : {}">
-			<input
-				v-if="editingTitle"
-				ref="titleInputRef"
-				v-model="titleDraft"
-				class="stack-column__title-input"
-				:aria-label="t('kanso', 'Column name')"
-				@keydown.enter.prevent="saveTitle"
-				@keydown.esc.prevent="cancelEditTitle"
-				@blur="onTitleBlur">
-			<span
-				v-else
-				class="stack-column__title"
-				:class="{ 'stack-column__title--editable': !!onRenameStack }"
-				:role="onRenameStack ? 'button' : null"
-				:tabindex="onRenameStack ? 0 : null"
-				:title="onRenameStack ? t('kanso', 'Rename column') : null"
-				@click="startEditTitle"
-				@keydown.enter="startEditTitle">{{ stack.title }}</span>
-			<span
-				v-if="stack.role > 0"
-				class="stack-column__role-chip"
-				:class="`stack-column__role-chip--${stack.role}`"
-				:title="roleLabel(stack.role)">
-				{{ roleLabel(stack.role) }}
-			</span>
-			<span
-				class="stack-column__badge"
-				:class="{ 'stack-column__badge--over-limit': isOverLimit }">
-				{{ wipBadgeText }}
-			</span>
-			<!-- Stack actions menu - rendered whenever at least one edit action is wired -->
+			<div class="stack-column__header-row">
+				<input
+					v-if="editingTitle"
+					ref="titleInputRef"
+					v-model="titleDraft"
+					class="stack-column__title-input"
+					:aria-label="t('kanso', 'Column name')"
+					@keydown.enter.prevent="saveTitle"
+					@keydown.esc.prevent="cancelEditTitle"
+					@blur="onTitleBlur">
+				<span
+					v-else
+					class="stack-column__title"
+					:class="{ 'stack-column__title--editable': !!onRenameStack }"
+					:role="onRenameStack ? 'button' : null"
+					:tabindex="onRenameStack ? 0 : null"
+					:title="onRenameStack ? t('kanso', 'Rename column') : null"
+					@click="startEditTitle"
+					@keydown.enter="startEditTitle">{{ stack.title }}</span>
+				<!-- Plain card count / WIP text (mockup: "12" or "4 / 3"). The count/limit
+				     text is kept here (not a pill) so the WIP figure stays visible; the
+				     visual "over limit" cue is the meter bar + caption below. -->
+				<span
+					class="stack-column__badge"
+					:class="{ 'stack-column__badge--over-limit': isOverLimit }">
+					{{ wipBadgeText }}
+				</span>
+				<span
+					v-if="stack.role > 0"
+					class="stack-column__role-chip"
+					:class="`stack-column__role-chip--${stack.role}`"
+					:title="roleLabel(stack.role)">
+					{{ roleLabel(stack.role) }}
+				</span>
+				<!-- Stack actions menu - rendered whenever at least one edit action is wired -->
 			<NcActions
 				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip"
 				class="stack-column__actions"
@@ -129,6 +133,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActionButton>
 				</template>
 			</NcActions>
+			</div>
+
+			<!-- WIP meter (mockup 1a): a 2px fill bar under the header. With a WIP
+			     limit set, the fill tracks fill ratio (capped at 100%) and turns to
+			     the warning colour once at/over the limit; without a limit it stays a
+			     neutral track. Replaces the old count/limit pill badge. -->
+			<div
+				class="stack-column__wip-meter"
+				:class="{ 'stack-column__wip-meter--over': isOverLimit, 'stack-column__wip-meter--at': isAtLimit && !isOverLimit }"
+				role="presentation">
+				<div
+					v-if="hasWipLimit"
+					class="stack-column__wip-fill"
+					:style="{ width: wipFillPct + '%' }" />
+			</div>
+			<div v-if="isOverLimit" class="stack-column__wip-caption">
+				{{ t('kanso', '{n} over the WIP limit', { n: cards.length - stack.wipLimit }) }}
+			</div>
 		</div>
 
 		<!-- Inline card composer at TOP - signature rapid-entry UX -->
@@ -544,6 +566,14 @@ async function handleSetColor(color) {
  */
 const hasWipLimit = computed(() => typeof props.stack.wipLimit === 'number' && props.stack.wipLimit > 0)
 const isOverLimit = computed(() => hasWipLimit.value && props.cards.length > props.stack.wipLimit)
+const isAtLimit = computed(() => hasWipLimit.value && props.cards.length >= props.stack.wipLimit)
+
+/** Meter fill ratio (0-100), capped at 100 once at/over the limit. */
+const wipFillPct = computed(() => {
+	if (!hasWipLimit.value) return 0
+	const pct = (props.cards.length / props.stack.wipLimit) * 100
+	return Math.max(0, Math.min(100, pct))
+})
 
 const wipBadgeText = computed(() => {
 	if (!hasWipLimit.value) return String(props.cards.length)
@@ -787,6 +817,9 @@ async function createFromTemplate(templateId) {
 </script>
 
 <style scoped>
+/* Quiet-columns (variant 1a): a white / raised column surface that lifts off the
+   sunken board canvas. --color-main-background + a soft shadow gives the "raised"
+   read against the board-view__stacks-wrap sunken background. */
 .stack-column {
 	position: relative;
 	flex-shrink: 0;
@@ -794,11 +827,12 @@ async function createFromTemplate(templateId) {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	background: var(--color-background-hover);
+	background: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);
 	padding: 12px;
 	max-height: calc(100vh - 140px);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .stack-column--dragging {
@@ -827,17 +861,26 @@ async function createFromTemplate(templateId) {
 
 .stack-column__header {
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--color-border);
+	flex-direction: column;
+	gap: 0;
 	cursor: grab;
 }
-/* Coloured column: a bottom accent bar in the stack colour. */
-.stack-column__header--colored {
-	border-bottom-color: var(--stack-color);
-	border-bottom-width: 3px;
+.stack-column__header-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+/* Coloured column: the meter track below the header takes the stack colour as its
+   accent (see --stack-color usage in the meter rules). */
+/* Actions menu - sits at the far right; margin-left:auto pushes it right when
+   no role chip is present (when a role chip is present it already took the auto
+   margin and the menu simply trails it). */
+.stack-column__actions {
+	flex-shrink: 0;
+	margin-left: auto;
+}
+.stack-column__role-chip + .stack-column__actions {
+	margin-left: 4px;
 }
 .stack-column__swatch {
 	display: inline-block;
@@ -884,19 +927,58 @@ async function createFromTemplate(templateId) {
 	margin: 0;
 }
 
+/* Card count / WIP figure - plain muted text next to the title (mockup 1a).
+   No longer a filled pill; the "over limit" signal is the meter + caption. */
 .stack-column__badge {
 	flex-shrink: 0;
 	display: inline-flex;
 	align-items: center;
-	justify-content: center;
-	min-width: 20px;
-	height: 20px;
-	padding: 0 6px;
-	border-radius: 10px;
-	background: var(--color-border);
+	font-size: 0.8rem;
+	font-weight: 500;
 	color: var(--color-text-maxcontrast);
-	font-size: 0.75rem;
+}
+
+.stack-column__badge--over-limit {
+	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
 	font-weight: 600;
+}
+
+/* WIP meter - a 2px track under the header. Neutral track by default; with a
+   limit the fill tracks the ratio and shifts to the warning colour at/over it.
+   Mirrors the --kanso-tint-* color-mix fallback pattern used elsewhere. */
+.stack-column__wip-meter {
+	position: relative;
+	height: 2px;
+	margin-top: 10px;
+	border-radius: 1px;
+	background: var(--color-border);
+	overflow: hidden;
+}
+/* Coloured column: tint the meter track with the stack colour. */
+.stack-column__header--colored .stack-column__wip-meter {
+	background: color-mix(in srgb, var(--stack-color) 40%, var(--color-border));
+}
+.stack-column__wip-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	height: 100%;
+	background: var(--color-primary-element, #0082c9);
+	border-radius: 1px;
+	transition: width 0.2s ease;
+}
+.stack-column__wip-meter--at .stack-column__wip-fill {
+	background: color-mix(in srgb, var(--color-warning, #eca700) 90%, transparent);
+}
+.stack-column__wip-meter--over {
+	background: var(--kanso-tint-warning, color-mix(in srgb, var(--color-warning, #eca700) 20%, transparent));
+}
+.stack-column__wip-meter--over .stack-column__wip-fill {
+	background: var(--color-warning, #eca700);
+}
+.stack-column__wip-caption {
+	margin-top: 6px;
+	font-size: 0.7rem;
+	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
 }
 
 /* Card composer */
@@ -972,9 +1054,10 @@ async function createFromTemplate(templateId) {
 	border-radius: var(--border-radius);
 }
 
-/* Role chip */
+/* Role chip - pushed to the right edge of the header row (mockup 1a). */
 .stack-column__role-chip {
 	flex-shrink: 0;
+	margin-left: auto;
 	display: inline-flex;
 	align-items: center;
 	height: 18px;

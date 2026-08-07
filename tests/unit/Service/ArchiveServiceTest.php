@@ -23,6 +23,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -36,6 +37,7 @@ class ArchiveServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private ITimeFactory&MockObject $time;
+	private IDBConnection&MockObject $db;
 	private ArchiveService $service;
 
 	protected function setUp(): void {
@@ -48,6 +50,7 @@ class ArchiveServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new ArchiveService(
 			$this->ruleMapper,
 			$this->cardMapper,
@@ -56,6 +59,7 @@ class ArchiveServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->time,
+			$this->db,
 		);
 	}
 
@@ -283,7 +287,14 @@ class ArchiveServiceTest extends TestCase {
 
 	// ---- sweep ------------------------------------------------------------
 
-	public function testSweepArchivesEligibleAndEmitsPerCardChange(): void {
+	/**
+	 * #3418 + #3579: a batch sweep records ONE change row per archived card (so no
+	 * client delta is lost) but coalesces the realtime fan-out into a SINGLE
+	 * pushBoardChanged for the whole batch (the push body is only {boardId}, so
+	 * one push suffices - clients delta/collapse the N rows). Each card's archive
+	 * write + its change row commit atomically (a per-item transaction).
+	 */
+	public function testSweepRecordsPerCardChangeButEmitsOneCoalescedPush(): void {
 		$rule = $this->rule();
 		$this->cardMapper->method('findEligibleForArchive')
 			->willReturn([$this->card(10), $this->card(11)]);
@@ -297,9 +308,10 @@ class ArchiveServiceTest extends TestCase {
 				return $c;
 			});
 
+		// N change rows recorded (never the push-emitting notify()).
 		$notified = [];
 		$this->changeNotifier->expects(self::exactly(2))
-			->method('notify')
+			->method('recordChange')
 			->willReturnCallback(function (int $boardId, int $entity, int $entityId, int $action, ?string $actor) use (&$notified): Change {
 				self::assertSame(1, $boardId);
 				self::assertSame(Change::ENTITY_CARD, $entity);
@@ -308,6 +320,13 @@ class ArchiveServiceTest extends TestCase {
 				$notified[] = $entityId;
 				return new Change();
 			});
+		$this->changeNotifier->expects(self::never())->method('notify');
+		// Exactly ONE coalesced push for the whole batch, not one per card.
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+		// Each card is committed in its own transaction.
+		$this->db->expects(self::exactly(2))->method('beginTransaction');
+		$this->db->expects(self::exactly(2))->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
 
 		$count = $this->service->sweep($rule);
 		self::assertSame(2, $count);
@@ -319,9 +338,35 @@ class ArchiveServiceTest extends TestCase {
 		$rule = $this->rule();
 		$this->cardMapper->method('findEligibleForArchive')->willReturn([]);
 		$this->cardMapper->expects(self::never())->method('update');
-		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		// An empty sweep emits no push at all.
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->db->expects(self::never())->method('beginTransaction');
 
 		self::assertSame(0, $this->service->sweep($rule));
+	}
+
+	/**
+	 * #3579: if a card's change-row write throws mid-sweep, that card's archive
+	 * write rolls back (per-item transaction) rather than leaving it archived
+	 * without a delta row.
+	 */
+	public function testSweepRollsBackCardWhenChangeRowInsertThrows(): void {
+		$rule = $this->rule();
+		$this->cardMapper->method('findEligibleForArchive')->willReturn([$this->card(10)]);
+		$this->cardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willThrowException(new \RuntimeException('change row insert failed'));
+
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		// A failed item aborts the sweep before the coalesced push.
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->sweep($rule);
 	}
 
 	// ---- archiveNow -------------------------------------------------------
@@ -336,7 +381,7 @@ class ArchiveServiceTest extends TestCase {
 			->with($board, 'alice', PermissionService::PERMISSION_MANAGE);
 		$this->cardMapper->method('findEligibleForArchive')->willReturn([$this->card(10)]);
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		self::assertSame(1, $this->service->archiveNow(3, 'alice'));
 	}
@@ -362,7 +407,7 @@ class ArchiveServiceTest extends TestCase {
 		$this->cardMapper->method('findEligibleForArchive')
 			->willReturnOnConsecutiveCalls([$this->card(10)], [$this->card(11), $this->card(12)]);
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		self::assertSame(3, $this->service->runEnabledRules());
 	}
@@ -382,7 +427,7 @@ class ArchiveServiceTest extends TestCase {
 				return [$this->card(11)];
 			});
 		$this->cardMapper->method('update')->willReturnArgument(0);
-		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		self::assertSame(1, $this->service->runEnabledRules());
 	}

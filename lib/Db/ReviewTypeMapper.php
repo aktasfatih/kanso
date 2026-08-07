@@ -53,4 +53,29 @@ class ReviewTypeMapper extends QBMapper {
 
 		return $this->findEntities($qb);
 	}
+
+	/**
+	 * Review-type id => stage map for a board, in ONE query - the lookup the
+	 * gating fold needs (see {@see \OCA\Kanso\Service\ReviewService}). Untyped
+	 * reviews (review_type_id = 0) are implicitly stage 0 and are NOT keyed here;
+	 * callers must default a missing id to stage 0.
+	 *
+	 * @return array<int, int> map of reviewTypeId => stage
+	 * @throws Exception
+	 */
+	public function stageMapForBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'stage')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['id']] = (int)$row['stage'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
 }

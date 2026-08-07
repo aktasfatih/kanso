@@ -72,7 +72,9 @@ test.describe('Labels', () => {
 	test('colored label created via the settings panel renders colored everywhere', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 
 		// Pick the first preset (red e74c3c), name it, create it
 		await page.getByRole('button', { name: /pick color for new label/i }).click()

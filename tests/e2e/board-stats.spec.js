@@ -58,7 +58,9 @@ test.describe('Board analytics', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 10_000 })
 
-		await page.locator('.board-view__analytics-btn').click()
+		// Board analytics now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: 'Board analytics' }).click()
 
 		await expect(page).toHaveURL(new RegExp(`#/board/${state.boardId}/stats`))
 		const view = page.locator('.board-stats__body')

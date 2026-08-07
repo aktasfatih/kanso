@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Service\ActivityPublisher;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\NotifyPush\Queue\IQueue;
 use OCP\IGroup;
@@ -30,6 +31,7 @@ class ChangeNotifierTest extends TestCase {
 	private IGroupManager&MockObject $groupManager;
 	private ContainerInterface&MockObject $container;
 	private LoggerInterface&MockObject $logger;
+	private ActivityPublisher&MockObject $activityPublisher;
 	private ChangeNotifier $notifier;
 
 	protected function setUp(): void {
@@ -40,13 +42,15 @@ class ChangeNotifierTest extends TestCase {
 		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->container = $this->createMock(ContainerInterface::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->activityPublisher = $this->createMock(ActivityPublisher::class);
 		$this->notifier = new ChangeNotifier(
 			$this->changeMapper,
 			$this->boardMapper,
 			$this->aclMapper,
 			$this->groupManager,
 			$this->container,
-			$this->logger
+			$this->logger,
+			$this->activityPublisher
 		);
 	}
 
@@ -95,6 +99,51 @@ class ChangeNotifierTest extends TestCase {
 		$this->container->method('get')->willThrowException(new \Exception('no such service'));
 
 		self::assertSame($change, $this->notifier->notify(1, Change::ENTITY_CARD, 7, Change::ACTION_UPDATE, 'alice'));
+	}
+
+	public function testRecordChangeInsertsRowAndEmitsNoPush(): void {
+		$change = new Change();
+		$this->changeMapper->expects(self::once())
+			->method('insertChange')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				7,
+				Change::ACTION_UPDATE,
+				'alice',
+				self::greaterThan(0),
+				Change::VERB_UPDATED
+			)
+			->willReturn($change);
+		// recordChange must NOT touch the push path at all - no queue lookup, no
+		// recipient resolution (that is pushBoardChanged's job).
+		$this->container->expects(self::never())->method('get');
+		$this->boardMapper->expects(self::never())->method('find');
+
+		self::assertSame(
+			$change,
+			$this->notifier->recordChange(1, Change::ENTITY_CARD, 7, Change::ACTION_UPDATE, 'alice', Change::VERB_UPDATED)
+		);
+	}
+
+	public function testPushBoardChangedFansOutWithoutRecordingAChangeRow(): void {
+		// pushBoardChanged is push-only: it never writes a change row.
+		$this->changeMapper->expects(self::never())->method('insertChange');
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$this->userAcl('bob')]);
+
+		$pushed = [];
+		$queue = $this->createMock(IQueue::class);
+		$queue->expects(self::exactly(2))
+			->method('push')
+			->willReturnCallback(static function (string $channel, $event) use (&$pushed): void {
+				$pushed[] = $event['user'];
+			});
+		$this->container->method('get')->willReturn($queue);
+
+		$this->notifier->pushBoardChanged(1);
+
+		self::assertSame(['alice', 'bob'], $pushed);
 	}
 
 	public function testEmitsOnePushPerRecipientIncludingExpandedGroups(): void {
@@ -174,5 +223,64 @@ class ChangeNotifierTest extends TestCase {
 		$this->boardMapper->expects(self::never())->method('find');
 
 		$this->notifier->notify(1, Change::ENTITY_BOARD, 1, Change::ACTION_CREATE, 'alice');
+	}
+
+	public function testPublishCardActivityFansOutToBoardRecipients(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$this->userAcl('bob')]);
+
+		$this->activityPublisher->expects(self::once())
+			->method('cardDone')
+			->with(1, 7, 'Ship it', 'alice', ['alice', 'bob']);
+		$this->activityPublisher->expects(self::never())->method('cardCreated');
+		$this->activityPublisher->expects(self::never())->method('cardMoved');
+
+		$this->notifier->publishCardActivity(1, 'card_done', 7, 'Ship it', 'alice');
+	}
+
+	public function testPublishCardActivityRoutesEachSubject(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+
+		$this->activityPublisher->expects(self::once())->method('cardCreated')->with(1, 7, 'A', 'alice', ['alice']);
+		$this->activityPublisher->expects(self::once())->method('cardMoved')->with(1, 7, 'A', 'alice', ['alice']);
+
+		$this->notifier->publishCardActivity(1, 'card_created', 7, 'A', 'alice');
+		$this->notifier->publishCardActivity(1, 'card_moved', 7, 'A', 'alice');
+	}
+
+	public function testPublishCardActivitySkipsSystemActor(): void {
+		// A null actor is a system/cron sweep (auto-archive, recurrence) - never
+		// an activity. No recipient resolution, no publish.
+		$this->boardMapper->expects(self::never())->method('find');
+		$this->activityPublisher->expects(self::never())->method('cardCreated');
+		$this->activityPublisher->expects(self::never())->method('cardMoved');
+		$this->activityPublisher->expects(self::never())->method('cardDone');
+
+		$this->notifier->publishCardActivity(1, 'card_moved', 7, 'A', null);
+	}
+
+	public function testPublishCardActivityNeverPropagates(): void {
+		// A recipient-resolution failure must never break the mutation that
+		// already committed.
+		$this->boardMapper->method('find')->willThrowException(new \RuntimeException('db hiccup'));
+		$this->logger->expects(self::once())->method('debug');
+		$this->activityPublisher->expects(self::never())->method('cardMoved');
+
+		$this->notifier->publishCardActivity(1, 'card_moved', 7, 'A', 'alice');
+	}
+
+	public function testPublishBoardSharedFansOutAndSkipsSystemActor(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$this->userAcl('bob')]);
+
+		$this->activityPublisher->expects(self::once())
+			->method('boardShared')
+			->with(1, 'My Board', 'alice', ['alice', 'bob']);
+
+		$this->notifier->publishBoardShared(1, 'My Board', 'alice');
+
+		// A null actor short-circuits without touching the publisher.
+		$this->notifier->publishBoardShared(1, 'My Board', null);
 	}
 }

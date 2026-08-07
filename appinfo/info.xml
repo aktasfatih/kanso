@@ -26,7 +26,7 @@ Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
 roles, a command palette with full-text search, trash with restore, GitHub
 links and webhook, and one-click Import from Deck.
 	]]></description>
-	<version>0.9.25</version>
+	<version>0.9.29</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>
@@ -41,6 +41,9 @@ links and webhook, and one-click Import from Deck.
 	<dependencies>
 		<nextcloud min-version="30" max-version="34"/>
 	</dependencies>
+	<commands>
+		<command>OCA\Kanso\Command\Rebalance</command>
+	</commands>
 	<background-jobs>
 		<job>OCA\Kanso\Cron\PruneChanges</job>
 		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>
@@ -52,6 +55,14 @@ links and webhook, and one-click Import from Deck.
 		<admin>OCA\Kanso\Settings\BackupAdmin</admin>
 		<admin-section>OCA\Kanso\Settings\AdminSection</admin-section>
 	</settings>
+	<activity>
+		<settings>
+			<setting>OCA\Kanso\Activity\Setting</setting>
+		</settings>
+		<providers>
+			<provider>OCA\Kanso\Activity\Provider</provider>
+		</providers>
+	</activity>
 	<navigations>
 		<navigation>
 			<name>Kanso</name>

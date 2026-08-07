@@ -11,9 +11,11 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldValue;
+use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
-use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -24,6 +26,7 @@ use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ReviewService;
 use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -51,7 +54,7 @@ class CardController extends Controller {
 		private CardLabelMapper $cardLabelMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardContactMapper $cardContactMapper,
-		private CardReviewMapper $cardReviewMapper,
+		private ReviewService $reviewService,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
@@ -59,6 +62,8 @@ class CardController extends Controller {
 		private CardRelationService $relationService,
 		private ProjectCardMapper $projectCardMapper,
 		private CardAttachmentMapper $cardAttachmentMapper,
+		private CardTimeEntryMapper $cardTimeEntryMapper,
+		private CardFieldValueMapper $cardFieldValueMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -139,16 +144,23 @@ class CardController extends Controller {
 			+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
 			+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
 			+ ['contacts' => $this->cardContactMapper->findContactsByCard($id)]
-			+ ['reviews' => $this->cardReviewMapper->findByCard($id)]
+			+ ['reviews' => $this->reviewService->serializeReviewsForCard($id)]
 			+ ['checklistItems' => $checklistItems]
 			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
 			+ ['parent' => $parent]
 			+ ['children' => $children]
 			+ ['commentCount' => $this->commentMapper->countByCard($id)]
 			+ ['attachmentCount' => $this->cardAttachmentMapper->countByCard($id)]
+			+ ['timeSpent' => $this->cardTimeEntryMapper->sumSecondsByCard($id)]
 			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
 			+ ['relations' => $this->relationService->groupedForCard($id)]
-			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)];
+			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)]
+			// Custom-field VALUES (#3537): [{fieldId, value}] - detail-only, never
+			// in the board summary (the definitions ride the board payload).
+			+ ['fieldValues' => array_map(
+				static fn (CardFieldValue $v): array => $v->jsonSerialize(),
+				$this->cardFieldValueMapper->findByCard($id)
+			)];
 	}
 
 	/**

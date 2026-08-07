@@ -54,7 +54,9 @@ test.describe('Board settings enable switches (public link + calendar feed)', ()
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
 		await expect(page.locator('#bs-pane-automation')).toBeVisible({ timeout: 8_000 })
 

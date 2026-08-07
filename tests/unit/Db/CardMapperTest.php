@@ -262,6 +262,39 @@ class CardMapperTest extends TestCase {
 		self::assertNull($this->mapper->findByBoardAndSeq(7, 999));
 	}
 
+	// ---- findSummariesByIds (delta-sync per-card re-serialize, #3675) ------
+
+	public function testFindSummariesByIdsHydratesTheRequestedCards(): void {
+		// The delta window touched card 42 → it comes back as a hydrated summary
+		// (same shape as findSummariesByBoard, no description).
+		$this->stubQuery([[
+			'id' => 42,
+			'board_id' => 7,
+			'stack_id' => 3,
+			'title' => 'Edited elsewhere',
+			'sort_key' => 'aa',
+			'deleted_at' => 0,
+			'is_template' => false,
+		]]);
+
+		$cards = $this->mapper->findSummariesByIds(7, [42]);
+		self::assertCount(1, $cards);
+		self::assertSame(42, $cards[0]->getId());
+		self::assertSame('Edited elsewhere', $cards[0]->getTitle());
+	}
+
+	public function testFindSummariesByIdsEmptySetShortCircuitsWithoutQuery(): void {
+		// An empty id set must never emit `IN ()` - no DB call at all.
+		$this->db->expects(self::never())->method('getQueryBuilder');
+		self::assertSame([], $this->mapper->findSummariesByIds(7, []));
+	}
+
+	public function testFindSummariesByIdsExcludesTemplates(): void {
+		// A card turned into a template between the cursor and now must not come
+		// back as an upsert (the controller then emits it as a remove).
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->findSummariesByIds(7, [42]));
+	}
+
 	// ---- findTemplatesByBoard (per-board template picker, #3409) -----------
 
 	public function testFindTemplatesByBoardHydratesTemplateRows(): void {

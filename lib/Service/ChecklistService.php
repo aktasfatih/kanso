@@ -15,6 +15,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 
 /**
  * Flat checklist (todo) items on a card. Mirrors the assignee/label flow:
@@ -35,6 +36,7 @@ class ChecklistService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -80,11 +82,9 @@ class ChecklistService {
 		$item->setDone($done);
 		$item->setSortKey($sortKey);
 		$item->setCreatedAt(time());
-		$saved = $this->itemMapper->insert($item);
 
-		$this->notifyCard($card, $actorUid);
-
-		return $saved;
+		// Atomic item-write + card change-row (#3579); push after commit.
+		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->insert($item));
 	}
 
 	/**
@@ -119,10 +119,8 @@ class ChecklistService {
 			return $item;
 		}
 
-		$saved = $this->itemMapper->update($item);
-		$this->notifyCard($card, $actorUid);
-
-		return $saved;
+		// Atomic item-write + card change-row (#3579); push after commit.
+		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
 	}
 
 	/**
@@ -178,10 +176,9 @@ class ChecklistService {
 		}
 
 		$item->setSortKey($newKey);
-		$saved = $this->itemMapper->update($item);
-		$this->notifyCard($card, $actorUid);
 
-		return $saved;
+		// Atomic item-write + card change-row (#3579); push after commit.
+		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
 	}
 
 	/**
@@ -196,24 +193,48 @@ class ChecklistService {
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 
-		$this->itemMapper->delete($item);
-		$this->notifyCard($card, $actorUid);
+		// Atomic item-delete + card change-row (#3579); push after commit. The
+		// deleted item is returned so the shared helper's contract holds; the
+		// caller (void) ignores it.
+		$this->writeItemChange($card, $actorUid, function () use ($item): ChecklistItem {
+			$this->itemMapper->delete($item);
+			return $item;
+		});
 	}
 
 	/**
-	 * A checklist change is a card update as far as sync is concerned: the
-	 * board ETag bumps and clients refetch the card (items) and the board
-	 * (progress count).
+	 * Runs a checklist-item write and the card's `kanso_changes` row atomically
+	 * (#3579): a checklist change is a card UPDATE as far as sync is concerned
+	 * (the board ETag bumps and clients refetch the card's items + the board's
+	 * progress count). The item write in $write and the card change-row insert
+	 * commit together, or roll back together on any failure; the realtime push is
+	 * emitted only AFTER commit.
+	 *
+	 * @param callable():ChecklistItem $write performs the item write and returns the row
+	 * @throws \Throwable rethrows whatever the write or the change-row insert throws
 	 */
-	private function notifyCard(Card $card, string $actorUid): void {
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$card->getId(),
-			Change::ACTION_UPDATE,
-			$actorUid,
-			verb: Change::VERB_CHECKLIST,
-		);
+	private function writeItemChange(Card $card, string $actorUid, callable $write): ChecklistItem {
+		$this->db->beginTransaction();
+		try {
+			$saved = $write();
+			$this->changeNotifier->recordChange(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$card->getId(),
+				Change::ACTION_UPDATE,
+				$actorUid,
+				Change::VERB_CHECKLIST,
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Commit succeeded - now it is safe to broadcast.
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
+
+		return $saved;
 	}
 
 	/**

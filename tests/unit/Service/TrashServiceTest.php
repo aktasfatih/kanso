@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -24,6 +25,7 @@ use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
+use OCA\Kanso\Service\CardTimeEntryService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -50,6 +52,8 @@ class TrashServiceTest extends TestCase {
 	private CardRelationMapper&MockObject $cardRelationMapper;
 	private ProjectCardMapper&MockObject $projectCardMapper;
 	private CardAttachmentService&MockObject $cardAttachmentService;
+	private CardTimeEntryService&MockObject $cardTimeEntryService;
+	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -70,6 +74,8 @@ class TrashServiceTest extends TestCase {
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
 		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
+		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
+		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -87,6 +93,8 @@ class TrashServiceTest extends TestCase {
 			$this->cardRelationMapper,
 			$this->projectCardMapper,
 			$this->cardAttachmentService,
+			$this->cardTimeEntryService,
+			$this->cardFieldValueMapper,
 		);
 	}
 
@@ -200,6 +208,10 @@ class TrashServiceTest extends TestCase {
 		$this->subscriptionMapper->expects(self::once())->method('deleteByCard')->with(9);
 		// Attachments cascade through the service (objects + rows), not a mapper.
 		$this->cardAttachmentService->expects(self::once())->method('deleteAllForCard')->with(9);
+		// Manual time-tracking entries are cascaded too (#3536).
+		$this->cardTimeEntryService->expects(self::once())->method('deleteAllForCard')->with(9);
+		// Custom-field values are cascaded too (#3537).
+		$this->cardFieldValueMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->cardMapper->expects(self::once())->method('delete')->with($card);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')

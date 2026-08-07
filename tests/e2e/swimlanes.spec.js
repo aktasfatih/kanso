@@ -61,8 +61,9 @@ test.describe('Swimlanes (#3406)', () => {
 		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible()
 		await expect(page.locator('.swimlane')).toHaveCount(0)
 
-		// Open the swimlane menu and pick "Group by label".
-		await page.locator('.board-view__swimlane-menu button').first().click()
+		// Swimlanes now live under the consolidated ⋯ More overflow menu. Open it
+		// and pick "Group by label".
+		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByText('Group by label', { exact: true }).click()
 
 		// Lanes appear: the "Frontend" label lane and the trailing "No label" lane.
@@ -85,7 +86,7 @@ test.describe('Swimlanes (#3406)', () => {
 		await expect(page.locator('.swimlane')).toHaveCount(2)
 
 		// Toggle back to "No swimlanes" → flat board restored, lanes gone.
-		await page.locator('.board-view__swimlane-menu button').first().click()
+		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByText('No swimlanes', { exact: true }).click()
 		await expect(page.locator('.swimlane')).toHaveCount(0)
 		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible()

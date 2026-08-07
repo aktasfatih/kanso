@@ -9,7 +9,7 @@ import App from './App.vue'
 import { router } from './router/index.js'
 import { initRealtime } from './services/realtime.js'
 import { isBoardMovePending } from './composables/useCardMove.js'
-import { boardQueryKey } from './composables/queryKeys.js'
+import { syncBoardDelta } from './composables/useBoardDelta.js'
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -25,19 +25,15 @@ createApp(App)
 	.use(VueQueryPlugin, { queryClient })
 	.mount(document.getElementById('kanso'))
 
-// Realtime: a push event means someone changed the board - refetch it,
-// unless our own moves are still in flight (the move queue's drain
-// invalidate syncs afterwards; refetching now would show pre-move state).
-// Board query keys are ['board', <route param>]; boardQueryKey coerces the
-// realtime boardId to the same string key the board query is registered under.
-// Cancel any in-flight board refetch before invalidating (mirrors
-// useBoardSubscription): otherwise a pre-change response already on the wire
-// can settle after the push-triggered refetch and overwrite fresher data.
-initRealtime(async (boardId) => {
+// Realtime: a push event means someone changed the board - delta-sync it (#3675)
+// instead of re-downloading the whole board. syncBoardDelta fetches only the
+// changes since our cursor and PATCHES the cache (O(delta), not O(boardSize));
+// on a resync signal or error it falls back to a full board invalidate, and it
+// re-checks the move-pending guard internally so it never clobbers an optimistic
+// move (the move queue's drain invalidate reconciles afterwards).
+initRealtime((boardId) => {
 	if (isBoardMovePending(boardId)) {
 		return
 	}
-	const boardKey = boardQueryKey(boardId)
-	await queryClient.cancelQueries({ queryKey: boardKey })
-	queryClient.invalidateQueries({ queryKey: boardKey })
+	syncBoardDelta(queryClient, boardId)
 })

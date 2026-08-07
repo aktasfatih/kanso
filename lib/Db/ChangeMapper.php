@@ -152,6 +152,51 @@ class ChangeMapper extends QBMapper {
 	}
 
 	/**
+	 * Lowest change id of a board - the oldest RETAINED change, the floor of the
+	 * delta window. A client whose cursor is below this floor has fallen off the
+	 * pruned tail and must resync (full refetch) rather than receive an
+	 * incomplete delta. 0 for boards without any change rows (which regular flows
+	 * never produce - see {@see self::getLatestChangeId()}).
+	 *
+	 * @throws Exception
+	 */
+	public function getOldestChangeId(int $boardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->min('id'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$min = $result->fetchOne();
+		$result->closeCursor();
+
+		return is_numeric($min) ? (int)$min : 0;
+	}
+
+	/**
+	 * The board's change rows newer than $since (id > $since), oldest first,
+	 * capped at $limit - the delta-sync read behind `GET /api/boards/{id}/changes`.
+	 * Uses the (board_id, id) index (WHERE board_id = ? AND id > ? ORDER BY id).
+	 * When the returned count equals $limit the window is saturated: the caller
+	 * treats that as "client too far behind" and forces a resync rather than
+	 * shipping a partial delta.
+	 *
+	 * @return Change[]
+	 * @throws Exception
+	 */
+	public function findSince(int $boardId, int $since, int $limit = 500): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('id', $qb->createNamedParameter($since, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC')
+			->setMaxResults($limit);
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Ids of change rows eligible for pruning: older than $olderThan, but
 	 * NEVER a board's newest row - deleting that would regress
 	 * getLatestChangeId() to 0 for idle boards, flipping their ETag to "0"

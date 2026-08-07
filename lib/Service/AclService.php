@@ -104,6 +104,10 @@ class AclService {
 			$actorUid
 		);
 
+		// Surface the new share in the Nextcloud Activity stream (best-effort). Only
+		// a fresh share is an activity - a permission-mask update or a revoke is not.
+		$this->changeNotifier->publishBoardShared($boardId, (string)$board->getTitle(), $actorUid);
+
 		return $acl;
 	}
 

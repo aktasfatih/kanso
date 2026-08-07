@@ -68,8 +68,9 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 		await expect(page.locator('.card-tile', { hasText: 'Alpha' })).toBeVisible({ timeout: 10_000 })
 
-		// Enter multi-select mode via the toolbar toggle.
-		await page.getByRole('button', { name: 'Select multiple cards' }).click()
+		// Enter multi-select mode via the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: 'Select multiple cards' }).click()
 
 		// Selection checkboxes now appear on the tiles; select Alpha and Bravo.
 		await page.locator('.card-tile', { hasText: 'Alpha' }).click()

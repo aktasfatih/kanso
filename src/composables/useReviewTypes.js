@@ -23,18 +23,19 @@ export function useReviewTypes(boardId) {
 	}
 
 	const createReviewType = useMutation({
-		mutationFn: ({ title, color }) =>
-			apiCreateReviewType(resolveBoardId(boardId), title, color || null),
+		mutationFn: ({ title, color, stage }) =>
+			apiCreateReviewType(resolveBoardId(boardId), title, color || null, stage),
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
 		},
 	})
 
 	const updateReviewType = useMutation({
-		mutationFn: ({ typeId, title, color }) =>
+		mutationFn: ({ typeId, title, color, stage }) =>
 			apiUpdateReviewType(typeId, {
 				...(title !== undefined ? { title } : {}),
 				...(color !== undefined ? { color } : {}),
+				...(stage !== undefined ? { stage } : {}),
 			}),
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })

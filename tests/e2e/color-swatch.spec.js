@@ -50,8 +50,10 @@ test.describe('Colour-pick swatch shape', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		// Open board settings → Labels tab.
-		await page.click('.board-view__settings-btn')
+		// Open board settings → Labels tab. Board settings now lives in the
+		// consolidated ⋯ More overflow menu, so open that first.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: 'Board settings' }).click()
 		await page.waitForSelector('.label-settings__swatch', { timeout: 10_000 })
 
 		const box = await page.locator('.label-settings__swatch').first().boundingBox()

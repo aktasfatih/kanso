@@ -62,42 +62,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
-			<!-- Swimlanes - client-side grouping of the Board view into horizontal
-			     lanes by assignee / label / priority. View-only over the summary
-			     payload; persisted per board per user. Only shown in Board view. -->
-			<NcActions
-				v-if="boardData && viewMode === 'board'"
-				class="board-view__swimlane-menu"
-				:menu-name="swimlaneModeLabel">
-				<template #icon>
-					<ViewAgendaOutlineIcon :size="20" />
-				</template>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'none'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('none')">
-					{{ t('kanso', 'No swimlanes') }}
-				</NcActionRadio>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'assignee'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('assignee')">
-					{{ t('kanso', 'Group by assignee') }}
-				</NcActionRadio>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'label'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('label')">
-					{{ t('kanso', 'Group by label') }}
-				</NcActionRadio>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'priority'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('priority')">
-					{{ t('kanso', 'Group by priority') }}
-				</NcActionRadio>
-			</NcActions>
-
 			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
 			<NcActions
 				v-if="boardData"
@@ -137,88 +101,129 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@delete-saved="handleDeleteSavedFilter" />
 			<div v-if="filterError" class="board-view__filter-error">{{ filterError }}</div>
 
-			<!-- Archived cards page button - only shown when ≥1 archived card -->
-			<NcButton
-				v-if="boardData && archivedCards.length > 0"
-				class="board-view__archived-btn"
-				:title="t('kanso', 'View archived cards')"
-				:aria-label="t('kanso', 'View archived cards ({count})', { count: archivedCards.length })"
-				@click="goToArchived">
-				<template #icon>
-					<ArchiveIcon :size="20" />
-				</template>
-				{{ archivedCards.length }}
-			</NcButton>
-
-			<!-- Watch / unwatch this board - subscribes to a "new card created"
-			     notification. Uses the same eye icon as the card-level watcher:
-			     eye-off (crossed) when watching, plain eye outline when not. -->
-			<NcButton
+			<!-- Consolidated "More" overflow (variant 1a): the secondary board
+			     actions live behind a single ⋯ menu so the toolbar reads as one
+			     bar. Every action here stays fully reachable and keeps its handler,
+			     permission gate, and any keyboard shortcut (e.g. the settings panel
+			     is still toggled by its own control). Swimlanes (a view-only Board
+			     grouping) are the radio group at the top; the rest are actions. -->
+			<NcActions
 				v-if="boardData"
-				class="board-view__watch-btn"
-				:type="isBoardSubscribed ? 'secondary' : 'tertiary'"
-				:title="isBoardSubscribed
-					? t('kanso', 'Watching this board (click to stop)')
-					: t('kanso', 'Watch this board for new cards')"
-				:aria-label="isBoardSubscribed ? t('kanso', 'Unwatch board') : t('kanso', 'Watch board')"
-				:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
-				@click="toggleBoardWatch">
+				v-model:open="moreMenuOpen"
+				class="board-view__more-menu"
+				:menu-name="t('kanso', 'More')"
+				:aria-label="t('kanso', 'More board actions')">
 				<template #icon>
-					<EyeOffOutlineIcon v-if="isBoardSubscribed" :size="20" />
-					<EyeOutlineIcon v-else :size="20" />
+					<DotsHorizontalIcon :size="20" />
 				</template>
-			</NcButton>
 
-			<!-- Trash button - always visible when board is loaded; opens the Trash page -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__trash-btn"
-				:title="t('kanso', 'View deleted cards')"
-				:aria-label="t('kanso', 'View deleted cards')"
-				@click="goToTrash">
-				<template #icon>
-					<DeleteIcon :size="20" />
+				<!-- Swimlanes - client-side grouping of the Board view into
+				     horizontal lanes by assignee / label / priority. View-only over
+				     the summary payload; persisted per board per user. Only shown in
+				     Board view. -->
+				<template v-if="viewMode === 'board'">
+					<NcActionCaption :name="t('kanso', 'Swimlanes')" />
+					<NcActionRadio
+						:model-value="swimlaneMode === 'none'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('none')">
+						{{ t('kanso', 'No swimlanes') }}
+					</NcActionRadio>
+					<NcActionRadio
+						:model-value="swimlaneMode === 'assignee'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('assignee')">
+						{{ t('kanso', 'Group by assignee') }}
+					</NcActionRadio>
+					<NcActionRadio
+						:model-value="swimlaneMode === 'label'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('label')">
+						{{ t('kanso', 'Group by label') }}
+					</NcActionRadio>
+					<NcActionRadio
+						:model-value="swimlaneMode === 'priority'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('priority')">
+						{{ t('kanso', 'Group by priority') }}
+					</NcActionRadio>
+					<NcActionSeparator />
 				</template>
-			</NcButton>
 
-			<!-- Analytics button - navigates to the board stats page -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__analytics-btn"
-				:title="t('kanso', 'Board analytics')"
-				:aria-label="t('kanso', 'Board analytics')"
-				@click="goToStats">
-				<template #icon>
-					<ChartBarIcon :size="20" />
-				</template>
-			</NcButton>
+				<!-- Archived cards page - only offered when ≥1 archived card. The
+				     visible label already carries the count, so no separate aria-label
+				     is set (that would override the accessible name). -->
+				<NcActionButton
+					v-if="archivedCards.length > 0"
+					class="board-view__archived-btn"
+					@click="goToArchived">
+					<template #icon>
+						<ArchiveIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Archived cards ({count})', { count: archivedCards.length }) }}
+				</NcActionButton>
 
-			<!-- Multi-select mode toggle -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__multiselect-btn"
-				:type="bulk.selectionMode.value ? 'secondary' : 'tertiary'"
-				:title="t('kanso', 'Select multiple cards')"
-				:aria-label="t('kanso', 'Select multiple cards')"
-				:aria-pressed="bulk.selectionMode.value ? 'true' : 'false'"
-				@click="bulk.selectionMode.value ? bulk.exitMode() : bulk.enterMode()">
-				<template #icon>
-					<SelectMultipleIcon :size="20" />
-				</template>
-			</NcButton>
+				<!-- Watch / unwatch this board - subscribes to a "new card created"
+				     notification. Uses the same eye icon as the card-level watcher:
+				     eye-off (crossed) when watching, plain eye outline when not. -->
+				<NcActionButton
+					class="board-view__watch-btn"
+					:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
+					@click="moreMenuOpen = false; toggleBoardWatch()">
+					<template #icon>
+						<EyeOffOutlineIcon v-if="isBoardSubscribed" :size="20" />
+						<EyeOutlineIcon v-else :size="20" />
+					</template>
+					{{ isBoardSubscribed ? t('kanso', 'Unwatch board') : t('kanso', 'Watch board') }}
+				</NcActionButton>
 
-			<!-- Settings (gear) button - toggles the right-docked settings panel -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__settings-btn"
-				:title="t('kanso', 'Board settings')"
-				:aria-label="t('kanso', 'Board settings')"
-				:aria-expanded="showSettings ? 'true' : 'false'"
-				@click="showSettings = !showSettings">
-				<template #icon>
-					<CogIcon :size="20" />
-				</template>
-			</NcButton>
+				<!-- Trash - opens the routed Trash page -->
+				<NcActionButton
+					class="board-view__trash-btn"
+					@click="goToTrash">
+					<template #icon>
+						<DeleteIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Deleted cards') }}
+				</NcActionButton>
+
+				<!-- Analytics - navigates to the board stats page -->
+				<NcActionButton
+					class="board-view__analytics-btn"
+					@click="goToStats">
+					<template #icon>
+						<ChartBarIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Board analytics') }}
+				</NcActionButton>
+
+				<!-- Multi-select mode toggle -->
+				<NcActionButton
+					class="board-view__multiselect-btn"
+					:aria-pressed="bulk.selectionMode.value ? 'true' : 'false'"
+					@click="moreMenuOpen = false; bulk.selectionMode.value ? bulk.exitMode() : bulk.enterMode()">
+					<template #icon>
+						<SelectMultipleIcon :size="20" />
+					</template>
+					{{ bulk.selectionMode.value ? t('kanso', 'Exit multi-select') : t('kanso', 'Select multiple cards') }}
+				</NcActionButton>
+
+				<NcActionSeparator />
+
+				<!-- Settings - toggles the right-docked settings panel. Closing the
+				     overflow menu first is required: the panel is a non-blocking
+				     docked drawer, so a lingering menu popover would sit over it and
+				     swallow clicks / Escape. -->
+				<NcActionButton
+					class="board-view__settings-btn"
+					:aria-expanded="showSettings ? 'true' : 'false'"
+					@click="moreMenuOpen = false; showSettings = !showSettings">
+					<template #icon>
+						<CogIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Board settings') }}
+				</NcActionButton>
+			</NcActions>
 		</div>
 
 		<!-- Board settings modal (Labels + Sharing tabs) -->
@@ -227,6 +232,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:board-id="props.id"
 			:labels="boardLabels"
 			:review-types="boardData.reviewTypes ?? []"
+			:card-fields="boardData.cardFields ?? []"
 			:acl="boardData.acl ?? []"
 			:permissions="boardData.permissions ?? 0"
 			:participants="participants.data.value ?? []"
@@ -254,9 +260,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<button class="board-view__move-error-dismiss" @click="dismissActionError">×</button>
 		</div>
 
-		<!-- Error -->
+		<!-- Error - status-aware (#3662): a gone/forbidden board explains itself and
+		     links back to the boards list; a transient failure offers a retry. -->
 		<div v-if="isError" class="board-view__error">
-			{{ t('kanso', 'Failed to load board.') }}
+			<p class="board-view__error-msg">{{ boardErrorMessage }}</p>
+			<div class="board-view__error-actions">
+				<NcButton v-if="!boardIsGoneOrForbidden" type="primary" @click="boardRefetch">
+					{{ t('kanso', 'Retry') }}
+				</NcButton>
+				<NcButton :type="boardIsGoneOrForbidden ? 'primary' : 'tertiary'" @click="router.push({ name: 'board-list' })">
+					{{ t('kanso', 'Go to boards') }}
+				</NcButton>
+			</div>
 		</div>
 
 		<!-- Stacks row (Board view). Kept mounted under v-show so its drag-and-drop
@@ -344,12 +359,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:stacks="sortedStacks"
 			:cards-by-stack="cardsByStack"
 			:labels-by-id="labelsById"
+			:board-prefix="boardData?.board?.prefix ?? ''"
 			:board-id="props.id" />
 
 		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->
 		<BoardTimelineView
 			v-if="viewMode === 'timeline' && boardData"
 			:cards="allVisibleCards"
+			:stacks="sortedStacks"
+			:cards-by-stack="cardsByStack"
+			:board-prefix="boardData?.board?.prefix ?? ''"
+			:can-edit="canEditBoard"
 			:board-id="props.id" />
 
 		<!-- Keyboard shortcuts overlay -->
@@ -456,7 +476,11 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -467,7 +491,6 @@ import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted
 import SortIcon from 'vue-material-design-icons/Sort.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
-import ViewAgendaOutlineIcon from 'vue-material-design-icons/ViewAgendaOutline.vue'
 import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BulkActionBar from '../components/BulkActionBar.vue'
@@ -581,13 +604,6 @@ function setSwimlaneMode(mode) {
 		localStorage.setItem(`kanso.swimlaneMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
 }
-const swimlaneModeLabel = computed(() => ({
-	none: t('kanso', 'No swimlanes'),
-	assignee: t('kanso', 'By assignee'),
-	label: t('kanso', 'By label'),
-	priority: t('kanso', 'By priority'),
-}[swimlaneMode.value] ?? t('kanso', 'No swimlanes')))
-
 /**
  * View-only comparator for the active display sort. Every non-manual mode falls
  * back to the fractional sort key as a stable tiebreaker.
@@ -610,7 +626,24 @@ function sortCards(cards) {
 	}
 	return arr.sort(bySortKey)
 }
-const { data: boardData, isLoading, isError, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+
+// Status-aware board error copy (#3662). A dead deep-link/notification to a
+// deleted board 404s; a revoked share 403s. Both should read as an explanatory
+// message with a way back to the boards list - not the generic error box. A
+// transient network/5xx failure stays retryable.
+const boardErrorStatus = computed(() => boardError.value?.response?.status ?? null)
+const boardIsGoneOrForbidden = computed(() =>
+	boardErrorStatus.value === 404 || boardErrorStatus.value === 403)
+const boardErrorMessage = computed(() => {
+	if (boardErrorStatus.value === 403) {
+		return t('kanso', 'This board no longer exists or you no longer have access.')
+	}
+	if (boardErrorStatus.value === 404) {
+		return t('kanso', 'This board no longer exists.')
+	}
+	return t('kanso', 'Couldn\'t load this board. Please try again.')
+})
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
@@ -638,6 +671,11 @@ let boardCleanup = () => {}
 
 // Label settings panel visibility
 const showSettings = ref(false)
+
+// The consolidated ⋯ "More" overflow menu open state. Controlled so in-place
+// actions (settings panel, multi-select, watch) can dismiss the menu explicitly
+// — otherwise its popover lingers over the docked settings panel and eats clicks.
+const moreMenuOpen = ref(false)
 
 // ── Card-template manager (#3634) ─────────────────────────────────────────────
 // Board-scoped modal to view / edit / delete / unmark / create templates (which
@@ -1568,14 +1606,18 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	background: var(--board-background);
 }
 
+/* One consolidated toolbar (variant 1a): a single opaque header row holding the
+   back button, board title, then the right-aligned control cluster (search, view
+   toggle, sort, swimlanes, filters, and the icon actions). A tighter gap groups
+   the controls so they read as one bar rather than scattered buttons. */
 .board-view__header {
 	display: flex;
 	align-items: center;
-	gap: 16px;
+	gap: 8px;
 	/* Extra left padding reserves room for the NcAppNavigation toggle, which is
 	   pinned to the top-left of the app content area and would otherwise overlap
 	   the "All boards" button. */
-	padding: 12px 24px 12px 52px;
+	padding: 10px 20px 10px 52px;
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
 	flex-shrink: 0;
@@ -1642,8 +1684,22 @@ const onBulkDelete = () => runBulkAction('delete', {})
 }
 
 .board-view__error {
-	padding: 16px 24px;
+	padding: 40px 24px;
+	text-align: center;
 	color: var(--color-error);
+}
+
+.board-view__error-msg {
+	margin: 0 0 20px;
+	color: var(--color-main-text);
+	font-size: 1.05rem;
+}
+
+.board-view__error-actions {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 10px;
 }
 
 .board-view__move-error {
@@ -1667,7 +1723,10 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	padding: 0 4px;
 }
 
-/* Stacks scrollable row */
+/* Stacks scrollable row - the "sunken" board canvas (variant 1a). A recessed
+   surface so the white/raised columns lift off it. When a custom board
+   background gradient is active we stay transparent so the gradient shows
+   through instead (see the --has-background override below). */
 .board-view__stacks-wrap {
 	display: flex;
 	flex-direction: row;
@@ -1677,6 +1736,13 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	overflow-x: auto;
 	overflow-y: hidden;
 	flex: 1;
+	background: var(--color-background-hover);
+}
+
+/* With a custom board background, let the gradient be the canvas. */
+.board-view--has-background .board-view__stacks-wrap,
+.board-view--has-background .board-view__swimlanes-wrap {
+	background: transparent;
 }
 
 /* Swimlanes (grouped board): vertical scroll region holding stacked lanes.
@@ -1701,7 +1767,8 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	color: var(--color-text-maxcontrast);
 }
 
-.board-view__swimlane-menu {
+/* The consolidated "More" overflow menu trigger. */
+.board-view__more-menu {
 	flex-shrink: 0;
 }
 

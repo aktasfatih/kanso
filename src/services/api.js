@@ -13,6 +13,12 @@ export const fetchBoards = () =>
 export const fetchBoard = (id) =>
 	axios.get(url(`/api/boards/${id}`)).then((r) => r.data)
 
+// Delta-sync read (#3675): the board's changes since `since` (the client's
+// cursor). Returns { cursor, resync, cards:{upsert,remove}, stacks:{upsert,remove} }.
+// When resync is true the client drops its cursor and does a full fetchBoard.
+export const fetchBoardChanges = (id, since) =>
+	axios.get(url(`/api/boards/${id}/changes`), { params: { since } }).then((r) => r.data)
+
 export const createBoard = (data) =>
 	axios.post(url('/api/boards'), data).then((r) => r.data)
 
@@ -314,6 +320,17 @@ export const cardAttachmentUrl = (cardId, attachmentId) =>
 export const cardAttachmentInlineUrl = (cardId, attachmentId) =>
 	url(`/api/cards/${cardId}/attachments/${attachmentId}/inline`)
 
+// Card time tracking (#3536). Manual entries (seconds + optional note); the
+// per-card total lives in the card detail payload's `timeSpent`.
+export const fetchCardTimeEntries = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/time-entries`)).then((r) => r.data)
+
+export const addCardTimeEntry = (cardId, seconds, note) =>
+	axios.post(url(`/api/cards/${cardId}/time-entries`), { seconds, note }).then((r) => r.data)
+
+export const deleteCardTimeEntry = (cardId, entryId) =>
+	axios.delete(url(`/api/cards/${cardId}/time-entries/${entryId}`)).then((r) => r.data)
+
 // Deck import
 export const fetchDeckImportBoards = () =>
 	axios.get(url('/api/deck-import/boards')).then((r) => r.data)
@@ -405,14 +422,45 @@ export const getMyCards = () =>
 	axios.get(url('/api/my-cards')).then((r) => r.data)
 
 // Review types
-export const createReviewType = (boardId, title, color) =>
-	axios.post(url('/api/review-types'), { boardId, title, color: color || null }).then((r) => r.data)
+export const createReviewType = (boardId, title, color, stage) =>
+	axios.post(url('/api/review-types'), {
+		boardId,
+		title,
+		color: color || null,
+		...(stage != null ? { stage } : {}),
+	}).then((r) => r.data)
 
 export const updateReviewType = (id, data) =>
 	axios.patch(url(`/api/review-types/${id}`), data).then((r) => r.data)
 
 export const deleteReviewType = (id) =>
 	axios.delete(url(`/api/review-types/${id}`)).then((r) => r.data)
+
+// Custom fields (#3537): per-board field DEFINITIONS (MANAGE-gated). The board
+// payload carries the definition list; these mutate it.
+export const createCardField = (boardId, name, type, options) =>
+	axios.post(url('/api/card-fields'), {
+		boardId,
+		name,
+		type,
+		...(options != null ? { options } : {}),
+	}).then((r) => r.data)
+
+export const updateCardField = (id, data) =>
+	axios.patch(url(`/api/card-fields/${id}`), data).then((r) => r.data)
+
+export const deleteCardField = (id) =>
+	axios.delete(url(`/api/card-fields/${id}`)).then((r) => r.data)
+
+// Per-card custom-field VALUES (#3537, EDIT-gated). A set is an upsert; an
+// empty/absent value clears it. Values ride the card detail payload.
+export const setCardFieldValue = (cardId, fieldId, value) =>
+	axios.put(url(`/api/cards/${cardId}/fields/${fieldId}`),
+		value != null ? { value } : {},
+	).then((r) => r.data)
+
+export const clearCardFieldValue = (cardId, fieldId) =>
+	axios.delete(url(`/api/cards/${cardId}/fields/${fieldId}`)).then((r) => r.data)
 
 // Per-card activity feed (read-only view over the change log)
 export const getCardActivity = (cardId) =>

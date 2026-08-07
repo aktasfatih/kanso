@@ -102,8 +102,9 @@ test.describe('Automation rules (#3400)', () => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 
-		// Open board settings → Automation tab.
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Open board settings → Automation tab (settings now in the ⋯ More menu).
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
 
 		// The card-rules "Add rule" form: pick In-progress role + add-label, then submit.

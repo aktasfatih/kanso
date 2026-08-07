@@ -147,7 +147,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:key="uid"
 						:user="uid"
 						:size="24"
-						:show-user-status="false"
+						:hide-status="true"
 						:disable-tooltip="false"
 						class="card-tile__avatar" />
 					<span v-if="extraAssigneeCount > 0" class="card-tile__avatar-overflow">

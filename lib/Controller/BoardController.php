@@ -11,10 +11,12 @@ use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardContactMapper;
+use OCA\Kanso\Db\CardFieldMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -53,6 +55,7 @@ class BoardController extends Controller {
 		private CardContactMapper $cardContactMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
+		private CardFieldMapper $cardFieldMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CommentMapper $commentMapper,
 		private AclMapper $aclMapper,
@@ -100,42 +103,175 @@ class BoardController extends Controller {
 				return $response;
 			}
 
-			$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($id);
-			$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($id);
-			$contactsByCard = $this->cardContactMapper->findContactsByBoard($id);
-			$checklistByCard = $this->checklistItemMapper->progressByBoard($id);
-			$childProgressByCard = $this->cardMapper->childProgressByBoard($id);
-			$commentCountByCard = $this->commentMapper->countsByBoard($id);
-			$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($id);
-			// Card ids blocked by a not-done card - drives the tile "blocked" badge.
-			$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($id));
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
-				'cards' => array_map(
-					static fn (Card $card): array => $card->jsonSerializeSummary()
-						+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
-						+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
-						+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
-						+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
-						+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
-						+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
-						+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
-						+ ['blocked' => isset($blockedIds[$card->getId()])],
-					$this->cardMapper->findSummariesByBoard($id)
-				),
+				'cards' => $this->serializeCardSummaries($id, $this->cardMapper->findSummariesByBoard($id)),
 				'labels' => $this->labelMapper->findByBoard($id),
 				'reviewTypes' => $this->reviewTypeMapper->findByBoard($id),
+				// Custom-field DEFINITIONS ride the board payload (#3537); their
+				// per-card VALUES live only in the card detail payload.
+				'cardFields' => $this->cardFieldMapper->findByBoard($id),
 				'acl' => $this->aclMapper->findByBoard($id),
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.
 				'permissions' => $this->permissionService->getPermissions($board, $uid),
 				// The requester's board-watch state {subscribed, subscribers, count}.
 				'subscription' => $this->subscriptionService->buildBoardSubscription($id, $uid),
+				// The board's latest change id - the same value as the ETag. Seeds
+				// the client's delta-sync cursor from the body so it can poll
+				// `?since=<cursor>` without parsing the ETag header.
+				'cursor' => (int)$etag,
 			]);
 			$response->setETag($etag);
 			return $response;
 		});
+	}
+
+	/**
+	 * Delta-sync read (#3675): the board changes since the client's cursor, so a
+	 * single edit patches the client cache instead of forcing a whole-board
+	 * refetch. Same ACL gate as {@see self::show()} (via BoardService::find). The
+	 * response advances the client's cursor and carries per-entity upserts/removes:
+	 *
+	 *   {cursor, resync, cards:{upsert:[...], remove:[ids]}, stacks:{upsert:[...], remove:[ids]}}
+	 *
+	 * `resync:true` (a 200 with the flag, never an error status) tells the client
+	 * to drop its cursor and do a full {@see self::show()} refetch. It fires when:
+	 *   - the cursor is unusable (`since <= 0`, or below the board's retained tail
+	 *     after pruning), so a delta would be incomplete;
+	 *   - the window is saturated (client too far behind - more than the row cap);
+	 *   - the window touched an entity kind this delta path does not (yet) model
+	 *     (labels / acl / review-types / custom-fields / board itself). Those are
+	 *     rare relative to card/stack edits, and a full refetch on one is an
+	 *     acceptable MVP cut that avoids replicating the board-wide array
+	 *     enrichment (labels list, acl, permissions, subscription) here.
+	 *
+	 * The cursor is ALWAYS the board's latest change id (even on an empty delta or
+	 * a resync), so the client advances and a subsequent poll starts from there.
+	 * No ETag: the request is already conditional via `since`.
+	 */
+	#[NoAdminRequired]
+	public function changes(int $id, int $since = 0): JSONResponse {
+		return $this->respond(function () use ($id, $since): JSONResponse {
+			$uid = $this->currentUserId();
+			// Same ACL gate show() trusts: throws NotPermitted (→403) / DoesNotExist
+			// (→404), which ApiErrorTrait maps exactly as it does for show().
+			$this->boardService->find($id, $uid);
+
+			$latest = $this->changeMapper->getLatestChangeId($id);
+
+			// Unusable cursor → resync. `since <= 0` is a client with no cursor yet;
+			// a cursor below the board's oldest RETAINED change (minus one, so the
+			// exact oldest row is still deliverable) has fallen off the pruned tail
+			// and a delta from it would be incomplete.
+			if ($since <= 0 || $since < $this->changeMapper->getOldestChangeId($id) - 1) {
+				return new JSONResponse(['cursor' => $latest, 'resync' => true]);
+			}
+
+			$limit = 500;
+			$rows = $this->changeMapper->findSince($id, $since, $limit);
+			// Saturated window: the client is more than one page behind, so the
+			// delta may be truncated - force a full refetch instead of a partial.
+			if (count($rows) === $limit) {
+				return new JSONResponse(['cursor' => $latest, 'resync' => true]);
+			}
+
+			// Collapse to the latest intent per (entity_type, entity_id): a card
+			// created then moved then edited in the window is one upsert; a card
+			// deleted last is a remove. We only need which cards / stacks to
+			// re-serialize (or drop), and whether any out-of-scope kind appeared.
+			$cardAction = [];
+			$stackAction = [];
+			foreach ($rows as $row) {
+				switch ($row->getEntityType()) {
+					case Change::ENTITY_CARD:
+						$cardAction[$row->getEntityId()] = $row->getAction();
+						break;
+					case Change::ENTITY_STACK:
+						$stackAction[$row->getEntityId()] = $row->getAction();
+						break;
+					default:
+						// A label / acl / review-type / custom-field / board change
+						// rode the window - the MVP scope cut: resync rather than
+						// replicate board-wide array enrichment here.
+						return new JSONResponse(['cursor' => $latest, 'resync' => true]);
+				}
+			}
+
+			// Cards: re-serialize the ones still live (byte-identical to show()),
+			// and remove those the summary query no longer returns - either the
+			// last action was DELETE, or the row was deleted / turned into a
+			// template between the cursor and now.
+			$cardIds = array_keys($cardAction);
+			$liveCards = $this->serializeCardSummaries($id, $this->cardMapper->findSummariesByIds($id, $cardIds));
+			$presentCardIds = array_flip(array_map(static fn (array $c): int => $c['id'], $liveCards));
+			$removedCardIds = array_values(array_filter(
+				$cardIds,
+				static fn (int $cid): bool => !isset($presentCardIds[$cid])
+			));
+
+			// Stacks: same shape as show() (raw entity JSON), remove the absent ones.
+			$liveStacks = $this->stackMapper->findByIds($id, array_keys($stackAction));
+			$presentStackIds = array_flip(array_map(static fn ($s): int => $s->getId(), $liveStacks));
+			$removedStackIds = array_values(array_filter(
+				array_keys($stackAction),
+				static fn (int $sid): bool => !isset($presentStackIds[$sid])
+			));
+
+			return new JSONResponse([
+				'cursor' => $latest,
+				'resync' => false,
+				'cards' => [
+					'upsert' => $liveCards,
+					'remove' => $removedCardIds,
+				],
+				'stacks' => [
+					'upsert' => $liveStacks,
+					'remove' => $removedStackIds,
+				],
+			]);
+		});
+	}
+
+	/**
+	 * Enriches card summaries with the same per-card signal the board payload
+	 * carries (labelIds / assigneeIds / contacts / checklist / childProgress /
+	 * commentCount / reviewState / blocked). Extracted from {@see self::show()} so
+	 * {@see self::changes()} produces a BYTE-IDENTICAL card shape - the delta-sync
+	 * upsert must be indistinguishable from a full-board card, or a patched cache
+	 * entry would drift from a freshly fetched one. The enrichment maps are board-
+	 * wide (one query each, no N+1); the per-card lookups just index into them, so
+	 * passing a subset of the board's cards is safe and cheap.
+	 *
+	 * @param Card[] $cards
+	 * @return list<array<string, mixed>>
+	 */
+	private function serializeCardSummaries(int $boardId, array $cards): array {
+		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($boardId);
+		$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($boardId);
+		$contactsByCard = $this->cardContactMapper->findContactsByBoard($boardId);
+		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId);
+		$childProgressByCard = $this->cardMapper->childProgressByBoard($boardId);
+		$commentCountByCard = $this->commentMapper->countsByBoard($boardId);
+		$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($boardId);
+		// Card ids blocked by a not-done card - drives the tile "blocked" badge.
+		$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($boardId));
+
+		// array_values so the result is a genuine list (Card[] may be keyed by the
+		// mapper); the delta-sync consumer serializes it as a JSON array.
+		return array_values(array_map(
+			static fn (Card $card): array => $card->jsonSerializeSummary()
+				+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
+				+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
+				+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
+				+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
+				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
+				+ ['blocked' => isset($blockedIds[$card->getId()])],
+			$cards
+		));
 	}
 
 	/**

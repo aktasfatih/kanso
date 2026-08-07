@@ -137,4 +137,88 @@ class SortKeyServiceTest extends TestCase {
 			);
 		}
 	}
+
+	// ---- evenlySpaced (rebalance key set) ---------------------------------
+
+	public function testEvenlySpacedZeroReturnsEmpty(): void {
+		self::assertSame([], $this->service->evenlySpaced(0));
+	}
+
+	public function testEvenlySpacedRejectsNegative(): void {
+		$this->expectException(InvalidInputException::class);
+		$this->service->evenlySpaced(-1);
+	}
+
+	public function testEvenlySpacedSingleKeyIsCentred(): void {
+		$keys = $this->service->evenlySpaced(1);
+		self::assertCount(1, $keys);
+		self::assertMatchesRegularExpression('/^[0-9A-Z]+$/', $keys[0]);
+		self::assertStringEndsNotWith('0', $keys[0]);
+		self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($keys[0]));
+	}
+
+	public function testEvenlySpacedProducesShortStrictlyIncreasingKeys(): void {
+		foreach ([2, 3, 10, 50, 200, 1000] as $n) {
+			$keys = $this->service->evenlySpaced($n);
+			self::assertCount($n, $keys);
+			for ($i = 0; $i < $n; $i++) {
+				self::assertMatchesRegularExpression('/^[0-9A-Z]+$/', $keys[$i]);
+				self::assertStringEndsNotWith('0', $keys[$i]);
+				// Short: two-character keys for realistic stack sizes.
+				self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($keys[$i]));
+				if ($i > 0) {
+					self::assertLessThan(
+						0,
+						strcmp($keys[$i - 1], $keys[$i]),
+						"evenlySpaced($n) not strictly increasing at index $i"
+					);
+				}
+			}
+		}
+	}
+
+	/**
+	 * The whole point of a rebalance: after resetting a stack to evenly-spaced
+	 * keys, a between() at ANY gap must fit without overflowing. This is the
+	 * recovery invariant for the 409 rebalance_required path.
+	 */
+	public function testBetweenAtEveryGapOfEvenlySpacedNeverOverflows(): void {
+		$keys = $this->service->evenlySpaced(100);
+		for ($i = 1; $i < count($keys); $i++) {
+			$mid = $this->service->between($keys[$i - 1], $keys[$i]);
+			self::assertLessThan(0, strcmp($keys[$i - 1], $mid));
+			self::assertLessThan(0, strcmp($mid, $keys[$i]));
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($mid));
+		}
+		// ...and appending after the last key also fits.
+		$tail = $this->service->after($keys[count($keys) - 1]);
+		self::assertLessThan(0, strcmp($keys[count($keys) - 1], $tail));
+	}
+
+	/**
+	 * A stack that has hit the overflow wall (colliding/at-capacity long keys)
+	 * is rescued: the rewritten keys are short and a subsequent between() no
+	 * longer throws where the original pair did.
+	 */
+	public function testEvenlySpacedRescuesAnAtCapacityPair(): void {
+		// Two adjacent keys so long that between() overflows (the 409 case).
+		$a = str_repeat('I', SortKeyService::MAX_KEY_LENGTH);
+		$b = $a . 'I';
+		// Sanity: the original pair genuinely overflows.
+		$overflowed = false;
+		try {
+			$this->service->between($a, $b);
+		} catch (OverflowException) {
+			$overflowed = true;
+		}
+		self::assertTrue($overflowed, 'precondition: the long pair must overflow');
+
+		// Rebalance the (2-card) stack; the fresh keys are short and insertable.
+		$keys = $this->service->evenlySpaced(2);
+		self::assertLessThanOrEqual(2, strlen($keys[0]));
+		self::assertLessThanOrEqual(2, strlen($keys[1]));
+		$mid = $this->service->between($keys[0], $keys[1]);
+		self::assertLessThan(0, strcmp($keys[0], $mid));
+		self::assertLessThan(0, strcmp($mid, $keys[1]));
+	}
 }

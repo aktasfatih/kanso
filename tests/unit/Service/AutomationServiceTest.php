@@ -24,6 +24,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\ReviewService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -38,6 +39,7 @@ class AutomationServiceTest extends TestCase {
 	private LabelMapper&MockObject $labelMapper;
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
+	private IDBConnection&MockObject $db;
 	private AutomationService $service;
 
 	protected function setUp(): void {
@@ -49,6 +51,7 @@ class AutomationServiceTest extends TestCase {
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new AutomationService(
 			$this->ruleMapper,
 			$this->boardMapper,
@@ -57,6 +60,7 @@ class AutomationServiceTest extends TestCase {
 			$this->labelMapper,
 			$this->cardLabelMapper,
 			$this->changeNotifier,
+			$this->db,
 		);
 	}
 
@@ -199,9 +203,14 @@ class AutomationServiceTest extends TestCase {
 		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
 		$this->cardLabelMapper->method('exists')->with(99, 55)->willReturn(false);
 		$this->cardLabelMapper->expects($this->once())->method('insertAssignment')->with(99, 55);
+		// #3579: the label assignment + change row commit atomically; the push
+		// fires after commit.
 		$this->changeNotifier->expects($this->once())
-			->method('notify')
+			->method('recordChange')
 			->with(self::BOARD_ID, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, self::ACTOR);
+		$this->changeNotifier->expects($this->once())->method('pushBoardChanged')->with(self::BOARD_ID);
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('commit');
 
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_IN_PROGRESS, self::ACTOR);
 	}
@@ -211,7 +220,7 @@ class AutomationServiceTest extends TestCase {
 		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
 		$this->cardLabelMapper->method('exists')->willReturn(true);
 		$this->cardLabelMapper->expects($this->never())->method('insertAssignment');
-		$this->changeNotifier->expects($this->never())->method('notify');
+		$this->changeNotifier->expects($this->never())->method('recordChange');
 
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_IN_PROGRESS, self::ACTOR);
 	}
