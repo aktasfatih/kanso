@@ -39,6 +39,10 @@ test.describe('Board List view (#3444)', () => {
 		state.boardId = board.id
 		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
 		await api('POST', '/cards', { stackId: stack.id, title: state.cardTitle })
+		// A second card with a due date well in the past → the group header should
+		// surface an "overdue" hint for it (variant 1d per-group hints).
+		const overdue = await api('POST', '/cards', { stackId: stack.id, title: 'Overdue row card' })
+		await api('PATCH', `/cards/${overdue.id}`, { duedate: '2020-01-01T00:00:00+00:00' })
 	})
 
 	test.afterAll(async () => {
@@ -60,6 +64,10 @@ test.describe('Board List view (#3444)', () => {
 		const row = page.locator('.board-list-row', { hasText: state.cardTitle })
 		await expect(row).toBeVisible({ timeout: 8_000 })
 		await expect(page.locator('.board-view__stacks-wrap')).toBeHidden()
+
+		// The group header surfaces a per-group overdue hint for the past-due card.
+		await expect(page.locator('.board-list-group__hint--overdue', { hasText: 'overdue' }))
+			.toBeVisible({ timeout: 8_000 })
 
 		// Toggle back to Board → columns visible again (round-trip, no modal open).
 		await setView('Board')

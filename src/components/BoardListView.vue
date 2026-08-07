@@ -46,6 +46,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 					<span v-else class="board-list-group__count">{{ rows[vRow.index].count }}</span>
 
+					<!-- Per-group hints: overdue / blocked counts, only when nonzero -->
+					<span
+						v-if="rows[vRow.index].hints && (rows[vRow.index].hints.overdue || rows[vRow.index].hints.blocked)"
+						class="board-list-group__hints">
+						<span
+							v-if="rows[vRow.index].hints.overdue"
+							class="board-list-group__hint board-list-group__hint--overdue">
+							{{ t('kanso', '{n} overdue', { n: rows[vRow.index].hints.overdue }) }}
+						</span>
+						<span
+							v-if="rows[vRow.index].hints.blocked"
+							class="board-list-group__hint">
+							{{ t('kanso', '{n} blocked', { n: rows[vRow.index].hints.blocked }) }}
+						</span>
+					</span>
+
 					<!-- Aggregate done/total progress across the group -->
 					<span
 						v-if="rows[vRow.index].progress"
@@ -150,7 +166,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -218,6 +234,25 @@ function groupProgress(cards) {
 	return { done, total: cards.length }
 }
 
+// Reactive clock so overdue counts recompute over time (e.g. a board left open
+// across midnight) rather than freezing until the card data changes.
+const now = ref(Date.now())
+let clockTimer = null
+onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 60_000) })
+onBeforeUnmount(() => { if (clockTimer !== null) { clearInterval(clockTimer); clockTimer = null } })
+
+// Secondary group hints: overdue (not done, past-due) and blocked counts. Mirrors
+// the row-level isOverdue / card.blocked so the header echoes what's in the list.
+function groupHints(cards) {
+	let overdue = 0
+	let blocked = 0
+	for (const c of cards) {
+		if (isOverdue(c)) overdue++
+		if (c.blocked === true) blocked++
+	}
+	return { overdue, blocked }
+}
+
 // A flat row model: one header per stack, then its cards (unless collapsed).
 // Collapsed groups drop their card rows entirely so virtualization stays exact.
 const rows = computed(() => {
@@ -232,6 +267,7 @@ const rows = computed(() => {
 			count: cards.length,
 			wip: hasWip ? { count: cards.length, limit: stack.wipLimit, over: cards.length > stack.wipLimit } : null,
 			progress: groupProgress(cards),
+			hints: groupHints(cards),
 		})
 		if (isCollapsed(stack.id)) continue
 		for (const card of cards) {
@@ -305,7 +341,7 @@ function formatDue(duedate) {
 function isOverdue(card) {
 	if (!card.duedate || isDone(card)) return false
 	const d = new Date(card.duedate)
-	return !Number.isNaN(d.getTime()) && d.getTime() < Date.now()
+	return !Number.isNaN(d.getTime()) && d.getTime() < now.value
 }
 </script>
 
@@ -400,6 +436,32 @@ function isOverdue(card) {
 	color: color-mix(in srgb, var(--color-warning) 85%, var(--color-main-text));
 	background: color-mix(in srgb, var(--color-warning) 25%, transparent);
 	outline: 1px solid color-mix(in srgb, var(--color-warning) 50%, transparent);
+}
+
+/* Secondary hints (overdue · blocked) sit just after the count, muted; the
+   progress badge still anchors to the far end. */
+.board-list-group__hints {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.board-list-group__hint {
+	white-space: nowrap;
+}
+
+.board-list-group__hint + .board-list-group__hint::before {
+	content: '·';
+	margin-inline-end: 6px;
+	color: var(--color-text-maxcontrast);
+}
+
+.board-list-group__hint--overdue {
+	color: color-mix(in srgb, var(--color-error) 80%, var(--color-text-maxcontrast));
+	font-weight: 600;
 }
 
 .board-list-group__progress {
