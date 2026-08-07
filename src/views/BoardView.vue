@@ -354,6 +354,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:stacks="sortedStacks"
 			:cards-by-stack="cardsByStack"
 			:labels-by-id="labelsById"
+			:board-prefix="boardData?.board?.prefix ?? ''"
 			:board-id="props.id" />
 
 		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->

@@ -74,4 +74,28 @@ test.describe('Board List view (#3444)', () => {
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
 	})
+
+	test('collapsing a group hides its cards; expanding shows them again', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+
+		// Switch to List view.
+		await page.locator('.board-view__view-menu button').first().click()
+		await page.getByText('List', { exact: true }).click()
+
+		const row = page.locator('.board-list-row', { hasText: state.cardTitle })
+		const group = page.locator('.board-list-group', { hasText: 'To do' })
+		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(group).toBeVisible()
+
+		// Collapse the group → its card row disappears from the virtualized list.
+		await group.dispatchEvent('click')
+		await expect(row).toBeHidden({ timeout: 8_000 })
+		await expect(group).toBeVisible()
+
+		// Expand again → the card row comes back.
+		await group.dispatchEvent('click')
+		await expect(row).toBeVisible({ timeout: 8_000 })
+	})
 })
