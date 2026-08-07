@@ -939,10 +939,18 @@ async function createFromTemplate(templateId) {
 .stack-column--collapsed {
 	width: 48px;
 	min-width: 48px;
+	/* Fill the board height so every collapsed rail is the same length,
+	   regardless of how many cards its (hidden) list holds — otherwise a
+	   1-card column collapses to a stub while a full one stays tall. Matches
+	   the expanded column's max-height cap. */
+	height: calc(100vh - 140px);
 	padding: 0;
 	gap: 0;
 	overflow: hidden;
 	cursor: pointer;
+}
+.stack-column--collapsed:hover {
+	background: var(--color-background-hover);
 }
 .stack-column--collapsed .stack-column__cards {
 	/* Keep a sized box for the drop target, but hide the cards behind the rail. */
@@ -966,13 +974,13 @@ async function createFromTemplate(templateId) {
 	gap: 8px;
 	padding: 10px 0;
 	border: none;
-	border-radius: var(--border-radius-large);
-	background: var(--color-main-background);
+	/* No own background/border-radius: the parent .stack-column already draws
+	   the card (bg + border + radius) and clips via overflow:hidden, so a
+	   second rounded rect here just produced mismatched corners. The rail is a
+	   transparent overlay that only holds the chevron/count/title + click. */
+	background: transparent;
 	color: var(--color-main-text);
 	cursor: pointer;
-}
-.stack-column__rail:hover {
-	background: var(--color-background-hover);
 }
 .stack-column__rail:focus-visible {
 	outline: 2px solid var(--color-primary-element);

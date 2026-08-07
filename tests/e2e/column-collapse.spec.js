@@ -92,3 +92,46 @@ test.describe('Column collapse (#3677)', () => {
 		await expect(page.locator('.card-composer__input').first()).toBeVisible({ timeout: 6_000 })
 	})
 })
+
+// Regression (#3677): a collapsed rail's height must not follow its (hidden)
+// card count — a 1-card column and a full column collapse to the SAME
+// full-height rail. Previously the rail filled a content-height column, so
+// short stacks collapsed to stubs while a full stack stayed tall.
+test.describe('Column collapse — equal-height rails (#3677)', () => {
+	const state = { boardId: 0 }
+
+	test.beforeAll(async () => {
+		const board = await apiSend('POST', '/boards', { title: 'Collapse Height E2E' })
+		state.boardId = board.id
+		const long = await apiSend('POST', '/stacks', { boardId: board.id, title: 'Long Stack' })
+		const a = await apiSend('POST', '/stacks', { boardId: board.id, title: 'One A' })
+		const b = await apiSend('POST', '/stacks', { boardId: board.id, title: 'One B' })
+		for (let i = 0; i < 25; i++) await apiSend('POST', '/cards', { stackId: long.id, title: `Card ${i}` })
+		await apiSend('POST', '/cards', { stackId: a.id, title: 'Only A' })
+		await apiSend('POST', '/cards', { stackId: b.id, title: 'Only B' })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await apiSend('DELETE', `/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('a full stack and a 1-card stack collapse to equal-height rails', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.stack-column', { timeout: 20_000 })
+		await page.waitForTimeout(600)
+
+		// Collapse all three (always the leftmost still-expanded column).
+		for (let i = 0; i < 3; i++) {
+			await page.locator('.stack-column:not(.stack-column--collapsed) .stack-column__collapse-btn').first().click()
+			await page.waitForTimeout(300)
+		}
+
+		const heights = await page.$$eval('.stack-column--collapsed',
+			els => els.map(e => Math.round(e.getBoundingClientRect().height)))
+		expect(heights.length).toBe(3)
+		// All rails the same height (full board height), not card-count-driven stubs.
+		expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(2)
+		expect(Math.min(...heights)).toBeGreaterThan(300)
+	})
+})
