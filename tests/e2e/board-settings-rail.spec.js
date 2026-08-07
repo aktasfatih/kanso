@@ -51,7 +51,9 @@ test.describe('Board settings section rail', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 
 		// The rail exposes a proper vertical tablist (holding only the section tabs).
 		const rail = page.locator('.bs-rail .bs-rail__tabs[role="tablist"]')
@@ -98,7 +100,9 @@ test.describe('Board settings section rail', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
 
 		// Column automations starts expanded → its rule form is visible.

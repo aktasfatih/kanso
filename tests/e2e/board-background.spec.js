@@ -56,7 +56,9 @@ test.describe('Board background preset (#3528)', () => {
 		// No background to start with.
 		await expect(boardView).not.toHaveClass(/board-view--has-background/)
 
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /general/i }).click()
 		await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
 
@@ -74,7 +76,9 @@ test.describe('Board background preset (#3528)', () => {
 		await expect(page.locator('.board-view')).toHaveClass(/board-view--has-background/, { timeout: 8_000 })
 
 		// Clearing it removes the background again.
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /general/i }).click()
 		await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
 		await page.locator('[data-test="board-bg-none"]').click()

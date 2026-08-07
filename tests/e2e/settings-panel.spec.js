@@ -83,8 +83,9 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		const card = page.locator('.card-tile', { hasText: 'First card' })
 		await expect(card).toBeVisible({ timeout: 20_000 })
 
-		// Open settings panel via gear button
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Open settings panel via the ⋯ More overflow menu → Board settings.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 
 		// Panel must be visible
 		const panel = page.locator('.bs-modal')
@@ -123,8 +124,9 @@ test.describe('Settings panel (right-docked drawer)', () => {
 
 		await page.locator('.card-tile').first().waitFor({ state: 'visible', timeout: 20_000 })
 
-		// Open panel
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Open panel via the ⋯ More overflow menu → Board settings.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		const panel = page.locator('.bs-modal')
 		await expect(panel).toBeVisible({ timeout: 5_000 })
 
@@ -133,21 +135,26 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		await expect(panel).not.toBeVisible({ timeout: 3_000 })
 	})
 
-	test('gear button toggles the panel (second click closes)', async ({ page }) => {
+	test('Board settings menu item toggles the panel (second invocation closes)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 
 		await page.locator('.card-tile').first().waitFor({ state: 'visible', timeout: 20_000 })
 
-		const gearBtn = page.getByRole('button', { name: /board settings/i })
+		const moreBtn = page.getByRole('button', { name: 'More' })
+		const settingsItem = page.getByRole('menuitem', { name: /board settings/i })
 		const panel = page.locator('.bs-modal')
 
-		// First click opens
-		await gearBtn.click()
+		// First invocation opens (Board settings now lives in the ⋯ More overflow
+		// menu; selecting it dismisses the menu but leaves the docked panel open).
+		await moreBtn.click()
+		await settingsItem.click()
 		await expect(panel).toBeVisible({ timeout: 5_000 })
 
-		// Second click closes (toggle behavior)
-		await gearBtn.click()
+		// Second invocation closes (the same handler still toggles). Re-open the
+		// menu — its item is hidden while the menu is dismissed — then invoke again.
+		await moreBtn.click()
+		await settingsItem.click()
 		await expect(panel).not.toBeVisible({ timeout: 3_000 })
 	})
 })

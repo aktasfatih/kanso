@@ -105,8 +105,9 @@ test.describe('Review types', () => {
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
-		// Open board settings
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Open board settings (now in the consolidated ⋯ More overflow menu)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 
 		// Click the Review types tab
 		await page.getByRole('tab', { name: /review types/i }).click()
@@ -128,7 +129,8 @@ test.describe('Review types', () => {
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
-		await page.getByRole('button', { name: /board settings/i }).click()
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /review types/i }).click()
 
 		// Pick a color for the new type

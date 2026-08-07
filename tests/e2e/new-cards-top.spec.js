@@ -60,9 +60,11 @@ test.describe('New cards on top', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// Open board settings → General tab → turn on "Add new cards to the top".
-		// The settings dialog is a teleported modal; on the slow runner it takes a
-		// beat to mount, so wait for each control to be actionable before clicking.
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu. The
+		// settings dialog is a teleported modal; on the slow runner it takes a beat
+		// to mount, so wait for each control to be actionable before clicking.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		const generalTab = page.getByRole('tab', { name: 'General' })
 		await expect(generalTab).toBeVisible({ timeout: 10_000 })
 		await generalTab.click()

@@ -62,7 +62,9 @@ async function ncLogin(page) {
 // ── Helpers for opening the routed Trash page ────────────────────────────────
 
 async function openTrashPage(page) {
-	const trashBtn = page.locator('.board-view__trash-btn')
+	// Trash now lives in the consolidated ⋯ More overflow menu.
+	await page.getByRole('button', { name: 'More' }).click()
+	const trashBtn = page.getByRole('menuitem', { name: 'Deleted cards' })
 	await expect(trashBtn).toBeVisible({ timeout: 8000 })
 	await trashBtn.click()
 	// Deep-linkable routed page.

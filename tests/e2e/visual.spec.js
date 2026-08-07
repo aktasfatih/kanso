@@ -50,7 +50,9 @@ test.describe('Visual proportions', () => {
 	test('label color-option swatches render as true circles (width === height)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.getByRole('button', { name: /board settings/i }).click()
+		// Board settings now lives in the consolidated ⋯ More overflow menu.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
 
 		// Open the new-label color picker grid
 		await page.getByRole('button', { name: /pick color for new label/i }).click()

@@ -62,42 +62,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionRadio>
 			</NcActions>
 
-			<!-- Swimlanes - client-side grouping of the Board view into horizontal
-			     lanes by assignee / label / priority. View-only over the summary
-			     payload; persisted per board per user. Only shown in Board view. -->
-			<NcActions
-				v-if="boardData && viewMode === 'board'"
-				class="board-view__swimlane-menu"
-				:menu-name="swimlaneModeLabel">
-				<template #icon>
-					<ViewAgendaOutlineIcon :size="20" />
-				</template>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'none'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('none')">
-					{{ t('kanso', 'No swimlanes') }}
-				</NcActionRadio>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'assignee'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('assignee')">
-					{{ t('kanso', 'Group by assignee') }}
-				</NcActionRadio>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'label'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('label')">
-					{{ t('kanso', 'Group by label') }}
-				</NcActionRadio>
-				<NcActionRadio
-					:model-value="swimlaneMode === 'priority'"
-					name="kanso-swimlane"
-					@change="setSwimlaneMode('priority')">
-					{{ t('kanso', 'Group by priority') }}
-				</NcActionRadio>
-			</NcActions>
-
 			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
 			<NcActions
 				v-if="boardData"
@@ -137,88 +101,129 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@delete-saved="handleDeleteSavedFilter" />
 			<div v-if="filterError" class="board-view__filter-error">{{ filterError }}</div>
 
-			<!-- Archived cards page button - only shown when ≥1 archived card -->
-			<NcButton
-				v-if="boardData && archivedCards.length > 0"
-				class="board-view__archived-btn"
-				:title="t('kanso', 'View archived cards')"
-				:aria-label="t('kanso', 'View archived cards ({count})', { count: archivedCards.length })"
-				@click="goToArchived">
-				<template #icon>
-					<ArchiveIcon :size="20" />
-				</template>
-				{{ archivedCards.length }}
-			</NcButton>
-
-			<!-- Watch / unwatch this board - subscribes to a "new card created"
-			     notification. Uses the same eye icon as the card-level watcher:
-			     eye-off (crossed) when watching, plain eye outline when not. -->
-			<NcButton
+			<!-- Consolidated "More" overflow (variant 1a): the secondary board
+			     actions live behind a single ⋯ menu so the toolbar reads as one
+			     bar. Every action here stays fully reachable and keeps its handler,
+			     permission gate, and any keyboard shortcut (e.g. the settings panel
+			     is still toggled by its own control). Swimlanes (a view-only Board
+			     grouping) are the radio group at the top; the rest are actions. -->
+			<NcActions
 				v-if="boardData"
-				class="board-view__watch-btn"
-				:type="isBoardSubscribed ? 'secondary' : 'tertiary'"
-				:title="isBoardSubscribed
-					? t('kanso', 'Watching this board (click to stop)')
-					: t('kanso', 'Watch this board for new cards')"
-				:aria-label="isBoardSubscribed ? t('kanso', 'Unwatch board') : t('kanso', 'Watch board')"
-				:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
-				@click="toggleBoardWatch">
+				v-model:open="moreMenuOpen"
+				class="board-view__more-menu"
+				:menu-name="t('kanso', 'More')"
+				:aria-label="t('kanso', 'More board actions')">
 				<template #icon>
-					<EyeOffOutlineIcon v-if="isBoardSubscribed" :size="20" />
-					<EyeOutlineIcon v-else :size="20" />
+					<DotsHorizontalIcon :size="20" />
 				</template>
-			</NcButton>
 
-			<!-- Trash button - always visible when board is loaded; opens the Trash page -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__trash-btn"
-				:title="t('kanso', 'View deleted cards')"
-				:aria-label="t('kanso', 'View deleted cards')"
-				@click="goToTrash">
-				<template #icon>
-					<DeleteIcon :size="20" />
+				<!-- Swimlanes - client-side grouping of the Board view into
+				     horizontal lanes by assignee / label / priority. View-only over
+				     the summary payload; persisted per board per user. Only shown in
+				     Board view. -->
+				<template v-if="viewMode === 'board'">
+					<NcActionCaption :name="t('kanso', 'Swimlanes')" />
+					<NcActionRadio
+						:model-value="swimlaneMode === 'none'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('none')">
+						{{ t('kanso', 'No swimlanes') }}
+					</NcActionRadio>
+					<NcActionRadio
+						:model-value="swimlaneMode === 'assignee'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('assignee')">
+						{{ t('kanso', 'Group by assignee') }}
+					</NcActionRadio>
+					<NcActionRadio
+						:model-value="swimlaneMode === 'label'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('label')">
+						{{ t('kanso', 'Group by label') }}
+					</NcActionRadio>
+					<NcActionRadio
+						:model-value="swimlaneMode === 'priority'"
+						name="kanso-swimlane"
+						@change="setSwimlaneMode('priority')">
+						{{ t('kanso', 'Group by priority') }}
+					</NcActionRadio>
+					<NcActionSeparator />
 				</template>
-			</NcButton>
 
-			<!-- Analytics button - navigates to the board stats page -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__analytics-btn"
-				:title="t('kanso', 'Board analytics')"
-				:aria-label="t('kanso', 'Board analytics')"
-				@click="goToStats">
-				<template #icon>
-					<ChartBarIcon :size="20" />
-				</template>
-			</NcButton>
+				<!-- Archived cards page - only offered when ≥1 archived card. The
+				     visible label already carries the count, so no separate aria-label
+				     is set (that would override the accessible name). -->
+				<NcActionButton
+					v-if="archivedCards.length > 0"
+					class="board-view__archived-btn"
+					@click="goToArchived">
+					<template #icon>
+						<ArchiveIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Archived cards ({count})', { count: archivedCards.length }) }}
+				</NcActionButton>
 
-			<!-- Multi-select mode toggle -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__multiselect-btn"
-				:type="bulk.selectionMode.value ? 'secondary' : 'tertiary'"
-				:title="t('kanso', 'Select multiple cards')"
-				:aria-label="t('kanso', 'Select multiple cards')"
-				:aria-pressed="bulk.selectionMode.value ? 'true' : 'false'"
-				@click="bulk.selectionMode.value ? bulk.exitMode() : bulk.enterMode()">
-				<template #icon>
-					<SelectMultipleIcon :size="20" />
-				</template>
-			</NcButton>
+				<!-- Watch / unwatch this board - subscribes to a "new card created"
+				     notification. Uses the same eye icon as the card-level watcher:
+				     eye-off (crossed) when watching, plain eye outline when not. -->
+				<NcActionButton
+					class="board-view__watch-btn"
+					:aria-pressed="isBoardSubscribed ? 'true' : 'false'"
+					@click="moreMenuOpen = false; toggleBoardWatch()">
+					<template #icon>
+						<EyeOffOutlineIcon v-if="isBoardSubscribed" :size="20" />
+						<EyeOutlineIcon v-else :size="20" />
+					</template>
+					{{ isBoardSubscribed ? t('kanso', 'Unwatch board') : t('kanso', 'Watch board') }}
+				</NcActionButton>
 
-			<!-- Settings (gear) button - toggles the right-docked settings panel -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__settings-btn"
-				:title="t('kanso', 'Board settings')"
-				:aria-label="t('kanso', 'Board settings')"
-				:aria-expanded="showSettings ? 'true' : 'false'"
-				@click="showSettings = !showSettings">
-				<template #icon>
-					<CogIcon :size="20" />
-				</template>
-			</NcButton>
+				<!-- Trash - opens the routed Trash page -->
+				<NcActionButton
+					class="board-view__trash-btn"
+					@click="goToTrash">
+					<template #icon>
+						<DeleteIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Deleted cards') }}
+				</NcActionButton>
+
+				<!-- Analytics - navigates to the board stats page -->
+				<NcActionButton
+					class="board-view__analytics-btn"
+					@click="goToStats">
+					<template #icon>
+						<ChartBarIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Board analytics') }}
+				</NcActionButton>
+
+				<!-- Multi-select mode toggle -->
+				<NcActionButton
+					class="board-view__multiselect-btn"
+					:aria-pressed="bulk.selectionMode.value ? 'true' : 'false'"
+					@click="moreMenuOpen = false; bulk.selectionMode.value ? bulk.exitMode() : bulk.enterMode()">
+					<template #icon>
+						<SelectMultipleIcon :size="20" />
+					</template>
+					{{ bulk.selectionMode.value ? t('kanso', 'Exit multi-select') : t('kanso', 'Select multiple cards') }}
+				</NcActionButton>
+
+				<NcActionSeparator />
+
+				<!-- Settings - toggles the right-docked settings panel. Closing the
+				     overflow menu first is required: the panel is a non-blocking
+				     docked drawer, so a lingering menu popover would sit over it and
+				     swallow clicks / Escape. -->
+				<NcActionButton
+					class="board-view__settings-btn"
+					:aria-expanded="showSettings ? 'true' : 'false'"
+					@click="moreMenuOpen = false; showSettings = !showSettings">
+					<template #icon>
+						<CogIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Board settings') }}
+				</NcActionButton>
+			</NcActions>
 		</div>
 
 		<!-- Board settings modal (Labels + Sharing tabs) -->
@@ -471,7 +476,11 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -482,7 +491,6 @@ import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted
 import SortIcon from 'vue-material-design-icons/Sort.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
-import ViewAgendaOutlineIcon from 'vue-material-design-icons/ViewAgendaOutline.vue'
 import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BulkActionBar from '../components/BulkActionBar.vue'
@@ -596,13 +604,6 @@ function setSwimlaneMode(mode) {
 		localStorage.setItem(`kanso.swimlaneMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
 }
-const swimlaneModeLabel = computed(() => ({
-	none: t('kanso', 'No swimlanes'),
-	assignee: t('kanso', 'By assignee'),
-	label: t('kanso', 'By label'),
-	priority: t('kanso', 'By priority'),
-}[swimlaneMode.value] ?? t('kanso', 'No swimlanes')))
-
 /**
  * View-only comparator for the active display sort. Every non-manual mode falls
  * back to the fractional sort key as a stable tiebreaker.
@@ -670,6 +671,11 @@ let boardCleanup = () => {}
 
 // Label settings panel visibility
 const showSettings = ref(false)
+
+// The consolidated ⋯ "More" overflow menu open state. Controlled so in-place
+// actions (settings panel, multi-select, watch) can dismiss the menu explicitly
+// — otherwise its popover lingers over the docked settings panel and eats clicks.
+const moreMenuOpen = ref(false)
 
 // ── Card-template manager (#3634) ─────────────────────────────────────────────
 // Board-scoped modal to view / edit / delete / unmark / create templates (which
@@ -1761,7 +1767,8 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	color: var(--color-text-maxcontrast);
 }
 
-.board-view__swimlane-menu {
+/* The consolidated "More" overflow menu trigger. */
+.board-view__more-menu {
 	flex-shrink: 0;
 }
 
