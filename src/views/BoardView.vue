@@ -1595,14 +1595,18 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	background: var(--board-background);
 }
 
+/* One consolidated toolbar (variant 1a): a single opaque header row holding the
+   back button, board title, then the right-aligned control cluster (search, view
+   toggle, sort, swimlanes, filters, and the icon actions). A tighter gap groups
+   the controls so they read as one bar rather than scattered buttons. */
 .board-view__header {
 	display: flex;
 	align-items: center;
-	gap: 16px;
+	gap: 8px;
 	/* Extra left padding reserves room for the NcAppNavigation toggle, which is
 	   pinned to the top-left of the app content area and would otherwise overlap
 	   the "All boards" button. */
-	padding: 12px 24px 12px 52px;
+	padding: 10px 20px 10px 52px;
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
 	flex-shrink: 0;
@@ -1708,7 +1712,10 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	padding: 0 4px;
 }
 
-/* Stacks scrollable row */
+/* Stacks scrollable row - the "sunken" board canvas (variant 1a). A recessed
+   surface so the white/raised columns lift off it. When a custom board
+   background gradient is active we stay transparent so the gradient shows
+   through instead (see the --has-background override below). */
 .board-view__stacks-wrap {
 	display: flex;
 	flex-direction: row;
@@ -1718,6 +1725,13 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	overflow-x: auto;
 	overflow-y: hidden;
 	flex: 1;
+	background: var(--color-background-hover);
+}
+
+/* With a custom board background, let the gradient be the canvas. */
+.board-view--has-background .board-view__stacks-wrap,
+.board-view--has-background .board-view__swimlanes-wrap {
+	background: transparent;
 }
 
 /* Swimlanes (grouped board): vertical scroll region holding stacked lanes.
