@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="timeline">
-		<!-- Zoom control -->
+		<!-- Zoom control + jump-to-today + legend -->
 		<div class="timeline__toolbar">
 			<span class="timeline__toolbar-label">{{ t('kanso', 'Zoom') }}</span>
 			<div class="timeline__zoom" role="group" :aria-label="t('kanso', 'Timeline zoom')">
@@ -16,6 +16,36 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@click="zoom = z.key">
 					{{ z.label }}
 				</button>
+			</div>
+			<button
+				class="timeline__today-btn"
+				:disabled="scheduledRows.length === 0"
+				@click="jumpToToday">
+				<CalendarTodayIcon :size="16" />
+				{{ t('kanso', 'Jump to today') }}
+			</button>
+
+			<div v-if="scheduledRows.length > 0" class="timeline__legend">
+				<span class="timeline__legend-item">
+					<span class="timeline__legend-swatch timeline__legend-swatch--not-started" />
+					{{ t('kanso', 'Not started') }}
+				</span>
+				<span class="timeline__legend-item">
+					<span class="timeline__legend-swatch timeline__legend-swatch--in-progress" />
+					{{ t('kanso', 'In progress') }}
+				</span>
+				<span class="timeline__legend-item">
+					<span class="timeline__legend-swatch timeline__legend-swatch--overdue" />
+					{{ t('kanso', 'Overdue') }}
+				</span>
+				<span class="timeline__legend-item">
+					<span class="timeline__legend-swatch timeline__legend-swatch--done" />
+					{{ t('kanso', 'Done') }}
+				</span>
+				<span class="timeline__legend-item">
+					<span class="timeline__legend-swatch timeline__legend-swatch--milestone" />
+					{{ t('kanso', 'Single date') }}
+				</span>
 			</div>
 		</div>
 
@@ -33,12 +63,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div class="timeline__pane">
 				<div class="timeline__pane-head">{{ t('kanso', 'Card') }}</div>
 				<template v-for="grp in groups" :key="`p${grp.stack.id}`">
-					<div class="timeline__group-row">
+					<div
+						class="timeline__group-row"
+						role="button"
+						tabindex="0"
+						:aria-expanded="!isCollapsed(grp.stack.id)"
+						@click="toggleGroup(grp.stack.id)"
+						@keydown.enter.prevent="toggleGroup(grp.stack.id)"
+						@keydown.space.prevent="toggleGroup(grp.stack.id)">
+						<ChevronRightIcon v-if="isCollapsed(grp.stack.id)" class="timeline__group-chevron" :size="16" />
+						<ChevronDownIcon v-else class="timeline__group-chevron" :size="16" />
 						<span
 							class="timeline__group-dot"
 							:style="grp.stack.color ? { background: cssColor(grp.stack.color) } : {}" />
 						<span class="timeline__group-title">{{ grp.stack.title }}</span>
-						<span class="timeline__group-count">{{ grp.rows.length }}</span>
+						<span class="timeline__group-count">{{ grp.count }}</span>
 					</div>
 					<div
 						v-for="row in grp.rows"
@@ -70,7 +109,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 
 			<!-- Scrollable track -->
-			<div class="timeline__scroll">
+			<div ref="scrollRef" class="timeline__scroll">
 				<div class="timeline__inner" :style="{ width: `${trackWidth}px` }">
 					<!-- Weekend shading (behind everything) -->
 					<div
@@ -164,11 +203,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
+import CalendarTodayIcon from 'vue-material-design-icons/CalendarToday.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 
@@ -185,6 +227,41 @@ const props = defineProps({
 })
 
 const router = useRouter()
+
+// The horizontally-scrolling track container (for jump-to-today + page-fill sizing).
+const scrollRef = ref(null)
+// Live viewport width of the track, so a short date range can be padded to fill it.
+const viewportWidth = ref(0)
+let resizeObserver = null
+
+// Collapsed stack ids, persisted per board (mirrors the List view's kanso.listCollapsed).
+const collapsedKey = computed(() => `kanso.timelineCollapsed.${props.boardId}`)
+const collapsed = ref(loadCollapsed())
+
+function loadCollapsed() {
+	try {
+		const saved = localStorage.getItem(`kanso.timelineCollapsed.${props.boardId}`)
+		if (saved) return new Set(JSON.parse(saved))
+	} catch (e) { /* localStorage unavailable - default to all expanded */ }
+	return new Set()
+}
+
+// Reload persisted state when the board changes (component is reused across boards).
+watch(() => props.boardId, () => { collapsed.value = loadCollapsed() })
+
+function isCollapsed(stackId) {
+	return collapsed.value.has(stackId)
+}
+
+function toggleGroup(stackId) {
+	const next = new Set(collapsed.value)
+	if (next.has(stackId)) next.delete(stackId)
+	else next.add(stackId)
+	collapsed.value = next
+	try {
+		localStorage.setItem(collapsedKey.value, JSON.stringify([...next]))
+	} catch (e) { /* localStorage unavailable - collapse is in-memory only */ }
+}
 
 const DAY = 86_400_000
 const ZOOMS = [
@@ -206,6 +283,15 @@ onMounted(() => {
 	clockTimer = setInterval(tickNow, 60_000)
 	document.addEventListener('visibilitychange', tickNow)
 	window.addEventListener('focus', tickNow)
+	if (scrollRef.value) {
+		viewportWidth.value = scrollRef.value.clientWidth
+		if (typeof ResizeObserver !== 'undefined') {
+			resizeObserver = new ResizeObserver((entries) => {
+				for (const entry of entries) viewportWidth.value = entry.contentRect.width
+			})
+			resizeObserver.observe(scrollRef.value)
+		}
+	}
 })
 onBeforeUnmount(() => {
 	if (clockTimer !== null) {
@@ -214,6 +300,10 @@ onBeforeUnmount(() => {
 	}
 	document.removeEventListener('visibilitychange', tickNow)
 	window.removeEventListener('focus', tickNow)
+	if (resizeObserver) {
+		resizeObserver.disconnect()
+		resizeObserver = null
+	}
 })
 const zoomCfg = computed(() => ZOOMS.find((z) => z.key === zoom.value) ?? ZOOMS[1])
 const pxPerDay = computed(() => zoomCfg.value.pxPerDay)
@@ -275,42 +365,80 @@ const grouped = computed(() => {
 const scheduledRows = computed(() => grouped.value.groups.flatMap((g) => g.rows))
 const unscheduled = computed(() => grouped.value.unscheduled)
 
-const axisStart = computed(() => {
+// Real extent of the scheduled cards (the dates bars are anchored to). Collapsed
+// groups still count toward the extent so the axis doesn't jump when a group folds.
+const dataStart = computed(() => {
 	const items = scheduledRows.value
 	if (items.length === 0) return null
 	return items.reduce((min, r) => Math.min(min, r.startMs), Infinity)
 })
-const axisEnd = computed(() => {
+const dataEnd = computed(() => {
 	const items = scheduledRows.value
 	if (items.length === 0) return null
 	return items.reduce((max, r) => Math.max(max, r.endMs), -Infinity)
 })
 
-const totalDays = computed(() => {
-	if (axisStart.value === null) return 0
-	return Math.round((axisEnd.value - axisStart.value) / DAY) + 1
+// Rendered axis origin. When today falls before the earliest scheduled card we
+// extend the origin backwards (leading pad) so the today marker stays on-screen;
+// otherwise the axis starts at the real earliest date. Bars are always positioned
+// via xForMs() off this origin, so real positions are never distorted.
+const axisStart = computed(() => {
+	if (dataStart.value === null) return null
+	const today = dayFloor(now.value)
+	return Math.min(dataStart.value, today)
 })
 
-const trackWidth = computed(() => LEFT_PAD * 2 + totalDays.value * pxPerDay.value)
+// The date range must cover the viewport even when the data is short: we pad
+// trailing empty days (and include today) so the track never looks truncated.
+const totalDays = computed(() => {
+	if (axisStart.value === null) return 0
+	const today = dayFloor(now.value)
+	// Extend the real end to at least today, so a short board near today still
+	// paints a continuous track up to the marker.
+	const dataDays = Math.round((Math.max(dataEnd.value, today) - axisStart.value) / DAY) + 1
+	// Days that fit in the current viewport, minus the two side pads.
+	const fitDays = viewportWidth.value > 0
+		? Math.ceil((viewportWidth.value - LEFT_PAD * 2) / pxPerDay.value)
+		: 0
+	return Math.max(dataDays, fitDays)
+})
+
+const trackWidth = computed(() => {
+	const w = LEFT_PAD * 2 + totalDays.value * pxPerDay.value
+	// Guarantee the inner track is never narrower than its viewport (belt-and-braces
+	// against sub-pixel rounding), so it always fills horizontally.
+	return viewportWidth.value > 0 ? Math.max(w, viewportWidth.value) : w
+})
+
+// Rendered end of the axis (last padded day), so the two-tier month axis, gridlines
+// and weekend shading extend across the whole filled width, not just the real data.
+const axisEnd = computed(() => {
+	if (axisStart.value === null) return null
+	return axisStart.value + (totalDays.value - 1) * DAY
+})
 
 function xForMs(ms) {
 	return LEFT_PAD + Math.round((ms - axisStart.value) / DAY) * pxPerDay.value
 }
 
 // Per-group with computed bar geometry, ready to render row-for-row against the pane.
+// A collapsed group keeps its header (with the true card count) but drops its card
+// rows entirely — the SAME reduced `rows` array feeds both the frozen pane and the
+// track, so their row sequences stay identical and pane↔track alignment is exact.
 const groups = computed(() => {
 	if (axisStart.value === null) return []
-	return grouped.value.groups.map((g) => ({
-		stack: g.stack,
-		rows: g.rows.map((r) => {
+	return grouped.value.groups.map((g) => {
+		const isColl = isCollapsed(g.stack.id)
+		const rows = isColl ? [] : g.rows.map((r) => {
 			const left = xForMs(r.startMs)
 			const isMilestone = r.startMs === r.endMs
 			const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
 			const overdue = !r.done && r.endMs < now.value
 			const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
 			return { ...r, left, width, isMilestone, overdue, labelInside }
-		}),
-	}))
+		})
+		return { stack: g.stack, rows, count: g.rows.length }
+	})
 })
 
 const ticks = computed(() => {
@@ -394,6 +522,21 @@ function cardHumanId(card) {
 function openCard(cardId) {
 	router.push({ name: 'card-modal', params: { id: String(props.boardId), cardId: String(cardId) } })
 }
+
+// Scroll the track so today's marker is centered (or as close as the range allows).
+function jumpToToday() {
+	const el = scrollRef.value
+	if (!el) return
+	nextTick(() => {
+		const today = dayFloor(now.value)
+		// Fall back to the axis origin if today isn't on the (padded) axis.
+		const x = (axisStart.value !== null && today >= axisStart.value && today <= axisEnd.value)
+			? xForMs(today)
+			: LEFT_PAD
+		const target = x - el.clientWidth / 2
+		el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+	})
+}
 </script>
 
 <style scoped>
@@ -436,6 +579,81 @@ function openCard(cardId) {
 .timeline__zoom-btn--active {
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
+}
+
+/* ── Jump-to-today ── */
+.timeline__today-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-pill);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-weight: 600;
+	font-size: 0.8rem;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.timeline__today-btn:hover:not(:disabled) {
+	background: var(--color-background-hover);
+}
+
+.timeline__today-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* ── Legend ── */
+.timeline__legend {
+	margin-inline-start: auto;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+	flex-wrap: wrap;
+}
+
+.timeline__legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	white-space: nowrap;
+}
+
+.timeline__legend-swatch {
+	width: 20px;
+	height: 8px;
+	border-radius: 4px;
+	flex: 0 0 auto;
+}
+
+.timeline__legend-swatch--not-started {
+	background: var(--color-background-dark);
+}
+
+.timeline__legend-swatch--in-progress {
+	background: var(--color-primary-element);
+}
+
+.timeline__legend-swatch--overdue {
+	background: var(--color-error);
+}
+
+.timeline__legend-swatch--done {
+	background: var(--color-success);
+}
+
+.timeline__legend-swatch--milestone {
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+	background: var(--color-text-maxcontrast);
+	transform: rotate(45deg);
 }
 
 .timeline__empty {
@@ -505,6 +723,17 @@ function openCard(cardId) {
 	box-sizing: border-box;
 	background: var(--color-background-hover);
 	border-bottom: 1px solid var(--color-border);
+	cursor: pointer;
+}
+
+.timeline__group-row:hover {
+	background: color-mix(in srgb, var(--color-background-hover) 60%, var(--color-background-dark));
+}
+
+.timeline__group-chevron {
+	color: var(--color-text-maxcontrast);
+	flex: 0 0 auto;
+	display: inline-flex;
 }
 
 .timeline__group-dot {

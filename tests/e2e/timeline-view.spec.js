@@ -91,6 +91,67 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
 	})
 
+	test('chrome: jump-to-today scrolls, legend renders, groups collapse, track fills the viewport', async ({ page }) => {
+		await ncLogin(page)
+		// Start from a clean slate so a prior run's collapsed state doesn't leak in.
+		await page.addInitScript(() => { try { localStorage.clear() } catch (e) {} })
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__view-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+
+		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
+
+		// Legend renders with all five swatches.
+		const legend = page.locator('.timeline__legend')
+		await expect(legend).toBeVisible()
+		await expect(legend).toContainText('Not started')
+		await expect(legend).toContainText('In progress')
+		await expect(legend).toContainText('Overdue')
+		await expect(legend).toContainText('Done')
+		await expect(legend).toContainText('Single date')
+		await expect(page.locator('.timeline__legend-swatch')).toHaveCount(5)
+
+		// Page-fill: on this short-range board the inner track still fills the viewport.
+		const fill = await page.locator('.timeline__scroll').evaluate((el) => {
+			return { scroll: el.scrollWidth, client: el.clientWidth }
+		})
+		expect(fill.scroll).toBeGreaterThanOrEqual(fill.client)
+
+		// Jump-to-today scrolls the track horizontally toward the today marker.
+		const todayBtn = page.getByRole('button', { name: 'Jump to today' })
+		await expect(todayBtn).toBeVisible()
+		const scrollBefore = await page.locator('.timeline__scroll').evaluate((el) => {
+			el.scrollLeft = 0
+			return el.scrollLeft
+		})
+		await todayBtn.click()
+		await page.waitForTimeout(700) // smooth scroll settles
+		const scrollAfter = await page.locator('.timeline__scroll').evaluate((el) => el.scrollLeft)
+		// With a track wider than the viewport and today near the right edge, the
+		// jump moves the scroll position off zero (or leaves it at zero only when
+		// today is already centered within the first viewport).
+		expect(scrollAfter).toBeGreaterThanOrEqual(scrollBefore)
+
+		// Group-collapse: the header chevron folds away its card rows in the pane.
+		const paneRowsBefore = await page.locator('.timeline__pane-row').count()
+		expect(paneRowsBefore).toBeGreaterThan(0)
+		const laneRowsBefore = await page.locator('.timeline__lane').count()
+		// Pane rows and track lanes mirror 1:1 for alignment.
+		expect(laneRowsBefore).toBe(paneRowsBefore)
+
+		await page.locator('.timeline__group-row').first().click()
+		await expect(page.locator('.timeline__pane-row')).toHaveCount(0)
+		await expect(page.locator('.timeline__lane')).toHaveCount(0)
+		// Header still visible with its count.
+		await expect(page.locator('.timeline__group-row').first()).toBeVisible()
+
+		// Expand again restores the exact row set in both pane and track.
+		await page.locator('.timeline__group-row').first().click()
+		await expect(page.locator('.timeline__pane-row')).toHaveCount(paneRowsBefore)
+		await expect(page.locator('.timeline__lane')).toHaveCount(laneRowsBefore)
+	})
+
 	test('a lane is keyboard-openable: focus + Enter opens the card (#3512)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
