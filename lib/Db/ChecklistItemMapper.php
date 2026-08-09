@@ -246,6 +246,55 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The derived "waiting on client" aggregate (epic 6, #3746): for every
+	 * non-deleted card on the board, whether at least one OPEN step is parked
+	 * on the given board side and since when - cardId => MIN(assigned_at)
+	 * over the card's open steps whose FROZEN role equals $role. Presence in
+	 * the map IS the wait flag; the value is the oldest such step's
+	 * assignment time (the "since" the tile chip shows).
+	 *
+	 * ONE fixed grouped query folded into the board summary as another
+	 * enrichment map next to {@see self::progressByBoard()} - never a
+	 * per-card lookup and never a stored column (the wait state is computed
+	 * from step state alone, so it can not drift from the truth). The open
+	 * filter binds a dialect-safe PARAM_BOOL exactly like progressByBoard
+	 * (Postgres native boolean vs MySQL/SQLite 0/1).
+	 *
+	 * Viewer-scoped like every other summary map (#3743): a card hidden from
+	 * this viewer never appears, so its wait state can not leak through the
+	 * map even if a caller were to emit it wholesale.
+	 *
+	 * The primitive is role-agnostic: 'external' (the default) derives
+	 * "waiting on client"; binding the viewer's own side instead would derive
+	 * the mirror "waiting on us" for free.
+	 *
+	 * @return array<int, ?int> map of cardId => oldest open matching step's assigned_at
+	 * @throws Exception
+	 */
+	public function waitingByBoard(int $boardId, ViewerContext $viewer, string $role = ViewerContext::ROLE_EXTERNAL): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->min('ci.assigned_at'), 'waiting_since')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('ci.assigned_role', $qb->createNamedParameter($role)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = $row['waiting_since'] !== null ? (int)$row['waiting_since'] : null;
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * The cross-board "my steps" feed (#3745): every OPEN checklist step
 	 * assigned to $uid on the given boards, joined up with its card / board /
 	 * stack titles for display. ONE query, driven by the (assigned_user, done)

@@ -247,8 +247,9 @@ class BoardController extends Controller {
 
 	/**
 	 * Enriches card summaries with the same per-card signal the board payload
-	 * carries (labelIds / assigneeIds / contacts / checklist / childProgress /
-	 * commentCount / reviewState / blocked). Extracted from {@see self::show()} so
+	 * carries (labelIds / assigneeIds / contacts / checklist / waitingOnExternal
+	 * + waitingSince / childProgress / commentCount / reviewState / blocked).
+	 * Extracted from {@see self::show()} so
 	 * {@see self::changes()} produces a BYTE-IDENTICAL card shape - the delta-sync
 	 * upsert must be indistinguishable from a full-board card, or a patched cache
 	 * entry would drift from a freshly fetched one. The enrichment maps are board-
@@ -263,6 +264,9 @@ class BoardController extends Controller {
 		$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($boardId);
 		$contactsByCard = $this->cardContactMapper->findContactsByBoard($boardId);
 		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId, $viewer);
+		// Derived "waiting on client" (#3746): cardId => oldest open external
+		// step's assigned_at. Presence = waiting; never stored, always computed.
+		$waitingByCard = $this->checklistItemMapper->waitingByBoard($boardId, $viewer);
 		$childProgressByCard = $this->cardMapper->childProgressByBoard($boardId, $viewer);
 		$commentCountByCard = $this->commentMapper->countsByBoard($boardId);
 		$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($boardId);
@@ -277,6 +281,8 @@ class BoardController extends Controller {
 				+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
 				+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
 				+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['waitingOnExternal' => \array_key_exists($card->getId(), $waitingByCard)]
+				+ ['waitingSince' => $waitingByCard[$card->getId()] ?? null]
 				+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
 				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
