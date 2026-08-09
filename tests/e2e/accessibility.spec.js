@@ -69,6 +69,10 @@ test.describe('Accessibility smoke', () => {
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 		const dialog = page.getByRole('dialog').first()
 		await expect(dialog).toBeVisible()
+		// The modal mounts before the card detail fetch resolves; snapshotting
+		// immediately races the content load (flaked on a cold CI runner). Wait
+		// for the card's real title to render before taking the aria snapshot.
+		await expect(dialog).toContainText('Accessible card', { timeout: 20_000 })
 		const modalSnapshot = await dialog.ariaSnapshot()
 		expect(modalSnapshot).toContain('Accessible card')
 	})
