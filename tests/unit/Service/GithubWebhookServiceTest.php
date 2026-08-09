@@ -10,6 +10,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardLink;
+use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardLinkService;
@@ -29,6 +31,7 @@ class GithubWebhookServiceTest extends TestCase {
 	private StackMapper&MockObject $stackMapper;
 	private CardService&MockObject $cardService;
 	private CardLinkService&MockObject $cardLinkService;
+	private CardLinkMapper&MockObject $cardLinkMapper;
 	private PermissionService&MockObject $permissionService;
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
@@ -40,6 +43,7 @@ class GithubWebhookServiceTest extends TestCase {
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardService = $this->createMock(CardService::class);
 		$this->cardLinkService = $this->createMock(CardLinkService::class);
+		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
@@ -48,6 +52,7 @@ class GithubWebhookServiceTest extends TestCase {
 			$this->stackMapper,
 			$this->cardService,
 			$this->cardLinkService,
+			$this->cardLinkMapper,
 			$this->permissionService,
 			$this->secureRandom,
 			$this->urlGenerator,
@@ -220,6 +225,157 @@ class GithubWebhookServiceTest extends TestCase {
 		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
 		self::assertTrue($result['handled']);
 		self::assertFalse($result['moved']);
+	}
+
+	// ---- issues events ----------------------------------------------------
+
+	private function link(int $id, int $cardId, string $url = 'https://github.com/octo/app/issues/7'): CardLink {
+		$l = new CardLink();
+		$l->setId($id);
+		$l->setCardId($cardId);
+		$l->setUrl($url);
+		$l->setKind(CardLink::KIND_ISSUE);
+		$l->setState(CardLink::STATE_OPEN);
+		$l->setLastPolled(0);
+		return $l;
+	}
+
+	private function issueBody(string $action, string $url = 'https://github.com/octo/app/issues/7', string $state = 'open', string $title = 'Crash on load'): string {
+		return json_encode([
+			'action' => $action,
+			'issue' => [
+				'html_url' => $url,
+				'state' => $state,
+				'title' => $title,
+			],
+		]);
+	}
+
+	public function testIssueClosedMovesLinkedCardToDoneStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->expects(self::once())->method('findByBoardAndUrls')
+			->willReturnCallback(function (int $boardId, array $urls): array {
+				self::assertSame(1, $boardId);
+				self::assertContains('https://github.com/octo/app/issues/7', $urls);
+				return [$this->link(11, 9)];
+			});
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(5, Stack::ROLE_DONE));
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 5, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['moved']);
+		self::assertSame(9, $result['cardId']);
+	}
+
+	public function testIssueReopenedMovesCardBackToInProgressStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_IN_PROGRESS)
+			->willReturn($this->stack(3, Stack::ROLE_IN_PROGRESS));
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 3, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = $this->issueBody('reopened');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['moved']);
+	}
+
+	public function testIssueReopenedFallsBackToTodoStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->stackMapper->method('findByBoardAndRole')->willReturnMap([
+			[1, Stack::ROLE_IN_PROGRESS, null], // no in-progress stack
+			[1, Stack::ROLE_TODO, $this->stack(2, Stack::ROLE_TODO)],
+		]);
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 2, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = $this->issueBody('reopened');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['moved']);
+	}
+
+	public function testUnlinkedIssueIsNoop(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]); // nothing on this board
+		$this->cardService->expects(self::never())->method('move');
+		$this->cardLinkMapper->expects(self::never())->method('update');
+
+		$body = $this->issueBody('closed', state: 'closed');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testIssueClosedWithoutDoneStackUpdatesLinkButDoesNotMove(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null); // no done-role stack
+		$this->cardService->expects(self::never())->method('move');
+		$this->cardLinkMapper->expects(self::once())->method('update');
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertTrue($result['handled']);
+		self::assertFalse($result['moved']);
+	}
+
+	public function testIssueEventRefreshesCachedLinkStateAndTitle(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$link = $this->link(11, 9);
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$link]);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$this->cardLinkMapper->expects(self::once())->method('update')
+			->willReturnCallback(function (CardLink $l): CardLink {
+				self::assertSame(CardLink::STATE_CLOSED, $l->getState());
+				self::assertSame('Fixed crash', $l->getTitle());
+				self::assertGreaterThan(0, $l->getLastPolled());
+				return $l;
+			});
+
+		$body = $this->issueBody('closed', state: 'closed', title: 'Fixed crash');
+		$this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertSame(CardLink::STATE_CLOSED, $link->getState());
+	}
+
+	public function testIssueCommentOnPrShapedIssueIsIgnored(): void {
+		// An issue_comment delivery on a PR carries an `issue` whose html_url is
+		// a /pull/ URL - not a Kanso issue link, so it must be a no-op.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->expects(self::never())->method('findByBoardAndUrls');
+		$this->cardService->expects(self::never())->method('move');
+
+		$body = $this->issueBody('created', url: 'https://github.com/octo/app/pull/3');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testIssueEventRejectsInvalidSignature(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->expects(self::never())->method('findByBoardAndUrls');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->handleWebhook(1, 'sha256=deadbeef', $this->issueBody('closed', state: 'closed'));
+	}
+
+	public function testIssueClosedMovesEveryLinkedCard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')
+			->willReturn([$this->link(11, 9), $this->link(12, 10)]);
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(5, Stack::ROLE_DONE));
+		$moves = [];
+		$this->cardService->expects(self::exactly(2))->method('move')
+			->willReturnCallback(function (int $cardId, int $stackId) use (&$moves): Card {
+				$moves[] = [$cardId, $stackId];
+				return $this->card($cardId, 1);
+			});
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertSame([[9, 5], [10, 5]], $moves);
+		self::assertTrue($result['moved']);
+		self::assertSame(9, $result['cardId']);
 	}
 
 	// ---- config (MANAGE) --------------------------------------------------

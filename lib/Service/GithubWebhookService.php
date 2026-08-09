@@ -9,6 +9,8 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\CardLink;
+use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -17,17 +19,22 @@ use OCP\Security\ISecureRandom;
 
 /**
  * Inbound GitHub webhooks (slice 2 of the GitHub integration). A board opts in
- * by generating a per-board secret (MANAGE) and pointing a GitHub `pull_request`
- * webhook at its endpoint. Each delivery is verified by HMAC-SHA256 against that
- * secret - the endpoint is the ONLY unauthenticated write path, so every field
- * is treated as untrusted and the signature is checked in constant time before
- * anything is parsed.
+ * by generating a per-board secret (MANAGE) and pointing a GitHub webhook
+ * sending `pull_request` and `issues` events at its endpoint. Each delivery is
+ * verified by HMAC-SHA256 against that secret - the endpoint is the ONLY
+ * unauthenticated write path, so every field is treated as untrusted and the
+ * signature is checked in constant time before anything is parsed.
  *
  * Auto-move reuses stack ROLES, not a config surface: a PR opened moves its card
- * to the board's ROLE_REVIEW stack; a PR merged moves it to the ROLE_DONE stack
- * (which stamps it done via the existing move automation). A board with no such
- * stack simply doesn't move - it still records the PR link. The move goes through
- * CardService::move so sort keys, the transaction and the change row all fire.
+ * (matched by its `kanso-<id>` branch) to the board's ROLE_REVIEW stack; a PR
+ * merged moves it to the ROLE_DONE stack (which stamps it done via the existing
+ * move automation). An issue has no branch, so its cards are matched in reverse:
+ * alive cards on this board with that issue URL attached as a link. An issue
+ * closed moves them to ROLE_DONE; reopened moves them back to ROLE_IN_PROGRESS
+ * (or ROLE_TODO if the board has no in-progress stack). A board with no matching
+ * role-stack simply doesn't move - the link/state is still recorded. Every move
+ * goes through CardService::move so sort keys, the transaction and the change
+ * row all fire.
  */
 class GithubWebhookService {
 	public function __construct(
@@ -35,6 +42,7 @@ class GithubWebhookService {
 		private StackMapper $stackMapper,
 		private CardService $cardService,
 		private CardLinkService $cardLinkService,
+		private CardLinkMapper $cardLinkMapper,
 		private PermissionService $permissionService,
 		private ISecureRandom $secureRandom,
 		private IURLGenerator $urlGenerator,
@@ -114,13 +122,29 @@ class GithubWebhookService {
 			// A bare JSON scalar / null / malformed body - accepted, nothing to do.
 			return ['handled' => false];
 		}
-		$pr = $payload['pull_request'] ?? null;
-		if (!is_array($pr)) {
-			// Not a pull_request event (e.g. a ping) - accepted, nothing to do.
-			return ['handled' => false];
-		}
-
 		$action = is_string($payload['action'] ?? null) ? $payload['action'] : '';
+
+		$pr = $payload['pull_request'] ?? null;
+		if (is_array($pr)) {
+			return $this->handlePullRequestEvent($board, $action, $pr);
+		}
+		$issue = $payload['issue'] ?? null;
+		if (is_array($issue)) {
+			return $this->handleIssueEvent($board, $action, $issue);
+		}
+		// Not a pull_request/issues event (e.g. a ping) - accepted, nothing to do.
+		return ['handled' => false];
+	}
+
+	/**
+	 * A `pull_request` event: the card is named by the PR's `kanso-<id>` head
+	 * branch; the PR is recorded as a link and the card auto-moved per action.
+	 *
+	 * @param array<string, mixed> $pr
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool}
+	 */
+	private function handlePullRequestEvent(Board $board, string $action, array $pr): array {
+		$boardId = $board->getId();
 		$branch = '';
 		if (isset($pr['head']) && is_array($pr['head']) && is_string($pr['head']['ref'] ?? null)) {
 			$branch = $pr['head']['ref'];
@@ -156,6 +180,57 @@ class GithubWebhookService {
 	}
 
 	/**
+	 * An `issues` event: an issue has no branch, so its cards are matched in
+	 * reverse - alive cards on this board with the issue's URL attached as a
+	 * link. The link's cached state/title is refreshed from the payload (fresher
+	 * and cheaper than a read-time poll), then each card is auto-moved per
+	 * action. An `issue_comment` delivery on a PR also carries an `issue` object
+	 * (whose html_url is a /pull/ URL) - that is not a Kanso issue link, so it
+	 * falls out at the KIND_ISSUE check.
+	 *
+	 * @param array<string, mixed> $issue
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool}
+	 */
+	private function handleIssueEvent(Board $board, string $action, array $issue): array {
+		$issueUrl = is_string($issue['html_url'] ?? null) ? $issue['html_url'] : '';
+		if ($issueUrl === '') {
+			return ['handled' => false];
+		}
+		try {
+			[$kind, $owner, $repo, $number] = CardLinkService::parseGitHubUrl($issueUrl);
+		} catch (InvalidInputException) {
+			return ['handled' => false];
+		}
+		if ($kind !== CardLink::KIND_ISSUE) {
+			return ['handled' => false];
+		}
+
+		$links = $this->cardLinkMapper->findByBoardAndUrls(
+			$board->getId(),
+			$this->issueUrlCandidates($owner, $repo, $number),
+		);
+		if ($links === []) {
+			return ['handled' => false];
+		}
+
+		$this->refreshLinksFromIssue($links, $issue);
+
+		$moved = false;
+		$firstCardId = 0;
+		foreach ($links as $link) {
+			$cardId = $link->getCardId();
+			if ($firstCardId === 0) {
+				$firstCardId = $cardId;
+			}
+			if ($this->applyIssueAutoMove($board->getId(), $cardId, $action, $board->getOwner())) {
+				$moved = true;
+			}
+		}
+
+		return ['handled' => true, 'action' => $action, 'cardId' => $firstCardId, 'moved' => $moved];
+	}
+
+	/**
 	 * Moves the card per the PR action, if the board has a matching role-stack.
 	 * A merged PR → ROLE_DONE (stamps done); an opened/reopened/ready PR →
 	 * ROLE_REVIEW. Returns whether a move actually happened.
@@ -186,6 +261,92 @@ class GithubWebhookService {
 			// the link is still recorded; the move is simply skipped.
 			return false;
 		}
+	}
+
+	/**
+	 * Moves a card per the issue action, if the board has a matching role-stack.
+	 * Closed → ROLE_DONE (stamps done); reopened → ROLE_IN_PROGRESS, falling
+	 * back to ROLE_TODO when the board has no in-progress stack. Purely
+	 * role-based - a board without the role stack simply doesn't move, exactly
+	 * like the PR path. Returns whether a move actually happened.
+	 */
+	private function applyIssueAutoMove(int $boardId, int $cardId, string $action, string $actorUid): bool {
+		$roles = [];
+		if ($action === 'closed') {
+			$roles = [Stack::ROLE_DONE];
+		} elseif ($action === 'reopened') {
+			$roles = [Stack::ROLE_IN_PROGRESS, Stack::ROLE_TODO];
+		}
+
+		$target = null;
+		foreach ($roles as $role) {
+			$target = $this->stackMapper->findByBoardAndRole($boardId, $role);
+			if ($target !== null) {
+				break;
+			}
+		}
+		if ($target === null) {
+			return false;
+		}
+
+		try {
+			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
+			return true;
+		} catch (\Throwable) {
+			// Best-effort, like the PR path - the state refresh already happened.
+			return false;
+		}
+	}
+
+	/**
+	 * Refreshes the matched links' cached state/title straight from the webhook
+	 * payload - authoritative and fresher than any poll - and stamps last_polled
+	 * so the read-time throttle doesn't immediately re-poll. Best-effort: a
+	 * failed row update must not fail the delivery.
+	 *
+	 * @param CardLink[] $links
+	 * @param array<string, mixed> $issue
+	 */
+	private function refreshLinksFromIssue(array $links, array $issue): void {
+		$rawState = is_string($issue['state'] ?? null) ? $issue['state'] : '';
+		$state = match ($rawState) {
+			'open' => CardLink::STATE_OPEN,
+			'closed' => CardLink::STATE_CLOSED,
+			default => CardLink::STATE_UNKNOWN,
+		};
+		$title = is_string($issue['title'] ?? null) ? $issue['title'] : null;
+		$now = time();
+
+		foreach ($links as $link) {
+			$link->setState($state);
+			if ($title !== null) {
+				$link->setTitle($title);
+			}
+			$link->setLastPolled($now);
+			try {
+				$this->cardLinkMapper->update($link);
+			} catch (\Throwable) {
+				// Non-critical - the next read-time poll will catch up.
+			}
+		}
+	}
+
+	/**
+	 * The URL spellings under which a github.com issue may have been attached
+	 * as a link (host www or not, trailing slash or not). Matching by candidate
+	 * set keeps the reverse lookup a plain indexed `url IN (...)` while still
+	 * being repo + issue-number based.
+	 *
+	 * @return string[]
+	 */
+	private function issueUrlCandidates(string $owner, string $repo, int $number): array {
+		$path = '/' . $owner . '/' . $repo . '/issues/' . $number;
+		return [
+			'https://github.com' . $path,
+			'https://github.com' . $path . '/',
+			'https://www.github.com' . $path,
+			'https://www.github.com' . $path . '/',
+		];
 	}
 
 	/**

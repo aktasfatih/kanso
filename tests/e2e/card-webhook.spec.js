@@ -77,6 +77,58 @@ test.describe('GitHub webhook ingest', () => {
 		expect(Number(card.doneAt)).toBeGreaterThan(0)
 	})
 
+	// Issues events (#3751): an issue has no branch, so the card is matched via
+	// its attached issue link. Closed → Done-role stack; reopened → back to the
+	// in-progress-role stack (falling back to To do when absent).
+	test('a signed issue-closed delivery moves the linked card to Done, reopened moves it back', async () => {
+		const issueUrl = 'https://github.com/nextcloud/server/issues/12345'
+		const issueCardId = (await api('POST', '/cards', { stackId: todoStackId, title: 'Fix the bug' })).body.id
+		await api('PATCH', `/stacks/${todoStackId}`, { role: 2 }) // ROLE_TODO (reopen fallback target)
+		const linkRes = await api('POST', `/cards/${issueCardId}/links`, { url: issueUrl })
+		expect(linkRes.ok).toBe(true)
+
+		// closed → Done-role stack, stamped done, cached link state refreshed.
+		let raw = JSON.stringify({
+			action: 'closed',
+			issue: { html_url: issueUrl, state: 'closed', title: 'Fix the bug upstream' },
+		})
+		let res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(true)
+		expect(res.body.moved).toBe(true)
+		expect(res.body.cardId).toBe(issueCardId)
+
+		let card = (await api('GET', `/cards/${issueCardId}`)).body
+		expect(card.stackId).toBe(doneStackId)
+		expect(Number(card.doneAt)).toBeGreaterThan(0)
+
+		const links = (await api('GET', `/cards/${issueCardId}/links`)).body
+		expect(links[0].state).toBe('closed')
+		expect(links[0].title).toBe('Fix the bug upstream')
+
+		// reopened → back out of Done (no in-progress stack here → To do fallback).
+		raw = JSON.stringify({
+			action: 'reopened',
+			issue: { html_url: issueUrl, state: 'open', title: 'Fix the bug upstream' },
+		})
+		res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.moved).toBe(true)
+
+		card = (await api('GET', `/cards/${issueCardId}`)).body
+		expect(card.stackId).toBe(todoStackId)
+	})
+
+	test('an issues delivery for an unlinked issue is an accepted no-op', async () => {
+		const raw = JSON.stringify({
+			action: 'closed',
+			issue: { html_url: 'https://github.com/nextcloud/server/issues/999999', state: 'closed', title: 'x' },
+		})
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+	})
+
 	test('a delivery with a bad signature is rejected 401 and does not move', async () => {
 		// Reset the card into To do first.
 		await api('POST', `/cards/${cardId}/move`, { targetStackId: todoStackId, afterCardId: null })

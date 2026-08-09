@@ -1092,7 +1092,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</p>
 				<template v-else>
 					<p class="github-webhook__hint">
-						{{ t('kanso', 'Add a GitHub "pull_request" webhook pointing at the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done.') }}
+						{{ t('kanso', 'Add a GitHub webhook sending "pull_request" and "issues" events to the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress.') }}
 					</p>
 
 					<label class="github-webhook__label">{{ t('kanso', 'Payload URL') }}</label>

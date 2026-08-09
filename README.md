@@ -67,8 +67,11 @@ your work, on your own Nextcloud, laid out plainly.
   assignees) into a new Kanso board you own. Your Deck boards are left untouched.
 - **GitHub links**: attach PRs/issues to a card with live open/merged/closed
   badges, and copy a ready-made `kanso-<id>` branch name.
-- **GitHub webhook**: an HMAC-verified webhook moves a card to your Review
-  column when its PR opens and to Done when it merges. No credentials, no OAuth.
+- **GitHub webhook**: an HMAC-verified webhook (send it `pull_request` and
+  `issues` events) moves a card to your Review column when its PR opens and to
+  Done when it merges. Closing an issue linked on a card moves that card to
+  Done; reopening it moves the card back to In progress. No credentials, no
+  OAuth.
 
 ### 📊 Views
 - **Board, List and Timeline** views: switch per board (remembered per user).
