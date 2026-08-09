@@ -152,8 +152,11 @@ export const searchSharees = (boardId, q) =>
 export const createAcl = (boardId, data) =>
 	axios.post(url(`/api/boards/${boardId}/acl`), data).then((r) => r.data)
 
-export const updateAcl = (boardId, aclId, permission) =>
-	axios.patch(url(`/api/boards/${boardId}/acl/${aclId}`), { permission }).then((r) => r.data)
+// `role` is optional ('internal' | 'external'); omitted/undefined is dropped
+// from the JSON body and the server keeps the member's stored board side
+// untouched (role changes are MANAGE-gated server-side).
+export const updateAcl = (boardId, aclId, permission, role) =>
+	axios.patch(url(`/api/boards/${boardId}/acl/${aclId}`), { permission, role }).then((r) => r.data)
 
 export const deleteAcl = (boardId, aclId) =>
 	axios.delete(url(`/api/boards/${boardId}/acl/${aclId}`)).then((r) => r.data)

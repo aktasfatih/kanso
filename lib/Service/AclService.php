@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
@@ -47,21 +48,31 @@ class AclService {
 	 * Shares the board with a user or group. READ is always included in the
 	 * stored mask - a share nobody can see is never valid.
 	 *
+	 * The member's board side (#3742) defaults to 'internal'; adding an
+	 * EXTERNAL (client-side) member is a role assignment and therefore
+	 * MANAGE-gated - SHARE alone only hands out same-side memberships.
+	 *
 	 * @param string $participantType 'user' or 'group'
 	 * @param int $permission bitmask of PermissionService::PERMISSION_* bits
+	 * @param string $role one of the ViewerContext::ROLE_* values
 	 * @throws DoesNotExistException if the board does not exist or is deleted
-	 * @throws NotPermittedException if the actor may not share the board, or
-	 *                               lacks MANAGE and tries to grant bits beyond their own
+	 * @throws NotPermittedException if the actor may not share the board,
+	 *                               lacks MANAGE and tries to grant bits beyond their own,
+	 *                               or lacks MANAGE and sets a non-default role
 	 * @throws InvalidInputException on unknown permission bits, an invalid
-	 *                               participant type, the board owner or a nonexistent participant,
-	 *                               or a participant the board is already shared with
+	 *                               participant type or role, the board owner or a nonexistent
+	 *                               participant, or a participant the board is already shared with
 	 */
-	public function create(int $boardId, string $participant, string $participantType, int $permission, string $actorUid): Acl {
+	public function create(int $boardId, string $participant, string $participantType, int $permission, string $actorUid, string $role = ViewerContext::ROLE_INTERNAL): Acl {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
 
 		$permission = $this->validateMask($permission);
 		$type = $this->parseParticipantType($participantType);
+		$role = $this->parseRole($role);
+		if ($role !== ViewerContext::ROLE_INTERNAL) {
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+		}
 
 		if ($type === Acl::TYPE_USER && $participant === $board->getOwner()) {
 			throw new InvalidInputException('Cannot share a board with its owner');
@@ -84,6 +95,7 @@ class AclService {
 		$acl->setParticipantType($type);
 		$acl->setParticipant($participant);
 		$acl->setPermission($permission);
+		$acl->setRole($role);
 
 		try {
 			$acl = $this->aclMapper->insert($acl);
@@ -117,19 +129,37 @@ class AclService {
 	 * re-submit an existing mask untouched even when it contains bits they
 	 * do not hold - they just cannot flip such bits.
 	 *
+	 * A non-null $role additionally re-assigns the member's board side
+	 * (#3742); FLIPPING the role is MANAGE-gated (re-submitting the current
+	 * one is not). There is no "last internal manager" hazard: the board
+	 * owner is an implicit internal manager and never appears in the ACL,
+	 * so an internal manager always remains.
+	 *
 	 * @param int $permission bitmask of PermissionService::PERMISSION_* bits
+	 * @param string|null $role one of the ViewerContext::ROLE_* values, or
+	 *                          null to leave the stored role untouched
 	 * @throws DoesNotExistException if the board or the sharing rule does not exist
 	 * @throws NotPermittedException if the actor may not share the board, or
-	 *                               lacks MANAGE and flips bits beyond their own
-	 * @throws InvalidInputException on unknown permission bits or a rule of another board
+	 *                               lacks MANAGE and flips bits beyond their own or the role
+	 * @throws InvalidInputException on unknown permission bits, an unknown
+	 *                               role, or a rule of another board
 	 */
-	public function update(int $boardId, int $aclId, int $permission, string $actorUid): Acl {
+	public function update(int $boardId, int $aclId, int $permission, string $actorUid, ?string $role = null): Acl {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
 
 		$acl = $this->loadAcl($boardId, $aclId);
 		$permission = $this->validateMask($permission);
 		$this->assertNoEscalation($board, $actorUid, $permission ^ $acl->getPermission());
+
+		if ($role !== null) {
+			$role = $this->parseRole($role);
+			$storedRole = $acl->getRole() ?? ViewerContext::ROLE_INTERNAL;
+			if ($role !== $storedRole) {
+				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+				$acl->setRole($role);
+			}
+		}
 
 		$acl->setPermission($permission);
 		$acl = $this->aclMapper->update($acl);
@@ -378,6 +408,17 @@ class AclService {
 			throw new InvalidInputException('Unknown permission bits');
 		}
 		return $mask | PermissionService::PERMISSION_READ;
+	}
+
+	/**
+	 * @return string one of the ViewerContext::ROLE_* values
+	 * @throws InvalidInputException on anything but 'internal' or 'external'
+	 */
+	private function parseRole(string $role): string {
+		if (!in_array($role, ViewerContext::ROLES, true)) {
+			throw new InvalidInputException("Role must be 'internal' or 'external'");
+		}
+		return $role;
 	}
 
 	/**

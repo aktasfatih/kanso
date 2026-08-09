@@ -869,6 +869,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Display name -->
 						<span class="sharing__entry-name">{{ resolveDisplayName(entry) }}</span>
 
+						<!-- Board side (#3742): internal (provider) vs external (client).
+						     Role assignment is MANAGE-gated; others see a passive badge. -->
+						<select
+							v-if="canManage"
+							class="sharing__role-select"
+							:value="entry.role || 'internal'"
+							:disabled="patchingAclId === entry.id"
+							:aria-label="t('kanso', 'Board side for {name}', { name: resolveDisplayName(entry) })"
+							:title="t('kanso', 'Internal members and external members each see only their own side\'s internal cards')"
+							data-test="acl-role-select"
+							@change="changeRole(entry, $event.target.value)">
+							<option value="internal">{{ t('kanso', 'Internal') }}</option>
+							<option value="external">{{ t('kanso', 'External') }}</option>
+						</select>
+						<span
+							v-else-if="(entry.role || 'internal') === 'external'"
+							class="sharing__role-badge"
+							data-test="acl-role-badge">
+							{{ t('kanso', 'External') }}
+						</span>
+
 						<!-- Permission toggles: Edit (bit 2), Share (bit 4), Manage (bit 8) -->
 						<div class="sharing__perms">
 							<label
@@ -3132,6 +3153,29 @@ async function togglePerm(entry, bit, checked) {
 	}
 }
 
+// ── ACL: board side (internal/external, #3742) ────────────────────────────────
+
+/**
+ * Re-assign a member's board side. MANAGE-gated (the selector only renders
+ * for managers); the permission mask is re-submitted unchanged so the
+ * escalation cap sees zero flipped bits.
+ */
+async function changeRole(entry, role) {
+	if (role === (entry.role || 'internal')) return
+	patchAclErrors.value = { ...patchAclErrors.value, [entry.id]: '' }
+	patchingAclId.value = entry.id
+	try {
+		await patchAcl.mutateAsync({ aclId: entry.id, permission: entry.permission, role })
+	} catch (err) {
+		patchAclErrors.value = {
+			...patchAclErrors.value,
+			[entry.id]: err?.response?.data?.error || t('kanso', 'Failed to update role.'),
+		}
+	} finally {
+		patchingAclId.value = null
+	}
+}
+
 // ── ACL: remove entry ─────────────────────────────────────────────────────────
 const confirmRemoveAclId = ref(null)
 const isRemovingAcl = ref(false)
@@ -4293,6 +4337,28 @@ async function doDeleteAutoRule(rule) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.sharing__role-select {
+	flex-shrink: 0;
+	max-width: 110px;
+	height: 28px;
+	min-height: 28px;
+	padding: 0 4px;
+	font-size: 0.8rem;
+	border: 1px solid var(--color-border-maxcontrast);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.sharing__role-badge {
+	flex-shrink: 0;
+	padding: 1px 8px;
+	font-size: 0.75rem;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
 }
 
 .sharing__perms {
