@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -34,6 +35,7 @@ class BoardService {
 		private CardReviewMapper $cardReviewMapper,
 		private BoardGroupMemberMapper $boardGroupMemberMapper,
 		private BoardPinMapper $boardPinMapper,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -75,12 +77,17 @@ class BoardService {
 		$boards = $this->findAll($uid);
 		$boardIds = array_map(static fn (Board $b): int => $b->getId(), $boards);
 
+		// The viewer's per-board role map scopes every count below (#3743):
+		// hidden cards must not surface through a tile number either. ONE
+		// batched ACL fetch, mirroring getPermissionsForBoards.
+		$rolesByBoard = $this->boardAccess->rolesFor($boards, $uid);
+
 		// A fixed set of batched aggregates over the readable board-id set - the
 		// count is constant no matter how many boards the user has.
-		$counts = $this->cardMapper->countByBoards($boardIds);
-		$ratios = $this->cardMapper->doneRatioByBoards($boardIds);
-		$overdue = $this->cardMapper->overdueCountByBoards($boardIds, new \DateTime('@' . time()));
-		$needsReview = $this->cardReviewMapper->needsReviewCountByBoards($boardIds);
+		$counts = $this->cardMapper->countByBoards($boardIds, $uid, $rolesByBoard);
+		$ratios = $this->cardMapper->doneRatioByBoards($boardIds, $uid, $rolesByBoard);
+		$overdue = $this->cardMapper->overdueCountByBoards($boardIds, new \DateTime('@' . time()), $uid, $rolesByBoard);
+		$needsReview = $this->cardReviewMapper->needsReviewCountByBoards($boardIds, $uid, $rolesByBoard);
 		// Per-user board folder (#3529): ONE batched WHERE uid = ? AND board_id
 		// IN (...) over the same readable set - not one query per board. A board
 		// absent from the map is Ungrouped (groupId null).

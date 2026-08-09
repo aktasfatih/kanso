@@ -15,6 +15,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Subscription;
 use OCA\Kanso\Db\SubscriptionMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -29,6 +30,7 @@ class SubscriptionServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private NotificationService&MockObject $notificationService;
 	private BoardSubscriptionMapper&MockObject $boardSubscriptionMapper;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private SubscriptionService $service;
 
 	protected function setUp(): void {
@@ -39,6 +41,8 @@ class SubscriptionServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->boardSubscriptionMapper = $this->createMock(BoardSubscriptionMapper::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new SubscriptionService(
 			$this->subscriptionMapper,
 			$this->cardMapper,
@@ -46,6 +50,7 @@ class SubscriptionServiceTest extends TestCase {
 			$this->permissionService,
 			$this->notificationService,
 			$this->boardSubscriptionMapper,
+			$this->visibilityGuard,
 		);
 	}
 

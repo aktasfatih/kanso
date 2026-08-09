@@ -97,6 +97,78 @@ class ArchitectureTest extends TestCase {
 		);
 	}
 
+	/**
+	 * Read-path completeness ratchet (#3743): every lib/ class that touches
+	 * CardMapper either carries a visibility construct (CardVisibilityScope /
+	 * CardVisibilityGuard / ViewerContext / BoardAccess - i.e. it resolved a
+	 * viewer or gates per card) or sits on this FROZEN allowlist of paths that
+	 * are deliberately viewer-less. The list may only SHRINK: a NEW service or
+	 * controller reading cards without any visibility construct fails the
+	 * build instead of silently shipping the "second read path that leaks".
+	 *
+	 * Why each entry is allowed to stay viewer-less:
+	 * - Db/BoardPinMapper.php ............ docblock mention only, no card query
+	 * - Notification/Notifier.php ........ bell rendering; audience filtering is
+	 *                                      the off-request card #3760
+	 * - Service/ArchiveService.php ....... auto-archive cron (system actor,
+	 *                                      write-only sweep) - #3760
+	 * - Service/BulkCardService.php ...... delegates every mutation to per-card
+	 *                                      services, which gate visibility and
+	 *                                      convert hidden → skipped
+	 * - Service/CalendarFeedService.php .. anonymous feed; the PUBLIC-ONLY
+	 *                                      scope is applied inside
+	 *                                      CardMapper::findWithDuedateByBoard
+	 * - Service/CsvImportService.php ..... importer, creates cards only
+	 * - Service/DeckImportService.php .... importer, creates cards only
+	 * - Service/DueReminderService.php ... reminder cron - #3760
+	 * - Service/PublicShareService.php ... anonymous snapshot; PUBLIC-ONLY is
+	 *                                      applied inside findPublicByBoard /
+	 *                                      progressByBoardPublicOnly
+	 * - Service/RecurrenceService.php .... recurrence cron - #3760
+	 * - Service/TrelloImportService.php .. importer, creates cards only
+	 */
+	private const VIEWERLESS_CARD_READER_ALLOWLIST = [
+		'Db/BoardPinMapper.php',
+		'Notification/Notifier.php',
+		'Service/ArchiveService.php',
+		'Service/BulkCardService.php',
+		'Service/CalendarFeedService.php',
+		'Service/CsvImportService.php',
+		'Service/DeckImportService.php',
+		'Service/DueReminderService.php',
+		'Service/PublicShareService.php',
+		'Service/RecurrenceService.php',
+		'Service/TrelloImportService.php',
+	];
+
+	public function testEveryCardMapperConsumerCarriesAVisibilityConstruct(): void {
+		$actual = self::scanLib(
+			static fn (string $content): bool => str_contains($content, 'CardMapper')
+				&& !str_contains($content, 'CardVisibilityScope')
+				&& !str_contains($content, 'CardVisibilityGuard')
+				&& !str_contains($content, 'ViewerContext')
+				&& !str_contains($content, 'BoardAccess'),
+		);
+		// Schema migrations and the mapper's own entity are not read paths.
+		$actual = array_values(array_filter(
+			$actual,
+			static fn (string $path): bool => !str_starts_with($path, 'Migration/')
+				&& $path !== 'Db/Card.php',
+		));
+
+		self::assertSame(
+			self::VIEWERLESS_CARD_READER_ALLOWLIST,
+			$actual,
+			'A lib/ class reads cards (references CardMapper) without any visibility '
+			. 'construct. Every viewer-facing read path must resolve the viewer '
+			. '(BoardAccess/ViewerContext) and scope its queries (CardVisibilityScope) '
+			. 'or gate per card (CardVisibilityGuard) - see #3743 for the wiring '
+			. 'pattern. If the new path is genuinely viewer-less (cron, importer, '
+			. 'anonymous-with-scope-in-the-mapper), justify it in the allowlist doc '
+			. 'above; if a listed class gained a visibility construct, SHRINK the list.',
+		);
+	}
+
 	public function testViewerContextIsMintedOnlyByBoardAccess(): void {
 		$expected = [
 			'Access/BoardAccess.php',

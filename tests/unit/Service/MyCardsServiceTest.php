@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\BoardService;
@@ -17,13 +19,15 @@ use PHPUnit\Framework\TestCase;
 class MyCardsServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
 	private CardMapper&MockObject $cardMapper;
+	private BoardAccess&MockObject $boardAccess;
 	private MyCardsService $service;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
-		$this->service = new MyCardsService($this->boardService, $this->cardMapper);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->service = new MyCardsService($this->boardService, $this->cardMapper, $this->boardAccess);
 	}
 
 	private function board(int $id): Board {
@@ -40,10 +44,15 @@ class MyCardsServiceTest extends TestCase {
 			->with('alice')
 			->willReturn([$this->board(3), $this->board(9)]);
 
+		$roles = [3 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL];
+		$this->boardAccess->expects($this->once())
+			->method('rolesFor')
+			->willReturn($roles);
+
 		$expected = [['id' => 1, 'boardId' => 3, 'title' => 'A task']];
 		$this->cardMapper->expects($this->once())
 			->method('findAssignedInBoards')
-			->with(['alice'], [3, 9])
+			->with(['alice'], [3, 9], 'alice', $roles)
 			->willReturn($expected);
 
 		$this->assertSame($expected, $this->service->findMine('alice'));
@@ -51,9 +60,10 @@ class MyCardsServiceTest extends TestCase {
 
 	public function testFindMineWithNoReadableBoardsQueriesEmptySet(): void {
 		$this->boardService->method('findAll')->willReturn([]);
+		$this->boardAccess->method('rolesFor')->willReturn([]);
 		$this->cardMapper->expects($this->once())
 			->method('findAssignedInBoards')
-			->with(['bob'], [])
+			->with(['bob'], [], 'bob', [])
 			->willReturn([]);
 
 		$this->assertSame([], $this->service->findMine('bob'));

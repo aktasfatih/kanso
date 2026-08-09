@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -18,7 +19,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<Change>
  */
 class ChangeMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_changes', Change::class);
 	}
 
@@ -77,13 +81,18 @@ class ChangeMapper extends QBMapper {
 	 * the row merges cleanly with the comment feed. Empty card/board/verb set → [].
 	 * Uses the (entity_type, entity_id) index.
 	 *
+	 * Visibility (#3743): the viewer is $excludeActor - the scope runs on the
+	 * joined card row (a change row alone carries no title, but the feed
+	 * enriches it with one, so the JOINED card must be viewer-visible).
+	 *
 	 * @param int[] $cardIds followed card ids
 	 * @param int[] $boardIds the viewer's readable board ids
 	 * @param int[] $verbs the Change::VERB_* values to surface
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return list<array{id: int, cardId: int, boardId: int, cardTitle: string, boardTitle: string, author: string, verb: int, createdAt: int}>
 	 * @throws Exception
 	 */
-	public function findInboxForCards(array $cardIds, array $boardIds, string $excludeActor, array $verbs, int $limit): array {
+	public function findInboxForCards(array $cardIds, array $boardIds, string $excludeActor, array $verbs, int $limit, array $rolesByBoard): array {
 		if ($cardIds === [] || $boardIds === [] || $verbs === []) {
 			return [];
 		}
@@ -109,6 +118,7 @@ class ChangeMapper extends QBMapper {
 			->orderBy('ch.created_at', 'DESC')
 			->addOrderBy('ch.id', 'DESC')
 			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $excludeActor, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$rows = [];

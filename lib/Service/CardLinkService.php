@@ -43,6 +43,7 @@ class CardLinkService {
 		private PermissionService $permissionService,
 		private ChangeNotifier $changeNotifier,
 		private IClientService $clientService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -57,6 +58,7 @@ class CardLinkService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$links = $this->cardLinkMapper->findByCard($cardId);
 		$now = time();
@@ -80,6 +82,7 @@ class CardLinkService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		[$kind] = self::parseGitHubUrl($url);
 
@@ -134,6 +137,7 @@ class CardLinkService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$link = $this->cardLinkMapper->find($linkId);
 		if ($link->getCardId() !== $cardId) {

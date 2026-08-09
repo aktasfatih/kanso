@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
 use OCA\Kanso\Db\AutomationRule;
@@ -82,6 +84,7 @@ class ImportService {
 		private AutomationRuleMapper $automationRuleMapper,
 		private IUserManager $userManager,
 		private IDBConnection $db,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -142,7 +145,12 @@ class ImportService {
 	 * @throws \OCP\DB\Exception
 	 */
 	public function duplicate(Board $source, string $actorUid, bool $withCards): array {
-		$doc = $this->exportService->export($source);
+		// The duplicate carries only cards the DUPLICATING viewer can see
+		// (#3743) - same scoped export the download endpoint uses.
+		$doc = $this->exportService->export(
+			$source,
+			$this->boardAccess->contextFor($source, $actorUid),
+		);
 		$board = $doc['board'];
 		$board['title'] = $this->copyTitle($source->getTitle());
 		// A copy always starts un-archived, whatever the source's state.
@@ -361,6 +369,23 @@ class ImportService {
 			$card->setParentCardId(null);
 			$card->setPriority((int)($row['priority'] ?? 0));
 			$card->setEstimate($this->nullableStr($row, 'estimate'));
+			// Visibility round-trip (#3743): preserve a narrowed visibility so
+			// a duplicate/import never silently widens a card to 'public'.
+			// Unknown/absent values fall back to the open default (documents
+			// predating the field). The creator SIDE is NOT preserved: the
+			// importer owns the fresh board and is therefore its provider
+			// ('internal') side, and the new board has no ACL yet - keeping a
+			// foreign 'external' side would only hide an imported internal
+			// card from the very person who imported it. Private cards keep
+			// their owner (kept above when the uid exists), so a restored
+			// backup still hides them from everyone else.
+			$visibility = $this->nullableStr($row, 'visibility');
+			$card->setVisibility(
+				in_array($visibility, CardVisibilityScope::VISIBILITIES, true)
+					? $visibility
+					: CardVisibilityScope::VISIBILITY_PUBLIC,
+			);
+			$card->setCreatorRole(ViewerContext::ROLE_INTERNAL);
 			$card->setBoardSeq($nextBoardSeq);
 			$nextBoardSeq++;
 			$new = $this->cardMapper->insert($card);

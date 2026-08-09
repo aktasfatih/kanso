@@ -15,6 +15,7 @@ use OCA\Kanso\Db\CardTimeEntry;
 use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\CardTimeEntryService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -29,6 +30,7 @@ class CardTimeEntryServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private PermissionService&MockObject $permissionService;
 	private ChangeNotifier&MockObject $changeNotifier;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardTimeEntryService $service;
 
 	protected function setUp(): void {
@@ -39,12 +41,15 @@ class CardTimeEntryServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CardTimeEntryService(
 			$this->timeEntryMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->permissionService,
 			$this->changeNotifier,
+			$this->visibilityGuard,
 		);
 	}
 

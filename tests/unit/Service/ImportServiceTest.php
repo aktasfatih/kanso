@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
 use OCA\Kanso\Db\AutomationRule;
@@ -52,6 +54,7 @@ class ImportServiceTest extends TestCase {
 	private AutomationRuleMapper&MockObject $automationRuleMapper;
 	private IUserManager&MockObject $userManager;
 	private \OCP\IDBConnection&MockObject $db;
+	private BoardAccess&MockObject $boardAccess;
 	private ImportService $service;
 
 	/** @var array<string, int> per-class monotonically-increasing id sequences */
@@ -77,6 +80,12 @@ class ImportServiceTest extends TestCase {
 		$this->automationRuleMapper = $this->createMock(AutomationRuleMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(\OCP\IDBConnection::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// duplicate() resolves the duplicating viewer's context and hands it to
+		// the (viewer-scoped) export (#3743).
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
+		);
 
 		$this->service = new ImportService(
 			$this->boardService,
@@ -95,6 +104,7 @@ class ImportServiceTest extends TestCase {
 			$this->automationRuleMapper,
 			$this->userManager,
 			$this->db,
+			$this->boardAccess,
 		);
 	}
 
@@ -346,7 +356,8 @@ class ImportServiceTest extends TestCase {
 		$source = new Board();
 		$source->setId(7);
 		$source->setTitle('Roadmap');
-		$this->exportService->expects(self::once())->method('export')->with($source)
+		$this->exportService->expects(self::once())->method('export')
+			->with($source, self::isInstanceOf(ViewerContext::class))
 			->willReturn($this->sourceExport());
 
 		// The copy is created through BoardService, titled "<original> (copy)",

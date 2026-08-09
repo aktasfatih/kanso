@@ -63,6 +63,7 @@ class CardService {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private SubscriptionMapper $subscriptionMapper,
 		private BoardAccess $boardAccess,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -76,6 +77,10 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+		// Visibility (#3743): a hidden card 404s exactly like a missing one -
+		// no existence oracle. Runs AFTER the board gate so non-members keep
+		// today's 403.
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 		return $card;
 	}
 
@@ -92,7 +97,10 @@ class CardService {
 	public function listTemplates(int $boardId, string $uid): array {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
-		return $this->cardMapper->findTemplatesByBoard($boardId);
+		return $this->cardMapper->findTemplatesByBoard(
+			$boardId,
+			$this->boardAccess->contextFor($board, $uid),
+		);
 	}
 
 	/**
@@ -136,7 +144,13 @@ class CardService {
 			return null;
 		}
 
-		return $this->cardMapper->findByBoardAndSeq($boardId, $seq);
+		// Viewer-scoped (#3743): a reference to a hidden card resolves to null,
+		// indistinguishable from a reference that never matched.
+		return $this->cardMapper->findByBoardAndSeq(
+			$boardId,
+			$seq,
+			$this->boardAccess->contextFor($board, $uid),
+		);
 	}
 
 	/**
@@ -334,6 +348,7 @@ class CardService {
 		$source = $this->loadCard($id);
 		$sourceBoard = $this->loadBoard($source->getBoardId());
 		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
 
 		$targetStack = $this->loadStack($targetStackId);
 		$targetBoard = $this->loadBoard($targetStack->getBoardId());
@@ -394,6 +409,7 @@ class CardService {
 		$source = $this->loadCard($id);
 		$sourceBoard = $this->loadBoard($source->getBoardId());
 		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
 
 		$targetStack = $this->loadStack($targetStackId);
 		$targetBoard = $this->loadBoard($targetStack->getBoardId());
@@ -445,7 +461,7 @@ class CardService {
 				$boardSeq = $this->cardMapper->nextBoardSeq($targetBoard->getId());
 
 				$now = time();
-				$moved = $this->buildMovedCard($source, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now);
+				$moved = $this->buildMovedCard($source, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
 				$moved = $this->cardMapper->insert($moved);
 				$newId = $moved->getId();
 
@@ -555,8 +571,14 @@ class CardService {
 	 * rejects the token); the title crosses UNCHANGED (a move is not a copy, so no
 	 * " (copy)" suffix). Never a template - a moved card is always an ordinary live
 	 * card.
+	 *
+	 * Visibility (#3743) crosses over UNCHANGED - a private/internal card must
+	 * never widen to 'public' by being moved. The creator SIDE is re-resolved
+	 * as the MOVER's role on the TARGET board (the frozen-at-create rule, with
+	 * the move as the create): the source side is meaningless there, and the
+	 * mover - who could see the card to move it - keeps seeing it after.
 	 */
-	private function buildMovedCard(Card $source, Board $targetBoard, int $targetStackId, string $sortKey, int $boardSeq, int $now): Card {
+	private function buildMovedCard(Card $source, Board $targetBoard, int $targetStackId, string $sortKey, int $boardSeq, int $now, string $moverUid): Card {
 		$card = new Card();
 		$card->setBoardId($targetBoard->getId());
 		$card->setStackId($targetStackId);
@@ -582,6 +604,8 @@ class CardService {
 		$card->setLastModified($now);
 		$card->setDeletedAt(0);
 		$card->setIsTemplate(false);
+		$card->setVisibility($source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+		$card->setCreatorRole($this->boardAccess->contextFor($targetBoard, $moverUid)->role);
 		return $card;
 	}
 
@@ -655,6 +679,7 @@ class CardService {
 		$template = $this->loadCard($templateId);
 		$board = $this->loadBoard($template->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $template, $uid);
 
 		if (!$template->getIsTemplate()) {
 			throw new InvalidInputException('Card ' . $templateId . ' is not a template');
@@ -695,6 +720,12 @@ class CardService {
 		$target->setType($source->getType());
 		$target->setStartedAt($source->getStartedAt());
 		$target->setDoneAt($source->getDoneAt());
+		// Visibility is CONTENT too (#3743): a copy of (or a card spawned
+		// from) a private/internal source must not silently widen to
+		// 'public'. The clone keeps the source's LEVEL while owner and
+		// creator side are the CLONER's (create() set both), so the actor
+		// always sees what they just made.
+		$target->setVisibility($source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC);
 		$estimate = $source->getEstimate();
 		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
 			$target->setEstimate($estimate);
@@ -730,6 +761,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$card->setIsTemplate($isTemplate);
 		$card->setLastModified(time());
@@ -841,10 +873,12 @@ class CardService {
 		?bool $dueReminderDayBefore = null,
 		?string $coverColor = null,
 		?string $type = null,
+		?string $visibility = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
@@ -927,6 +961,9 @@ class CardService {
 		if ($status !== null) {
 			$this->applyStatus($card, $status);
 		}
+		if ($visibility !== null) {
+			$this->applyVisibility($card, $board, $visibility, $uid);
+		}
 
 		$now = time();
 		$card->setLastModified($now);
@@ -970,6 +1007,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$now = time();
 
@@ -1018,6 +1056,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$targetStack = $this->loadStack($targetStackId);
 		if ($targetStack->getBoardId() !== $card->getBoardId()) {
@@ -1044,7 +1083,7 @@ class CardService {
 		for ($attempt = 0; ; $attempt++) {
 			$afterCard = $afterCardId === null
 				? null
-				: $this->loadAfterCard($afterCardId, $targetStackId, $id);
+				: $this->loadAfterCard($afterCardId, $targetStackId, $id, $board, $uid);
 			try {
 				$moved = $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
 				// Moving the last open child into a done-role stack (which stamps
@@ -1160,6 +1199,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		if ($parentCardId === null) {
 			if ($card->getParentCardId() === null) {
@@ -1171,6 +1211,11 @@ class CardService {
 				throw new InvalidInputException('A card cannot be its own parent');
 			}
 			$parent = $this->loadParentCard($parentCardId);
+			// A parent the actor cannot SEE reads as missing (#3743) - same
+			// masking as loadParentCard's absence case, no existence oracle.
+			if (!$this->visibilityGuard->isVisible($board, $parent, $uid)) {
+				throw new InvalidInputException('Parent card ' . $parentCardId . ' does not exist');
+			}
 			if ($parent->getBoardId() !== $card->getBoardId()) {
 				throw new InvalidInputException('Parent card must be on the same board');
 			}
@@ -1199,6 +1244,27 @@ class CardService {
 		);
 
 		return $card;
+	}
+
+	/**
+	 * Applies a visibility change (#3743). The value must be one of the three
+	 * known levels, and only the card's CREATOR (owner) or a board MANAGER may
+	 * narrow/widen it - a regular member must not flip someone else's card
+	 * across the fence. The creator side (`creator_role`) stays FROZEN: a
+	 * manager marking another member's card 'internal' scopes it to the
+	 * CREATOR's side, never their own.
+	 *
+	 * @throws InvalidInputException on an unknown visibility value
+	 * @throws NotPermittedException if the actor is neither creator nor manager
+	 */
+	private function applyVisibility(Card $card, Board $board, string $visibility, string $uid): void {
+		if (!in_array($visibility, CardVisibilityScope::VISIBILITIES, true)) {
+			throw new InvalidInputException('Unknown card visibility: ' . $visibility);
+		}
+		if ($card->getOwner() !== $uid && !$this->boardAccess->contextFor($board, $uid)->isManager) {
+			throw new NotPermittedException('Only the card creator or a board manager may change its visibility');
+		}
+		$card->setVisibility($visibility);
 	}
 
 	/**
@@ -1545,7 +1611,7 @@ class CardService {
 	 *
 	 * @throws InvalidInputException
 	 */
-	private function loadAfterCard(int $afterCardId, int $targetStackId, int $movedCardId): Card {
+	private function loadAfterCard(int $afterCardId, int $targetStackId, int $movedCardId, Board $board, string $uid): Card {
 		if ($afterCardId === $movedCardId) {
 			throw new InvalidInputException('afterCardId must not be the moved card itself');
 		}
@@ -1555,6 +1621,11 @@ class CardService {
 			throw new InvalidInputException('Card ' . $afterCardId . ' does not exist');
 		}
 		if ($afterCard->getDeletedAt() > 0) {
+			throw new InvalidInputException('Card ' . $afterCardId . ' does not exist');
+		}
+		// An anchor the mover cannot SEE reads as missing (#3743) - probing
+		// stack positions with foreign ids must not confirm a hidden card.
+		if (!$this->visibilityGuard->isVisible($board, $afterCard, $uid)) {
 			throw new InvalidInputException('Card ' . $afterCardId . ' does not exist');
 		}
 		if ($afterCard->getStackId() !== $targetStackId) {

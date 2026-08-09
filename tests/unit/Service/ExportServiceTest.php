@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
 use OCA\Kanso\Db\AutomationRule;
@@ -48,6 +49,7 @@ class ExportServiceTest extends TestCase {
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private AutomationRuleMapper&MockObject $automationRuleMapper;
 	private ExportService $service;
+	private ViewerContext $viewer;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -77,6 +79,8 @@ class ExportServiceTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->automationRuleMapper,
 		);
+		// The export is viewer-scoped (#3743): only cards this viewer can see ride along.
+		$this->viewer = ViewerContext::forMember('alice', 7, ViewerContext::ROLE_INTERNAL, true);
 	}
 
 	private function board(): Board {
@@ -117,10 +121,6 @@ class ExportServiceTest extends TestCase {
 		$type->setColor('00f');
 		$this->reviewTypeMapper->method('findByBoard')->with(7)->willReturn([$type]);
 
-		$summary = new Card();
-		$summary->setId(41);
-		$this->cardMapper->method('findByStack')->with(11)->willReturn([$summary]);
-
 		$full = new Card();
 		$full->setId(41);
 		$full->setBoardId(7);
@@ -140,7 +140,9 @@ class ExportServiceTest extends TestCase {
 		$full->setParentCardId(null);
 		$full->setPriority(4);
 		$full->setEstimate('M');
-		$this->cardMapper->method('find')->with(41)->willReturn($full);
+		// ONE viewer-scoped full-row query replaces the per-stack + per-card reads.
+		$this->cardMapper->expects(self::once())
+			->method('findExportableByBoard')->with(7, $this->viewer)->willReturn([$full]);
 
 		$this->cardLabelMapper->method('findLabelIdsByCard')->with(41)->willReturn([21]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(41)->willReturn(['bob']);
@@ -213,7 +215,7 @@ class ExportServiceTest extends TestCase {
 		$autoRule->setCreatedAt(560);
 		$this->automationRuleMapper->method('findByBoard')->with(7)->willReturn([$autoRule]);
 
-		$doc = $this->service->export($this->board());
+		$doc = $this->service->export($this->board(), $this->viewer);
 
 		self::assertSame(ExportService::FORMAT_VERSION, $doc['kanso']);
 		self::assertIsInt($doc['exportedAt']);
@@ -239,6 +241,9 @@ class ExportServiceTest extends TestCase {
 		self::assertSame(4, $card['priority']);
 		self::assertSame([21], $card['labelIds']);
 		self::assertSame(['bob'], $card['assignees']);
+		// Visibility rides along (#3741/#3743); unset columns read as the defaults.
+		self::assertSame('public', $card['visibility']);
+		self::assertSame('internal', $card['creatorRole']);
 		self::assertSame([['title' => 'write test', 'done' => true, 'sortKey' => 'a', 'createdAt' => 510]], $card['checklist']);
 		self::assertSame('looks good', $card['comments'][0]['body']);
 		self::assertSame('carol', $card['comments'][0]['author']);
@@ -265,11 +270,52 @@ class ExportServiceTest extends TestCase {
 		$this->recurRuleMapper->method('findByBoard')->willReturn([]);
 		$this->automationRuleMapper->method('findByBoard')->willReturn([]);
 
-		$doc = $this->service->export($this->board());
+		$doc = $this->service->export($this->board(), $this->viewer);
 
 		self::assertSame([], $doc['board']['stacks']);
 		self::assertSame([], $doc['board']['cards']);
 		self::assertSame([], $doc['board']['labels']);
 		self::assertSame([], $doc['board']['automationRules']);
+	}
+
+	public function testExportCardsCarryVisibilityAndOnlyExportableRows(): void {
+		// The card walk is EXACTLY findExportableByBoard's viewer-scoped result -
+		// no per-stack or per-card reads that could resurrect a hidden card - and
+		// each row round-trips its visibility/creatorRole so an import can never
+		// silently widen the card back to 'public'.
+		$stack = new Stack();
+		$stack->setId(11);
+		$stack->setBoardId(7);
+		$stack->setTitle('Doing');
+		$stack->setSortKey('m');
+		$stack->setArchived(false);
+		$this->stackMapper->method('findByBoard')->with(7)->willReturn([$stack]);
+
+		$card = new Card();
+		$card->setId(41);
+		$card->setBoardId(7);
+		$card->setStackId(11);
+		$card->setTitle('Client-side task');
+		$card->setSortKey('h');
+		$card->setDoneAt(0);
+		$card->setStartedAt(0);
+		$card->setArchived(false);
+		$card->setCreatedAt(500);
+		$card->setLastModified(600);
+		$card->setPriority(0);
+		$card->setVisibility('private');
+		$card->setCreatorRole('external');
+		$this->cardMapper->expects(self::once())
+			->method('findExportableByBoard')->with(7, $this->viewer)->willReturn([$card]);
+		$this->cardMapper->expects(self::never())->method('findByStack');
+		$this->cardMapper->expects(self::never())->method('find');
+
+		$doc = $this->service->export($this->board(), $this->viewer);
+
+		self::assertCount(1, $doc['board']['cards']);
+		$row = $doc['board']['cards'][0];
+		self::assertSame(41, $row['id']);
+		self::assertSame('private', $row['visibility']);
+		self::assertSame('external', $row['creatorRole']);
 	}
 }

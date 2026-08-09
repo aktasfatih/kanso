@@ -41,6 +41,7 @@ class CardFieldValueService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -57,6 +58,7 @@ class CardFieldValueService {
 		$card = $this->cardMapper->find($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$field = $this->loadFieldForCard($fieldId, $card);
 
@@ -95,6 +97,7 @@ class CardFieldValueService {
 		$card = $this->cardMapper->find($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$this->loadFieldForCard($fieldId, $card);
 		$this->clearInternal($cardId, $fieldId, $card, $board, $uid);

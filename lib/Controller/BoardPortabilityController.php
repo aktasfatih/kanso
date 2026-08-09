@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ExportService;
 use OCA\Kanso\Service\ImportService;
@@ -32,6 +33,7 @@ class BoardPortabilityController extends Controller {
 		private BoardService $boardService,
 		private ExportService $exportService,
 		private ImportService $importService,
+		private BoardAccess $boardAccess,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -45,7 +47,10 @@ class BoardPortabilityController extends Controller {
 		return $this->respond(function () use ($id): JSONResponse {
 			$uid = $this->currentUserId();
 			$board = $this->boardService->find($id, $uid);
-			return new JSONResponse($this->exportService->export($board));
+			// The export content is scoped to the VIEWER's visible card set
+			// (#3743) - READ on the board alone must not dump hidden cards.
+			$viewer = $this->boardAccess->contextFor($board, $uid);
+			return new JSONResponse($this->exportService->export($board, $viewer));
 		});
 	}
 

@@ -173,7 +173,7 @@ class Card extends Entity implements \JsonSerializable {
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string, isTemplate: bool}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string, isTemplate: bool, visibility: string}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -211,6 +211,13 @@ class Card extends Entity implements \JsonSerializable {
 			// board render; the flag is surfaced so the template picker and the
 			// card detail can tell a template apart from a normal card.
 			'isTemplate' => $this->isTemplate ?? false,
+			// Card visibility (#3741/#3743): 'public' | 'internal' | 'private'.
+			// Every payload row has already passed the visibility scope, so
+			// exposing the level leaks nothing - the UI needs it for the badge
+			// and the picker. `creatorRole` stays server-side (the scope
+			// filters on it; a visible internal card always matches the
+			// viewer's own side, so the value would be redundant anyway).
+			'visibility' => $this->visibility ?? 'public',
 		];
 	}
 

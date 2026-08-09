@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
@@ -16,6 +18,14 @@ use OCP\IDBConnection;
 
 /**
  * Mapper for `kanso_cards`.
+ *
+ * Card-visibility (#3743): every method that feeds a VIEWER-FACING payload
+ * takes the viewer - a {@see ViewerContext} (board-scoped) or a
+ * (uid, rolesByBoard) pair (cross-board) - and applies
+ * {@see CardVisibilityScope} in SQL, so a hidden card never leaves the
+ * database. Methods without a viewer are internal mechanics (sort-key
+ * neighbours, rebalance, cron candidate sets, parent auto-complete) whose
+ * results never reach a response directly.
  *
  * @template-extends QBMapper<Card>
  */
@@ -53,9 +63,16 @@ class CardMapper extends QBMapper {
 		'cover_color',
 		'type',
 		'is_template',
+		// Card visibility (#3741/#3743): in the summary so the tile badge and
+		// the picker render without a detail fetch. `creator_role` is NOT
+		// selected - the scope filters on it, the payload never carries it.
+		'visibility',
 	];
 
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_cards', Card::class);
 	}
 
@@ -107,9 +124,12 @@ class CardMapper extends QBMapper {
 	 * deleted card resolves to null (falls back to the raw text) rather than
 	 * linking to a card the board no longer shows.
 	 *
+	 * A reference to a card the viewer cannot SEE resolves to null too (#3743) -
+	 * indistinguishable from a reference to a card that never existed.
+	 *
 	 * @throws Exception
 	 */
-	public function findByBoardAndSeq(int $boardId, int $seq): ?Card {
+	public function findByBoardAndSeq(int $boardId, int $seq, ViewerContext $viewer): ?Card {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -117,6 +137,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->setMaxResults(1);
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$cards = $this->findEntities($qb);
 		return $cards[0] ?? null;
@@ -132,7 +153,7 @@ class CardMapper extends QBMapper {
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findSummariesByBoard(int $boardId): array {
+	public function findSummariesByBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -141,6 +162,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('stack_id', 'ASC')
 			->addOrderBy('sort_key', 'ASC');
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		return $this->findEntities($qb);
 	}
@@ -159,7 +181,7 @@ class CardMapper extends QBMapper {
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findSummariesByIds(int $boardId, array $ids): array {
+	public function findSummariesByIds(int $boardId, array $ids, ViewerContext $viewer): array {
 		if ($ids === []) {
 			return [];
 		}
@@ -171,6 +193,11 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+		// Visibility (#3743): a hidden card simply drops out of the delta
+		// upsert set - the changes() endpoint then emits it as a `remove`,
+		// which is exactly the right client behavior for a card the viewer
+		// may (no longer) see. Its change rows never carry a title.
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		return $this->findEntities($qb);
 	}
@@ -185,7 +212,7 @@ class CardMapper extends QBMapper {
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findTemplatesByBoard(int $boardId): array {
+	public function findTemplatesByBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -194,6 +221,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('title', 'ASC')
 			->addOrderBy('id', 'ASC');
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		return $this->findEntities($qb);
 	}
@@ -219,6 +247,9 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('stack_id', 'ASC')
 			->addOrderBy('sort_key', 'ASC');
+		// The share viewer is ANONYMOUS: 'public' cards only, no role branch
+		// ever - regardless of any ACL on the board (#3743).
+		$this->visibilityScope->applyPublicOnly($qb, '');
 
 		return $this->findEntities($qb);
 	}
@@ -245,6 +276,39 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->orderBy('duedate', 'ASC')
 			->addOrderBy('id', 'ASC');
+		// The feed token authenticates a BOARD, not a person: the reader is
+		// anonymous, so only 'public' cards may ever reach the calendar (#3743).
+		$this->visibilityScope->applyPublicOnly($qb, '');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * FULL rows (description included) of every non-deleted card on a board
+	 * that the VIEWER can see - templates and archived cards included, exactly
+	 * the set the board export/duplicate may serialize (#3743). One query
+	 * (replaces the old per-stack walk + per-card detail refetch); the caller
+	 * groups by stack. Ordered by stack, then display order, so per-stack
+	 * card order matches the old export byte-for-byte.
+	 *
+	 * $viewer = null is the SYSTEM scope (unfiltered) - reserved for the
+	 * admin backup ({@see \OCA\Kanso\Service\ExportService::export()}), whose
+	 * output never reaches an HTTP response. No default: callers choose.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findExportableByBoard(int $boardId, ?ViewerContext $viewer): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('stack_id', 'ASC')
+			->addOrderBy('sort_key', 'ASC');
+		if ($viewer !== null) {
+			$this->visibilityScope->applyForViewer($qb, '', $viewer);
+		}
 
 		return $this->findEntities($qb);
 	}
@@ -374,11 +438,16 @@ class CardMapper extends QBMapper {
 	 * pre-escaped and wrapped by the caller. Title matches sort first, then most
 	 * recent. $boardIds must be non-empty (the caller returns early otherwise).
 	 *
+	 * Visibility (#3743): cross-board scope over the viewer's per-board roles,
+	 * applied in SQL - a hidden card can never match, not even by title.
+	 *
 	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 *                                         ({@see \OCA\Kanso\Access\BoardAccess::rolesFor()})
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function searchInBoards(array $boardIds, string $likePattern, int $limit): array {
+	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
@@ -390,6 +459,7 @@ class CardMapper extends QBMapper {
 			))
 			->orderBy('id', 'DESC')
 			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		return $this->findEntities($qb);
 	}
@@ -401,7 +471,7 @@ class CardMapper extends QBMapper {
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findDeletedByBoard(int $boardId): array {
+	public function findDeletedByBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -409,6 +479,9 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->gt('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->orderBy('deleted_at', 'DESC')
 			->addOrderBy('id', 'DESC');
+		// A hidden card stays hidden in the trash too (#3743) - deleting a
+		// private/internal card must not surface it to the other side.
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		return $this->findEntities($qb);
 	}
@@ -428,6 +501,28 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->orderBy('stack_id', 'ASC')
 			->addOrderBy('sort_key', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * The viewer-facing twin of {@see self::findChildren()} for the card
+	 * detail payload (#3743): hidden children are dropped in SQL. The unscoped
+	 * variant stays for INTERNAL logic (parent auto-complete, delete-detach),
+	 * where correctness must count every child - hidden ones included.
+	 *
+	 * @return Card[]
+	 * @throws Exception
+	 */
+	public function findVisibleChildren(int $parentCardId, ViewerContext $viewer): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('parent_card_id', $qb->createNamedParameter($parentCardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('stack_id', 'ASC')
+			->addOrderBy('sort_key', 'ASC');
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		return $this->findEntities($qb);
 	}
@@ -460,12 +555,16 @@ class CardMapper extends QBMapper {
 	 * constant number of queries. "done" counts children whose `done_at > 0`.
 	 * Parents with no children are absent from the map (callers default to 0/0).
 	 *
+	 * Visibility (#3743): only children the VIEWER can see are counted, so a
+	 * private child can never betray its existence through a parent's child
+	 * count (counts are part of the leak surface).
+	 *
 	 * @return array<int, array{total: int, done: int}> map of parentCardId => counts
 	 * @throws Exception
 	 */
-	public function childProgressByBoard(int $boardId): array {
-		$totals = $this->countChildrenByBoard($boardId, false);
-		$done = $this->countChildrenByBoard($boardId, true);
+	public function childProgressByBoard(int $boardId, ViewerContext $viewer): array {
+		$totals = $this->countChildrenByBoard($boardId, false, $viewer);
+		$done = $this->countChildrenByBoard($boardId, true, $viewer);
 
 		$map = [];
 		foreach ($totals as $parentId => $count) {
@@ -482,7 +581,7 @@ class CardMapper extends QBMapper {
 	 * @return array<int, int> map of parentCardId => count
 	 * @throws Exception
 	 */
-	private function countChildrenByBoard(int $boardId, bool $doneOnly): array {
+	private function countChildrenByBoard(int $boardId, bool $doneOnly, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('parent_card_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -491,6 +590,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->isNotNull('parent_card_id'))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('parent_card_id');
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		if ($doneOnly) {
 			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
@@ -609,12 +709,17 @@ class CardMapper extends QBMapper {
 	 * Ordered undated-last, then by due date, then priority - so the soonest
 	 * actionable work floats to the top. Capped at $limit rows.
 	 *
+	 * Visibility (#3743): the viewer's per-board roles scope the query - being
+	 * ASSIGNED to a card grants no visibility beyond the rule (an external
+	 * assigned to a provider-internal card must not see it here either).
+	 *
 	 * @param string[] $uids the assignee identities to match (a user's uid plus any group ids they belong to)
 	 * @param int[] $boardIds the readable board set; an empty set yields no rows
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return list<array<string, mixed>>
 	 * @throws Exception
 	 */
-	public function findAssignedInBoards(array $uids, array $boardIds, int $limit = 200): array {
+	public function findAssignedInBoards(array $uids, array $boardIds, string $viewerUid, array $rolesByBoard, int $limit = 200): array {
 		if ($uids === [] || $boardIds === []) {
 			return [];
 		}
@@ -643,6 +748,7 @@ class CardMapper extends QBMapper {
 			->addOrderBy('c.priority', 'DESC')
 			->addOrderBy('c.id', 'ASC')
 			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $viewerUid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -676,7 +782,7 @@ class CardMapper extends QBMapper {
 	 * @return list<array{stackId: int, count: int}>
 	 * @throws Exception
 	 */
-	public function countByStack(int $boardId): array {
+	public function countByStack(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('stack_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -686,6 +792,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('stack_id');
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -705,7 +812,7 @@ class CardMapper extends QBMapper {
 	 * @return list<array{priority: int, count: int}>
 	 * @throws Exception
 	 */
-	public function countByPriority(int $boardId): array {
+	public function countByPriority(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('priority')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -715,6 +822,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('priority');
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -736,7 +844,7 @@ class CardMapper extends QBMapper {
 	 *
 	 * @throws Exception
 	 */
-	public function agingCount(int $boardId, int $cutoff): int {
+	public function agingCount(int $boardId, int $cutoff, ViewerContext $viewer): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*'))
 			->from($this->getTableName())
@@ -746,6 +854,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$count = (int)$result->fetchOne();
@@ -764,7 +873,7 @@ class CardMapper extends QBMapper {
 	 *
 	 * @throws Exception
 	 */
-	public function overdueCount(int $boardId, \DateTime $now): int {
+	public function overdueCount(int $boardId, \DateTime $now, ViewerContext $viewer): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*'))
 			->from($this->getTableName())
@@ -775,6 +884,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$count = (int)$result->fetchOne();
@@ -793,7 +903,7 @@ class CardMapper extends QBMapper {
 	 * @return int[] the done_at unix timestamps (unordered)
 	 * @throws Exception
 	 */
-	public function doneTimeline(int $boardId, int $sinceTs, int $untilTs): array {
+	public function doneTimeline(int $boardId, int $sinceTs, int $untilTs, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('done_at')
 			->from($this->getTableName())
@@ -803,6 +913,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$stamps = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
@@ -829,7 +940,7 @@ class CardMapper extends QBMapper {
 	 * @return list<array{createdAt: int, doneAt: int, estimate: ?string}> unordered
 	 * @throws Exception
 	 */
-	public function doneCycleTimes(int $boardId, int $sinceTs, int $untilTs): array {
+	public function doneCycleTimes(int $boardId, int $sinceTs, int $untilTs, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('created_at', 'done_at', 'estimate')
 			->from($this->getTableName())
@@ -839,6 +950,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('done_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('done_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -863,7 +975,7 @@ class CardMapper extends QBMapper {
 	 * @return int[] the created_at unix timestamps (unordered)
 	 * @throws Exception
 	 */
-	public function createdTimeline(int $boardId, int $sinceTs, int $untilTs): array {
+	public function createdTimeline(int $boardId, int $sinceTs, int $untilTs, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('created_at')
 			->from($this->getTableName())
@@ -872,6 +984,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($untilTs, IQueryBuilder::PARAM_INT)));
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$stamps = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
@@ -891,7 +1004,7 @@ class CardMapper extends QBMapper {
 	 * @return list<array{stackId: int, estimate: string}>
 	 * @throws Exception
 	 */
-	public function estimateByStack(int $boardId): array {
+	public function estimateByStack(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('stack_id', 'estimate')
 			->from($this->getTableName())
@@ -900,6 +1013,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('estimate'));
+		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -935,10 +1049,11 @@ class CardMapper extends QBMapper {
 	 * (#3409/#3626) are excluded so a per-board template never inflates the signal.
 	 *
 	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return array<int, int> map of boardId => open card count
 	 * @throws Exception
 	 */
-	public function countByBoards(array $boardIds): array {
+	public function countByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
 		if ($boardIds === []) {
 			return [];
 		}
@@ -952,6 +1067,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('board_id');
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$map = [];
@@ -972,16 +1088,17 @@ class CardMapper extends QBMapper {
 	 * from the map (callers default to 0/0 ⇒ 0 %).
 	 *
 	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return array<int, array{total: int, done: int}> map of boardId => counts
 	 * @throws Exception
 	 */
-	public function doneRatioByBoards(array $boardIds): array {
+	public function doneRatioByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
 		if ($boardIds === []) {
 			return [];
 		}
 
-		$totals = $this->countByBoards($boardIds);
-		$done = $this->countDoneByBoards($boardIds);
+		$totals = $this->countByBoards($boardIds, $uid, $rolesByBoard);
+		$done = $this->countDoneByBoards($boardIds, $uid, $rolesByBoard);
 
 		$map = [];
 		foreach ($totals as $boardId => $count) {
@@ -999,7 +1116,7 @@ class CardMapper extends QBMapper {
 	 * @return array<int, int> map of boardId => done card count
 	 * @throws Exception
 	 */
-	private function countDoneByBoards(array $boardIds): array {
+	private function countDoneByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('board_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -1010,6 +1127,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('board_id');
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$map = [];
@@ -1030,10 +1148,11 @@ class CardMapper extends QBMapper {
 	 * no overdue cards are absent from the map (callers default to 0).
 	 *
 	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return array<int, int> map of boardId => overdue card count
 	 * @throws Exception
 	 */
-	public function overdueCountByBoards(array $boardIds, \DateTime $now): array {
+	public function overdueCountByBoards(array $boardIds, \DateTime $now, string $uid, array $rolesByBoard): array {
 		if ($boardIds === []) {
 			return [];
 		}
@@ -1050,6 +1169,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
 			->groupBy('board_id');
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$map = [];

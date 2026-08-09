@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -96,7 +97,7 @@ class StatsService {
 	 * @throws \OCP\DB\Exception
 	 * @throws \OCP\AppFramework\Db\DoesNotExistException
 	 */
-	public function boardStats(int $boardId): array {
+	public function boardStats(int $boardId, ViewerContext $viewer): array {
 		$now = time();
 		$windowStart = $now - self::WINDOW_DAYS * self::DAY_SECONDS;
 		$agingCutoff = $now - self::AGING_DAYS * self::DAY_SECONDS;
@@ -110,21 +111,24 @@ class StatsService {
 		$board = $this->boardMapper->find($boardId);
 		$numericScale = $this->isNumericScale($board);
 
-		$completions = $this->cardMapper->doneCycleTimes($boardId, $flowFetchStart, $now);
+		$completions = $this->cardMapper->doneCycleTimes($boardId, $flowFetchStart, $now, $viewer);
 
+		// Visibility (#3743): EVERY aggregate below is viewer-scoped - a
+		// hidden card must not surface through a count, a timeline bucket,
+		// an estimate sum or a velocity figure either.
 		return [
-			'byStack' => $this->cardMapper->countByStack($boardId),
-			'byPriority' => $this->cardMapper->countByPriority($boardId),
-			'byAssignee' => $this->cardAssigneeMapper->countByAssigneeForBoard($boardId),
-			'byLabel' => $this->cardLabelMapper->countByLabelForBoard($boardId),
-			'throughput' => $this->bucketByDay($this->cardMapper->doneTimeline($boardId, $windowStart, $now)),
-			'created' => $this->bucketByDay($this->cardMapper->createdTimeline($boardId, $windowStart, $now)),
-			'estimateByStack' => $this->estimateByStack($board, $boardId),
-			'estimateByAssignee' => $this->estimateByAssignee($board, $boardId),
-			'aging' => ['days' => self::AGING_DAYS, 'count' => $this->cardMapper->agingCount($boardId, $agingCutoff)],
-			'overdue' => $this->cardMapper->overdueCount($boardId, new \DateTime('@' . $now)),
-			'checklist' => $this->checklistTotals($boardId),
-			'commentActivity' => $this->commentMapper->countRecentForBoard($boardId, $windowStart),
+			'byStack' => $this->cardMapper->countByStack($boardId, $viewer),
+			'byPriority' => $this->cardMapper->countByPriority($boardId, $viewer),
+			'byAssignee' => $this->cardAssigneeMapper->countByAssigneeForBoard($boardId, $viewer),
+			'byLabel' => $this->cardLabelMapper->countByLabelForBoard($boardId, $viewer),
+			'throughput' => $this->bucketByDay($this->cardMapper->doneTimeline($boardId, $windowStart, $now, $viewer)),
+			'created' => $this->bucketByDay($this->cardMapper->createdTimeline($boardId, $windowStart, $now, $viewer)),
+			'estimateByStack' => $this->estimateByStack($board, $boardId, $viewer),
+			'estimateByAssignee' => $this->estimateByAssignee($board, $boardId, $viewer),
+			'aging' => ['days' => self::AGING_DAYS, 'count' => $this->cardMapper->agingCount($boardId, $agingCutoff, $viewer)],
+			'overdue' => $this->cardMapper->overdueCount($boardId, new \DateTime('@' . $now), $viewer),
+			'checklist' => $this->checklistTotals($boardId, $viewer),
+			'commentActivity' => $this->commentMapper->countRecentForBoard($boardId, $windowStart, $viewer),
 			'velocity' => $this->velocity($completions, $numericScale, $now),
 			'cycleTime' => $this->cycleTime($completions, $flowWindowStart),
 		];
@@ -390,13 +394,13 @@ class StatsService {
 	 * @return null|list<array{stackId: int, total: float}>
 	 * @throws \OCP\DB\Exception
 	 */
-	private function estimateByStack(Board $board, int $boardId): ?array {
+	private function estimateByStack(Board $board, int $boardId, ViewerContext $viewer): ?array {
 		if (!$this->isNumericScale($board)) {
 			return null;
 		}
 
 		$totals = [];
-		foreach ($this->cardMapper->estimateByStack($boardId) as $row) {
+		foreach ($this->cardMapper->estimateByStack($boardId, $viewer) as $row) {
 			if (!is_numeric($row['estimate'])) {
 				continue;
 			}
@@ -419,13 +423,13 @@ class StatsService {
 	 * @return null|list<array{uid: string, total: float}>
 	 * @throws \OCP\DB\Exception
 	 */
-	private function estimateByAssignee(Board $board, int $boardId): ?array {
+	private function estimateByAssignee(Board $board, int $boardId, ViewerContext $viewer): ?array {
 		if (!$this->isNumericScale($board)) {
 			return null;
 		}
 
 		$totals = [];
-		foreach ($this->cardAssigneeMapper->estimateByAssigneeForBoard($boardId) as $row) {
+		foreach ($this->cardAssigneeMapper->estimateByAssigneeForBoard($boardId, $viewer) as $row) {
 			if (!is_numeric($row['estimate'])) {
 				continue;
 			}
@@ -470,10 +474,10 @@ class StatsService {
 	 * @return array{total: int, done: int}
 	 * @throws \OCP\DB\Exception
 	 */
-	private function checklistTotals(int $boardId): array {
+	private function checklistTotals(int $boardId, ViewerContext $viewer): array {
 		$total = 0;
 		$done = 0;
-		foreach ($this->checklistItemMapper->progressByBoard($boardId) as $progress) {
+		foreach ($this->checklistItemMapper->progressByBoard($boardId, $viewer) as $progress) {
 			$total += $progress['total'];
 			$done += $progress['done'];
 		}

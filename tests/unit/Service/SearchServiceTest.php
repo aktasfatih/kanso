@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
@@ -22,6 +24,7 @@ class SearchServiceTest extends TestCase {
 	private CardMapper&MockObject $cardMapper;
 	private CommentMapper&MockObject $commentMapper;
 	private IDBConnection&MockObject $db;
+	private BoardAccess&MockObject $boardAccess;
 	private SearchService $service;
 
 	protected function setUp(): void {
@@ -34,11 +37,13 @@ class SearchServiceTest extends TestCase {
 		$this->db->method('escapeLikeParameter')->willReturnCallback(
 			static fn (string $s): string => str_replace(['\\', '_', '%'], ['\\\\', '\\_', '\\%'], $s),
 		);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->service = new SearchService(
 			$this->boardService,
 			$this->cardMapper,
 			$this->commentMapper,
 			$this->db,
+			$this->boardAccess,
 		);
 	}
 
@@ -126,11 +131,17 @@ class SearchServiceTest extends TestCase {
 
 	public function testSearchesAllReadableBoardsWhenNoBoardScope(): void {
 		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
+		// Both sources are scoped by the viewer's uid + per-board roles (#3743).
+		$roles = [1 => ViewerContext::ROLE_INTERNAL, 7 => ViewerContext::ROLE_EXTERNAL];
+		$this->boardAccess->expects(self::once())->method('rolesFor')->willReturn($roles);
 		$this->cardMapper->expects(self::once())
 			->method('searchInBoards')
-			->with([1, 7], self::anything(), self::anything())
+			->with([1, 7], self::anything(), self::anything(), 'alice', $roles)
 			->willReturn([]);
-		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->expects(self::once())
+			->method('searchInBoards')
+			->with([1, 7], self::anything(), self::anything(), 'alice', $roles)
+			->willReturn([]);
 
 		$this->service->search('widget', 'alice', null, 25, 0);
 	}

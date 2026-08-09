@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\ChecklistService;
 use OCA\Kanso\Service\InvalidInputException;
@@ -32,6 +33,7 @@ class ChecklistServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ChecklistService $service;
 
 	protected function setUp(): void {
@@ -42,6 +44,8 @@ class ChecklistServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		// A real SortKeyService - the fractional-key maths is deterministic and
 		// central to reorder behaviour, so exercise it rather than mock it.
 		$this->service = new ChecklistService(
@@ -52,6 +56,7 @@ class ChecklistServiceTest extends TestCase {
 			$this->permissionService,
 			new SortKeyService(),
 			$this->db,
+			$this->visibilityGuard,
 		);
 	}
 

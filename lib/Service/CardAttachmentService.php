@@ -60,6 +60,7 @@ class CardAttachmentService {
 		private IAppData $appData,
 		private ISecureRandom $secureRandom,
 		private IRootFolder $rootFolder,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -74,6 +75,7 @@ class CardAttachmentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		return $this->attachmentMapper->findByCard($cardId);
 	}
@@ -95,6 +97,7 @@ class CardAttachmentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if ($upload === null || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
 			$error = $upload['error'] ?? UPLOAD_ERR_NO_FILE;
@@ -209,6 +212,7 @@ class CardAttachmentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Resolve the node from the ACTOR'S OWN userfolder - the actor can only
 		// source a file they can already read. First match wins (a file can appear
@@ -297,6 +301,7 @@ class CardAttachmentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
 		try {
@@ -342,6 +347,7 @@ class CardAttachmentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
 
@@ -372,6 +378,7 @@ class CardAttachmentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
 

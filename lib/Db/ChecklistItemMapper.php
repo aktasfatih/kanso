@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
@@ -20,7 +22,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<ChecklistItem>
  */
 class ChecklistItemMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_checklist_items', ChecklistItem::class);
 	}
 
@@ -85,14 +90,67 @@ class ChecklistItemMapper extends QBMapper {
 	 * @return array<int, array{total: int, done: int}> map of cardId => counts
 	 * @throws Exception
 	 */
-	public function progressByBoard(int $boardId): array {
-		$totals = $this->countByBoard($boardId, false);
-		$done = $this->countByBoard($boardId, true);
+	public function progressByBoard(int $boardId, ViewerContext $viewer): array {
+		$totals = $this->countByBoard($boardId, false, $viewer);
+		$done = $this->countByBoard($boardId, true, $viewer);
 
 		$map = [];
 		foreach ($totals as $cardId => $count) {
 			$map[$cardId] = ['total' => $count, 'done' => $done[$cardId] ?? 0];
 		}
+		return $map;
+	}
+
+	/**
+	 * The anonymous-share twin of {@see self::progressByBoard()} (#3743): the
+	 * same per-card progress map, restricted to PUBLIC cards only - the
+	 * public snapshot has no viewer and must never count a hidden card's
+	 * items. The map is keyed by card id and consumed against the (equally
+	 * public-only) card list, so the restriction is belt-and-braces.
+	 *
+	 * @return array<int, array{total: int, done: int}> map of cardId => counts
+	 * @throws Exception
+	 */
+	public function progressByBoardPublicOnly(int $boardId): array {
+		$totals = $this->countByBoardPublicOnly($boardId, false);
+		$done = $this->countByBoardPublicOnly($boardId, true);
+
+		$map = [];
+		foreach ($totals as $cardId => $count) {
+			$map[$cardId] = ['total' => $count, 'done' => $done[$cardId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
+	 * Item counts grouped by card for a board's PUBLIC cards only - the
+	 * anonymous half of {@see self::countByBoard()}.
+	 *
+	 * @return array<int, int> map of cardId => count
+	 * @throws Exception
+	 */
+	private function countByBoardPublicOnly(int $boardId, bool $doneOnly): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->applyPublicOnly($qb, 'c');
+
+		if ($doneOnly) {
+			$qb->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+		}
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
 		return $map;
 	}
 
@@ -162,7 +220,7 @@ class ChecklistItemMapper extends QBMapper {
 	 * @return array<int, int> map of cardId => count
 	 * @throws Exception
 	 */
-	private function countByBoard(int $boardId, bool $doneOnly): array {
+	private function countByBoard(int $boardId, bool $doneOnly, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('ci.card_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -171,6 +229,7 @@ class ChecklistItemMapper extends QBMapper {
 			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('ci.card_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		if ($doneOnly) {
 			$qb->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));

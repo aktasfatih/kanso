@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -46,6 +47,8 @@ class ReviewService {
 		private ReviewTypeMapper $reviewTypeMapper,
 		private BoardService $boardService,
 		private CommentService $commentService,
+		private BoardAccess $boardAccess,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -57,11 +60,18 @@ class ReviewService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function findMine(string $uid): array {
+		$boards = $this->boardService->findAll($uid);
 		$boardIds = array_map(
 			static fn ($board): int => $board->getId(),
-			$this->boardService->findAll($uid)
+			$boards
 		);
-		return $this->cardReviewMapper->findByReviewerInBoards($uid, $boardIds);
+		// Visibility (#3743): the joined card is scoped by the viewer's roles,
+		// so a review on a card hidden from them drops out of the feed.
+		return $this->cardReviewMapper->findByReviewerInBoards(
+			$uid,
+			$boardIds,
+			$this->boardAccess->rolesFor($boards, $uid),
+		);
 	}
 
 	/**
@@ -79,10 +89,17 @@ class ReviewService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// A reviewer who cannot see the board could never open the card to act.
 		if (($this->permissionService->getPermissions($board, $reviewerUid) & PermissionService::PERMISSION_READ) === 0) {
 			throw new InvalidInputException('User has no access to this board');
+		}
+		// ... and one who cannot see this CARD could not either (#3743): an
+		// internal/private card must not be reviewable across the fence -
+		// the request itself would leak the title into their feed.
+		if (!$this->visibilityGuard->isVisible($board, $card, $reviewerUid)) {
+			throw new InvalidInputException('User has no access to this card');
 		}
 
 		// A typed request must reference a review type of this card's board.
@@ -139,6 +156,7 @@ class ReviewService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$review = $this->cardReviewMapper->findById($reviewId);
 		if ($review === null || $review->getCardId() !== $cardId) {
@@ -168,6 +186,7 @@ class ReviewService {
 
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$review = $this->cardReviewMapper->findById($reviewId);
 		if ($review === null || $review->getCardId() !== $cardId) {

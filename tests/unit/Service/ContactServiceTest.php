@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\ContactsUnavailableException;
@@ -36,6 +37,7 @@ class ContactServiceTest extends TestCase {
 	private IAppManager&MockObject $appManager;
 	private IContactsManager&MockObject $contactsManager;
 	private IUserManager&MockObject $userManager;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ContactService $service;
 
 	protected function setUp(): void {
@@ -48,6 +50,8 @@ class ContactServiceTest extends TestCase {
 		$this->appManager = $this->createMock(IAppManager::class);
 		$this->contactsManager = $this->createMock(IContactsManager::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new ContactService(
 			$this->cardContactMapper,
 			$this->cardMapper,
@@ -56,7 +60,8 @@ class ContactServiceTest extends TestCase {
 			$this->permissionService,
 			$this->appManager,
 			$this->contactsManager,
-			$this->userManager
+			$this->userManager,
+			$this->visibilityGuard,
 		);
 	}
 

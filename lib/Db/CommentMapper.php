@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
@@ -17,10 +19,18 @@ use OCP\IDBConnection;
 /**
  * Mapper for `kanso_comments`.
  *
+ * Comments INHERIT their card's visibility (#3743): every viewer-facing query
+ * that joins `kanso_cards` applies {@see CardVisibilityScope} on the joined
+ * card alias, so a hidden card's comments can never surface - not in search,
+ * not in the inbox, not in a count.
+ *
  * @template-extends QBMapper<Comment>
  */
 class CommentMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_comments', Comment::class);
 	}
 
@@ -153,10 +163,11 @@ class CommentMapper extends QBMapper {
 	 * shown and deep-linked without a second query. $boardIds must be non-empty.
 	 *
 	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return array<int, array{id: int, cardId: int, boardId: int, cardTitle: string, body: string}>
 	 * @throws Exception
 	 */
-	public function searchInBoards(array $boardIds, string $likePattern, int $limit): array {
+	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('cm.id', 'cm.card_id', 'cm.body', 'c.board_id', 'c.title')
 			->from($this->getTableName(), 'cm')
@@ -167,6 +178,7 @@ class CommentMapper extends QBMapper {
 			->andWhere($qb->expr()->iLike('cm.body', $qb->createNamedParameter($likePattern)))
 			->orderBy('cm.id', 'DESC')
 			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -191,12 +203,16 @@ class CommentMapper extends QBMapper {
 	 * readable board set (mirrors the readable-boards discipline), so no per-row
 	 * permission check is needed. Empty card set → [].
 	 *
+	 * Visibility (#3743): the viewer is $excludeAuthor - the scope runs on the
+	 * joined card, so a followed card that turned hidden stops feeding the inbox.
+	 *
 	 * @param int[] $cardIds followed card ids
 	 * @param int[] $boardIds the viewer's readable board ids
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return list<array{id: int, cardId: int, boardId: int, cardTitle: string, boardTitle: string, author: string, body: string, createdAt: int}>
 	 * @throws Exception
 	 */
-	public function findInboxForCards(array $cardIds, array $boardIds, string $excludeAuthor, int $limit): array {
+	public function findInboxForCards(array $cardIds, array $boardIds, string $excludeAuthor, int $limit, array $rolesByBoard): array {
 		if ($cardIds === [] || $boardIds === []) {
 			return [];
 		}
@@ -217,6 +233,7 @@ class CommentMapper extends QBMapper {
 			->orderBy('cm.created_at', 'DESC')
 			->addOrderBy('cm.id', 'DESC')
 			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $excludeAuthor, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -243,9 +260,12 @@ class CommentMapper extends QBMapper {
 	 * COUNT joining through `kanso_cards`. `created_at` is a plain unix int, so
 	 * the window is a direct integer comparison.
 	 *
+	 * Visibility (#3743): comments on cards the viewer cannot see are not
+	 * counted - a count is a leak too.
+	 *
 	 * @throws Exception
 	 */
-	public function countRecentForBoard(int $boardId, int $sinceTs): int {
+	public function countRecentForBoard(int $boardId, int $sinceTs, ViewerContext $viewer): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*'))
 			->from($this->getTableName(), 'cm')
@@ -254,6 +274,7 @@ class CommentMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->gte('cm.created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)));
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		$result = $qb->executeQuery();
 		$count = (int)$result->fetchOne();

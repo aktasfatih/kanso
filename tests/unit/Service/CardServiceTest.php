@@ -19,6 +19,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AutomationService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -49,6 +50,7 @@ class CardServiceTest extends TestCase {
 	private \OCA\Kanso\Db\CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private \OCA\Kanso\Db\SubscriptionMapper&MockObject $subscriptionMapper;
 	private BoardAccess&MockObject $boardAccess;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	/** The role the BoardAccess mock resolves creators to (#3741 freeze). */
 	private string $resolvedRole = ViewerContext::ROLE_INTERNAL;
 	private CardService $service;
@@ -81,6 +83,11 @@ class CardServiceTest extends TestCase {
 			fn (Board $board, string $uid): ViewerContext
 				=> ViewerContext::forMember($uid, $board->getId(), $this->resolvedRole, false),
 		);
+		// Visibility gate (#3743): every card is visible by default so the
+		// pre-existing behavioral tests are unaffected; hidden-card tests
+		// override assertVisible per test.
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -100,7 +107,8 @@ class CardServiceTest extends TestCase {
 			$this->checklistItemMapper,
 			$this->cardAssigneeMapper,
 			$this->subscriptionMapper,
-			$this->boardAccess
+			$this->boardAccess,
+			$this->visibilityGuard
 		);
 	}
 
@@ -587,6 +595,18 @@ class CardServiceTest extends TestCase {
 		$this->service->find(9, 'alice');
 	}
 
+	public function testFindThrowsDoesNotExistForHiddenCard(): void {
+		// Visibility gate (#3743): a card the viewer may not see 404s exactly
+		// like a missing id - never a 403 (no existence oracle).
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->find(9, 'alice');
+	}
+
 	// ---- findByRef (board-scoped PREFIX-<seq> resolution, #3611) -----------
 
 	private function boardWithPrefix(string $prefix, int $id = 1): Board {
@@ -603,7 +623,9 @@ class CardServiceTest extends TestCase {
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_READ);
 		$this->cardMapper->expects(self::once())
-			->method('findByBoardAndSeq')->with(1, 123)->willReturn($card);
+			->method('findByBoardAndSeq')
+			->with(1, 123, self::isInstanceOf(ViewerContext::class))
+			->willReturn($card);
 
 		self::assertSame($card, $this->service->findByRef(1, 'KAN-123', 'alice'));
 	}
@@ -612,7 +634,8 @@ class CardServiceTest extends TestCase {
 		$board = $this->boardWithPrefix('KAN');
 		$card = $this->card(42);
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardMapper->method('findByBoardAndSeq')->with(1, 7)->willReturn($card);
+		$this->cardMapper->method('findByBoardAndSeq')
+			->with(1, 7, self::isInstanceOf(ViewerContext::class))->willReturn($card);
 
 		self::assertSame($card, $this->service->findByRef(1, 'kan-7', 'alice'));
 	}
@@ -620,7 +643,8 @@ class CardServiceTest extends TestCase {
 	public function testFindByRefReturnsNullForUnknownSeq(): void {
 		$board = $this->boardWithPrefix('KAN');
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardMapper->method('findByBoardAndSeq')->with(1, 999)->willReturn(null);
+		$this->cardMapper->method('findByBoardAndSeq')
+			->with(1, 999, self::isInstanceOf(ViewerContext::class))->willReturn(null);
 
 		self::assertNull($this->service->findByRef(1, 'KAN-999', 'alice'));
 	}
@@ -650,7 +674,8 @@ class CardServiceTest extends TestCase {
 		$board = $this->board(); // no prefix set
 		$card = $this->card(42);
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardMapper->method('findByBoardAndSeq')->with(1, 5)->willReturn($card);
+		$this->cardMapper->method('findByBoardAndSeq')
+			->with(1, 5, self::isInstanceOf(ViewerContext::class))->willReturn($card);
 
 		self::assertSame($card, $this->service->findByRef(1, 'KAN-5', 'alice'));
 	}
@@ -1017,6 +1042,58 @@ class CardServiceTest extends TestCase {
 		$this->service->update(9, 'Renamed', null, null, null, null, 'bob');
 	}
 
+	// ---- update visibility (#3743) ----------------------------------------
+
+	public function testUpdateVisibilityByCardOwnerSetsIt(): void {
+		// The card's owner ('alice') may narrow their own card.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', visibility: 'internal');
+		self::assertSame('internal', $updated->getVisibility());
+	}
+
+	public function testUpdateVisibilityDeniedForNonOwnerNonManager(): void {
+		// 'bob' is neither the card's owner nor a manager (the setUp contextFor
+		// stub resolves isManager=false) - flipping someone else's card across
+		// the fence is forbidden.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, null, null, null, null, 'bob', visibility: 'private');
+	}
+
+	public function testUpdateRejectsUnknownVisibility(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', visibility: 'bogus');
+	}
+
+	public function testUpdateOnHiddenCardThrowsDoesNotExist(): void {
+		// A hidden card is unmutable: the write 404s like a missing id.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->update(9, 'Renamed', null, null, null, null, 'alice');
+	}
+
 	// ---- delete -----------------------------------------------------------
 
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
@@ -1037,6 +1114,19 @@ class CardServiceTest extends TestCase {
 			)
 			->willReturn(new Change());
 
+		$this->service->delete(9, 'alice');
+	}
+
+	public function testDeleteOnHiddenCardThrowsDoesNotExist(): void {
+		// Same unmutability rule for delete: a hidden card cannot be removed.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(DoesNotExistException::class);
 		$this->service->delete(9, 'alice');
 	}
 
@@ -2448,7 +2538,9 @@ class CardServiceTest extends TestCase {
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_READ);
 		$this->cardMapper->expects(self::once())
-			->method('findTemplatesByBoard')->with(1)->willReturn($templates);
+			->method('findTemplatesByBoard')
+			->with(1, self::isInstanceOf(ViewerContext::class))
+			->willReturn($templates);
 
 		self::assertSame($templates, $this->service->listTemplates(1, 'alice'));
 	}

@@ -41,6 +41,8 @@ class CardRelationService {
 		private BoardMapper $boardMapper,
 		private PermissionService $permissionService,
 		private ChangeNotifier $changeNotifier,
+		private CardVisibilityGuard $visibilityGuard,
+		private CardVisibilityScope $visibilityScope,
 	) {
 	}
 
@@ -55,27 +57,54 @@ class CardRelationService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		return $this->groupedForCard($cardId);
+		return $this->groupedForCard($cardId, $board, $uid);
 	}
 
 	/**
 	 * Grouped relations WITHOUT a permission check - for callers that have
 	 * already gated READ on the card (e.g. the card-detail payload).
 	 *
+	 * Visibility (#3743): a counterpart the viewer cannot see keeps its ROW
+	 * (the relation itself is board-visible and stays removable) but its
+	 * content is MASKED - `hidden: true`, no id, no title, no done state -
+	 * so the panel can render "1 hidden linked card" without leaking.
+	 *
 	 * @return array{blocks: list<array<string,mixed>>, blockedBy: list<array<string,mixed>>, duplicates: list<array<string,mixed>>, relates: list<array<string,mixed>>}
 	 * @throws \OCP\DB\Exception
 	 */
-	public function groupedForCard(int $cardId): array {
+	public function groupedForCard(int $cardId, Board $board, string $uid): array {
 		$outgoing = $this->relationMapper->findOutgoing($cardId);
 		$incoming = $this->relationMapper->findIncoming($cardId);
 
-		$entry = static fn (array $r): array => [
-			'id' => $r['id'],
-			'cardId' => $r['otherCardId'],
-			'title' => $r['otherTitle'],
-			'done' => $r['otherDone'],
-		];
+		// Resolve the viewer's side ONCE; each row then evaluates the same
+		// rule the SQL scope applies - no per-row card fetch, no per-row ACL.
+		$role = $this->visibilityGuard->roleOn($board, $uid);
+		$entry = function (array $r) use ($uid, $role): array {
+			$other = new Card();
+			$other->setOwner($r['otherOwner']);
+			$other->setVisibility($r['otherVisibility'] ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+			if ($r['otherCreatorRole'] !== null) {
+				$other->setCreatorRole($r['otherCreatorRole']);
+			}
+			if (!$this->visibilityScope->isVisibleTo($other, $uid, $role)) {
+				return [
+					'id' => $r['id'],
+					'cardId' => null,
+					'title' => null,
+					'done' => false,
+					'hidden' => true,
+				];
+			}
+			return [
+				'id' => $r['id'],
+				'cardId' => $r['otherCardId'],
+				'title' => $r['otherTitle'],
+				'done' => $r['otherDone'],
+				'hidden' => false,
+			];
+		};
 		$pick = static function (array $rows, string $type) use ($entry): array {
 			return array_values(array_map($entry, array_filter($rows, static fn ($r): bool => $r['type'] === $type)));
 		};
@@ -112,6 +141,11 @@ class CardRelationService {
 		}
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		// Both endpoints must be visible to the actor (#3743): relating TO a
+		// hidden card would both confirm it exists and leak its title into
+		// this card's relations panel.
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		$this->visibilityGuard->assertVisible($board, $other, $uid);
 
 		// Resolve the API kind to a stored (source, target, type) triple.
 		[$src, $dst, $type] = $this->resolveStorage($cardId, $otherCardId, $kind);
@@ -156,6 +190,25 @@ class CardRelationService {
 		$relation = $this->relationMapper->find($relationId);
 		$board = $this->loadBoard($relation->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		// The actor must see at least ONE endpoint (#3743): the relation row
+		// is rendered (masked) on the visible side, so deleting from there is
+		// legitimate - but an id probed blind, where both endpoints are
+		// hidden, must read as not-found.
+		$endpointVisible = false;
+		foreach ([$relation->getCardId(), $relation->getOtherCardId()] as $endpointId) {
+			try {
+				$endpoint = $this->cardMapper->find($endpointId);
+			} catch (DoesNotExistException) {
+				continue;
+			}
+			if ($this->visibilityGuard->isVisible($board, $endpoint, $uid)) {
+				$endpointVisible = true;
+				break;
+			}
+		}
+		if (!$endpointVisible) {
+			throw new DoesNotExistException('Relation ' . $relationId . ' does not exist');
+		}
 
 		$this->relationMapper->delete($relation);
 		$this->notifyBoth($relation->getBoardId(), $relation->getCardId(), $relation->getOtherCardId(), $uid);

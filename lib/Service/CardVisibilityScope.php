@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Db\Card;
 use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 
@@ -71,7 +72,7 @@ class CardVisibilityScope {
 	 */
 	public function apply(IQueryBuilder $qb, string $cardAlias, string $userId, ?int $boardId, array $rolesByBoard): void {
 		$visibility = fn (string $value) => $qb->expr()->eq(
-			$cardAlias . '.visibility',
+			$this->column($cardAlias, 'visibility'),
 			$qb->createNamedParameter($value),
 		);
 
@@ -86,17 +87,80 @@ class CardVisibilityScope {
 
 		$branches[] = $qb->expr()->andX(
 			$visibility(self::VISIBILITY_PRIVATE),
-			$qb->expr()->eq($cardAlias . '.owner', $qb->createNamedParameter($userId)),
+			$qb->expr()->eq($this->column($cardAlias, 'owner'), $qb->createNamedParameter($userId)),
 		);
 
 		$qb->andWhere($qb->expr()->orX(...$branches));
 
 		if ($boardId !== null) {
 			$qb->andWhere($qb->expr()->eq(
-				$cardAlias . '.board_id',
+				$this->column($cardAlias, 'board_id'),
 				$qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT),
 			));
 		}
+	}
+
+	/**
+	 * Board-scoped convenience over {@see self::apply()} for callers holding a
+	 * resolved {@see ViewerContext} - the (uid, boardId, role) triple IS the
+	 * proof of membership, so the role map is derived instead of hand-built.
+	 */
+	public function applyForViewer(IQueryBuilder $qb, string $cardAlias, ViewerContext $viewer): void {
+		$this->apply($qb, $cardAlias, $viewer->userId, $viewer->boardId, [$viewer->boardId => $viewer->role]);
+	}
+
+	/**
+	 * The anonymous-viewer mode (#3743): public cards ONLY, no internal or
+	 * private branch ever - for the token-gated surfaces (public board share,
+	 * ICS feed) where there is no session and therefore no role to match.
+	 * Deliberately its own method (not apply() with a magic uid) so an
+	 * anonymous read can never accidentally grow a role branch.
+	 */
+	public function applyPublicOnly(IQueryBuilder $qb, string $cardAlias): void {
+		$qb->andWhere($qb->expr()->eq(
+			$this->column($cardAlias, 'visibility'),
+			$qb->createNamedParameter(self::VISIBILITY_PUBLIC),
+		));
+	}
+
+	/**
+	 * The SAME rule as {@see self::apply()}, evaluated in PHP against one
+	 * already-loaded card - the single-card gate behind every card-id-addressed
+	 * endpoint ({@see CardVisibilityGuard}). Kept HERE so the visibility
+	 * decision cannot fork: SQL branches and this evaluator read off one class.
+	 *
+	 * @param string|null $role the viewer's resolved role on the card's board
+	 *                          ({@see \OCA\Kanso\Access\BoardAccess::contextFor()}), or null when the
+	 *                          viewer has no membership there - which drops the internal branch,
+	 *                          exactly like the SQL side
+	 */
+	public function isVisibleTo(Card $card, string $userId, ?string $role): bool {
+		// Rows predating the visibility migration read as 'public' (the
+		// migration backfill value) - default open, matching today's behavior.
+		$visibility = $card->getVisibility() ?? self::VISIBILITY_PUBLIC;
+
+		if ($visibility === self::VISIBILITY_PUBLIC) {
+			return true;
+		}
+		if ($visibility === self::VISIBILITY_PRIVATE) {
+			return $card->getOwner() === $userId;
+		}
+		if ($visibility === self::VISIBILITY_INTERNAL) {
+			// A null creator_role reads as 'internal', matching the backfill
+			// (same fold as BoardAccess for pre-hydration ACL rows).
+			$creatorSide = $card->getCreatorRole() ?? ViewerContext::ROLE_INTERNAL;
+			return $role !== null && in_array($role, ViewerContext::ROLES, true) && $creatorSide === $role;
+		}
+		// An unknown stored value fails CLOSED - never "sees everything".
+		return false;
+	}
+
+	/**
+	 * Column reference under the caller's alias; '' addresses an un-aliased
+	 * single-table query (the aggregate counts).
+	 */
+	private function column(string $cardAlias, string $name): string {
+		return $cardAlias === '' ? $name : $cardAlias . '.' . $name;
 	}
 
 	/**
@@ -109,7 +173,7 @@ class CardVisibilityScope {
 			return null;
 		}
 		return $qb->expr()->eq(
-			$cardAlias . '.creator_role',
+			$this->column($cardAlias, 'creator_role'),
 			$qb->createNamedParameter($role),
 		);
 	}
@@ -139,11 +203,11 @@ class CardVisibilityScope {
 			}
 			$sides[] = $qb->expr()->andX(
 				$qb->expr()->in(
-					$cardAlias . '.board_id',
+					$this->column($cardAlias, 'board_id'),
 					$qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY),
 				),
 				$qb->expr()->eq(
-					$cardAlias . '.creator_role',
+					$this->column($cardAlias, 'creator_role'),
 					$qb->createNamedParameter($side),
 				),
 			);

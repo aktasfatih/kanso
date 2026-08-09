@@ -15,6 +15,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
@@ -33,6 +34,7 @@ class LabelServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private LabelService $service;
 
 	protected function setUp(): void {
@@ -44,6 +46,8 @@ class LabelServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new LabelService(
 			$this->labelMapper,
 			$this->cardLabelMapper,
@@ -51,7 +55,8 @@ class LabelServiceTest extends TestCase {
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->db
+			$this->db,
+			$this->visibilityGuard,
 		);
 	}
 

@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -26,6 +28,7 @@ use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\CardTimeEntryService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -54,6 +57,8 @@ class TrashServiceTest extends TestCase {
 	private CardAttachmentService&MockObject $cardAttachmentService;
 	private CardTimeEntryService&MockObject $cardTimeEntryService;
 	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
+	private BoardAccess&MockObject $boardAccess;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private TrashService $service;
 
 	protected function setUp(): void {
@@ -76,6 +81,12 @@ class TrashServiceTest extends TestCase {
 		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
 		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
 		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
+		);
+		// Default: every card is visible to the actor (assertVisible passes).
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -95,6 +106,8 @@ class TrashServiceTest extends TestCase {
 			$this->cardAttachmentService,
 			$this->cardTimeEntryService,
 			$this->cardFieldValueMapper,
+			$this->boardAccess,
+			$this->visibilityGuard,
 		);
 	}
 
@@ -126,7 +139,10 @@ class TrashServiceTest extends TestCase {
 			->method('assertPermission')
 			->with($board, 'reader', PermissionService::PERMISSION_READ);
 		$trashed = [$this->trashedCard(9), $this->trashedCard(10)];
-		$this->cardMapper->method('findDeletedByBoard')->with(1)->willReturn($trashed);
+		// The query is scoped by the resolved viewer context (#3743).
+		$this->cardMapper->method('findDeletedByBoard')
+			->with(1, self::isInstanceOf(ViewerContext::class))
+			->willReturn($trashed);
 
 		self::assertSame($trashed, $this->service->listTrash(1, 'reader'));
 	}
@@ -176,6 +192,20 @@ class TrashServiceTest extends TestCase {
 		$this->cardMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
+		$this->service->restore(9, 'mallory');
+	}
+
+	public function testRestoreHiddenCardReadsAsMissing(): void {
+		// Visibility (#3743): a trashed card the actor may not see restores like
+		// a card that does not exist - a 404, never a confirmation it is there.
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
 		$this->service->restore(9, 'mallory');
 	}
 
@@ -233,6 +263,21 @@ class TrashServiceTest extends TestCase {
 			->with(9);
 
 		$this->service->purge(9, 'alice');
+	}
+
+	public function testPurgeHiddenCardReadsAsMissing(): void {
+		// Same 404 semantics on the hard delete: no cascade may fire for a card
+		// the actor cannot see.
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
+		$this->cardMapper->expects(self::never())->method('delete');
+		$this->cardAttachmentService->expects(self::never())->method('deleteAllForCard');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->purge(9, 'mallory');
 	}
 
 	public function testPurgeRejectsCardNotInTrash(): void {

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -18,7 +19,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<ProjectCard>
  */
 class ProjectCardMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_project_cards', ProjectCard::class);
 	}
 
@@ -121,11 +125,18 @@ class ProjectCardMapper extends QBMapper {
 	 * board the viewer cannot read is silently dropped. Deleted cards are
 	 * excluded. Rows are shaped exactly like {@see CardMapper::findAssignedInBoards}.
 	 *
+	 * Visibility (#3743): the scope runs on the joined card, so a collected
+	 * card that is hidden from the project owner (e.g. someone else's private
+	 * card that was public when collected) drops out of the list - and, since
+	 * project stats aggregate over exactly this id set, out of every project
+	 * metric too.
+	 *
 	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return list<array<string, mixed>>
 	 * @throws Exception
 	 */
-	public function findCardsInProjectAndBoards(int $projectId, array $boardIds): array {
+	public function findCardsInProjectAndBoards(int $projectId, array $boardIds, string $uid, array $rolesByBoard): array {
 		if ($boardIds === []) {
 			return [];
 		}
@@ -145,6 +156,7 @@ class ProjectCardMapper extends QBMapper {
 			->orderBy('board_title', 'ASC')
 			->addOrderBy('c.sort_key', 'ASC')
 			->addOrderBy('c.id', 'ASC');
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$rows = [];

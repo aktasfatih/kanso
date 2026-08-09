@@ -1407,6 +1407,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</ul>
 						</section>
 
+						<!-- Card visibility (#3743): who on the board may see this card.
+						     Editable by the card creator or a board manager only; everyone
+						     else sees the current level read-only. -->
+						<section
+							v-if="canEdit"
+							class="card-modal__section card-modal__section--tight"
+							data-test="card-visibility">
+							<div class="card-modal__section-inline">
+								<LockOutlineIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Visibility') }}</span>
+								<select
+									class="card-modal__visibility-select"
+									:value="cardData.visibility ?? 'public'"
+									:disabled="!canSetVisibility"
+									data-test="card-visibility-select"
+									:aria-label="t('kanso', 'Card visibility')"
+									@change="handleVisibilityChange($event.target.value)">
+									<option value="public">{{ t('kanso', 'Public — everyone on the board') }}</option>
+									<option value="internal">{{ t('kanso', 'Internal — only your side of the board') }}</option>
+									<option value="private">{{ t('kanso', 'Private — only you') }}</option>
+								</select>
+							</div>
+							<span v-if="visibilityError" class="card-modal__save-error">{{ visibilityError }}</span>
+						</section>
+
 						<!-- Relations - shown only when the card has relations, or the
 						     editor was opened from the ⋯ menu -->
 						<section
@@ -1421,7 +1446,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<span class="card-modal__relation-label">{{ group.label }}</span>
 									<ul class="card-modal__relation-group">
 										<li v-for="rel in group.items" :key="rel.id" class="card-modal__relation-row">
+											<!-- A counterpart hidden from this viewer (#3743): keep the
+											     row (the relation is real and removable) but never its
+											     title - render a non-clickable placeholder instead. -->
+											<span
+												v-if="rel.hidden"
+												class="card-modal__relation-title card-modal__relation-title--hidden"
+												:title="t('kanso', 'This card is not visible to you')">
+												<LockOutlineIcon :size="12" />
+												{{ t('kanso', 'Hidden card') }}
+											</span>
 											<button
+												v-else
 												type="button"
 												class="card-modal__relation-title"
 												:class="{ 'card-modal__relation-title--done': rel.done }"
@@ -3079,6 +3115,20 @@ const canManage = computed(() => {
 	const perms = boardData.value?.permissions ?? 0
 	return (perms & 8) !== 0
 })
+
+// Card visibility (#3743): only the card's creator or a board manager may
+// change it (the server enforces the same rule).
+const canSetVisibility = computed(() => canManage.value || (cardData.value?.owner === currentUserId))
+
+const visibilityError = ref('')
+async function handleVisibilityChange(visibility) {
+	visibilityError.value = ''
+	try {
+		await updateCard.mutateAsync({ data: { visibility } })
+	} catch (e) {
+		visibilityError.value = t('kanso', 'Could not change the card visibility')
+	}
+}
 
 const flatComments = computed(() => commentsQuery.data.value ?? [])
 const commentThread = computed(() => buildCommentTree(flatComments.value))
@@ -6064,6 +6114,20 @@ async function handleToggleProject(projectId) {
 	outline-offset: 2px;
 	border-radius: 2px;
 }
+.card-modal__relation-title--hidden {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
+	cursor: default;
+}
+
+.card-modal__visibility-select {
+	margin-inline-start: auto;
+	max-width: 320px;
+}
+
 .card-modal__relation-title--done {
 	color: var(--color-text-maxcontrast);
 	text-decoration: line-through;

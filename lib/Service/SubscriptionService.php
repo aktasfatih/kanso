@@ -37,6 +37,7 @@ class SubscriptionService {
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
 		private BoardSubscriptionMapper $boardSubscriptionMapper,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -52,6 +53,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		return $this->buildCardSubscription($cardId, $actorUid);
 	}
@@ -67,6 +69,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_SUBSCRIBED);
 
@@ -85,6 +88,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_OPTED_OUT);
 
@@ -107,6 +111,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Directly or via a group ACL, the target must at least see the board.
 		// Unknown users hold no permissions, so they fail this too.
@@ -134,6 +139,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Only tombstone an EXISTING subscription row. Planting an opt-out for a
 		// user who is not currently watching would silently suppress a later

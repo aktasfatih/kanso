@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\CardMapper;
 
 /**
@@ -19,6 +20,7 @@ class MyCardsService {
 	public function __construct(
 		private BoardService $boardService,
 		private CardMapper $cardMapper,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -26,10 +28,18 @@ class MyCardsService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function findMine(string $uid): array {
+		$boards = $this->boardService->findAll($uid);
 		$boardIds = array_map(
 			static fn ($board): int => $board->getId(),
-			$this->boardService->findAll($uid)
+			$boards
 		);
-		return $this->cardMapper->findAssignedInBoards([$uid], $boardIds);
+		// Visibility (#3743): assignment grants no visibility - the viewer's
+		// per-board roles scope the query like every other read path.
+		return $this->cardMapper->findAssignedInBoards(
+			[$uid],
+			$boardIds,
+			$uid,
+			$this->boardAccess->rolesFor($boards, $uid),
+		);
 	}
 }

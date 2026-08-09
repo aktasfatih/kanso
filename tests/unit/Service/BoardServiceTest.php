@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -30,6 +32,7 @@ class BoardServiceTest extends TestCase {
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private BoardGroupMemberMapper&MockObject $boardGroupMemberMapper;
 	private BoardPinMapper&MockObject $boardPinMapper;
+	private BoardAccess&MockObject $boardAccess;
 	private BoardService $service;
 
 	protected function setUp(): void {
@@ -41,6 +44,7 @@ class BoardServiceTest extends TestCase {
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->boardGroupMemberMapper = $this->createMock(BoardGroupMemberMapper::class);
 		$this->boardPinMapper = $this->createMock(BoardPinMapper::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->service = new BoardService(
 			$this->boardMapper,
 			$this->changeNotifier,
@@ -48,7 +52,8 @@ class BoardServiceTest extends TestCase {
 			$this->cardMapper,
 			$this->cardReviewMapper,
 			$this->boardGroupMemberMapper,
-			$this->boardPinMapper
+			$this->boardPinMapper,
+			$this->boardAccess
 		);
 	}
 
@@ -276,16 +281,22 @@ class BoardServiceTest extends TestCase {
 		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn([]);
 		$this->boardMapper->method('findAllForUser')->with('alice', [])->willReturn([$b1, $b2]);
 
+		// The viewer's per-board role map (ONE batched fetch, #3743) scopes every
+		// aggregate below.
+		$roles = [1 => ViewerContext::ROLE_INTERNAL, 2 => ViewerContext::ROLE_EXTERNAL];
+		$this->boardAccess->expects(self::once())->method('rolesFor')
+			->with([$b1, $b2], 'alice')->willReturn($roles);
+
 		// The aggregates are called ONCE each with the full readable board-id set -
 		// a fixed query count, not one-query-per-board.
 		$this->cardMapper->expects(self::once())
-			->method('countByBoards')->with([1, 2])->willReturn([1 => 5, 2 => 0]);
+			->method('countByBoards')->with([1, 2], 'alice', $roles)->willReturn([1 => 5, 2 => 0]);
 		$this->cardMapper->expects(self::once())
-			->method('doneRatioByBoards')->with([1, 2])->willReturn([1 => ['total' => 5, 'done' => 2]]);
+			->method('doneRatioByBoards')->with([1, 2], 'alice', $roles)->willReturn([1 => ['total' => 5, 'done' => 2]]);
 		$this->cardMapper->expects(self::once())
-			->method('overdueCountByBoards')->with([1, 2])->willReturn([1 => 3]);
+			->method('overdueCountByBoards')->with([1, 2], self::anything(), 'alice', $roles)->willReturn([1 => 3]);
 		$this->cardReviewMapper->expects(self::once())
-			->method('needsReviewCountByBoards')->with([1, 2])->willReturn([1 => 4]);
+			->method('needsReviewCountByBoards')->with([1, 2], 'alice', $roles)->willReturn([1 => 4]);
 		// The per-user folder map is ONE batched lookup over the same readable set;
 		// board 1 is filed under folder 7, board 2 is Ungrouped (absent).
 		$this->boardGroupMemberMapper->expects(self::once())

@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -18,7 +20,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<CardLabel>
  */
 class CardLabelMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_card_labels', CardLabel::class);
 	}
 
@@ -57,7 +62,7 @@ class CardLabelMapper extends QBMapper {
 	 * @return list<array{labelId: int, count: int}>
 	 * @throws Exception
 	 */
-	public function countByLabelForBoard(int $boardId): array {
+	public function countByLabelForBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('cl.label_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -67,6 +72,7 @@ class CardLabelMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('cl.label_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];

@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\CardLinkService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -32,6 +33,7 @@ class CardLinkServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private IClientService&MockObject $clientService;
 	private IClient&MockObject $client;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardLinkService $service;
 
 	protected function setUp(): void {
@@ -44,6 +46,8 @@ class CardLinkServiceTest extends TestCase {
 		$this->clientService = $this->createMock(IClientService::class);
 		$this->client = $this->createMock(IClient::class);
 		$this->clientService->method('newClient')->willReturn($this->client);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CardLinkService(
 			$this->cardLinkMapper,
 			$this->cardMapper,
@@ -51,6 +55,7 @@ class CardLinkServiceTest extends TestCase {
 			$this->permissionService,
 			$this->changeNotifier,
 			$this->clientService,
+			$this->visibilityGuard,
 		);
 	}
 

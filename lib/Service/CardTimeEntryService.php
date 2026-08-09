@@ -48,6 +48,7 @@ class CardTimeEntryService {
 		private BoardMapper $boardMapper,
 		private PermissionService $permissionService,
 		private ChangeNotifier $changeNotifier,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -62,6 +63,7 @@ class CardTimeEntryService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		return $this->timeEntryMapper->findByCard($cardId);
 	}
@@ -81,6 +83,7 @@ class CardTimeEntryService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if ($seconds <= 0) {
 			throw new InvalidInputException('Duration must be greater than zero');
@@ -121,6 +124,7 @@ class CardTimeEntryService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$entry = $this->loadEntryOnCard($entryId, $cardId);
 		$this->timeEntryMapper->delete($entry);

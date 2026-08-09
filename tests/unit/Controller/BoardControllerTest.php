@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Controller\BoardController;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
@@ -65,6 +67,7 @@ class BoardControllerTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardRelationMapper&MockObject $cardRelationMapper;
+	private BoardAccess&MockObject $boardAccess;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -90,6 +93,12 @@ class BoardControllerTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
+		// show()/changes() resolve the viewer context once, after the READ gate
+		// (#3743); the mapper mocks just receive it.
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
+		);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -117,7 +126,8 @@ class BoardControllerTest extends TestCase {
 			$this->aclMapper,
 			$this->permissionService,
 			$this->subscriptionService,
-			$this->cardRelationMapper
+			$this->cardRelationMapper,
+			$this->boardAccess
 		);
 	}
 

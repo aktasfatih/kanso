@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -39,6 +40,7 @@ class SearchService {
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
 		private IDBConnection $db,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -52,19 +54,24 @@ class SearchService {
 			return ['query' => $term, 'total' => 0, 'results' => []];
 		}
 
-		$boardIds = $this->readableBoardIds($uid, $boardId);
+		$boards = $this->boardService->findAll($uid);
+		$boardIds = $this->readableBoardIds($boards, $boardId);
 		if ($boardIds === []) {
 			return ['query' => $term, 'total' => 0, 'results' => []];
 		}
+		// The viewer's per-board roles scope BOTH sources (#3743): a hidden
+		// card can never match - not by its title/description, and not
+		// through one of its comments either (comments inherit the card).
+		$rolesByBoard = $this->boardAccess->rolesFor($boards, $uid);
 
 		$pattern = '%' . $this->db->escapeLikeParameter($term) . '%';
 		$lowerTerm = mb_strtolower($term);
 
 		$results = [];
-		foreach ($this->cardMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP) as $card) {
+		foreach ($this->cardMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard) as $card) {
 			$results[] = $this->cardResult($card, $lowerTerm);
 		}
-		foreach ($this->commentMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP) as $row) {
+		foreach ($this->commentMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard) as $row) {
 			$results[] = [
 				'type' => 'comment',
 				'cardId' => $row['cardId'],
@@ -102,16 +109,17 @@ class SearchService {
 	}
 
 	/**
-	 * The readable board ids for the user, optionally narrowed to a single
-	 * requested board. Requesting a board the user cannot read yields an empty
-	 * set (no results) rather than an error - the ACL is enforced by omission.
+	 * The readable board ids, optionally narrowed to a single requested
+	 * board. Requesting a board the user cannot read yields an empty set (no
+	 * results) rather than an error - the ACL is enforced by omission.
 	 *
+	 * @param \OCA\Kanso\Db\Board[] $boards the viewer's readable boards
 	 * @return int[]
 	 */
-	private function readableBoardIds(string $uid, ?int $boardId): array {
+	private function readableBoardIds(array $boards, ?int $boardId): array {
 		$ids = array_map(
 			static fn ($board): int => $board->getId(),
-			$this->boardService->findAll($uid)
+			$boards
 		);
 		if ($boardId !== null) {
 			return in_array($boardId, $ids, true) ? [$boardId] : [];

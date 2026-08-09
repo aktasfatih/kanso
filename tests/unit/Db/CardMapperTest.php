@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Db;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -29,7 +31,27 @@ class CardMapperTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->db = $this->createMock(IDBConnection::class);
-		$this->mapper = new CardMapper($this->db);
+		$this->mapper = new CardMapper($this->db, new CardVisibilityScope());
+	}
+
+	/**
+	 * A resolved board-scoped viewer for the visibility-scoped reads (#3743).
+	 * The scope only appends extra WHERE branches, which the fluent QB mocks
+	 * absorb - the rows fed back are what each assertion pins.
+	 */
+	private static function viewer(int $boardId = 7): ViewerContext {
+		return ViewerContext::forMember('alice', $boardId, ViewerContext::ROLE_INTERNAL, true);
+	}
+
+	/**
+	 * The cross-board role map matching {@see self::viewer()} for the
+	 * board-set aggregates (uid + rolesByBoard instead of a ViewerContext).
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, string>
+	 */
+	private static function roles(array $boardIds): array {
+		return array_fill_keys($boardIds, ViewerContext::ROLE_INTERNAL);
 	}
 
 	/**
@@ -102,7 +124,7 @@ class CardMapperTest extends TestCase {
 
 		$db = $this->createMock(IDBConnection::class);
 		$db->method('getQueryBuilder')->willReturn($qb);
-		$mapper = new CardMapper($db);
+		$mapper = new CardMapper($db, new CardVisibilityScope());
 
 		$call($mapper);
 
@@ -174,14 +196,14 @@ class CardMapperTest extends TestCase {
 			['board_id' => 9, 'cnt' => 2],
 		]);
 
-		self::assertSame([7 => 5, 9 => 2], $this->mapper->countByBoards([7, 9]));
+		self::assertSame([7 => 5, 9 => 2], $this->mapper->countByBoards([7, 9], 'alice', self::roles([7, 9])));
 	}
 
 	public function testCountByBoardsEmptySetShortCircuitsWithoutQuery(): void {
 		// No getQueryBuilder() call is allowed for an empty set.
 		$this->db->expects(self::never())->method('getQueryBuilder');
 
-		self::assertSame([], $this->mapper->countByBoards([]));
+		self::assertSame([], $this->mapper->countByBoards([], 'alice', []));
 	}
 
 	public function testCountByBoardsOmitsBoardsWithNoOpenCards(): void {
@@ -190,7 +212,7 @@ class CardMapperTest extends TestCase {
 		// nothing rather than a phantom 0-row.
 		$this->stubQuery([['board_id' => 7, 'cnt' => 3]]);
 
-		$map = $this->mapper->countByBoards([7, 9]);
+		$map = $this->mapper->countByBoards([7, 9], 'alice', self::roles([7, 9]));
 		self::assertSame([7 => 3], $map);
 		self::assertArrayNotHasKey(9, $map);
 	}
@@ -206,13 +228,13 @@ class CardMapperTest extends TestCase {
 			// board 7: 2 of 5 done; board 9: 0 done (absent from the done map).
 			7 => ['total' => 5, 'done' => 2],
 			9 => ['total' => 4, 'done' => 0],
-		], $this->mapper->doneRatioByBoards([7, 9]));
+		], $this->mapper->doneRatioByBoards([7, 9], 'alice', self::roles([7, 9])));
 	}
 
 	public function testDoneRatioByBoardsEmptySetShortCircuits(): void {
 		$this->db->expects(self::never())->method('getQueryBuilder');
 
-		self::assertSame([], $this->mapper->doneRatioByBoards([]));
+		self::assertSame([], $this->mapper->doneRatioByBoards([], 'alice', []));
 	}
 
 	public function testOverdueCountByBoardsGroupsCountsAcrossBoards(): void {
@@ -223,14 +245,14 @@ class CardMapperTest extends TestCase {
 
 		self::assertSame(
 			[7 => 1, 9 => 4],
-			$this->mapper->overdueCountByBoards([7, 9], new \DateTime('@1000'))
+			$this->mapper->overdueCountByBoards([7, 9], new \DateTime('@1000'), 'alice', self::roles([7, 9]))
 		);
 	}
 
 	public function testOverdueCountByBoardsEmptySetShortCircuits(): void {
 		$this->db->expects(self::never())->method('getQueryBuilder');
 
-		self::assertSame([], $this->mapper->overdueCountByBoards([], new \DateTime('@1000')));
+		self::assertSame([], $this->mapper->overdueCountByBoards([], new \DateTime('@1000'), 'alice', []));
 	}
 
 	// ---- findByBoardAndSeq (PREFIX-<board_seq> point read, #3611) ----------
@@ -247,7 +269,7 @@ class CardMapperTest extends TestCase {
 			'deleted_at' => 0,
 		]]);
 
-		$card = $this->mapper->findByBoardAndSeq(7, 123);
+		$card = $this->mapper->findByBoardAndSeq(7, 123, self::viewer());
 		self::assertNotNull($card);
 		self::assertSame(42, $card->getId());
 		self::assertSame('Referenced card', $card->getTitle());
@@ -259,7 +281,7 @@ class CardMapperTest extends TestCase {
 		// so a stale reference falls back to plain text.
 		$this->stubQuery([]);
 
-		self::assertNull($this->mapper->findByBoardAndSeq(7, 999));
+		self::assertNull($this->mapper->findByBoardAndSeq(7, 999, self::viewer()));
 	}
 
 	// ---- findSummariesByIds (delta-sync per-card re-serialize, #3675) ------
@@ -277,7 +299,7 @@ class CardMapperTest extends TestCase {
 			'is_template' => false,
 		]]);
 
-		$cards = $this->mapper->findSummariesByIds(7, [42]);
+		$cards = $this->mapper->findSummariesByIds(7, [42], self::viewer());
 		self::assertCount(1, $cards);
 		self::assertSame(42, $cards[0]->getId());
 		self::assertSame('Edited elsewhere', $cards[0]->getTitle());
@@ -286,13 +308,13 @@ class CardMapperTest extends TestCase {
 	public function testFindSummariesByIdsEmptySetShortCircuitsWithoutQuery(): void {
 		// An empty id set must never emit `IN ()` - no DB call at all.
 		$this->db->expects(self::never())->method('getQueryBuilder');
-		self::assertSame([], $this->mapper->findSummariesByIds(7, []));
+		self::assertSame([], $this->mapper->findSummariesByIds(7, [], self::viewer()));
 	}
 
 	public function testFindSummariesByIdsExcludesTemplates(): void {
 		// A card turned into a template between the cursor and now must not come
 		// back as an upsert (the controller then emits it as a remove).
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->findSummariesByIds(7, [42]));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->findSummariesByIds(7, [42], self::viewer()));
 	}
 
 	// ---- findTemplatesByBoard (per-board template picker, #3409) -----------
@@ -313,7 +335,7 @@ class CardMapperTest extends TestCase {
 			],
 		]);
 
-		$templates = $this->mapper->findTemplatesByBoard(7);
+		$templates = $this->mapper->findTemplatesByBoard(7, self::viewer());
 		self::assertCount(1, $templates);
 		self::assertSame(42, $templates[0]->getId());
 		self::assertSame('Bug report template', $templates[0]->getTitle());
@@ -322,7 +344,7 @@ class CardMapperTest extends TestCase {
 
 	public function testFindTemplatesByBoardReturnsEmptyWhenNoTemplates(): void {
 		$this->stubQuery([]);
-		self::assertSame([], $this->mapper->findTemplatesByBoard(7));
+		self::assertSame([], $this->mapper->findTemplatesByBoard(7, self::viewer()));
 	}
 
 	// ---- template exclusion from analytics aggregates (#3626) --------------
@@ -335,43 +357,43 @@ class CardMapperTest extends TestCase {
 	// change drops it from the shared pattern, the matching assertion fails.
 
 	public function testCountByStackExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByStack(7));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByStack(7, self::viewer()));
 	}
 
 	public function testCountByPriorityExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByPriority(7));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByPriority(7, self::viewer()));
 	}
 
 	public function testAgingCountExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->agingCount(7, 1000));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->agingCount(7, 1000, self::viewer()));
 	}
 
 	public function testOverdueCountExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->overdueCount(7, new \DateTime('@1000')));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->overdueCount(7, new \DateTime('@1000'), self::viewer()));
 	}
 
 	public function testDoneTimelineExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneTimeline(7, 0, 1000));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneTimeline(7, 0, 1000, self::viewer()));
 	}
 
 	public function testDoneCycleTimesExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneCycleTimes(7, 0, 1000));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->doneCycleTimes(7, 0, 1000, self::viewer()));
 	}
 
 	public function testCreatedTimelineExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->createdTimeline(7, 0, 1000));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->createdTimeline(7, 0, 1000, self::viewer()));
 	}
 
 	public function testEstimateByStackExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->estimateByStack(7));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->estimateByStack(7, self::viewer()));
 	}
 
 	public function testCountByBoardsExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByBoards([7]));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->countByBoards([7], 'alice', self::roles([7])));
 	}
 
 	public function testOverdueCountByBoardsExcludesTemplates(): void {
-		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->overdueCountByBoards([7], new \DateTime('@1000')));
+		$this->assertFiltersTemplates(fn (CardMapper $m) => $m->overdueCountByBoards([7], new \DateTime('@1000'), 'alice', self::roles([7])));
 	}
 
 	public function testCountByPriorityForCardsExcludesTemplates(): void {
@@ -400,7 +422,7 @@ class CardMapperTest extends TestCase {
 
 		self::assertSame(
 			[['stackId' => 5, 'count' => 3]],
-			$this->mapper->countByStack(7)
+			$this->mapper->countByStack(7, self::viewer())
 		);
 	}
 }

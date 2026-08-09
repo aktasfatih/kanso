@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
+				v-if="isInProgress || card.blocked || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -56,6 +56,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:aria-label="t('kanso', 'In progress')">
 					<ProgressClockIcon :size="12" />
 					{{ t('kanso', 'In progress') }}
+				</span>
+				<!-- Visibility badge (#3743) - internal/private cards carry a lock
+				     so viewers know the card is scoped (public cards show nothing) -->
+				<span
+					v-if="isRestricted"
+					class="card-tile__visibility"
+					:aria-label="card.visibility === 'private' ? t('kanso', 'Private card') : t('kanso', 'Internal card')"
+					:title="card.visibility === 'private' ? t('kanso', 'Private — only you') : t('kanso', 'Internal — only your side of the board')">
+					<LockOutlineIcon :size="12" />
+					{{ card.visibility === 'private' ? t('kanso', 'Private') : t('kanso', 'Internal') }}
 				</span>
 				<!-- Blocked badge - shown when the card has an unresolved blocker -->
 				<span
@@ -177,6 +187,7 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import CancelIcon from 'vue-material-design-icons/Cancel.vue'
+import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import BugIcon from 'vue-material-design-icons/Bug.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import CheckboxMarkedCircleOutlineIcon from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
@@ -325,6 +336,9 @@ const priorityLabel = computed(() => {
 })
 
 // Card type (#3402) metadata for the tile icon, or null for the implicit "none".
+// Internal/private cards carry a lock badge (#3743); public shows nothing.
+const isRestricted = computed(() => props.card.visibility === 'internal' || props.card.visibility === 'private')
+
 const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.type) ?? null)
 
 // Assignee avatar stack: max 3 visible + overflow count
@@ -681,6 +695,20 @@ const extraAssigneeCount = computed(() => {
 	color: var(--color-error, #e30000);
 	border-color: var(--color-error, #e30000);
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+}
+
+/* Visibility badge (#3743) - neutral lock chip for internal/private cards */
+.card-tile__visibility {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: var(--color-text-maxcontrast);
+	border: 1px solid var(--color-border-dark);
+	background: var(--color-background-hover);
 }
 
 /* Blocked badge - muted red attention chip */

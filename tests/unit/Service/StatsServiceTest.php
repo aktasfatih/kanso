@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -26,6 +27,7 @@ class StatsServiceTest extends TestCase {
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CommentMapper&MockObject $commentMapper;
 	private StatsService $service;
+	private ViewerContext $viewer;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -43,6 +45,8 @@ class StatsServiceTest extends TestCase {
 			$this->checklistItemMapper,
 			$this->commentMapper,
 		);
+		// boardStats() is viewer-scoped (#3743); the mapper mocks just receive it.
+		$this->viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
 	}
 
 	private function board(string $scale): Board {
@@ -79,7 +83,7 @@ class StatsServiceTest extends TestCase {
 		$this->stubCommonAggregates();
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 
-		$dto = $this->service->boardStats(1);
+		$dto = $this->service->boardStats(1, $this->viewer);
 
 		self::assertSame([['stackId' => 42, 'count' => 3]], $dto['byStack']);
 		self::assertSame([['uid' => 'alice', 'count' => 2]], $dto['byAssignee']);
@@ -99,7 +103,7 @@ class StatsServiceTest extends TestCase {
 		$this->cardMapper->expects(self::never())->method('estimateByStack');
 		$this->cardAssigneeMapper->expects(self::never())->method('estimateByAssigneeForBoard');
 
-		$dto = $this->service->boardStats(1);
+		$dto = $this->service->boardStats(1, $this->viewer);
 
 		self::assertNull($dto['estimateByStack']);
 		self::assertNull($dto['estimateByAssignee']);
@@ -118,7 +122,7 @@ class StatsServiceTest extends TestCase {
 			['uid' => 'alice', 'estimate' => '8'],
 		]);
 
-		$dto = $this->service->boardStats(1);
+		$dto = $this->service->boardStats(1, $this->viewer);
 
 		self::assertSame([['stackId' => 42, 'total' => 8.0]], $dto['estimateByStack']);
 		self::assertSame([['uid' => 'alice', 'total' => 8.0]], $dto['estimateByAssignee']);
@@ -130,7 +134,7 @@ class StatsServiceTest extends TestCase {
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 		$this->cardMapper->expects(self::never())->method('estimateByStack');
 
-		$dto = $this->service->boardStats(1);
+		$dto = $this->service->boardStats(1, $this->viewer);
 		self::assertNull($dto['estimateByStack']);
 	}
 
@@ -143,7 +147,7 @@ class StatsServiceTest extends TestCase {
 		$jan3 = gmmktime(5, 0, 0, 1, 3, 2026);
 		$this->cardMapper->method('doneTimeline')->willReturn([$jan2, $jan3, $jan2b]);
 
-		$dto = $this->service->boardStats(1);
+		$dto = $this->service->boardStats(1, $this->viewer);
 
 		self::assertSame([
 			['day' => '2026-01-02', 'count' => 2],
@@ -170,7 +174,7 @@ class StatsServiceTest extends TestCase {
 		$this->stubCommonAggregates($completions);
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 
-		$velocity = $this->service->boardStats(1)['velocity'];
+		$velocity = $this->service->boardStats(1, $this->viewer)['velocity'];
 
 		self::assertSame(4, $velocity['weeks']);
 		self::assertSame(28, $velocity['windowDays']);
@@ -202,7 +206,7 @@ class StatsServiceTest extends TestCase {
 		$this->cardMapper->method('estimateByStack')->willReturn([]);
 		$this->cardAssigneeMapper->method('estimateByAssigneeForBoard')->willReturn([]);
 
-		$velocity = $this->service->boardStats(1)['velocity'];
+		$velocity = $this->service->boardStats(1, $this->viewer)['velocity'];
 
 		// 16 points over 4 weeks ⇒ 4.0/week.
 		self::assertSame(4.0, $velocity['pointsPerWeek']);
@@ -217,7 +221,7 @@ class StatsServiceTest extends TestCase {
 		$this->stubCommonAggregates([]);
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 
-		$velocity = $this->service->boardStats(1)['velocity'];
+		$velocity = $this->service->boardStats(1, $this->viewer)['velocity'];
 
 		self::assertSame(0.0, $velocity['cardsPerWeek']);
 		self::assertSame('flat', $velocity['cardsTrend']);
@@ -238,7 +242,7 @@ class StatsServiceTest extends TestCase {
 		$this->stubCommonAggregates($completions);
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 
-		$cycle = $this->service->boardStats(1)['cycleTime'];
+		$cycle = $this->service->boardStats(1, $this->viewer)['cycleTime'];
 
 		self::assertSame(28, $cycle['windowDays']);
 		self::assertSame(3, $cycle['sampleSize']);
@@ -263,7 +267,7 @@ class StatsServiceTest extends TestCase {
 		$this->stubCommonAggregates($completions);
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 
-		$dto = $this->service->boardStats(1);
+		$dto = $this->service->boardStats(1, $this->viewer);
 
 		// Velocity current window: only the 5-day card ⇒ 1 card / 4 weeks = 0.25.
 		self::assertSame(0.25, $dto['velocity']['cardsPerWeek']);
@@ -280,7 +284,7 @@ class StatsServiceTest extends TestCase {
 		$this->stubCommonAggregates([]);
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
 
-		$cycle = $this->service->boardStats(1)['cycleTime'];
+		$cycle = $this->service->boardStats(1, $this->viewer)['cycleTime'];
 
 		self::assertSame(0, $cycle['sampleSize']);
 		self::assertNull($cycle['medianDays']);

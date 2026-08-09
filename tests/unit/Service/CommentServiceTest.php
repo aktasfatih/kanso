@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\CommentService;
 use OCA\Kanso\Service\InvalidInputException;
@@ -33,6 +34,7 @@ class CommentServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private MentionService&MockObject $mentionService;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CommentService $service;
 
 	protected function setUp(): void {
@@ -44,6 +46,8 @@ class CommentServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->mentionService = $this->createMock(MentionService::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CommentService(
 			$this->commentMapper,
 			$this->cardMapper,
@@ -52,6 +56,7 @@ class CommentServiceTest extends TestCase {
 			$this->permissionService,
 			$this->subscriptionService,
 			$this->mentionService,
+			$this->visibilityGuard,
 		);
 	}
 
@@ -210,6 +215,18 @@ class CommentServiceTest extends TestCase {
 		$card = $this->card();
 		$card->setDeletedAt(1234);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->commentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->addComment(9, 'hi', null, 'bob');
+	}
+
+	public function testAddCommentOnHiddenCardReadsAsNotFound(): void {
+		// A card the actor cannot see must be uncommentable, and fail exactly
+		// like a missing card id (#3743) - never a 403 existence oracle.
+		$this->expectCardLoaded();
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
 		$this->commentMapper->expects(self::never())->method('insert');
 
 		$this->expectException(DoesNotExistException::class);

@@ -207,7 +207,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([
 			100 => [5],
 		]);
-		$this->checklistItemMapper->method('progressByBoard')->with(1)->willReturn([
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->with(1)->willReturn([
 			100 => ['total' => 3, 'done' => 1],
 		]);
 	}
@@ -307,7 +307,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->cardMapper->method('findPublicByBoard')->willReturn([]);
 		$this->labelMapper->method('findByBoard')->willReturn([]);
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->willReturn([]);
-		$this->checklistItemMapper->method('progressByBoard')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
 		self::assertSame('Roadmap', $payload['board']['title']);

@@ -152,7 +152,8 @@ class PublicShareService {
 			$labelsById[(int)$label->getId()] = $label;
 		}
 		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($boardId);
-		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId);
+		// Anonymous viewer: checklist counts over PUBLIC cards only (#3743).
+		$checklistByCard = $this->checklistItemMapper->progressByBoardPublicOnly($boardId);
 
 		// Only NON-archived stacks, in display order; drop the internal board id.
 		$stacks = [];

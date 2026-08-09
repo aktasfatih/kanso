@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Db;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -29,7 +31,19 @@ class CardReviewMapperTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->db = $this->createMock(IDBConnection::class);
-		$this->mapper = new CardReviewMapper($this->db);
+		$this->mapper = new CardReviewMapper($this->db, new CardVisibilityScope());
+	}
+
+	/**
+	 * The viewer's cross-board role map for the visibility-scoped aggregate
+	 * (#3743) - the scope only appends extra WHERE branches, which the fluent
+	 * QB mock absorbs; the fed grouped rows are what each assertion pins.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, string>
+	 */
+	private static function roles(array $boardIds): array {
+		return array_fill_keys($boardIds, ViewerContext::ROLE_INTERNAL);
 	}
 
 	/**
@@ -76,13 +90,13 @@ class CardReviewMapperTest extends TestCase {
 			['board_id' => 9, 'cnt' => 1],
 		]);
 
-		self::assertSame([7 => 3, 9 => 1], $this->mapper->needsReviewCountByBoards([7, 9]));
+		self::assertSame([7 => 3, 9 => 1], $this->mapper->needsReviewCountByBoards([7, 9], 'alice', self::roles([7, 9])));
 	}
 
 	public function testNeedsReviewCountByBoardsEmptySetShortCircuits(): void {
 		$this->db->expects(self::never())->method('getQueryBuilder');
 
-		self::assertSame([], $this->mapper->needsReviewCountByBoards([]));
+		self::assertSame([], $this->mapper->needsReviewCountByBoards([], 'alice', []));
 	}
 
 	public function testNeedsReviewCountByBoardsOmitsBoardsWithNoOpenReviews(): void {
@@ -90,7 +104,7 @@ class CardReviewMapperTest extends TestCase {
 		// yields no grouped row and must be absent from the map (defaults to 0).
 		$this->stubQuery([['board_id' => 7, 'cnt' => 2]]);
 
-		$map = $this->mapper->needsReviewCountByBoards([7, 9]);
+		$map = $this->mapper->needsReviewCountByBoards([7, 9], 'alice', self::roles([7, 9]));
 		self::assertSame([7 => 2], $map);
 		self::assertArrayNotHasKey(9, $map);
 	}

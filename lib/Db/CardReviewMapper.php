@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -18,7 +19,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<CardReview>
  */
 class CardReviewMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_card_reviews', CardReview::class);
 	}
 
@@ -97,11 +101,16 @@ class CardReviewMapper extends QBMapper {
 	 * readable-boards discipline), so no per-row permission check is needed.
 	 * Deleted cards are excluded.
 	 *
+	 * Visibility (#3743): the reviewer IS the viewer - the scope runs on the
+	 * joined card, so a review requested on a card that later turned hidden
+	 * for them drops out of the feed rather than leaking its title.
+	 *
 	 * @param int[] $boardIds the reviewer's readable board ids (empty → [])
+	 * @param array<int, string> $rolesByBoard the reviewer's role per board id
 	 * @return list<array{id: int, cardId: int, cardTitle: string, boardId: int, boardTitle: string, state: string, reviewTypeId: ?int, reviewTypeTitle: ?string, reviewTypeColor: ?string, requestedBy: string, createdAt: int}>
 	 * @throws Exception
 	 */
-	public function findByReviewerInBoards(string $reviewer, array $boardIds): array {
+	public function findByReviewerInBoards(string $reviewer, array $boardIds, array $rolesByBoard): array {
 		if ($boardIds === []) {
 			return [];
 		}
@@ -122,6 +131,7 @@ class CardReviewMapper extends QBMapper {
 			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->orderBy('r.created_at', 'DESC')
 			->addOrderBy('r.id', 'DESC');
+		$this->visibilityScope->apply($qb, 'c', $reviewer, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -165,10 +175,11 @@ class CardReviewMapper extends QBMapper {
 	 * (never emit `IN ()`).
 	 *
 	 * @param int[] $boardIds the viewer's readable board ids (empty → [])
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 * @return array<int, int> map of boardId => needs-review card count
 	 * @throws Exception
 	 */
-	public function needsReviewCountByBoards(array $boardIds): array {
+	public function needsReviewCountByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
 		if ($boardIds === []) {
 			return [];
 		}
@@ -183,6 +194,7 @@ class CardReviewMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->neq('r.state', $qb->createNamedParameter(CardReview::STATE_APPROVED)))
 			->groupBy('c.board_id');
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$map = [];

@@ -37,6 +37,7 @@ class ChecklistService {
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -51,6 +52,7 @@ class ChecklistService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		return $this->itemMapper->findByCard($cardId);
 	}
@@ -70,6 +72,7 @@ class ChecklistService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$last = $this->itemMapper->findLastByCard($cardId);
 		$sortKey = $last === null
@@ -101,6 +104,7 @@ class ChecklistService {
 		$card = $this->loadCard($item->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$changed = false;
 		if ($title !== null) {
@@ -142,6 +146,7 @@ class ChecklistService {
 		$card = $this->loadCard($item->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Siblings in display order, excluding the item being moved.
 		$siblings = array_values(array_filter(
@@ -192,6 +197,7 @@ class ChecklistService {
 		$card = $this->loadCard($item->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Atomic item-delete + card change-row (#3579); push after commit. The
 		// deleted item is returned so the shared helper's contract holds; the

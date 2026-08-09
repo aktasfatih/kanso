@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\ActivityService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\IUser;
@@ -27,6 +28,7 @@ class ActivityServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private PermissionService&MockObject $permissionService;
 	private IUserManager&MockObject $userManager;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ActivityService $service;
 
 	protected function setUp(): void {
@@ -36,12 +38,15 @@ class ActivityServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new ActivityService(
 			$this->changeMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->permissionService,
 			$this->userManager,
+			$this->visibilityGuard,
 		);
 	}
 
