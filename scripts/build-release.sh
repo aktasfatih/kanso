@@ -122,7 +122,13 @@ KEY_FILE=""
 CRT_FILE=""
 TMP_KEY=""
 TMP_CRT=""
-cleanup_keys() { [[ -n "$TMP_KEY" ]] && rm -f "$TMP_KEY"; [[ -n "$TMP_CRT" ]] && rm -f "$TMP_CRT"; }
+# Must end with status 0: a failing last command in an EXIT trap overrides the
+# script's exit code under `set -e` (this broke the unsigned path, where the
+# empty-var tests return 1).
+cleanup_keys() {
+	if [[ -n "$TMP_KEY" ]]; then rm -f "$TMP_KEY"; fi
+	if [[ -n "$TMP_CRT" ]]; then rm -f "$TMP_CRT"; fi
+}
 trap cleanup_keys EXIT
 
 if [[ -n "${APP_PRIVATE_KEY_FILE:-}" && -n "${APP_CERTIFICATE_FILE:-}" ]]; then
