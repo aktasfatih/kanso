@@ -15,6 +15,10 @@ export function useInbox() {
 	const query = useQuery({
 		queryKey: ['inbox'],
 		queryFn: apiGetInbox,
+		// #3766: the nav badges keep this query permanently mounted, so a default
+		// mount refetch is suppressed within staleTime - 'always' makes every
+		// navigation to the Inbox revalidate against the server.
+		refetchOnMount: 'always',
 	})
 
 	return query

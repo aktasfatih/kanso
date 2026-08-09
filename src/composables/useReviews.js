@@ -8,6 +8,7 @@ import {
 	setReviewState as apiSetReviewState,
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
+import { invalidateMyWork } from './queryKeys.js'
 
 /**
  * Resolve a boardId argument that may be a plain value, a Vue ref (.value),
@@ -120,6 +121,9 @@ export function useReviews(boardId) {
 		onSettled: (_data, _err, { cardId }) => {
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Requesting/withdrawing a review changes My Reviews membership for the
+			// target reviewer - refresh the actor's own feeds too (#3766).
+			invalidateMyWork(queryClient)
 		},
 	})
 
@@ -164,6 +168,9 @@ export function useReviews(boardId) {
 		onSettled: (_data, _err, { cardId }) => {
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Requesting/withdrawing a review changes My Reviews membership for the
+			// target reviewer - refresh the actor's own feeds too (#3766).
+			invalidateMyWork(queryClient)
 		},
 	})
 
@@ -225,6 +232,8 @@ export function useReviews(boardId) {
 			// so refresh the discussion thread too - otherwise it only appears after
 			// a full reload.
 			queryClient.invalidateQueries({ queryKey: ['comments', String(cardId)] })
+			// A verdict changes My Reviews membership (pending → answered) (#3766).
+			invalidateMyWork(queryClient)
 		},
 	})
 

@@ -29,3 +29,35 @@ export function boardQueryKey(id) {
 	}
 	return ['board', String(value)]
 }
+
+/**
+ * Key family for the cross-board "My Work" feeds (My Tasks / My Reviews /
+ * Inbox). These queries live outside the per-board cache, so board-scoped
+ * invalidation and delta sync never touch them (#3766).
+ *
+ * @type {Array<[string]>}
+ */
+export const MY_WORK_QUERY_KEYS = [['my-cards'], ['my-reviews'], ['inbox']]
+
+/**
+ * Invalidate every cross-board My Work feed (#3766).
+ *
+ * Call this from the settle phase of any mutation that can change membership
+ * of a My Work set: card assign/unassign, review request/withdraw/verdict,
+ * watch/unwatch, card done/archive/delete/restore, move-to-board, and bulk
+ * apply. The nav badges (useMyWorkBadges) keep these three queries mounted for
+ * the app's lifetime, so invalidating here refetches them immediately and the
+ * feeds are already fresh when the user navigates to a My Work page.
+ *
+ * Never call this from onMutate - the settle phase only - so it can never
+ * interfere with optimistic patches or their rollback. The feeds are small,
+ * per-user, server-filtered lists (three cheap GETs), so refetching all three
+ * on a membership-changing user action is deliberate and proportionate.
+ *
+ * @param {import('@tanstack/vue-query').QueryClient} queryClient
+ */
+export function invalidateMyWork(queryClient) {
+	for (const queryKey of MY_WORK_QUERY_KEYS) {
+		queryClient.invalidateQueries({ queryKey })
+	}
+}

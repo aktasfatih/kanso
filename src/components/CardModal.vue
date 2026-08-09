@@ -2095,7 +2095,7 @@ import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
-import { boardQueryKey } from '../composables/queryKeys.js'
+import { boardQueryKey, invalidateMyWork } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { useAnnouncer } from '../composables/useAnnouncer.js'
 import { initial, between, after, before } from '../services/sortKey.js'
@@ -3584,6 +3584,9 @@ async function confirmMoveToBoard() {
 		queryClient.invalidateQueries({ queryKey: boardQueryKey(targetBoard) })
 		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 		queryClient.invalidateQueries({ queryKey: ['boards'] })
+		// A cross-board move changes the board context the My Work feeds render,
+		// and can drop the card from a feed entirely (#3766).
+		invalidateMyWork(queryClient)
 		showCopyDialog.value = false
 		showSuccess(t('kanso', 'Card moved.'))
 		// The card no longer exists on this board (its id changed on the target),
