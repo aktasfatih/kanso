@@ -107,7 +107,7 @@ class Notifier implements INotifier {
 
 			$notification
 				->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
-				->setLink($this->cardLink($card->getBoardId(), $cardId))
+				->setLink($this->cardLink($cardId))
 				->setParsedSubject($plain)
 				->setRichSubject(
 					$rich,
@@ -134,7 +134,7 @@ class Notifier implements INotifier {
 
 		$notification
 			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
-			->setLink($this->cardLink($card->getBoardId(), $cardId))
+			->setLink($this->cardLink($cardId))
 			->setParsedSubject($plain)
 			->setRichSubject(
 				$rich,
@@ -148,10 +148,12 @@ class Notifier implements INotifier {
 	}
 
 	/**
-	 * Deep link to the card inside the board (the app is a hash-routed SPA).
+	 * Deep link to the card via the fragment-free SERVER route (#3744): a hash
+	 * route would lose its fragment on the login round-trip - exactly the
+	 * guests/externals these notification links are for. The $boardId parameter
+	 * is intentionally gone: the server route resolves the board itself.
 	 */
-	private function cardLink(int $boardId, int $cardId): string {
-		return $this->urlGenerator->linkToRouteAbsolute('kanso.page.index')
-			. '#/board/' . $boardId . '/card/' . $cardId;
+	private function cardLink(int $cardId): string {
+		return $this->urlGenerator->linkToRouteAbsolute('kanso.deepLink.card', ['id' => $cardId]);
 	}
 }

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
@@ -198,5 +199,102 @@ class PermissionServiceTest extends TestCase {
 		$this->groupManager->expects(self::never())->method('getUserGroupIds');
 
 		self::assertSame([], $this->service->getUserGroupIds('ghost'));
+	}
+
+	// ── external-role permission cap (#3744) ──────────────────────────────────
+
+	private function externalAcl(int $participantType, string $participant, int $permission): Acl {
+		$acl = $this->acl($participantType, $participant, $permission);
+		$acl->setRole(ViewerContext::ROLE_EXTERNAL);
+		return $acl;
+	}
+
+	public function testExternalRowNeverYieldsManageOrShareEffectively(): void {
+		// The backdoor this closes: an external ACL row storing MANAGE|SHARE
+		// bits must not pass the MANAGE/SHARE asserts - otherwise an external
+		// could edit the ACL / board settings, or SHARE new *internal* members
+		// in (a visibility escalation past the role model).
+		$board = $this->board('alice');
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([
+			$this->externalAcl(Acl::TYPE_USER, 'client', PermissionService::PERMISSION_ALL),
+		]);
+
+		self::assertSame(
+			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			$this->service->getPermissions($board, 'client')
+		);
+		$this->expectException(NotPermittedException::class);
+		$this->service->assertPermission($board, 'client', PermissionService::PERMISSION_MANAGE);
+	}
+
+	public function testExternalRowStillGrantsReadAndEdit(): void {
+		// The cap only strips the internal-only bits: an external with EDIT
+		// keeps acting on the cards they can see.
+		$board = $this->board('alice');
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([
+			$this->externalAcl(
+				Acl::TYPE_USER,
+				'client',
+				PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT
+			),
+		]);
+
+		$this->service->assertPermission($board, 'client', PermissionService::PERMISSION_EDIT);
+		self::assertSame(
+			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			$this->service->getPermissions($board, 'client')
+		);
+	}
+
+	public function testMixedRolesFoldInternalWinsAndKeepManage(): void {
+		// A user matching an external user-row AND an internal group-row is
+		// effectively internal (same internal-wins fold as BoardAccess) - the
+		// cap must not strip their MANAGE.
+		$board = $this->board('alice');
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([
+			$this->externalAcl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_READ),
+			$this->acl(Acl::TYPE_GROUP, 'devs', PermissionService::PERMISSION_ALL),
+		]);
+
+		$bob = $this->createMock(IUser::class);
+		$this->userManager->method('get')->with('bob')->willReturn($bob);
+		$this->groupManager->method('getUserGroupIds')->with($bob)->willReturn(['devs']);
+
+		self::assertSame(PermissionService::PERMISSION_ALL, $this->service->getPermissions($board, 'bob'));
+	}
+
+	public function testNullRoleRowsReadAsInternalAndKeepManage(): void {
+		// Rows predating the role column hydrate role=null → 'internal' (the
+		// migration backfill); the cap must not regress pre-role boards.
+		$board = $this->board('alice');
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([
+			$this->acl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_ALL),
+		]);
+
+		self::assertSame(PermissionService::PERMISSION_ALL, $this->service->getPermissions($board, 'bob'));
+		$this->service->assertPermission($board, 'bob', PermissionService::PERMISSION_MANAGE);
+	}
+
+	public function testGetPermissionsForBoardsAppliesTheExternalCapPerBoard(): void {
+		// The batch fold applies the same cap independently per board: bob is
+		// external-with-ALL on board 2 (capped) and internal-with-ALL on 3 (not).
+		$externalAcl = $this->externalAcl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_ALL);
+		$externalAcl->setBoardId(2);
+		$internalAcl = $this->acl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_ALL);
+		$internalAcl->setBoardId(3);
+		$this->aclMapper->expects(self::once())
+			->method('findByBoards')
+			->with([2, 3])
+			->willReturn([$externalAcl, $internalAcl]);
+
+		$map = $this->service->getPermissionsForBoards(
+			[$this->board('alice', 2), $this->board('alice', 3)],
+			'bob'
+		);
+
+		self::assertSame([
+			2 => PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			3 => PermissionService::PERMISSION_ALL,
+		], $map);
 	}
 }

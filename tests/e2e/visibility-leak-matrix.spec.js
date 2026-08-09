@@ -175,22 +175,18 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		expect(tile.stats.cardCount).toBe(2)
 	})
 
-	test('export + duplicate are scoped to the exporting viewer', async () => {
+	test('export + duplicate: viewer-scoped for internals, denied for externals', async () => {
 		const adminExport = await api(ADMIN, 'GET', `/boards/${state.boardId}/export`)
 		expectTitles(adminExport.board.cards, ['PUB', 'PROV', 'PRIV'])
 		// The scoped export still round-trips visibility.
 		const privRow = adminExport.board.cards.find((c) => c.id === state.cards.PRIV.id)
 		expect(privRow.visibility).toBe('private')
 
-		const testerExport = await api(TESTER, 'GET', `/boards/${state.boardId}/export`)
-		expectTitles(testerExport.board.cards, ['PUB', 'CLI'])
-		expect(JSON.stringify(testerExport)).not.toContain(title('PROV'))
-		expect(JSON.stringify(testerExport)).not.toContain(title('PRIV'))
-
-		const dup = await api(TESTER, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: true })
-		const dupBoard = await api(TESTER, 'GET', `/boards/${dup.boardId}`)
-		expectTitles(dupBoard.cards, ['PUB', 'CLI'])
-		await api(TESTER, 'DELETE', `/boards/${dup.boardId}`)
+		// #3744 (decided policy): whole-board egress is INTERNAL-only - the
+		// external member gets a plain 403 for export AND duplicate, instead
+		// of the viewer-scoped copy externals briefly had under #3743.
+		expect((await call(TESTER, 'GET', `/boards/${state.boardId}/export`)).status).toBe(403)
+		expect((await call(TESTER, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: true })).status).toBe(403)
 	})
 
 	test('card-id probes: reads AND writes on a hidden card 404 (no existence oracle)', async () => {

@@ -197,12 +197,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="backgroundError" class="label-settings__error">{{ backgroundError }}</span>
 						</template>
 
-						<!-- Board actions: Export / Duplicate are READ-gated on the
-						     server, so they are available to anyone who can open these
-						     settings; Archive / Delete are MANAGE-only (canManage). -->
-						<div class="board-actions">
+						<!-- Board actions: Export / Duplicate are internal-only
+						     (#3744) - hidden for external members and 403'd by the
+						     server regardless; Archive / Delete are MANAGE-only
+						     (canManage). -->
+						<div v-if="isInternal || canManage" class="board-actions">
 							<h4 class="board-actions__heading">{{ t('kanso', 'Board actions') }}</h4>
 
+							<template v-if="isInternal">
 							<!-- Export -->
 							<div class="board-actions__row">
 								<div class="board-actions__text">
@@ -246,6 +248,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</NcButton>
 							</div>
 							<span v-if="duplicateError" class="label-settings__error">{{ duplicateError }}</span>
+							</template>
 
 							<!-- Danger zone: destructive actions, MANAGE only. -->
 							<div v-if="canManage" class="board-actions__danger">
@@ -2547,6 +2550,11 @@ const {
 
 // ── Workflow composable ───────────────────────────────────────────────────────
 const { data: boardQueryData, updateStack, updateBoard } = useBoard(computed(() => props.boardId))
+
+// The viewer's board side from the board payload (#3744): export/duplicate
+// are internal-only. Absent role (stale cache) reads as internal - the
+// server 403s external egress regardless.
+const isInternal = computed(() => (boardQueryData.value?.role ?? 'internal') !== 'external')
 
 const ROLE_OPTIONS = [
 	{ value: 0, label: t('kanso', 'None') },

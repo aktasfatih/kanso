@@ -122,6 +122,10 @@ class BoardController extends Controller {
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.
 				'permissions' => $this->permissionService->getPermissions($board, $uid),
+				// The requester's board side (#3744) - 'internal' or 'external'.
+				// Gates the internal-only UI (export/duplicate) client-side; the
+				// server enforces regardless.
+				'role' => $viewer->role,
 				// The requester's board-watch state {subscribed, subscribers, count}.
 				'subscription' => $this->subscriptionService->buildBoardSubscription($id, $uid),
 				// The board's latest change id - the same value as the ETag. Seeds

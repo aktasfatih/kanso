@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
@@ -19,6 +20,17 @@ use OCP\IUserManager;
  * The board owner holds every permission bit; other users accumulate bits
  * from `kanso_board_acl` rows addressing them directly or one of their
  * groups. Bit order matches Deck for familiarity.
+ *
+ * Role cap (#3744): SHARE and MANAGE are internal-side concepts. A member
+ * whose EFFECTIVE role folds to 'external' (every matching ACL row is
+ * external - mixed grants fold internal-wins, mirroring
+ * {@see \OCA\Kanso\Access\BoardAccess}) has those bits STRIPPED from the
+ * effective mask, no matter what their rows store. Without this, an
+ * external row carrying the MANAGE bit would pass every MANAGE assert
+ * (board settings, ACL edits) and an external with SHARE could add new
+ * INTERNAL members - a visibility escalation. Stripping here, at the
+ * single mask fold, closes that for every assertPermission() caller and
+ * for the permission bitmask the board payloads hand the frontend.
  */
 class PermissionService {
 	public const PERMISSION_READ = 1;
@@ -30,6 +42,9 @@ class PermissionService {
 		| self::PERMISSION_EDIT
 		| self::PERMISSION_SHARE
 		| self::PERMISSION_MANAGE;
+
+	/** The bits an external-role member can never hold effectively. */
+	public const INTERNAL_ONLY_PERMISSIONS = self::PERMISSION_SHARE | self::PERMISSION_MANAGE;
 
 	public function __construct(
 		private AclMapper $aclMapper,
@@ -59,18 +74,28 @@ class PermissionService {
 		}
 
 		$permissions = 0;
+		$sawInternal = false;
 		$groupIds = null;
 		foreach ($this->aclMapper->findByBoard($board->getId()) as $acl) {
+			$applies = false;
 			if ($acl->getParticipantType() === Acl::TYPE_USER) {
-				if ($acl->getParticipant() === $uid) {
-					$permissions |= $acl->getPermission();
-				}
+				$applies = $acl->getParticipant() === $uid;
 			} elseif ($acl->getParticipantType() === Acl::TYPE_GROUP) {
 				$groupIds ??= $this->getUserGroupIds($uid);
-				if (in_array($acl->getParticipant(), $groupIds, true)) {
-					$permissions |= $acl->getPermission();
-				}
+				$applies = in_array($acl->getParticipant(), $groupIds, true);
 			}
+			if ($applies) {
+				$permissions |= $acl->getPermission();
+				// Null stored role reads as 'internal' (migration backfill),
+				// same as BoardAccess::foldRole.
+				$sawInternal = $sawInternal
+					|| ($acl->getRole() ?? ViewerContext::ROLE_INTERNAL) === ViewerContext::ROLE_INTERNAL;
+			}
+		}
+		// Effective role folds internal-wins; a purely-external membership
+		// can never hold the internal-only bits (see class doc).
+		if ($permissions !== 0 && !$sawInternal) {
+			$permissions &= ~self::INTERNAL_ONLY_PERMISSIONS;
 		}
 		return $permissions;
 	}
@@ -100,6 +125,8 @@ class PermissionService {
 		}
 
 		$groupIds = null;
+		/** @var array<int, bool> $sawInternal per shared board: any matching internal row */
+		$sawInternal = [];
 		foreach ($this->aclMapper->findByBoards($sharedIds) as $acl) {
 			$applies = false;
 			if ($acl->getParticipantType() === Acl::TYPE_USER) {
@@ -109,7 +136,17 @@ class PermissionService {
 				$applies = in_array($acl->getParticipant(), $groupIds, true);
 			}
 			if ($applies) {
-				$map[$acl->getBoardId()] |= $acl->getPermission();
+				$boardId = $acl->getBoardId();
+				$map[$boardId] |= $acl->getPermission();
+				$sawInternal[$boardId] = ($sawInternal[$boardId] ?? false)
+					|| ($acl->getRole() ?? ViewerContext::ROLE_INTERNAL) === ViewerContext::ROLE_INTERNAL;
+			}
+		}
+		// Same role cap as getPermissions(): a purely-external membership
+		// never holds SHARE/MANAGE effectively (see class doc).
+		foreach ($sharedIds as $boardId) {
+			if ($map[$boardId] !== 0 && !($sawInternal[$boardId] ?? false)) {
+				$map[$boardId] &= ~self::INTERNAL_ONLY_PERMISSIONS;
 			}
 		}
 		return $map;

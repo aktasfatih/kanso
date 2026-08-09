@@ -71,37 +71,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ t('kanso', 'No folders yet') }}
 			</NcActionText>
 
-			<NcActionSeparator />
+			<!-- No trailing separator when the whole export block below is hidden. -->
+			<NcActionSeparator v-if="isInternal" />
 		</template>
 
-		<!-- Duplicate / Export (#3750) — READ-gated server-side, shown to all. -->
-		<NcActionButton
-			:data-test="'tile-duplicate-with-cards-' + board.id"
-			close-after-click
-			@click="$emit('duplicate', true)">
-			<template #icon>
-				<ContentCopyIcon :size="20" />
-			</template>
-			{{ t('kanso', 'Duplicate with cards') }}
-		</NcActionButton>
-		<NcActionButton
-			:data-test="'tile-duplicate-empty-' + board.id"
-			close-after-click
-			@click="$emit('duplicate', false)">
-			<template #icon>
-				<ContentDuplicateIcon :size="20" />
-			</template>
-			{{ t('kanso', 'Duplicate without cards') }}
-		</NcActionButton>
-		<NcActionButton
-			:data-test="'tile-export-' + board.id"
-			close-after-click
-			@click="$emit('export')">
-			<template #icon>
-				<DownloadIcon :size="20" />
-			</template>
-			{{ t('kanso', 'Export board') }}
-		</NcActionButton>
+		<!-- Duplicate / Export (#3750) — whole-board egress is internal-only
+		     (#3744): hidden for external members, and the server 403s regardless. -->
+		<template v-if="isInternal">
+			<NcActionButton
+				:data-test="'tile-duplicate-with-cards-' + board.id"
+				close-after-click
+				@click="$emit('duplicate', true)">
+				<template #icon>
+					<ContentCopyIcon :size="20" />
+				</template>
+				{{ t('kanso', 'Duplicate with cards') }}
+			</NcActionButton>
+			<NcActionButton
+				:data-test="'tile-duplicate-empty-' + board.id"
+				close-after-click
+				@click="$emit('duplicate', false)">
+				<template #icon>
+					<ContentDuplicateIcon :size="20" />
+				</template>
+				{{ t('kanso', 'Duplicate without cards') }}
+			</NcActionButton>
+			<NcActionButton
+				:data-test="'tile-export-' + board.id"
+				close-after-click
+				@click="$emit('export')">
+				<template #icon>
+					<DownloadIcon :size="20" />
+				</template>
+				{{ t('kanso', 'Export board') }}
+			</NcActionButton>
+		</template>
 
 		<!-- Archive / Delete (#3750) — MANAGE only, destructive last. -->
 		<template v-if="canManage">
@@ -182,4 +186,9 @@ const isPinned = computed(() => props.pinned || !!props.board.pinned)
 // Manager-only entries (archive/delete) gate on the boards-list payload's
 // permission bitmask (#3750).
 const canManage = computed(() => (Number(props.board.permissions ?? 0) & PERM_MANAGE) !== 0)
+
+// Internal-only entries (export/duplicate, #3744) gate on the boards-list
+// payload's role. Absent role (stale cache) reads as internal - the server
+// enforces the denial regardless.
+const isInternal = computed(() => (props.board.role ?? 'internal') !== 'external')
 </script>

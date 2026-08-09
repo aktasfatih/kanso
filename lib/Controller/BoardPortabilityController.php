@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ExportService;
 use OCA\Kanso\Service\ImportService;
@@ -40,7 +41,9 @@ class BoardPortabilityController extends Controller {
 
 	/**
 	 * Exports one board as a Kanso export envelope. Gated on board READ (the
-	 * board load itself asserts it).
+	 * board load itself asserts it) AND on the internal role (#3744): bulk
+	 * egress of a whole board is denied to external (client-side) members -
+	 * the industry norm for guest/client roles - so an external gets a 403.
 	 */
 	#[NoAdminRequired]
 	public function export(int $id): JSONResponse {
@@ -50,6 +53,7 @@ class BoardPortabilityController extends Controller {
 			// The export content is scoped to the VIEWER's visible card set
 			// (#3743) - READ on the board alone must not dump hidden cards.
 			$viewer = $this->boardAccess->contextFor($board, $uid);
+			$this->assertInternal($viewer);
 			return new JSONResponse($this->exportService->export($board, $viewer));
 		});
 	}
@@ -70,19 +74,35 @@ class BoardPortabilityController extends Controller {
 
 	/**
 	 * Duplicates an existing board the caller can READ into a fresh board owned
-	 * by the caller. The board load asserts READ; the new board's title is
-	 * "<original> (copy)". `withCards` also clones the card graph; when false a
-	 * structural-only clone (stacks/roles/labels/rules) is produced.
+	 * by the caller. The board load asserts READ; internal role required, same
+	 * rationale as {@see self::export()} (#3744 - duplicate is export→import
+	 * in-process, so it is the same whole-board egress). The new board's title
+	 * is "<original> (copy)". `withCards` also clones the card graph; when
+	 * false a structural-only clone (stacks/roles/labels/rules) is produced.
 	 */
 	#[NoAdminRequired]
 	public function duplicate(int $id, bool $withCards = false): JSONResponse {
 		return $this->respond(function () use ($id, $withCards): JSONResponse {
 			$uid = $this->currentUserId();
 			$board = $this->boardService->find($id, $uid);
+			$this->assertInternal($this->boardAccess->contextFor($board, $uid));
 			return new JSONResponse(
 				$this->importService->duplicate($board, $uid, $withCards)
 			);
 		});
+	}
+
+	/**
+	 * Whole-board egress (export / duplicate) is internal-only (#3744, the
+	 * decided policy): an EXTERNAL member gets a plain 403. Not a 404 - the
+	 * board itself is visible to them, so denial reveals nothing new.
+	 *
+	 * @throws NotPermittedException if the viewer's board side is external
+	 */
+	private function assertInternal(ViewerContext $viewer): void {
+		if (!$viewer->isInternal()) {
+			throw new NotPermittedException('Board export is limited to internal members');
+		}
 	}
 
 	/**

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
@@ -19,6 +20,12 @@ use OCP\IDBConnection;
  * Stack CRUD. Every mutation appends a row to the `kanso_changes` log in
  * the same flow (see BoardService). New stacks are appended to the end of
  * the board via fractional sort keys - no sibling renumbering.
+ *
+ * Role cap (#3744): every stack MUTATION additionally requires the actor's
+ * board side to be 'internal'. External (client-side) members with EDIT act
+ * on cards they can see - they do not restructure the board (create / move /
+ * archive / delete columns). Reads are untouched (stacks ride the board
+ * payload for every member).
  */
 class StackService {
 	private const MAX_TITLE_LENGTH = 100;
@@ -30,7 +37,20 @@ class StackService {
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
+		private BoardAccess $boardAccess,
 	) {
+	}
+
+	/**
+	 * The internal-side gate on stack mutations (see class doc). Runs AFTER
+	 * the EDIT assert, so the actor is always a resolvable member here.
+	 *
+	 * @throws NotPermittedException if the actor's board side is external
+	 */
+	private function assertInternal(Board $board, string $uid): void {
+		if (!$this->boardAccess->contextFor($board, $uid)->isInternal()) {
+			throw new NotPermittedException('Board structure changes are limited to internal members');
+		}
 	}
 
 	/**
@@ -43,6 +63,7 @@ class StackService {
 	public function create(int $boardId, string $title, string $uid): Stack {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->assertInternal($board, $uid);
 
 		$stacks = $this->stackMapper->findByBoard($boardId);
 		$lastStack = end($stacks);
@@ -88,6 +109,7 @@ class StackService {
 		$stack = $this->loadStack($id);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->assertInternal($board, $uid);
 
 		if ($title !== null) {
 			$stack->setTitle($this->validateTitle($title));
@@ -125,6 +147,7 @@ class StackService {
 		$stack = $this->loadStack($id);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->assertInternal($board, $uid);
 
 		$now = time();
 		$stack->setDeletedAt($now);
@@ -155,6 +178,7 @@ class StackService {
 		}
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->assertInternal($board, $uid);
 
 		$stack->setDeletedAt(0);
 
@@ -188,6 +212,7 @@ class StackService {
 		$stack = $this->loadStack($id);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->assertInternal($board, $uid);
 
 		// Board stacks in display order, without the moved stack itself.
 		$siblings = array_values(array_filter(

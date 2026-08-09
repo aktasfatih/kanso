@@ -717,6 +717,20 @@ class CardServiceTest extends TestCase {
 		self::assertGreaterThan(0, $updated->getLastModified());
 	}
 
+	public function testUpdateSucceedsForExternalMemberOnAVisibleCard(): void {
+		// The external-role happy path (#3744): an external member with EDIT
+		// mutates the cards the visibility scope shows them - the role cap
+		// only bites on SHARE/MANAGE surfaces and board structure, never here.
+		$this->resolvedRole = ViewerContext::ROLE_EXTERNAL;
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, 'Client rename', null, null, null, null, 'client');
+		self::assertSame('Client rename', $updated->getTitle());
+	}
+
 	public function testUpdateLeavesFieldsUnchangedOnNull(): void {
 		$card = $this->card();
 		$card->setDescription('Keep me');

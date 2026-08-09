@@ -180,7 +180,7 @@ class CalendarFeedService {
 			$event->add('DTEND', $utcDue);
 		}
 
-		$link = $this->cardUrl($board, $card);
+		$link = $this->cardUrl($card);
 		$event->add('URL', $link);
 		$event->add('DESCRIPTION', $link);
 	}
@@ -203,12 +203,12 @@ class CalendarFeedService {
 	}
 
 	/**
-	 * The deep link back to a card in the Kanso SPA (hash route
-	 * `#/board/{id}/card/{cardId}` under the app's index page).
+	 * The deep link back to a card via the fragment-free SERVER route (#3744).
+	 * Calendar clients open these links cold (no session), so the target must
+	 * survive the login round-trip - a hash route's fragment would not.
 	 */
-	private function cardUrl(Board $board, Card $card): string {
-		$base = $this->urlGenerator->linkToRouteAbsolute('kanso.page.index');
-		return rtrim($base, '/') . '/#/board/' . (int)$board->getId() . '/card/' . (int)$card->getId();
+	private function cardUrl(Card $card): string {
+		return $this->urlGenerator->linkToRouteAbsolute('kanso.deepLink.card', ['id' => (int)$card->getId()]);
 	}
 
 	/**

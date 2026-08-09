@@ -65,7 +65,13 @@ class NotifierTest extends TestCase {
 		$this->l10nFactory->method('get')->willReturn($l);
 		$this->urlGenerator->method('imagePath')->willReturn('/img/app.svg');
 		$this->urlGenerator->method('getAbsoluteURL')->willReturnArgument(0);
-		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc.example/apps/kanso/');
+		// Card links use the fragment-free server route (#3744): the deep-link
+		// route with the card id, never a `#/…` hash under the index page.
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturnCallback(
+			static fn (string $route, array $args = []): string => $route === 'kanso.deepLink.card'
+				? 'https://nc.example/apps/kanso/card/' . $args['id']
+				: 'https://nc.example/apps/kanso/'
+		);
 	}
 
 	public function testGetIdAndName(): void {
@@ -103,7 +109,7 @@ class NotifierTest extends TestCase {
 		$this->userManager->method('get')->with('alice')->willReturn($actor);
 
 		$n->expects(self::once())->method('setLink')
-			->with('https://nc.example/apps/kanso/#/board/3/card/9')->willReturnSelf();
+			->with('https://nc.example/apps/kanso/card/9')->willReturnSelf();
 		$n->expects(self::once())->method('setRichSubject')
 			->with(
 				'{actor} assigned you to {card}',
@@ -129,7 +135,7 @@ class NotifierTest extends TestCase {
 		$this->userManager->method('get')->with('alice')->willReturn($actor);
 
 		$n->expects(self::once())->method('setLink')
-			->with('https://nc.example/apps/kanso/#/board/3/card/9')->willReturnSelf();
+			->with('https://nc.example/apps/kanso/card/9')->willReturnSelf();
 		$n->expects(self::once())->method('setRichSubject')
 			->with(
 				'{actor} assigned you a step on {card}',

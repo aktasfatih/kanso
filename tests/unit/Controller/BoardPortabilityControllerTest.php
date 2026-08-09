@@ -30,6 +30,8 @@ class BoardPortabilityControllerTest extends TestCase {
 	private ExportService&MockObject $exportService;
 	private ImportService&MockObject $importService;
 	private BoardAccess&MockObject $boardAccess;
+	/** The board side contextFor resolves for the acting user (#3744). */
+	private string $viewerRole = ViewerContext::ROLE_INTERNAL;
 	private BoardPortabilityController $controller;
 
 	protected function setUp(): void {
@@ -40,10 +42,11 @@ class BoardPortabilityControllerTest extends TestCase {
 		$this->exportService = $this->createMock(ExportService::class);
 		$this->importService = $this->createMock(ImportService::class);
 		// export() resolves the viewer's context after the READ gate and hands
-		// it to the viewer-scoped export (#3743).
+		// it to the viewer-scoped export (#3743). Role defaults to internal;
+		// the #3744 external-denial tests flip $this->viewerRole.
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->boardAccess->method('contextFor')->willReturnCallback(
-			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
+			fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), $this->viewerRole, true),
 		);
 		$this->controller = new BoardPortabilityController(
 			'kanso',
@@ -108,5 +111,49 @@ class BoardPortabilityControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		self::assertSame('bad version', $response->getData()['error']);
+	}
+
+	// ── whole-board egress is internal-only (#3744) ───────────────────────────
+
+	public function testExportIsForbiddenForExternalMembers(): void {
+		$this->viewerRole = ViewerContext::ROLE_EXTERNAL;
+		$this->loginAs('client');
+		$board = new Board();
+		$board->setId(5);
+		$this->boardService->method('find')->with(5, 'client')->willReturn($board);
+		// The denial must fire BEFORE any export content is built.
+		$this->exportService->expects(self::never())->method('export');
+
+		$response = $this->controller->export(5);
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testDuplicateIsForbiddenForExternalMembers(): void {
+		$this->viewerRole = ViewerContext::ROLE_EXTERNAL;
+		$this->loginAs('client');
+		$board = new Board();
+		$board->setId(5);
+		$this->boardService->method('find')->with(5, 'client')->willReturn($board);
+		$this->importService->expects(self::never())->method('duplicate');
+
+		$response = $this->controller->duplicate(5, true);
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testDuplicateStillWorksForInternalMembers(): void {
+		$this->loginAs('alice');
+		$board = new Board();
+		$board->setId(5);
+		$this->boardService->method('find')->with(5, 'alice')->willReturn($board);
+		$this->importService->expects(self::once())->method('duplicate')
+			->with($board, 'alice', true)
+			->willReturn(['boardId' => 43, 'title' => 'T (copy)', 'stacks' => 1, 'cards' => 2, 'labels' => 0]);
+
+		$response = $this->controller->duplicate(5, true);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(43, $response->getData()['boardId']);
 	}
 }

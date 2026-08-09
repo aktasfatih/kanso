@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -117,6 +118,12 @@ class BoardService {
 				// This user's permission bitmask on the board (#3750), same shape
 				// as the single-board payload's `permissions`.
 				'permissions' => $permissions[$id] ?? 0,
+				// This user's board side (#3744) - 'internal' or 'external'. The
+				// tile menu hides internal-only entries (export/duplicate) on it.
+				// Every board in this list resolved a membership, so the fallback
+				// is unreachable; internal keeps the pre-role behaviour if it ever
+				// fires for an owner row.
+				'role' => $rolesByBoard[$id] ?? ViewerContext::ROLE_INTERNAL,
 				'stats' => [
 					'cardCount' => $counts[$id] ?? 0,
 					'doneCount' => $done,

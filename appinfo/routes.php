@@ -9,6 +9,13 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
+		// Fragment-free card deep link (#3744). A SERVER route (not `#/…`), so
+		// the target survives the login round-trip - email/bell/ICS links point
+		// here. Auth required (no PublicPage); any unauthorized/unknown id is a
+		// uniform 404 page. The controller hands the target to the SPA via the
+		// `openCard` initial state.
+		['name' => 'deepLink#card', 'url' => '/card/{id}', 'verb' => 'GET'],
+
 		// Public / read-only board share (#3531). UNAUTHENTICATED: `/p/{token}`
 		// renders the read-only SPA shell and `/api/public/{token}` returns the
 		// STRIPPED payload. Both are #[PublicPage] + brute-force throttled; a bad
