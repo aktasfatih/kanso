@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPrefix;
@@ -61,6 +62,7 @@ class CardService {
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private SubscriptionMapper $subscriptionMapper,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -163,6 +165,11 @@ class CardService {
 		// cleanly (a 400 via InvalidInputException) before any INSERT is attempted,
 		// matching update()'s validation. '' is treated as "no due date" too.
 		$parsedDue = $duedate === null ? null : $this->parseDuedate($duedate);
+		// The creator's board side, FROZEN at create (#3741) - never recomputed
+		// later, so an 'internal' card keeps its side when the creator changes
+		// role or leaves the board. Resolved once, outside the retry loop (the
+		// EDIT assertion above guarantees a membership to resolve).
+		$creatorRole = $this->boardAccess->contextFor($board, $uid)->role;
 		$now = time();
 
 		// Default: append to the bottom of the stack. When the board opts in,
@@ -224,6 +231,12 @@ class CardService {
 			// a card is only flagged a template later via setTemplate(). Explicit so
 			// the column is set on INSERT (the DB default backs pre-migration rows).
 			$card->setIsTemplate(false);
+			// Visibility (#3741): every card starts 'public' (whoever decides
+			// nothing works in the open; a narrower visibility is a later,
+			// explicit choice) with the creator's side frozen alongside it.
+			// Explicit on INSERT, same rationale as is_template above.
+			$card->setVisibility(CardVisibilityScope::VISIBILITY_PUBLIC);
+			$card->setCreatorRole($creatorRole);
 
 			// Insert the card AND its CREATE change row atomically (#3579): a
 			// failed change-row write must roll the card INSERT back, never leave

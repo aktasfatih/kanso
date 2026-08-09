@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -46,6 +48,9 @@ class CardServiceTest extends TestCase {
 	private \OCA\Kanso\Db\ChecklistItemMapper&MockObject $checklistItemMapper;
 	private \OCA\Kanso\Db\CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private \OCA\Kanso\Db\SubscriptionMapper&MockObject $subscriptionMapper;
+	private BoardAccess&MockObject $boardAccess;
+	/** The role the BoardAccess mock resolves creators to (#3741 freeze). */
+	private string $resolvedRole = ViewerContext::ROLE_INTERNAL;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -67,6 +72,15 @@ class CardServiceTest extends TestCase {
 		$this->checklistItemMapper = $this->createMock(\OCA\Kanso\Db\ChecklistItemMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(\OCA\Kanso\Db\CardAssigneeMapper::class);
 		$this->subscriptionMapper = $this->createMock(\OCA\Kanso\Db\SubscriptionMapper::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// Membership for the creator_role freeze (#3741): every creator
+		// resolves to $this->resolvedRole (internal by default; tests
+		// exercising the external side flip the property).
+		$this->resolvedRole = ViewerContext::ROLE_INTERNAL;
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			fn (Board $board, string $uid): ViewerContext
+				=> ViewerContext::forMember($uid, $board->getId(), $this->resolvedRole, false),
+		);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -85,7 +99,8 @@ class CardServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->checklistItemMapper,
 			$this->cardAssigneeMapper,
-			$this->subscriptionMapper
+			$this->subscriptionMapper,
+			$this->boardAccess
 		);
 	}
 
@@ -167,6 +182,45 @@ class CardServiceTest extends TestCase {
 
 		$card = $this->service->create(5, 'A card', 'alice');
 		self::assertSame(9, $card->getId());
+	}
+
+	public function testCreateStartsPublicWithFrozenCreatorRole(): void {
+		// Visibility model (#3741): a new card is 'public' (default-open) and
+		// carries the creator's resolved board side frozen on the INSERT.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame('public', $card->getVisibility());
+				self::assertSame(ViewerContext::ROLE_INTERNAL, $card->getCreatorRole());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	public function testCreateFreezesExternalCreatorRole(): void {
+		// An external (client-side) member's card freezes 'external' - the
+		// symmetric half of the internal-visibility rule.
+		$this->resolvedRole = ViewerContext::ROLE_EXTERNAL;
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame('public', $card->getVisibility());
+				self::assertSame(ViewerContext::ROLE_EXTERNAL, $card->getCreatorRole());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'bob');
 	}
 
 	public function testCreateAppendsAfterLastCard(): void {
