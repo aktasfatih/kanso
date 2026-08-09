@@ -1092,7 +1092,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</p>
 				<template v-else>
 					<p class="github-webhook__hint">
-						{{ t('kanso', 'Add a GitHub webhook sending "pull_request" and "issues" events to the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress.') }}
+						{{ t('kanso', 'Add a GitHub webhook sending "pull_request" and "issues" events to the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards.') }}
 					</p>
 
 					<label class="github-webhook__label">{{ t('kanso', 'Payload URL') }}</label>
@@ -1124,6 +1124,49 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</NcButton>
 						<span v-if="webhook.enabled" class="github-webhook__status">{{ t('kanso', 'Enabled') }}</span>
 					</div>
+
+					<!-- Issue intake (#3752): opt-in auto-create of linked cards -->
+					<template v-if="webhook.enabled">
+						<label class="github-webhook__label" for="bs-webhook-intake-stack">{{ t('kanso', 'Issue intake') }}</label>
+						<p class="github-webhook__hint">
+							{{ t('kanso', 'Pick a column and every newly opened issue becomes a card there, with the issue attached as a link (title only, no body copy).') }}
+						</p>
+						<div class="github-webhook__row">
+							<select
+								id="bs-webhook-intake-stack"
+								class="workflow__select"
+								:disabled="intakeBusy"
+								:value="webhook.intakeStackId == null ? '' : String(webhook.intakeStackId)"
+								@change="onIntakeStackChange">
+								<option value="">{{ t('kanso', 'Off — do not create cards') }}</option>
+								<option v-for="s in stacks" :key="s.id" :value="String(s.id)">{{ s.title }}</option>
+							</select>
+						</div>
+						<div v-if="webhook.intakeStackId != null" class="github-webhook__row">
+							<select
+								class="workflow__select"
+								:disabled="intakeBusy"
+								:value="intakeFilterMode"
+								:aria-label="t('kanso', 'Which issues to take in')"
+								@change="onIntakeFilterModeChange">
+								<option value="all">{{ t('kanso', 'All issues') }}</option>
+								<option value="label">{{ t('kanso', 'Only issues with a label') }}</option>
+							</select>
+							<template v-if="intakeFilterMode === 'label'">
+								<input
+									v-model="intakeLabelInput"
+									class="github-webhook__input"
+									type="text"
+									:placeholder="t('kanso', 'GitHub label name')"
+									:aria-label="t('kanso', 'GitHub label name')"
+									:disabled="intakeBusy"
+									@keyup.enter="saveIntakeLabel">
+								<NcButton :disabled="intakeBusy || !intakeLabelInput.trim()" @click="saveIntakeLabel">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+							</template>
+						</div>
+					</template>
 					<span v-if="webhookError" class="label-settings__error">{{ webhookError }}</span>
 				</template>
 					</div>
@@ -1985,6 +2028,7 @@ import {
 	fetchWebhookConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
+	updateWebhookIntake as apiUpdateWebhookIntake,
 	fetchPublicShareConfig,
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
@@ -2074,15 +2118,27 @@ const canShare = computed(() => (props.permissions & PERM_SHARE) !== 0)
 const canEdit = computed(() => (props.permissions & PERM_EDIT) !== 0)
 
 // ── GitHub webhook config (MANAGE) ───────────────────────────────────────────
-const webhook = ref({ enabled: false, payloadUrl: '' })
+const webhook = ref({ enabled: false, payloadUrl: '', intakeStackId: null, intakeLabel: '' })
 const revealedSecret = ref('')
 const webhookError = ref('')
 const webhookBusy = ref(false)
+
+// Issue intake (#3752): the filter-mode select and label input are local UI
+// state, re-derived from the server config after every load/save.
+const intakeBusy = ref(false)
+const intakeFilterMode = ref('all')
+const intakeLabelInput = ref('')
+
+function syncIntakeFromConfig() {
+	intakeFilterMode.value = webhook.value.intakeLabel ? 'label' : 'all'
+	intakeLabelInput.value = webhook.value.intakeLabel || ''
+}
 
 async function loadWebhookConfig() {
 	if (!canManage.value) return
 	try {
 		webhook.value = await fetchWebhookConfig(props.boardId)
+		syncIntakeFromConfig()
 		// An active integration should be visible without a click.
 		if (webhook.value.enabled) {
 			automationGroups.value.github = true
@@ -2092,13 +2148,51 @@ async function loadWebhookConfig() {
 	}
 }
 
+async function saveIntake(stackId, label) {
+	webhookError.value = ''
+	intakeBusy.value = true
+	try {
+		webhook.value = await apiUpdateWebhookIntake(props.boardId, stackId, label)
+		syncIntakeFromConfig()
+	} catch (e) {
+		webhookError.value = e?.response?.data?.error || t('kanso', 'Could not save the issue-intake settings.')
+	} finally {
+		intakeBusy.value = false
+	}
+}
+
+function onIntakeStackChange(e) {
+	const v = e.target.value
+	if (v === '') {
+		// Off: the server also drops any label filter.
+		saveIntake(null, '')
+		return
+	}
+	const label = intakeFilterMode.value === 'label' ? intakeLabelInput.value.trim() : ''
+	saveIntake(Number(v), label)
+}
+
+function onIntakeFilterModeChange(e) {
+	intakeFilterMode.value = e.target.value
+	if (e.target.value === 'all') {
+		saveIntake(webhook.value.intakeStackId, '')
+	}
+	// 'label' persists on Save/Enter, once a name is typed.
+}
+
+function saveIntakeLabel() {
+	const label = intakeLabelInput.value.trim()
+	if (!label) return
+	saveIntake(webhook.value.intakeStackId, label)
+}
+
 async function handleRotateSecret() {
 	webhookError.value = ''
 	webhookBusy.value = true
 	try {
 		const res = await apiRotateWebhookSecret(props.boardId)
 		revealedSecret.value = res.secret
-		webhook.value = { enabled: true, payloadUrl: res.payloadUrl }
+		webhook.value = { ...webhook.value, enabled: true, payloadUrl: res.payloadUrl }
 	} catch (e) {
 		webhookError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
 	} finally {

@@ -377,6 +377,10 @@ export const rotateWebhookSecret = (boardId) =>
 export const disableWebhook = (boardId) =>
 	axios.delete(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)
 
+// Issue intake (#3752): stackId null turns intake off; label '' = all issues.
+export const updateWebhookIntake = (boardId, stackId, label) =>
+	axios.put(url(`/api/boards/${boardId}/webhook/intake`), { stackId, label }).then((r) => r.data)
+
 // Public / read-only board share link (board-level, MANAGE)
 export const fetchPublicShareConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)

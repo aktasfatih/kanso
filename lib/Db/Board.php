@@ -32,6 +32,10 @@ use OCP\DB\Types;
  * @method void setDeletedAt(int $deletedAt)
  * @method string|null getWebhookSecret()
  * @method void setWebhookSecret(?string $webhookSecret)
+ * @method int|null getWebhookIntakeStackId()
+ * @method void setWebhookIntakeStackId(?int $webhookIntakeStackId)
+ * @method string|null getWebhookIntakeLabel()
+ * @method void setWebhookIntakeLabel(?string $webhookIntakeLabel)
  * @method string getEstimateScale()
  * @method void setEstimateScale(string $estimateScale)
  * @method bool|null getNewCardsOnTop()
@@ -60,6 +64,13 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?int $deletedAt = null;
 	// MANAGE-only; deliberately NEVER emitted by jsonSerialize().
 	protected ?string $webhookSecret = null;
+	// GitHub issue intake (#3752). MANAGE-only webhook config, OFF by default.
+	// NULL stack = intake disabled (webhook stays react-only); a non-null stack
+	// means an `issues`/`opened` delivery auto-creates a link-only card there.
+	// The label is an optional free-text GitHub label filter (NULL = all
+	// issues). Both ride the webhook config endpoint, not the board payload.
+	protected ?int $webhookIntakeStackId = null;
+	protected ?string $webhookIntakeLabel = null;
 	protected ?string $estimateScale = null;
 	protected ?bool $newCardsOnTop = null;
 	// The per-board human-id prefix (e.g. "KAN"); a card's reference is
@@ -92,6 +103,8 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
 		$this->addType('webhookSecret', Types::STRING);
+		$this->addType('webhookIntakeStackId', Types::INTEGER);
+		$this->addType('webhookIntakeLabel', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);
 		$this->addType('newCardsOnTop', Types::BOOLEAN);
 		$this->addType('prefix', Types::STRING);

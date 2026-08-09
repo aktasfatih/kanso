@@ -82,6 +82,20 @@ class WebhookController extends Controller {
 		});
 	}
 
+	/**
+	 * Issue-intake config (#3752): the stack an opened issue's card lands in
+	 * (null = intake off) plus an optional GitHub label filter. MANAGE-gated in
+	 * the service.
+	 */
+	#[NoAdminRequired]
+	public function intake(int $id, ?int $stackId = null, string $label = ''): JSONResponse {
+		return $this->respond(function () use ($id, $stackId, $label): JSONResponse {
+			return new JSONResponse(
+				$this->webhookService->setIntakeConfig($id, $stackId, $label, $this->currentUserId())
+			);
+		});
+	}
+
 	#[NoAdminRequired]
 	public function disable(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {

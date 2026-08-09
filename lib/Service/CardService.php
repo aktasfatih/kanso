@@ -35,7 +35,8 @@ use OCP\IDBConnection;
  * single card row - no sibling renumbering, ever.
  */
 class CardService {
-	private const MAX_TITLE_LENGTH = 100;
+	// Public: the webhook's issue intake pre-truncates external titles to it.
+	public const MAX_TITLE_LENGTH = 100;
 
 	// Max insert attempts in create(): absorbs sort-key AND board-wide board_seq
 	// unique collisions under concurrency before surfacing a retryable 409.

@@ -76,10 +76,12 @@ class GithubWebhookServiceTest extends TestCase {
 		return $c;
 	}
 
-	private function stack(int $id, int $role): Stack {
+	private function stack(int $id, int $role, int $boardId = 1, int $deletedAt = 0): Stack {
 		$s = new Stack();
 		$s->setId($id);
 		$s->setRole($role);
+		$s->setBoardId($boardId);
+		$s->setDeletedAt($deletedAt);
 		return $s;
 	}
 
@@ -240,13 +242,17 @@ class GithubWebhookServiceTest extends TestCase {
 		return $l;
 	}
 
-	private function issueBody(string $action, string $url = 'https://github.com/octo/app/issues/7', string $state = 'open', string $title = 'Crash on load'): string {
+	/**
+	 * @param array<int, array{name: string}> $labels
+	 */
+	private function issueBody(string $action, string $url = 'https://github.com/octo/app/issues/7', string $state = 'open', string $title = 'Crash on load', array $labels = []): string {
 		return json_encode([
 			'action' => $action,
 			'issue' => [
 				'html_url' => $url,
 				'state' => $state,
 				'title' => $title,
+				'labels' => $labels,
 			],
 		]);
 	}
@@ -378,6 +384,231 @@ class GithubWebhookServiceTest extends TestCase {
 		self::assertSame(9, $result['cardId']);
 	}
 
+	// ---- issue intake (#3752) ---------------------------------------------
+
+	private function intakeBoard(int $stackId = 7, ?string $label = null): Board {
+		$b = $this->board();
+		$b->setWebhookIntakeStackId($stackId);
+		$b->setWebhookIntakeLabel($label);
+		return $b;
+	}
+
+	public function testOpenedIssueWithIntakeOffDoesNotCreateACard(): void {
+		// No intake stack configured (the default): opened stays a plain no-op.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardLinkMapper->expects(self::never())->method('insert');
+
+		$body = $this->issueBody('opened');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testOpenedIssueIntakeCreatesLinkedCardInConfiguredStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturnCallback(
+			function (int $boardId, array $urls): bool {
+				self::assertSame(1, $boardId);
+				self::assertContains('https://github.com/octo/app/issues/7', $urls);
+				return false;
+			},
+		);
+		$this->cardService->expects(self::once())->method('create')
+			->with(7, 'Crash on load', 'alice')->willReturn($this->card(42, 1));
+		$this->cardLinkMapper->expects(self::once())->method('insert')
+			->willReturnCallback(function (CardLink $l): CardLink {
+				self::assertSame(42, $l->getCardId());
+				self::assertSame('https://github.com/octo/app/issues/7', $l->getUrl());
+				self::assertSame(CardLink::KIND_ISSUE, $l->getKind());
+				// State/title cached straight from the payload - no poll.
+				self::assertSame(CardLink::STATE_OPEN, $l->getState());
+				self::assertSame('Crash on load', $l->getTitle());
+				self::assertGreaterThan(0, $l->getLastPolled());
+				return $l;
+			});
+
+		$body = $this->issueBody('opened');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['created']);
+		self::assertSame(42, $result['cardId']);
+		self::assertFalse($result['moved']);
+	}
+
+	public function testIntakeTruncatesOverlongIssueTitle(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->expects(self::once())->method('create')
+			->willReturnCallback(function (int $stackId, string $title): Card {
+				self::assertSame(100, mb_strlen($title));
+				return $this->card(42, 1);
+			});
+
+		$body = $this->issueBody('opened', title: str_repeat('x', 150));
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	public function testIntakeWhitespacePaddedTitleNeverReachesCreateEmpty(): void {
+		// A title that truncates into trailing whitespace must still yield a
+		// non-empty title (create() would otherwise reject it and drop the issue).
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->expects(self::once())->method('create')
+			->willReturnCallback(function (int $stackId, string $title): Card {
+				self::assertNotSame('', $title);
+				self::assertLessThanOrEqual(100, mb_strlen($title));
+				self::assertSame($title, trim($title));
+				return $this->card(42, 1);
+			});
+
+		$body = $this->issueBody('opened', title: 'x' . str_repeat(' ', 120) . 'y');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	public function testIntakeLabelFilterMatchesCaseInsensitively(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard(7, 'bug'));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->expects(self::once())->method('create')->willReturn($this->card(42, 1));
+
+		$body = $this->issueBody('opened', labels: [['name' => 'Bug'], ['name' => 'triage']]);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	public function testIntakeLabelFilterSkipsNonMatchingIssue(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard(7, 'bug'));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->issueBody('opened', labels: [['name' => 'feature']]);
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testIntakeRedeliveryDoesNotCreateADuplicate(): void {
+		// The alive lookup misses (e.g. the created card was archived or
+		// trashed), but the any-state dedup lookup still finds the link -
+		// a redelivered `opened` must not create a second card.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(true);
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->issueBody('opened');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testIntakeSkipsWhenIssueAlreadyLinkedOnAliveCard(): void {
+		// An alive linked card exists: opened refreshes the cached state (the
+		// pre-intake behavior) and never creates a duplicate.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardLinkMapper->expects(self::once())->method('update');
+
+		$body = $this->issueBody('opened');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertTrue($result['handled']);
+		self::assertArrayNotHasKey('created', $result);
+	}
+
+	public function testIntakeStaleStackIsANoop(): void {
+		// The configured stack now lives on another board (or was deleted):
+		// intake degrades to a no-op instead of creating a card elsewhere.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO, 2)); // board 2!
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->issueBody('opened');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testIntakeDeletedStackIsANoop(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)
+			->willReturn($this->stack(7, Stack::ROLE_TODO, 1, time())); // soft-deleted
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->issueBody('opened');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testReopenedNeverCreatedIssueDoesNotIntake(): void {
+		// Intake is `opened`-only: a reopened issue nobody linked stays a no-op.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardService->expects(self::never())->method('move');
+
+		$body = $this->issueBody('reopened');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	// ---- intake config (MANAGE) -------------------------------------------
+
+	public function testSetIntakeConfigPersistsStackAndLabel(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/webhook');
+		$this->boardMapper->expects(self::once())->method('update')
+			->willReturnCallback(function (Board $b): Board {
+				self::assertSame(7, $b->getWebhookIntakeStackId());
+				self::assertSame('bug', $b->getWebhookIntakeLabel());
+				return $b;
+			});
+
+		$config = $this->service->setIntakeConfig(1, 7, ' bug ', 'alice');
+		self::assertSame(7, $config['intakeStackId']);
+		self::assertSame('bug', $config['intakeLabel']);
+	}
+
+	public function testSetIntakeConfigNullStackDisablesAndClearsLabel(): void {
+		$board = $this->intakeBoard(7, 'bug');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/webhook');
+		$this->boardMapper->expects(self::once())->method('update')
+			->willReturnCallback(function (Board $b): Board {
+				self::assertNull($b->getWebhookIntakeStackId());
+				self::assertNull($b->getWebhookIntakeLabel());
+				return $b;
+			});
+
+		$config = $this->service->setIntakeConfig(1, null, 'bug', 'alice');
+		self::assertNull($config['intakeStackId']);
+		self::assertSame('', $config['intakeLabel']);
+	}
+
+	public function testSetIntakeConfigRejectsForeignStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO, 2)); // board 2!
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(\OCA\Kanso\Service\InvalidInputException::class);
+		$this->service->setIntakeConfig(1, 7, '', 'alice');
+	}
+
+	public function testSetIntakeConfigDeniedWithoutManage(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setIntakeConfig(1, 7, '', 'mallory');
+	}
+
 	// ---- config (MANAGE) --------------------------------------------------
 
 	public function testRotateSecretRequiresManageAndReturnsSecret(): void {
@@ -416,6 +647,18 @@ class GithubWebhookServiceTest extends TestCase {
 		$config = $this->service->getConfig(1, 'alice');
 		self::assertTrue($config['enabled']);
 		self::assertSame('https://nc/webhook', $config['payloadUrl']);
+		// Intake defaults: off, no filter.
+		self::assertNull($config['intakeStackId']);
+		self::assertSame('', $config['intakeLabel']);
+	}
+
+	public function testGetConfigReportsIntakeSettings(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard(7, 'bug'));
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/webhook');
+
+		$config = $this->service->getConfig(1, 'alice');
+		self::assertSame(7, $config['intakeStackId']);
+		self::assertSame('bug', $config['intakeLabel']);
 	}
 
 	public function testDisableClearsSecret(): void {

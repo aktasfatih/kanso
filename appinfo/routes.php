@@ -187,6 +187,7 @@ return [
 		['name' => 'webhook#github', 'url' => '/api/boards/{id}/github-webhook', 'verb' => 'POST'],
 		['name' => 'webhook#config', 'url' => '/api/boards/{id}/webhook', 'verb' => 'GET'],
 		['name' => 'webhook#rotate', 'url' => '/api/boards/{id}/webhook/rotate', 'verb' => 'POST'],
+		['name' => 'webhook#intake', 'url' => '/api/boards/{id}/webhook/intake', 'verb' => 'PUT'],
 		['name' => 'webhook#disable', 'url' => '/api/boards/{id}/webhook', 'verb' => 'DELETE'],
 
 		['name' => 'cardLink#index', 'url' => '/api/cards/{cardId}/links', 'verb' => 'GET'],

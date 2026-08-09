@@ -35,6 +35,14 @@ use OCP\Security\ISecureRandom;
  * role-stack simply doesn't move - the link/state is still recorded. Every move
  * goes through CardService::move so sort keys, the transaction and the change
  * row all fire.
+ *
+ * Issue intake (#3752, opt-in): when a board configures an intake stack, an
+ * `issues`/`opened` delivery for an issue not yet linked anywhere on the board
+ * auto-creates a LINK-ONLY card there (title = issue title, the issue attached
+ * as a KIND_ISSUE link with state/title cached from the payload - no body copy,
+ * no content sync). An optional free-text label filter narrows intake to issues
+ * carrying that GitHub label. Creation goes through CardService::create as the
+ * board owner, so the sort key, change row and realtime all fire.
  */
 class GithubWebhookService {
 	public function __construct(
@@ -50,21 +58,48 @@ class GithubWebhookService {
 	}
 
 	/**
-	 * The board's webhook config for a MANAGE user: whether it's enabled and the
-	 * payload URL to paste into GitHub. The secret itself is NOT returned here
-	 * (it is shown once, on rotate).
+	 * The board's webhook config for a MANAGE user: whether it's enabled, the
+	 * payload URL to paste into GitHub and the issue-intake settings. The secret
+	 * itself is NOT returned here (it is shown once, on rotate).
 	 *
-	 * @return array{enabled: bool, payloadUrl: string}
+	 * @return array{enabled: bool, payloadUrl: string, intakeStackId: int|null, intakeLabel: string}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not manage the board
 	 */
 	public function getConfig(int $boardId, string $actorUid): array {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
-		return [
-			'enabled' => ($board->getWebhookSecret() ?? '') !== '',
-			'payloadUrl' => $this->payloadUrl($boardId),
-		];
+		return $this->configArray($board);
+	}
+
+	/**
+	 * Configures issue intake (#3752): the stack an opened issue's card is
+	 * created in, plus an optional GitHub label filter. A null stack turns
+	 * intake OFF (and drops the filter). Requires MANAGE.
+	 *
+	 * @return array{enabled: bool, payloadUrl: string, intakeStackId: int|null, intakeLabel: string}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not manage the board
+	 * @throws InvalidInputException if the stack is not an alive stack of this board, or the label is too long
+	 */
+	public function setIntakeConfig(int $boardId, ?int $stackId, string $label, string $actorUid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+
+		if ($stackId !== null && $this->findAliveStack($boardId, $stackId) === null) {
+			throw new InvalidInputException('Stack does not belong to this board');
+		}
+		$label = trim($label);
+		if (mb_strlen($label) > 100) {
+			throw new InvalidInputException('Label filter must not exceed 100 characters');
+		}
+
+		$board->setWebhookIntakeStackId($stackId);
+		// No stack = intake off; a stale filter must not linger behind it.
+		$board->setWebhookIntakeLabel($stackId === null || $label === '' ? null : $label);
+		$this->boardMapper->update($board);
+
+		return $this->configArray($board);
 	}
 
 	/**
@@ -109,7 +144,7 @@ class GithubWebhookService {
 	 *
 	 * @param string $signatureHeader the raw `X-Hub-Signature-256` value
 	 * @param string $rawBody the exact request body bytes (HMAC is over these)
-	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool}
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the signature is missing or invalid
 	 */
@@ -188,8 +223,12 @@ class GithubWebhookService {
 	 * (whose html_url is a /pull/ URL) - that is not a Kanso issue link, so it
 	 * falls out at the KIND_ISSUE check.
 	 *
+	 * An `opened` issue nobody has linked yet is the intake case (#3752): when
+	 * the board configured an intake stack (and the issue passes the optional
+	 * label filter), a link-only card is auto-created for it.
+	 *
 	 * @param array<string, mixed> $issue
-	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool}
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
 	 */
 	private function handleIssueEvent(Board $board, string $action, array $issue): array {
 		$issueUrl = is_string($issue['html_url'] ?? null) ? $issue['html_url'] : '';
@@ -205,11 +244,12 @@ class GithubWebhookService {
 			return ['handled' => false];
 		}
 
-		$links = $this->cardLinkMapper->findByBoardAndUrls(
-			$board->getId(),
-			$this->issueUrlCandidates($owner, $repo, $number),
-		);
+		$candidates = $this->issueUrlCandidates($owner, $repo, $number);
+		$links = $this->cardLinkMapper->findByBoardAndUrls($board->getId(), $candidates);
 		if ($links === []) {
+			if ($action === 'opened') {
+				return $this->intakeIssue($board, $issue, $issueUrl, $candidates, $number);
+			}
 			return ['handled' => false];
 		}
 
@@ -228,6 +268,133 @@ class GithubWebhookService {
 		}
 
 		return ['handled' => true, 'action' => $action, 'cardId' => $firstCardId, 'moved' => $moved];
+	}
+
+	/**
+	 * Issue intake (#3752): auto-creates a LINK-ONLY card for a just-opened
+	 * issue in the board's configured intake stack. Opt-in and defensive - any
+	 * failed precondition degrades to the accepted no-op the webhook always
+	 * returns for business-level misses:
+	 *
+	 *  - no intake stack configured (the default) → off;
+	 *  - a configured label filter the issue doesn't carry → filtered out;
+	 *  - a stale stack (deleted / moved off this board) → off until re-configured;
+	 *  - the issue already linked ANYWHERE on the board - alive, archived or
+	 *    trashed card - → dedup, a redelivery never creates a duplicate.
+	 *
+	 * The dedup is check-then-act (no unique index spans a link URL and the
+	 * card's board), so two CONCURRENT deliveries of the same opened event
+	 * could in principle both pass it. Accepted residual race: GitHub delivers
+	 * redeliveries sequentially in practice, and the worst case is one extra
+	 * card a human deletes - not worth a cross-table constraint.
+	 *
+	 * The card is created via CardService::create as the board owner (sort key
+	 * append + change row + realtime), then the issue is attached as a
+	 * KIND_ISSUE link with state/title cached straight from the payload. No
+	 * body copy, no ongoing content sync - after creation only the issue
+	 * auto-move automation applies.
+	 *
+	 * @param array<string, mixed> $issue
+	 * @param string[] $candidates the issue's URL-spelling candidates (dedup key)
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
+	 */
+	private function intakeIssue(Board $board, array $issue, string $issueUrl, array $candidates, int $number): array {
+		$stackId = $board->getWebhookIntakeStackId();
+		if ($stackId === null || $stackId <= 0) {
+			return ['handled' => false];
+		}
+		$labelFilter = trim($board->getWebhookIntakeLabel() ?? '');
+		if ($labelFilter !== '' && !$this->issueHasLabel($issue, $labelFilter)) {
+			return ['handled' => false];
+		}
+		$stack = $this->findAliveStack($board->getId(), $stackId);
+		if ($stack === null) {
+			return ['handled' => false];
+		}
+		if ($this->cardLinkMapper->existsByBoardAndUrls($board->getId(), $candidates)) {
+			return ['handled' => false];
+		}
+
+		$title = trim(is_string($issue['title'] ?? null) ? $issue['title'] : '');
+		if (mb_strlen($title) > CardService::MAX_TITLE_LENGTH) {
+			$title = trim(mb_substr($title, 0, CardService::MAX_TITLE_LENGTH));
+		}
+		// AFTER truncation, so a degenerate title can never reach create() empty.
+		if ($title === '') {
+			$title = 'Issue #' . $number;
+		}
+
+		try {
+			$card = $this->cardService->create($stack->getId(), $title, $board->getOwner());
+		} catch (\Throwable) {
+			// e.g. a concurrent create storm exhausting the sort-key retry - the
+			// delivery is still accepted; GitHub must not see a 5xx and disable
+			// the hook.
+			return ['handled' => false];
+		}
+
+		// Attach the issue as a link with its state/title cached from the payload
+		// (authoritative - no poll needed). Best-effort: a failed link insert
+		// leaves a plain card rather than failing the delivery.
+		$link = new CardLink();
+		$link->setCardId($card->getId());
+		$link->setUrl($issueUrl);
+		$link->setKind(CardLink::KIND_ISSUE);
+		$link->setState($this->issueState($issue));
+		$link->setTitle(is_string($issue['title'] ?? null) ? $issue['title'] : null);
+		$now = time();
+		$link->setLastPolled($now);
+		$link->setCreatedAt($now);
+		try {
+			$this->cardLinkMapper->insert($link);
+		} catch (\Throwable) {
+			// Non-critical - the card exists; the link can be added manually.
+		}
+
+		return [
+			'handled' => true,
+			'action' => 'opened',
+			'cardId' => $card->getId(),
+			'moved' => false,
+			'created' => true,
+		];
+	}
+
+	/**
+	 * Whether the event payload lists a label of this (case-insensitive) name.
+	 * Matched at event time against the delivery's `labels` array only - no
+	 * GitHub API call, no stored label state.
+	 *
+	 * @param array<string, mixed> $issue
+	 */
+	private function issueHasLabel(array $issue, string $name): bool {
+		$labels = $issue['labels'] ?? null;
+		if (!is_array($labels)) {
+			return false;
+		}
+		foreach ($labels as $label) {
+			if (is_array($label) && is_string($label['name'] ?? null)
+				&& mb_strtolower($label['name']) === mb_strtolower($name)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The configured stack, when it still is an alive stack of this board -
+	 * null otherwise (deleted, moved, or never valid).
+	 */
+	private function findAliveStack(int $boardId, int $stackId): ?Stack {
+		try {
+			$stack = $this->stackMapper->find($stackId);
+		} catch (\Throwable) {
+			return null;
+		}
+		if ($stack->getBoardId() !== $boardId || $stack->getDeletedAt() > 0) {
+			return null;
+		}
+		return $stack;
 	}
 
 	/**
@@ -308,12 +475,7 @@ class GithubWebhookService {
 	 * @param array<string, mixed> $issue
 	 */
 	private function refreshLinksFromIssue(array $links, array $issue): void {
-		$rawState = is_string($issue['state'] ?? null) ? $issue['state'] : '';
-		$state = match ($rawState) {
-			'open' => CardLink::STATE_OPEN,
-			'closed' => CardLink::STATE_CLOSED,
-			default => CardLink::STATE_UNKNOWN,
-		};
+		$state = $this->issueState($issue);
 		$title = is_string($issue['title'] ?? null) ? $issue['title'] : null;
 		$now = time();
 
@@ -329,6 +491,20 @@ class GithubWebhookService {
 				// Non-critical - the next read-time poll will catch up.
 			}
 		}
+	}
+
+	/**
+	 * The payload's issue state mapped onto the CardLink state enum.
+	 *
+	 * @param array<string, mixed> $issue
+	 */
+	private function issueState(array $issue): string {
+		$rawState = is_string($issue['state'] ?? null) ? $issue['state'] : '';
+		return match ($rawState) {
+			'open' => CardLink::STATE_OPEN,
+			'closed' => CardLink::STATE_CLOSED,
+			default => CardLink::STATE_UNKNOWN,
+		};
 	}
 
 	/**
@@ -375,6 +551,20 @@ class GithubWebhookService {
 
 	private function payloadUrl(int $boardId): string {
 		return $this->urlGenerator->linkToRouteAbsolute('kanso.webhook.github', ['id' => $boardId]);
+	}
+
+	/**
+	 * The MANAGE-facing config shape shared by getConfig and setIntakeConfig.
+	 *
+	 * @return array{enabled: bool, payloadUrl: string, intakeStackId: int|null, intakeLabel: string}
+	 */
+	private function configArray(Board $board): array {
+		return [
+			'enabled' => ($board->getWebhookSecret() ?? '') !== '',
+			'payloadUrl' => $this->payloadUrl($board->getId()),
+			'intakeStackId' => $board->getWebhookIntakeStackId(),
+			'intakeLabel' => $board->getWebhookIntakeLabel() ?? '',
+		];
 	}
 
 	/**

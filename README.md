@@ -70,8 +70,10 @@ your work, on your own Nextcloud, laid out plainly.
 - **GitHub webhook**: an HMAC-verified webhook (send it `pull_request` and
   `issues` events) moves a card to your Review column when its PR opens and to
   Done when it merges. Closing an issue linked on a card moves that card to
-  Done; reopening it moves the card back to In progress. No credentials, no
-  OAuth.
+  Done; reopening it moves the card back to In progress. Opt-in **issue
+  intake**: pick a column in the board's webhook settings and every newly
+  opened issue (optionally filtered to one GitHub label) becomes a linked card
+  there — title plus issue link only, no body copy. No credentials, no OAuth.
 
 ### 📊 Views
 - **Board, List and Timeline** views: switch per board (remembered per user).

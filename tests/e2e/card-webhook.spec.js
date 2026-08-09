@@ -144,3 +144,192 @@ test.describe('GitHub webhook ingest', () => {
 		expect(card.stackId).toBe(todoStackId)
 	})
 })
+
+// Issue intake (#3752): a board can opt in to auto-creating a linked card when
+// an issue is opened, into a configured stack, optionally filtered by label.
+test.describe('GitHub webhook issue intake', () => {
+	let boardId = 0
+	let inboxStackId = 0
+	let secret = ''
+	let issueSeq = 0
+
+	const openedBody = (issueNumber, { title = 'New bug report', labels = [] } = {}) =>
+		JSON.stringify({
+			action: 'opened',
+			issue: {
+				html_url: `https://github.com/octo/app/issues/${issueNumber}`,
+				state: 'open',
+				title,
+				labels,
+			},
+		})
+
+	// Card summaries of one stack from the board payload (includes archived
+	// card summaries - they carry `archived: true`).
+	const cardsIn = async (stackId) => {
+		const cards = (await api('GET', `/boards/${boardId}`)).body.cards ?? []
+		return cards.filter((c) => c.stackId === stackId)
+	}
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Intake E2E' })).body.id
+		inboxStackId = (await api('POST', '/stacks', { boardId, title: 'Inbox' })).body.id
+		secret = (await api('POST', `/boards/${boardId}/webhook/rotate`)).body.secret
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('opened issue with intake off is an accepted no-op', async () => {
+		const raw = openedBody(++issueSeq)
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(await cardsIn(inboxStackId)).toHaveLength(0)
+	})
+
+	test('opened issue creates a linked card in the configured stack, redelivery does not duplicate', async () => {
+		const cfg = await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: '' })
+		expect(cfg.ok).toBe(true)
+		expect(cfg.body.intakeStackId).toBe(inboxStackId)
+
+		const issueNumber = ++issueSeq
+		const raw = openedBody(issueNumber, { title: 'Crash on load' })
+		let res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(true)
+		expect(res.body.created).toBe(true)
+
+		const cards = await cardsIn(inboxStackId)
+		expect(cards).toHaveLength(1)
+		expect(cards[0].title).toBe('Crash on load')
+
+		// Link-only card: the issue rides as a KIND_ISSUE link with the payload's
+		// state/title cached; the description stays empty (no body copy).
+		const links = (await api('GET', `/cards/${res.body.cardId}/links`)).body
+		expect(links).toHaveLength(1)
+		expect(links[0].url).toBe(`https://github.com/octo/app/issues/${issueNumber}`)
+		expect(links[0].kind).toBe('issue')
+		expect(links[0].state).toBe('open')
+		expect(links[0].title).toBe('Crash on load')
+
+		// Redelivery of the same issue → no duplicate card.
+		res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(await cardsIn(inboxStackId)).toHaveLength(1)
+	})
+
+	test('an archived intake card still dedupes a redelivered opened event', async () => {
+		const issueNumber = ++issueSeq
+		const raw = openedBody(issueNumber)
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.body.created).toBe(true)
+		const countAfterCreate = (await cardsIn(inboxStackId)).length
+
+		await api('PATCH', `/cards/${res.body.cardId}`, { archived: true })
+		const again = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(again.status).toBe(200)
+		expect(again.body.handled).toBe(false)
+		// No new card: the archived one still holds the dedup.
+		expect((await cardsIn(inboxStackId)).length).toBe(countAfterCreate)
+	})
+
+	test('the label filter takes in matching issues only', async () => {
+		const cfg = await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: 'bug' })
+		expect(cfg.ok).toBe(true)
+		expect(cfg.body.intakeLabel).toBe('bug')
+
+		const before = (await cardsIn(inboxStackId)).length
+
+		let raw = openedBody(++issueSeq, { labels: [{ name: 'enhancement' }] })
+		let res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.body.handled).toBe(false)
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+
+		raw = openedBody(++issueSeq, { title: 'Labelled bug', labels: [{ name: 'Bug' }] })
+		res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.body.created).toBe(true)
+		expect((await cardsIn(inboxStackId)).length).toBe(before + 1)
+	})
+
+	test('the intake endpoint rejects a stack of another board', async () => {
+		const otherBoardId = (await api('POST', '/boards', { title: 'Intake E2E other' })).body.id
+		const foreignStackId = (await api('POST', '/stacks', { boardId: otherBoardId, title: 'Elsewhere' })).body.id
+		const res = await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: foreignStackId, label: '' })
+		expect(res.status).toBe(400)
+		await api('DELETE', `/boards/${otherBoardId}`)
+	})
+})
+
+async function ncLogin(page) {
+	await page.goto(BASE + '/index.php/login')
+	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
+	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
+	await page.fill('#user', 'admin')
+	await page.fill('#password', 'admin')
+	await page.click('button[type=submit]')
+	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
+	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+}
+
+// Settings UI smoke (#3752): the intake stack picker + label filter live in the
+// board settings' GitHub webhook section and persist through the intake endpoint.
+test.describe('Issue intake settings UI', () => {
+	let boardId = 0
+	let inboxStackId = 0
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Intake UI E2E' })).body.id
+		inboxStackId = (await api('POST', '/stacks', { boardId, title: 'Inbox' })).body.id
+		await api('POST', '/stacks', { boardId, title: 'Doing' })
+		// The intake block shows once the webhook is enabled.
+		await api('POST', `/boards/${boardId}/webhook/rotate`)
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	async function openGithubSettings(page) {
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		await page.getByRole('tab', { name: /automation/i }).click()
+		// The GitHub group auto-expands while the webhook is active.
+		await expect(page.locator('#bs-webhook-intake-stack')).toBeVisible({ timeout: 8_000 })
+	}
+
+	test('picking a stack and a label filter persists', async ({ page }) => {
+		await ncLogin(page)
+		await openGithubSettings(page)
+		const github = page.locator('#bs-automation-github')
+
+		await page.locator('#bs-webhook-intake-stack').selectOption({ label: 'Inbox' })
+		await expect
+			.poll(async () => (await api('GET', `/boards/${boardId}/webhook`)).body.intakeStackId)
+			.toBe(inboxStackId)
+
+		// Filter mode: only issues carrying one GitHub label.
+		await github.getByLabel('Which issues to take in').selectOption('label')
+		await github.getByPlaceholder('GitHub label name').fill('bug')
+		await github.getByRole('button', { name: 'Save' }).click()
+		await expect
+			.poll(async () => (await api('GET', `/boards/${boardId}/webhook`)).body.intakeLabel)
+			.toBe('bug')
+
+		// A fresh load reads it all back.
+		await page.reload()
+		await openGithubSettings(page)
+		await expect(page.locator('#bs-webhook-intake-stack')).toHaveValue(String(inboxStackId))
+		await expect(github.getByLabel('Which issues to take in')).toHaveValue('label')
+		await expect(github.getByPlaceholder('GitHub label name')).toHaveValue('bug')
+
+		// Back to all issues: the label filter is dropped server-side.
+		await github.getByLabel('Which issues to take in').selectOption('all')
+		await expect
+			.poll(async () => (await api('GET', `/boards/${boardId}/webhook`)).body.intakeLabel)
+			.toBe('')
+	})
+})
