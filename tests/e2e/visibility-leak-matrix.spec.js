@@ -273,6 +273,38 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		await api(TESTER, 'DELETE', `/cards/${copy.id}`)
 	})
 
+	test('my-steps: a step on a card narrowed past its assignee leaves the feed', async () => {
+		// Assign-time is already gated (a step can only be assigned to someone
+		// who SEES the card), so the SQL-level leak vector is narrowing AFTER
+		// assignment: the step row keeps its assignee, but the my-steps query
+		// must drop it via the card-visibility scope (#3745/#3743). A dedicated
+		// card keeps the earlier set/count assertions untouched.
+		const card = await api(ADMIN, 'POST', '/cards', { stackId: state.stackId, title: `STEPHOST ${token}` })
+		const item = await api(ADMIN, 'POST', `/cards/${card.id}/checklist`, { title: `step ${token}` })
+		await api(ADMIN, 'POST', `/checklist/${item.id}/assign`, { participant: 'tester' })
+
+		// Visible card → the step is in tester's feed.
+		const before = await api(TESTER, 'GET', '/my-steps')
+		expect(before.some((s) => s.id === item.id)).toBe(true)
+
+		// Narrow to provider-internal (creator admin is internal) → hidden from
+		// the external tester; the step must vanish from the feed at SQL level.
+		await api(ADMIN, 'PATCH', `/cards/${card.id}`, { visibility: 'internal' })
+		const after = await api(TESTER, 'GET', '/my-steps')
+		expect(after.some((s) => s.id === item.id)).toBe(false)
+		expect(JSON.stringify(after)).not.toContain(`STEPHOST ${token}`)
+
+		// The row is a filter, not a delete: admin re-widening restores it.
+		await api(ADMIN, 'PATCH', `/cards/${card.id}`, { visibility: 'public' })
+		const restored = await api(TESTER, 'GET', '/my-steps')
+		expect(restored.some((s) => s.id === item.id)).toBe(true)
+
+		// Hard-remove the host card (soft-delete, then purge) so the exact
+		// trash assertions below stay untouched.
+		await api(ADMIN, 'DELETE', `/cards/${card.id}`)
+		await api(ADMIN, 'DELETE', `/cards/${card.id}/purge`)
+	})
+
 	test('trash: a hidden card stays hidden after deletion, and is unrestorable', async () => {
 		// The previous test soft-deleted tester's internal COPY ("CLI … (copy)")
 		// into the trash: it must show for tester and stay hidden from admin.

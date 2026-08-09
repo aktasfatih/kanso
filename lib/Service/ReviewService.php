@@ -215,7 +215,7 @@ class ReviewService {
 			// A flip to APPROVED may un-gate downstream reviews: fire any deferred
 			// reviewer notification for a now-ungated review that was never notified.
 			if ($state === CardReview::STATE_APPROVED) {
-				$this->fireDeferredNotifications($card);
+				$this->fireDeferredNotifications($board, $card);
 			}
 		}
 
@@ -313,9 +313,17 @@ class ReviewService {
 	 * Reuses the SAME gating helper as request-time so the two cannot diverge.
 	 * The stage map + sibling set are fetched ONCE per call.
 	 *
+	 * Visibility (#3761): the card may have NARROWED between request time and
+	 * fire time - the reviewer was checked visible when the review was requested,
+	 * but firing now would write a notification row (and push) naming a card
+	 * they can no longer see. Each fire re-checks the visibility guard, exactly
+	 * mirroring the request-time check; a hidden reviewer is skipped WITHOUT
+	 * stamping `notified_at`, so a later widening lets the next approval sweep
+	 * deliver the deferred notification after all.
+	 *
 	 * @throws \OCP\DB\Exception
 	 */
-	private function fireDeferredNotifications(Card $card): void {
+	private function fireDeferredNotifications(Board $board, Card $card): void {
 		$cardId = $card->getId();
 		$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
 		$reviews = $this->cardReviewMapper->findByCard($cardId);
@@ -328,6 +336,9 @@ class ReviewService {
 				continue;
 			}
 			if ($this->isGated($review, $reviews, $stageMap)) {
+				continue;
+			}
+			if (!$this->visibilityGuard->isVisible($board, $card, $review->getReviewer())) {
 				continue;
 			}
 			$this->notificationService->notifyReviewRequested(

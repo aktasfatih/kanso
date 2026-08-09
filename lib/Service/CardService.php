@@ -1298,6 +1298,18 @@ class CardService {
 	 * manager marking another member's card 'internal' scopes it to the
 	 * CREATOR's side, never their own.
 	 *
+	 * Narrowing is deliberately NOT retroactive (#3761, accepted MVP scope):
+	 * previously-sent targeted bells (assigned / mentioned / comment / review
+	 * requested), watches and pending reviews of now-excluded users are left in
+	 * place rather than enumerated and pruned here. Every read path re-checks
+	 * visibility at consumption time, so nothing about the card reaches such a
+	 * user anyway: the bell render gate hides their stale notifications
+	 * ({@see \OCA\Kanso\Notification\Notifier::prepare()}, pinned by
+	 * NotifierTest::testPrepareRejectsWhenCardIsHiddenFromTheRecipient), the
+	 * feeds drop their rows via the SQL visibility scope, and the deferred
+	 * review fire re-checks the guard ({@see ReviewService}). Revisit only if
+	 * the leftover rows themselves become a problem (storage, admin tooling).
+	 *
 	 * @throws InvalidInputException on an unknown visibility value
 	 * @throws NotPermittedException if the actor is neither creator nor manager
 	 */

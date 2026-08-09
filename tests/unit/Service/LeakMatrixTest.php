@@ -11,9 +11,21 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\NotAMemberException;
 use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReview;
+use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ReviewTypeMapper;
+use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\CardVisibilityScope;
+use OCA\Kanso\Service\ChangeNotifier;
+use OCA\Kanso\Service\CommentService;
+use OCA\Kanso\Service\NotificationService;
+use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\ReviewService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use PHPUnit\Framework\TestCase;
 
@@ -275,6 +287,112 @@ class LeakMatrixTest extends TestCase {
 		$bogus = new Card();
 		$bogus->setVisibility('everyone');
 		self::assertFalse($this->scope->isPublic($bogus));
+	}
+
+	public function testDeferredReviewFireRespectsTheMatrixColumn(): void {
+		// #3761: a stage-gated review is requested while its reviewer can SEE
+		// the card, then the card narrows before the blocking review approves.
+		// The deferred fire in ReviewService::fireDeferredNotifications() must
+		// re-check THE rule per reviewer: for every viewer × card cell, the
+		// un-gating approval delivers the deferred notification (stamping
+		// notified_at) iff the matrix says visible - a hidden reviewer is
+		// skipped WITHOUT the stamp, so a later widening can still deliver.
+		foreach ($this->cards() as $cardName => $fixtureCard) {
+			foreach ($this->viewers() as $reviewerUid => $role) {
+				$expected = $this->expectedMatrix()[$reviewerUid][$cardName];
+
+				$card = clone $fixtureCard;
+				$card->setId(9);
+				$card->setBoardId(self::BOARD_ID);
+				$card->setDeletedAt(0);
+				$board = new Board();
+				$board->setId(self::BOARD_ID);
+				$board->setOwner('board-owner');
+				$board->setDeletedAt(0);
+				// The un-gating actor is the card's own creator - visible to
+				// themselves in every card class, whatever the class hides.
+				$actor = (string)$card->getOwner();
+
+				$blocker = new CardReview();
+				$blocker->setId(1);
+				$blocker->setCardId(9);
+				$blocker->setReviewer($actor);
+				$blocker->setState(CardReview::STATE_PENDING);
+				$blocker->setRequestedBy('requester');
+				$blocker->setReviewTypeId(1); // stage 0
+				$blocker->setNotifiedAt(100); // already notified at request time
+				$deferred = new CardReview();
+				$deferred->setId(2);
+				$deferred->setCardId(9);
+				$deferred->setReviewer($reviewerUid);
+				$deferred->setState(CardReview::STATE_PENDING);
+				$deferred->setRequestedBy('requester');
+				$deferred->setReviewTypeId(2); // stage 1, gated behind the blocker
+				$deferred->setNotifiedAt(null);
+
+				$cardMapper = $this->createMock(CardMapper::class);
+				$cardMapper->method('find')->with(9)->willReturn($card);
+				$boardMapper = $this->createMock(BoardMapper::class);
+				$boardMapper->method('find')->with(self::BOARD_ID)->willReturn($board);
+				$changeNotifier = $this->createMock(ChangeNotifier::class);
+				$changeNotifier->method('notify')->willReturn(new Change());
+				$permissionService = $this->createMock(PermissionService::class);
+				$permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+				$reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
+				$reviewTypeMapper->method('stageMapForBoard')->with(self::BOARD_ID)->willReturn([1 => 0, 2 => 1]);
+				$cardReviewMapper = $this->createMock(CardReviewMapper::class);
+				$cardReviewMapper->method('findById')->with(1)->willReturn($blocker);
+				$cardReviewMapper->method('findByCard')->with(9)->willReturn([$blocker, $deferred]);
+
+				$notificationService = $this->createMock(NotificationService::class);
+				$notificationService->expects($expected ? self::once() : self::never())
+					->method('notifyReviewRequested')
+					->with(9, $reviewerUid, 'requester');
+
+				$service = new ReviewService(
+					$cardReviewMapper,
+					$cardMapper,
+					$boardMapper,
+					$changeNotifier,
+					$permissionService,
+					$notificationService,
+					$reviewTypeMapper,
+					$this->createMock(BoardService::class),
+					$this->createMock(CommentService::class),
+					$this->boardAccessResolvingFixtureContexts(),
+					new CardVisibilityGuard($this->boardAccessResolvingFixtureContexts(), $this->scope),
+				);
+
+				$service->setState(9, 1, CardReview::STATE_APPROVED, $actor);
+
+				self::assertSame(
+					$expected,
+					$deferred->getNotifiedAt() !== null,
+					sprintf('deferred-fire stamp for cell [%s × %s]', $reviewerUid, $cardName),
+				);
+			}
+		}
+	}
+
+	/**
+	 * A BoardAccess whose contextFor() resolves exactly the viewer fixture
+	 * (throwing NotAMemberException for a null role) plus the card-owner uids -
+	 * the per-uid counterpart of {@see self::boardAccessResolvingFixtureRoles()},
+	 * wired to the REAL scope so the deferred-fire cells exercise the same rule
+	 * as the matrix.
+	 */
+	private function boardAccessResolvingFixtureContexts(): BoardAccess {
+		$boardAccess = $this->createMock(BoardAccess::class);
+		$boardAccess->method('contextFor')->willReturnCallback(
+			function (Board $board, string $uid): ViewerContext {
+				$role = $this->viewers()[$uid] ?? null;
+				if ($role === null) {
+					throw new NotAMemberException('not a member');
+				}
+				return ViewerContext::forMember($uid, self::BOARD_ID, $role, false);
+			},
+		);
+		return $boardAccess;
 	}
 
 	/**

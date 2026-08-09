@@ -204,7 +204,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->labelMapper->method('findByBoard')->with(1)->willReturn([
 			$this->label(5, 'Bug', 'ff0000'),
 		]);
-		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->with(1)->willReturn([
 			100 => [5],
 		]);
 		$this->checklistItemMapper->method('progressByBoardPublicOnly')->with(1)->willReturn([
@@ -311,7 +311,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->stackMapper->method('findByBoard')->willReturn([]);
 		$this->cardMapper->method('findPublicByBoard')->willReturn([]);
 		$this->labelMapper->method('findByBoard')->willReturn([]);
-		$this->cardLabelMapper->method('findLabelIdsByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
 		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);

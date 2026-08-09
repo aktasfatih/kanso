@@ -330,4 +330,55 @@ class ExportServiceTest extends TestCase {
 		self::assertSame('private', $row['visibility']);
 		self::assertSame('external', $row['creatorRole']);
 	}
+
+	public function testExportWithNullViewerIsTheUnfilteredSystemScope(): void {
+		// $viewer = null is the admin-backup cron's SYSTEM scope (#3743): the
+		// null must reach findExportableByBoard verbatim (whose SQL then skips
+		// the visibility scope entirely), and EVERY card - hidden classes
+		// included - must ride the envelope. The viewer-scoped twin is pinned
+		// by testExportCardsCarryVisibilityAndOnlyExportableRows above.
+		$stack = new Stack();
+		$stack->setId(11);
+		$stack->setBoardId(7);
+		$stack->setTitle('Doing');
+		$stack->setSortKey('m');
+		$stack->setArchived(false);
+		$this->stackMapper->method('findByBoard')->with(7)->willReturn([$stack]);
+
+		$mk = static function (int $id, string $visibility, string $creatorRole, string $owner): Card {
+			$card = new Card();
+			$card->setId($id);
+			$card->setBoardId(7);
+			$card->setStackId(11);
+			$card->setTitle('Card ' . $id);
+			$card->setSortKey('h');
+			$card->setDoneAt(0);
+			$card->setStartedAt(0);
+			$card->setArchived(false);
+			$card->setCreatedAt(500);
+			$card->setLastModified(600);
+			$card->setPriority(0);
+			$card->setOwner($owner);
+			$card->setVisibility($visibility);
+			$card->setCreatorRole($creatorRole);
+			return $card;
+		};
+		$this->cardMapper->expects(self::once())
+			->method('findExportableByBoard')
+			->with(7, null)
+			->willReturn([
+				$mk(41, 'public', 'internal', 'inty'),
+				$mk(42, 'internal', 'external', 'exty'),
+				$mk(43, 'private', 'internal', 'inty'),
+			]);
+
+		$doc = $this->service->export($this->board(), null);
+
+		$rows = $doc['board']['cards'];
+		self::assertCount(3, $rows, 'the system scope must carry every card, hidden classes included');
+		self::assertSame(
+			[[41, 'public'], [42, 'internal'], [43, 'private']],
+			array_map(static fn (array $row): array => [$row['id'], $row['visibility']], $rows),
+		);
+	}
 }

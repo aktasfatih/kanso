@@ -480,6 +480,41 @@ class ReviewServiceTest extends TestCase {
 		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 
+	public function testDeferredFireSkipsReviewerWhoCanNoLongerSeeTheCard(): void {
+		// Visibility re-check at fire time (#3761): the card narrowed past carol
+		// BETWEEN her (visible) request and the un-gating approval. The sweep must
+		// skip her - no notification row - and must NOT stamp notified_at, so a
+		// later widening lets the next approval sweep deliver it after all.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->hiddenFrom = ['carol'];
+
+		$code = $this->review('bob', CardReview::STATE_PENDING, 1, 9);
+		$code->setReviewTypeId(1); // stage 0
+		$qa = $this->review('carol', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1
+		$qa->setNotifiedAt(null); // deferred at request time
+
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($code);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// No notification for the now-hidden reviewer...
+		$this->notificationService->expects(self::never())->method('notifyReviewRequested');
+		// ...and exactly ONE update: bob's verdict flip. Carol's row is untouched.
+		$this->cardReviewMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (CardReview $r): CardReview {
+				self::assertSame('bob', $r->getReviewer(), 'only the verdict row may be written');
+				return $r;
+			});
+
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+		self::assertNull($qa->getNotifiedAt(), 'a skipped fire must not stamp notified_at');
+	}
+
 	public function testSetStateRejectsActorWhoIsNotTheReviewer(): void {
 		$this->loadCardAndBoard();
 		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
