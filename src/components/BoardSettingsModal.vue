@@ -128,6 +128,37 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="prefixError" class="label-settings__error">{{ prefixError }}</span>
 						</template>
 
+						<!-- Project chat link (#3748): a plain URL (typically a Talk room)
+						     surfaced as a toolbar button for every member. MANAGE only;
+						     http/https only (validated here and server-side); empty clears
+						     the link and hides the button. Deliberately dumb - no Talk API. -->
+						<template v-if="canManage">
+							<label class="board-settings__prefix-label" for="bs-chat-url">
+								{{ t('kanso', 'Project chat link') }}
+							</label>
+							<div class="board-settings__prefix-row">
+								<input
+									id="bs-chat-url"
+									v-model="chatUrlDraft"
+									class="board-settings__chat-url-input"
+									type="url"
+									:disabled="chatUrlSaving"
+									:placeholder="t('kanso', 'https://cloud.example.com/call/abc123')"
+									data-test="board-chat-url-input"
+									@keydown.enter.prevent="saveChatUrl">
+								<NcButton
+									:disabled="chatUrlSaving || !chatUrlDirty"
+									data-test="board-chat-url-save"
+									@click="saveChatUrl">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+							</div>
+							<p class="board-settings__general-hint">
+								{{ t('kanso', 'Shown to everyone on this board as a "Project chat" button in the toolbar — typically a Nextcloud Talk room. Leave empty to remove the button.') }}
+							</p>
+							<span v-if="chatUrlError" class="label-settings__error" data-test="board-chat-url-error">{{ chatUrlError }}</span>
+						</template>
+
 						<!-- Board background (#3528): a curated preset gradient rendered
 						     behind the board view. MANAGE only; presets only (no free-form
 						     CSS / image upload). -->
@@ -2621,6 +2652,37 @@ async function savePrefix() {
 	}
 }
 
+// ── Project chat link (per-board, #3748) ─────────────────────────────────────
+// A plain http(s) URL (typically a Talk room) surfaced as a toolbar button for
+// every member. MANAGE-only to set; the server enforces the same http/https
+// allow-list. The draft mirrors the cache value and is re-seeded after a save
+// invalidates + refetches. An empty save clears the link (button disappears).
+const boardChatUrl = computed(() => boardQueryData.value?.board?.chatUrl || '')
+const chatUrlDraft = ref('')
+const chatUrlSaving = ref(false)
+const chatUrlError = ref('')
+watch(boardChatUrl, (val) => { chatUrlDraft.value = val }, { immediate: true })
+const chatUrlDirty = computed(() => chatUrlDraft.value.trim() !== boardChatUrl.value)
+async function saveChatUrl() {
+	if (!chatUrlDirty.value) return
+	const draft = chatUrlDraft.value.trim()
+	// Mirror the server gate client-side for an inline error instead of a
+	// round-trip: empty (= clear) or a plain absolute http(s) URL.
+	if (draft !== '' && !/^https?:\/\/\S+$/i.test(draft)) {
+		chatUrlError.value = t('kanso', 'The chat link must be a http:// or https:// URL.')
+		return
+	}
+	chatUrlSaving.value = true
+	chatUrlError.value = ''
+	try {
+		await updateBoard.mutateAsync({ chatUrl: draft })
+	} catch (err) {
+		chatUrlError.value = err?.response?.data?.error || t('kanso', 'Failed to update chat link.')
+	} finally {
+		chatUrlSaving.value = false
+	}
+}
+
 // Archive the board: hides it from the list + nav (restorable from the boards
 // page). Close the panel and return to the board list, since the board the user
 // is on is now archived.
@@ -3804,6 +3866,12 @@ async function doDeleteAutoRule(rule) {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	font-family: var(--font-face-monospace, monospace);
+}
+
+/* ── Project chat link (#3748) ────────────────────────────────────────────── */
+.board-settings__chat-url-input {
+	flex: 1;
+	min-width: 0;
 }
 
 /* ── Board background palette (#3528) ─────────────────────────────────────── */

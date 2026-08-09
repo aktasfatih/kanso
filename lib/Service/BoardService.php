@@ -26,6 +26,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  */
 class BoardService {
 	private const MAX_TITLE_LENGTH = 100;
+	// Matches the kanso_boards.chat_url column length (#3748).
+	private const MAX_CHAT_URL_LENGTH = 4000;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -177,9 +179,9 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title, color, background, estimate scale or prefix
+	 * @throws InvalidInputException on invalid title, color, background, estimate scale, prefix or chat URL
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -214,6 +216,14 @@ class BoardService {
 				throw new InvalidInputException('Prefix must contain at least one letter or digit');
 			}
 			$board->setPrefix($normalized);
+		}
+		if ($chatUrl !== null) {
+			// "Project chat" link (#3748): a pure display address, deliberately
+			// dumb (no Talk API coupling). An empty string clears it; a non-empty
+			// value must be a plain http(s) URL - the scheme allow-list is the
+			// XSS gate (rejects javascript:, data:, etc.) since the client
+			// renders this as an <a href>.
+			$board->setChatUrl($this->validateChatUrl($chatUrl));
 		}
 
 		$now = time();
@@ -266,6 +276,29 @@ class BoardService {
 			throw new DoesNotExistException('Board ' . $id . ' is deleted');
 		}
 		return $board;
+	}
+
+	/**
+	 * Normalizes a chat-URL update: '' clears (NULL), anything else must be a
+	 * plain absolute http:// or https:// URL without whitespace and fit the
+	 * column (4000 chars).
+	 *
+	 * @throws InvalidInputException
+	 */
+	private function validateChatUrl(string $chatUrl): ?string {
+		$chatUrl = trim($chatUrl);
+		if ($chatUrl === '') {
+			return null;
+		}
+		if (mb_strlen($chatUrl) > self::MAX_CHAT_URL_LENGTH) {
+			throw new InvalidInputException(
+				'Chat link must not exceed ' . self::MAX_CHAT_URL_LENGTH . ' characters'
+			);
+		}
+		if (preg_match('#^https?://\S+$#i', $chatUrl) !== 1) {
+			throw new InvalidInputException('Chat link must be an http:// or https:// URL');
+		}
+		return $chatUrl;
 	}
 
 	/**

@@ -239,6 +239,83 @@ class BoardServiceTest extends TestCase {
 		$this->service->update(1, null, null, null, 'bob', null, null, null, 'ocean');
 	}
 
+	public function testUpdateSetsValidChatUrlAndSerializesIt(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_BOARD, 1, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, 'https://cloud.example.com/call/abc123');
+		self::assertSame('https://cloud.example.com/call/abc123', $updated->getChatUrl());
+		// The chat link rides the regular board payload, visible to all members.
+		self::assertSame('https://cloud.example.com/call/abc123', $updated->jsonSerialize()['chatUrl']);
+	}
+
+	public function testUpdateClearsChatUrlWithEmptyString(): void {
+		$board = $this->board();
+		$board->setChatUrl('https://cloud.example.com/call/abc123');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// An empty (or whitespace-only) string clears the link (stored as null).
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, '   ');
+		self::assertNull($updated->getChatUrl());
+		self::assertNull($updated->jsonSerialize()['chatUrl']);
+	}
+
+	/**
+	 * The scheme allow-list is the XSS gate: the client renders the chat link
+	 * as an <a href>, so anything but plain http(s) must be rejected.
+	 */
+	public static function invalidChatUrlProvider(): array {
+		return [
+			'javascript scheme' => ['javascript:alert(1)'],
+			'data scheme' => ['data:text/html,<script>alert(1)</script>'],
+			'scheme-relative' => ['//evil.example.com/room'],
+			'no scheme' => ['cloud.example.com/call/abc123'],
+			'embedded whitespace' => ['https://cloud.example.com/call/a b'],
+		];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('invalidChatUrlProvider')]
+	public function testUpdateRejectsInvalidChatUrl(string $chatUrl): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, null, null, null, 'alice', null, null, null, null, $chatUrl);
+	}
+
+	public function testUpdateRejectsOverlongChatUrl(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		// Longer than the 4000-char chat_url column.
+		$this->service->update(1, null, null, null, 'alice', null, null, null, null, 'https://cloud.example.com/' . str_repeat('a', 4000));
+	}
+
+	public function testUpdateChatUrlAssertsManagePermission(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		// A non-MANAGE user cannot set the chat link.
+		$this->service->update(1, null, null, null, 'bob', null, null, null, null, 'https://cloud.example.com/call/abc123');
+	}
+
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);

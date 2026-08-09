@@ -48,6 +48,8 @@ use OCP\DB\Types;
  * @method void setPublicShareExpiresAt(?int $publicShareExpiresAt)
  * @method string|null getIcalFeedToken()
  * @method void setIcalFeedToken(?string $icalFeedToken)
+ * @method string|null getChatUrl()
+ * @method void setChatUrl(?string $chatUrl)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -93,6 +95,10 @@ class Board extends Entity implements \JsonSerializable {
 	// independent lifecycles. Deliberately NEVER emitted by jsonSerialize(); the
 	// token is only ever returned by the dedicated MANAGE feed-config endpoints.
 	protected ?string $icalFeedToken = null;
+	// "Project chat" link (#3748). MANAGE-only to set, validated server-side to
+	// http/https. A pure display address (typically a Talk room) - no Talk API
+	// coupling. NULL = no chat link. Emitted to every board member.
+	protected ?string $chatUrl = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -111,10 +117,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('publicShareToken', Types::STRING);
 		$this->addType('publicShareExpiresAt', Types::INTEGER);
 		$this->addType('icalFeedToken', Types::STRING);
+		$this->addType('chatUrl', Types::STRING);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -131,6 +138,7 @@ class Board extends Entity implements \JsonSerializable {
 			// The human-id prefix; falls back to the shared default for boards
 			// that predate the column and haven't been backfilled yet.
 			'prefix' => $this->prefix ?? BoardPrefix::DEFAULT,
+			'chatUrl' => $this->chatUrl,
 		];
 	}
 }
