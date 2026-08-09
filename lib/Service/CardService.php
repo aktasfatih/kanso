@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPrefix;
@@ -163,16 +164,32 @@ class CardService {
 	 * and $allDay flags a date-only due date, mirroring update()'s duedate/allDay
 	 * coupling. A null $duedate leaves the card with no due date (back-compat).
 	 *
+	 * $visibility / $creatorRole are the recurrence-inheritance overrides
+	 * (#3760): a spawned clone must carry its template's visibility class and
+	 * frozen creator side FROM THE INSERT on, so the create-time fan-outs
+	 * (activity, board-watcher notifications) already see - and filter by -
+	 * the final visibility. Null (every request-path caller) keeps the
+	 * default: 'public' with the creator's own resolved side.
+	 *
+	 * @param string|null $visibility one of the CardVisibilityScope::VISIBILITIES, or null for 'public'
+	 * @param string|null $creatorRole one of the ViewerContext::ROLES, or null for the creator's resolved side
 	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title or due date
+	 * @throws InvalidInputException on invalid title, due date, visibility or creator role
 	 * @throws \OverflowException if the appended sort key would overflow (stack needs a rebalance)
 	 *                            or a concurrent create keeps colliding after one retry
 	 */
-	public function create(int $stackId, string $title, string $uid, ?string $duedate = null, ?bool $allDay = null): Card {
+	public function create(int $stackId, string $title, string $uid, ?string $duedate = null, ?bool $allDay = null, ?string $visibility = null, ?string $creatorRole = null): Card {
 		$stack = $this->loadStack($stackId);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		if ($visibility !== null && !in_array($visibility, CardVisibilityScope::VISIBILITIES, true)) {
+			throw new InvalidInputException('Unknown card visibility: ' . $visibility);
+		}
+		if ($creatorRole !== null && !in_array($creatorRole, ViewerContext::ROLES, true)) {
+			throw new InvalidInputException('Unknown creator role: ' . $creatorRole);
+		}
 
 		$title = $this->validateTitle($title);
 		// Parse the optional due date up-front so an invalid value fails the create
@@ -183,7 +200,7 @@ class CardService {
 		// later, so an 'internal' card keeps its side when the creator changes
 		// role or leaves the board. Resolved once, outside the retry loop (the
 		// EDIT assertion above guarantees a membership to resolve).
-		$creatorRole = $this->boardAccess->contextFor($board, $uid)->role;
+		$creatorSide = $this->boardAccess->contextFor($board, $uid)->role;
 		$now = time();
 
 		// Default: append to the bottom of the stack. When the board opts in,
@@ -248,9 +265,11 @@ class CardService {
 			// Visibility (#3741): every card starts 'public' (whoever decides
 			// nothing works in the open; a narrower visibility is a later,
 			// explicit choice) with the creator's side frozen alongside it.
-			// Explicit on INSERT, same rationale as is_template above.
-			$card->setVisibility(CardVisibilityScope::VISIBILITY_PUBLIC);
-			$card->setCreatorRole($creatorRole);
+			// Explicit on INSERT, same rationale as is_template above. The
+			// recurrence-inheritance overrides (#3760) replace both on the
+			// INSERT itself, so no fan-out ever sees a wider interim class.
+			$card->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+			$card->setCreatorRole($creatorRole ?? $creatorSide);
 
 			// Insert the card AND its CREATE change row atomically (#3579): a
 			// failed change-row write must roll the card INSERT back, never leave
@@ -279,8 +298,7 @@ class CardService {
 				$this->changeNotifier->publishCardActivity(
 					$stack->getBoardId(),
 					'card_created',
-					$card->getId(),
-					(string)$card->getTitle(),
+					$card,
 					$uid,
 				);
 
@@ -288,7 +306,7 @@ class CardService {
 				// watchers. Best-effort - a notification hiccup must never fail the
 				// create (the card + its change row are already committed).
 				try {
-					$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card->getId(), $uid);
+					$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card, $uid);
 				} catch (\Throwable) {
 					// Ignore - board-activity fan-out is a non-critical side effect.
 				}
@@ -357,8 +375,19 @@ class CardService {
 		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
 
 		// 1. Create the shell at the bottom of the target stack (fresh id + key +
-		//    change row + board-watcher fan-out - all reused from create()).
-		$copy = $this->create($targetStackId, $this->copyTitle($source->getTitle()), $uid);
+		//    change row + board-watcher fan-out - all reused from create()). The
+		//    source's visibility LEVEL rides the INSERT itself (#3760): the
+		//    create-time fan-outs (activity, board watchers) carry the source's
+		//    title, so they must already be filtered by the copy's final class -
+		//    a post-hoc narrowing would leak the title of a hidden source.
+		$copy = $this->create(
+			$targetStackId,
+			$this->copyTitle($source->getTitle()),
+			$uid,
+			null,
+			null,
+			$source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+		);
 
 		// 2. Clone the content (description / priority / type / status / estimate /
 		//    labels / checklist) into the shell - shared with createFromTemplate().
@@ -542,8 +571,7 @@ class CardService {
 				$this->changeNotifier->publishCardActivity(
 					$targetBoard->getId(),
 					'card_moved',
-					$newId,
-					(string)$moved->getTitle(),
+					$moved,
 					$uid,
 				);
 
@@ -692,8 +720,17 @@ class CardService {
 
 		// Fresh live card at the bottom of the target stack (fresh id + key + change
 		// row + watcher fan-out). Same-board, so the content clone re-assigns labels
-		// by id and keeps the estimate as-is.
-		$card = $this->create($targetStackId, $this->validateTitle($template->getTitle()), $uid);
+		// by id and keeps the estimate as-is. The template's visibility level rides
+		// the INSERT (#3760) so the create-time fan-outs are filtered by the final
+		// class, never an interim 'public' bearing a hidden template's title.
+		$card = $this->create(
+			$targetStackId,
+			$this->validateTitle($template->getTitle()),
+			$uid,
+			null,
+			null,
+			$template->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+		);
 		$this->cloneContentInto($template, $card, $board, $board, $uid);
 
 		return $card;
@@ -984,7 +1021,7 @@ class CardService {
 		// A new @mention in the description pings + auto-subscribes readable-board
 		// participants (only when the description actually changed).
 		if ($descriptionChanged) {
-			$this->mentionService->handleMentions($id, $board, (string)$description, $uid);
+			$this->mentionService->handleMentions($card, $board, (string)$description, $uid);
 		}
 
 		// Completing (or archiving) the last open child auto-completes the parent.
@@ -1168,8 +1205,7 @@ class CardService {
 		$this->changeNotifier->publishCardActivity(
 			$card->getBoardId(),
 			$becameDone ? 'card_done' : 'card_moved',
-			$card->getId(),
-			(string)$card->getTitle(),
+			$card,
 			$uid,
 		);
 

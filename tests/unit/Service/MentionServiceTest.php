@@ -7,8 +7,14 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\NotAMemberException;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\SubscriptionMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\MentionService;
 use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\PermissionService;
@@ -20,17 +26,41 @@ class MentionServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private NotificationService&MockObject $notificationService;
+	private BoardAccess&MockObject $boardAccess;
 	private MentionService $service;
+
+	/**
+	 * The mentioned users' resolved roles, consumed by the REAL
+	 * CardVisibilityGuard + CardVisibilityScope pair (#3760 leak tests
+	 * exercise the actual visibility rule, not a stub).
+	 *
+	 * @var array<string, string>
+	 */
+	private array $rolesOnBoard = [];
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('rolesOn')->willReturnCallback(
+			fn (Board $b, array $uids): array => array_intersect_key($this->rolesOnBoard, array_flip($uids)),
+		);
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			function (Board $b, string $uid): ViewerContext {
+				$role = $this->rolesOnBoard[$uid] ?? null;
+				if ($role === null) {
+					throw new NotAMemberException('not a member');
+				}
+				return ViewerContext::forMember($uid, $b->getId(), $role, false);
+			},
+		);
 		$this->service = new MentionService(
 			$this->permissionService,
 			$this->subscriptionService,
 			$this->notificationService,
+			new CardVisibilityGuard($this->boardAccess, new CardVisibilityScope()),
 		);
 	}
 
@@ -39,6 +69,20 @@ class MentionServiceTest extends TestCase {
 		$board->setId($id);
 		$board->setDeletedAt(0);
 		return $board;
+	}
+
+	private function card(int $id = 9, ?string $visibility = null, ?string $creatorRole = null, string $owner = 'alice'): Card {
+		$card = new Card();
+		$card->setId($id);
+		$card->setBoardId(1);
+		if ($visibility !== null) {
+			$card->setVisibility($visibility);
+		}
+		if ($creatorRole !== null) {
+			$card->setCreatorRole($creatorRole);
+		}
+		$card->setOwner($owner);
+		return $card;
 	}
 
 	// ---- extractUsernames (pure) -----------------------------------------
@@ -81,7 +125,7 @@ class MentionServiceTest extends TestCase {
 			->method('notifyCardMentioned')
 			->with(9, 'bob', 'alice');
 
-		$this->service->handleMentions(9, $board, 'hey @bob look', 'alice');
+		$this->service->handleMentions($this->card(), $board, 'hey @bob look', 'alice');
 	}
 
 	public function testHandleMentionsIsInertForNonMember(): void {
@@ -93,7 +137,7 @@ class MentionServiceTest extends TestCase {
 		$this->subscriptionService->expects(self::never())->method('autoSubscribe');
 		$this->notificationService->expects(self::never())->method('notifyCardMentioned');
 
-		$this->service->handleMentions(9, $board, 'hi @stranger', 'alice');
+		$this->service->handleMentions($this->card(), $board, 'hi @stranger', 'alice');
 	}
 
 	public function testHandleMentionsSkipsSelfMention(): void {
@@ -103,7 +147,7 @@ class MentionServiceTest extends TestCase {
 		$this->subscriptionService->expects(self::never())->method('autoSubscribe');
 		$this->notificationService->expects(self::never())->method('notifyCardMentioned');
 
-		$this->service->handleMentions(9, $board, 'note to @alice self', 'alice');
+		$this->service->handleMentions($this->card(), $board, 'note to @alice self', 'alice');
 	}
 
 	public function testHandleMentionsMixedMembershipOnlyActsOnReadable(): void {
@@ -124,9 +168,53 @@ class MentionServiceTest extends TestCase {
 				$notified[] = $target;
 			});
 
-		$this->service->handleMentions(9, $board, '@bob @stranger please look', 'alice');
+		$this->service->handleMentions($this->card(), $board, '@bob @stranger please look', 'alice');
 
 		self::assertSame(['bob'], $subscribed);
 		self::assertSame(['bob'], $notified);
+	}
+
+	// ---- visibility (#3760): mentions inside a hidden card are inert --------
+
+	public function testMentionInsideHiddenCardIsInertForExcludedViewer(): void {
+		// exty holds READ on the board but sits outside the provider-internal
+		// card's visibility: no bell, no watch row - either would be an
+		// existence oracle for a card they cannot open. inty (same side) is
+		// still pinged.
+		$board = $this->board();
+		$card = $this->card(9, CardVisibilityScope::VISIBILITY_INTERNAL, ViewerContext::ROLE_INTERNAL);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->rolesOnBoard = [
+			'inty' => ViewerContext::ROLE_INTERNAL,
+			'exty' => ViewerContext::ROLE_EXTERNAL,
+		];
+
+		$this->subscriptionService->expects(self::once())
+			->method('autoSubscribe')
+			->with(9, SubscriptionMapper::THREAD_CARD, 'inty');
+		$this->notificationService->expects(self::once())
+			->method('notifyCardMentioned')
+			->with(9, 'inty', 'alice');
+
+		$this->service->handleMentions($card, $board, 'cc @inty @exty', 'alice');
+	}
+
+	public function testMentionInsidePrivateCardOnlyReachesItsOwner(): void {
+		$board = $this->board();
+		$card = $this->card(9, CardVisibilityScope::VISIBILITY_PRIVATE, ViewerContext::ROLE_INTERNAL, 'owner');
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->rolesOnBoard = [
+			'owner' => ViewerContext::ROLE_INTERNAL,
+			'mgr' => ViewerContext::ROLE_INTERNAL, // manager is NOT a backdoor
+		];
+
+		$this->subscriptionService->expects(self::once())
+			->method('autoSubscribe')
+			->with(9, SubscriptionMapper::THREAD_CARD, 'owner');
+		$this->notificationService->expects(self::once())
+			->method('notifyCardMentioned')
+			->with(9, 'owner', 'alice');
+
+		$this->service->handleMentions($card, $board, 'cc @owner @mgr', 'alice');
 	}
 }

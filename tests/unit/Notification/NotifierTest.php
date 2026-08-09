@@ -7,9 +7,12 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Notification;
 
+use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Notification\Notifier;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IURLGenerator;
 use OCP\IUser;
@@ -25,6 +28,8 @@ class NotifierTest extends TestCase {
 	private IURLGenerator&MockObject $urlGenerator;
 	private IUserManager&MockObject $userManager;
 	private CardMapper&MockObject $cardMapper;
+	private BoardMapper&MockObject $boardMapper;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private Notifier $notifier;
 
 	protected function setUp(): void {
@@ -33,11 +38,21 @@ class NotifierTest extends TestCase {
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->boardMapper = $this->createMock(BoardMapper::class);
+		$board = new Board();
+		$board->setId(3);
+		$board->setOwner('board-owner');
+		$this->boardMapper->method('find')->with(3)->willReturn($board);
+		// Visible by default; the #3760 render-gate test flips this off.
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->notifier = new Notifier(
 			$this->l10nFactory,
 			$this->urlGenerator,
 			$this->userManager,
 			$this->cardMapper,
+			$this->boardMapper,
+			$this->visibilityGuard,
 		);
 
 		// IL10N is not in the OCP dev stub; a tiny stand-in with t() suffices
@@ -118,6 +133,50 @@ class NotifierTest extends TestCase {
 		$n = $this->notification('kanso', 'card_assigned');
 		$this->cardMapper->method('find')->with(9)->willThrowException(new DoesNotExistException('gone'));
 		$this->expectException(UnknownNotificationException::class);
+		$this->notifier->prepare($n, 'en');
+	}
+
+	public function testPrepareRejectsWhenCardIsHiddenFromTheRecipient(): void {
+		// Render-time audience gate (#3760): the card's visibility narrowed
+		// past the recipient AFTER the notification was queued - the bell
+		// entry (title + link) must behave exactly like a purged card.
+		$n = $this->notification('kanso', 'card_assigned');
+		$n->method('getUser')->willReturn('bob');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		$guard = $this->createMock(CardVisibilityGuard::class);
+		$guard->method('isVisible')->willReturn(false);
+		$notifier = new Notifier(
+			$this->l10nFactory,
+			$this->urlGenerator,
+			$this->userManager,
+			$this->cardMapper,
+			$this->boardMapper,
+			$guard,
+		);
+
+		$n->expects(self::never())->method('setRichSubject');
+		$this->expectException(UnknownNotificationException::class);
+		$notifier->prepare($n, 'en');
+	}
+
+	public function testPrepareChecksVisibilityForTheNotificationsRecipient(): void {
+		// The gate must ask about the RECIPIENT (the notification's user),
+		// not the actor or anyone else.
+		$n = $this->notification('kanso', 'card_assigned');
+		$n->method('getUser')->willReturn('bob');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$actor = $this->createMock(IUser::class);
+		$actor->method('getDisplayName')->willReturn('Alice A.');
+		$this->userManager->method('get')->willReturn($actor);
+		$n->method('setLink')->willReturnSelf();
+		$n->method('setRichSubject')->willReturnSelf();
+
+		$this->visibilityGuard->expects(self::once())
+			->method('isVisible')
+			->with(self::isInstanceOf(Board::class), self::isInstanceOf(Card::class), 'bob')
+			->willReturn(true);
+
 		$this->notifier->prepare($n, 'en');
 	}
 }

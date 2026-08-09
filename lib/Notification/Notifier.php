@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Notification;
 
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IURLGenerator;
@@ -30,6 +32,8 @@ class Notifier implements INotifier {
 		private IURLGenerator $urlGenerator,
 		private IUserManager $userManager,
 		private CardMapper $cardMapper,
+		private BoardMapper $boardMapper,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -71,8 +75,17 @@ class Notifier implements INotifier {
 
 		try {
 			$card = $this->cardMapper->find($cardId);
+			$board = $this->boardMapper->find($card->getBoardId());
 		} catch (DoesNotExistException) {
-			// The card was purged after the notification was queued.
+			// The card (or its board) was purged after the notification was queued.
+			throw new UnknownNotificationException();
+		}
+
+		// Render-time audience gate (#3760), defense-in-depth behind the send-time
+		// filters: if the card's visibility narrowed past the recipient AFTER the
+		// notification was queued, the bell entry (title + link) must not render -
+		// it behaves exactly like a purged card.
+		if (!$this->visibilityGuard->isVisible($board, $card, $notification->getUser())) {
 			throw new UnknownNotificationException();
 		}
 

@@ -12,10 +12,12 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
+use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardLinkService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\GithubWebhookService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -30,6 +32,7 @@ class GithubWebhookServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private StackMapper&MockObject $stackMapper;
 	private CardService&MockObject $cardService;
+	private CardMapper&MockObject $cardMapper;
 	private CardLinkService&MockObject $cardLinkService;
 	private CardLinkMapper&MockObject $cardLinkMapper;
 	private PermissionService&MockObject $permissionService;
@@ -42,6 +45,11 @@ class GithubWebhookServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardService = $this->createMock(CardService::class);
+		$this->cardMapper = $this->createMock(CardMapper::class);
+		// The egress gate loads linked cards to decide public-ness; default
+		// fixture cards carry no visibility (-> public), keeping the response
+		// shape of the pre-#3760 tests.
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card($id));
 		$this->cardLinkService = $this->createMock(CardLinkService::class);
 		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
@@ -51,9 +59,11 @@ class GithubWebhookServiceTest extends TestCase {
 			$this->boardMapper,
 			$this->stackMapper,
 			$this->cardService,
+			$this->cardMapper,
 			$this->cardLinkService,
 			$this->cardLinkMapper,
 			$this->permissionService,
+			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
 		);
@@ -671,5 +681,83 @@ class GithubWebhookServiceTest extends TestCase {
 			});
 
 		$this->service->disable(1, 'alice');
+	}
+
+	// ---- egress visibility (#3760) ----------------------------------------
+
+	public function testIssueResponseNeverNamesANonPublicCard(): void {
+		// The 200 response goes to an EXTERNAL system (GitHub's delivery log):
+		// a hidden (here: private) linked card is still processed - its move
+		// runs as the board owner, visibility-gated in CardService - but its
+		// id must not be confirmed outward. With no public card linked, the
+		// response reports cardId 0.
+		$hidden = $this->card(9, 1);
+		$hidden->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$hidden->setOwner('alice');
+		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardMapper->method('find')->with(9)->willReturn($hidden);
+		$service = new GithubWebhookService(
+			$this->boardMapper,
+			$this->stackMapper,
+			$this->cardService,
+			$this->cardMapper,
+			$this->cardLinkService,
+			$this->cardLinkMapper,
+			$this->permissionService,
+			new CardVisibilityScope(),
+			$this->secureRandom,
+			$this->urlGenerator,
+		);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(5, Stack::ROLE_DONE));
+		// The move still happens (owner-gated automation is not egress).
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 5, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$result = $service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['moved']);
+		self::assertSame(0, $result['cardId']);
+	}
+
+	public function testIssueResponseNamesTheFirstPublicCardWhenMixed(): void {
+		// Two links: card 8 is provider-internal (hidden), card 9 public - the
+		// response names only the public one.
+		$internal = $this->card(8, 1);
+		$internal->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$public = $this->card(9, 1);
+		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardMapper->method('find')->willReturnCallback(
+			static fn (int $id): Card => $id === 8 ? $internal : $public,
+		);
+		$service = new GithubWebhookService(
+			$this->boardMapper,
+			$this->stackMapper,
+			$this->cardService,
+			$this->cardMapper,
+			$this->cardLinkService,
+			$this->cardLinkMapper,
+			$this->permissionService,
+			new CardVisibilityScope(),
+			$this->secureRandom,
+			$this->urlGenerator,
+		);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([
+			$this->link(11, 8),
+			$this->link(12, 9),
+		]);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$result = $service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertSame(9, $result['cardId']);
 	}
 }

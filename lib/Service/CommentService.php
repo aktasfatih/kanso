@@ -98,8 +98,9 @@ class CommentService {
 		$this->notifyCard($card, $actorUid);
 		// Auto-subscribe the commenter and fan out to the card's watchers.
 		$this->subscriptionService->handleNewComment($cardId, $parentCommentId, $actorUid);
-		// @mentioned readable-board participants are pinged + auto-subscribed.
-		$this->mentionService->handleMentions($cardId, $board, $body, $actorUid);
+		// @mentioned readable-board participants who can SEE the card are
+		// pinged + auto-subscribed (#3760).
+		$this->mentionService->handleMentions($card, $board, $body, $actorUid);
 
 		return $saved;
 	}

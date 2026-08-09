@@ -41,6 +41,7 @@ class BoardAccessTest extends TestCase {
 		$this->access = new BoardAccess(
 			$this->aclMapper,
 			new PermissionService($this->aclMapper, $this->groupManager, $this->userManager),
+			$this->groupManager,
 		);
 	}
 
@@ -231,5 +232,82 @@ class BoardAccessTest extends TestCase {
 		$this->aclMapper->expects(self::never())->method('findByBoards');
 
 		self::assertSame([], $this->access->rolesFor([], 'bob'));
+	}
+
+	// ── rolesOn: batched many-users-one-board audience map (#3760) ────────────
+
+	/**
+	 * Stubs a group whose members are exactly $memberUids (the group→members
+	 * direction rolesOn expands, inverse of userInGroups above).
+	 *
+	 * @param string[] $memberUids
+	 */
+	private function groupWithMembers(string $gid, array $memberUids): void {
+		$members = [];
+		foreach ($memberUids as $uid) {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+			$members[] = $user;
+		}
+		$group = $this->createMock(\OCP\IGroup::class);
+		$group->method('getUsers')->willReturn($members);
+		$this->groupManager->method('get')->with($gid)->willReturn($group);
+	}
+
+	public function testRolesOnResolvesTheWholeAudienceFromOneAclFetch(): void {
+		// ONE findByBoard for the whole candidate set - never per-recipient
+		// queries (this feeds the cron fan-outs, #3760).
+		$this->aclMapper->expects(self::once())
+			->method('findByBoard')
+			->with(1)
+			->willReturn([
+				$this->acl(Acl::TYPE_USER, 'inty', PermissionService::PERMISSION_READ, ViewerContext::ROLE_INTERNAL),
+				$this->acl(Acl::TYPE_GROUP, 'clients', PermissionService::PERMISSION_READ, ViewerContext::ROLE_EXTERNAL),
+				// carol: external direct + external group; dave matches nothing.
+				$this->acl(Acl::TYPE_USER, 'carol', PermissionService::PERMISSION_READ, ViewerContext::ROLE_EXTERNAL),
+			]);
+		$this->groupWithMembers('clients', ['carol', 'exty']);
+
+		$map = $this->access->rolesOn(
+			$this->board('alice'),
+			['alice', 'inty', 'exty', 'carol', 'dave'],
+		);
+
+		self::assertEqualsCanonicalizing(
+			['alice', 'inty', 'exty', 'carol'],
+			array_keys($map), // dave absent: no membership, no role.
+		);
+		self::assertSame(ViewerContext::ROLE_INTERNAL, $map['alice']); // owner, no ACL row needed
+		self::assertSame(ViewerContext::ROLE_INTERNAL, $map['inty']);
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $map['exty']);
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $map['carol']);
+	}
+
+	public function testRolesOnFoldsMixedEntriesInternalWins(): void {
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([
+			$this->acl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_READ, ViewerContext::ROLE_EXTERNAL),
+			$this->acl(Acl::TYPE_GROUP, 'devs', PermissionService::PERMISSION_READ, ViewerContext::ROLE_INTERNAL),
+		]);
+		$this->groupWithMembers('devs', ['bob']);
+
+		self::assertSame(
+			['bob' => ViewerContext::ROLE_INTERNAL],
+			$this->access->rolesOn($this->board('alice'), ['bob']),
+		);
+	}
+
+	public function testRolesOnAllOwnerSkipsTheAclFetch(): void {
+		$this->aclMapper->expects(self::never())->method('findByBoard');
+
+		self::assertSame(
+			['alice' => ViewerContext::ROLE_INTERNAL],
+			$this->access->rolesOn($this->board('alice'), ['alice', 'alice']),
+		);
+	}
+
+	public function testRolesOnEmptyAudienceIsEmpty(): void {
+		$this->aclMapper->expects(self::never())->method('findByBoard');
+
+		self::assertSame([], $this->access->rolesOn($this->board('alice'), []));
 	}
 }

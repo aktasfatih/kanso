@@ -43,6 +43,11 @@ class SubscriptionServiceTest extends TestCase {
 		$this->boardSubscriptionMapper = $this->createMock(BoardSubscriptionMapper::class);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		// Pass-through audience filter by default; the #3760 leak tests below
+		// exercise a restrictive filter explicitly.
+		$this->visibilityGuard->method('filterVisible')->willReturnCallback(
+			static fn (Board $b, Card $c, array $uids): array => array_values(array_unique($uids)),
+		);
 		$this->service = new SubscriptionService(
 			$this->subscriptionMapper,
 			$this->cardMapper,
@@ -313,6 +318,7 @@ class SubscriptionServiceTest extends TestCase {
 	// ---- handleNewComment -------------------------------------------------
 
 	public function testHandleNewTopLevelCommentAutoSubscribesAndNotifiesOthers(): void {
+		$this->expectCardLoaded();
 		$this->subscriptionMapper->method('findOne')->willReturn(null);
 		// Card-level watchers: alice, bob, and the actor bob's comment shouldn't self-notify.
 		$this->subscriptionMapper->method('findNotifyUids')->with(9, 0)->willReturn(['alice', 'bob', 'carol']);
@@ -459,7 +465,7 @@ class SubscriptionServiceTest extends TestCase {
 				$notified[] = $target;
 			});
 
-		$this->service->notifyBoardCardCreated(1, 42, 'bob');
+		$this->service->notifyBoardCardCreated(1, $this->card(42), 'bob');
 
 		self::assertSame(['alice'], $notified);
 	}
@@ -469,6 +475,69 @@ class SubscriptionServiceTest extends TestCase {
 		$this->boardMapper->expects(self::never())->method('find');
 		$this->notificationService->expects(self::never())->method('notifyBoardActivity');
 
-		$this->service->notifyBoardCardCreated(1, 42, 'bob');
+		$this->service->notifyBoardCardCreated(1, $this->card(42), 'bob');
+	}
+
+	// ---- visibility (#3760): fan-outs restricted to the card's audience -----
+
+	/**
+	 * A service wired with a guard that admits only $visible - the fan-outs
+	 * must notify exactly the filtered set (the filter rule itself is pinned
+	 * by LeakMatrixTest / the CardVisibilityGuard tests).
+	 *
+	 * @param string[] $visible
+	 */
+	private function serviceAdmittingOnly(array $visible): SubscriptionService {
+		$guard = $this->createMock(CardVisibilityGuard::class);
+		$guard->method('isVisible')->willReturn(true);
+		$guard->method('filterVisible')->willReturnCallback(
+			static fn (Board $b, Card $c, array $uids): array => array_values(array_intersect($uids, $visible)),
+		);
+		return new SubscriptionService(
+			$this->subscriptionMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->permissionService,
+			$this->notificationService,
+			$this->boardSubscriptionMapper,
+			$guard,
+		);
+	}
+
+	public function testHandleNewCommentSkipsWatchersOutsideTheCardsVisibility(): void {
+		// carol subscribed while she could see the card; it has since been
+		// narrowed past her - she gets NO comment notification (existence oracle).
+		$this->expectCardLoaded();
+		$this->subscriptionMapper->method('findOne')->willReturn(null);
+		$this->subscriptionMapper->method('findNotifyUids')->with(9, 0)->willReturn(['alice', 'carol']);
+
+		$notified = [];
+		$this->notificationService->method('notifyCardComment')
+			->willReturnCallback(function (int $cardId, string $target, string $actor) use (&$notified): void {
+				$notified[] = $target;
+			});
+
+		$this->serviceAdmittingOnly(['alice'])->handleNewComment(9, null, 'bob');
+
+		self::assertSame(['alice'], $notified);
+	}
+
+	public function testNotifyBoardCardCreatedSkipsWatchersOutsideTheCardsVisibility(): void {
+		// A recurrence-spawned card can inherit a narrow class: board watchers
+		// outside it get no "new card" bell even though they hold READ.
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardSubscriptionMapper->method('findBoardSubscriberUids')->with(1)
+			->willReturn(['alice', 'carol']);
+
+		$notified = [];
+		$this->notificationService->method('notifyBoardActivity')
+			->willReturnCallback(function (int $cardId, string $target, string $actor) use (&$notified): void {
+				$notified[] = $target;
+			});
+
+		$this->serviceAdmittingOnly(['alice'])->notifyBoardCardCreated(1, $this->card(42), 'bob');
+
+		self::assertSame(['alice'], $notified);
 	}
 }

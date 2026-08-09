@@ -75,6 +75,7 @@ class RecurrenceService {
 		private CardService $cardService,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		private CardVisibilityGuard $visibilityGuard,
 		private ITimeFactory $time,
 		private IDBConnection $db,
 		private IConfig $config,
@@ -210,6 +211,11 @@ class RecurrenceService {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 		$this->validate($boardId, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds);
+		// Visibility (#3760): a rule may only be anchored on a template card its
+		// creator can SEE - a hidden template reads as "does not exist" (404,
+		// same as a bogus id - no existence oracle). Spawns re-check against the
+		// rule OWNER, so a later visibility narrowing cannot keep leaking copies.
+		$this->visibilityGuard->assertVisible($board, $this->loadCard($templateCardId), $uid);
 
 		$now = $this->time->getTime();
 		$rule = new RecurRule();
@@ -268,6 +274,8 @@ class RecurrenceService {
 		$newPolicy = $duedatePolicy ?? $rule->getDuedatePolicy();
 		$newOffset = $duedateOffsetSeconds ?? $rule->getDuedateOffsetSeconds();
 		$this->validate($rule->getBoardId(), $newTemplate, $newStack, $newMode, $newRrule, $newPolicy, $newOffset);
+		// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
+		$this->visibilityGuard->assertVisible($board, $this->loadCard($newTemplate), $uid);
 
 		$rule->setTemplateCardId($newTemplate);
 		$rule->setTargetStackId($newStack);
@@ -323,6 +331,11 @@ class RecurrenceService {
 		$rule = $this->ruleMapper->find($id);
 		$board = $this->loadBoard($rule->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		// Visibility (#3760): the spawned/reset card (title, description) is
+		// returned to the ACTOR - a template hidden from them must read as
+		// missing (404), or create-now would be a read oracle for hidden
+		// content. The spawn itself re-checks against the rule OWNER.
+		$this->visibilityGuard->assertVisible($board, $this->loadCard($rule->getTemplateCardId()), $uid);
 		return $this->spawn($rule, true);
 	}
 
@@ -436,9 +449,28 @@ class RecurrenceService {
 	private function spawnClone(RecurRule $rule, int $occurrenceTs): Card {
 		$template = $this->cardMapper->find($rule->getTemplateCardId());
 
+		// Visibility (#3760): the spawn runs as the rule OWNER - if the template
+		// has been narrowed past them since the rule was created, copying its
+		// content into a card the owner CAN see would be a leak. Fails like a
+		// missing template (DoesNotExistException); the cron logs and retries,
+		// exactly as when the owner lost board access.
+		$board = $this->loadBoard($rule->getBoardId());
+		$this->visibilityGuard->assertVisible($board, $template, $rule->getOwner());
+
 		// CardService::create runs as the owner: EDIT check, bottom-of-stack
-		// sort key, CREATE change - all in one place.
-		$card = $this->cardService->create($rule->getTargetStackId(), $template->getTitle(), $rule->getOwner());
+		// sort key, CREATE change - all in one place. The spawned card inherits
+		// the template's visibility class AND frozen creator side VERBATIM
+		// (#3760) - set on the INSERT itself, so the create-time fan-outs
+		// (activity, board watchers) never see a wider interim 'public' card.
+		$card = $this->cardService->create(
+			$rule->getTargetStackId(),
+			$template->getTitle(),
+			$rule->getOwner(),
+			null,
+			null,
+			$template->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+			$template->getCreatorRole(),
+		);
 
 		$card->setDescription($template->getDescription());
 		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));

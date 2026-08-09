@@ -11,9 +11,11 @@ use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\ActivityPublisher;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\NotifyPush\Queue\IQueue;
 use OCP\IGroup;
@@ -32,6 +34,7 @@ class ChangeNotifierTest extends TestCase {
 	private ContainerInterface&MockObject $container;
 	private LoggerInterface&MockObject $logger;
 	private ActivityPublisher&MockObject $activityPublisher;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ChangeNotifier $notifier;
 
 	protected function setUp(): void {
@@ -43,6 +46,12 @@ class ChangeNotifierTest extends TestCase {
 		$this->container = $this->createMock(ContainerInterface::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->activityPublisher = $this->createMock(ActivityPublisher::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		// Pass-through audience filter by default; the #3760 leak test below
+		// exercises a restrictive filter explicitly.
+		$this->visibilityGuard->method('filterVisible')->willReturnCallback(
+			static fn (Board $b, Card $c, array $uids): array => array_values(array_unique($uids)),
+		);
 		$this->notifier = new ChangeNotifier(
 			$this->changeMapper,
 			$this->boardMapper,
@@ -50,8 +59,17 @@ class ChangeNotifierTest extends TestCase {
 			$this->groupManager,
 			$this->container,
 			$this->logger,
-			$this->activityPublisher
+			$this->activityPublisher,
+			$this->visibilityGuard
 		);
+	}
+
+	private function card(int $id = 7, string $title = 'A'): Card {
+		$card = new Card();
+		$card->setId($id);
+		$card->setBoardId(1);
+		$card->setTitle($title);
+		return $card;
 	}
 
 	private function board(int $id = 1, string $owner = 'alice'): Board {
@@ -235,7 +253,7 @@ class ChangeNotifierTest extends TestCase {
 		$this->activityPublisher->expects(self::never())->method('cardCreated');
 		$this->activityPublisher->expects(self::never())->method('cardMoved');
 
-		$this->notifier->publishCardActivity(1, 'card_done', 7, 'Ship it', 'alice');
+		$this->notifier->publishCardActivity(1, 'card_done', $this->card(7, 'Ship it'), 'alice');
 	}
 
 	public function testPublishCardActivityRoutesEachSubject(): void {
@@ -245,8 +263,8 @@ class ChangeNotifierTest extends TestCase {
 		$this->activityPublisher->expects(self::once())->method('cardCreated')->with(1, 7, 'A', 'alice', ['alice']);
 		$this->activityPublisher->expects(self::once())->method('cardMoved')->with(1, 7, 'A', 'alice', ['alice']);
 
-		$this->notifier->publishCardActivity(1, 'card_created', 7, 'A', 'alice');
-		$this->notifier->publishCardActivity(1, 'card_moved', 7, 'A', 'alice');
+		$this->notifier->publishCardActivity(1, 'card_created', $this->card(), 'alice');
+		$this->notifier->publishCardActivity(1, 'card_moved', $this->card(), 'alice');
 	}
 
 	public function testPublishCardActivitySkipsSystemActor(): void {
@@ -257,7 +275,7 @@ class ChangeNotifierTest extends TestCase {
 		$this->activityPublisher->expects(self::never())->method('cardMoved');
 		$this->activityPublisher->expects(self::never())->method('cardDone');
 
-		$this->notifier->publishCardActivity(1, 'card_moved', 7, 'A', null);
+		$this->notifier->publishCardActivity(1, 'card_moved', $this->card(), null);
 	}
 
 	public function testPublishCardActivityNeverPropagates(): void {
@@ -267,7 +285,36 @@ class ChangeNotifierTest extends TestCase {
 		$this->logger->expects(self::once())->method('debug');
 		$this->activityPublisher->expects(self::never())->method('cardMoved');
 
-		$this->notifier->publishCardActivity(1, 'card_moved', 7, 'A', 'alice');
+		$this->notifier->publishCardActivity(1, 'card_moved', $this->card(), 'alice');
+	}
+
+	public function testPublishCardActivityAudienceIsFilteredByCardVisibility(): void {
+		// The visibility guard admits only alice: bob (a board member outside
+		// the card's visibility) must not receive the activity row - its
+		// subject names the card title (#3760).
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, 'alice'));
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$this->userAcl('bob')]);
+
+		$guard = $this->createMock(CardVisibilityGuard::class);
+		$guard->method('filterVisible')->willReturnCallback(
+			static fn (Board $b, Card $c, array $uids): array => array_values(array_intersect($uids, ['alice'])),
+		);
+		$notifier = new ChangeNotifier(
+			$this->changeMapper,
+			$this->boardMapper,
+			$this->aclMapper,
+			$this->groupManager,
+			$this->container,
+			$this->logger,
+			$this->activityPublisher,
+			$guard
+		);
+
+		$this->activityPublisher->expects(self::once())
+			->method('cardDone')
+			->with(1, 7, 'Ship it', 'alice', ['alice']);
+
+		$notifier->publishCardActivity(1, 'card_done', $this->card(7, 'Ship it'), 'alice');
 	}
 
 	public function testPublishBoardSharedFansOutAndSkipsSystemActor(): void {

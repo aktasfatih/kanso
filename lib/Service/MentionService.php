@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\SubscriptionMapper;
 
 /**
@@ -35,6 +36,7 @@ class MentionService {
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
 		private NotificationService $notificationService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -53,11 +55,17 @@ class MentionService {
 
 	/**
 	 * For every mention in $body that resolves to a board participant holding
-	 * READ (and is not the actor themselves), auto-subscribe them to the card
-	 * (respecting an opt-out tombstone) and send a "mentioned you" notification.
-	 * Mentions of non-members / unknown uids are silently inert.
+	 * READ *who can SEE the card* (and is not the actor themselves),
+	 * auto-subscribe them to the card (respecting an opt-out tombstone) and
+	 * send a "mentioned you" notification. Mentions of non-members / unknown
+	 * uids are silently inert - and so is a mention of a user OUTSIDE the
+	 * card's visibility (#3760): notifying them would hand them an existence
+	 * oracle (a bell entry + a watch row) for a card they cannot open. The
+	 * visibility check is one batched role resolution
+	 * ({@see CardVisibilityGuard::filterVisible()}), not per-mention queries.
 	 */
-	public function handleMentions(int $cardId, Board $board, string $body, string $actorUid): void {
+	public function handleMentions(Card $card, Board $board, string $body, string $actorUid): void {
+		$readable = [];
 		foreach ($this->extractUsernames($body) as $uid) {
 			if ($uid === $actorUid) {
 				// You don't notify or (re-)subscribe yourself by mentioning you.
@@ -67,8 +75,12 @@ class MentionService {
 				// Not a readable-board participant - inert (no notify, no leak).
 				continue;
 			}
-			$this->subscriptionService->autoSubscribe($cardId, SubscriptionMapper::THREAD_CARD, $uid);
-			$this->notificationService->notifyCardMentioned($cardId, $uid, $actorUid);
+			$readable[] = $uid;
+		}
+
+		foreach ($this->visibilityGuard->filterVisible($board, $card, $readable) as $uid) {
+			$this->subscriptionService->autoSubscribe($card->getId(), SubscriptionMapper::THREAD_CARD, $uid);
+			$this->notificationService->notifyCardMentioned($card->getId(), $uid, $actorUid);
 		}
 	}
 }

@@ -108,10 +108,11 @@ class ArchitectureTest extends TestCase {
 	 *
 	 * Why each entry is allowed to stay viewer-less:
 	 * - Db/BoardPinMapper.php ............ docblock mention only, no card query
-	 * - Notification/Notifier.php ........ bell rendering; audience filtering is
-	 *                                      the off-request card #3760
 	 * - Service/ArchiveService.php ....... auto-archive cron (system actor,
-	 *                                      write-only sweep) - #3760
+	 *                                      write-only sweep); the MANAGE-only
+	 *                                      archiveNow count deliberately stays
+	 *                                      an unscoped aggregate - decision
+	 *                                      documented on archiveNow (#3760)
 	 * - Service/BulkCardService.php ...... delegates every mutation to per-card
 	 *                                      services, which gate visibility and
 	 *                                      convert hidden → skipped
@@ -120,24 +121,24 @@ class ArchitectureTest extends TestCase {
 	 *                                      CardMapper::findWithDuedateByBoard
 	 * - Service/CsvImportService.php ..... importer, creates cards only
 	 * - Service/DeckImportService.php .... importer, creates cards only
-	 * - Service/DueReminderService.php ... reminder cron - #3760
 	 * - Service/PublicShareService.php ... anonymous snapshot; PUBLIC-ONLY is
 	 *                                      applied inside findPublicByBoard /
 	 *                                      progressByBoardPublicOnly
-	 * - Service/RecurrenceService.php .... recurrence cron - #3760
 	 * - Service/TrelloImportService.php .. importer, creates cards only
+	 *
+	 * Shrunk by #3760: Notification/Notifier.php (render-time audience gate),
+	 * Service/DueReminderService.php (batched recipient filter) and
+	 * Service/RecurrenceService.php (template-visibility gates + verbatim
+	 * visibility inheritance) now carry visibility constructs.
 	 */
 	private const VIEWERLESS_CARD_READER_ALLOWLIST = [
 		'Db/BoardPinMapper.php',
-		'Notification/Notifier.php',
 		'Service/ArchiveService.php',
 		'Service/BulkCardService.php',
 		'Service/CalendarFeedService.php',
 		'Service/CsvImportService.php',
 		'Service/DeckImportService.php',
-		'Service/DueReminderService.php',
 		'Service/PublicShareService.php',
-		'Service/RecurrenceService.php',
 		'Service/TrelloImportService.php',
 	];
 

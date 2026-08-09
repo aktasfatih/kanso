@@ -156,6 +156,17 @@ class CardVisibilityScope {
 	}
 
 	/**
+	 * The PHP counterpart of {@see self::applyPublicOnly()} for one loaded
+	 * card: true only for the 'public' class (a NULL pre-migration value
+	 * reads as 'public', matching the backfill). Used where an emission has
+	 * NO viewer at all - external egress such as the webhook response body
+	 * (#3760) - so anything narrower than public is simply never emitted.
+	 */
+	public function isPublic(Card $card): bool {
+		return ($card->getVisibility() ?? self::VISIBILITY_PUBLIC) === self::VISIBILITY_PUBLIC;
+	}
+
+	/**
 	 * Column reference under the caller's alias; '' addresses an un-aliased
 	 * single-table query (the aggregate counts).
 	 */

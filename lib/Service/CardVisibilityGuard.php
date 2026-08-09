@@ -56,6 +56,35 @@ class CardVisibilityGuard {
 	}
 
 	/**
+	 * The audience filter for the background fan-outs (#3760): of the given
+	 * candidate recipients, the ones who can actually SEE the card - the set
+	 * a reminder / comment / mention / activity emission about the card may
+	 * reach. A recipient outside the card's visibility gets NO artifact (a
+	 * bell entry would be an existence oracle for a hidden card).
+	 *
+	 * Batched: one {@see BoardAccess::rolesOn()} resolution for the whole
+	 * candidate set - never a per-recipient ACL query (these run in cron
+	 * over whole boards). Public cards short-circuit without touching the
+	 * ACL at all (every board audience may see them). Order is preserved,
+	 * duplicates are dropped.
+	 *
+	 * @param Board $board the card's own board, already loaded by the caller
+	 * @param string[] $uids candidate recipients
+	 * @return list<string> the recipients the card is visible to
+	 */
+	public function filterVisible(Board $board, Card $card, array $uids): array {
+		$uids = array_values(array_unique($uids));
+		if ($uids === [] || $this->visibilityScope->isPublic($card)) {
+			return $uids;
+		}
+		$roles = $this->boardAccess->rolesOn($board, $uids);
+		return array_values(array_filter(
+			$uids,
+			fn (string $uid): bool => $this->visibilityScope->isVisibleTo($card, $uid, $roles[$uid] ?? null),
+		));
+	}
+
+	/**
 	 * The viewer's resolved side on the board, or null for a non-member -
 	 * the exact input {@see CardVisibilityScope::isVisibleTo()} expects.
 	 */

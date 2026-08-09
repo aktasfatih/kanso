@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -47,11 +49,22 @@ class DueReminderService {
 	/** One day in seconds - the fixed "day before" lead time. */
 	private const DAY_SECONDS = 86400;
 
+	/**
+	 * Per-run board memo for the visibility filter - the sweep may touch many
+	 * cards of the same board, and each needs the board only to resolve the
+	 * audience's roles.
+	 *
+	 * @var array<int, Board>
+	 */
+	private array $boards = [];
+
 	public function __construct(
 		private CardMapper $cardMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private SubscriptionMapper $subscriptionMapper,
 		private NotificationService $notificationService,
+		private BoardMapper $boardMapper,
+		private CardVisibilityGuard $visibilityGuard,
 		private ITimeFactory $time,
 		private \Psr\Log\LoggerInterface $logger,
 	) {
@@ -131,8 +144,12 @@ class DueReminderService {
 
 	/**
 	 * Fans the reminder out to the union of the card's assignees and its card-
-	 * level watchers, deduplicated. Actor-less (a system event), so there is no
-	 * one to skip. $daysBefore selects the fixed reminder (0 = at due, 1 = day
+	 * level watchers, deduplicated - RESTRICTED to those who can SEE the card
+	 * (#3760): a reminder about a card the recipient cannot see would be an
+	 * existence oracle for it. The audience is filtered in one batched role
+	 * resolution ({@see CardVisibilityGuard::filterVisible()}), never
+	 * per-recipient queries. Actor-less (a system event), so there is no one
+	 * to skip. $daysBefore selects the fixed reminder (0 = at due, 1 = day
 	 * before).
 	 */
 	private function notifyRecipients(Card $card, int $daysBefore): void {
@@ -140,8 +157,14 @@ class DueReminderService {
 			$this->cardAssigneeMapper->findUserIdsByCard($card->getId()),
 			$this->subscriptionMapper->findCardSubscriberUids($card->getId()),
 		));
+		if ($recipients === []) {
+			return;
+		}
 
-		foreach ($recipients as $uid) {
+		$board = $this->boards[$card->getBoardId()]
+			??= $this->boardMapper->find($card->getBoardId());
+
+		foreach ($this->visibilityGuard->filterVisible($board, $card, $recipients) as $uid) {
 			$this->notificationService->notifyCardDue($card->getId(), $uid, $daysBefore);
 		}
 	}

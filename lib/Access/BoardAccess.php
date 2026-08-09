@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Service\PermissionService;
+use OCP\IGroupManager;
 
 /**
  * The effective-role resolver (#3742) - the single place that folds a
@@ -41,6 +42,7 @@ class BoardAccess {
 	public function __construct(
 		private AclMapper $aclMapper,
 		private PermissionService $permissionService,
+		private IGroupManager $groupManager,
 	) {
 	}
 
@@ -111,6 +113,67 @@ class BoardAccess {
 			}
 			$boardId = $acl->getBoardId();
 			$map[$boardId] = $this->foldRole($map[$boardId] ?? null, $acl);
+		}
+		return $map;
+	}
+
+	/**
+	 * Effective role of MANY users on ONE board at once - the audience-side
+	 * counterpart of {@see self::rolesFor()} that feeds the background
+	 * fan-outs (#3760: reminders, comment/mention notifications, activity
+	 * audience). ONE ACL fetch for the board plus one member expansion per
+	 * distinct group row - never a per-recipient query (these run in cron
+	 * over whole boards). Same fold as {@see self::contextFor()}: the owner
+	 * resolves to 'internal' without touching the ACL table, mixed grants
+	 * fold internal-wins, and users with no matching row are simply absent
+	 * from the map.
+	 *
+	 * @param string[] $uids
+	 * @return array<string, string> uid => ViewerContext::ROLE_* value
+	 */
+	public function rolesOn(Board $board, array $uids): array {
+		$map = [];
+		$candidates = [];
+		foreach (array_unique($uids) as $uid) {
+			if ($board->getOwner() === $uid) {
+				$map[$uid] = ViewerContext::ROLE_INTERNAL;
+			} else {
+				$candidates[$uid] = true;
+			}
+		}
+		if ($candidates === []) {
+			return $map;
+		}
+
+		/** @var array<string, array<string, bool>> $groupMembers gid => member uid set */
+		$groupMembers = [];
+		foreach ($this->aclMapper->findByBoard($board->getId()) as $acl) {
+			if ($acl->getParticipantType() === Acl::TYPE_USER) {
+				$uid = $acl->getParticipant();
+				if (isset($candidates[$uid])) {
+					$map[$uid] = $this->foldRole($map[$uid] ?? null, $acl);
+				}
+				continue;
+			}
+			if ($acl->getParticipantType() !== Acl::TYPE_GROUP) {
+				continue;
+			}
+			// Group rows expand group -> members ONCE per distinct group (the
+			// inverse direction of contextFor's lazy user -> groups lookup,
+			// which would be a per-recipient query here).
+			$gid = $acl->getParticipant();
+			if (!isset($groupMembers[$gid])) {
+				$members = [];
+				foreach ($this->groupManager->get($gid)?->getUsers() ?? [] as $user) {
+					$members[$user->getUID()] = true;
+				}
+				$groupMembers[$gid] = $members;
+			}
+			foreach (array_keys($candidates) as $uid) {
+				if (isset($groupMembers[$gid][$uid])) {
+					$map[$uid] = $this->foldRole($map[$uid] ?? null, $acl);
+				}
+			}
 		}
 		return $map;
 	}

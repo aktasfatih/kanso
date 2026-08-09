@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
+use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -43,15 +44,28 @@ use OCP\Security\ISecureRandom;
  * no content sync). An optional free-text label filter narrows intake to issues
  * carrying that GitHub label. Creation goes through CardService::create as the
  * board owner, so the sort key, change row and realtime all fire.
+ *
+ * Egress / visibility rule (#3760): the 200 response body is this service's
+ * ONLY outbound payload, and it goes to an EXTERNAL system (GitHub's delivery
+ * log, readable by repo admins who need not be board members). It therefore
+ * carries ids and booleans only - NEVER card titles or content - and a card id
+ * it reports is either an echo of the request's own `kanso-<id>` branch name
+ * (PR path) or restricted to PUBLIC cards (issue path: a non-public linked
+ * card is processed but not named, so egress can't confirm hidden card ids).
+ * Every card mutation runs as the board owner through CardService, whose
+ * visibility gates (#3743) apply - a card hidden from the owner is untouched
+ * (the no-op response every business-level miss produces).
  */
 class GithubWebhookService {
 	public function __construct(
 		private BoardMapper $boardMapper,
 		private StackMapper $stackMapper,
 		private CardService $cardService,
+		private CardMapper $cardMapper,
 		private CardLinkService $cardLinkService,
 		private CardLinkMapper $cardLinkMapper,
 		private PermissionService $permissionService,
+		private CardVisibilityScope $visibilityScope,
 		private ISecureRandom $secureRandom,
 		private IURLGenerator $urlGenerator,
 	) {
@@ -259,7 +273,11 @@ class GithubWebhookService {
 		$firstCardId = 0;
 		foreach ($links as $link) {
 			$cardId = $link->getCardId();
-			if ($firstCardId === 0) {
+			// Egress rule (#3760): the response goes to an external system, so
+			// only a PUBLIC card's id may be named in it. Non-public cards are
+			// still processed (their moves run as the board owner, gated by the
+			// owner's visibility) - they are just never confirmed outward.
+			if ($firstCardId === 0 && $this->isPublicCard($cardId)) {
 				$firstCardId = $cardId;
 			}
 			if ($this->applyIssueAutoMove($board->getId(), $cardId, $action, $board->getOwner())) {
@@ -358,6 +376,19 @@ class GithubWebhookService {
 			'moved' => false,
 			'created' => true,
 		];
+	}
+
+	/**
+	 * Whether the card may be named in the response body - the external-egress
+	 * gate (#3760): PUBLIC cards only, per {@see CardVisibilityScope::isPublic()}.
+	 * A purged card is simply not public.
+	 */
+	private function isPublicCard(int $cardId): bool {
+		try {
+			return $this->visibilityScope->isPublic($this->cardMapper->find($cardId));
+		} catch (\Throwable) {
+			return false;
+		}
 	}
 
 	/**

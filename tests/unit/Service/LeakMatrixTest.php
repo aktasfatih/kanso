@@ -183,6 +183,116 @@ class LeakMatrixTest extends TestCase {
 		self::assertTrue(true);
 	}
 
+	// ---- background paths (#3760) ------------------------------------------
+	//
+	// The off-request emissions - due reminders, comment/mention fan-outs,
+	// board-watcher notifications and the Activity audience - all route their
+	// recipient set through ONE choke point: CardVisibilityGuard::filterVisible()
+	// (batched BoardAccess::rolesOn + the same isVisibleTo the matrix pins).
+	// These cells assert that for every card class, the audience that receives
+	// an artifact is EXACTLY the matrix column - a viewer outside the card's
+	// visibility gets no notification/activity artifact. The per-service
+	// wiring is covered in each service's own test; the RULE is pinned here.
+	// (Webhook egress has no viewer at all and is public-only - see
+	// testExternalEgressIsPublicOnly below. The render-time bell gate reuses
+	// isVisible(), already covered by the guard cells above.)
+
+	public function testBackgroundAudienceFilterMatchesTheMatrixColumns(): void {
+		$board = new Board();
+		$board->setId(self::BOARD_ID);
+		$board->setOwner('board-owner');
+		$allViewers = array_keys($this->viewers());
+
+		foreach ($this->cards() as $cardName => $card) {
+			$expectedAudience = array_values(array_keys(array_filter(
+				array_map(
+					fn (string $uid): bool => $this->expectedMatrix()[$uid][$cardName],
+					array_combine($allViewers, $allViewers),
+				),
+			)));
+
+			$guard = new CardVisibilityGuard($this->boardAccessResolvingFixtureRoles(), $this->scope);
+			self::assertSame(
+				$expectedAudience,
+				$guard->filterVisible($board, $card, $allViewers),
+				'background audience for card class [' . $cardName . ']',
+			);
+		}
+	}
+
+	public function testBackgroundAudienceFilterIsBatchedAndSkipsAclForPublicCards(): void {
+		$board = new Board();
+		$board->setId(self::BOARD_ID);
+		$board->setOwner('board-owner');
+
+		// Public card: every candidate passes WITHOUT any role resolution -
+		// and duplicates collapse.
+		$boardAccess = $this->createMock(BoardAccess::class);
+		$boardAccess->expects(self::never())->method('rolesOn');
+		$guard = new CardVisibilityGuard($boardAccess, $this->scope);
+		self::assertSame(
+			['mgr', 'spy'],
+			$guard->filterVisible($board, $this->cards()['public'], ['mgr', 'spy', 'mgr']),
+		);
+
+		// Non-public card: exactly ONE batched rolesOn call for the whole
+		// candidate set - never per-recipient resolution (cron-scale fan-outs).
+		$boardAccess = $this->createMock(BoardAccess::class);
+		$boardAccess->expects(self::once())
+			->method('rolesOn')
+			->willReturn(['inty' => ViewerContext::ROLE_INTERNAL, 'exty' => ViewerContext::ROLE_EXTERNAL]);
+		$guard = new CardVisibilityGuard($boardAccess, $this->scope);
+		self::assertSame(
+			['inty'],
+			$guard->filterVisible($board, $this->cards()['internal-provider'], ['inty', 'exty', 'spy']),
+		);
+	}
+
+	public function testExternalEgressIsPublicOnly(): void {
+		// Emissions with NO viewer (the webhook response body): only the
+		// 'public' class may ever be named - every narrower class, a legacy
+		// NULL row (reads public, matching the backfill) and an unknown value
+		// (fails closed) behave exactly like applyPublicOnly() in SQL.
+		$expected = [
+			'public' => true,
+			'internal-provider' => false,
+			'internal-client' => false,
+			'private-of-inty' => false,
+			'private-of-exty' => false,
+		];
+		foreach ($this->cards() as $cardName => $card) {
+			self::assertSame(
+				$expected[$cardName],
+				$this->scope->isPublic($card),
+				'egress cell [' . $cardName . ']',
+			);
+		}
+
+		$legacy = new Card();
+		$legacy->setOwner('anyone');
+		self::assertTrue($this->scope->isPublic($legacy));
+
+		$bogus = new Card();
+		$bogus->setVisibility('everyone');
+		self::assertFalse($this->scope->isPublic($bogus));
+	}
+
+	/**
+	 * A BoardAccess whose rolesOn() resolves exactly the viewer fixture -
+	 * the batched counterpart of guardFor()'s contextFor stub, wired to the
+	 * REAL scope so the audience cells exercise the same rule as the matrix.
+	 */
+	private function boardAccessResolvingFixtureRoles(): BoardAccess {
+		$boardAccess = $this->createMock(BoardAccess::class);
+		$boardAccess->method('rolesOn')->willReturnCallback(
+			fn (Board $board, array $uids): array => array_filter(
+				array_intersect_key($this->viewers(), array_flip($uids)),
+				static fn (?string $role): bool => $role !== null,
+			),
+		);
+		return $boardAccess;
+	}
+
 	public function testLegacyRowsReadAsPublicAndUnknownValuesFailClosed(): void {
 		// Pre-migration rows (visibility NULL) read as 'public' - existing
 		// data behaves exactly as before the feature.
