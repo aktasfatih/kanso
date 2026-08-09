@@ -65,13 +65,18 @@ class Notifier implements INotifier {
 			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
 			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY
 			&& $subject !== NotificationService::SUBJECT_CARD_DUE
-			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON) {
+			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON
+			&& $subject !== NotificationService::SUBJECT_STEP_ASSIGNED) {
 			throw new UnknownNotificationException();
 		}
 
 		$params = $notification->getSubjectParameters();
 		$actorUid = (string)($params['actor'] ?? '');
-		$cardId = (int)$notification->getObjectId();
+		// Step notifications are keyed by the checklist-item id (per-step
+		// dismissal, #3745); their card id rides in the subject parameters.
+		$cardId = $subject === NotificationService::SUBJECT_STEP_ASSIGNED
+			? (int)($params['cardId'] ?? 0)
+			: (int)$notification->getObjectId();
 
 		try {
 			$card = $this->cardMapper->find($cardId);
@@ -115,6 +120,8 @@ class Notifier implements INotifier {
 		[$plain, $rich] = match ($subject) {
 			NotificationService::SUBJECT_CARD_ASSIGNED
 				=> [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')],
+			NotificationService::SUBJECT_STEP_ASSIGNED
+				=> [$l->t('%1$s assigned you a step on %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you a step on {card}')],
 			NotificationService::SUBJECT_CARD_MENTIONED
 				=> [$l->t('%1$s mentioned you in %2$s', [$actorName, $cardTitle]), $l->t('{actor} mentioned you in {card}')],
 			NotificationService::SUBJECT_CARD_REVIEW_REQUESTED

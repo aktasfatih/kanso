@@ -446,6 +446,11 @@ class ImportService {
 	}
 
 	/**
+	 * Clone-path policy for rich steps (#3745): the exported `dueDate` (unix
+	 * timestamp) is KEPT; any assignee / frozen role / done_at in the document
+	 * is deliberately IGNORED - the import lands on a board with its own
+	 * membership, so steps arrive unassigned and unstamped.
+	 *
 	 * @param array<string, mixed> $row
 	 */
 	private function attachChecklist(array $row, int $newCardId, int $now): void {
@@ -459,6 +464,9 @@ class ImportService {
 			$entity->setDone((bool)($item['done'] ?? false));
 			$entity->setSortKey($this->str($item, 'sortKey', '1'));
 			$entity->setCreatedAt((int)($item['createdAt'] ?? $now));
+			if (is_numeric($item['dueDate'] ?? null)) {
+				$entity->setDueDate((new \DateTime('now', new \DateTimeZone('UTC')))->setTimestamp((int)$item['dueDate']));
+			}
 			$this->checklistItemMapper->insert($entity);
 		}
 	}

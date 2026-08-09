@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\NotAMemberException;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -25,6 +27,13 @@ use OCP\IDBConnection;
  * by a fractional sort key, so a reorder is a single-row UPDATE - a sort-key
  * overflow surfaces as 409 rebalance_required via the controller trait, exactly
  * like a card move.
+ *
+ * An item can be a rich "step" (#3745): assigned to ONE user (with the
+ * assignee's board side frozen into `assigned_role` at assign time), carrying
+ * its own due date, and stamping `done_at` when done flips. Assignment
+ * mirrors the card-assignee rules: the assignee must hold READ on the board
+ * AND be able to SEE the card - a step of a hidden card in someone's
+ * "my steps" would be an existence oracle.
  */
 class ChecklistService {
 	private const MAX_TITLE_LENGTH = 255;
@@ -38,6 +47,8 @@ class ChecklistService {
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
 		private CardVisibilityGuard $visibilityGuard,
+		private BoardAccess $boardAccess,
+		private NotificationService $notificationService,
 	) {
 	}
 
@@ -60,14 +71,16 @@ class ChecklistService {
 	/**
 	 * Appends an item to the card's checklist. Requires EDIT. `$done` seeds the
 	 * item's checked state in the same insert (used when cloning a card's
-	 * checklist so a done item is a single write, not an add-then-toggle).
+	 * checklist so a done item is a single write, not an add-then-toggle), and
+	 * `$dueDate` seeds the step due date the same way (the clone paths KEEP due
+	 * dates while dropping assignee + done_at, #3745).
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
 	 * @throws InvalidInputException if the title is empty or too long
 	 * @throws \OverflowException if the appended sort key would overflow (rebalance needed)
 	 */
-	public function addItem(int $cardId, string $title, string $actorUid, bool $done = false): ChecklistItem {
+	public function addItem(int $cardId, string $title, string $actorUid, bool $done = false, ?\DateTime $dueDate = null): ChecklistItem {
 		$title = $this->normalizeTitle($title);
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
@@ -85,6 +98,9 @@ class ChecklistService {
 		$item->setDone($done);
 		$item->setSortKey($sortKey);
 		$item->setCreatedAt(time());
+		if ($dueDate !== null) {
+			$item->setDueDate($dueDate);
+		}
 
 		// Atomic item-write + card change-row (#3579); push after commit.
 		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->insert($item));
@@ -116,6 +132,9 @@ class ChecklistService {
 		}
 		if ($done !== null && $done !== $item->getDone()) {
 			$item->setDone($done);
+			// `done` stays the source of truth; `done_at` is only the stamp of
+			// the flip (#3745) - set on complete, cleared on un-done.
+			$item->setDoneAt($done ? time() : null);
 			$changed = true;
 		}
 
@@ -206,6 +225,131 @@ class ChecklistService {
 			$this->itemMapper->delete($item);
 			return $item;
 		});
+	}
+
+	/**
+	 * Assigns the step to ONE user (steps are user-only, no groups - #3745)
+	 * and FREEZES the assignee's board side into `assigned_role` at this
+	 * moment, resolved by {@see BoardAccess::contextFor()}: the derived
+	 * wait-state (epic 6) must stay stable even if the assignee later flips
+	 * role or leaves the board. Requires EDIT for the actor; the assignee must
+	 * hold READ on the board AND be able to SEE the card (a step of a card
+	 * hidden from its own assignee would surface the card in their "my steps"
+	 * - an existence oracle). Re-assigning the same user is a no-op;
+	 * re-assigning a different user replaces them (single-assignee model) and
+	 * dismisses the previous assignee's bell notification.
+	 *
+	 * @throws DoesNotExistException if the item, card or board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws InvalidInputException if the assignee cannot read the board, cannot see the card, or does not exist
+	 */
+	public function assignItem(int $itemId, string $participantUid, string $actorUid): ChecklistItem {
+		$item = $this->itemMapper->find($itemId);
+		$card = $this->loadCard($item->getCardId());
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+
+		// Directly or via a group ACL, the assignee must at least see the
+		// board. Unknown users hold no permissions, so they fail this too
+		// (mirrors AssigneeService::assign()).
+		if (($this->permissionService->getPermissions($board, $participantUid) & PermissionService::PERMISSION_READ) === 0) {
+			throw new InvalidInputException('User has no access to this board');
+		}
+		// ...and the CARD itself: assigning a step of a card its assignee
+		// cannot see would leak the card into their my-steps feed.
+		if (!$this->visibilityGuard->isVisible($board, $card, $participantUid)) {
+			throw new InvalidInputException('User cannot see this card');
+		}
+
+		if ($item->getAssignedUser() === $participantUid) {
+			return $item;
+		}
+		$previousAssignee = $item->getAssignedUser();
+
+		try {
+			$role = $this->boardAccess->contextFor($board, $participantUid)->role;
+		} catch (NotAMemberException) {
+			// READ resolved but no membership row - cannot happen through the
+			// permission model above, but never freeze a made-up role.
+			throw new InvalidInputException('User has no access to this board');
+		}
+
+		$item->setAssignedUser($participantUid);
+		$item->setAssignedRole($role);
+		$item->setAssignedAt(time());
+
+		// Atomic item-write + card change-row (#3579); push after commit.
+		$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+
+		// Bell notifications only after the commit stuck. The audience gate is
+		// the assign validation itself (the assignee provably sees the card);
+		// self-assignment is suppressed inside the service.
+		if ($previousAssignee !== null) {
+			$this->notificationService->dismissStepAssigned($itemId, $previousAssignee);
+		}
+		$this->notificationService->notifyStepAssigned($itemId, $card->getId(), $participantUid, $actorUid);
+
+		return $saved;
+	}
+
+	/**
+	 * Clears the step's assignee (and the frozen role + assigned_at with it).
+	 * Idempotent: unassigning an unassigned step is a no-op and writes no
+	 * change row. Requires EDIT.
+	 *
+	 * @throws DoesNotExistException if the item, card or board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not edit the board
+	 */
+	public function unassignItem(int $itemId, string $actorUid): ChecklistItem {
+		$item = $this->itemMapper->find($itemId);
+		$card = $this->loadCard($item->getCardId());
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+
+		$previousAssignee = $item->getAssignedUser();
+		if ($previousAssignee === null) {
+			return $item;
+		}
+
+		$item->setAssignedUser(null);
+		$item->setAssignedRole(null);
+		$item->setAssignedAt(null);
+
+		// Atomic item-write + card change-row (#3579); push after commit.
+		$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+
+		// Clear any pending "step assigned to you" bell for this step.
+		$this->notificationService->dismissStepAssigned($itemId, $previousAssignee);
+
+		return $saved;
+	}
+
+	/**
+	 * Sets or clears the step's own due date. $due uses the same wire format
+	 * as the card due date ({@see DueDateParser}): strict ISO 8601, '' or null
+	 * clears. Requires EDIT. A no-op (same instant) writes no change row.
+	 *
+	 * @throws DoesNotExistException if the item, card or board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws InvalidInputException if $due is not a valid ISO 8601 datetime
+	 */
+	public function setItemDue(int $itemId, ?string $due, string $actorUid): ChecklistItem {
+		$item = $this->itemMapper->find($itemId);
+		$card = $this->loadCard($item->getCardId());
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+
+		$parsed = DueDateParser::parse($due ?? '');
+		if ($parsed?->getTimestamp() === $item->getDueDate()?->getTimestamp()) {
+			return $item;
+		}
+		$item->setDueDate($parsed);
+
+		// Atomic item-write + card change-row (#3579); push after commit.
+		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
 	}
 
 	/**

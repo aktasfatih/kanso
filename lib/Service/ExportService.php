@@ -214,11 +214,16 @@ class ExportService {
 
 		$checklist = [];
 		foreach ($this->checklistItemMapper->findByCard($cardId) as $item) {
+			// Clone-path policy for rich steps (#3745): the due date round-trips
+			// (unix timestamp, like the card dates above); assignee, frozen role
+			// and done_at deliberately do NOT - an import lands on a board with
+			// its own membership, so steps arrive unassigned and unstamped.
 			$checklist[] = [
 				'title' => $item->getTitle(),
 				'done' => $item->getDone(),
 				'sortKey' => $item->getSortKey(),
 				'createdAt' => $item->getCreatedAt(),
+				'dueDate' => $item->getDueDate()?->getTimestamp(),
 			];
 		}
 

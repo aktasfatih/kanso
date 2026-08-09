@@ -246,6 +246,76 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The cross-board "my steps" feed (#3745): every OPEN checklist step
+	 * assigned to $uid on the given boards, joined up with its card / board /
+	 * stack titles for display. ONE query, driven by the (assigned_user, done)
+	 * index; the card-visibility scope is applied in cross-board mode exactly
+	 * like {@see CardMapper::findAssignedInBoards} (my-cards) - a step of a
+	 * card the viewer cannot SEE is never returned, no matter that they are
+	 * assigned to it (assignment grants no visibility). Deleted and archived
+	 * cards drop out like everywhere else.
+	 *
+	 * Ordered due-date-first (undated steps last), then by item id for a
+	 * stable tail.
+	 *
+	 * @param int[] $boardIds the viewer's readable board set
+	 * @param array<int, string> $rolesByBoard the viewer's effective role per
+	 *                                         board id, from {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return list<array<string, mixed>>
+	 * @throws Exception
+	 */
+	public function findOpenAssignedInBoards(string $uid, array $boardIds, array $rolesByBoard, int $limit = 200): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.id', 'ci.card_id', 'ci.title', 'ci.due_date', 'ci.assigned_at', 'ci.assigned_role')
+			->addSelect('c.board_id', 'c.stack_id')
+			->selectAlias('c.title', 'card_title')
+			->selectAlias('b.title', 'board_title')
+			->selectAlias('s.title', 'stack_title')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->leftJoin('c', 'kanso_stacks', 's', $qb->expr()->eq('c.stack_id', 's.id'))
+			->where($qb->expr()->eq('ci.assigned_user', $qb->createNamedParameter($uid)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			// Undated steps last: a step with no due date sorts after any dated one.
+			->addOrderBy($qb->createFunction('CASE WHEN ci.due_date IS NULL THEN 1 ELSE 0 END'), 'ASC')
+			->addOrderBy('ci.due_date', 'ASC')
+			->addOrderBy('ci.id', 'ASC')
+			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$due = $row['due_date'] !== null
+				? (new \DateTime((string)$row['due_date']))->format(\DateTimeInterface::ATOM)
+				: null;
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'cardId' => (int)$row['card_id'],
+				'cardTitle' => (string)$row['card_title'],
+				'boardId' => (int)$row['board_id'],
+				'boardTitle' => (string)$row['board_title'],
+				'stackTitle' => $row['stack_title'] !== null ? (string)$row['stack_title'] : null,
+				'title' => (string)$row['title'],
+				'dueDate' => $due,
+				'assignedAt' => $row['assigned_at'] !== null ? (int)$row['assigned_at'] : null,
+				'assignedRole' => $row['assigned_role'] !== null ? (string)$row['assigned_role'] : null,
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
 	 * Hard-deletes every checklist item of a card - cascade for a card purge.
 	 *
 	 * @return int number of deleted rows

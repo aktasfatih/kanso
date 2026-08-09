@@ -504,6 +504,10 @@ class CardService {
 				}
 
 				// Checklist items, in display order, carrying their done state.
+				// Clone-path policy for rich steps (#3745): KEEP the step due
+				// date, DROP assignee + done_at - the frozen assigned_role was
+				// resolved against the SOURCE board's ACL and may be wrong on
+				// the target, so the step lands unassigned (like a copy).
 				$itemKey = $this->sortKeyService->initial();
 				foreach ($sourceItems as $index => $item) {
 					if ($index > 0) {
@@ -515,6 +519,7 @@ class CardService {
 					$clone->setDone($item->getDone());
 					$clone->setSortKey($itemKey);
 					$clone->setCreatedAt($now);
+					$clone->setDueDate($item->getDueDate());
 					$this->checklistItemMapper->insert($clone);
 				}
 
@@ -777,8 +782,11 @@ class CardService {
 		// Checklist items, in display order (reuses ChecklistService::addItem,
 		// which appends and writes its own change row). The done state rides the
 		// same insert, so a done item is a single write - not add+toggle.
+		// Clone-path policy for rich steps (#3745): KEEP the step due date,
+		// DROP assignee + done_at - a copy/template instantiation is new work,
+		// so it starts unassigned and unstamped.
 		foreach ($this->checklistItemMapper->findByCard($source->getId()) as $item) {
-			$this->checklistService->addItem($target->getId(), $item->getTitle(), $uid, $item->getDone());
+			$this->checklistService->addItem($target->getId(), $item->getTitle(), $uid, $item->getDone(), $item->getDueDate());
 		}
 	}
 
@@ -1720,31 +1728,13 @@ class CardService {
 	}
 
 	/**
-	 * Strict ISO 8601 due dates, normalized to UTC. The empty string clears
-	 * the due date. Two accepted shapes: RFC 3339 without fractional seconds
-	 * (2026-07-22T12:00:00Z / +02:00) and with milliseconds
-	 * (2026-07-22T12:00:00.000Z) - the latter is what JS Date.toISOString()
-	 * produces.
+	 * Strict ISO 8601 due dates, normalized to UTC; the empty string clears
+	 * the due date. Delegates to the shared {@see DueDateParser} (also used by
+	 * the checklist-step due date, #3745) so the wire format cannot fork.
 	 *
 	 * @throws InvalidInputException on any other shape
 	 */
 	private function parseDuedate(string $duedate): ?\DateTime {
-		if ($duedate === '') {
-			return null;
-		}
-		$parsed = \DateTime::createFromFormat(\DateTimeInterface::ATOM, $duedate)
-			?: \DateTime::createFromFormat('Y-m-d\TH:i:s.vP', $duedate);
-		// createFromFormat rolls over out-of-range components (2026-02-30
-		// becomes March 2nd) and only records it in getLastErrors - reject
-		// those too, or clients get a silently wrong date back.
-		$errors = \DateTime::getLastErrors();
-		if ($parsed === false
-			|| ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
-			throw new InvalidInputException(
-				'Due date must be an ISO 8601 datetime like 2026-07-22T12:00:00Z'
-			);
-		}
-		$parsed->setTimezone(new \DateTimeZone('UTC'));
-		return $parsed;
+		return DueDateParser::parse($duedate);
 	}
 }

@@ -19,6 +19,7 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
@@ -170,7 +171,12 @@ class ImportServiceTest extends TestCase {
 		$this->labelMapper->method('insert')->willReturnCallback($this->autoId('label', 10));
 		$this->reviewTypeMapper->method('insert')->willReturnCallback($this->autoId('rt', 20));
 		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
-		$this->checklistItemMapper->method('insert')->willReturnCallback($this->autoId('cl', 60));
+		$capturedItems = [];
+		$this->checklistItemMapper->method('insert')->willReturnCallback(function (ChecklistItem $i) use (&$capturedItems): ChecklistItem {
+			$i->setId(60 + count($capturedItems));
+			$capturedItems[] = $i;
+			return $i;
+		});
 		$this->cardReviewMapper->method('insert')->willReturnCallback($this->autoId('rv', 80));
 
 		// Fresh import target starts its human-id counter at 1.
@@ -244,7 +250,14 @@ class ImportServiceTest extends TestCase {
 						'id' => 100, 'stackId' => 1, 'title' => 'Parent', 'sortKey' => 'h',
 						'parentCardId' => null, 'priority' => 0,
 						'labelIds' => [5], 'assignees' => ['bob', 'ghost'],
-						'checklist' => [['title' => 'step', 'done' => false, 'sortKey' => 'a']],
+						// Rich-step fields (#3745): dueDate is KEPT; any assignee /
+						// role / done_at in the document is IGNORED (clone policy).
+						'checklist' => [[
+							'title' => 'step', 'done' => false, 'sortKey' => 'a',
+							'dueDate' => 1755194400,
+							'assignedUser' => 'ghost', 'assignedRole' => 'external',
+							'assignedAt' => 1, 'doneAt' => 2,
+						]],
 						'comments' => [
 							['id' => 200, 'parentCommentId' => null, 'author' => 'carol', 'body' => 'top'],
 							['id' => 201, 'parentCommentId' => 200, 'author' => 'ghost', 'body' => 'reply'],
@@ -290,6 +303,15 @@ class ImportServiceTest extends TestCase {
 		self::assertSame([[100, 10]], $labelAssignments);
 		// Unknown assignee "ghost" dropped, "bob" kept.
 		self::assertSame([[100, 'bob']], $assignees);
+
+		// Rich-step clone policy (#3745): the due date round-trips; the
+		// document's assignee / frozen role / stamps never reach the row.
+		self::assertCount(1, $capturedItems);
+		self::assertSame(1755194400, $capturedItems[0]->getDueDate()?->getTimestamp());
+		self::assertNull($capturedItems[0]->getAssignedUser());
+		self::assertNull($capturedItems[0]->getAssignedRole());
+		self::assertNull($capturedItems[0]->getAssignedAt());
+		self::assertNull($capturedItems[0]->getDoneAt());
 
 		// Parent remap: the child card's parent became the new parent card id (100).
 		self::assertSame(100, $this->cardsById[101]->getParentCardId());

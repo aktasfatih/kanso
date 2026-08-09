@@ -117,6 +117,31 @@ class NotifierTest extends TestCase {
 		self::assertSame($n, $this->notifier->prepare($n, 'en'));
 	}
 
+	public function testPrepareStepAssignedResolvesCardFromParamsAndLinksIt(): void {
+		// Step notifications are keyed by the ITEM id (object 50); the card id
+		// rides in the subject parameters (#3745) - the render must resolve
+		// card 9 (not object 50) and deep-link to it.
+		$n = $this->notification('kanso', 'step_assigned', ['actor' => 'alice', 'cardId' => 9], '50');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		$actor = $this->createMock(IUser::class);
+		$actor->method('getDisplayName')->willReturn('Alice A.');
+		$this->userManager->method('get')->with('alice')->willReturn($actor);
+
+		$n->expects(self::once())->method('setLink')
+			->with('https://nc.example/apps/kanso/#/board/3/card/9')->willReturnSelf();
+		$n->expects(self::once())->method('setRichSubject')
+			->with(
+				'{actor} assigned you a step on {card}',
+				self::callback(static fn (array $p): bool
+					=> $p['actor']['id'] === 'alice'
+					&& $p['card']['id'] === '9'
+					&& $p['card']['name'] === 'Fix the bug')
+			)->willReturnSelf();
+
+		self::assertSame($n, $this->notifier->prepare($n, 'en'));
+	}
+
 	public function testPrepareRejectsForeignApp(): void {
 		$n = $this->notification('files', 'card_assigned');
 		$this->expectException(UnknownNotificationException::class);

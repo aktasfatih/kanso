@@ -154,6 +154,13 @@ class ExportServiceTest extends TestCase {
 		$item->setDone(true);
 		$item->setSortKey('a');
 		$item->setCreatedAt(510);
+		// Rich step (#3745): the due date round-trips; the assignee, frozen
+		// role and done_at must NOT appear in the export (clone-path policy).
+		$item->setDueDate(new \DateTime('@1755194400'));
+		$item->setAssignedUser('client');
+		$item->setAssignedRole('external');
+		$item->setAssignedAt(600);
+		$item->setDoneAt(700);
 		$this->checklistItemMapper->method('findByCard')->with(41)->willReturn([$item]);
 
 		$comment = new Comment();
@@ -244,7 +251,12 @@ class ExportServiceTest extends TestCase {
 		// Visibility rides along (#3741/#3743); unset columns read as the defaults.
 		self::assertSame('public', $card['visibility']);
 		self::assertSame('internal', $card['creatorRole']);
-		self::assertSame([['title' => 'write test', 'done' => true, 'sortKey' => 'a', 'createdAt' => 510]], $card['checklist']);
+		// The step due date round-trips as a unix timestamp; assignee / frozen
+		// role / done_at are deliberately absent (#3745 clone-path policy).
+		self::assertSame(
+			[['title' => 'write test', 'done' => true, 'sortKey' => 'a', 'createdAt' => 510, 'dueDate' => 1755194400]],
+			$card['checklist'],
+		);
 		self::assertSame('looks good', $card['comments'][0]['body']);
 		self::assertSame('carol', $card['comments'][0]['author']);
 		self::assertSame('dave', $card['reviews'][0]['reviewer']);

@@ -143,6 +143,8 @@ return [
 
 		['name' => 'myCards#index', 'url' => '/api/my-cards', 'verb' => 'GET'],
 
+		['name' => 'mySteps#index', 'url' => '/api/my-steps', 'verb' => 'GET'],
+
 		['name' => 'review#mine', 'url' => '/api/reviews/mine', 'verb' => 'GET'],
 		['name' => 'review#request', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'PUT'],
 		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'DELETE'],
@@ -248,6 +250,10 @@ return [
 		['name' => 'checklist#update', 'url' => '/api/checklist/{itemId}', 'verb' => 'PATCH'],
 		['name' => 'checklist#move', 'url' => '/api/checklist/{itemId}/move', 'verb' => 'POST'],
 		['name' => 'checklist#destroy', 'url' => '/api/checklist/{itemId}', 'verb' => 'DELETE'],
+		// Rich checklist steps (#3745): per-item assignee + due date.
+		['name' => 'checklist#assign', 'url' => '/api/checklist/{itemId}/assign', 'verb' => 'POST'],
+		['name' => 'checklist#unassign', 'url' => '/api/checklist/{itemId}/assign', 'verb' => 'DELETE'],
+		['name' => 'checklist#setDue', 'url' => '/api/checklist/{itemId}/due', 'verb' => 'PUT'],
 
 		['name' => 'label#create', 'url' => '/api/labels', 'verb' => 'POST'],
 		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],

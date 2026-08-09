@@ -2098,12 +2098,15 @@ class CardServiceTest extends TestCase {
 		return $label;
 	}
 
-	private function checklistItem(int $id, int $cardId, string $title, bool $done): \OCA\Kanso\Db\ChecklistItem {
+	private function checklistItem(int $id, int $cardId, string $title, bool $done, ?\DateTime $dueDate = null): \OCA\Kanso\Db\ChecklistItem {
 		$item = new \OCA\Kanso\Db\ChecklistItem();
 		$item->setId($id);
 		$item->setCardId($cardId);
 		$item->setTitle($title);
 		$item->setDone($done);
+		if ($dueDate !== null) {
+			$item->setDueDate($dueDate);
+		}
 		$item->setSortKey('I');
 		return $item;
 	}
@@ -2151,14 +2154,23 @@ class CardServiceTest extends TestCase {
 		});
 
 		// Checklist: two items, second one done → each recreated in a single
-		// addItem call carrying its done state (no separate toggle).
+		// addItem call carrying its done state (no separate toggle). The first
+		// is a rich step (#3745): assigned + due + done-stamped on the source.
+		// Clone policy: the DUE DATE rides the addItem call; assignee and
+		// done_at have no addItem parameter at all, so they drop by
+		// construction.
+		$stepDue = new \DateTime('2026-08-14T18:00:00Z');
+		$richStep = $this->checklistItem(1, 9, 'Step one', false, $stepDue);
+		$richStep->setAssignedUser('client');
+		$richStep->setAssignedRole(\OCA\Kanso\Access\ViewerContext::ROLE_EXTERNAL);
+		$richStep->setAssignedAt(1000);
 		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
-			$this->checklistItem(1, 9, 'Step one', false),
+			$richStep,
 			$this->checklistItem(2, 9, 'Step two', true),
 		]);
 		$added = [];
-		$this->checklistService->method('addItem')->willReturnCallback(function (int $cardId, string $title, string $uid, bool $done) use (&$added): \OCA\Kanso\Db\ChecklistItem {
-			$added[] = [$title, $done];
+		$this->checklistService->method('addItem')->willReturnCallback(function (int $cardId, string $title, string $uid, bool $done = false, ?\DateTime $dueDate = null) use (&$added): \OCA\Kanso\Db\ChecklistItem {
+			$added[] = [$title, $done, $dueDate?->getTimestamp()];
 			$new = new \OCA\Kanso\Db\ChecklistItem();
 			$new->setId(count($added) + 100);
 			$new->setCardId($cardId);
@@ -2167,6 +2179,8 @@ class CardServiceTest extends TestCase {
 			return $new;
 		});
 		$this->checklistService->expects(self::never())->method('updateItem');
+		// The clone path never re-assigns or re-stamps a step on the copy.
+		$this->checklistService->expects(self::never())->method('assignItem');
 
 		$copy = $this->service->copy(9, 7, 'alice');
 
@@ -2178,7 +2192,11 @@ class CardServiceTest extends TestCase {
 		self::assertSame(0, $copy->getDoneAt());
 		self::assertSame('3', $copy->getEstimate());
 		self::assertSame([[42, 11], [42, 12]], $assigned);
-		self::assertSame([['Step one', false], ['Step two', true]], $added);
+		self::assertSame(
+			[['Step one', false, $stepDue->getTimestamp()], ['Step two', true, null]],
+			$added,
+			'the copy keeps each step due date; assignee/done_at drop by construction',
+		);
 	}
 
 	/**
@@ -2292,9 +2310,18 @@ class CardServiceTest extends TestCase {
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
 
 		// Source carries no labels, one checklist item, one assignee, one watcher.
+		// The item is a rich step (#3745): assigned + due + done-stamped - the
+		// move keeps the DUE DATE but drops assignee/role/stamps (the frozen
+		// role was resolved against the SOURCE board's ACL).
 		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([]);
+		$stepDue = new \DateTime('2026-08-14T18:00:00Z');
+		$movedStep = $this->checklistItem(1, 9, 'Step one', true, $stepDue);
+		$movedStep->setAssignedUser('bob');
+		$movedStep->setAssignedRole(\OCA\Kanso\Access\ViewerContext::ROLE_INTERNAL);
+		$movedStep->setAssignedAt(1000);
+		$movedStep->setDoneAt(2000);
 		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
-			$this->checklistItem(1, 9, 'Step one', true),
+			$movedStep,
 		]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob']);
 		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn(['carol']);
@@ -2325,7 +2352,7 @@ class CardServiceTest extends TestCase {
 		});
 		$items = [];
 		$this->checklistItemMapper->method('insert')->willReturnCallback(function (\OCA\Kanso\Db\ChecklistItem $i) use (&$items): \OCA\Kanso\Db\ChecklistItem {
-			$items[] = [$i->getTitle(), $i->getDone()];
+			$items[] = [$i->getTitle(), $i->getDone(), $i->getDueDate()?->getTimestamp(), $i->getAssignedUser(), $i->getAssignedRole(), $i->getDoneAt()];
 			return $i;
 		});
 
@@ -2355,7 +2382,11 @@ class CardServiceTest extends TestCase {
 		self::assertSame('3', $moved->getEstimate());
 		self::assertSame([[42, 'bob']], $assignedTo, 'the readable assignee crosses over');
 		self::assertSame(['carol'], $watchedBy, 'the readable watcher crosses over');
-		self::assertSame([['Step one', true]], $items);
+		self::assertSame(
+			[['Step one', true, $stepDue->getTimestamp(), null, null, null]],
+			$items,
+			'the moved step keeps its due date; assignee, frozen role and done_at drop (#3745 clone policy)',
+		);
 		self::assertNotNull($softDeleted, 'the source card is soft-deleted');
 		self::assertGreaterThan(0, $softDeleted->getDeletedAt());
 		self::assertSame(

@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -18,6 +20,7 @@ use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\ChecklistService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
@@ -34,6 +37,8 @@ class ChecklistServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private BoardAccess&MockObject $boardAccess;
+	private NotificationService&MockObject $notificationService;
 	private ChecklistService $service;
 
 	protected function setUp(): void {
@@ -46,9 +51,19 @@ class ChecklistServiceTest extends TestCase {
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->notificationService = $this->createMock(NotificationService::class);
 		// A real SortKeyService - the fractional-key maths is deterministic and
 		// central to reorder behaviour, so exercise it rather than mock it.
-		$this->service = new ChecklistService(
+		$this->service = $this->makeService($this->visibilityGuard);
+	}
+
+	/**
+	 * Builds the service; a test that needs per-uid visibility answers passes
+	 * its own guard mock (the setUp guard is stubbed to a blanket true).
+	 */
+	private function makeService(CardVisibilityGuard $guard): ChecklistService {
+		return new ChecklistService(
 			$this->itemMapper,
 			$this->cardMapper,
 			$this->boardMapper,
@@ -56,7 +71,9 @@ class ChecklistServiceTest extends TestCase {
 			$this->permissionService,
 			new SortKeyService(),
 			$this->db,
-			$this->visibilityGuard,
+			$guard,
+			$this->boardAccess,
+			$this->notificationService,
 		);
 	}
 
@@ -405,5 +422,314 @@ class ChecklistServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->deleteItem(50, 'mallory');
+	}
+
+	// ---- rich steps (#3745): done_at stamp --------------------------------
+
+	public function testCompletingAnItemStampsDoneAt(): void {
+		$item = $this->item(50, 'I', 'todo', false);
+		$this->itemMapper->method('find')->with(50)->willReturn($item);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$before = time();
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i) use ($before): ChecklistItem {
+				self::assertTrue($i->getDone());
+				self::assertNotNull($i->getDoneAt());
+				self::assertGreaterThanOrEqual($before, $i->getDoneAt());
+				return $i;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->updateItem(50, null, true, 'alice');
+	}
+
+	public function testUncheckingAnItemClearsDoneAt(): void {
+		$item = $this->item(50, 'I', 'todo', true);
+		$item->setDoneAt(1234);
+		$this->itemMapper->method('find')->with(50)->willReturn($item);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i): ChecklistItem {
+				self::assertFalse($i->getDone());
+				self::assertNull($i->getDoneAt());
+				return $i;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->updateItem(50, null, false, 'alice');
+	}
+
+	public function testRenameAloneLeavesDoneAtUntouched(): void {
+		$item = $this->item(50, 'I', 'old', true);
+		$item->setDoneAt(1234);
+		$this->itemMapper->method('find')->with(50)->willReturn($item);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i): ChecklistItem {
+				self::assertSame(1234, $i->getDoneAt());
+				return $i;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->updateItem(50, 'renamed', null, 'alice');
+	}
+
+	// ---- rich steps (#3745): assignItem / unassignItem --------------------
+
+	public function testAssignItemFreezesRoleStampsAndNotifies(): void {
+		$board = $this->expectItemLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'alice', PermissionService::PERMISSION_EDIT);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'client')
+			->willReturn(PermissionService::PERMISSION_READ);
+		// The role is FROZEN from the resolver at assign time: an external
+		// member freezes 'external' (the epic-5 acceptance criterion).
+		$this->boardAccess->expects(self::once())
+			->method('contextFor')
+			->with($board, 'client')
+			->willReturn(ViewerContext::forMember('client', 1, ViewerContext::ROLE_EXTERNAL, false));
+		$before = time();
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i) use ($before): ChecklistItem {
+				self::assertSame('client', $i->getAssignedUser());
+				self::assertSame(ViewerContext::ROLE_EXTERNAL, $i->getAssignedRole());
+				self::assertGreaterThanOrEqual($before, $i->getAssignedAt());
+				return $i;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+		$this->notificationService->expects(self::once())
+			->method('notifyStepAssigned')
+			->with(50, 9, 'client', 'alice');
+		$this->notificationService->expects(self::never())->method('dismissStepAssigned');
+
+		$saved = $this->service->assignItem(50, 'client', 'alice');
+		self::assertTrue($saved->waitsOnExternal(), 'an open external-assigned step waits on the client side');
+	}
+
+	public function testAssignItemRejectsParticipantWithoutBoardRead(): void {
+		$this->expectItemLoaded();
+		$this->permissionService->method('getPermissions')->willReturn(0);
+		$this->itemMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->notificationService->expects(self::never())->method('notifyStepAssigned');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->assignItem(50, 'stranger', 'alice');
+	}
+
+	public function testAssignItemRejectsParticipantWhoCannotSeeTheCard(): void {
+		// Per-uid visibility: the actor sees the card, the would-be assignee
+		// does not (e.g. an internal-side card assigned to an external member).
+		$guard = $this->createMock(CardVisibilityGuard::class);
+		$guard->method('isVisible')
+			->willReturnCallback(static fn (Board $b, Card $c, string $uid): bool => $uid !== 'client');
+		$service = $this->makeService($guard);
+
+		$this->expectItemLoaded();
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->itemMapper->expects(self::never())->method('update');
+		$this->notificationService->expects(self::never())->method('notifyStepAssigned');
+
+		$this->expectException(InvalidInputException::class);
+		$service->assignItem(50, 'client', 'alice');
+	}
+
+	public function testAssignItemIsIdempotentForTheSameAssignee(): void {
+		$item = $this->item(50, 'I');
+		$item->setAssignedUser('client');
+		$item->setAssignedRole(ViewerContext::ROLE_EXTERNAL);
+		$this->itemMapper->method('find')->with(50)->willReturn($item);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->itemMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->notificationService->expects(self::never())->method('notifyStepAssigned');
+
+		self::assertSame($item, $this->service->assignItem(50, 'client', 'alice'));
+	}
+
+	public function testReassignReplacesAssigneeAndDismissesThePreviousBell(): void {
+		$this->expectItemLoaded(function (ChecklistItem $item): void {
+			$item->setAssignedUser('bob');
+			$item->setAssignedRole(ViewerContext::ROLE_INTERNAL);
+			$item->setAssignedAt(1000);
+		});
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->boardAccess->method('contextFor')
+			->willReturn(ViewerContext::forMember('client', 1, ViewerContext::ROLE_EXTERNAL, false));
+		$this->itemMapper->method('update')->willReturnCallback(static fn (ChecklistItem $i): ChecklistItem => $i);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->notificationService->expects(self::once())
+			->method('dismissStepAssigned')
+			->with(50, 'bob');
+		$this->notificationService->expects(self::once())
+			->method('notifyStepAssigned')
+			->with(50, 9, 'client', 'alice');
+
+		$saved = $this->service->assignItem(50, 'client', 'alice');
+		self::assertSame('client', $saved->getAssignedUser());
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $saved->getAssignedRole());
+	}
+
+	public function testAssignItemAssertsActorEditPermission(): void {
+		$board = $this->expectItemLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->itemMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->assignItem(50, 'client', 'mallory');
+	}
+
+	public function testAssignItemOnHiddenCardBehavesLikeMissing(): void {
+		// The visibility gate (#3743): a card hidden from the ACTOR is a 404,
+		// never a 403 - assign is card-addressed like every other write.
+		$this->expectItemLoaded();
+		$this->visibilityGuard->expects(self::once())
+			->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
+		$this->itemMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->assignItem(50, 'client', 'alice');
+	}
+
+	public function testUnassignItemClearsAssignmentAndDismissesTheBell(): void {
+		$this->expectItemLoaded(function (ChecklistItem $item): void {
+			$item->setAssignedUser('client');
+			$item->setAssignedRole(ViewerContext::ROLE_EXTERNAL);
+			$item->setAssignedAt(1000);
+		});
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i): ChecklistItem {
+				self::assertNull($i->getAssignedUser());
+				self::assertNull($i->getAssignedRole());
+				self::assertNull($i->getAssignedAt());
+				return $i;
+			});
+		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturn(new Change());
+		$this->notificationService->expects(self::once())
+			->method('dismissStepAssigned')
+			->with(50, 'client');
+
+		$this->service->unassignItem(50, 'alice');
+	}
+
+	public function testUnassignItemIsANoOpWhenUnassigned(): void {
+		$this->expectItemLoaded();
+		$this->itemMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->notificationService->expects(self::never())->method('dismissStepAssigned');
+
+		$this->service->unassignItem(50, 'alice');
+	}
+
+	// ---- rich steps (#3745): setItemDue -----------------------------------
+
+	public function testSetItemDueParsesIsoToUtcAndWritesChangeRow(): void {
+		$this->expectItemLoaded();
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i): ChecklistItem {
+				self::assertNotNull($i->getDueDate());
+				self::assertSame('2026-08-14T18:00:00+00:00', $i->getDueDate()->format(\DateTimeInterface::ATOM));
+				return $i;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$this->service->setItemDue(50, '2026-08-14T18:00:00Z', 'alice');
+	}
+
+	public function testSetItemDueNullClearsTheDate(): void {
+		$this->expectItemLoaded(function (ChecklistItem $item): void {
+			$item->setDueDate(new \DateTime('2026-08-14T18:00:00Z'));
+		});
+		$this->itemMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (ChecklistItem $i): ChecklistItem {
+				self::assertNull($i->getDueDate());
+				return $i;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->setItemDue(50, null, 'alice');
+	}
+
+	public function testSetItemDueRejectsGarbage(): void {
+		$this->expectItemLoaded();
+		$this->itemMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->setItemDue(50, 'next tuesday', 'alice');
+	}
+
+	public function testSetItemDueSameInstantIsANoOp(): void {
+		$this->expectItemLoaded(function (ChecklistItem $item): void {
+			$item->setDueDate(new \DateTime('2026-08-14T18:00:00Z'));
+		});
+		$this->itemMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->service->setItemDue(50, '2026-08-14T18:00:00Z', 'alice');
+	}
+
+	public function testAddItemSeedsCloneDueDateButNeverAssignee(): void {
+		// The clone paths (copy / template / import) hand addItem the source's
+		// due date; assignee + done_at have no addItem parameter AT ALL, which
+		// is the "drop on clone" policy enforced by construction.
+		$this->expectCardLoaded();
+		$this->itemMapper->method('findLastByCard')->willReturn(null);
+		$due = new \DateTime('2026-08-14T18:00:00Z');
+		$this->itemMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(function (ChecklistItem $i) use ($due): ChecklistItem {
+				self::assertSame($due->getTimestamp(), $i->getDueDate()?->getTimestamp());
+				self::assertTrue($i->getDone());
+				self::assertNull($i->getAssignedUser());
+				self::assertNull($i->getAssignedRole());
+				self::assertNull($i->getAssignedAt());
+				self::assertNull($i->getDoneAt());
+				return $i;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->addItem(9, 'Cloned step', 'alice', true, $due);
+	}
+
+	/**
+	 * Wires the mappers for an item-addressed call (item 50 on card 9, board 1)
+	 * and returns the board. $mutateItem tweaks the item before it is served.
+	 *
+	 * @param callable(ChecklistItem):void|null $mutateItem
+	 */
+	private function expectItemLoaded(?callable $mutateItem = null): Board {
+		$board = $this->board();
+		$item = $this->item(50, 'I');
+		if ($mutateItem !== null) {
+			$mutateItem($item);
+		}
+		$this->itemMapper->method('find')->with(50)->willReturn($item);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		return $board;
 	}
 }

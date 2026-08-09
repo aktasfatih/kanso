@@ -277,3 +277,105 @@ test.describe('Checklist', () => {
 		await expect(badge).toHaveText(/2\/2/)
 	})
 })
+
+// Rich checklist steps (#3745): per-item assignee, due date (with overdue
+// styling), done_at stamping, and the cross-board /api/my-steps feed.
+test.describe('Checklist steps', () => {
+	const state = { boardId: 0, cardId: 0, boardUrl: '' }
+
+	test.beforeAll(async () => {
+		const boards = await apiGet('/boards')
+		for (const b of boards) {
+			if (b.title === 'Checklist Steps Board') {
+				await apiDelete(`/boards/${b.id}`)
+			}
+		}
+
+		const board = await apiPost('/boards', { title: 'Checklist Steps Board' })
+		state.boardId = board.id
+		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card With Steps' })
+		state.cardId = card.id
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+	})
+
+	test('assign a step, set an overdue due date, complete it - done_at stamps and my-steps tracks it', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+
+		const cardTile = page.locator('.card-tile').filter({ hasText: 'Card With Steps' })
+		await cardTile.click()
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// Add the step.
+		const addInput = page.locator('.card-modal__checklist-add-input')
+		await addInput.fill('Send contract')
+		await addInput.press('Enter')
+		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Send contract' })
+		await expect(item).toBeVisible({ timeout: 10_000 })
+
+		// Assign it to admin via the row's assign picker.
+		await item.hover()
+		const assignRes = page.waitForResponse(
+			(res) => /\/api\/checklist\/\d+\/assign/.test(res.url())
+				&& res.request().method() === 'POST' && res.status() < 400,
+			{ timeout: 20_000 },
+		)
+		await item.locator('.card-modal__step-btn[title="Assign step"]').click()
+		await item.locator('.card-modal__assign-option').filter({ hasText: 'admin' }).first().click()
+		await assignRes
+
+		// The assignee avatar renders on the row.
+		await expect(item.locator('.card-modal__step-assignee')).toBeVisible({ timeout: 10_000 })
+
+		// The step now surfaces in the cross-board my-steps feed (open + assigned).
+		const openSteps = await apiGet('/my-steps')
+		const mine = openSteps.find((s) => s.title === 'Send contract')
+		if (!mine) throw new Error('assigned open step missing from /api/my-steps')
+		if (mine.cardTitle !== 'Card With Steps') throw new Error('my-steps row lost its card context')
+
+		// Set a PAST due date → the chip renders with overdue styling.
+		await item.hover()
+		const dueRes = page.waitForResponse(
+			(res) => /\/api\/checklist\/\d+\/due/.test(res.url())
+				&& res.request().method() === 'PUT' && res.status() < 400,
+			{ timeout: 20_000 },
+		)
+		await item.locator('.card-modal__step-btn[title="Set step due date"]').click()
+		await item.locator('.card-modal__date-input').fill('2020-01-01T09:00')
+		await dueRes
+		await expect(item.locator('.card-modal__step-due')).toBeVisible({ timeout: 10_000 })
+		await expect(item.locator('.card-modal__step-due--overdue')).toBeVisible({ timeout: 10_000 })
+
+		// Complete the step → done_at stamps server-side and the overdue accent
+		// is suppressed on the done row.
+		await toggleChecklistItem(page, 'Send contract')
+		await expect(item.locator('.card-modal__step-due--overdue')).toHaveCount(0, { timeout: 10_000 })
+
+		const items = await apiGet(`/cards/${state.cardId}/checklist`)
+		const step = items.find((i) => i.title === 'Send contract')
+		if (!step) throw new Error('step missing from checklist payload')
+		if (step.assignedUser !== 'admin') throw new Error(`assignedUser not persisted: ${step.assignedUser}`)
+		if (!step.assignedRole) throw new Error('assignedRole was not frozen at assign time')
+		if (!step.assignedAt) throw new Error('assignedAt was not stamped')
+		if (!step.dueDate || !step.dueDate.startsWith('2020-01-01')) throw new Error(`dueDate not persisted: ${step.dueDate}`)
+		if (!step.doneAt || step.doneAt <= 0) throw new Error('done toggle did not stamp done_at')
+
+		// A DONE step leaves the my-steps feed (it lists OPEN steps only).
+		const stepsAfterDone = await apiGet('/my-steps')
+		if (stepsAfterDone.some((s) => s.title === 'Send contract')) {
+			throw new Error('completed step still listed in /api/my-steps')
+		}
+
+		// Un-done clears the stamp again (done stays the source of truth).
+		const checkbox = item.locator('.card-modal__checklist-checkbox')
+		const patch = waitForChecklistPatch(page)
+		await checkbox.click()
+		await patch
+		const reopened = (await apiGet(`/cards/${state.cardId}/checklist`)).find((i) => i.title === 'Send contract')
+		if (reopened.doneAt !== null) throw new Error('un-done did not clear done_at')
+		if (reopened.assignedUser !== 'admin') throw new Error('un-done must not touch the assignee')
+	})
+})

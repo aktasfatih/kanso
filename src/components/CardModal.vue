@@ -1068,6 +1068,54 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@keydown.space.prevent="startItemEdit(item)">
 										{{ item.title }}
 									</span>
+									<!-- Rich step meta (#3745): due chip + assignee avatar + pickers -->
+									<span
+										v-if="item.dueDate"
+										class="card-modal__step-due"
+										:class="stepDueClass(item)"
+										:data-step-due="item.id"
+										:role="canEdit ? 'button' : undefined"
+										:tabindex="canEdit ? 0 : undefined"
+										:title="t('kanso', 'Step due date')"
+										@click="canEdit && toggleStepMenu(item, 'due')"
+										@keydown.enter.prevent="canEdit && toggleStepMenu(item, 'due')">
+										<CalendarIcon :size="12" />
+										{{ formatStepDue(item.dueDate) }}
+									</span>
+									<span
+										v-if="item.assignedUser"
+										class="card-modal__step-assignee"
+										:data-step-assignee="item.assignedUser"
+										:role="canEdit ? 'button' : undefined"
+										:tabindex="canEdit ? 0 : undefined"
+										:title="participantName(item.assignedUser)"
+										@click="canEdit && toggleStepMenu(item, 'assign')"
+										@keydown.enter.prevent="canEdit && toggleStepMenu(item, 'assign')">
+										<NcAvatar
+											:user="item.assignedUser"
+											:display-name="participantName(item.assignedUser)"
+											:size="20"
+											:hide-status="true"
+											:disable-tooltip="true" />
+									</span>
+									<span v-if="canEdit" class="card-modal__step-actions">
+										<button
+											v-if="!item.assignedUser"
+											class="card-modal__step-btn"
+											:title="t('kanso', 'Assign step')"
+											:aria-expanded="isStepMenuOpen(item, 'assign')"
+											@click="toggleStepMenu(item, 'assign')">
+											<AccountPlusIcon :size="14" />
+										</button>
+										<button
+											v-if="!item.dueDate"
+											class="card-modal__step-btn"
+											:title="t('kanso', 'Set step due date')"
+											:aria-expanded="isStepMenuOpen(item, 'due')"
+											@click="toggleStepMenu(item, 'due')">
+											<CalendarIcon :size="14" />
+										</button>
+									</span>
 									<button
 										class="card-modal__checklist-item-delete"
 										:title="t('kanso', 'Delete item')"
@@ -1075,6 +1123,47 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="handleDeleteItem(item)">
 										<CloseIcon :size="14" />
 									</button>
+									<div v-if="isStepMenuOpen(item, 'assign')" class="card-modal__popover card-modal__step-popover">
+										<button
+											v-if="item.assignedUser"
+											class="card-modal__assign-option"
+											:disabled="unassignItem.isPending.value"
+											@click="handleUnassignStep(item)">
+											<CloseIcon :size="16" />
+											<span>{{ t('kanso', 'Remove assignee') }}</span>
+										</button>
+										<button
+											v-for="p in stepAssignCandidates(item)"
+											:key="p.uid"
+											class="card-modal__assign-option"
+											:disabled="assignItem.isPending.value"
+											@click="handleAssignStep(item, p.uid)">
+											<NcAvatar
+												:user="p.uid"
+												:display-name="p.displayName"
+												:size="24"
+												:hide-status="true"
+												:disable-tooltip="true" />
+											<span>{{ p.displayName }}</span>
+										</button>
+									</div>
+									<div v-if="isStepMenuOpen(item, 'due')" class="card-modal__popover card-modal__popover--pad card-modal__step-popover">
+										<label class="card-modal__field-label">{{ t('kanso', 'Step due date') }}</label>
+										<div class="card-modal__field-row">
+											<input
+												class="card-modal__date-input"
+												type="datetime-local"
+												:value="stepDueInputValue(item)"
+												@change="handleStepDueChange(item, $event)">
+											<button
+												v-if="item.dueDate"
+												class="card-modal__field-clear"
+												:title="t('kanso', 'Clear step due date')"
+												@click="clearStepDue(item)">
+												<CloseIcon :size="14" />
+											</button>
+										</div>
+									</div>
 								</li>
 							</ul>
 
@@ -2820,6 +2909,9 @@ const {
 	renameItem,
 	deleteItem,
 	moveItem,
+	assignItem,
+	unassignItem,
+	setItemDue,
 } = useChecklist(computed(() => props.cardId), boardId)
 
 const checklistItems = computed(() => checklistQuery.data.value ?? [])
@@ -2910,6 +3002,90 @@ async function saveItemTitle(item) {
 	} finally {
 		cancelItemEdit()
 	}
+}
+
+// ── Rich checklist steps (#3745): per-item assignee + due date ──────────────
+// One step popover open at a time, keyed `${type}:${itemId}` ('assign'|'due').
+const openStepMenu = ref(null)
+function isStepMenuOpen(item, type) {
+	return openStepMenu.value === `${type}:${item.id}`
+}
+function toggleStepMenu(item, type) {
+	const key = `${type}:${item.id}`
+	openStepMenu.value = openStepMenu.value === key ? null : key
+}
+
+// All board participants (external members included - assigning a step to the
+// client side is the point of #3745) minus the current assignee.
+function stepAssignCandidates(item) {
+	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	return list.filter((p) => p.uid !== item.assignedUser)
+}
+
+async function handleAssignStep(item, uid) {
+	checklistError.value = ''
+	openStepMenu.value = null
+	try {
+		await assignItem.mutateAsync({ item, participant: uid })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to assign step.')
+	}
+}
+
+async function handleUnassignStep(item) {
+	checklistError.value = ''
+	openStepMenu.value = null
+	try {
+		await unassignItem.mutateAsync({ item })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to unassign step.')
+	}
+}
+
+// datetime-local needs "YYYY-MM-DDTHH:mm" in local time (same shaping as the
+// card due date input above).
+function stepDueInputValue(item) {
+	if (!item.dueDate) return ''
+	const d = new Date(item.dueDate)
+	const pad = (n) => String(n).padStart(2, '0')
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+async function handleStepDueChange(item, event) {
+	const val = event.target.value
+	if (!val) return
+	checklistError.value = ''
+	openStepMenu.value = null
+	try {
+		await setItemDue.mutateAsync({ item, due: new Date(val).toISOString() })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to update step due date.')
+	}
+}
+
+async function clearStepDue(item) {
+	checklistError.value = ''
+	openStepMenu.value = null
+	try {
+		await setItemDue.mutateAsync({ item, due: null })
+	} catch (err) {
+		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to clear step due date.')
+	}
+}
+
+// Overdue/soon styling for the step due chip - suppressed once the step is
+// done (mirrors the card-tile due chip).
+function stepDueClass(item) {
+	if (!item.dueDate || item.done) return ''
+	const due = new Date(item.dueDate)
+	const now = new Date()
+	if (due < now) return 'card-modal__step-due--overdue'
+	if ((due - now) / (1000 * 60 * 60) <= 24) return 'card-modal__step-due--soon'
+	return ''
+}
+
+function formatStepDue(iso) {
+	return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 // ── Checklist drag-and-drop (native HTML5 DnD) ─────────────────────────────
@@ -5745,6 +5921,7 @@ async function handleToggleProject(projectId) {
 	padding: 6px;
 }
 .card-modal__checklist-item {
+	position: relative; /* anchors the per-step assign/due popovers (#3745) */
 	display: flex;
 	align-items: center;
 	gap: 10px;
@@ -5791,6 +5968,70 @@ async function handleToggleProject(projectId) {
 	color: var(--color-main-text);
 }
 .card-modal__checklist-item-input:focus { outline: none; }
+/* ── Rich step meta (#3745): due chip + assignee avatar + row actions ────── */
+.card-modal__step-due {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+	padding: 1px 7px;
+	border-radius: 10px;
+	font-size: 12px;
+	white-space: nowrap;
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__step-due[role='button'] {
+	cursor: pointer;
+}
+.card-modal__step-due--overdue {
+	background: var(--color-error);
+	color: #fff;
+}
+.card-modal__step-due--soon {
+	background: var(--color-warning, #d89b00);
+	color: #fff;
+}
+.card-modal__step-assignee {
+	display: inline-flex;
+	flex-shrink: 0;
+	line-height: 0;
+}
+.card-modal__step-assignee[role='button'] {
+	cursor: pointer;
+}
+.card-modal__step-actions {
+	display: inline-flex;
+	gap: 2px;
+	flex-shrink: 0;
+	opacity: 0;
+}
+.card-modal__checklist-item:hover .card-modal__step-actions,
+.card-modal__checklist-item:focus-within .card-modal__step-actions {
+	opacity: 1;
+}
+.card-modal__step-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__step-btn:hover {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+}
+.card-modal__step-popover {
+	top: calc(100% - 4px);
+	right: 0;
+	left: auto;
+}
+
 .card-modal__checklist-item-delete {
 	display: inline-flex;
 	align-items: center;

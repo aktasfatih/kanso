@@ -233,6 +233,20 @@ export const moveChecklistItem = (itemId, afterItemId) =>
 export const deleteChecklistItem = (itemId) =>
 	axios.delete(url(`/api/checklist/${itemId}`)).then((r) => r.data)
 
+// Rich checklist steps (#3745): per-item assignee + due date
+export const assignChecklistItem = (itemId, participant) =>
+	axios.post(url(`/api/checklist/${itemId}/assign`), { participant }).then((r) => r.data)
+
+export const unassignChecklistItem = (itemId) =>
+	axios.delete(url(`/api/checklist/${itemId}/assign`)).then((r) => r.data)
+
+// due: ISO 8601 string, or null to clear
+export const setChecklistItemDue = (itemId, due) =>
+	axios.put(url(`/api/checklist/${itemId}/due`), { due: due ?? null }).then((r) => r.data)
+
+export const fetchMySteps = () =>
+	axios.get(url('/api/my-steps')).then((r) => r.data)
+
 // Trash
 export const fetchTrash = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/trash`)).then((r) => r.data)
