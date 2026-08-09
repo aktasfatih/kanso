@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.31] - 2026-08-08
+
+First tagged beta, published as a pre-built tarball on
+[GitHub Releases](https://github.com/aktasfatih/kanso/releases/tag/v0.9.31).
+
 ### Added
 
 - **Import cards from a CSV / spreadsheet.** The board-list Import menu now has a
@@ -135,8 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.0] - 2026-07-30
 
-First public release, published to the Nextcloud App Store. Targets
-Nextcloud 30–32 and PHP 8.2+.
+First public release. Targets Nextcloud 30–32 and PHP 8.2+.
 
 ### Added
 
@@ -183,6 +187,8 @@ Nextcloud 30–32 and PHP 8.2+.
 - **Realtime updates** via `notify_push` (High Performance Backend) when
   available, with an automatic light polling fallback everywhere else.
 
-[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.31...HEAD
+[0.9.31]: https://github.com/aktasfatih/kanso/compare/v0.9.2...v0.9.31
+[0.9.2]: https://github.com/aktasfatih/kanso/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aktasfatih/kanso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aktasfatih/kanso/releases/tag/v0.9.0

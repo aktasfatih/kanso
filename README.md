@@ -103,8 +103,31 @@ your work, on your own Nextcloud, laid out plainly.
 ## Installation
 
 Kanso targets **Nextcloud 30–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
-App Store yet, so install it from source (you'll need **Node 20+**,
-**Composer**, and shell access to your server):
+App Store yet — until it is, install the pre-built tarball from
+[GitHub Releases](https://github.com/aktasfatih/kanso/releases) (no Node or
+Composer needed on your server):
+
+```sh
+# 1. Download the tarball from the latest release
+curl -fLO https://github.com/aktasfatih/kanso/releases/latest/download/kanso.tar.gz
+
+# 2. Extract into your Nextcloud "custom apps" directory (unpacks as kanso/)
+tar -xzf kanso.tar.gz -C /path/to/nextcloud/custom_apps/
+chown -R www-data:www-data /path/to/nextcloud/custom_apps/kanso
+
+# 3. Enable the app
+cd /path/to/nextcloud
+sudo -u www-data php occ app:enable kanso
+```
+
+The tarball is not (yet) signed by the App Store, so Nextcloud lists Kanso as
+an untested/custom app — that's expected. To upgrade, extract the new tarball
+over the old directory and run `occ upgrade`.
+
+Open **Kanso** from the Nextcloud app menu and create your first board.
+
+<details>
+<summary><b>Install from source</b> (needs Node 20+, Composer, shell access)</summary>
 
 ```sh
 # 1. Clone into your Nextcloud "custom apps" directory
@@ -121,7 +144,7 @@ cd /path/to/nextcloud
 sudo -u www-data php occ app:enable kanso
 ```
 
-Open **Kanso** from the Nextcloud app menu and create your first board.
+</details>
 
 - **Background jobs** (recurring cards, auto-archive, change-log pruning) run
   through Nextcloud's cron. Make sure [system cron](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html)
