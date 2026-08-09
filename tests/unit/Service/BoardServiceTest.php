@@ -294,6 +294,16 @@ class BoardServiceTest extends TestCase {
 		// board 1 is pinned, board 2 is not (absent from the map → false).
 		$this->boardPinMapper->expects(self::once())
 			->method('pinnedMap')->with('alice', [1, 2])->willReturn([1 => true]);
+		// The permission map is ONE batched call over the whole board set (#3750)
+		// - never a per-board getPermissions() call. Board 1: full (owner-like),
+		// board 2: read-only (shared).
+		$this->permissionService->expects(self::once())
+			->method('getPermissionsForBoards')
+			->with([$b1, $b2], 'alice')
+			->willReturn([
+				1 => PermissionService::PERMISSION_ALL,
+				2 => PermissionService::PERMISSION_READ,
+			]);
 
 		$result = $this->service->findAllWithStats('alice');
 
@@ -301,6 +311,9 @@ class BoardServiceTest extends TestCase {
 		self::assertSame(1, $result[0]['id']);
 		self::assertSame(7, $result[0]['groupId']);
 		self::assertTrue($result[0]['pinned']);
+		// The bitmask is stitched onto the payload so the tile menu can gate
+		// manager-only entries.
+		self::assertSame(PermissionService::PERMISSION_ALL, $result[0]['permissions']);
 		self::assertSame([
 			'cardCount' => 5,
 			'doneCount' => 2,
@@ -314,6 +327,8 @@ class BoardServiceTest extends TestCase {
 		self::assertNull($result[1]['groupId']);
 		// A board absent from the pin map is not pinned by this user.
 		self::assertFalse($result[1]['pinned']);
+		// A shared (non-owner) board carries this user's reduced bitmask.
+		self::assertSame(PermissionService::PERMISSION_READ, $result[1]['permissions']);
 		self::assertSame([
 			'cardCount' => 0,
 			'doneCount' => 0,
@@ -333,6 +348,8 @@ class BoardServiceTest extends TestCase {
 		$this->cardReviewMapper->expects(self::once())->method('needsReviewCountByBoards')->with([])->willReturn([]);
 		$this->boardGroupMemberMapper->expects(self::once())->method('findGroupIdsByBoards')->with('alice', [])->willReturn([]);
 		$this->boardPinMapper->expects(self::once())->method('pinnedMap')->with('alice', [])->willReturn([]);
+		$this->permissionService->expects(self::once())
+			->method('getPermissionsForBoards')->with([], 'alice')->willReturn([]);
 
 		self::assertSame([], $this->service->findAllWithStats('alice'));
 	}

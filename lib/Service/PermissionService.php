@@ -76,6 +76,46 @@ class PermissionService {
 	}
 
 	/**
+	 * Effective permission bitmask of the user on MANY boards at once, backed
+	 * by ONE batched ACL fetch over the whole set ({@see AclMapper::findByBoards()})
+	 * — never a per-board query. Boards the user owns short-circuit to
+	 * PERMISSION_ALL without touching the ACL table.
+	 *
+	 * @param Board[] $boards
+	 * @return array<int, int> board id => permission bitmask
+	 */
+	public function getPermissionsForBoards(array $boards, string $uid): array {
+		$map = [];
+		$sharedIds = [];
+		foreach ($boards as $board) {
+			if ($board->getOwner() === $uid) {
+				$map[$board->getId()] = self::PERMISSION_ALL;
+			} else {
+				$map[$board->getId()] = 0;
+				$sharedIds[] = $board->getId();
+			}
+		}
+		if ($sharedIds === []) {
+			return $map;
+		}
+
+		$groupIds = null;
+		foreach ($this->aclMapper->findByBoards($sharedIds) as $acl) {
+			$applies = false;
+			if ($acl->getParticipantType() === Acl::TYPE_USER) {
+				$applies = $acl->getParticipant() === $uid;
+			} elseif ($acl->getParticipantType() === Acl::TYPE_GROUP) {
+				$groupIds ??= $this->getUserGroupIds($uid);
+				$applies = in_array($acl->getParticipant(), $groupIds, true);
+			}
+			if ($applies) {
+				$map[$acl->getBoardId()] |= $acl->getPermission();
+			}
+		}
+		return $map;
+	}
+
+	/**
 	 * Group ids of the given user, [] for unknown users.
 	 *
 	 * @return string[]

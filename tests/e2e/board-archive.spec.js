@@ -79,8 +79,10 @@ test.describe('Board archiving', () => {
 		const row = page.locator('.board-list__archived-row', { hasText: state.title })
 		await expect(row).toBeVisible({ timeout: 6_000 })
 
-		// Unarchive restores it to active.
-		await row.getByRole('button', { name: 'Unarchive' }).click()
+		// Unarchive restores it to active. The standalone Unarchive button is
+		// folded into the tile's options (⋯) menu (#3750).
+		await row.locator(`[data-test="board-options-menu-${state.boardId}"] button`).first().click()
+		await page.locator(`[data-test="tile-unarchive-${state.boardId}"]`).first().click()
 		await expect.poll(() => boardArchived(state.boardId), { timeout: 8_000 }).toBe(false)
 		// Back on the Active segment, the board reappears as a tile.
 		await page.getByRole('button', { name: 'Active', exact: true }).click()

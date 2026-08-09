@@ -2017,7 +2017,7 @@ import { useCardFields } from '../composables/useCardFields.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useBoard } from '../composables/useBoard.js'
-import { useBoards } from '../composables/useBoards.js'
+import { useBoardActions } from '../composables/useBoardActions.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
@@ -2037,8 +2037,6 @@ import {
 	disableCalendarFeed as apiDisableCalendarFeed,
 	getSettings,
 	updateSettings,
-	exportBoard as apiExportBoard,
-	duplicateBoard as apiDuplicateBoard,
 } from '../services/api.js'
 
 const props = defineProps({
@@ -2416,11 +2414,24 @@ function toggleAutomationGroup(key) {
 	automationGroups.value[key] = !automationGroups.value[key]
 }
 
+// ── Board actions (export / duplicate / delete) ──────────────────────────────
+// The heavy lifting lives in the useBoardActions composable, shared with the
+// boards-view tile menu (#3750). The modal keeps its own confirm step and
+// close/navigation behaviour on top of the shared actions.
+const {
+	exporting,
+	exportError,
+	exportBoardToFile: exportBoardAction,
+	duplicating,
+	duplicateError,
+	duplicateBoardNow: duplicateBoardAction,
+	isDeletingBoard,
+	deleteBoardError,
+	deleteBoardNow,
+} = useBoardActions()
+
 // ── Delete board (MANAGE, destructive) ────────────────────────────────────────
-const { deleteBoard: deleteBoardMutation } = useBoards()
 const showDeleteBoardConfirm = ref(false)
-const isDeletingBoard = ref(false)
-const deleteBoardError = ref('')
 function onDeleteBoardClick() {
 	deleteBoardError.value = ''
 	showDeleteBoardConfirm.value = true
@@ -2431,17 +2442,10 @@ function onDeleteBoardClick() {
 	})
 }
 async function doDeleteBoard() {
-	isDeletingBoard.value = true
-	deleteBoardError.value = ''
-	try {
-		await deleteBoardMutation.mutateAsync(Number(props.boardId))
+	if (await deleteBoardNow(props.boardId)) {
 		showDeleteBoardConfirm.value = false
 		emit('close')
 		router.push({ name: 'board-list' })
-	} catch (e) {
-		deleteBoardError.value = e?.response?.data?.error || t('kanso', 'Could not delete the board.')
-	} finally {
-		isDeletingBoard.value = false
 	}
 }
 
@@ -2615,55 +2619,23 @@ async function archiveBoard() {
 	}
 }
 
-// ── Export board to a downloadable .json file ─────────────────────────────────
-const exporting = ref(false)
-const exportError = ref('')
-
-async function exportBoardToFile() {
-	exporting.value = true
-	exportError.value = ''
-	try {
-		const doc = await apiExportBoard(props.boardId)
-		const title = (doc?.board?.title || 'board')
-			.replace(/[^\w.-]+/g, '-')
-			.replace(/^-+|-+$/g, '') || 'board'
-		const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
-		const href = URL.createObjectURL(blob)
-		const a = document.createElement('a')
-		a.href = href
-		a.download = `kanso-${title}.json`
-		document.body.appendChild(a)
-		a.click()
-		a.remove()
-		URL.revokeObjectURL(href)
-	} catch (e) {
-		exportError.value = e?.response?.data?.error || t('kanso', 'Could not export this board.')
-	} finally {
-		exporting.value = false
-	}
+// ── Export board to a downloadable .json file (shared composable) ─────────────
+function exportBoardToFile() {
+	return exportBoardAction(props.boardId)
 }
 
-const duplicating = ref(false)
-const duplicateError = ref('')
 const duplicateWithCards = ref(true)
 
 /**
  * Server-side duplicate of this board into a fresh one the caller owns. On
- * success the board list is refreshed, the settings modal closed, and the
- * router navigates to the new copy.
+ * success the board list is refreshed (by the composable), the settings modal
+ * closed, and the router navigates to the new copy.
  */
 async function duplicateBoardNow() {
-	duplicating.value = true
-	duplicateError.value = ''
-	try {
-		const res = await apiDuplicateBoard(props.boardId, duplicateWithCards.value)
-		await archiveQueryClient.invalidateQueries({ queryKey: ['boards'] })
+	const res = await duplicateBoardAction(props.boardId, duplicateWithCards.value)
+	if (res) {
 		emit('close')
 		router.push({ name: 'board', params: { id: res.boardId } })
-	} catch (e) {
-		duplicateError.value = e?.response?.data?.error || t('kanso', 'Could not duplicate this board.')
-	} finally {
-		duplicating.value = false
 	}
 }
 

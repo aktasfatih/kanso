@@ -128,6 +128,71 @@ class PermissionServiceTest extends TestCase {
 		$this->service->assertPermission($board, 'bob', PermissionService::PERMISSION_READ);
 	}
 
+	public function testGetPermissionsForBoardsOwnerGetsAllWithoutAclFetch(): void {
+		// Every board is owned by the caller → PERMISSION_ALL each, and the ACL
+		// table is never touched.
+		$this->aclMapper->expects(self::never())->method('findByBoards');
+
+		$map = $this->service->getPermissionsForBoards(
+			[$this->board('alice', 1), $this->board('alice', 2)],
+			'alice'
+		);
+
+		self::assertSame([
+			1 => PermissionService::PERMISSION_ALL,
+			2 => PermissionService::PERMISSION_ALL,
+		], $map);
+	}
+
+	public function testGetPermissionsForBoardsBatchesSharedBoardsIntoOneAclFetch(): void {
+		$owned = $this->board('bob', 1);
+		$sharedDirect = $this->board('alice', 2);
+		$sharedViaGroup = $this->board('alice', 3);
+		$noAccess = $this->board('alice', 4);
+
+		// ONE batched fetch over exactly the non-owned board ids — never a
+		// per-board findByBoard() loop.
+		$readEdit = PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT;
+		$directAcl = $this->acl(Acl::TYPE_USER, 'bob', $readEdit);
+		$directAcl->setBoardId(2);
+		$otherUserAcl = $this->acl(Acl::TYPE_USER, 'carol', PermissionService::PERMISSION_ALL);
+		$otherUserAcl->setBoardId(4);
+		$groupAcl = $this->acl(Acl::TYPE_GROUP, 'devs', PermissionService::PERMISSION_READ);
+		$groupAcl->setBoardId(3);
+		$foreignGroupAcl = $this->acl(Acl::TYPE_GROUP, 'guests', PermissionService::PERMISSION_ALL);
+		$foreignGroupAcl->setBoardId(4);
+		$this->aclMapper->expects(self::once())
+			->method('findByBoards')
+			->with([2, 3, 4])
+			->willReturn([$directAcl, $otherUserAcl, $groupAcl, $foreignGroupAcl]);
+
+		$bob = $this->createMock(IUser::class);
+		$this->userManager->method('get')->with('bob')->willReturn($bob);
+		$this->groupManager->method('getUserGroupIds')->with($bob)->willReturn(['devs']);
+
+		$map = $this->service->getPermissionsForBoards(
+			[$owned, $sharedDirect, $sharedViaGroup, $noAccess],
+			'bob'
+		);
+
+		self::assertSame([
+			// Owned → full bitmask without any ACL row.
+			1 => PermissionService::PERMISSION_ALL,
+			// Shared directly → exactly the granted (reduced) bits.
+			2 => $readEdit,
+			// Shared via a group bob belongs to → the group's bits.
+			3 => PermissionService::PERMISSION_READ,
+			// Rows addressing other users/groups grant nothing.
+			4 => 0,
+		], $map);
+	}
+
+	public function testGetPermissionsForBoardsWithEmptySetSkipsTheAclFetch(): void {
+		$this->aclMapper->expects(self::never())->method('findByBoards');
+
+		self::assertSame([], $this->service->getPermissionsForBoards([], 'bob'));
+	}
+
 	public function testGetUserGroupIdsForUnknownUserIsEmpty(): void {
 		$this->userManager->method('get')->with('ghost')->willReturn(null);
 		$this->groupManager->expects(self::never())->method('getUserGroupIds');

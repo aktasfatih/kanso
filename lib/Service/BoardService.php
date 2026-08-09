@@ -89,6 +89,10 @@ class BoardService {
 		// IN (...) over the same readable set - not one query per board. A board
 		// absent from the map is not pinned by this user.
 		$pinned = $this->boardPinMapper->pinnedMap($uid, $boardIds);
+		// Effective permission bitmask per board (#3750): the tile menu gates
+		// manager-only entries (archive/delete) on it. ONE batched ACL fetch over
+		// the readable set - not a per-board getPermissions() call.
+		$permissions = $this->permissionService->getPermissionsForBoards($boards, $uid);
 
 		$out = [];
 		foreach ($boards as $board) {
@@ -101,6 +105,9 @@ class BoardService {
 				'groupId' => $groupIds[$id] ?? null,
 				// Whether THIS user has pinned this board (#3632).
 				'pinned' => $pinned[$id] ?? false,
+				// This user's permission bitmask on the board (#3750), same shape
+				// as the single-board payload's `permissions`.
+				'permissions' => $permissions[$id] ?? 0,
 				'stats' => [
 					'cardCount' => $counts[$id] ?? 0,
 					'doneCount' => $done,
