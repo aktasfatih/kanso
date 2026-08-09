@@ -22,6 +22,22 @@ import { boardQueryKey } from './queryKeys.js'
  * Mid-drag safety: never patch while a move is pending for the board - a patch
  * (like a refetch) would clobber the optimistic move placement. The move queue's
  * drain invalidate (useCardMove) is the post-drag reconciliation point.
+ *
+ * Open-card freshness (#3767): the board delta only patches the board SUMMARY
+ * cache. The card modal composes separate per-card detail queries (description,
+ * comments, checklist, links, attachments, time entries, activity) that a
+ * summary patch never touches - so an open modal in another tab went stale
+ * until closed and reopened. Every card-scoped mutation (comments, checklist,
+ * reviews, labels, relations included) records an ENTITY_CARD change row, so a
+ * delta upsert/remove for a card id is exactly the "this card's details may
+ * have changed" signal: when one arrives we invalidate that card's detail
+ * queries. Only ACTIVE queries refetch (an open modal); everything else is just
+ * marked stale for its next mount, so this is O(open modals), not O(cards).
+ *
+ * Draft safety: the modal's title/description editors copy into local draft
+ * refs when editing starts, so a detail refetch can never clobber a dirty
+ * editor. Optimistic in-flight mutations ARE clobberable, so the invalidation
+ * defers while any mutation is in flight (see flushCardDetailInvalidation).
  */
 
 // Module-level cursor registry, keyed by String(boardId) (mirrors
@@ -29,6 +45,111 @@ import { boardQueryKey } from './queryKeys.js'
 // cache (the useBoard poll and the main.js push handler) so they advance the
 // same cursor.
 const cursorByBoard = new Map()
+
+// First segment of every per-card detail query key the modal (and the tile
+// quick-preview) composes. Board-level keys ('board', 'board-stats', ...) are
+// deliberately absent - the delta patch / board invalidate already covers them.
+const CARD_DETAIL_KEY_PREFIXES = new Set([
+	'card',
+	'comments',
+	'checklist',
+	'card-links',
+	'card-attachments',
+	'card-time-entries',
+	'card-activity',
+])
+
+// "Changes arrived" client signal (#3767): listeners are notified after a
+// delta has been applied (or a resync/error forced a full refetch), with the
+// card ids the window touched. Kept deliberately tiny - consumers that need
+// finer-than-board realtime (open modal freshness today, presence/toasts
+// tomorrow) subscribe here instead of growing new polling loops.
+const changesAppliedListeners = new Set()
+
+/**
+ * Subscribe to applied board changes. The listener receives
+ * `{ boardId: string, cardIds: number[], resync: boolean }` - on a resync the
+ * touched ids are unknown, so `cardIds` is empty and `resync` is true.
+ *
+ * @param {(event: {boardId: string, cardIds: number[], resync: boolean}) => void} listener
+ * @return {() => void} unsubscribe
+ */
+export function onBoardChangesApplied(listener) {
+	changesAppliedListeners.add(listener)
+	return () => changesAppliedListeners.delete(listener)
+}
+
+/**
+ * @param {{boardId: string, cardIds: number[], resync: boolean}} event
+ */
+function emitBoardChangesApplied(event) {
+	for (const listener of changesAppliedListeners) {
+		try {
+			listener(event)
+		} catch {
+			// A listener must never be able to break delta sync itself.
+		}
+	}
+}
+
+// Pending detail invalidation (#3767). Invalidation is deferred while ANY
+// mutation is in flight: an invalidate-triggered refetch racing an optimistic
+// patch (comment add, checklist toggle) could momentarily resurrect the
+// pre-mutation server state - the exact clobbering the onMutate cancelQueries
+// convention exists to prevent. The ids are remembered (not dropped) and
+// flushed by the next syncBoardDelta tick; the mutation's own onSettled
+// invalidation covers its card in the meantime. `all` is the resync/error
+// case where the touched ids are unknown.
+const pendingDetailInvalidation = { all: false, ids: new Set() }
+
+/**
+ * Queue (and, when safe, immediately apply) an invalidation of the per-card
+ * detail queries for the given card ids - or for every cached card when
+ * `cardIds` is null (resync/error: the touched ids are unknown).
+ *
+ * @param {import('@tanstack/vue-query').QueryClient} queryClient
+ * @param {Array<number>|null} cardIds
+ */
+function invalidateCardDetailQueries(queryClient, cardIds) {
+	if (cardIds === null) {
+		pendingDetailInvalidation.all = true
+	} else {
+		for (const id of cardIds) {
+			pendingDetailInvalidation.ids.add(String(id))
+		}
+	}
+	flushCardDetailInvalidation(queryClient)
+}
+
+/**
+ * Apply any queued detail invalidation, unless a mutation is in flight (the
+ * queue is kept and retried on the next delta tick). Matching is by predicate
+ * so both String- and Number-typed detail keys (['card', '7'] from the route
+ * param, ['card', 7] from a tile preview) are caught.
+ *
+ * @param {import('@tanstack/vue-query').QueryClient} queryClient
+ */
+function flushCardDetailInvalidation(queryClient) {
+	if (!pendingDetailInvalidation.all && pendingDetailInvalidation.ids.size === 0) {
+		return
+	}
+	if (queryClient.isMutating() > 0) {
+		return
+	}
+	const all = pendingDetailInvalidation.all
+	const ids = new Set(pendingDetailInvalidation.ids)
+	pendingDetailInvalidation.all = false
+	pendingDetailInvalidation.ids.clear()
+	queryClient.invalidateQueries({
+		predicate: (query) => {
+			const [prefix, id] = query.queryKey
+			if (!CARD_DETAIL_KEY_PREFIXES.has(prefix)) {
+				return false
+			}
+			return all || ids.has(String(id))
+		},
+	})
+}
 
 function keyOf(boardId) {
 	const value = typeof boardId === 'object' && boardId !== null && boardId.value !== undefined
@@ -98,6 +219,11 @@ function applyDelta(list, delta) {
  * @return {Promise<void>}
  */
 export async function syncBoardDelta(queryClient, boardId) {
+	// Retry any detail invalidation a previous tick deferred (mutation was in
+	// flight). Runs even when the delta below turns out empty or unfetchable -
+	// the queue must drain, not depend on new changes arriving.
+	flushCardDetailInvalidation(queryClient)
+
 	if (isBoardMovePending(boardId)) {
 		return
 	}
@@ -115,14 +241,24 @@ export async function syncBoardDelta(queryClient, boardId) {
 	} catch {
 		// A failed delta read must never leave the client silently stale: drop the
 		// cursor and fall back to a full refetch (which re-seeds the cursor).
+		// The full board refetch only heals the SUMMARY cache; the rows we may
+		// have missed could carry open-card detail changes, so invalidate the
+		// detail queries too (ids unknown → all).
 		dropCursor(boardId)
 		queryClient.invalidateQueries({ queryKey: boardKey })
+		invalidateCardDetailQueries(queryClient, null)
+		emitBoardChangesApplied({ boardId: key, cardIds: [], resync: true })
 		return
 	}
 
 	if (delta?.resync) {
+		// Same reasoning as the error path: a resync window (saturated, pruned
+		// tail, or an unmodeled entity kind) may hide ENTITY_CARD rows for the
+		// open card - never let it stay stale.
 		dropCursor(boardId)
 		queryClient.invalidateQueries({ queryKey: boardKey })
+		invalidateCardDetailQueries(queryClient, null)
+		emitBoardChangesApplied({ boardId: key, cardIds: [], resync: true })
 		return
 	}
 
@@ -132,11 +268,30 @@ export async function syncBoardDelta(queryClient, boardId) {
 		return
 	}
 
+	// The card ids this window touched: upserts (edited/created, incl. every
+	// card-scoped sub-entity change - comments, checklist, reviews, labels -
+	// which all record an ENTITY_CARD row) plus removes (deleted/hidden).
+	const touchedCardIds = [
+		...(delta.cards?.upsert ?? []).map((card) => card.id),
+		...(delta.cards?.remove ?? []),
+	]
+	// An empty delta (most poll ticks) is not a change event - don't spam
+	// listeners with it.
+	const hasChanges = touchedCardIds.length > 0
+		|| (delta.stacks?.upsert?.length ?? 0) > 0
+		|| (delta.stacks?.remove?.length ?? 0) > 0
+
 	const existing = queryClient.getQueryData(boardKey)
 	if (!existing) {
 		// Nothing cached to patch (board not loaded / evicted): just record the
 		// advanced cursor; a future full fetch re-seeds from the payload anyway.
+		// The rows are consumed here (the cursor moves past them), so the detail
+		// invalidation must still happen or an open modal misses the change.
+		invalidateCardDetailQueries(queryClient, touchedCardIds)
 		cursorByBoard.set(key, delta.cursor)
+		if (hasChanges) {
+			emitBoardChangesApplied({ boardId: key, cardIds: touchedCardIds, resync: false })
+		}
 		return
 	}
 
@@ -149,6 +304,13 @@ export async function syncBoardDelta(queryClient, boardId) {
 		}
 	})
 
+	// Open-card freshness (#3767): a change row for a card means its DETAIL
+	// data may have changed too - refetch the open modal's queries.
+	invalidateCardDetailQueries(queryClient, touchedCardIds)
+
 	// Advance the cursor only after a successful patch.
 	cursorByBoard.set(key, delta.cursor)
+	if (hasChanges) {
+		emitBoardChangesApplied({ boardId: key, cardIds: touchedCardIds, resync: false })
+	}
 }
