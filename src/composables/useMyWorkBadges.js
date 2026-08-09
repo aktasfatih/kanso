@@ -47,9 +47,11 @@ export function markInboxSeen(newestCreatedAt) {
  * Lightweight badge counts for the My Tasks / My Reviews / Inbox nav items.
  *
  * Reuses the existing feed queries (`useMyCards`, `useMyReviews`, `useInbox`)
- * from the shared query cache — no extra endpoints or polling. The nav mounts
- * once for the app's lifetime, so these queries are warmed here and shared with
- * the views themselves (TanStack Query dedupes by key).
+ * from the shared query cache — no extra endpoints, no badge-specific polling.
+ * The nav mounts once for the app's lifetime, so these queries are warmed here
+ * and shared with the views themselves (TanStack Query dedupes by key). The
+ * queries' own visible-tab interval (MY_WORK_POLL_INTERVAL, #3768) is what
+ * keeps both these badges and the My Work pages live for other users' changes.
  *
  * - tasks:   count of open cards assigned to me (useMyCards already returns
  *            open-only, so no extra filtering is applied here).

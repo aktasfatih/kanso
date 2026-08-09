@@ -3,6 +3,7 @@
 
 import { useQuery } from '@tanstack/vue-query'
 import { getMyCards as apiGetMyCards } from '../services/api.js'
+import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
 
 /**
  * Composable for the "My tasks" feed - all open cards assigned to the current
@@ -14,6 +15,11 @@ import { getMyCards as apiGetMyCards } from '../services/api.js'
  * navigates to My Tasks - a default mount refetch would be suppressed and the
  * page would render pre-mutation data. 'always' makes every view mount (i.e.
  * client-side navigation) revalidate against the server.
+ *
+ * refetchInterval (#3768): other users' changes while the user SITS on the
+ * page (no navigation, no focus change) only arrive by polling - the feed is
+ * cross-board, so no board delta poll covers it. The same interval keeps the
+ * nav badge live from any view. Paused on hidden tabs (TanStack default).
  */
 export function useMyCards() {
 	return useQuery({
@@ -21,5 +27,6 @@ export function useMyCards() {
 		queryFn: apiGetMyCards,
 		refetchOnWindowFocus: true,
 		refetchOnMount: 'always',
+		refetchInterval: MY_WORK_POLL_INTERVAL,
 	})
 }

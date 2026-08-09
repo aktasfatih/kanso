@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { getMyReviews as apiGetMyReviews, setReviewState as apiSetReviewState } from '../services/api.js'
-import { boardQueryKey, invalidateMyWork } from './queryKeys.js'
+import { boardQueryKey, invalidateMyWork, MY_WORK_POLL_INTERVAL } from './queryKeys.js'
 
 /**
  * Composable for the "My Reviews" feed - all review requests assigned to the
@@ -19,6 +19,10 @@ export function useMyReviews() {
 		// mount refetch is suppressed within staleTime - 'always' makes every
 		// navigation to My Reviews revalidate against the server.
 		refetchOnMount: 'always',
+		// #3768: other users' review requests must appear while the user sits on
+		// the page - polling is the only channel for this cross-board feed.
+		// Paused on hidden tabs (TanStack default refetchIntervalInBackground).
+		refetchInterval: MY_WORK_POLL_INTERVAL,
 	})
 
 	/**

@@ -3,6 +3,7 @@
 
 import { useQuery } from '@tanstack/vue-query'
 import { getInbox as apiGetInbox } from '../services/api.js'
+import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
 
 /**
  * Composable for the Inbox feed - recent comments on cards the current user
@@ -19,6 +20,10 @@ export function useInbox() {
 		// mount refetch is suppressed within staleTime - 'always' makes every
 		// navigation to the Inbox revalidate against the server.
 		refetchOnMount: 'always',
+		// #3768: other people's comments must appear while the user sits on the
+		// Inbox - polling is the only channel for this cross-board feed.
+		// Paused on hidden tabs (TanStack default refetchIntervalInBackground).
+		refetchInterval: MY_WORK_POLL_INTERVAL,
 	})
 
 	return query
