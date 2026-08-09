@@ -32,6 +32,10 @@ use OCP\DB\Types;
  * @method void setDeletedAt(int $deletedAt)
  * @method string|null getWebhookSecret()
  * @method void setWebhookSecret(?string $webhookSecret)
+ * @method int|null getWebhookIntakeStackId()
+ * @method void setWebhookIntakeStackId(?int $webhookIntakeStackId)
+ * @method string|null getWebhookIntakeLabel()
+ * @method void setWebhookIntakeLabel(?string $webhookIntakeLabel)
  * @method string getEstimateScale()
  * @method void setEstimateScale(string $estimateScale)
  * @method bool|null getNewCardsOnTop()
@@ -44,6 +48,8 @@ use OCP\DB\Types;
  * @method void setPublicShareExpiresAt(?int $publicShareExpiresAt)
  * @method string|null getIcalFeedToken()
  * @method void setIcalFeedToken(?string $icalFeedToken)
+ * @method string|null getChatUrl()
+ * @method void setChatUrl(?string $chatUrl)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -60,6 +66,13 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?int $deletedAt = null;
 	// MANAGE-only; deliberately NEVER emitted by jsonSerialize().
 	protected ?string $webhookSecret = null;
+	// GitHub issue intake (#3752). MANAGE-only webhook config, OFF by default.
+	// NULL stack = intake disabled (webhook stays react-only); a non-null stack
+	// means an `issues`/`opened` delivery auto-creates a link-only card there.
+	// The label is an optional free-text GitHub label filter (NULL = all
+	// issues). Both ride the webhook config endpoint, not the board payload.
+	protected ?int $webhookIntakeStackId = null;
+	protected ?string $webhookIntakeLabel = null;
 	protected ?string $estimateScale = null;
 	protected ?bool $newCardsOnTop = null;
 	// The per-board human-id prefix (e.g. "KAN"); a card's reference is
@@ -82,6 +95,10 @@ class Board extends Entity implements \JsonSerializable {
 	// independent lifecycles. Deliberately NEVER emitted by jsonSerialize(); the
 	// token is only ever returned by the dedicated MANAGE feed-config endpoints.
 	protected ?string $icalFeedToken = null;
+	// "Project chat" link (#3748). MANAGE-only to set, validated server-side to
+	// http/https. A pure display address (typically a Talk room) - no Talk API
+	// coupling. NULL = no chat link. Emitted to every board member.
+	protected ?string $chatUrl = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -92,16 +109,19 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('lastModified', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
 		$this->addType('webhookSecret', Types::STRING);
+		$this->addType('webhookIntakeStackId', Types::INTEGER);
+		$this->addType('webhookIntakeLabel', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);
 		$this->addType('newCardsOnTop', Types::BOOLEAN);
 		$this->addType('prefix', Types::STRING);
 		$this->addType('publicShareToken', Types::STRING);
 		$this->addType('publicShareExpiresAt', Types::INTEGER);
 		$this->addType('icalFeedToken', Types::STRING);
+		$this->addType('chatUrl', Types::STRING);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -118,6 +138,7 @@ class Board extends Entity implements \JsonSerializable {
 			// The human-id prefix; falls back to the shared default for boards
 			// that predate the column and haven't been backfilled yet.
 			'prefix' => $this->prefix ?? BoardPrefix::DEFAULT,
+			'chatUrl' => $this->chatUrl,
 		];
 	}
 }

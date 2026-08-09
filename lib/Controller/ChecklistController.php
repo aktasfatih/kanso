@@ -73,6 +73,42 @@ class ChecklistController extends Controller {
 		});
 	}
 
+	/**
+	 * Assigns the step to one user (user-only, no groups - #3745) and freezes
+	 * the assignee's board side into the item. The assignee must be able to
+	 * read the board and see the card.
+	 */
+	#[NoAdminRequired]
+	public function assign(int $itemId, string $participant = ''): JSONResponse {
+		return $this->respond(function () use ($itemId, $participant): JSONResponse {
+			return new JSONResponse(
+				$this->checklistService->assignItem($itemId, $participant, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function unassign(int $itemId): JSONResponse {
+		return $this->respond(function () use ($itemId): JSONResponse {
+			return new JSONResponse(
+				$this->checklistService->unassignItem($itemId, $this->currentUserId())
+			);
+		});
+	}
+
+	/**
+	 * Sets or clears the step's own due date. Same wire format as the card due
+	 * date (strict ISO 8601; null or '' clears).
+	 */
+	#[NoAdminRequired]
+	public function setDue(int $itemId, ?string $due = null): JSONResponse {
+		return $this->respond(function () use ($itemId, $due): JSONResponse {
+			return new JSONResponse(
+				$this->checklistService->setItemDue($itemId, $due, $this->currentUserId())
+			);
+		});
+	}
+
 	#[NoAdminRequired]
 	public function destroy(int $itemId): JSONResponse {
 		return $this->respond(function () use ($itemId): JSONResponse {

@@ -33,6 +33,9 @@ import {
 	updateChecklistItem as apiUpdateChecklistItem,
 	moveChecklistItem as apiMoveChecklistItem,
 	deleteChecklistItem as apiDeleteChecklistItem,
+	assignChecklistItem as apiAssignChecklistItem,
+	unassignChecklistItem as apiUnassignChecklistItem,
+	setChecklistItemDue as apiSetChecklistItemDue,
 } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
 
@@ -323,6 +326,70 @@ export function useChecklist(cardId, boardId) {
 		},
 	})
 
+	// ── Shared helper: optimistic per-item field patch (steps, #3745) ───────────
+	// Patches one item's fields in the checklist + card-detail caches. Summary
+	// counts are untouched (assignee/due don't change done/total), so the board
+	// cache needs no patch. Returns the rollback context.
+	async function patchItemFields(itemId, fields) {
+		const checklistKey = getChecklistKey()
+		const cardKey = getCardKey()
+
+		await queryClient.cancelQueries({ queryKey: checklistKey })
+		await queryClient.cancelQueries({ queryKey: cardKey })
+
+		const previousChecklist = queryClient.getQueryData(checklistKey)
+		const previousCard = queryClient.getQueryData(cardKey)
+
+		const nextItems = (Array.isArray(previousChecklist) ? previousChecklist : []).map((i) =>
+			i.id === itemId ? { ...i, ...fields } : i,
+		)
+		queryClient.setQueryData(checklistKey, nextItems)
+		patchCardDetailSummary(nextItems)
+
+		return { previousChecklist, previousCard }
+	}
+
+	function rollbackItemFields(context) {
+		if (context?.previousChecklist !== undefined) {
+			queryClient.setQueryData(getChecklistKey(), context.previousChecklist)
+		}
+		if (context?.previousCard !== undefined) {
+			queryClient.setQueryData(getCardKey(), context.previousCard)
+		}
+	}
+
+	function settleItemFields() {
+		queryClient.invalidateQueries({ queryKey: getChecklistKey() })
+		queryClient.invalidateQueries({ queryKey: getCardKey() })
+	}
+
+	// ── assignItem (#3745) ──────────────────────────────────────────────────────
+	// assignedRole/assignedAt are server-derived (frozen at assign time), so the
+	// optimistic patch only sets the user; the settle invalidation fills the rest.
+	const assignItem = useMutation({
+		mutationFn: ({ item, participant }) => apiAssignChecklistItem(item.id, participant),
+		onMutate: ({ item, participant }) => patchItemFields(item.id, { assignedUser: participant }),
+		onError: (_err, _vars, context) => rollbackItemFields(context),
+		onSettled: settleItemFields,
+	})
+
+	// ── unassignItem (#3745) ────────────────────────────────────────────────────
+	const unassignItem = useMutation({
+		mutationFn: ({ item }) => apiUnassignChecklistItem(item.id),
+		onMutate: ({ item }) => patchItemFields(item.id, { assignedUser: null, assignedRole: null, assignedAt: null }),
+		onError: (_err, _vars, context) => rollbackItemFields(context),
+		onSettled: settleItemFields,
+	})
+
+	// ── setItemDue (#3745) ──────────────────────────────────────────────────────
+	// due: ISO 8601 string or null to clear (same wire format as the card due).
+	const setItemDue = useMutation({
+		mutationFn: ({ item, due }) => apiSetChecklistItemDue(item.id, due),
+		onMutate: ({ item, due }) => patchItemFields(item.id, { dueDate: due ?? null }),
+		onError: (_err, _vars, context) => rollbackItemFields(context),
+		onSettled: settleItemFields,
+	})
+
 	// ── moveItem ────────────────────────────────────────────────────────────────
 	// afterItemId: id of the item to insert after, or null to move to the top.
 	const moveItem = useMutation({
@@ -382,5 +449,8 @@ export function useChecklist(cardId, boardId) {
 		renameItem,
 		deleteItem,
 		moveItem,
+		assignItem,
+		unassignItem,
+		setItemDue,
 	}
 }

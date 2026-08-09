@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -14,10 +15,13 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelation;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Service\CardRelationService;
+use OCA\Kanso\Service\CardVisibilityGuard;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCP\AppFramework\Db\DoesNotExistException;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -27,6 +31,7 @@ class CardRelationServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private PermissionService&MockObject $permissionService;
 	private ChangeNotifier&MockObject $changeNotifier;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardRelationService $service;
 
 	protected function setUp(): void {
@@ -36,12 +41,18 @@ class CardRelationServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->visibilityGuard->method('roleOn')->willReturn(ViewerContext::ROLE_INTERNAL);
+		// A REAL scope - the masking rule is the behaviour under test, not a stub.
 		$this->service = new CardRelationService(
 			$this->relationMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->permissionService,
 			$this->changeNotifier,
+			$this->visibilityGuard,
+			new CardVisibilityScope(),
 		);
 	}
 
@@ -169,20 +180,54 @@ class CardRelationServiceTest extends TestCase {
 		$this->wireCards();
 		$this->permissionService->method('assertPermission'); // READ ok
 		$this->relationMapper->method('findOutgoing')->willReturn([
-			['id' => 1, 'type' => 'blocks', 'otherCardId' => 20, 'otherTitle' => 'B', 'otherDone' => false],
-			['id' => 2, 'type' => 'duplicates', 'otherCardId' => 30, 'otherTitle' => 'D', 'otherDone' => true],
+			['id' => 1, 'type' => 'blocks', 'otherCardId' => 20, 'otherTitle' => 'B', 'otherDone' => false, 'otherVisibility' => 'public', 'otherCreatorRole' => 'internal', 'otherOwner' => 'someone'],
+			['id' => 2, 'type' => 'duplicates', 'otherCardId' => 30, 'otherTitle' => 'D', 'otherDone' => true, 'otherVisibility' => 'public', 'otherCreatorRole' => 'internal', 'otherOwner' => 'someone'],
 		]);
 		$this->relationMapper->method('findIncoming')->willReturn([
-			['id' => 3, 'type' => 'blocks', 'otherCardId' => 40, 'otherTitle' => 'A', 'otherDone' => false],
+			['id' => 3, 'type' => 'blocks', 'otherCardId' => 40, 'otherTitle' => 'A', 'otherDone' => false, 'otherVisibility' => 'public', 'otherCreatorRole' => 'internal', 'otherOwner' => 'someone'],
 		]);
 
 		$grouped = $this->service->relationsForCard(10, 'alice');
 		self::assertCount(1, $grouped['blocks']);
 		self::assertSame(20, $grouped['blocks'][0]['cardId']);
+		self::assertFalse($grouped['blocks'][0]['hidden']);
 		self::assertCount(1, $grouped['blockedBy']);
 		self::assertSame(40, $grouped['blockedBy'][0]['cardId']);
 		self::assertCount(1, $grouped['duplicates']);
 		self::assertSame(30, $grouped['duplicates'][0]['cardId']);
 		self::assertCount(0, $grouped['relates']);
+	}
+
+	public function testGroupedForCardMasksInvisibleCounterpart(): void {
+		// A private counterpart owned by someone else: the row survives
+		// (the relation stays removable) but its content must be masked.
+		$this->relationMapper->method('findOutgoing')->willReturn([
+			['id' => 5, 'type' => 'relates', 'otherCardId' => 20, 'otherTitle' => 'Secret', 'otherDone' => true, 'otherVisibility' => 'private', 'otherCreatorRole' => null, 'otherOwner' => 'someone-else'],
+		]);
+		$this->relationMapper->method('findIncoming')->willReturn([]);
+		$board = new Board();
+		$board->setId(1);
+
+		$grouped = $this->service->groupedForCard(10, $board, 'alice');
+		self::assertSame(
+			['id' => 5, 'cardId' => null, 'title' => null, 'done' => false, 'hidden' => true],
+			$grouped['relates'][0],
+		);
+	}
+
+	public function testAddToInvisibleCounterpartReadsAsNotFound(): void {
+		$this->wireCards();
+		// The actor may see card 10 but NOT card 20 - relating to a hidden
+		// card must fail exactly like a missing id (no existence oracle).
+		$this->visibilityGuard->method('assertVisible')
+			->willReturnCallback(static function ($board, Card $card): void {
+				if ($card->getId() === 20) {
+					throw new DoesNotExistException('hidden');
+				}
+			});
+		$this->relationMapper->expects($this->never())->method('insert');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->addRelation(10, 20, 'relates', 'alice');
 	}
 }

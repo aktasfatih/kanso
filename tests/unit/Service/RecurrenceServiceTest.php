@@ -19,6 +19,8 @@ use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -44,6 +46,7 @@ class RecurrenceServiceTest extends TestCase {
 	private CardService&MockObject $cardService;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ITimeFactory&MockObject $time;
 	private IDBConnection&MockObject $db;
 	private IConfig&MockObject $config;
@@ -61,6 +64,9 @@ class RecurrenceServiceTest extends TestCase {
 		$this->cardService = $this->createMock(CardService::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		// Every template is visible by default (assertVisible no-ops); the
+		// #3760 hidden-template tests wire a throwing guard explicitly.
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->db = $this->createMock(IDBConnection::class);
@@ -78,6 +84,33 @@ class RecurrenceServiceTest extends TestCase {
 			$this->cardService,
 			$this->changeNotifier,
 			$this->permissionService,
+			$this->visibilityGuard,
+			$this->time,
+			$this->db,
+			$this->config,
+			$this->logger,
+		);
+	}
+
+	/**
+	 * A service whose visibility guard throws for the template - the #3760
+	 * hidden-template cases (visibility narrowed past the viewer/owner).
+	 */
+	private function serviceWithHiddenTemplate(): RecurrenceService {
+		$guard = $this->createMock(CardVisibilityGuard::class);
+		$guard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 10 does not exist'));
+		return new RecurrenceService(
+			$this->ruleMapper,
+			$this->cardMapper,
+			$this->stackMapper,
+			$this->boardMapper,
+			$this->cardLabelMapper,
+			$this->cardAssigneeMapper,
+			$this->cardService,
+			$this->changeNotifier,
+			$this->permissionService,
+			$guard,
 			$this->time,
 			$this->db,
 			$this->config,
@@ -663,6 +696,20 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->createNow(3, 'bob');
 	}
 
+	public function testCreateNowRefusesAHiddenTemplateLikeAMissingCard(): void {
+		// create-now RETURNS the spawned card (title, description) to the
+		// actor - a template hidden from them must read as missing (#3760),
+		// or the endpoint would be a read oracle for hidden content.
+		$rule = $this->rule(nextOccurrenceAt: self::NOW);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->expects(self::never())->method('create');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->serviceWithHiddenTemplate()->createNow(3, 'mgr');
+	}
+
 	// ---- runDueRules (cron entry) -----------------------------------------
 
 	public function testRunDueRulesSpawnsEachAndSkipsBroken(): void {
@@ -874,8 +921,8 @@ class RecurrenceServiceTest extends TestCase {
 		$service = new RecurrenceService(
 			$this->ruleMapper, $this->cardMapper, $this->stackMapper, $this->boardMapper,
 			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
-			$this->changeNotifier, $this->permissionService, $this->time, $this->db,
-			$config, $this->logger,
+			$this->changeNotifier, $this->permissionService, $this->visibilityGuard,
+			$this->time, $this->db, $config, $this->logger,
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -888,5 +935,82 @@ class RecurrenceServiceTest extends TestCase {
 		});
 
 		$service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
+	}
+
+	// ---- visibility (#3760) ------------------------------------------------
+
+	public function testSpawnedCloneInheritsTemplateVisibilityAndCreatorRoleVerbatim(): void {
+		// A provider-internal template spawns a provider-internal card - the
+		// class and the frozen creator side ride the CREATE itself, so no
+		// fan-out ever sees a wider interim 'public' card.
+		$template = $this->templateCard();
+		$template->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$template->setCreatorRole('internal');
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+
+		$this->cardService->expects(self::once())
+			->method('create')
+			->with(5, 'Water the plants', 'alice', null, null, CardVisibilityScope::VISIBILITY_INTERNAL, 'internal')
+			->willReturn($this->spawnedCard(99));
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		self::assertNotNull($this->service->spawn($rule));
+	}
+
+	public function testLegacyTemplateWithoutVisibilitySpawnsPublic(): void {
+		// Pre-migration template rows (NULL visibility) read as 'public' - the
+		// clone gets the explicit backfill value, creator side left to create().
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+
+		$this->cardService->expects(self::once())
+			->method('create')
+			->with(5, 'Water the plants', 'alice', null, null, CardVisibilityScope::VISIBILITY_PUBLIC, null)
+			->willReturn($this->spawnedCard(99));
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		self::assertNotNull($this->service->spawn($rule));
+	}
+
+	public function testSpawnRefusesWhenTemplateIsHiddenFromTheRuleOwner(): void {
+		// The template's visibility narrowed past the rule owner after the rule
+		// was created: cloning its content into a card the owner CAN see would
+		// be a leak - the spawn fails like a missing template, nothing created.
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->expects(self::never())->method('create');
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->serviceWithHiddenTemplate()->spawn($rule);
+	}
+
+	public function testCreateRefusesAHiddenTemplateLikeAMissingCard(): void {
+		// Anchoring a rule on a card the creator cannot SEE is a 404 - same as
+		// a bogus id, no existence oracle.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->serviceWithHiddenTemplate()->create(
+			1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'mgr',
+		);
+	}
+
+	public function testUpdateRefusesAHiddenTemplateLikeAMissingCard(): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->serviceWithHiddenTemplate()->update(3, null, null, null, null, null, null, null, null, 'mgr');
 	}
 }

@@ -9,7 +9,9 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
+use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCP\IGroupManager;
@@ -45,6 +47,7 @@ class ChangeNotifier {
 		private ContainerInterface $container,
 		private LoggerInterface $logger,
 		private ActivityPublisher $activityPublisher,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -150,17 +153,33 @@ class ChangeNotifier {
 	 * Best-effort and never throws - the Activity app may be absent (the publisher
 	 * no-ops) and any publish error is swallowed there.
 	 *
+	 * The audience is the board's participants RESTRICTED to those who can SEE
+	 * the card (#3760): an activity row names the card's title, so delivering
+	 * it to a participant outside the card's visibility is a direct content
+	 * leak. One batched role resolution
+	 * ({@see CardVisibilityGuard::filterVisible()}; public cards - the vast
+	 * majority - short-circuit); the realtime push
+	 * ({@see self::pushBoardChanged()}) deliberately stays board-wide, its body
+	 * carries only the board id, never card data.
+	 *
 	 * @param 'card_created'|'card_moved'|'card_done' $subject
 	 */
-	public function publishCardActivity(int $boardId, string $subject, int $cardId, string $cardTitle, ?string $actor): void {
+	public function publishCardActivity(int $boardId, string $subject, Card $card, ?string $actor): void {
 		// System/cron-driven changes carry a null actor (auto-archive sweep,
-		// recurrence spawns, due reminders). Activity is only for user-initiated
+		// due reminders). Activity is only for user-initiated
 		// milestones, so skip those - it avoids the batch/cron activity spam.
 		if ($actor === null) {
 			return;
 		}
 		try {
-			$recipients = $this->resolveRecipients($boardId);
+			$board = $this->boardMapper->find($boardId);
+			$recipients = $this->visibilityGuard->filterVisible(
+				$board,
+				$card,
+				$this->resolveRecipientsFor($board),
+			);
+			$cardId = $card->getId();
+			$cardTitle = (string)$card->getTitle();
 			match ($subject) {
 				'card_created' => $this->activityPublisher->cardCreated($boardId, $cardId, $cardTitle, $actor, $recipients),
 				'card_moved' => $this->activityPublisher->cardMoved($boardId, $cardId, $cardTitle, $actor, $recipients),
@@ -218,7 +237,17 @@ class ChangeNotifier {
 	 * @return list<string>
 	 */
 	private function resolveRecipients(int $boardId): array {
-		$board = $this->boardMapper->find($boardId);
+		return $this->resolveRecipientsFor($this->boardMapper->find($boardId));
+	}
+
+	/**
+	 * Same as {@see self::resolveRecipients()} for a caller already holding
+	 * the Board (avoids a second find on the activity-publish path).
+	 *
+	 * @return list<string>
+	 */
+	private function resolveRecipientsFor(Board $board): array {
+		$boardId = $board->getId();
 
 		// Keyed by uid for deduplication.
 		$uids = [$board->getOwner() => true];

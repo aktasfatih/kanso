@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -18,7 +20,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<CardLabel>
  */
 class CardLabelMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_card_labels', CardLabel::class);
 	}
 
@@ -50,6 +55,36 @@ class CardLabelMapper extends QBMapper {
 	}
 
 	/**
+	 * The anonymous-share twin of {@see self::findLabelIdsByBoard()} (#3743):
+	 * the same per-card label-id map, restricted to PUBLIC cards only - the
+	 * public snapshot has no viewer and must never fetch (then discard in PHP)
+	 * the label rows of hidden cards. Mirrors
+	 * {@see ChecklistItemMapper::progressByBoardPublicOnly()}.
+	 *
+	 * @return array<int, int[]> map of cardId => labelIds in assignment order
+	 * @throws Exception
+	 */
+	public function findLabelIdsByBoardPublicOnly(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('cl.card_id', 'cl.label_id')
+			->from($this->getTableName(), 'cl')
+			->innerJoin('cl', 'kanso_cards', 'c', $qb->expr()->eq('cl.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('cl.id', 'ASC');
+		$this->visibilityScope->applyPublicOnly($qb, 'c');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']][] = (int)$row['label_id'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * Open (non-deleted) card counts grouped by label for a board - the
 	 * "cards per label" board-stats aggregate. Joins through `kanso_cards`,
 	 * grouped by label_id.
@@ -57,7 +92,7 @@ class CardLabelMapper extends QBMapper {
 	 * @return list<array{labelId: int, count: int}>
 	 * @throws Exception
 	 */
-	public function countByLabelForBoard(int $boardId): array {
+	public function countByLabelForBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('cl.label_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -67,6 +102,7 @@ class CardLabelMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('cl.label_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];

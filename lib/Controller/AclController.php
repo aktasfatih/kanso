@@ -32,19 +32,24 @@ class AclController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(int $id, string $participant = '', string $participantType = '', int $permission = 0): JSONResponse {
-		return $this->respond(function () use ($id, $participant, $participantType, $permission): JSONResponse {
+	public function create(int $id, string $participant = '', string $participantType = '', int $permission = 0, string $role = 'internal'): JSONResponse {
+		return $this->respond(function () use ($id, $participant, $participantType, $permission, $role): JSONResponse {
 			return new JSONResponse(
-				$this->aclService->create($id, $participant, $participantType, $permission, $this->currentUserId())
+				$this->aclService->create($id, $participant, $participantType, $permission, $this->currentUserId(), $role)
 			);
 		});
 	}
 
+	/**
+	 * A null $role leaves the member's stored board side untouched - only
+	 * requests that explicitly send one can flip it (MANAGE-gated in the
+	 * service).
+	 */
 	#[NoAdminRequired]
-	public function update(int $id, int $aclId, int $permission = 0): JSONResponse {
-		return $this->respond(function () use ($id, $aclId, $permission): JSONResponse {
+	public function update(int $id, int $aclId, int $permission = 0, ?string $role = null): JSONResponse {
+		return $this->respond(function () use ($id, $aclId, $permission, $role): JSONResponse {
 			return new JSONResponse(
-				$this->aclService->update($id, $aclId, $permission, $this->currentUserId())
+				$this->aclService->update($id, $aclId, $permission, $this->currentUserId(), $role)
 			);
 		});
 	}

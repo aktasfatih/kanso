@@ -55,7 +55,7 @@ class CardRelationMapper extends QBMapper {
 	/**
 	 * Relations where $cardId is the source (card_id), joined to the OTHER card.
 	 *
-	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool}>
+	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool, otherVisibility: ?string, otherCreatorRole: ?string, otherOwner: string}>
 	 * @throws Exception
 	 */
 	public function findOutgoing(int $cardId): array {
@@ -66,7 +66,7 @@ class CardRelationMapper extends QBMapper {
 	 * Relations where $cardId is the target (other_card_id), joined to the
 	 * source card - this is where "blocked by" comes from.
 	 *
-	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool}>
+	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool, otherVisibility: ?string, otherCreatorRole: ?string, otherOwner: string}>
 	 * @throws Exception
 	 */
 	public function findIncoming(int $cardId): array {
@@ -77,7 +77,7 @@ class CardRelationMapper extends QBMapper {
 	 * Shared body of findOutgoing/findIncoming: rows where $matchCol = $cardId,
 	 * joined to the card named by $otherCol (the card at the far end).
 	 *
-	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool}>
+	 * @return list<array{id: int, type: string, otherCardId: int, otherTitle: string, otherDone: bool, otherVisibility: ?string, otherCreatorRole: ?string, otherOwner: string}>
 	 * @throws Exception
 	 */
 	private function joinedRows(string $matchCol, string $otherCol, int $cardId): array {
@@ -86,6 +86,11 @@ class CardRelationMapper extends QBMapper {
 			->selectAlias('c.id', 'other_id')
 			->selectAlias('c.title', 'other_title')
 			->selectAlias('c.done_at', 'other_done_at')
+			// The counterpart's visibility triple rides along so the service
+			// can mask hidden counterparts without a per-row card fetch (#3743).
+			->selectAlias('c.visibility', 'other_visibility')
+			->selectAlias('c.creator_role', 'other_creator_role')
+			->selectAlias('c.owner', 'other_owner')
 			->from($this->getTableName(), 'r')
 			->innerJoin('r', 'kanso_cards', 'c', $qb->expr()->eq('r.' . $otherCol, 'c.id'))
 			->where($qb->expr()->eq('r.' . $matchCol, $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
@@ -101,6 +106,9 @@ class CardRelationMapper extends QBMapper {
 				'otherCardId' => (int)$row['other_id'],
 				'otherTitle' => (string)$row['other_title'],
 				'otherDone' => ((int)$row['other_done_at']) > 0,
+				'otherVisibility' => $row['other_visibility'] !== null ? (string)$row['other_visibility'] : null,
+				'otherCreatorRole' => $row['other_creator_role'] !== null ? (string)$row['other_creator_role'] : null,
+				'otherOwner' => (string)$row['other_owner'],
 			];
 		}
 		$result->closeCursor();

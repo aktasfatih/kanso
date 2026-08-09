@@ -341,7 +341,10 @@ class TrelloImportService {
 
 	/**
 	 * Flattens a card's Trello checklists into Kanso checklist items in order,
-	 * `state:complete` → done.
+	 * `state:complete` → done. Clone-path policy for rich steps (#3745): a
+	 * checkItem's `due` (ISO 8601) is KEPT as the step due date; its
+	 * `idMember` is deliberately DROPPED - Trello member ids do not map to
+	 * Nextcloud uids, so imported steps arrive unassigned.
 	 *
 	 * @param list<array<string, mixed>> $checklists
 	 */
@@ -364,8 +367,28 @@ class TrelloImportService {
 				$itemKey = $itemKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($itemKey);
 				$entity->setSortKey($itemKey);
 				$entity->setCreatedAt($now);
+				$due = $this->parseCheckItemDue($item['due'] ?? null);
+				if ($due !== null) {
+					$entity->setDueDate($due);
+				}
 				$this->checklistItemMapper->insert($entity);
 			}
+		}
+	}
+
+	/**
+	 * A Trello checkItem `due` (ISO 8601, e.g. 2026-07-22T12:00:00.000Z),
+	 * normalized to UTC. Anything unparsable is dropped - a lost due date must
+	 * never fail a whole board import.
+	 */
+	private function parseCheckItemDue(mixed $due): ?\DateTime {
+		if (!is_string($due) || $due === '') {
+			return null;
+		}
+		try {
+			return (new \DateTime($due))->setTimezone(new \DateTimeZone('UTC'));
+		} catch (\Exception) {
+			return null;
 		}
 	}
 

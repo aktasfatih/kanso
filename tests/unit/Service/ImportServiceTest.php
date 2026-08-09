@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\ArchiveRule;
 use OCA\Kanso\Db\ArchiveRuleMapper;
 use OCA\Kanso\Db\AutomationRule;
@@ -17,6 +19,7 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
@@ -52,6 +55,7 @@ class ImportServiceTest extends TestCase {
 	private AutomationRuleMapper&MockObject $automationRuleMapper;
 	private IUserManager&MockObject $userManager;
 	private \OCP\IDBConnection&MockObject $db;
+	private BoardAccess&MockObject $boardAccess;
 	private ImportService $service;
 
 	/** @var array<string, int> per-class monotonically-increasing id sequences */
@@ -77,6 +81,12 @@ class ImportServiceTest extends TestCase {
 		$this->automationRuleMapper = $this->createMock(AutomationRuleMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(\OCP\IDBConnection::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// duplicate() resolves the duplicating viewer's context and hands it to
+		// the (viewer-scoped) export (#3743).
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
+		);
 
 		$this->service = new ImportService(
 			$this->boardService,
@@ -95,6 +105,7 @@ class ImportServiceTest extends TestCase {
 			$this->automationRuleMapper,
 			$this->userManager,
 			$this->db,
+			$this->boardAccess,
 		);
 	}
 
@@ -160,7 +171,12 @@ class ImportServiceTest extends TestCase {
 		$this->labelMapper->method('insert')->willReturnCallback($this->autoId('label', 10));
 		$this->reviewTypeMapper->method('insert')->willReturnCallback($this->autoId('rt', 20));
 		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
-		$this->checklistItemMapper->method('insert')->willReturnCallback($this->autoId('cl', 60));
+		$capturedItems = [];
+		$this->checklistItemMapper->method('insert')->willReturnCallback(function (ChecklistItem $i) use (&$capturedItems): ChecklistItem {
+			$i->setId(60 + count($capturedItems));
+			$capturedItems[] = $i;
+			return $i;
+		});
 		$this->cardReviewMapper->method('insert')->willReturnCallback($this->autoId('rv', 80));
 
 		// Fresh import target starts its human-id counter at 1.
@@ -234,7 +250,14 @@ class ImportServiceTest extends TestCase {
 						'id' => 100, 'stackId' => 1, 'title' => 'Parent', 'sortKey' => 'h',
 						'parentCardId' => null, 'priority' => 0,
 						'labelIds' => [5], 'assignees' => ['bob', 'ghost'],
-						'checklist' => [['title' => 'step', 'done' => false, 'sortKey' => 'a']],
+						// Rich-step fields (#3745): dueDate is KEPT; any assignee /
+						// role / done_at in the document is IGNORED (clone policy).
+						'checklist' => [[
+							'title' => 'step', 'done' => false, 'sortKey' => 'a',
+							'dueDate' => 1755194400,
+							'assignedUser' => 'ghost', 'assignedRole' => 'external',
+							'assignedAt' => 1, 'doneAt' => 2,
+						]],
 						'comments' => [
 							['id' => 200, 'parentCommentId' => null, 'author' => 'carol', 'body' => 'top'],
 							['id' => 201, 'parentCommentId' => 200, 'author' => 'ghost', 'body' => 'reply'],
@@ -280,6 +303,15 @@ class ImportServiceTest extends TestCase {
 		self::assertSame([[100, 10]], $labelAssignments);
 		// Unknown assignee "ghost" dropped, "bob" kept.
 		self::assertSame([[100, 'bob']], $assignees);
+
+		// Rich-step clone policy (#3745): the due date round-trips; the
+		// document's assignee / frozen role / stamps never reach the row.
+		self::assertCount(1, $capturedItems);
+		self::assertSame(1755194400, $capturedItems[0]->getDueDate()?->getTimestamp());
+		self::assertNull($capturedItems[0]->getAssignedUser());
+		self::assertNull($capturedItems[0]->getAssignedRole());
+		self::assertNull($capturedItems[0]->getAssignedAt());
+		self::assertNull($capturedItems[0]->getDoneAt());
 
 		// Parent remap: the child card's parent became the new parent card id (100).
 		self::assertSame(100, $this->cardsById[101]->getParentCardId());
@@ -346,7 +378,8 @@ class ImportServiceTest extends TestCase {
 		$source = new Board();
 		$source->setId(7);
 		$source->setTitle('Roadmap');
-		$this->exportService->expects(self::once())->method('export')->with($source)
+		$this->exportService->expects(self::once())->method('export')
+			->with($source, self::isInstanceOf(ViewerContext::class))
 			->willReturn($this->sourceExport());
 
 		// The copy is created through BoardService, titled "<original> (copy)",

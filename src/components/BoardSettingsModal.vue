@@ -128,6 +128,37 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="prefixError" class="label-settings__error">{{ prefixError }}</span>
 						</template>
 
+						<!-- Project chat link (#3748): a plain URL (typically a Talk room)
+						     surfaced as a toolbar button for every member. MANAGE only;
+						     http/https only (validated here and server-side); empty clears
+						     the link and hides the button. Deliberately dumb - no Talk API. -->
+						<template v-if="canManage">
+							<label class="board-settings__prefix-label" for="bs-chat-url">
+								{{ t('kanso', 'Project chat link') }}
+							</label>
+							<div class="board-settings__prefix-row">
+								<input
+									id="bs-chat-url"
+									v-model="chatUrlDraft"
+									class="board-settings__chat-url-input"
+									type="url"
+									:disabled="chatUrlSaving"
+									:placeholder="t('kanso', 'https://cloud.example.com/call/abc123')"
+									data-test="board-chat-url-input"
+									@keydown.enter.prevent="saveChatUrl">
+								<NcButton
+									:disabled="chatUrlSaving || !chatUrlDirty"
+									data-test="board-chat-url-save"
+									@click="saveChatUrl">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+							</div>
+							<p class="board-settings__general-hint">
+								{{ t('kanso', 'Shown to everyone on this board as a "Project chat" button in the toolbar — typically a Nextcloud Talk room. Leave empty to remove the button.') }}
+							</p>
+							<span v-if="chatUrlError" class="label-settings__error" data-test="board-chat-url-error">{{ chatUrlError }}</span>
+						</template>
+
 						<!-- Board background (#3528): a curated preset gradient rendered
 						     behind the board view. MANAGE only; presets only (no free-form
 						     CSS / image upload). -->
@@ -166,12 +197,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="backgroundError" class="label-settings__error">{{ backgroundError }}</span>
 						</template>
 
-						<!-- Board actions: Export / Duplicate are READ-gated on the
-						     server, so they are available to anyone who can open these
-						     settings; Archive / Delete are MANAGE-only (canManage). -->
-						<div class="board-actions">
+						<!-- Board actions: Export / Duplicate are internal-only
+						     (#3744) - hidden for external members and 403'd by the
+						     server regardless; Archive / Delete are MANAGE-only
+						     (canManage). -->
+						<div v-if="isInternal || canManage" class="board-actions">
 							<h4 class="board-actions__heading">{{ t('kanso', 'Board actions') }}</h4>
 
+							<template v-if="isInternal">
 							<!-- Export -->
 							<div class="board-actions__row">
 								<div class="board-actions__text">
@@ -215,6 +248,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</NcButton>
 							</div>
 							<span v-if="duplicateError" class="label-settings__error">{{ duplicateError }}</span>
+							</template>
 
 							<!-- Danger zone: destructive actions, MANAGE only. -->
 							<div v-if="canManage" class="board-actions__danger">
@@ -869,6 +903,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Display name -->
 						<span class="sharing__entry-name">{{ resolveDisplayName(entry) }}</span>
 
+						<!-- Board side (#3742): internal (provider) vs external (client).
+						     Role assignment is MANAGE-gated; others see a passive badge. -->
+						<select
+							v-if="canManage"
+							class="sharing__role-select"
+							:value="entry.role || 'internal'"
+							:disabled="patchingAclId === entry.id"
+							:aria-label="t('kanso', 'Board side for {name}', { name: resolveDisplayName(entry) })"
+							:title="t('kanso', 'Internal members and external members each see only their own side\'s internal cards')"
+							data-test="acl-role-select"
+							@change="changeRole(entry, $event.target.value)">
+							<option value="internal">{{ t('kanso', 'Internal') }}</option>
+							<option value="external">{{ t('kanso', 'External') }}</option>
+						</select>
+						<span
+							v-else-if="(entry.role || 'internal') === 'external'"
+							class="sharing__role-badge"
+							data-test="acl-role-badge">
+							{{ t('kanso', 'External') }}
+						</span>
+
 						<!-- Permission toggles: Edit (bit 2), Share (bit 4), Manage (bit 8) -->
 						<div class="sharing__perms">
 							<label
@@ -1092,7 +1147,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</p>
 				<template v-else>
 					<p class="github-webhook__hint">
-						{{ t('kanso', 'Add a GitHub "pull_request" webhook pointing at the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done.') }}
+						{{ t('kanso', 'Add a GitHub webhook sending "pull_request" and "issues" events to the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards.') }}
 					</p>
 
 					<label class="github-webhook__label">{{ t('kanso', 'Payload URL') }}</label>
@@ -1124,6 +1179,49 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</NcButton>
 						<span v-if="webhook.enabled" class="github-webhook__status">{{ t('kanso', 'Enabled') }}</span>
 					</div>
+
+					<!-- Issue intake (#3752): opt-in auto-create of linked cards -->
+					<template v-if="webhook.enabled">
+						<label class="github-webhook__label" for="bs-webhook-intake-stack">{{ t('kanso', 'Issue intake') }}</label>
+						<p class="github-webhook__hint">
+							{{ t('kanso', 'Pick a column and every newly opened issue becomes a card there, with the issue attached as a link (title only, no body copy).') }}
+						</p>
+						<div class="github-webhook__row">
+							<select
+								id="bs-webhook-intake-stack"
+								class="workflow__select"
+								:disabled="intakeBusy"
+								:value="webhook.intakeStackId == null ? '' : String(webhook.intakeStackId)"
+								@change="onIntakeStackChange">
+								<option value="">{{ t('kanso', 'Off — do not create cards') }}</option>
+								<option v-for="s in stacks" :key="s.id" :value="String(s.id)">{{ s.title }}</option>
+							</select>
+						</div>
+						<div v-if="webhook.intakeStackId != null" class="github-webhook__row">
+							<select
+								class="workflow__select"
+								:disabled="intakeBusy"
+								:value="intakeFilterMode"
+								:aria-label="t('kanso', 'Which issues to take in')"
+								@change="onIntakeFilterModeChange">
+								<option value="all">{{ t('kanso', 'All issues') }}</option>
+								<option value="label">{{ t('kanso', 'Only issues with a label') }}</option>
+							</select>
+							<template v-if="intakeFilterMode === 'label'">
+								<input
+									v-model="intakeLabelInput"
+									class="github-webhook__input"
+									type="text"
+									:placeholder="t('kanso', 'GitHub label name')"
+									:aria-label="t('kanso', 'GitHub label name')"
+									:disabled="intakeBusy"
+									@keyup.enter="saveIntakeLabel">
+								<NcButton :disabled="intakeBusy || !intakeLabelInput.trim()" @click="saveIntakeLabel">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+							</template>
+						</div>
+					</template>
 					<span v-if="webhookError" class="label-settings__error">{{ webhookError }}</span>
 				</template>
 					</div>
@@ -1974,7 +2072,7 @@ import { useCardFields } from '../composables/useCardFields.js'
 import { useAcl } from '../composables/useAcl.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useBoard } from '../composables/useBoard.js'
-import { useBoards } from '../composables/useBoards.js'
+import { useBoardActions } from '../composables/useBoardActions.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
@@ -1985,6 +2083,7 @@ import {
 	fetchWebhookConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
+	updateWebhookIntake as apiUpdateWebhookIntake,
 	fetchPublicShareConfig,
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
@@ -1993,8 +2092,6 @@ import {
 	disableCalendarFeed as apiDisableCalendarFeed,
 	getSettings,
 	updateSettings,
-	exportBoard as apiExportBoard,
-	duplicateBoard as apiDuplicateBoard,
 } from '../services/api.js'
 
 const props = defineProps({
@@ -2074,15 +2171,27 @@ const canShare = computed(() => (props.permissions & PERM_SHARE) !== 0)
 const canEdit = computed(() => (props.permissions & PERM_EDIT) !== 0)
 
 // ── GitHub webhook config (MANAGE) ───────────────────────────────────────────
-const webhook = ref({ enabled: false, payloadUrl: '' })
+const webhook = ref({ enabled: false, payloadUrl: '', intakeStackId: null, intakeLabel: '' })
 const revealedSecret = ref('')
 const webhookError = ref('')
 const webhookBusy = ref(false)
+
+// Issue intake (#3752): the filter-mode select and label input are local UI
+// state, re-derived from the server config after every load/save.
+const intakeBusy = ref(false)
+const intakeFilterMode = ref('all')
+const intakeLabelInput = ref('')
+
+function syncIntakeFromConfig() {
+	intakeFilterMode.value = webhook.value.intakeLabel ? 'label' : 'all'
+	intakeLabelInput.value = webhook.value.intakeLabel || ''
+}
 
 async function loadWebhookConfig() {
 	if (!canManage.value) return
 	try {
 		webhook.value = await fetchWebhookConfig(props.boardId)
+		syncIntakeFromConfig()
 		// An active integration should be visible without a click.
 		if (webhook.value.enabled) {
 			automationGroups.value.github = true
@@ -2092,13 +2201,51 @@ async function loadWebhookConfig() {
 	}
 }
 
+async function saveIntake(stackId, label) {
+	webhookError.value = ''
+	intakeBusy.value = true
+	try {
+		webhook.value = await apiUpdateWebhookIntake(props.boardId, stackId, label)
+		syncIntakeFromConfig()
+	} catch (e) {
+		webhookError.value = e?.response?.data?.error || t('kanso', 'Could not save the issue-intake settings.')
+	} finally {
+		intakeBusy.value = false
+	}
+}
+
+function onIntakeStackChange(e) {
+	const v = e.target.value
+	if (v === '') {
+		// Off: the server also drops any label filter.
+		saveIntake(null, '')
+		return
+	}
+	const label = intakeFilterMode.value === 'label' ? intakeLabelInput.value.trim() : ''
+	saveIntake(Number(v), label)
+}
+
+function onIntakeFilterModeChange(e) {
+	intakeFilterMode.value = e.target.value
+	if (e.target.value === 'all') {
+		saveIntake(webhook.value.intakeStackId, '')
+	}
+	// 'label' persists on Save/Enter, once a name is typed.
+}
+
+function saveIntakeLabel() {
+	const label = intakeLabelInput.value.trim()
+	if (!label) return
+	saveIntake(webhook.value.intakeStackId, label)
+}
+
 async function handleRotateSecret() {
 	webhookError.value = ''
 	webhookBusy.value = true
 	try {
 		const res = await apiRotateWebhookSecret(props.boardId)
 		revealedSecret.value = res.secret
-		webhook.value = { enabled: true, payloadUrl: res.payloadUrl }
+		webhook.value = { ...webhook.value, enabled: true, payloadUrl: res.payloadUrl }
 	} catch (e) {
 		webhookError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
 	} finally {
@@ -2322,11 +2469,24 @@ function toggleAutomationGroup(key) {
 	automationGroups.value[key] = !automationGroups.value[key]
 }
 
+// ── Board actions (export / duplicate / delete) ──────────────────────────────
+// The heavy lifting lives in the useBoardActions composable, shared with the
+// boards-view tile menu (#3750). The modal keeps its own confirm step and
+// close/navigation behaviour on top of the shared actions.
+const {
+	exporting,
+	exportError,
+	exportBoardToFile: exportBoardAction,
+	duplicating,
+	duplicateError,
+	duplicateBoardNow: duplicateBoardAction,
+	isDeletingBoard,
+	deleteBoardError,
+	deleteBoardNow,
+} = useBoardActions()
+
 // ── Delete board (MANAGE, destructive) ────────────────────────────────────────
-const { deleteBoard: deleteBoardMutation } = useBoards()
 const showDeleteBoardConfirm = ref(false)
-const isDeletingBoard = ref(false)
-const deleteBoardError = ref('')
 function onDeleteBoardClick() {
 	deleteBoardError.value = ''
 	showDeleteBoardConfirm.value = true
@@ -2337,17 +2497,10 @@ function onDeleteBoardClick() {
 	})
 }
 async function doDeleteBoard() {
-	isDeletingBoard.value = true
-	deleteBoardError.value = ''
-	try {
-		await deleteBoardMutation.mutateAsync(Number(props.boardId))
+	if (await deleteBoardNow(props.boardId)) {
 		showDeleteBoardConfirm.value = false
 		emit('close')
 		router.push({ name: 'board-list' })
-	} catch (e) {
-		deleteBoardError.value = e?.response?.data?.error || t('kanso', 'Could not delete the board.')
-	} finally {
-		isDeletingBoard.value = false
 	}
 }
 
@@ -2397,6 +2550,11 @@ const {
 
 // ── Workflow composable ───────────────────────────────────────────────────────
 const { data: boardQueryData, updateStack, updateBoard } = useBoard(computed(() => props.boardId))
+
+// The viewer's board side from the board payload (#3744): export/duplicate
+// are internal-only. Absent role (stale cache) reads as internal - the
+// server 403s external egress regardless.
+const isInternal = computed(() => (boardQueryData.value?.role ?? 'internal') !== 'external')
 
 const ROLE_OPTIONS = [
 	{ value: 0, label: t('kanso', 'None') },
@@ -2502,6 +2660,37 @@ async function savePrefix() {
 	}
 }
 
+// ── Project chat link (per-board, #3748) ─────────────────────────────────────
+// A plain http(s) URL (typically a Talk room) surfaced as a toolbar button for
+// every member. MANAGE-only to set; the server enforces the same http/https
+// allow-list. The draft mirrors the cache value and is re-seeded after a save
+// invalidates + refetches. An empty save clears the link (button disappears).
+const boardChatUrl = computed(() => boardQueryData.value?.board?.chatUrl || '')
+const chatUrlDraft = ref('')
+const chatUrlSaving = ref(false)
+const chatUrlError = ref('')
+watch(boardChatUrl, (val) => { chatUrlDraft.value = val }, { immediate: true })
+const chatUrlDirty = computed(() => chatUrlDraft.value.trim() !== boardChatUrl.value)
+async function saveChatUrl() {
+	if (!chatUrlDirty.value) return
+	const draft = chatUrlDraft.value.trim()
+	// Mirror the server gate client-side for an inline error instead of a
+	// round-trip: empty (= clear) or a plain absolute http(s) URL.
+	if (draft !== '' && !/^https?:\/\/\S+$/i.test(draft)) {
+		chatUrlError.value = t('kanso', 'The chat link must be a http:// or https:// URL.')
+		return
+	}
+	chatUrlSaving.value = true
+	chatUrlError.value = ''
+	try {
+		await updateBoard.mutateAsync({ chatUrl: draft })
+	} catch (err) {
+		chatUrlError.value = err?.response?.data?.error || t('kanso', 'Failed to update chat link.')
+	} finally {
+		chatUrlSaving.value = false
+	}
+}
+
 // Archive the board: hides it from the list + nav (restorable from the boards
 // page). Close the panel and return to the board list, since the board the user
 // is on is now archived.
@@ -2521,55 +2710,23 @@ async function archiveBoard() {
 	}
 }
 
-// ── Export board to a downloadable .json file ─────────────────────────────────
-const exporting = ref(false)
-const exportError = ref('')
-
-async function exportBoardToFile() {
-	exporting.value = true
-	exportError.value = ''
-	try {
-		const doc = await apiExportBoard(props.boardId)
-		const title = (doc?.board?.title || 'board')
-			.replace(/[^\w.-]+/g, '-')
-			.replace(/^-+|-+$/g, '') || 'board'
-		const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
-		const href = URL.createObjectURL(blob)
-		const a = document.createElement('a')
-		a.href = href
-		a.download = `kanso-${title}.json`
-		document.body.appendChild(a)
-		a.click()
-		a.remove()
-		URL.revokeObjectURL(href)
-	} catch (e) {
-		exportError.value = e?.response?.data?.error || t('kanso', 'Could not export this board.')
-	} finally {
-		exporting.value = false
-	}
+// ── Export board to a downloadable .json file (shared composable) ─────────────
+function exportBoardToFile() {
+	return exportBoardAction(props.boardId)
 }
 
-const duplicating = ref(false)
-const duplicateError = ref('')
 const duplicateWithCards = ref(true)
 
 /**
  * Server-side duplicate of this board into a fresh one the caller owns. On
- * success the board list is refreshed, the settings modal closed, and the
- * router navigates to the new copy.
+ * success the board list is refreshed (by the composable), the settings modal
+ * closed, and the router navigates to the new copy.
  */
 async function duplicateBoardNow() {
-	duplicating.value = true
-	duplicateError.value = ''
-	try {
-		const res = await apiDuplicateBoard(props.boardId, duplicateWithCards.value)
-		await archiveQueryClient.invalidateQueries({ queryKey: ['boards'] })
+	const res = await duplicateBoardAction(props.boardId, duplicateWithCards.value)
+	if (res) {
 		emit('close')
 		router.push({ name: 'board', params: { id: res.boardId } })
-	} catch (e) {
-		duplicateError.value = e?.response?.data?.error || t('kanso', 'Could not duplicate this board.')
-	} finally {
-		duplicating.value = false
 	}
 }
 
@@ -3060,6 +3217,29 @@ async function togglePerm(entry, bit, checked) {
 		patchAclErrors.value = {
 			...patchAclErrors.value,
 			[entry.id]: err?.response?.data?.error || t('kanso', 'Failed to update permission.'),
+		}
+	} finally {
+		patchingAclId.value = null
+	}
+}
+
+// ── ACL: board side (internal/external, #3742) ────────────────────────────────
+
+/**
+ * Re-assign a member's board side. MANAGE-gated (the selector only renders
+ * for managers); the permission mask is re-submitted unchanged so the
+ * escalation cap sees zero flipped bits.
+ */
+async function changeRole(entry, role) {
+	if (role === (entry.role || 'internal')) return
+	patchAclErrors.value = { ...patchAclErrors.value, [entry.id]: '' }
+	patchingAclId.value = entry.id
+	try {
+		await patchAcl.mutateAsync({ aclId: entry.id, permission: entry.permission, role })
+	} catch (err) {
+		patchAclErrors.value = {
+			...patchAclErrors.value,
+			[entry.id]: err?.response?.data?.error || t('kanso', 'Failed to update role.'),
 		}
 	} finally {
 		patchingAclId.value = null
@@ -3696,6 +3876,12 @@ async function doDeleteAutoRule(rule) {
 	font-family: var(--font-face-monospace, monospace);
 }
 
+/* ── Project chat link (#3748) ────────────────────────────────────────────── */
+.board-settings__chat-url-input {
+	flex: 1;
+	min-width: 0;
+}
+
 /* ── Board background palette (#3528) ─────────────────────────────────────── */
 .board-settings__bg-label {
 	display: block;
@@ -4227,6 +4413,28 @@ async function doDeleteAutoRule(rule) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.sharing__role-select {
+	flex-shrink: 0;
+	max-width: 110px;
+	height: 28px;
+	min-height: 28px;
+	padding: 0 4px;
+	font-size: 0.8rem;
+	border: 1px solid var(--color-border-maxcontrast);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.sharing__role-badge {
+	flex-shrink: 0;
+	padding: 1px 8px;
+	font-size: 0.75rem;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
 }
 
 .sharing__perms {

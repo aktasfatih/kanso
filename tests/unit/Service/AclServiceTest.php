@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
@@ -342,6 +343,71 @@ class AclServiceTest extends TestCase {
 		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_READ, 'alice');
 	}
 
+	// ---- create: member role (#3742) --------------------------------------
+
+	public function testCreateDefaultsRoleToInternal(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->aclMapper->method('findByParticipant')->willReturn(null);
+		$this->aclMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Acl $acl): Acl {
+				self::assertSame(ViewerContext::ROLE_INTERNAL, $acl->getRole());
+				$acl->setId(40);
+				return $acl;
+			});
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_READ, 'alice');
+	}
+
+	public function testCreateWithExternalRoleRequiresManage(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		// carol holds SHARE but not MANAGE: adding a same-side member is
+		// fine, but assigning the EXTERNAL side is a role assignment and
+		// stays MANAGE-only.
+		$this->permissionService->method('assertPermission')
+			->willReturnCallback(static function (Board $b, string $uid, int $permission): void {
+				if (($permission & PermissionService::PERMISSION_MANAGE) !== 0) {
+					throw new NotPermittedException();
+				}
+			});
+		$this->aclMapper->expects(self::never())->method('insert');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_READ, 'carol', ViewerContext::ROLE_EXTERNAL);
+	}
+
+	public function testCreateWithExternalRoleAndManageInserts(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->aclMapper->method('findByParticipant')->willReturn(null);
+		$this->aclMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Acl $acl): Acl {
+				self::assertSame(ViewerContext::ROLE_EXTERNAL, $acl->getRole());
+				$acl->setId(40);
+				return $acl;
+			});
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_READ, 'alice', ViewerContext::ROLE_EXTERNAL);
+	}
+
+	public function testCreateRejectsUnknownRole(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(1, 'bob', 'user', PermissionService::PERMISSION_READ, 'alice', 'admin');
+	}
+
 	// ---- update -----------------------------------------------------------
 
 	public function testUpdateChangesPermissionAndWritesChangeRow(): void {
@@ -488,6 +554,98 @@ class AclServiceTest extends TestCase {
 
 		$acl = $this->service->update(1, 40, $existingMask, 'carol');
 		self::assertSame($existingMask, $acl->getPermission());
+	}
+
+	// ---- update: member role (#3742) --------------------------------------
+
+	public function testUpdateFlippingRoleRequiresManage(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		// carol holds SHARE but not MANAGE - the permission part of the
+		// request is fine, flipping bob to the external side is not.
+		$this->permissionService->method('assertPermission')
+			->willReturnCallback(static function (Board $b, string $uid, int $permission): void {
+				if (($permission & PermissionService::PERMISSION_MANAGE) !== 0) {
+					throw new NotPermittedException();
+				}
+			});
+		$this->permissionService->method('getPermissions')
+			->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_SHARE);
+		$this->aclMapper->method('find')->with(40)->willReturn($this->acl());
+		$this->aclMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(1, 40, PermissionService::PERMISSION_READ, 'carol', ViewerContext::ROLE_EXTERNAL);
+	}
+
+	public function testUpdateResendingStoredRoleNeedsNoManage(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		// Mirrors the changed-bits-only escalation cap: re-submitting the
+		// CURRENT role is not a role change, so SHARE alone suffices.
+		$this->permissionService->method('assertPermission')
+			->willReturnCallback(static function (Board $b, string $uid, int $permission): void {
+				if (($permission & PermissionService::PERMISSION_MANAGE) !== 0) {
+					throw new NotPermittedException();
+				}
+			});
+		$this->permissionService->method('getPermissions')
+			->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_SHARE);
+		$existing = $this->acl();
+		$existing->setRole(ViewerContext::ROLE_EXTERNAL);
+		$this->aclMapper->method('find')->with(40)->willReturn($existing);
+		$this->aclMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static fn (Acl $acl): Acl => $acl);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$acl = $this->service->update(1, 40, PermissionService::PERMISSION_READ, 'carol', ViewerContext::ROLE_EXTERNAL);
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $acl->getRole());
+	}
+
+	public function testUpdateWithManageFlipsRole(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$existing = $this->acl();
+		$existing->setRole(ViewerContext::ROLE_INTERNAL);
+		$this->aclMapper->method('find')->with(40)->willReturn($existing);
+		$this->aclMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Acl $acl): Acl {
+				self::assertSame(ViewerContext::ROLE_EXTERNAL, $acl->getRole());
+				return $acl;
+			});
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$this->service->update(1, 40, PermissionService::PERMISSION_READ, 'alice', ViewerContext::ROLE_EXTERNAL);
+	}
+
+	public function testUpdateNullRoleLeavesStoredRoleUntouched(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$existing = $this->acl();
+		$existing->setRole(ViewerContext::ROLE_EXTERNAL);
+		$this->aclMapper->method('find')->with(40)->willReturn($existing);
+		$this->aclMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static fn (Acl $acl): Acl => $acl);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$acl = $this->service->update(1, 40, PermissionService::PERMISSION_READ, 'alice');
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $acl->getRole());
+	}
+
+	public function testUpdateRejectsUnknownRole(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->aclMapper->method('find')->with(40)->willReturn($this->acl());
+		$this->aclMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, 40, PermissionService::PERMISSION_READ, 'alice', 'owner');
 	}
 
 	// ---- delete -----------------------------------------------------------

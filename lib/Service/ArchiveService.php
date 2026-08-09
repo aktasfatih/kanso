@@ -147,6 +147,16 @@ class ArchiveService {
 	/**
 	 * Runs a rule's sweep once, on demand.
 	 *
+	 * Visibility decision (#3760): the returned count is a MANAGE-only
+	 * aggregate that INCLUDES cards hidden from the caller, and deliberately
+	 * stays that way. The sweep is hygiene automation and must process every
+	 * eligible card regardless of visibility (a scoped sweep would leave
+	 * hidden cards unarchived forever); the count reports the work that
+	 * sweep actually did - scoping it to the caller's visible subset would
+	 * misreport the mutation. What leaks is at most "N done cards crossed
+	 * the threshold" to a MANAGE holder - no ids, titles or content - which
+	 * is accepted for a board-hygiene admin surface.
+	 *
 	 * @return int number of cards archived
 	 * @throws DoesNotExistException if the rule or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board

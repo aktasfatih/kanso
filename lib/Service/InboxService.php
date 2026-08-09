@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -39,6 +40,7 @@ class InboxService {
 		private CommentMapper $commentMapper,
 		private ChangeMapper $changeMapper,
 		private IUserManager $userManager,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -46,9 +48,10 @@ class InboxService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function findMine(string $uid): array {
+		$boards = $this->boardService->findAll($uid);
 		$boardIds = array_map(
 			static fn ($board): int => $board->getId(),
-			$this->boardService->findAll($uid)
+			$boards
 		);
 		if ($boardIds === []) {
 			return [];
@@ -59,16 +62,20 @@ class InboxService {
 			return [];
 		}
 
+		// Visibility (#3743): a followed card that is (or became) hidden for
+		// the viewer feeds nothing - the scope runs inside both queries.
+		$rolesByBoard = $this->boardAccess->rolesFor($boards, $uid);
+
 		// Comments and card-status changes on the same followed/readable set,
 		// each tagged with a type so the frontend can render them differently.
 		// Both carry the actor uid under `author` so they merge on one field.
-		$comments = $this->commentMapper->findInboxForCards($cardIds, $boardIds, $uid, self::LIMIT);
+		$comments = $this->commentMapper->findInboxForCards($cardIds, $boardIds, $uid, self::LIMIT, $rolesByBoard);
 		foreach ($comments as &$comment) {
 			$comment['type'] = 'comment';
 		}
 		unset($comment);
 
-		$changes = $this->changeMapper->findInboxForCards($cardIds, $boardIds, $uid, self::FEED_VERBS, self::LIMIT);
+		$changes = $this->changeMapper->findInboxForCards($cardIds, $boardIds, $uid, self::FEED_VERBS, self::LIMIT, $rolesByBoard);
 		foreach ($changes as &$change) {
 			$change['type'] = 'change';
 		}

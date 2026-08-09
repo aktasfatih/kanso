@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
@@ -15,6 +16,12 @@ use OCP\DB\Types;
  * `kanso_checklist_items`). Items are ordered inside their card by the
  * fractional `sortKey` string (see \OCA\Kanso\Service\SortKeyService); a
  * reorder is a single-row UPDATE.
+ *
+ * A checklist item can be a rich "step" (#3745): assigned to one user (with
+ * the assignee's board side FROZEN into `assignedRole` at assignment time by
+ * {@see \OCA\Kanso\Service\ChecklistService::assignItem()}), carrying its own
+ * due date, and stamping `doneAt` when `done` flips. `done` stays the source
+ * of truth; `doneAt` is only the timestamp of the flip.
  *
  * @method int getCardId()
  * @method void setCardId(int $cardId)
@@ -26,6 +33,16 @@ use OCP\DB\Types;
  * @method void setSortKey(string $sortKey)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method ?string getAssignedUser()
+ * @method void setAssignedUser(?string $assignedUser)
+ * @method ?string getAssignedRole()
+ * @method void setAssignedRole(?string $assignedRole)
+ * @method ?int getAssignedAt()
+ * @method void setAssignedAt(?int $assignedAt)
+ * @method ?\DateTime getDueDate()
+ * @method void setDueDate(?\DateTime $dueDate)
+ * @method ?int getDoneAt()
+ * @method void setDoneAt(?int $doneAt)
  */
 class ChecklistItem extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -36,6 +53,11 @@ class ChecklistItem extends Entity implements \JsonSerializable {
 	protected ?bool $done = null;
 	protected ?string $sortKey = null;
 	protected ?int $createdAt = null;
+	protected ?string $assignedUser = null;
+	protected ?string $assignedRole = null;
+	protected ?int $assignedAt = null;
+	protected ?\DateTime $dueDate = null;
+	protected ?int $doneAt = null;
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
@@ -43,10 +65,26 @@ class ChecklistItem extends Entity implements \JsonSerializable {
 		$this->addType('done', Types::BOOLEAN);
 		$this->addType('sortKey', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
+		$this->addType('assignedUser', Types::STRING);
+		$this->addType('assignedRole', Types::STRING);
+		$this->addType('assignedAt', Types::INTEGER);
+		$this->addType('dueDate', Types::DATETIME);
+		$this->addType('doneAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, cardId: ?int, title: ?string, done: bool, sortKey: ?string}
+	 * Whether this step is open and parked on the client side - the raw
+	 * material for the "waiting on client" derivation (epic 6). Reads the
+	 * FROZEN role copy, never the live ACL, so the answer stays stable when
+	 * the assignee later changes role or leaves the board.
+	 */
+	public function waitsOnExternal(): bool {
+		return !($this->done ?? false)
+			&& $this->assignedRole === ViewerContext::ROLE_EXTERNAL;
+	}
+
+	/**
+	 * @return array{id: int, cardId: ?int, title: ?string, done: bool, sortKey: ?string, assignedUser: ?string, assignedRole: ?string, assignedAt: ?int, dueDate: ?string, doneAt: ?int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -56,6 +94,11 @@ class ChecklistItem extends Entity implements \JsonSerializable {
 			'title' => $this->title,
 			'done' => $this->done ?? false,
 			'sortKey' => $this->sortKey,
+			'assignedUser' => $this->assignedUser,
+			'assignedRole' => $this->assignedRole,
+			'assignedAt' => $this->assignedAt,
+			'dueDate' => $this->dueDate?->format(\DateTimeInterface::ATOM),
+			'doneAt' => $this->doneAt,
 		];
 	}
 }

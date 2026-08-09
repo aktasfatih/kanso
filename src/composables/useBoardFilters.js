@@ -20,6 +20,8 @@
  *                                 the dimension unfiltered (#3402).
  *   - due:         string|null  → one of 'overdue' | 'week' | 'none' | null.
  *   - done:        string|null  → 'done' | 'open' | null (tri-state).
+ *   - waiting:     string|null  → 'waiting' | 'not_waiting' | null (tri-state)
+ *                                 over the derived waitingOnExternal flag (#3746).
  *
  * Semantics: AND across dimensions, OR within a dimension — standard Linear
  * behaviour. An empty dimension imposes no constraint.
@@ -53,6 +55,15 @@ export const DONE_OPTIONS = [
 ]
 
 /**
+ * Waiting-on-client filter options (#3746, tri-state: null = both). Reads the
+ * derived `waitingOnExternal` summary flag - no extra request.
+ */
+export const WAITING_OPTIONS = [
+	{ value: 'waiting', label: 'Waiting on client' },
+	{ value: 'not_waiting', label: 'Not waiting' },
+]
+
+/**
  * A fresh, empty filter state. Sets for the multi-select dimensions, scalars for
  * the single-select ones.
  */
@@ -64,6 +75,7 @@ export function createFilterState() {
 		types: new Set(),
 		due: null,
 		done: null,
+		waiting: null,
 	})
 }
 
@@ -81,6 +93,7 @@ export function serializeFilter(s) {
 	if (s.types.size) out.types = [...s.types].sort()
 	if (s.due) out.due = s.due
 	if (s.done) out.done = s.done
+	if (s.waiting) out.waiting = s.waiting
 	return out
 }
 
@@ -98,6 +111,7 @@ export function applyFilter(state, obj) {
 	state.types.clear()
 	state.due = null
 	state.done = null
+	state.waiting = null
 	if (!obj || typeof obj !== 'object') return
 	if (Array.isArray(obj.labels)) {
 		for (const id of obj.labels) {
@@ -123,6 +137,7 @@ export function applyFilter(state, obj) {
 	}
 	if (DUE_OPTIONS.some((o) => o.value === obj.due)) state.due = obj.due
 	if (DONE_OPTIONS.some((o) => o.value === obj.done)) state.done = obj.done
+	if (WAITING_OPTIONS.some((o) => o.value === obj.waiting)) state.waiting = obj.waiting
 }
 
 /**
@@ -142,6 +157,7 @@ export function filterToQuery(ser) {
 	if (ser.types?.length) q.ft = ser.types.join(',')
 	if (ser.due) q.fd = ser.due
 	if (ser.done) q.fs = ser.done
+	if (ser.waiting) q.fw = ser.waiting
 	return q
 }
 
@@ -161,6 +177,7 @@ export function queryToFilter(query) {
 	if (query.ft != null) out.types = csv(query.ft)
 	if (query.fd != null) out.due = String(first(query.fd))
 	if (query.fs != null) out.done = String(first(query.fs))
+	if (query.fw != null) out.waiting = String(first(query.fw))
 	return out
 }
 
@@ -175,6 +192,7 @@ export function filterIsEmpty(ser) {
 		&& !ser.types?.length
 		&& !ser.due
 		&& !ser.done
+		&& !ser.waiting
 }
 
 /**
@@ -194,6 +212,7 @@ export function makePredicate(s, now = Date.now()) {
 	const hasTypes = s.types.size > 0
 	const due = s.due
 	const done = s.done
+	const waiting = s.waiting
 
 	// "This week" = now .. end of the 7th day ahead (inclusive), i.e. the next
 	// seven days. Overdue = strictly before now. Both compare against duedate.
@@ -242,6 +261,12 @@ export function makePredicate(s, now = Date.now()) {
 			if (done === 'done' && !isDone) return false
 			if (done === 'open' && isDone) return false
 		}
+		// Waiting on client (#3746, tri-state): the derived summary flag.
+		if (waiting) {
+			const isWaiting = !!card.waitingOnExternal
+			if (waiting === 'waiting' && !isWaiting) return false
+			if (waiting === 'not_waiting' && isWaiting) return false
+		}
 		return true
 	}
 }
@@ -257,6 +282,7 @@ export function useFilterCount(s) {
 		+ s.priorities.size
 		+ s.types.size
 		+ (s.due ? 1 : 0)
-		+ (s.done ? 1 : 0),
+		+ (s.done ? 1 : 0)
+		+ (s.waiting ? 1 : 0),
 	)
 }

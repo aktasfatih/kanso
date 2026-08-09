@@ -12,6 +12,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.35] - 2026-08-09
+
+Consolidates the 2026-08-09 sprint. Versions 0.9.32–0.9.34 were internal
+per-feature version bumps on the release branch and were never published; their
+changes all land here.
+
+### Added
+
+- **Card visibility: public / internal / private.** Every card now carries a
+  visibility level. *Public* (the default, and the behavior of all existing
+  cards) is visible to every board member; *internal* is visible only to the
+  creator's side of the board (see member roles below) — symmetric, so a
+  client-side internal card is equally hidden from the provider side, with no
+  owner or manager backdoor; *private* is visible to its creator alone. The
+  rule is enforced in SQL on every read path — board payload, delta sync,
+  search, My Work dashboards, stats and tile counts, trash, export, duplicate,
+  the public share snapshot and the calendar feed — and a hidden card behaves
+  exactly like a missing one on card-addressed endpoints (404, never a 403
+  existence oracle). Background emissions honour it too: due reminders,
+  comment/mention fan-outs, watcher notifications, activity and webhook egress
+  never reach (or name the card to) a user outside its visibility, stale bell
+  entries stop rendering if a card narrows after they were queued, and
+  deferred (stage-gated) review-request notifications re-check visibility at
+  fire time.
+- **Board member roles: internal vs external.** A board member is now shared
+  in as either *internal* (your own team) or *external* (the client/partner
+  side). The role feeds the internal card-visibility fence and freezes onto
+  what each member creates, and can be changed later by a board manager.
+- **Rich checklist steps.** A checklist item can now carry an assignee (with
+  their board side frozen at assignment time), a due date with overdue
+  styling, and a done-at stamp — plus a cross-board **My steps** feed
+  (`/api/my-steps`) of every open step assigned to you, visibility-scoped like
+  every other feed.
+- **Derived "waiting on client" status.** A card with at least one open step
+  parked on the external side shows a "waiting since …" chip on its tile and
+  can be filtered on — computed live from step state, never stored, so it can
+  not drift.
+- **GitHub issue intake (opt-in).** The board's GitHub webhook can now react
+  to issue events and — when explicitly enabled — auto-create a linked card
+  when an issue opens, using the existing HMAC-verified endpoint. The webhook
+  response body never names anything beyond public cards.
+- **Board tile menu.** The boards grid tile gains a context menu: duplicate,
+  export, archive and delete a board without opening it.
+- **Per-board project chat link.** A board can carry a chat URL (Talk, Slack,
+  …) surfaced as a toolbar deep-link button.
+- **Admin setup check.** Nextcloud's admin overview now warns when background
+  jobs run on AJAX cron or `overwrite.cli.url` is unset — both degrade
+  reminders, recurrence and webhook delivery.
+
+### Fixed
+
+- **Public share snapshot queries are public-only end to end.** The anonymous
+  board snapshot now restricts its label-association query to public cards in
+  SQL (as the checklist counts already were) instead of fetching every card's
+  labels and discarding the hidden ones in PHP.
+
 ## [0.9.31] - 2026-08-08
 
 First tagged beta, published as a pre-built tarball on
@@ -187,7 +243,8 @@ First public release. Targets Nextcloud 30–32 and PHP 8.2+.
 - **Realtime updates** via `notify_push` (High Performance Backend) when
   available, with an automatic light polling fallback everywhere else.
 
-[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.31...HEAD
+[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.35...HEAD
+[0.9.35]: https://github.com/aktasfatih/kanso/compare/v0.9.31...v0.9.35
 [0.9.31]: https://github.com/aktasfatih/kanso/compare/v0.9.2...v0.9.31
 [0.9.2]: https://github.com/aktasfatih/kanso/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aktasfatih/kanso/compare/v0.9.0...v0.9.1

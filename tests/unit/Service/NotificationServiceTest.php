@@ -47,6 +47,46 @@ class NotificationServiceTest extends TestCase {
 		$this->service->notifyCardAssigned(9, 'alice', 'alice');
 	}
 
+	public function testNotifyStepAssignedIsKeyedByTheItemAndCarriesTheCard(): void {
+		// Steps notify per ITEM (object checklist_item/50) so several steps of
+		// one card dismiss independently; the card id rides in the parameters
+		// for render-time resolution (#3745).
+		$n = $this->createMock(INotification::class);
+		$n->expects(self::once())->method('setApp')->with('kanso')->willReturnSelf();
+		$n->expects(self::once())->method('setUser')->with('client')->willReturnSelf();
+		$n->method('setDateTime')->willReturnSelf();
+		$n->expects(self::once())->method('setObject')->with('checklist_item', '50')->willReturnSelf();
+		$n->expects(self::once())->method('setSubject')
+			->with('step_assigned', ['actor' => 'alice', 'cardId' => 9])
+			->willReturnSelf();
+
+		$this->manager->method('createNotification')->willReturn($n);
+		$this->manager->expects(self::once())->method('notify')->with($n);
+
+		$this->service->notifyStepAssigned(50, 9, 'client', 'alice');
+	}
+
+	public function testNotifyStepAssignedIsNoOpWhenActorAssignsThemselves(): void {
+		$this->manager->expects(self::never())->method('createNotification');
+		$this->manager->expects(self::never())->method('notify');
+
+		$this->service->notifyStepAssigned(50, 9, 'alice', 'alice');
+	}
+
+	public function testDismissStepAssignedMarksProcessedByItem(): void {
+		$n = $this->createMock(INotification::class);
+		$n->method('setApp')->willReturnSelf();
+		$n->method('setUser')->willReturnSelf();
+		$n->expects(self::once())->method('setObject')->with('checklist_item', '50')->willReturnSelf();
+		$n->expects(self::once())->method('setSubject')->with('step_assigned')->willReturnSelf();
+
+		$this->manager->method('createNotification')->willReturn($n);
+		$this->manager->expects(self::once())->method('markProcessed')->with($n);
+		$this->manager->expects(self::never())->method('notify');
+
+		$this->service->dismissStepAssigned(50, 'client');
+	}
+
 	public function testDismissCardAssignedMarksProcessed(): void {
 		$n = $this->createMock(INotification::class);
 		$n->method('setApp')->willReturnSelf();

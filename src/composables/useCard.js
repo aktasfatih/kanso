@@ -27,8 +27,12 @@ export function useCard(id, enabled) {
 		onSettled: (data, _error, variables) => {
 			const cardId = typeof id === 'object' ? id.value : id
 			queryClient.invalidateQueries({ queryKey: ['card', cardId] })
-			// Also invalidate the parent board - we don't know which board the card
-			// belongs to here, but we have the result data or can invalidate all boards.
+			// Also invalidate the parent board so tile-visible mutations (incl. a
+			// visibility change, #3743) refetch the scoped board payload. On success
+			// `data` is the PATCH response - CardController::update() returns the
+			// Card entity via jsonSerialize(), which ALWAYS carries `boardId` - so
+			// the targeted branch is taken; the invalidate-all-boards fallback only
+			// runs for the error path (onSettled also fires on failure, data null).
 			if (data?.boardId) {
 				// boardQueryKey coerces the numeric API boardId to the same string
 				// key the board query is registered under (from the route param).

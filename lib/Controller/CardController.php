@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
@@ -64,6 +66,9 @@ class CardController extends Controller {
 		private CardAttachmentMapper $cardAttachmentMapper,
 		private CardTimeEntryMapper $cardTimeEntryMapper,
 		private CardFieldValueMapper $cardFieldValueMapper,
+		private BoardMapper $boardMapper,
+		private BoardAccess $boardAccess,
+		private \OCA\Kanso\Service\CardVisibilityGuard $visibilityGuard,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -117,6 +122,13 @@ class CardController extends Controller {
 	 */
 	private function detailPayload(Card $card, string $uid): array {
 		$id = $card->getId();
+		// The viewer's resolved side on the card's board (#3743): scopes the
+		// children list, masks a hidden parent and masks hidden relation
+		// counterparts. The caller has already asserted READ + visibility on
+		// $card itself (CardService::find / the mutating service).
+		$board = $this->boardMapper->find($card->getBoardId());
+		$viewer = $this->boardAccess->contextFor($board, $uid);
+
 		$checklistItems = $this->checklistItemMapper->findByCard($id);
 		$checklistDone = count(array_filter(
 			$checklistItems,
@@ -128,7 +140,10 @@ class CardController extends Controller {
 		if ($parentId !== null) {
 			try {
 				$parentCard = $this->cardMapper->find($parentId);
-				if ($parentCard->getDeletedAt() === 0) {
+				// A hidden parent reads as no parent (#3743) - its title must
+				// not surface through a child's breadcrumb.
+				if ($parentCard->getDeletedAt() === 0
+					&& $this->visibilityGuard->isVisible($board, $parentCard, $uid)) {
 					$parent = $parentCard->jsonSerializeSummary();
 				}
 			} catch (DoesNotExistException) {
@@ -137,7 +152,7 @@ class CardController extends Controller {
 		}
 		$children = array_map(
 			static fn (Card $child): array => $child->jsonSerializeSummary(),
-			$this->cardMapper->findChildren($id)
+			$this->cardMapper->findVisibleChildren($id, $viewer)
 		);
 
 		return $card->jsonSerialize()
@@ -153,7 +168,7 @@ class CardController extends Controller {
 			+ ['attachmentCount' => $this->cardAttachmentMapper->countByCard($id)]
 			+ ['timeSpent' => $this->cardTimeEntryMapper->sumSecondsByCard($id)]
 			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
-			+ ['relations' => $this->relationService->groupedForCard($id)]
+			+ ['relations' => $this->relationService->groupedForCard($id, $board, $uid)]
 			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)]
 			// Custom-field VALUES (#3537): [{fieldId, value}] - detail-only, never
 			// in the board summary (the definitions ride the board payload).
@@ -193,10 +208,11 @@ class CardController extends Controller {
 		?bool $dueReminderDayBefore = null,
 		?string $coverColor = null,
 		?string $type = null,
+		?string $visibility = null,
 	): JSONResponse {
-		return $this->respond(function () use ($id, $title, $description, $duedate, $done, $archived, $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type): JSONResponse {
+		return $this->respond(function () use ($id, $title, $description, $duedate, $done, $archived, $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility): JSONResponse {
 			return new JSONResponse(
-				$this->cardService->update($id, $title, $description, $duedate, $done, $archived, $this->currentUserId(), $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type)
+				$this->cardService->update($id, $title, $description, $duedate, $done, $archived, $this->currentUserId(), $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility)
 			);
 		});
 	}

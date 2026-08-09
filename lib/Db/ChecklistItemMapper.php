@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
@@ -20,7 +22,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<ChecklistItem>
  */
 class ChecklistItemMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_checklist_items', ChecklistItem::class);
 	}
 
@@ -85,14 +90,67 @@ class ChecklistItemMapper extends QBMapper {
 	 * @return array<int, array{total: int, done: int}> map of cardId => counts
 	 * @throws Exception
 	 */
-	public function progressByBoard(int $boardId): array {
-		$totals = $this->countByBoard($boardId, false);
-		$done = $this->countByBoard($boardId, true);
+	public function progressByBoard(int $boardId, ViewerContext $viewer): array {
+		$totals = $this->countByBoard($boardId, false, $viewer);
+		$done = $this->countByBoard($boardId, true, $viewer);
 
 		$map = [];
 		foreach ($totals as $cardId => $count) {
 			$map[$cardId] = ['total' => $count, 'done' => $done[$cardId] ?? 0];
 		}
+		return $map;
+	}
+
+	/**
+	 * The anonymous-share twin of {@see self::progressByBoard()} (#3743): the
+	 * same per-card progress map, restricted to PUBLIC cards only - the
+	 * public snapshot has no viewer and must never count a hidden card's
+	 * items. The map is keyed by card id and consumed against the (equally
+	 * public-only) card list, so the restriction is belt-and-braces.
+	 *
+	 * @return array<int, array{total: int, done: int}> map of cardId => counts
+	 * @throws Exception
+	 */
+	public function progressByBoardPublicOnly(int $boardId): array {
+		$totals = $this->countByBoardPublicOnly($boardId, false);
+		$done = $this->countByBoardPublicOnly($boardId, true);
+
+		$map = [];
+		foreach ($totals as $cardId => $count) {
+			$map[$cardId] = ['total' => $count, 'done' => $done[$cardId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
+	 * Item counts grouped by card for a board's PUBLIC cards only - the
+	 * anonymous half of {@see self::countByBoard()}.
+	 *
+	 * @return array<int, int> map of cardId => count
+	 * @throws Exception
+	 */
+	private function countByBoardPublicOnly(int $boardId, bool $doneOnly): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->applyPublicOnly($qb, 'c');
+
+		if ($doneOnly) {
+			$qb->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+		}
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
 		return $map;
 	}
 
@@ -162,7 +220,7 @@ class ChecklistItemMapper extends QBMapper {
 	 * @return array<int, int> map of cardId => count
 	 * @throws Exception
 	 */
-	private function countByBoard(int $boardId, bool $doneOnly): array {
+	private function countByBoard(int $boardId, bool $doneOnly, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('ci.card_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -171,6 +229,7 @@ class ChecklistItemMapper extends QBMapper {
 			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('ci.card_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		if ($doneOnly) {
 			$qb->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
@@ -184,6 +243,125 @@ class ChecklistItemMapper extends QBMapper {
 		$result->closeCursor();
 
 		return $map;
+	}
+
+	/**
+	 * The derived "waiting on client" aggregate (epic 6, #3746): for every
+	 * non-deleted card on the board, whether at least one OPEN step is parked
+	 * on the given board side and since when - cardId => MIN(assigned_at)
+	 * over the card's open steps whose FROZEN role equals $role. Presence in
+	 * the map IS the wait flag; the value is the oldest such step's
+	 * assignment time (the "since" the tile chip shows).
+	 *
+	 * ONE fixed grouped query folded into the board summary as another
+	 * enrichment map next to {@see self::progressByBoard()} - never a
+	 * per-card lookup and never a stored column (the wait state is computed
+	 * from step state alone, so it can not drift from the truth). The open
+	 * filter binds a dialect-safe PARAM_BOOL exactly like progressByBoard
+	 * (Postgres native boolean vs MySQL/SQLite 0/1).
+	 *
+	 * Viewer-scoped like every other summary map (#3743): a card hidden from
+	 * this viewer never appears, so its wait state can not leak through the
+	 * map even if a caller were to emit it wholesale.
+	 *
+	 * The primitive is role-agnostic: 'external' (the default) derives
+	 * "waiting on client"; binding the viewer's own side instead would derive
+	 * the mirror "waiting on us" for free.
+	 *
+	 * @return array<int, ?int> map of cardId => oldest open matching step's assigned_at
+	 * @throws Exception
+	 */
+	public function waitingByBoard(int $boardId, ViewerContext $viewer, string $role = ViewerContext::ROLE_EXTERNAL): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->min('ci.assigned_at'), 'waiting_since')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('ci.assigned_role', $qb->createNamedParameter($role)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = $row['waiting_since'] !== null ? (int)$row['waiting_since'] : null;
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
+	 * The cross-board "my steps" feed (#3745): every OPEN checklist step
+	 * assigned to $uid on the given boards, joined up with its card / board /
+	 * stack titles for display. ONE query, driven by the (assigned_user, done)
+	 * index; the card-visibility scope is applied in cross-board mode exactly
+	 * like {@see CardMapper::findAssignedInBoards} (my-cards) - a step of a
+	 * card the viewer cannot SEE is never returned, no matter that they are
+	 * assigned to it (assignment grants no visibility). Deleted and archived
+	 * cards drop out like everywhere else.
+	 *
+	 * Ordered due-date-first (undated steps last), then by item id for a
+	 * stable tail.
+	 *
+	 * @param int[] $boardIds the viewer's readable board set
+	 * @param array<int, string> $rolesByBoard the viewer's effective role per
+	 *                                         board id, from {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return list<array<string, mixed>>
+	 * @throws Exception
+	 */
+	public function findOpenAssignedInBoards(string $uid, array $boardIds, array $rolesByBoard, int $limit = 200): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.id', 'ci.card_id', 'ci.title', 'ci.due_date', 'ci.assigned_at', 'ci.assigned_role')
+			->addSelect('c.board_id', 'c.stack_id')
+			->selectAlias('c.title', 'card_title')
+			->selectAlias('b.title', 'board_title')
+			->selectAlias('s.title', 'stack_title')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->leftJoin('c', 'kanso_stacks', 's', $qb->expr()->eq('c.stack_id', 's.id'))
+			->where($qb->expr()->eq('ci.assigned_user', $qb->createNamedParameter($uid)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			// Undated steps last: a step with no due date sorts after any dated one.
+			->addOrderBy($qb->createFunction('CASE WHEN ci.due_date IS NULL THEN 1 ELSE 0 END'), 'ASC')
+			->addOrderBy('ci.due_date', 'ASC')
+			->addOrderBy('ci.id', 'ASC')
+			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$due = $row['due_date'] !== null
+				? (new \DateTime((string)$row['due_date']))->format(\DateTimeInterface::ATOM)
+				: null;
+			$rows[] = [
+				'id' => (int)$row['id'],
+				'cardId' => (int)$row['card_id'],
+				'cardTitle' => (string)$row['card_title'],
+				'boardId' => (int)$row['board_id'],
+				'boardTitle' => (string)$row['board_title'],
+				'stackTitle' => $row['stack_title'] !== null ? (string)$row['stack_title'] : null,
+				'title' => (string)$row['title'],
+				'dueDate' => $due,
+				'assignedAt' => $row['assigned_at'] !== null ? (int)$row['assigned_at'] : null,
+				'assignedRole' => $row['assigned_role'] !== null ? (string)$row['assigned_role'] : null,
+			];
+		}
+		$result->closeCursor();
+
+		return $rows;
 	}
 
 	/**

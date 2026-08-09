@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -15,6 +16,7 @@ use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -31,6 +33,8 @@ class ProjectServiceTest extends TestCase {
 	private CardMapper&MockObject $cardMapper;
 	private BoardMapper&MockObject $boardMapper;
 	private StatsService&MockObject $statsService;
+	private BoardAccess&MockObject $boardAccess;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -42,6 +46,9 @@ class ProjectServiceTest extends TestCase {
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->statsService = $this->createMock(StatsService::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// Default: every card is visible to the actor (assertVisible passes).
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -50,6 +57,8 @@ class ProjectServiceTest extends TestCase {
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->statsService,
+			$this->boardAccess,
+			$this->visibilityGuard,
 		);
 	}
 

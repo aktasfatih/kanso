@@ -152,8 +152,11 @@ export const searchSharees = (boardId, q) =>
 export const createAcl = (boardId, data) =>
 	axios.post(url(`/api/boards/${boardId}/acl`), data).then((r) => r.data)
 
-export const updateAcl = (boardId, aclId, permission) =>
-	axios.patch(url(`/api/boards/${boardId}/acl/${aclId}`), { permission }).then((r) => r.data)
+// `role` is optional ('internal' | 'external'); omitted/undefined is dropped
+// from the JSON body and the server keeps the member's stored board side
+// untouched (role changes are MANAGE-gated server-side).
+export const updateAcl = (boardId, aclId, permission, role) =>
+	axios.patch(url(`/api/boards/${boardId}/acl/${aclId}`), { permission, role }).then((r) => r.data)
 
 export const deleteAcl = (boardId, aclId) =>
 	axios.delete(url(`/api/boards/${boardId}/acl/${aclId}`)).then((r) => r.data)
@@ -229,6 +232,20 @@ export const moveChecklistItem = (itemId, afterItemId) =>
 
 export const deleteChecklistItem = (itemId) =>
 	axios.delete(url(`/api/checklist/${itemId}`)).then((r) => r.data)
+
+// Rich checklist steps (#3745): per-item assignee + due date
+export const assignChecklistItem = (itemId, participant) =>
+	axios.post(url(`/api/checklist/${itemId}/assign`), { participant }).then((r) => r.data)
+
+export const unassignChecklistItem = (itemId) =>
+	axios.delete(url(`/api/checklist/${itemId}/assign`)).then((r) => r.data)
+
+// due: ISO 8601 string, or null to clear
+export const setChecklistItemDue = (itemId, due) =>
+	axios.put(url(`/api/checklist/${itemId}/due`), { due: due ?? null }).then((r) => r.data)
+
+export const fetchMySteps = () =>
+	axios.get(url('/api/my-steps')).then((r) => r.data)
 
 // Trash
 export const fetchTrash = (boardId) =>
@@ -376,6 +393,10 @@ export const rotateWebhookSecret = (boardId) =>
 
 export const disableWebhook = (boardId) =>
 	axios.delete(url(`/api/boards/${boardId}/webhook`)).then((r) => r.data)
+
+// Issue intake (#3752): stackId null turns intake off; label '' = all issues.
+export const updateWebhookIntake = (boardId, stackId, label) =>
+	axios.put(url(`/api/boards/${boardId}/webhook/intake`), { stackId, label }).then((r) => r.data)
 
 // Public / read-only board share link (board-level, MANAGE)
 export const fetchPublicShareConfig = (boardId) =>

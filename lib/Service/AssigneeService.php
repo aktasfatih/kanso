@@ -33,6 +33,7 @@ class AssigneeService {
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
 		private SubscriptionService $subscriptionService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -48,6 +49,7 @@ class AssigneeService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Directly or via a group ACL, the assignee must at least see the
 		// board. Unknown users hold no permissions, so they fail this too.
@@ -96,6 +98,7 @@ class AssigneeService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if ($this->cardAssigneeMapper->deleteAssignment($cardId, $participantUid) === 0) {
 			return;

@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Controller\BoardController;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
@@ -65,6 +67,7 @@ class BoardControllerTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardRelationMapper&MockObject $cardRelationMapper;
+	private BoardAccess&MockObject $boardAccess;
 	private BoardController $controller;
 
 	protected function setUp(): void {
@@ -90,6 +93,12 @@ class BoardControllerTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
+		// show()/changes() resolve the viewer context once, after the READ gate
+		// (#3743); the mapper mocks just receive it.
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
+		);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -117,7 +126,8 @@ class BoardControllerTest extends TestCase {
 			$this->aclMapper,
 			$this->permissionService,
 			$this->subscriptionService,
-			$this->cardRelationMapper
+			$this->cardRelationMapper,
+			$this->boardAccess
 		);
 	}
 
@@ -191,6 +201,9 @@ class BoardControllerTest extends TestCase {
 		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([3 => [7]]);
 		$this->cardAssigneeMapper->method('findUserIdsByBoard')->with(1)->willReturn([3 => ['bob']]);
 		$this->checklistItemMapper->method('progressByBoard')->with(1)->willReturn([3 => ['total' => 4, 'done' => 1]]);
+		// Card 3 has an open external step (waiting on client since 1700000000);
+		// card 4 has none - it must read false/null, not be absent (#3746).
+		$this->checklistItemMapper->method('waitingByBoard')->with(1)->willReturn([3 => 1700000000]);
 		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
 		$this->commentMapper->method('countsByBoard')->with(1)->willReturn([3 => 5]);
 
@@ -224,6 +237,12 @@ class BoardControllerTest extends TestCase {
 		self::assertSame([], $data['cards'][1]['assigneeIds']);
 		self::assertSame(['total' => 4, 'done' => 1], $data['cards'][0]['checklist']);
 		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['checklist']);
+		// Derived waiting-on-client fields (#3746): from the waitingByBoard map,
+		// never stored on the card.
+		self::assertTrue($data['cards'][0]['waitingOnExternal']);
+		self::assertSame(1700000000, $data['cards'][0]['waitingSince']);
+		self::assertFalse($data['cards'][1]['waitingOnExternal']);
+		self::assertNull($data['cards'][1]['waitingSince']);
 		self::assertSame(['total' => 2, 'done' => 1], $data['cards'][0]['childProgress']);
 		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['childProgress']);
 		self::assertSame(5, $data['cards'][0]['commentCount']);
@@ -344,6 +363,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardAssigneeMapper->method('findUserIdsByBoard')->willReturn([]);
 		$this->cardContactMapper->method('findContactsByBoard')->willReturn([]);
 		$this->checklistItemMapper->method('progressByBoard')->willReturn([]);
+		$this->checklistItemMapper->method('waitingByBoard')->willReturn([]);
 		$this->cardMapper->method('childProgressByBoard')->willReturn([]);
 		$this->commentMapper->method('countsByBoard')->willReturn([]);
 		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([]);
@@ -499,6 +519,51 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(5, $data['cursor']);
 		self::assertSame([], $data['cards']['upsert']);
 		self::assertSame([], $data['cards']['remove']);
+	}
+
+	public function testChangesCardUpsertIsByteIdenticalToShow(): void {
+		// The delta-sync invariant (#3675): a changes() upsert must be
+		// indistinguishable from the same card in a full show() payload -
+		// including the derived waiting-on-client fields (#3746), which both
+		// paths must source from the same enrichment fold.
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->request->method('getHeader')->with('If-None-Match')->willReturn('');
+		$this->stackMapper->method('findByBoard')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->aclMapper->method('findByBoard')->willReturn([]);
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(3);
+		$card->setTitle('Waiting card');
+		$this->cardMapper->method('findSummariesByBoard')->with(1)->willReturn([$card]);
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+
+		// Non-empty waiting map so the NEW fields are exercised through both paths.
+		$this->cardLabelMapper->method('findLabelIdsByBoard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByBoard')->willReturn([]);
+		$this->cardContactMapper->method('findContactsByBoard')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoard')->willReturn([42 => ['total' => 2, 'done' => 1]]);
+		$this->checklistItemMapper->method('waitingByBoard')->willReturn([42 => 1700000000]);
+		$this->cardMapper->method('childProgressByBoard')->willReturn([]);
+		$this->commentMapper->method('countsByBoard')->willReturn([]);
+		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([]);
+		$this->cardRelationMapper->method('blockedCardIdsByBoard')->willReturn([]);
+
+		$shown = $this->controller->show(1)->getData()['cards'][0];
+		$delta = $this->controller->changes(1, 5)->getData()['cards']['upsert'][0];
+
+		self::assertSame(json_encode($shown), json_encode($delta));
+		self::assertTrue($delta['waitingOnExternal']);
+		self::assertSame(1700000000, $delta['waitingSince']);
 	}
 
 	public function testChangesMapsNotPermittedTo403(): void {

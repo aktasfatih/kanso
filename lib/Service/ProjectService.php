@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -41,6 +42,8 @@ class ProjectService {
 		private CardMapper $cardMapper,
 		private BoardMapper $boardMapper,
 		private StatsService $statsService,
+		private BoardAccess $boardAccess,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -140,6 +143,9 @@ class ProjectService {
 		if (($this->permissionService->getPermissions($board, $uid) & PermissionService::PERMISSION_READ) === 0) {
 			throw new NotPermittedException('User has no access to this board');
 		}
+		// A card the collector cannot SEE is meaningless to collect - and a
+		// successful add would confirm its existence (#3743).
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$this->projectCardMapper->add($project->getId(), $card->getId());
 	}
@@ -166,10 +172,13 @@ class ProjectService {
 	 */
 	public function listCards(int $projectId, string $uid): array {
 		$project = $this->loadOwnedProject($projectId, $uid);
+		$boards = $this->boardService->findAll($uid);
 
 		return $this->projectCardMapper->findCardsInProjectAndBoards(
 			$project->getId(),
-			$this->readableBoardIds($uid),
+			array_map(static fn (Board $board): int => $board->getId(), $boards),
+			$uid,
+			$this->boardAccess->rolesFor($boards, $uid),
 		);
 	}
 
@@ -192,27 +201,16 @@ class ProjectService {
 	public function stats(int $projectId, string $uid): array {
 		$project = $this->loadOwnedProject($projectId, $uid);
 
+		$boards = $this->boardService->findAll($uid);
 		$cards = $this->projectCardMapper->findCardsInProjectAndBoards(
 			$project->getId(),
-			$this->readableBoardIds($uid),
+			array_map(static fn (Board $board): int => $board->getId(), $boards),
+			$uid,
+			$this->boardAccess->rolesFor($boards, $uid),
 		);
 		$cardIds = array_map(static fn (array $card): int => (int)$card['id'], $cards);
 
 		return $this->statsService->projectStats($cardIds);
-	}
-
-	/**
-	 * The ids of every board the user can READ - the ACL frame for a project's
-	 * cross-board card resolution (shared by {@see self::listCards()} and
-	 * {@see self::stats()}).
-	 *
-	 * @return int[]
-	 */
-	private function readableBoardIds(string $uid): array {
-		return array_map(
-			static fn (Board $board): int => $board->getId(),
-			$this->boardService->findAll($uid)
-		);
 	}
 
 	/**

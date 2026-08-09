@@ -10,6 +10,8 @@ namespace OCA\Kanso\AppInfo;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Kanso\Notification\Notifier;
 use OCA\Kanso\Service\ActivityPublisher;
+use OCA\Kanso\SetupCheck\GuestsWhitelistCheck;
+use OCA\Kanso\SetupCheck\InstanceConfigCheck;
 use OCP\Activity\IManager as IActivityManager;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -36,6 +38,15 @@ class Application extends App implements IBootstrap, IEventListener {
 	#[\Override]
 	public function register(IRegistrationContext $context): void {
 		$context->registerNotifierService(Notifier::class);
+
+		// Admin-Overview setup check (#3747): warns about instance config that
+		// silently breaks shipped features (AJAX cron vs. due reminders, unset
+		// overwrite.cli.url vs. email deep links). Report-only, never writes.
+		$context->registerSetupCheck(InstanceConfigCheck::class);
+		// Guests-app allow-list check (#3744): a guest shared onto a board can
+		// only open Kanso when the Guests whitelist includes it. Silent when
+		// the Guests app is absent or its whitelist is off.
+		$context->registerSetupCheck(GuestsWhitelistCheck::class);
 
 		// Kanso's own app-data folder, so services (card attachments, #3526) can
 		// type-hint IAppData directly. Scoped to this app id - the bytes live in

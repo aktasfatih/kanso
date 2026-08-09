@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -30,6 +32,7 @@ class BoardServiceTest extends TestCase {
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private BoardGroupMemberMapper&MockObject $boardGroupMemberMapper;
 	private BoardPinMapper&MockObject $boardPinMapper;
+	private BoardAccess&MockObject $boardAccess;
 	private BoardService $service;
 
 	protected function setUp(): void {
@@ -41,6 +44,7 @@ class BoardServiceTest extends TestCase {
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->boardGroupMemberMapper = $this->createMock(BoardGroupMemberMapper::class);
 		$this->boardPinMapper = $this->createMock(BoardPinMapper::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->service = new BoardService(
 			$this->boardMapper,
 			$this->changeNotifier,
@@ -48,7 +52,8 @@ class BoardServiceTest extends TestCase {
 			$this->cardMapper,
 			$this->cardReviewMapper,
 			$this->boardGroupMemberMapper,
-			$this->boardPinMapper
+			$this->boardPinMapper,
+			$this->boardAccess
 		);
 	}
 
@@ -234,6 +239,83 @@ class BoardServiceTest extends TestCase {
 		$this->service->update(1, null, null, null, 'bob', null, null, null, 'ocean');
 	}
 
+	public function testUpdateSetsValidChatUrlAndSerializesIt(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_BOARD, 1, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, 'https://cloud.example.com/call/abc123');
+		self::assertSame('https://cloud.example.com/call/abc123', $updated->getChatUrl());
+		// The chat link rides the regular board payload, visible to all members.
+		self::assertSame('https://cloud.example.com/call/abc123', $updated->jsonSerialize()['chatUrl']);
+	}
+
+	public function testUpdateClearsChatUrlWithEmptyString(): void {
+		$board = $this->board();
+		$board->setChatUrl('https://cloud.example.com/call/abc123');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// An empty (or whitespace-only) string clears the link (stored as null).
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, '   ');
+		self::assertNull($updated->getChatUrl());
+		self::assertNull($updated->jsonSerialize()['chatUrl']);
+	}
+
+	/**
+	 * The scheme allow-list is the XSS gate: the client renders the chat link
+	 * as an <a href>, so anything but plain http(s) must be rejected.
+	 */
+	public static function invalidChatUrlProvider(): array {
+		return [
+			'javascript scheme' => ['javascript:alert(1)'],
+			'data scheme' => ['data:text/html,<script>alert(1)</script>'],
+			'scheme-relative' => ['//evil.example.com/room'],
+			'no scheme' => ['cloud.example.com/call/abc123'],
+			'embedded whitespace' => ['https://cloud.example.com/call/a b'],
+		];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('invalidChatUrlProvider')]
+	public function testUpdateRejectsInvalidChatUrl(string $chatUrl): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, null, null, null, 'alice', null, null, null, null, $chatUrl);
+	}
+
+	public function testUpdateRejectsOverlongChatUrl(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		// Longer than the 4000-char chat_url column.
+		$this->service->update(1, null, null, null, 'alice', null, null, null, null, 'https://cloud.example.com/' . str_repeat('a', 4000));
+	}
+
+	public function testUpdateChatUrlAssertsManagePermission(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		// A non-MANAGE user cannot set the chat link.
+		$this->service->update(1, null, null, null, 'bob', null, null, null, null, 'https://cloud.example.com/call/abc123');
+	}
+
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
@@ -276,16 +358,22 @@ class BoardServiceTest extends TestCase {
 		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn([]);
 		$this->boardMapper->method('findAllForUser')->with('alice', [])->willReturn([$b1, $b2]);
 
+		// The viewer's per-board role map (ONE batched fetch, #3743) scopes every
+		// aggregate below.
+		$roles = [1 => ViewerContext::ROLE_INTERNAL, 2 => ViewerContext::ROLE_EXTERNAL];
+		$this->boardAccess->expects(self::once())->method('rolesFor')
+			->with([$b1, $b2], 'alice')->willReturn($roles);
+
 		// The aggregates are called ONCE each with the full readable board-id set -
 		// a fixed query count, not one-query-per-board.
 		$this->cardMapper->expects(self::once())
-			->method('countByBoards')->with([1, 2])->willReturn([1 => 5, 2 => 0]);
+			->method('countByBoards')->with([1, 2], 'alice', $roles)->willReturn([1 => 5, 2 => 0]);
 		$this->cardMapper->expects(self::once())
-			->method('doneRatioByBoards')->with([1, 2])->willReturn([1 => ['total' => 5, 'done' => 2]]);
+			->method('doneRatioByBoards')->with([1, 2], 'alice', $roles)->willReturn([1 => ['total' => 5, 'done' => 2]]);
 		$this->cardMapper->expects(self::once())
-			->method('overdueCountByBoards')->with([1, 2])->willReturn([1 => 3]);
+			->method('overdueCountByBoards')->with([1, 2], self::anything(), 'alice', $roles)->willReturn([1 => 3]);
 		$this->cardReviewMapper->expects(self::once())
-			->method('needsReviewCountByBoards')->with([1, 2])->willReturn([1 => 4]);
+			->method('needsReviewCountByBoards')->with([1, 2], 'alice', $roles)->willReturn([1 => 4]);
 		// The per-user folder map is ONE batched lookup over the same readable set;
 		// board 1 is filed under folder 7, board 2 is Ungrouped (absent).
 		$this->boardGroupMemberMapper->expects(self::once())
@@ -294,6 +382,16 @@ class BoardServiceTest extends TestCase {
 		// board 1 is pinned, board 2 is not (absent from the map → false).
 		$this->boardPinMapper->expects(self::once())
 			->method('pinnedMap')->with('alice', [1, 2])->willReturn([1 => true]);
+		// The permission map is ONE batched call over the whole board set (#3750)
+		// - never a per-board getPermissions() call. Board 1: full (owner-like),
+		// board 2: read-only (shared).
+		$this->permissionService->expects(self::once())
+			->method('getPermissionsForBoards')
+			->with([$b1, $b2], 'alice')
+			->willReturn([
+				1 => PermissionService::PERMISSION_ALL,
+				2 => PermissionService::PERMISSION_READ,
+			]);
 
 		$result = $this->service->findAllWithStats('alice');
 
@@ -301,6 +399,9 @@ class BoardServiceTest extends TestCase {
 		self::assertSame(1, $result[0]['id']);
 		self::assertSame(7, $result[0]['groupId']);
 		self::assertTrue($result[0]['pinned']);
+		// The bitmask is stitched onto the payload so the tile menu can gate
+		// manager-only entries.
+		self::assertSame(PermissionService::PERMISSION_ALL, $result[0]['permissions']);
 		self::assertSame([
 			'cardCount' => 5,
 			'doneCount' => 2,
@@ -314,6 +415,8 @@ class BoardServiceTest extends TestCase {
 		self::assertNull($result[1]['groupId']);
 		// A board absent from the pin map is not pinned by this user.
 		self::assertFalse($result[1]['pinned']);
+		// A shared (non-owner) board carries this user's reduced bitmask.
+		self::assertSame(PermissionService::PERMISSION_READ, $result[1]['permissions']);
 		self::assertSame([
 			'cardCount' => 0,
 			'doneCount' => 0,
@@ -333,6 +436,8 @@ class BoardServiceTest extends TestCase {
 		$this->cardReviewMapper->expects(self::once())->method('needsReviewCountByBoards')->with([])->willReturn([]);
 		$this->boardGroupMemberMapper->expects(self::once())->method('findGroupIdsByBoards')->with('alice', [])->willReturn([]);
 		$this->boardPinMapper->expects(self::once())->method('pinnedMap')->with('alice', [])->willReturn([]);
+		$this->permissionService->expects(self::once())
+			->method('getPermissionsForBoards')->with([], 'alice')->willReturn([]);
 
 		self::assertSame([], $this->service->findAllWithStats('alice'));
 	}

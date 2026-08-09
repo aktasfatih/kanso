@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPrefix;
@@ -35,7 +37,8 @@ use OCP\IDBConnection;
  * single card row - no sibling renumbering, ever.
  */
 class CardService {
-	private const MAX_TITLE_LENGTH = 100;
+	// Public: the webhook's issue intake pre-truncates external titles to it.
+	public const MAX_TITLE_LENGTH = 100;
 
 	// Max insert attempts in create(): absorbs sort-key AND board-wide board_seq
 	// unique collisions under concurrency before surfacing a retryable 409.
@@ -60,6 +63,8 @@ class CardService {
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private SubscriptionMapper $subscriptionMapper,
+		private BoardAccess $boardAccess,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -73,6 +78,10 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+		// Visibility (#3743): a hidden card 404s exactly like a missing one -
+		// no existence oracle. Runs AFTER the board gate so non-members keep
+		// today's 403.
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 		return $card;
 	}
 
@@ -89,7 +98,10 @@ class CardService {
 	public function listTemplates(int $boardId, string $uid): array {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
-		return $this->cardMapper->findTemplatesByBoard($boardId);
+		return $this->cardMapper->findTemplatesByBoard(
+			$boardId,
+			$this->boardAccess->contextFor($board, $uid),
+		);
 	}
 
 	/**
@@ -133,7 +145,13 @@ class CardService {
 			return null;
 		}
 
-		return $this->cardMapper->findByBoardAndSeq($boardId, $seq);
+		// Viewer-scoped (#3743): a reference to a hidden card resolves to null,
+		// indistinguishable from a reference that never matched.
+		return $this->cardMapper->findByBoardAndSeq(
+			$boardId,
+			$seq,
+			$this->boardAccess->contextFor($board, $uid),
+		);
 	}
 
 	/**
@@ -146,22 +164,43 @@ class CardService {
 	 * and $allDay flags a date-only due date, mirroring update()'s duedate/allDay
 	 * coupling. A null $duedate leaves the card with no due date (back-compat).
 	 *
+	 * $visibility / $creatorRole are the recurrence-inheritance overrides
+	 * (#3760): a spawned clone must carry its template's visibility class and
+	 * frozen creator side FROM THE INSERT on, so the create-time fan-outs
+	 * (activity, board-watcher notifications) already see - and filter by -
+	 * the final visibility. Null (every request-path caller) keeps the
+	 * default: 'public' with the creator's own resolved side.
+	 *
+	 * @param string|null $visibility one of the CardVisibilityScope::VISIBILITIES, or null for 'public'
+	 * @param string|null $creatorRole one of the ViewerContext::ROLES, or null for the creator's resolved side
 	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title or due date
+	 * @throws InvalidInputException on invalid title, due date, visibility or creator role
 	 * @throws \OverflowException if the appended sort key would overflow (stack needs a rebalance)
 	 *                            or a concurrent create keeps colliding after one retry
 	 */
-	public function create(int $stackId, string $title, string $uid, ?string $duedate = null, ?bool $allDay = null): Card {
+	public function create(int $stackId, string $title, string $uid, ?string $duedate = null, ?bool $allDay = null, ?string $visibility = null, ?string $creatorRole = null): Card {
 		$stack = $this->loadStack($stackId);
 		$board = $this->loadBoard($stack->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+
+		if ($visibility !== null && !in_array($visibility, CardVisibilityScope::VISIBILITIES, true)) {
+			throw new InvalidInputException('Unknown card visibility: ' . $visibility);
+		}
+		if ($creatorRole !== null && !in_array($creatorRole, ViewerContext::ROLES, true)) {
+			throw new InvalidInputException('Unknown creator role: ' . $creatorRole);
+		}
 
 		$title = $this->validateTitle($title);
 		// Parse the optional due date up-front so an invalid value fails the create
 		// cleanly (a 400 via InvalidInputException) before any INSERT is attempted,
 		// matching update()'s validation. '' is treated as "no due date" too.
 		$parsedDue = $duedate === null ? null : $this->parseDuedate($duedate);
+		// The creator's board side, FROZEN at create (#3741) - never recomputed
+		// later, so an 'internal' card keeps its side when the creator changes
+		// role or leaves the board. Resolved once, outside the retry loop (the
+		// EDIT assertion above guarantees a membership to resolve).
+		$creatorSide = $this->boardAccess->contextFor($board, $uid)->role;
 		$now = time();
 
 		// Default: append to the bottom of the stack. When the board opts in,
@@ -223,6 +262,14 @@ class CardService {
 			// a card is only flagged a template later via setTemplate(). Explicit so
 			// the column is set on INSERT (the DB default backs pre-migration rows).
 			$card->setIsTemplate(false);
+			// Visibility (#3741): every card starts 'public' (whoever decides
+			// nothing works in the open; a narrower visibility is a later,
+			// explicit choice) with the creator's side frozen alongside it.
+			// Explicit on INSERT, same rationale as is_template above. The
+			// recurrence-inheritance overrides (#3760) replace both on the
+			// INSERT itself, so no fan-out ever sees a wider interim class.
+			$card->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+			$card->setCreatorRole($creatorRole ?? $creatorSide);
 
 			// Insert the card AND its CREATE change row atomically (#3579): a
 			// failed change-row write must roll the card INSERT back, never leave
@@ -251,8 +298,7 @@ class CardService {
 				$this->changeNotifier->publishCardActivity(
 					$stack->getBoardId(),
 					'card_created',
-					$card->getId(),
-					(string)$card->getTitle(),
+					$card,
 					$uid,
 				);
 
@@ -260,7 +306,7 @@ class CardService {
 				// watchers. Best-effort - a notification hiccup must never fail the
 				// create (the card + its change row are already committed).
 				try {
-					$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card->getId(), $uid);
+					$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card, $uid);
 				} catch (\Throwable) {
 					// Ignore - board-activity fan-out is a non-critical side effect.
 				}
@@ -320,6 +366,7 @@ class CardService {
 		$source = $this->loadCard($id);
 		$sourceBoard = $this->loadBoard($source->getBoardId());
 		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
 
 		$targetStack = $this->loadStack($targetStackId);
 		$targetBoard = $this->loadBoard($targetStack->getBoardId());
@@ -328,8 +375,19 @@ class CardService {
 		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
 
 		// 1. Create the shell at the bottom of the target stack (fresh id + key +
-		//    change row + board-watcher fan-out - all reused from create()).
-		$copy = $this->create($targetStackId, $this->copyTitle($source->getTitle()), $uid);
+		//    change row + board-watcher fan-out - all reused from create()). The
+		//    source's visibility LEVEL rides the INSERT itself (#3760): the
+		//    create-time fan-outs (activity, board watchers) carry the source's
+		//    title, so they must already be filtered by the copy's final class -
+		//    a post-hoc narrowing would leak the title of a hidden source.
+		$copy = $this->create(
+			$targetStackId,
+			$this->copyTitle($source->getTitle()),
+			$uid,
+			null,
+			null,
+			$source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+		);
 
 		// 2. Clone the content (description / priority / type / status / estimate /
 		//    labels / checklist) into the shell - shared with createFromTemplate().
@@ -380,6 +438,7 @@ class CardService {
 		$source = $this->loadCard($id);
 		$sourceBoard = $this->loadBoard($source->getBoardId());
 		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
 
 		$targetStack = $this->loadStack($targetStackId);
 		$targetBoard = $this->loadBoard($targetStack->getBoardId());
@@ -431,7 +490,7 @@ class CardService {
 				$boardSeq = $this->cardMapper->nextBoardSeq($targetBoard->getId());
 
 				$now = time();
-				$moved = $this->buildMovedCard($source, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now);
+				$moved = $this->buildMovedCard($source, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
 				$moved = $this->cardMapper->insert($moved);
 				$newId = $moved->getId();
 
@@ -445,6 +504,10 @@ class CardService {
 				}
 
 				// Checklist items, in display order, carrying their done state.
+				// Clone-path policy for rich steps (#3745): KEEP the step due
+				// date, DROP assignee + done_at - the frozen assigned_role was
+				// resolved against the SOURCE board's ACL and may be wrong on
+				// the target, so the step lands unassigned (like a copy).
 				$itemKey = $this->sortKeyService->initial();
 				foreach ($sourceItems as $index => $item) {
 					if ($index > 0) {
@@ -456,6 +519,7 @@ class CardService {
 					$clone->setDone($item->getDone());
 					$clone->setSortKey($itemKey);
 					$clone->setCreatedAt($now);
+					$clone->setDueDate($item->getDueDate());
 					$this->checklistItemMapper->insert($clone);
 				}
 
@@ -512,8 +576,7 @@ class CardService {
 				$this->changeNotifier->publishCardActivity(
 					$targetBoard->getId(),
 					'card_moved',
-					$newId,
-					(string)$moved->getTitle(),
+					$moved,
 					$uid,
 				);
 
@@ -541,8 +604,14 @@ class CardService {
 	 * rejects the token); the title crosses UNCHANGED (a move is not a copy, so no
 	 * " (copy)" suffix). Never a template - a moved card is always an ordinary live
 	 * card.
+	 *
+	 * Visibility (#3743) crosses over UNCHANGED - a private/internal card must
+	 * never widen to 'public' by being moved. The creator SIDE is re-resolved
+	 * as the MOVER's role on the TARGET board (the frozen-at-create rule, with
+	 * the move as the create): the source side is meaningless there, and the
+	 * mover - who could see the card to move it - keeps seeing it after.
 	 */
-	private function buildMovedCard(Card $source, Board $targetBoard, int $targetStackId, string $sortKey, int $boardSeq, int $now): Card {
+	private function buildMovedCard(Card $source, Board $targetBoard, int $targetStackId, string $sortKey, int $boardSeq, int $now, string $moverUid): Card {
 		$card = new Card();
 		$card->setBoardId($targetBoard->getId());
 		$card->setStackId($targetStackId);
@@ -568,6 +637,8 @@ class CardService {
 		$card->setLastModified($now);
 		$card->setDeletedAt(0);
 		$card->setIsTemplate(false);
+		$card->setVisibility($source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+		$card->setCreatorRole($this->boardAccess->contextFor($targetBoard, $moverUid)->role);
 		return $card;
 	}
 
@@ -641,6 +712,7 @@ class CardService {
 		$template = $this->loadCard($templateId);
 		$board = $this->loadBoard($template->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $template, $uid);
 
 		if (!$template->getIsTemplate()) {
 			throw new InvalidInputException('Card ' . $templateId . ' is not a template');
@@ -653,8 +725,17 @@ class CardService {
 
 		// Fresh live card at the bottom of the target stack (fresh id + key + change
 		// row + watcher fan-out). Same-board, so the content clone re-assigns labels
-		// by id and keeps the estimate as-is.
-		$card = $this->create($targetStackId, $this->validateTitle($template->getTitle()), $uid);
+		// by id and keeps the estimate as-is. The template's visibility level rides
+		// the INSERT (#3760) so the create-time fan-outs are filtered by the final
+		// class, never an interim 'public' bearing a hidden template's title.
+		$card = $this->create(
+			$targetStackId,
+			$this->validateTitle($template->getTitle()),
+			$uid,
+			null,
+			null,
+			$template->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+		);
 		$this->cloneContentInto($template, $card, $board, $board, $uid);
 
 		return $card;
@@ -681,6 +762,12 @@ class CardService {
 		$target->setType($source->getType());
 		$target->setStartedAt($source->getStartedAt());
 		$target->setDoneAt($source->getDoneAt());
+		// Visibility is CONTENT too (#3743): a copy of (or a card spawned
+		// from) a private/internal source must not silently widen to
+		// 'public'. The clone keeps the source's LEVEL while owner and
+		// creator side are the CLONER's (create() set both), so the actor
+		// always sees what they just made.
+		$target->setVisibility($source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC);
 		$estimate = $source->getEstimate();
 		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
 			$target->setEstimate($estimate);
@@ -695,8 +782,11 @@ class CardService {
 		// Checklist items, in display order (reuses ChecklistService::addItem,
 		// which appends and writes its own change row). The done state rides the
 		// same insert, so a done item is a single write - not add+toggle.
+		// Clone-path policy for rich steps (#3745): KEEP the step due date,
+		// DROP assignee + done_at - a copy/template instantiation is new work,
+		// so it starts unassigned and unstamped.
 		foreach ($this->checklistItemMapper->findByCard($source->getId()) as $item) {
-			$this->checklistService->addItem($target->getId(), $item->getTitle(), $uid, $item->getDone());
+			$this->checklistService->addItem($target->getId(), $item->getTitle(), $uid, $item->getDone(), $item->getDueDate());
 		}
 	}
 
@@ -716,6 +806,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$card->setIsTemplate($isTemplate);
 		$card->setLastModified(time());
@@ -827,10 +918,12 @@ class CardService {
 		?bool $dueReminderDayBefore = null,
 		?string $coverColor = null,
 		?string $type = null,
+		?string $visibility = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
@@ -913,6 +1006,9 @@ class CardService {
 		if ($status !== null) {
 			$this->applyStatus($card, $status);
 		}
+		if ($visibility !== null) {
+			$this->applyVisibility($card, $board, $visibility, $uid);
+		}
 
 		$now = time();
 		$card->setLastModified($now);
@@ -933,7 +1029,7 @@ class CardService {
 		// A new @mention in the description pings + auto-subscribes readable-board
 		// participants (only when the description actually changed).
 		if ($descriptionChanged) {
-			$this->mentionService->handleMentions($id, $board, (string)$description, $uid);
+			$this->mentionService->handleMentions($card, $board, (string)$description, $uid);
 		}
 
 		// Completing (or archiving) the last open child auto-completes the parent.
@@ -956,6 +1052,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$now = time();
 
@@ -1004,6 +1101,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$targetStack = $this->loadStack($targetStackId);
 		if ($targetStack->getBoardId() !== $card->getBoardId()) {
@@ -1030,7 +1128,7 @@ class CardService {
 		for ($attempt = 0; ; $attempt++) {
 			$afterCard = $afterCardId === null
 				? null
-				: $this->loadAfterCard($afterCardId, $targetStackId, $id);
+				: $this->loadAfterCard($afterCardId, $targetStackId, $id, $board, $uid);
 			try {
 				$moved = $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
 				// Moving the last open child into a done-role stack (which stamps
@@ -1115,8 +1213,7 @@ class CardService {
 		$this->changeNotifier->publishCardActivity(
 			$card->getBoardId(),
 			$becameDone ? 'card_done' : 'card_moved',
-			$card->getId(),
-			(string)$card->getTitle(),
+			$card,
 			$uid,
 		);
 
@@ -1146,6 +1243,7 @@ class CardService {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		if ($parentCardId === null) {
 			if ($card->getParentCardId() === null) {
@@ -1157,6 +1255,11 @@ class CardService {
 				throw new InvalidInputException('A card cannot be its own parent');
 			}
 			$parent = $this->loadParentCard($parentCardId);
+			// A parent the actor cannot SEE reads as missing (#3743) - same
+			// masking as loadParentCard's absence case, no existence oracle.
+			if (!$this->visibilityGuard->isVisible($board, $parent, $uid)) {
+				throw new InvalidInputException('Parent card ' . $parentCardId . ' does not exist');
+			}
 			if ($parent->getBoardId() !== $card->getBoardId()) {
 				throw new InvalidInputException('Parent card must be on the same board');
 			}
@@ -1185,6 +1288,39 @@ class CardService {
 		);
 
 		return $card;
+	}
+
+	/**
+	 * Applies a visibility change (#3743). The value must be one of the three
+	 * known levels, and only the card's CREATOR (owner) or a board MANAGER may
+	 * narrow/widen it - a regular member must not flip someone else's card
+	 * across the fence. The creator side (`creator_role`) stays FROZEN: a
+	 * manager marking another member's card 'internal' scopes it to the
+	 * CREATOR's side, never their own.
+	 *
+	 * Narrowing is deliberately NOT retroactive (#3761, accepted MVP scope):
+	 * previously-sent targeted bells (assigned / mentioned / comment / review
+	 * requested), watches and pending reviews of now-excluded users are left in
+	 * place rather than enumerated and pruned here. Every read path re-checks
+	 * visibility at consumption time, so nothing about the card reaches such a
+	 * user anyway: the bell render gate hides their stale notifications
+	 * ({@see \OCA\Kanso\Notification\Notifier::prepare()}, pinned by
+	 * NotifierTest::testPrepareRejectsWhenCardIsHiddenFromTheRecipient), the
+	 * feeds drop their rows via the SQL visibility scope, and the deferred
+	 * review fire re-checks the guard ({@see ReviewService}). Revisit only if
+	 * the leftover rows themselves become a problem (storage, admin tooling).
+	 *
+	 * @throws InvalidInputException on an unknown visibility value
+	 * @throws NotPermittedException if the actor is neither creator nor manager
+	 */
+	private function applyVisibility(Card $card, Board $board, string $visibility, string $uid): void {
+		if (!in_array($visibility, CardVisibilityScope::VISIBILITIES, true)) {
+			throw new InvalidInputException('Unknown card visibility: ' . $visibility);
+		}
+		if ($card->getOwner() !== $uid && !$this->boardAccess->contextFor($board, $uid)->isManager) {
+			throw new NotPermittedException('Only the card creator or a board manager may change its visibility');
+		}
+		$card->setVisibility($visibility);
 	}
 
 	/**
@@ -1531,7 +1667,7 @@ class CardService {
 	 *
 	 * @throws InvalidInputException
 	 */
-	private function loadAfterCard(int $afterCardId, int $targetStackId, int $movedCardId): Card {
+	private function loadAfterCard(int $afterCardId, int $targetStackId, int $movedCardId, Board $board, string $uid): Card {
 		if ($afterCardId === $movedCardId) {
 			throw new InvalidInputException('afterCardId must not be the moved card itself');
 		}
@@ -1541,6 +1677,11 @@ class CardService {
 			throw new InvalidInputException('Card ' . $afterCardId . ' does not exist');
 		}
 		if ($afterCard->getDeletedAt() > 0) {
+			throw new InvalidInputException('Card ' . $afterCardId . ' does not exist');
+		}
+		// An anchor the mover cannot SEE reads as missing (#3743) - probing
+		// stack positions with foreign ids must not confirm a hidden card.
+		if (!$this->visibilityGuard->isVisible($board, $afterCard, $uid)) {
 			throw new InvalidInputException('Card ' . $afterCardId . ' does not exist');
 		}
 		if ($afterCard->getStackId() !== $targetStackId) {
@@ -1599,31 +1740,13 @@ class CardService {
 	}
 
 	/**
-	 * Strict ISO 8601 due dates, normalized to UTC. The empty string clears
-	 * the due date. Two accepted shapes: RFC 3339 without fractional seconds
-	 * (2026-07-22T12:00:00Z / +02:00) and with milliseconds
-	 * (2026-07-22T12:00:00.000Z) - the latter is what JS Date.toISOString()
-	 * produces.
+	 * Strict ISO 8601 due dates, normalized to UTC; the empty string clears
+	 * the due date. Delegates to the shared {@see DueDateParser} (also used by
+	 * the checklist-step due date, #3745) so the wire format cannot fork.
 	 *
 	 * @throws InvalidInputException on any other shape
 	 */
 	private function parseDuedate(string $duedate): ?\DateTime {
-		if ($duedate === '') {
-			return null;
-		}
-		$parsed = \DateTime::createFromFormat(\DateTimeInterface::ATOM, $duedate)
-			?: \DateTime::createFromFormat('Y-m-d\TH:i:s.vP', $duedate);
-		// createFromFormat rolls over out-of-range components (2026-02-30
-		// becomes March 2nd) and only records it in getLastErrors - reject
-		// those too, or clients get a silently wrong date back.
-		$errors = \DateTime::getLastErrors();
-		if ($parsed === false
-			|| ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
-			throw new InvalidInputException(
-				'Due date must be an ISO 8601 datetime like 2026-07-22T12:00:00Z'
-			);
-		}
-		$parsed->setTimezone(new \DateTimeZone('UTC'));
-		return $parsed;
+		return DueDateParser::parse($duedate);
 	}
 }

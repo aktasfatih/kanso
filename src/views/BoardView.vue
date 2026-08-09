@@ -103,6 +103,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcButton>
 
+			<!-- Project chat (#3748): a plain deep link (typically a Talk room)
+			     set in board settings (MANAGE); visible to every member when set.
+			     NcButton renders an <a> with rel="nofollow noreferrer noopener"
+			     when href is set; opens in a new tab. -->
+			<NcButton
+				v-if="boardChatUrl"
+				class="board-view__chat-btn"
+				type="tertiary"
+				:href="boardChatUrl"
+				target="_blank"
+				:aria-label="t('kanso', 'Open project chat in a new tab')"
+				:title="t('kanso', 'Project chat')"
+				data-test="board-chat-btn">
+				<template #icon>
+					<ForumOutlineIcon :size="20" />
+				</template>
+			</NcButton>
+
 			<!-- Composable filter bar (#3407) — labels / assignees / due / done /
 			     priority, AND across dimensions & OR within, plus saved named views
 			     (per-user NC config) and URL-query sharing. Generalizes the old
@@ -554,6 +572,7 @@ import ViewAgendaIcon from 'vue-material-design-icons/ViewAgenda.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
+import ForumOutlineIcon from 'vue-material-design-icons/ForumOutline.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BulkActionBar from '../components/BulkActionBar.vue'
 import { useBulkSelect } from '../composables/useBulkSelect.js'
@@ -794,6 +813,9 @@ const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
 // key → CSS mapping lives client-side; an unknown key resolves to null.
 const boardBackground = computed(() => backgroundCss(boardData.value?.board?.background))
+// Project chat link (#3748): server-validated to http/https; empty/unset = no
+// button. Shown to every member (setting it is MANAGE-gated in board settings).
+const boardChatUrl = computed(() => boardData.value?.board?.chatUrl || null)
 const isBoardSubscribed = computed(() => boardData.value?.subscription?.subscribed ?? false)
 function toggleBoardWatch() {
 	boardWatchToggle.mutate({ subscribed: !isBoardSubscribed.value })

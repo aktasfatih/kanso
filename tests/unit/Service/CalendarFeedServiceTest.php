@@ -162,8 +162,12 @@ class CalendarFeedServiceTest extends TestCase {
 		$this->boardMapper->method('findByIcalFeedToken')->with(self::TOKEN)
 			->willReturn($this->board(1, self::TOKEN));
 		$this->cardMapper->method('findWithDuedateByBoard')->with(1)->willReturn($cards);
-		$this->urlGenerator->method('linkToRouteAbsolute')
-			->with('kanso.page.index')->willReturn('https://nc/apps/kanso/');
+		// Event links use the fragment-free deep-link server route (#3744).
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturnCallback(
+			static fn (string $route, array $args = []): string => $route === 'kanso.deepLink.card'
+				? 'https://nc/apps/kanso/card/' . $args['id']
+				: 'https://nc/apps/kanso/'
+		);
 	}
 
 	public function testFeedRendersValidVCalendarWithOneEventPerDueCard(): void {
@@ -189,8 +193,10 @@ class CalendarFeedServiceTest extends TestCase {
 		self::assertStringContainsString('SUMMARY:All-day task', $ics);
 		self::assertStringContainsString('UID:kanso-card-100@1', $ics);
 		self::assertStringContainsString('UID:kanso-card-101@1', $ics);
-		self::assertStringContainsString('/#/board/1/card/100', $ics);
-		self::assertMatchesRegularExpression('#URL[^:]*:https://nc/apps/kanso/\#/board/1/card/100#', $ics);
+		// Fragment-free server-route deep link (#3744) - survives login redirects.
+		self::assertStringContainsString('/apps/kanso/card/100', $ics);
+		self::assertMatchesRegularExpression('#URL[^:]*:https://nc/apps/kanso/card/100#', $ics);
+		self::assertStringNotContainsString('#/board/', $ics);
 
 		// A parser round-trips it and confirms the event count.
 		$vcal = \Sabre\VObject\Reader::read($ics);

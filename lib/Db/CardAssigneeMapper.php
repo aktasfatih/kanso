@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -22,7 +24,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<CardAssignee>
  */
 class CardAssigneeMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private CardVisibilityScope $visibilityScope,
+	) {
 		parent::__construct($db, 'kanso_card_assignees', CardAssignee::class);
 	}
 
@@ -62,7 +67,7 @@ class CardAssigneeMapper extends QBMapper {
 	 * @return list<array{uid: string, count: int}>
 	 * @throws Exception
 	 */
-	public function countByAssigneeForBoard(int $boardId): array {
+	public function countByAssigneeForBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('ca.participant')
 			->selectAlias($qb->func()->count('*'), 'cnt')
@@ -73,6 +78,7 @@ class CardAssigneeMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
 			->groupBy('ca.participant');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];
@@ -132,7 +138,7 @@ class CardAssigneeMapper extends QBMapper {
 	 * @return list<array{uid: string, estimate: string}>
 	 * @throws Exception
 	 */
-	public function estimateByAssigneeForBoard(int $boardId): array {
+	public function estimateByAssigneeForBoard(int $boardId, ViewerContext $viewer): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('ca.participant', 'c.estimate')
 			->from($this->getTableName(), 'ca')
@@ -142,6 +148,7 @@ class CardAssigneeMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNotNull('c.estimate'));
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = [];

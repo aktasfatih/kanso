@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Change;
@@ -29,6 +31,9 @@ class StackServiceTest extends TestCase {
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
+	private BoardAccess&MockObject $boardAccess;
+	/** The board side contextFor resolves for the acting user (#3744). */
+	private string $viewerRole = ViewerContext::ROLE_INTERNAL;
 	private StackService $service;
 
 	protected function setUp(): void {
@@ -38,13 +43,25 @@ class StackServiceTest extends TestCase {
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->db = $this->createMock(IDBConnection::class);
+		// Stack mutations are internal-only (#3744); default the resolved
+		// role to internal so the pre-role tests behave unchanged.
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember(
+				$uid,
+				(int)$board->getId(),
+				$this->viewerRole,
+				false,
+			),
+		);
 		$this->service = new StackService(
 			$this->stackMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
 			new SortKeyService(),
-			$this->db
+			$this->db,
+			$this->boardAccess
 		);
 	}
 
@@ -466,5 +483,62 @@ class StackServiceTest extends TestCase {
 
 		$this->expectException(\RuntimeException::class);
 		$this->service->move(7, 5, 'alice');
+	}
+
+	// ── external members cannot restructure the board (#3744) ─────────────────
+
+	/**
+	 * Every stack MUTATION is denied for an external member even when their
+	 * ACL carries EDIT (externals act on cards, not the board's structure).
+	 * The permission assert passes (EDIT held) - the ROLE gate is what denies.
+	 */
+	public function testStackMutationsAreDeniedForExternalMembers(): void {
+		$this->viewerRole = ViewerContext::ROLE_EXTERNAL;
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->stackMapper->expects(self::never())->method('insert');
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$mutations = [
+			'create' => fn () => $this->service->create(1, 'New column', 'bob'),
+			'update' => fn () => $this->service->update(5, 'Renamed', null, null, null, 'bob'),
+			'delete' => fn () => $this->service->delete(5, 'bob'),
+			'move' => fn () => $this->service->move(5, null, 'bob'),
+		];
+		foreach ($mutations as $name => $mutation) {
+			try {
+				$mutation();
+				self::fail("StackService::$name did not deny the external member");
+			} catch (NotPermittedException) {
+				// expected - denial per mutation
+			}
+		}
+	}
+
+	public function testRestoreIsDeniedForExternalMembers(): void {
+		// Separate from the loop above: restore() requires a DELETED stack to
+		// get past its own deleted-at guard and reach the role gate.
+		$this->viewerRole = ViewerContext::ROLE_EXTERNAL;
+		$deleted = $this->stack();
+		$deleted->setDeletedAt(123);
+		$this->stackMapper->method('find')->with(5)->willReturn($deleted);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->restore(5, 'bob');
+	}
+
+	public function testDeleteChecksRoleAfterEditSoInternalEditorStillDeletes(): void {
+		// Guard against over-tightening: an INTERNAL member with EDIT keeps
+		// today's ability to delete a column.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturn(new Change());
+
+		$stack = $this->service->delete(5, 'bob');
+		self::assertGreaterThan(0, $stack->getDeletedAt());
 	}
 }

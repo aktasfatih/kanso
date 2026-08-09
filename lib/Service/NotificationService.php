@@ -28,7 +28,9 @@ class NotificationService {
 	public const SUBJECT_BOARD_ACTIVITY = 'board_activity';
 	public const SUBJECT_CARD_DUE = 'card_due';
 	public const SUBJECT_CARD_DUE_SOON = 'card_due_soon';
+	public const SUBJECT_STEP_ASSIGNED = 'step_assigned';
 	public const OBJECT_CARD = 'card';
+	public const OBJECT_CHECKLIST_ITEM = 'checklist_item';
 
 	public function __construct(
 		private IManager $manager,
@@ -157,6 +159,43 @@ class NotificationService {
 			->setSubject($subject, ['cardId' => $cardId]);
 
 		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Notifies $targetUid that $actorUid assigned them a checklist step
+	 * (#3745). Keyed by the ITEM id (not the card) so several steps of one
+	 * card notify - and dismiss - independently; the card id rides in the
+	 * subject parameters for render-time resolution and the deep link. No-op
+	 * when the actor assigns themselves.
+	 */
+	public function notifyStepAssigned(int $itemId, int $cardId, string $targetUid, string $actorUid): void {
+		if ($targetUid === $actorUid) {
+			return;
+		}
+
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CHECKLIST_ITEM, (string)$itemId)
+			->setSubject(self::SUBJECT_STEP_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Dismisses a previously-sent "step assigned to you" notification (e.g.
+	 * after the step is unassigned or handed to someone else). Idempotent -
+	 * dismissing an absent notification is a no-op at the manager level.
+	 */
+	public function dismissStepAssigned(int $itemId, string $targetUid): void {
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setObject(self::OBJECT_CHECKLIST_ITEM, (string)$itemId)
+			->setSubject(self::SUBJECT_STEP_ASSIGNED);
+
+		$this->manager->markProcessed($notification);
 	}
 
 	/**

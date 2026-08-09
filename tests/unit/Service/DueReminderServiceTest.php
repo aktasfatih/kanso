@@ -7,10 +7,17 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\NotAMemberException;
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\DueReminderService;
 use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -25,9 +32,20 @@ class DueReminderServiceTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private SubscriptionMapper&MockObject $subscriptionMapper;
 	private NotificationService&MockObject $notificationService;
+	private BoardMapper&MockObject $boardMapper;
+	private BoardAccess&MockObject $boardAccess;
 	private ITimeFactory&MockObject $time;
 	private LoggerInterface&MockObject $logger;
 	private DueReminderService $service;
+
+	/**
+	 * The audience's resolved roles on board 1, consumed by the REAL
+	 * CardVisibilityGuard + CardVisibilityScope pair the service is wired
+	 * with - so the leak tests exercise the actual visibility rule.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $rolesOnBoard = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -35,6 +53,24 @@ class DueReminderServiceTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->boardMapper = $this->createMock(BoardMapper::class);
+		$board = new Board();
+		$board->setId(1);
+		$board->setOwner('board-owner');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('rolesOn')->willReturnCallback(
+			fn (Board $b, array $uids): array => array_intersect_key($this->rolesOnBoard, array_flip($uids)),
+		);
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			function (Board $b, string $uid): ViewerContext {
+				$role = $this->rolesOnBoard[$uid] ?? null;
+				if ($role === null) {
+					throw new NotAMemberException('not a member');
+				}
+				return ViewerContext::forMember($uid, $b->getId(), $role, false);
+			},
+		);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->logger = $this->createMock(LoggerInterface::class);
@@ -43,6 +79,8 @@ class DueReminderServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->subscriptionMapper,
 			$this->notificationService,
+			$this->boardMapper,
+			new CardVisibilityGuard($this->boardAccess, new CardVisibilityScope()),
 			$this->time,
 			$this->logger,
 		);
@@ -244,6 +282,51 @@ class DueReminderServiceTest extends TestCase {
 		// The good card still notifies + stamps.
 		$this->notificationService->expects(self::once())->method('notifyCardDue')->with(11, 'alice', 0);
 		$this->cardMapper->expects(self::once())->method('update');
+
+		self::assertSame(1, $this->service->runDueReminders());
+	}
+
+	// ---- visibility (#3760): a hidden card reminds no one outside it --------
+
+	public function testHiddenCardRemindsOnlyRecipientsInsideItsVisibility(): void {
+		// A provider-internal card watched/assigned across the fence: the
+		// external watcher and the unresolvable uid get NO reminder - a bell
+		// entry would be an existence oracle for a card they cannot open.
+		$card = $this->card(10, self::NOW - 60);
+		$card->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$card->setCreatorRole(ViewerContext::ROLE_INTERNAL);
+		$card->setOwner('inty');
+		$this->rolesOnBoard = [
+			'inty' => ViewerContext::ROLE_INTERNAL,
+			'exty' => ViewerContext::ROLE_EXTERNAL,
+		];
+		$this->cardMapper->method('findDueForReminder')->willReturn([$card]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(10)->willReturn(['inty', 'exty']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(10)->willReturn(['ghost']);
+
+		$this->notificationService->expects(self::once())
+			->method('notifyCardDue')->with(10, 'inty', 0);
+		// The marker still stamps: the reminder FIRED, just to a scoped audience.
+		$this->cardMapper->expects(self::once())->method('update');
+
+		self::assertSame(1, $this->service->runDueReminders());
+	}
+
+	public function testPrivateCardRemindsOnlyItsOwner(): void {
+		$card = $this->card(10, self::NOW - 60);
+		$card->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$card->setCreatorRole(ViewerContext::ROLE_INTERNAL);
+		$card->setOwner('inty');
+		$this->rolesOnBoard = [
+			'inty' => ViewerContext::ROLE_INTERNAL,
+			'mgr' => ViewerContext::ROLE_INTERNAL, // manager is NOT a backdoor
+		];
+		$this->cardMapper->method('findDueForReminder')->willReturn([$card]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(10)->willReturn(['inty', 'mgr']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(10)->willReturn([]);
+
+		$this->notificationService->expects(self::once())
+			->method('notifyCardDue')->with(10, 'inty', 0);
 
 		self::assertSame(1, $this->service->runDueReminders());
 	}

@@ -69,6 +69,10 @@ use OCP\DB\Types;
  * @method void setType(?string $type)
  * @method bool getIsTemplate()
  * @method void setIsTemplate(bool $isTemplate)
+ * @method string|null getVisibility()
+ * @method void setVisibility(string $visibility)
+ * @method string|null getCreatorRole()
+ * @method void setCreatorRole(string $creatorRole)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
@@ -124,6 +128,16 @@ class Card extends Entity implements \JsonSerializable {
 	// card query filters it out) and offered in a small picker. In the summary
 	// payload so the template picker (which reads summaries) can read the flag.
 	protected ?bool $isTemplate = null;
+	// Card visibility (#3741): 'public' | 'internal' | 'private' - the
+	// constants live in \OCA\Kanso\Service\CardVisibilityScope, NOT here (the
+	// scope owns the rule). `creatorRole` is the creator's board side
+	// ('internal'/'external' per \OCA\Kanso\Access\ViewerContext), FROZEN at
+	// create - never recomputed on role changes, so 'internal' cards keep
+	// their side. `owner` doubles as the 'private' match. Deliberately NOT
+	// serialized yet: the payloads gain visibility when the read paths adopt
+	// the scope (epic 3, #3743).
+	protected ?string $visibility = null;
+	protected ?string $creatorRole = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -151,13 +165,15 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('coverColor', Types::STRING);
 		$this->addType('type', Types::STRING);
 		$this->addType('isTemplate', Types::BOOLEAN);
+		$this->addType('visibility', Types::STRING);
+		$this->addType('creatorRole', Types::STRING);
 	}
 
 	/**
 	 * Summary payload for board/stack listings - deliberately without the
 	 * description (the charter's summary-payload performance bet).
 	 *
-	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string, isTemplate: bool}
+	 * @return array{id: int, boardId: ?int, stackId: ?int, title: ?string, sortKey: ?string, duedate: ?string, startDate: ?string, doneAt: int, startedAt: int, archived: bool, allDay: bool, owner: ?string, createdAt: int, lastModified: int, parentCardId: ?int, priority: int, estimate: ?string, boardSeq: ?int, dueReminderDayBefore: bool, coverColor: ?string, type: string, isTemplate: bool, visibility: string}
 	 */
 	public function jsonSerializeSummary(): array {
 		return [
@@ -195,6 +211,13 @@ class Card extends Entity implements \JsonSerializable {
 			// board render; the flag is surfaced so the template picker and the
 			// card detail can tell a template apart from a normal card.
 			'isTemplate' => $this->isTemplate ?? false,
+			// Card visibility (#3741/#3743): 'public' | 'internal' | 'private'.
+			// Every payload row has already passed the visibility scope, so
+			// exposing the level leaks nothing - the UI needs it for the badge
+			// and the picker. `creatorRole` stays server-side (the scope
+			// filters on it; a visible internal card always matches the
+			// viewer's own side, so the value would be redundant anyway).
+			'visibility' => $this->visibility ?? 'public',
 		];
 	}
 

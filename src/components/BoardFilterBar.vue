@@ -82,6 +82,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				name="kanso-filter-done"
 				@update:model-value="setSingle('done', opt.value)">{{ t('kanso', opt.label) }}</NcActionRadio>
 
+			<!-- Waiting on client (#3746, tri-state via radios) - reads the derived
+			     waitingOnExternal summary flag, no extra request -->
+			<NcActionCaption :name="t('kanso', 'Client status')" />
+			<NcActionRadio
+				v-for="opt in WAITING_OPTIONS"
+				:key="'w-' + opt.value"
+				:model-value="state.waiting === opt.value"
+				name="kanso-filter-waiting"
+				@update:model-value="setSingle('waiting', opt.value)">{{ t('kanso', opt.label) }}</NcActionRadio>
+
 			<!-- Clear (only when something is active) -->
 			<template v-if="count > 0">
 				<NcActionSeparator />
@@ -175,6 +185,7 @@ import {
 	UNASSIGNED,
 	DUE_OPTIONS,
 	DONE_OPTIONS,
+	WAITING_OPTIONS,
 	useFilterCount,
 } from '../composables/useBoardFilters.js'
 
@@ -223,8 +234,10 @@ function clearAll() {
 	props.state.labels.clear()
 	props.state.assignees.clear()
 	props.state.priorities.clear()
+	props.state.types.clear()
 	props.state.due = null
 	props.state.done = null
+	props.state.waiting = null
 }
 
 function submitSave() {

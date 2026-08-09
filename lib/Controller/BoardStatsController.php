@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\StatsService;
@@ -33,6 +34,7 @@ class BoardStatsController extends Controller {
 		private IUserSession $userSession,
 		private BoardService $boardService,
 		private StatsService $statsService,
+		private BoardAccess $boardAccess,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -44,8 +46,12 @@ class BoardStatsController extends Controller {
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
-			$this->boardService->find($id, $this->currentUserId());
-			return new JSONResponse($this->statsService->boardStats($id));
+			$uid = $this->currentUserId();
+			$board = $this->boardService->find($id, $uid);
+			// The viewer's side scopes every aggregate (#3743) - stats must
+			// not count cards the viewer cannot see.
+			$viewer = $this->boardAccess->contextFor($board, $uid);
+			return new JSONResponse($this->statsService->boardStats($id, $viewer));
 		});
 	}
 

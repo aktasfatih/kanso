@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -62,6 +63,8 @@ class TrashService {
 		private CardAttachmentService $cardAttachmentService,
 		private CardTimeEntryService $cardTimeEntryService,
 		private CardFieldValueMapper $cardFieldValueMapper,
+		private BoardAccess $boardAccess,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -77,7 +80,12 @@ class TrashService {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
 
-		return $this->cardMapper->findDeletedByBoard($boardId);
+		// Visibility (#3743): the trash shows only cards the viewer could see
+		// alive - deleting an internal/private card must not surface it here.
+		return $this->cardMapper->findDeletedByBoard(
+			$boardId,
+			$this->boardAccess->contextFor($board, $actorUid),
+		);
 	}
 
 	/**
@@ -92,6 +100,7 @@ class TrashService {
 		$card = $this->loadTrashedCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$card->setDeletedAt(0);
 		$card->setLastModified(time());
@@ -120,6 +129,7 @@ class TrashService {
 		$card = $this->loadTrashedCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$this->cardLabelMapper->deleteByCard($cardId);
 		$this->cardAssigneeMapper->deleteByCard($cardId);

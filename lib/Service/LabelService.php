@@ -36,6 +36,7 @@ class LabelService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private IDBConnection $db,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -145,6 +146,7 @@ class LabelService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$label = $this->labelMapper->find($labelId);
 		if ($label->getBoardId() !== $card->getBoardId()) {
@@ -178,6 +180,7 @@ class LabelService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		if ($this->cardLabelMapper->deleteAssignment($cardId, $labelId) === 0) {
 			return;

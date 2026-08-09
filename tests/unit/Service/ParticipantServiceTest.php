@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
@@ -266,5 +267,21 @@ class ParticipantServiceTest extends TestCase {
 		foreach ($participants as $p) {
 			self::assertStringContainsStringIgnoringCase('developer', $p['displayName']);
 		}
+	}
+
+	public function testExternalRoleMembersAppearInTheAssigneePicker(): void {
+		// #3744: the picker is role-blind by design - an external (client-side)
+		// member must be assignable and @mentionable like anyone else.
+		$externalAcl = $this->userAcl('client');
+		$externalAcl->setRole(ViewerContext::ROLE_EXTERNAL);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$externalAcl]);
+		$this->userManager->method('get')->willReturnMap([
+			['alice', $this->user('alice', 'Alice Adams')],
+			['client', $this->user('client', 'Cli Ent')],
+		]);
+
+		$uids = array_column($this->service->getParticipants(1, 'alice'), 'uid');
+		self::assertContains('client', $uids);
 	}
 }

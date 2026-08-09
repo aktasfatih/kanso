@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -17,6 +19,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AutomationService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -46,6 +49,10 @@ class CardServiceTest extends TestCase {
 	private \OCA\Kanso\Db\ChecklistItemMapper&MockObject $checklistItemMapper;
 	private \OCA\Kanso\Db\CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private \OCA\Kanso\Db\SubscriptionMapper&MockObject $subscriptionMapper;
+	private BoardAccess&MockObject $boardAccess;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
+	/** The role the BoardAccess mock resolves creators to (#3741 freeze). */
+	private string $resolvedRole = ViewerContext::ROLE_INTERNAL;
 	private CardService $service;
 
 	protected function setUp(): void {
@@ -67,6 +74,20 @@ class CardServiceTest extends TestCase {
 		$this->checklistItemMapper = $this->createMock(\OCA\Kanso\Db\ChecklistItemMapper::class);
 		$this->cardAssigneeMapper = $this->createMock(\OCA\Kanso\Db\CardAssigneeMapper::class);
 		$this->subscriptionMapper = $this->createMock(\OCA\Kanso\Db\SubscriptionMapper::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// Membership for the creator_role freeze (#3741): every creator
+		// resolves to $this->resolvedRole (internal by default; tests
+		// exercising the external side flip the property).
+		$this->resolvedRole = ViewerContext::ROLE_INTERNAL;
+		$this->boardAccess->method('contextFor')->willReturnCallback(
+			fn (Board $board, string $uid): ViewerContext
+				=> ViewerContext::forMember($uid, $board->getId(), $this->resolvedRole, false),
+		);
+		// Visibility gate (#3743): every card is visible by default so the
+		// pre-existing behavioral tests are unaffected; hidden-card tests
+		// override assertVisible per test.
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -85,7 +106,9 @@ class CardServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->checklistItemMapper,
 			$this->cardAssigneeMapper,
-			$this->subscriptionMapper
+			$this->subscriptionMapper,
+			$this->boardAccess,
+			$this->visibilityGuard
 		);
 	}
 
@@ -167,6 +190,45 @@ class CardServiceTest extends TestCase {
 
 		$card = $this->service->create(5, 'A card', 'alice');
 		self::assertSame(9, $card->getId());
+	}
+
+	public function testCreateStartsPublicWithFrozenCreatorRole(): void {
+		// Visibility model (#3741): a new card is 'public' (default-open) and
+		// carries the creator's resolved board side frozen on the INSERT.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame('public', $card->getVisibility());
+				self::assertSame(ViewerContext::ROLE_INTERNAL, $card->getCreatorRole());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'alice');
+	}
+
+	public function testCreateFreezesExternalCreatorRole(): void {
+		// An external (client-side) member's card freezes 'external' - the
+		// symmetric half of the internal-visibility rule.
+		$this->resolvedRole = ViewerContext::ROLE_EXTERNAL;
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (Card $card): Card {
+				self::assertSame('public', $card->getVisibility());
+				self::assertSame(ViewerContext::ROLE_EXTERNAL, $card->getCreatorRole());
+				$card->setId(9);
+				return $card;
+			});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->create(5, 'A card', 'bob');
 	}
 
 	public function testCreateAppendsAfterLastCard(): void {
@@ -533,6 +595,18 @@ class CardServiceTest extends TestCase {
 		$this->service->find(9, 'alice');
 	}
 
+	public function testFindThrowsDoesNotExistForHiddenCard(): void {
+		// Visibility gate (#3743): a card the viewer may not see 404s exactly
+		// like a missing id - never a 403 (no existence oracle).
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->find(9, 'alice');
+	}
+
 	// ---- findByRef (board-scoped PREFIX-<seq> resolution, #3611) -----------
 
 	private function boardWithPrefix(string $prefix, int $id = 1): Board {
@@ -549,7 +623,9 @@ class CardServiceTest extends TestCase {
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_READ);
 		$this->cardMapper->expects(self::once())
-			->method('findByBoardAndSeq')->with(1, 123)->willReturn($card);
+			->method('findByBoardAndSeq')
+			->with(1, 123, self::isInstanceOf(ViewerContext::class))
+			->willReturn($card);
 
 		self::assertSame($card, $this->service->findByRef(1, 'KAN-123', 'alice'));
 	}
@@ -558,7 +634,8 @@ class CardServiceTest extends TestCase {
 		$board = $this->boardWithPrefix('KAN');
 		$card = $this->card(42);
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardMapper->method('findByBoardAndSeq')->with(1, 7)->willReturn($card);
+		$this->cardMapper->method('findByBoardAndSeq')
+			->with(1, 7, self::isInstanceOf(ViewerContext::class))->willReturn($card);
 
 		self::assertSame($card, $this->service->findByRef(1, 'kan-7', 'alice'));
 	}
@@ -566,7 +643,8 @@ class CardServiceTest extends TestCase {
 	public function testFindByRefReturnsNullForUnknownSeq(): void {
 		$board = $this->boardWithPrefix('KAN');
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardMapper->method('findByBoardAndSeq')->with(1, 999)->willReturn(null);
+		$this->cardMapper->method('findByBoardAndSeq')
+			->with(1, 999, self::isInstanceOf(ViewerContext::class))->willReturn(null);
 
 		self::assertNull($this->service->findByRef(1, 'KAN-999', 'alice'));
 	}
@@ -596,7 +674,8 @@ class CardServiceTest extends TestCase {
 		$board = $this->board(); // no prefix set
 		$card = $this->card(42);
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardMapper->method('findByBoardAndSeq')->with(1, 5)->willReturn($card);
+		$this->cardMapper->method('findByBoardAndSeq')
+			->with(1, 5, self::isInstanceOf(ViewerContext::class))->willReturn($card);
 
 		self::assertSame($card, $this->service->findByRef(1, 'KAN-5', 'alice'));
 	}
@@ -636,6 +715,20 @@ class CardServiceTest extends TestCase {
 		self::assertSame('A description', $updated->getDescription());
 		self::assertTrue($updated->getArchived());
 		self::assertGreaterThan(0, $updated->getLastModified());
+	}
+
+	public function testUpdateSucceedsForExternalMemberOnAVisibleCard(): void {
+		// The external-role happy path (#3744): an external member with EDIT
+		// mutates the cards the visibility scope shows them - the role cap
+		// only bites on SHARE/MANAGE surfaces and board structure, never here.
+		$this->resolvedRole = ViewerContext::ROLE_EXTERNAL;
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, 'Client rename', null, null, null, null, 'client');
+		self::assertSame('Client rename', $updated->getTitle());
 	}
 
 	public function testUpdateLeavesFieldsUnchangedOnNull(): void {
@@ -963,6 +1056,58 @@ class CardServiceTest extends TestCase {
 		$this->service->update(9, 'Renamed', null, null, null, null, 'bob');
 	}
 
+	// ---- update visibility (#3743) ----------------------------------------
+
+	public function testUpdateVisibilityByCardOwnerSetsIt(): void {
+		// The card's owner ('alice') may narrow their own card.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', visibility: 'internal');
+		self::assertSame('internal', $updated->getVisibility());
+	}
+
+	public function testUpdateVisibilityDeniedForNonOwnerNonManager(): void {
+		// 'bob' is neither the card's owner nor a manager (the setUp contextFor
+		// stub resolves isManager=false) - flipping someone else's card across
+		// the fence is forbidden.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, null, null, null, null, 'bob', visibility: 'private');
+	}
+
+	public function testUpdateRejectsUnknownVisibility(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', visibility: 'bogus');
+	}
+
+	public function testUpdateOnHiddenCardThrowsDoesNotExist(): void {
+		// A hidden card is unmutable: the write 404s like a missing id.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->update(9, 'Renamed', null, null, null, null, 'alice');
+	}
+
 	// ---- delete -----------------------------------------------------------
 
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {
@@ -983,6 +1128,19 @@ class CardServiceTest extends TestCase {
 			)
 			->willReturn(new Change());
 
+		$this->service->delete(9, 'alice');
+	}
+
+	public function testDeleteOnHiddenCardThrowsDoesNotExist(): void {
+		// Same unmutability rule for delete: a hidden card cannot be removed.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(DoesNotExistException::class);
 		$this->service->delete(9, 'alice');
 	}
 
@@ -1954,12 +2112,15 @@ class CardServiceTest extends TestCase {
 		return $label;
 	}
 
-	private function checklistItem(int $id, int $cardId, string $title, bool $done): \OCA\Kanso\Db\ChecklistItem {
+	private function checklistItem(int $id, int $cardId, string $title, bool $done, ?\DateTime $dueDate = null): \OCA\Kanso\Db\ChecklistItem {
 		$item = new \OCA\Kanso\Db\ChecklistItem();
 		$item->setId($id);
 		$item->setCardId($cardId);
 		$item->setTitle($title);
 		$item->setDone($done);
+		if ($dueDate !== null) {
+			$item->setDueDate($dueDate);
+		}
 		$item->setSortKey('I');
 		return $item;
 	}
@@ -2007,14 +2168,23 @@ class CardServiceTest extends TestCase {
 		});
 
 		// Checklist: two items, second one done → each recreated in a single
-		// addItem call carrying its done state (no separate toggle).
+		// addItem call carrying its done state (no separate toggle). The first
+		// is a rich step (#3745): assigned + due + done-stamped on the source.
+		// Clone policy: the DUE DATE rides the addItem call; assignee and
+		// done_at have no addItem parameter at all, so they drop by
+		// construction.
+		$stepDue = new \DateTime('2026-08-14T18:00:00Z');
+		$richStep = $this->checklistItem(1, 9, 'Step one', false, $stepDue);
+		$richStep->setAssignedUser('client');
+		$richStep->setAssignedRole(\OCA\Kanso\Access\ViewerContext::ROLE_EXTERNAL);
+		$richStep->setAssignedAt(1000);
 		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
-			$this->checklistItem(1, 9, 'Step one', false),
+			$richStep,
 			$this->checklistItem(2, 9, 'Step two', true),
 		]);
 		$added = [];
-		$this->checklistService->method('addItem')->willReturnCallback(function (int $cardId, string $title, string $uid, bool $done) use (&$added): \OCA\Kanso\Db\ChecklistItem {
-			$added[] = [$title, $done];
+		$this->checklistService->method('addItem')->willReturnCallback(function (int $cardId, string $title, string $uid, bool $done = false, ?\DateTime $dueDate = null) use (&$added): \OCA\Kanso\Db\ChecklistItem {
+			$added[] = [$title, $done, $dueDate?->getTimestamp()];
 			$new = new \OCA\Kanso\Db\ChecklistItem();
 			$new->setId(count($added) + 100);
 			$new->setCardId($cardId);
@@ -2023,6 +2193,8 @@ class CardServiceTest extends TestCase {
 			return $new;
 		});
 		$this->checklistService->expects(self::never())->method('updateItem');
+		// The clone path never re-assigns or re-stamps a step on the copy.
+		$this->checklistService->expects(self::never())->method('assignItem');
 
 		$copy = $this->service->copy(9, 7, 'alice');
 
@@ -2034,7 +2206,11 @@ class CardServiceTest extends TestCase {
 		self::assertSame(0, $copy->getDoneAt());
 		self::assertSame('3', $copy->getEstimate());
 		self::assertSame([[42, 11], [42, 12]], $assigned);
-		self::assertSame([['Step one', false], ['Step two', true]], $added);
+		self::assertSame(
+			[['Step one', false, $stepDue->getTimestamp()], ['Step two', true, null]],
+			$added,
+			'the copy keeps each step due date; assignee/done_at drop by construction',
+		);
 	}
 
 	/**
@@ -2148,9 +2324,18 @@ class CardServiceTest extends TestCase {
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
 
 		// Source carries no labels, one checklist item, one assignee, one watcher.
+		// The item is a rich step (#3745): assigned + due + done-stamped - the
+		// move keeps the DUE DATE but drops assignee/role/stamps (the frozen
+		// role was resolved against the SOURCE board's ACL).
 		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([]);
+		$stepDue = new \DateTime('2026-08-14T18:00:00Z');
+		$movedStep = $this->checklistItem(1, 9, 'Step one', true, $stepDue);
+		$movedStep->setAssignedUser('bob');
+		$movedStep->setAssignedRole(\OCA\Kanso\Access\ViewerContext::ROLE_INTERNAL);
+		$movedStep->setAssignedAt(1000);
+		$movedStep->setDoneAt(2000);
 		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([
-			$this->checklistItem(1, 9, 'Step one', true),
+			$movedStep,
 		]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob']);
 		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn(['carol']);
@@ -2181,7 +2366,7 @@ class CardServiceTest extends TestCase {
 		});
 		$items = [];
 		$this->checklistItemMapper->method('insert')->willReturnCallback(function (\OCA\Kanso\Db\ChecklistItem $i) use (&$items): \OCA\Kanso\Db\ChecklistItem {
-			$items[] = [$i->getTitle(), $i->getDone()];
+			$items[] = [$i->getTitle(), $i->getDone(), $i->getDueDate()?->getTimestamp(), $i->getAssignedUser(), $i->getAssignedRole(), $i->getDoneAt()];
 			return $i;
 		});
 
@@ -2211,7 +2396,11 @@ class CardServiceTest extends TestCase {
 		self::assertSame('3', $moved->getEstimate());
 		self::assertSame([[42, 'bob']], $assignedTo, 'the readable assignee crosses over');
 		self::assertSame(['carol'], $watchedBy, 'the readable watcher crosses over');
-		self::assertSame([['Step one', true]], $items);
+		self::assertSame(
+			[['Step one', true, $stepDue->getTimestamp(), null, null, null]],
+			$items,
+			'the moved step keeps its due date; assignee, frozen role and done_at drop (#3745 clone policy)',
+		);
 		self::assertNotNull($softDeleted, 'the source card is soft-deleted');
 		self::assertGreaterThan(0, $softDeleted->getDeletedAt());
 		self::assertSame(
@@ -2394,7 +2583,9 @@ class CardServiceTest extends TestCase {
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_READ);
 		$this->cardMapper->expects(self::once())
-			->method('findTemplatesByBoard')->with(1)->willReturn($templates);
+			->method('findTemplatesByBoard')
+			->with(1, self::isInstanceOf(ViewerContext::class))
+			->willReturn($templates);
 
 		self::assertSame($templates, $this->service->listTemplates(1, 'alice'));
 	}

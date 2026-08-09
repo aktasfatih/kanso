@@ -16,6 +16,7 @@ use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\CommentReaction;
 use OCA\Kanso\Db\CommentReactionMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\CommentReactionService;
 use OCA\Kanso\Service\InvalidInputException;
@@ -33,6 +34,7 @@ class CommentReactionServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CommentReactionService $service;
 
 	protected function setUp(): void {
@@ -43,6 +45,8 @@ class CommentReactionServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CommentReactionService(
 			$this->reactionMapper,
 			$this->commentMapper,
@@ -50,6 +54,7 @@ class CommentReactionServiceTest extends TestCase {
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
+			$this->visibilityGuard,
 		);
 	}
 

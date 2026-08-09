@@ -48,6 +48,7 @@ class ContactService {
 		private IAppManager $appManager,
 		private IContactsManager $contactsManager,
 		private IUserManager $userManager,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -118,6 +119,7 @@ class ContactService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if (!$this->isAvailable($actorUid)) {
 			throw new ContactsUnavailableException('Contacts app is not available');
@@ -170,6 +172,7 @@ class ContactService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if ($this->cardContactMapper->deleteLink($cardId, $contactUri) === 0) {
 			return;

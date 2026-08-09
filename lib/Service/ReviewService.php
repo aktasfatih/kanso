@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -46,6 +47,8 @@ class ReviewService {
 		private ReviewTypeMapper $reviewTypeMapper,
 		private BoardService $boardService,
 		private CommentService $commentService,
+		private BoardAccess $boardAccess,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -57,11 +60,18 @@ class ReviewService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function findMine(string $uid): array {
+		$boards = $this->boardService->findAll($uid);
 		$boardIds = array_map(
 			static fn ($board): int => $board->getId(),
-			$this->boardService->findAll($uid)
+			$boards
 		);
-		return $this->cardReviewMapper->findByReviewerInBoards($uid, $boardIds);
+		// Visibility (#3743): the joined card is scoped by the viewer's roles,
+		// so a review on a card hidden from them drops out of the feed.
+		return $this->cardReviewMapper->findByReviewerInBoards(
+			$uid,
+			$boardIds,
+			$this->boardAccess->rolesFor($boards, $uid),
+		);
 	}
 
 	/**
@@ -79,10 +89,17 @@ class ReviewService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// A reviewer who cannot see the board could never open the card to act.
 		if (($this->permissionService->getPermissions($board, $reviewerUid) & PermissionService::PERMISSION_READ) === 0) {
 			throw new InvalidInputException('User has no access to this board');
+		}
+		// ... and one who cannot see this CARD could not either (#3743): an
+		// internal/private card must not be reviewable across the fence -
+		// the request itself would leak the title into their feed.
+		if (!$this->visibilityGuard->isVisible($board, $card, $reviewerUid)) {
+			throw new InvalidInputException('User has no access to this card');
 		}
 
 		// A typed request must reference a review type of this card's board.
@@ -139,6 +156,7 @@ class ReviewService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$review = $this->cardReviewMapper->findById($reviewId);
 		if ($review === null || $review->getCardId() !== $cardId) {
@@ -168,6 +186,7 @@ class ReviewService {
 
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$review = $this->cardReviewMapper->findById($reviewId);
 		if ($review === null || $review->getCardId() !== $cardId) {
@@ -196,7 +215,7 @@ class ReviewService {
 			// A flip to APPROVED may un-gate downstream reviews: fire any deferred
 			// reviewer notification for a now-ungated review that was never notified.
 			if ($state === CardReview::STATE_APPROVED) {
-				$this->fireDeferredNotifications($card);
+				$this->fireDeferredNotifications($board, $card);
 			}
 		}
 
@@ -294,9 +313,17 @@ class ReviewService {
 	 * Reuses the SAME gating helper as request-time so the two cannot diverge.
 	 * The stage map + sibling set are fetched ONCE per call.
 	 *
+	 * Visibility (#3761): the card may have NARROWED between request time and
+	 * fire time - the reviewer was checked visible when the review was requested,
+	 * but firing now would write a notification row (and push) naming a card
+	 * they can no longer see. Each fire re-checks the visibility guard, exactly
+	 * mirroring the request-time check; a hidden reviewer is skipped WITHOUT
+	 * stamping `notified_at`, so a later widening lets the next approval sweep
+	 * deliver the deferred notification after all.
+	 *
 	 * @throws \OCP\DB\Exception
 	 */
-	private function fireDeferredNotifications(Card $card): void {
+	private function fireDeferredNotifications(Board $board, Card $card): void {
 		$cardId = $card->getId();
 		$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
 		$reviews = $this->cardReviewMapper->findByCard($cardId);
@@ -309,6 +336,9 @@ class ReviewService {
 				continue;
 			}
 			if ($this->isGated($review, $reviews, $stageMap)) {
+				continue;
+			}
+			if (!$this->visibilityGuard->isVisible($board, $card, $review->getReviewer())) {
 				continue;
 			}
 			$this->notificationService->notifyReviewRequested(

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
@@ -17,6 +18,11 @@ use OCP\DB\Types;
  * Rows are written by AclService (the sharing endpoints) and read by
  * PermissionService for every permission check.
  *
+ * `role` (#3742) is the member's board side - 'internal' (provider) or
+ * 'external' (client), one of the ViewerContext::ROLE_* values. A user
+ * matching several rows (via groups) gets ONE effective role, folded
+ * internal-wins by \OCA\Kanso\Access\BoardAccess.
+ *
  * @method int getBoardId()
  * @method void setBoardId(int $boardId)
  * @method int getParticipantType()
@@ -25,6 +31,8 @@ use OCP\DB\Types;
  * @method void setParticipant(string $participant)
  * @method int getPermission()
  * @method void setPermission(int $permission)
+ * @method string|null getRole()
+ * @method void setRole(string $role)
  */
 class Acl extends Entity implements \JsonSerializable {
 	public const TYPE_USER = 0;
@@ -37,19 +45,21 @@ class Acl extends Entity implements \JsonSerializable {
 	protected ?int $participantType = null;
 	protected ?string $participant = null;
 	protected ?int $permission = null;
+	protected ?string $role = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
 		$this->addType('participantType', Types::INTEGER);
 		$this->addType('participant', Types::STRING);
 		$this->addType('permission', Types::INTEGER);
+		$this->addType('role', Types::STRING);
 	}
 
 	/**
 	 * `participantType` serializes as 'user'/'group' - the API never leaks
 	 * the numeric storage constants.
 	 *
-	 * @return array{id: int, boardId: ?int, participant: ?string, participantType: string, permission: ?int}
+	 * @return array{id: int, boardId: ?int, participant: ?string, participantType: string, permission: ?int, role: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -59,6 +69,9 @@ class Acl extends Entity implements \JsonSerializable {
 			'participant' => $this->participant,
 			'participantType' => $this->participantType === self::TYPE_GROUP ? 'group' : 'user',
 			'permission' => $this->permission,
+			// A row hydrated before the role column existed reads as
+			// 'internal', matching the migration backfill.
+			'role' => $this->role ?? ViewerContext::ROLE_INTERNAL,
 		];
 	}
 }

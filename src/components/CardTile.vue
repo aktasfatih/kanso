@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate"
+				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -57,6 +57,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<ProgressClockIcon :size="12" />
 					{{ t('kanso', 'In progress') }}
 				</span>
+				<!-- Visibility badge (#3743) - internal/private cards carry a lock
+				     so viewers know the card is scoped (public cards show nothing) -->
+				<span
+					v-if="isRestricted"
+					class="card-tile__visibility"
+					:aria-label="card.visibility === 'private' ? t('kanso', 'Private card') : t('kanso', 'Internal card')"
+					:title="card.visibility === 'private' ? t('kanso', 'Private — only you') : t('kanso', 'Internal — only your side of the board')">
+					<LockOutlineIcon :size="12" />
+					{{ card.visibility === 'private' ? t('kanso', 'Private') : t('kanso', 'Internal') }}
+				</span>
 				<!-- Blocked badge - shown when the card has an unresolved blocker -->
 				<span
 					v-if="card.blocked"
@@ -64,6 +74,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:aria-label="t('kanso', 'Blocked by another card')">
 					<CancelIcon :size="12" />
 					{{ t('kanso', 'Blocked') }}
+				</span>
+				<!-- Waiting-on-client chip (#3746) - derived server-side from the
+				     card's open steps assigned to the external side; appears and
+				     clears purely from step state, no stored flag -->
+				<span
+					v-if="card.waitingOnExternal"
+					class="card-tile__waiting"
+					:aria-label="t('kanso', 'Waiting on client')"
+					:title="waitingTitle">
+					<AccountClockIcon :size="12" />
+					{{ waitingLabel }}
 				</span>
 				<!-- Type icon (#3402) - icon-first built-in issue type -->
 				<span
@@ -177,6 +198,8 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import CancelIcon from 'vue-material-design-icons/Cancel.vue'
+import AccountClockIcon from 'vue-material-design-icons/AccountClock.vue'
+import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import BugIcon from 'vue-material-design-icons/Bug.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import CheckboxMarkedCircleOutlineIcon from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
@@ -325,6 +348,34 @@ const priorityLabel = computed(() => {
 })
 
 // Card type (#3402) metadata for the tile icon, or null for the implicit "none".
+// Internal/private cards carry a lock badge (#3743); public shows nothing.
+const isRestricted = computed(() => props.card.visibility === 'internal' || props.card.visibility === 'private')
+
+// Waiting-on-client chip (#3746): relative age since the OLDEST open external
+// step was assigned (waitingSince is epoch seconds from the board summary).
+// Below one hour the age is omitted rather than showing a noisy "0h".
+const waitingAge = computed(() => {
+	const since = Number(props.card.waitingSince ?? 0)
+	if (!since) return ''
+	const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - since)
+	const days = Math.floor(elapsed / 86400)
+	if (days > 0) return t('kanso', '{n}d', { n: days })
+	const hours = Math.floor(elapsed / 3600)
+	return hours > 0 ? t('kanso', '{n}h', { n: hours }) : ''
+})
+
+const waitingLabel = computed(() => (waitingAge.value
+	? t('kanso', 'Waiting on client') + ' · ' + waitingAge.value
+	: t('kanso', 'Waiting on client')))
+
+const waitingTitle = computed(() => {
+	const since = Number(props.card.waitingSince ?? 0)
+	if (!since) return t('kanso', 'Waiting on client')
+	return t('kanso', 'Waiting on client since {date}', {
+		date: new Date(since * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+	})
+})
+
 const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.type) ?? null)
 
 // Assignee avatar stack: max 3 visible + overflow count
@@ -683,6 +734,20 @@ const extraAssigneeCount = computed(() => {
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
 }
 
+/* Visibility badge (#3743) - neutral lock chip for internal/private cards */
+.card-tile__visibility {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: var(--color-text-maxcontrast);
+	border: 1px solid var(--color-border-dark);
+	background: var(--color-background-hover);
+}
+
 /* Blocked badge - muted red attention chip */
 .card-tile__blocked {
 	display: inline-flex;
@@ -695,6 +760,22 @@ const extraAssigneeCount = computed(() => {
 	color: var(--color-error, #e30000);
 	border: 1px solid var(--color-error, #e30000);
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+}
+
+/* Waiting-on-client chip (#3746) - amber "ball is with the client" signal.
+ * --color-warning adapts per theme and keeps text contrast; distinct from the
+ * blocked chip's red (blocked = stuck, waiting = parked with the other side). */
+.card-tile__waiting {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: var(--color-warning, #e07b00);
+	border: 1px solid var(--color-warning, #e07b00);
+	background: rgba(240, 168, 68, 0.1);
 }
 
 /* Estimate chip */
@@ -796,7 +877,8 @@ const extraAssigneeCount = computed(() => {
 .card-tile--compact .card-tile__estimate,
 .card-tile--compact .card-tile__review,
 .card-tile--compact .card-tile__inprogress,
-.card-tile--compact .card-tile__blocked {
+.card-tile--compact .card-tile__blocked,
+.card-tile--compact .card-tile__waiting {
 	font-size: 0.68rem;
 	padding: 0 5px;
 }

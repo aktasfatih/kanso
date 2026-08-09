@@ -40,6 +40,7 @@ class CommentService {
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
 		private MentionService $mentionService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -54,6 +55,7 @@ class CommentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		return $this->commentMapper->findByCard($cardId);
 	}
@@ -71,6 +73,7 @@ class CommentService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if ($parentCommentId !== null) {
 			$parent = $this->loadParentComment($parentCommentId);
@@ -95,8 +98,9 @@ class CommentService {
 		$this->notifyCard($card, $actorUid);
 		// Auto-subscribe the commenter and fan out to the card's watchers.
 		$this->subscriptionService->handleNewComment($cardId, $parentCommentId, $actorUid);
-		// @mentioned readable-board participants are pinged + auto-subscribed.
-		$this->mentionService->handleMentions($cardId, $board, $body, $actorUid);
+		// @mentioned readable-board participants who can SEE the card are
+		// pinged + auto-subscribed (#3760).
+		$this->mentionService->handleMentions($card, $board, $body, $actorUid);
 
 		return $saved;
 	}
@@ -115,6 +119,7 @@ class CommentService {
 		$card = $this->loadCard($comment->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		if ($comment->getAuthor() !== $actorUid) {
 			throw new NotPermittedException('Only the author may edit this comment');
@@ -148,6 +153,9 @@ class CommentService {
 		$comment = $this->loadComment($commentId);
 		$card = $this->loadCard($comment->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
+		// Visibility (#3743): comments inherit their card - a comment on a
+		// hidden card is unaddressable, even for a manager.
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$isManager = ($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_MANAGE) !== 0;
 		$isAuthor = $comment->getAuthor() === $actorUid;

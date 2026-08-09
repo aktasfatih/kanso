@@ -201,7 +201,10 @@ class BackupService {
 	 * @throws \OCP\Files\NotPermittedException
 	 */
 	private function backupBoard(Folder $folder, Board $board, int $retention): void {
-		$envelope = $this->exportService->export($board);
+		// SYSTEM scope (null viewer): a backup is a full-fidelity admin
+		// artifact - it must carry hidden cards too, and it never leaves the
+		// admin-controlled backup folder (#3743).
+		$envelope = $this->exportService->export($board, null);
 		$json = json_encode($envelope, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 		if ($json === false) {
 			throw new \RuntimeException('Failed to encode board ' . $board->getId() . ' to JSON');

@@ -43,6 +43,7 @@ class CardLinkService {
 		private PermissionService $permissionService,
 		private ChangeNotifier $changeNotifier,
 		private IClientService $clientService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -57,6 +58,7 @@ class CardLinkService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$links = $this->cardLinkMapper->findByCard($cardId);
 		$now = time();
@@ -80,8 +82,9 @@ class CardLinkService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		[$kind] = $this->parseGitHubUrl($url);
+		[$kind] = self::parseGitHubUrl($url);
 
 		$now = time();
 		$link = new CardLink();
@@ -134,6 +137,7 @@ class CardLinkService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$link = $this->cardLinkMapper->find($linkId);
 		if ($link->getCardId() !== $cardId) {
@@ -168,12 +172,13 @@ class CardLinkService {
 	/**
 	 * Parses and validates a GitHub URL, returning [kind, owner, repo, number].
 	 * Only github.com is accepted; a pull/issue URL yields its number, any other
-	 * github.com URL is KIND_OTHER (number 0, not polled).
+	 * github.com URL is KIND_OTHER (number 0, not polled). Pure - static so any
+	 * server caller (e.g. the webhook ingest) parses identically.
 	 *
 	 * @return array{0: string, 1: string, 2: string, 3: int}
 	 * @throws InvalidInputException if the URL is not an https github.com URL
 	 */
-	public function parseGitHubUrl(string $url): array {
+	public static function parseGitHubUrl(string $url): array {
 		$url = trim($url);
 		$parts = parse_url($url);
 		if ($parts === false
@@ -203,7 +208,7 @@ class CardLinkService {
 	private function refreshState(CardLink $link, int $now): void {
 		$link->setLastPolled($now);
 		try {
-			[$kind, $owner, $repo, $number] = $this->parseGitHubUrl($link->getUrl());
+			[$kind, $owner, $repo, $number] = self::parseGitHubUrl($link->getUrl());
 			if ($kind === CardLink::KIND_OTHER) {
 				$this->cardLinkMapper->update($link);
 				return;

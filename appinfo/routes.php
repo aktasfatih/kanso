@@ -9,6 +9,13 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
+		// Fragment-free card deep link (#3744). A SERVER route (not `#/…`), so
+		// the target survives the login round-trip - email/bell/ICS links point
+		// here. Auth required (no PublicPage); any unauthorized/unknown id is a
+		// uniform 404 page. The controller hands the target to the SPA via the
+		// `openCard` initial state.
+		['name' => 'deepLink#card', 'url' => '/card/{id}', 'verb' => 'GET'],
+
 		// Public / read-only board share (#3531). UNAUTHENTICATED: `/p/{token}`
 		// renders the read-only SPA shell and `/api/public/{token}` returns the
 		// STRIPPED payload. Both are #[PublicPage] + brute-force throttled; a bad
@@ -143,6 +150,8 @@ return [
 
 		['name' => 'myCards#index', 'url' => '/api/my-cards', 'verb' => 'GET'],
 
+		['name' => 'mySteps#index', 'url' => '/api/my-steps', 'verb' => 'GET'],
+
 		['name' => 'review#mine', 'url' => '/api/reviews/mine', 'verb' => 'GET'],
 		['name' => 'review#request', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'PUT'],
 		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'DELETE'],
@@ -187,6 +196,7 @@ return [
 		['name' => 'webhook#github', 'url' => '/api/boards/{id}/github-webhook', 'verb' => 'POST'],
 		['name' => 'webhook#config', 'url' => '/api/boards/{id}/webhook', 'verb' => 'GET'],
 		['name' => 'webhook#rotate', 'url' => '/api/boards/{id}/webhook/rotate', 'verb' => 'POST'],
+		['name' => 'webhook#intake', 'url' => '/api/boards/{id}/webhook/intake', 'verb' => 'PUT'],
 		['name' => 'webhook#disable', 'url' => '/api/boards/{id}/webhook', 'verb' => 'DELETE'],
 
 		['name' => 'cardLink#index', 'url' => '/api/cards/{cardId}/links', 'verb' => 'GET'],
@@ -247,6 +257,10 @@ return [
 		['name' => 'checklist#update', 'url' => '/api/checklist/{itemId}', 'verb' => 'PATCH'],
 		['name' => 'checklist#move', 'url' => '/api/checklist/{itemId}/move', 'verb' => 'POST'],
 		['name' => 'checklist#destroy', 'url' => '/api/checklist/{itemId}', 'verb' => 'DELETE'],
+		// Rich checklist steps (#3745): per-item assignee + due date.
+		['name' => 'checklist#assign', 'url' => '/api/checklist/{itemId}/assign', 'verb' => 'POST'],
+		['name' => 'checklist#unassign', 'url' => '/api/checklist/{itemId}/assign', 'verb' => 'DELETE'],
+		['name' => 'checklist#setDue', 'url' => '/api/checklist/{itemId}/due', 'verb' => 'PUT'],
 
 		['name' => 'label#create', 'url' => '/api/labels', 'verb' => 'POST'],
 		['name' => 'label#update', 'url' => '/api/labels/{id}', 'verb' => 'PATCH'],

@@ -7,7 +7,11 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Controller\CardController;
+use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
@@ -22,6 +26,7 @@ use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
@@ -54,6 +59,9 @@ class CardControllerTest extends TestCase {
 	private CardAttachmentMapper&MockObject $cardAttachmentMapper;
 	private CardTimeEntryMapper&MockObject $cardTimeEntryMapper;
 	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
+	private BoardMapper&MockObject $boardMapper;
+	private BoardAccess&MockObject $boardAccess;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardController $controller;
 
 	protected function setUp(): void {
@@ -88,6 +96,20 @@ class CardControllerTest extends TestCase {
 		$this->cardTimeEntryMapper->method('sumSecondsByCard')->willReturn(0);
 		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
 		$this->cardFieldValueMapper->method('findByCard')->willReturn([]);
+		// Visibility wiring (#3743): the detail payload resolves the viewer on
+		// the card's board and scopes children/parent through the guard. All
+		// cards are visible by default here.
+		$board = new Board();
+		$board->setId(1);
+		$board->setOwner('alice');
+		$board->setDeletedAt(0);
+		$this->boardMapper = $this->createMock(BoardMapper::class);
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->boardAccess->method('contextFor')
+			->willReturn(ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true));
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
@@ -113,7 +135,10 @@ class CardControllerTest extends TestCase {
 			$this->projectCardMapper,
 			$this->cardAttachmentMapper,
 			$this->cardTimeEntryMapper,
-			$this->cardFieldValueMapper
+			$this->cardFieldValueMapper,
+			$this->boardMapper,
+			$this->boardAccess,
+			$this->visibilityGuard
 		);
 	}
 

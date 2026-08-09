@@ -40,7 +40,9 @@ export function useAcl(boardId) {
 	})
 
 	const patchAcl = useMutation({
-		mutationFn: ({ aclId, permission }) => apiUpdateAcl(rawBoardId(), aclId, permission),
+		// role is optional; undefined is dropped from the JSON body and the
+		// server keeps the stored board side (internal/external) untouched.
+		mutationFn: ({ aclId, permission, role }) => apiUpdateAcl(rawBoardId(), aclId, permission, role),
 		onSettled: () => queryClient.invalidateQueries({ queryKey: getBoardKey() }),
 	})
 

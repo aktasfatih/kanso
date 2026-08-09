@@ -204,10 +204,10 @@ class PublicShareServiceTest extends TestCase {
 		$this->labelMapper->method('findByBoard')->with(1)->willReturn([
 			$this->label(5, 'Bug', 'ff0000'),
 		]);
-		$this->cardLabelMapper->method('findLabelIdsByBoard')->with(1)->willReturn([
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->with(1)->willReturn([
 			100 => [5],
 		]);
-		$this->checklistItemMapper->method('progressByBoard')->with(1)->willReturn([
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->with(1)->willReturn([
 			100 => ['total' => 3, 'done' => 1],
 		]);
 	}
@@ -234,6 +234,9 @@ class PublicShareServiceTest extends TestCase {
 
 	public function testPublicPayloadHasNoPeopleOrInternalFields(): void {
 		$this->primePublicBoard();
+		// The anonymous snapshot must not even COMPUTE the waiting-on-client
+		// aggregate (#3746) - it is excluded, not merely dropped.
+		$this->checklistItemMapper->expects(self::never())->method('waitingByBoard');
 		$payload = $this->service->getPublicBoard(self::TOKEN);
 
 		// Board: no owner, no acl, no webhook secret, no share token.
@@ -251,9 +254,11 @@ class PublicShareServiceTest extends TestCase {
 			$cardKeys
 		);
 
-		// Explicitly assert the sensitive keys never appear.
+		// Explicitly assert the sensitive keys never appear. 'waiting' pins the
+		// #3746 exclusion: the derived waiting-on-client state is provider-side
+		// signal (who the ball is with) and must never ride the anonymous payload.
 		$json = json_encode($payload);
-		foreach (['owner', 'assignee', 'comment', 'acl', 'webhook', 'subscriber', 'watcher', 'reviewState', 'activity'] as $forbidden) {
+		foreach (['owner', 'assignee', 'comment', 'acl', 'webhook', 'subscriber', 'watcher', 'reviewState', 'activity', 'waiting'] as $forbidden) {
 			self::assertStringNotContainsStringIgnoringCase($forbidden, $json, "public payload leaked '$forbidden'");
 		}
 	}
@@ -306,8 +311,8 @@ class PublicShareServiceTest extends TestCase {
 		$this->stackMapper->method('findByBoard')->willReturn([]);
 		$this->cardMapper->method('findPublicByBoard')->willReturn([]);
 		$this->labelMapper->method('findByBoard')->willReturn([]);
-		$this->cardLabelMapper->method('findLabelIdsByBoard')->willReturn([]);
-		$this->checklistItemMapper->method('progressByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
 		self::assertSame('Roadmap', $payload['board']['title']);

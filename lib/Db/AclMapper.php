@@ -73,4 +73,25 @@ class AclMapper extends QBMapper {
 
 		return $this->findEntities($qb);
 	}
+
+	/**
+	 * All sharing rules of MANY boards in one query (`board_id IN (...)`), for
+	 * batched permission computation over a board set — never call
+	 * {@see self::findByBoard()} in a loop (that is the N+1 this avoids).
+	 *
+	 * @param int[] $boardIds
+	 * @return Acl[]
+	 * @throws Exception
+	 */
+	public function findByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		return $this->findEntities($qb);
+	}
 }

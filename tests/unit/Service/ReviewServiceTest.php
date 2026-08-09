@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -17,6 +19,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ReviewType;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\CommentService;
 use OCA\Kanso\Service\InvalidInputException;
@@ -38,7 +41,12 @@ class ReviewServiceTest extends TestCase {
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private BoardService&MockObject $boardService;
 	private CommentService&MockObject $commentService;
+	private BoardAccess&MockObject $boardAccess;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ReviewService $service;
+
+	/** @var string[] uids the guard reports as unable to see the card */
+	private array $hiddenFrom = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -51,6 +59,13 @@ class ReviewServiceTest extends TestCase {
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->commentService = $this->createMock(CommentService::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// Default: everyone sees every card (assertVisible passes as a no-op);
+		// a test hides the card from specific uids via $this->hiddenFrom.
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturnCallback(
+			fn (Board $board, Card $card, string $uid): bool => !in_array($uid, $this->hiddenFrom, true),
+		);
 		$this->service = new ReviewService(
 			$this->cardReviewMapper,
 			$this->cardMapper,
@@ -61,6 +76,8 @@ class ReviewServiceTest extends TestCase {
 			$this->reviewTypeMapper,
 			$this->boardService,
 			$this->commentService,
+			$this->boardAccess,
+			$this->visibilityGuard,
 		);
 	}
 
@@ -265,6 +282,22 @@ class ReviewServiceTest extends TestCase {
 		$this->service->requestReview(9, 'stranger', 'alice');
 	}
 
+	public function testRequestRejectsReviewerWhoCannotSeeTheCard(): void {
+		// Visibility (#3743): the actor sees the card, but the REVIEWER does not
+		// (e.g. an internal card requested from an external member) - the request
+		// must be rejected before any row lands, or the title leaks into their feed.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->hiddenFrom = ['bob'];
+		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('User has no access to this card');
+		$this->service->requestReview(9, 'bob', 'alice');
+	}
+
 	public function testRequestRejectsDeletedCard(): void {
 		$card = $this->card();
 		$card->setDeletedAt(1234);
@@ -447,6 +480,41 @@ class ReviewServiceTest extends TestCase {
 		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 
+	public function testDeferredFireSkipsReviewerWhoCanNoLongerSeeTheCard(): void {
+		// Visibility re-check at fire time (#3761): the card narrowed past carol
+		// BETWEEN her (visible) request and the un-gating approval. The sweep must
+		// skip her - no notification row - and must NOT stamp notified_at, so a
+		// later widening lets the next approval sweep deliver it after all.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->hiddenFrom = ['carol'];
+
+		$code = $this->review('bob', CardReview::STATE_PENDING, 1, 9);
+		$code->setReviewTypeId(1); // stage 0
+		$qa = $this->review('carol', CardReview::STATE_PENDING, 2, 9);
+		$qa->setReviewTypeId(2); // stage 1
+		$qa->setNotifiedAt(null); // deferred at request time
+
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($code);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([1 => 0, 2 => 1]);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// No notification for the now-hidden reviewer...
+		$this->notificationService->expects(self::never())->method('notifyReviewRequested');
+		// ...and exactly ONE update: bob's verdict flip. Carol's row is untouched.
+		$this->cardReviewMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (CardReview $r): CardReview {
+				self::assertSame('bob', $r->getReviewer(), 'only the verdict row may be written');
+				return $r;
+			});
+
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+		self::assertNull($qa->getNotifiedAt(), 'a skipped fire must not stamp notified_at');
+	}
+
 	public function testSetStateRejectsActorWhoIsNotTheReviewer(): void {
 		$this->loadCardAndBoard();
 		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
@@ -624,9 +692,12 @@ class ReviewServiceTest extends TestCase {
 			'boardTitle' => 'Board', 'state' => 'pending', 'reviewTypeId' => null,
 			'requestedBy' => 'alice', 'createdAt' => 100,
 		]];
+		// The viewer's per-board roles scope the joined card (#3743).
+		$roles = [1 => ViewerContext::ROLE_INTERNAL, 2 => ViewerContext::ROLE_EXTERNAL];
+		$this->boardAccess->expects(self::once())->method('rolesFor')->willReturn($roles);
 		$this->cardReviewMapper->expects(self::once())
 			->method('findByReviewerInBoards')
-			->with('bob', [1, 2])
+			->with('bob', [1, 2], $roles)
 			->willReturn($rows);
 
 		self::assertSame($rows, $this->service->findMine('bob'));
@@ -634,9 +705,10 @@ class ReviewServiceTest extends TestCase {
 
 	public function testFindMineWithNoReadableBoardsReturnsEmpty(): void {
 		$this->boardService->method('findAll')->with('bob')->willReturn([]);
+		$this->boardAccess->method('rolesFor')->willReturn([]);
 		$this->cardReviewMapper->expects(self::once())
 			->method('findByReviewerInBoards')
-			->with('bob', [])
+			->with('bob', [], [])
 			->willReturn([]);
 
 		self::assertSame([], $this->service->findMine('bob'));

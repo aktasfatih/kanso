@@ -48,6 +48,7 @@ class CommentReactionService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -118,6 +119,7 @@ class CommentReactionService {
 		$card = $this->loadCard($comment->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 		return [$comment, $card];
 	}
 

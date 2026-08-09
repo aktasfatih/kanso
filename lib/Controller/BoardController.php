@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
@@ -62,6 +64,7 @@ class BoardController extends Controller {
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
 		private CardRelationMapper $cardRelationMapper,
+		private BoardAccess $boardAccess,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -95,6 +98,9 @@ class BoardController extends Controller {
 		return $this->respond(function () use ($id): JSONResponse {
 			$uid = $this->currentUserId();
 			$board = $this->boardService->find($id, $uid);
+			// The viewer's resolved side on this board scopes every card row
+			// and count below (#3743). Resolved once, after the READ gate.
+			$viewer = $this->boardAccess->contextFor($board, $uid);
 
 			$etag = (string)$this->changeMapper->getLatestChangeId($id);
 			if ($this->matchesIfNoneMatch($etag)) {
@@ -106,7 +112,7 @@ class BoardController extends Controller {
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
-				'cards' => $this->serializeCardSummaries($id, $this->cardMapper->findSummariesByBoard($id)),
+				'cards' => $this->serializeCardSummaries($id, $this->cardMapper->findSummariesByBoard($id, $viewer), $viewer),
 				'labels' => $this->labelMapper->findByBoard($id),
 				'reviewTypes' => $this->reviewTypeMapper->findByBoard($id),
 				// Custom-field DEFINITIONS ride the board payload (#3537); their
@@ -116,6 +122,10 @@ class BoardController extends Controller {
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.
 				'permissions' => $this->permissionService->getPermissions($board, $uid),
+				// The requester's board side (#3744) - 'internal' or 'external'.
+				// Gates the internal-only UI (export/duplicate) client-side; the
+				// server enforces regardless.
+				'role' => $viewer->role,
 				// The requester's board-watch state {subscribed, subscribers, count}.
 				'subscription' => $this->subscriptionService->buildBoardSubscription($id, $uid),
 				// The board's latest change id - the same value as the ETag. Seeds
@@ -157,7 +167,8 @@ class BoardController extends Controller {
 			$uid = $this->currentUserId();
 			// Same ACL gate show() trusts: throws NotPermitted (→403) / DoesNotExist
 			// (→404), which ApiErrorTrait maps exactly as it does for show().
-			$this->boardService->find($id, $uid);
+			$board = $this->boardService->find($id, $uid);
+			$viewer = $this->boardAccess->contextFor($board, $uid);
 
 			$latest = $this->changeMapper->getLatestChangeId($id);
 
@@ -204,7 +215,11 @@ class BoardController extends Controller {
 			// last action was DELETE, or the row was deleted / turned into a
 			// template between the cursor and now.
 			$cardIds = array_keys($cardAction);
-			$liveCards = $this->serializeCardSummaries($id, $this->cardMapper->findSummariesByIds($id, $cardIds));
+			// Visibility (#3743): findSummariesByIds is viewer-scoped, so a card
+			// hidden from THIS viewer is absent from $liveCards and lands in the
+			// remove list below - the client drops it from its cache, and its
+			// change rows (entity_id/action only, no title) leak nothing.
+			$liveCards = $this->serializeCardSummaries($id, $this->cardMapper->findSummariesByIds($id, $cardIds, $viewer), $viewer);
 			$presentCardIds = array_flip(array_map(static fn (array $c): int => $c['id'], $liveCards));
 			$removedCardIds = array_values(array_filter(
 				$cardIds,
@@ -236,8 +251,9 @@ class BoardController extends Controller {
 
 	/**
 	 * Enriches card summaries with the same per-card signal the board payload
-	 * carries (labelIds / assigneeIds / contacts / checklist / childProgress /
-	 * commentCount / reviewState / blocked). Extracted from {@see self::show()} so
+	 * carries (labelIds / assigneeIds / contacts / checklist / waitingOnExternal
+	 * + waitingSince / childProgress / commentCount / reviewState / blocked).
+	 * Extracted from {@see self::show()} so
 	 * {@see self::changes()} produces a BYTE-IDENTICAL card shape - the delta-sync
 	 * upsert must be indistinguishable from a full-board card, or a patched cache
 	 * entry would drift from a freshly fetched one. The enrichment maps are board-
@@ -247,12 +263,15 @@ class BoardController extends Controller {
 	 * @param Card[] $cards
 	 * @return list<array<string, mixed>>
 	 */
-	private function serializeCardSummaries(int $boardId, array $cards): array {
+	private function serializeCardSummaries(int $boardId, array $cards, ViewerContext $viewer): array {
 		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($boardId);
 		$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($boardId);
 		$contactsByCard = $this->cardContactMapper->findContactsByBoard($boardId);
-		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId);
-		$childProgressByCard = $this->cardMapper->childProgressByBoard($boardId);
+		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId, $viewer);
+		// Derived "waiting on client" (#3746): cardId => oldest open external
+		// step's assigned_at. Presence = waiting; never stored, always computed.
+		$waitingByCard = $this->checklistItemMapper->waitingByBoard($boardId, $viewer);
+		$childProgressByCard = $this->cardMapper->childProgressByBoard($boardId, $viewer);
 		$commentCountByCard = $this->commentMapper->countsByBoard($boardId);
 		$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($boardId);
 		// Card ids blocked by a not-done card - drives the tile "blocked" badge.
@@ -266,6 +285,8 @@ class BoardController extends Controller {
 				+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
 				+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
 				+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['waitingOnExternal' => \array_key_exists($card->getId(), $waitingByCard)]
+				+ ['waitingSince' => $waitingByCard[$card->getId()] ?? null]
 				+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
 				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
@@ -305,10 +326,10 @@ class BoardController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl): JSONResponse {
 			return new JSONResponse(
-				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background)
+				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl)
 			);
 		});
 	}

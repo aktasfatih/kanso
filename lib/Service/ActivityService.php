@@ -31,6 +31,7 @@ class ActivityService {
 		private BoardMapper $boardMapper,
 		private PermissionService $permissionService,
 		private IUserManager $userManager,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -48,6 +49,9 @@ class ActivityService {
 			throw new DoesNotExistException('Board ' . $board->getId() . ' is deleted');
 		}
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+		// Visibility (#3743): a hidden card's activity (verbs, actors, times)
+		// is as sensitive as the card - 404 like a missing card.
+		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
 		$limit = max(1, min($limit, self::MAX_LIMIT));
 		$rows = $this->changeMapper->findByEntity($card->getBoardId(), Change::ENTITY_CARD, $cardId, $limit);

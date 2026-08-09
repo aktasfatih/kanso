@@ -159,6 +159,32 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@close="showCsvImport = false"
 			@imported="onCsvImported" />
 
+		<!-- Delete-board confirm (#3750). Same pattern as BoardSettingsModal's
+		     danger zone: an explicit confirm dialog, no undo toast (board delete
+		     is soft server-side, but the Trash page covers cards only). -->
+		<NcDialog
+			v-if="deleteTarget"
+			:open="true"
+			:name="t('kanso', 'Delete board')"
+			data-test="tile-delete-confirm"
+			@closing="deleteTarget = null">
+			<p class="board-delete-confirm__hint">
+				{{ t('kanso', 'Delete "{title}" and all of its cards for everyone? This cannot be undone.', { title: deleteTarget.title }) }}
+			</p>
+			<template #actions>
+				<NcButton
+					type="error"
+					:disabled="isDeletingBoard"
+					data-test="tile-delete-confirm-yes"
+					@click="confirmDeleteBoard">
+					{{ isDeletingBoard ? t('kanso', 'Deleting…') : t('kanso', 'Delete board') }}
+				</NcButton>
+				<NcButton :disabled="isDeletingBoard" @click="deleteTarget = null">
+					{{ t('kanso', 'Cancel') }}
+				</NcButton>
+			</template>
+		</NcDialog>
+
 		<!-- Import-from-Deck modal -->
 		<NcModal v-if="showImport" size="normal" @close="showImport = false">
 			<div class="deck-import">
@@ -274,7 +300,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									pinned
 									@toggle-pin="togglePin(board)"
 									@assign="(gid) => moveBoard(board.id, gid)"
-									@unassign="() => removeFromFolder(board.id)" />
+									@unassign="() => removeFromFolder(board.id)"
+									@duplicate="(withCards) => duplicateFromTile(board, withCards)"
+									@export="() => exportFromTile(board)"
+									@archive="() => archiveBoard(board.id)"
+									@delete="() => (deleteTarget = board)" />
 							</div>
 						</div>
 					</div>
@@ -297,13 +327,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:key="board.id"
 							class="board-tile board-tile--archived board-list__archived-row">
 							<BoardTileContent :board="board" />
+							<!-- The same options (⋯) menu as active tiles (#3750): the
+							     standalone Unarchive button folded into it, plus
+							     duplicate / export / delete. -->
 							<div class="board-tile__actions">
-								<NcButton :disabled="updateBoard.isPending.value" @click="unarchiveBoard(board.id)">
-									<template #icon>
-										<ArchiveArrowUpIcon :size="18" />
-									</template>
-									{{ t('kanso', 'Unarchive') }}
-								</NcButton>
+								<BoardTileMenu
+									:board="board"
+									archived
+									@duplicate="(withCards) => duplicateFromTile(board, withCards)"
+									@export="() => exportFromTile(board)"
+									@unarchive="() => unarchiveBoard(board.id)"
+									@delete="() => (deleteTarget = board)" />
 							</div>
 						</div>
 					</div>
@@ -385,7 +419,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:groups="groups"
 											@toggle-pin="togglePin(board)"
 											@assign="(gid) => moveBoard(board.id, gid)"
-											@unassign="() => removeFromFolder(board.id)" />
+											@unassign="() => removeFromFolder(board.id)"
+											@duplicate="(withCards) => duplicateFromTile(board, withCards)"
+											@export="() => exportFromTile(board)"
+											@archive="() => archiveBoard(board.id)"
+											@delete="() => (deleteTarget = board)" />
 									</div>
 								</div>
 							</div>
@@ -424,7 +462,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:groups="groups"
 										@toggle-pin="togglePin(board)"
 										@assign="(gid) => moveBoard(board.id, gid)"
-										@unassign="() => removeFromFolder(board.id)" />
+										@unassign="() => removeFromFolder(board.id)"
+										@duplicate="(withCards) => duplicateFromTile(board, withCards)"
+										@export="() => exportFromTile(board)"
+										@archive="() => archiveBoard(board.id)"
+										@delete="() => (deleteTarget = board)" />
 								</div>
 							</div>
 						</div>
@@ -440,7 +482,9 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { useQueryClient } from '@tanstack/vue-query'
+import { showError } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -453,7 +497,6 @@ import CodeJsonIcon from 'vue-material-design-icons/CodeJson.vue'
 import TableLargeIcon from 'vue-material-design-icons/TableLarge.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
-import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import FolderPlusOutlineIcon from 'vue-material-design-icons/FolderPlusOutline.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
@@ -463,6 +506,7 @@ import BoardTileContent from '../components/BoardTileContent.vue'
 import BoardTileMenu from '../components/BoardTileMenu.vue'
 import CsvImportModal from '../components/CsvImportModal.vue'
 import { useBoards } from '../composables/useBoards.js'
+import { useBoardActions } from '../composables/useBoardActions.js'
 import { useBoardGroups } from '../composables/useBoardGroups.js'
 import { getSettings, updateSettings, createStack, createCard } from '../services/api.js'
 import { fetchDeckImportBoards, importDeckBoard, importBoard, importTrelloBoard } from '../services/api.js'
@@ -617,6 +661,47 @@ function openBoard(id) {
 
 async function unarchiveBoard(id) {
 	await updateBoard.mutateAsync({ id, data: { archived: false } })
+}
+
+async function archiveBoard(id) {
+	await updateBoard.mutateAsync({ id, data: { archived: true } })
+}
+
+// ── Tile-menu board actions (#3750) ──────────────────────────────────────────
+// Duplicate / export / delete reuse the same composable as BoardSettingsModal.
+// Failures surface as toasts (tiles have no inline error slot). Unlike the
+// modal, duplicating stays on the boards page — the refreshed grid shows the
+// new copy.
+const {
+	exportError,
+	exportBoardToFile,
+	duplicateError,
+	duplicateBoardNow,
+	isDeletingBoard,
+	deleteBoardError,
+	deleteBoardNow,
+} = useBoardActions()
+
+async function duplicateFromTile(board, withCards) {
+	const res = await duplicateBoardNow(board.id, withCards)
+	if (!res) showError(duplicateError.value)
+}
+
+async function exportFromTile(board) {
+	const doc = await exportBoardToFile(board.id)
+	if (!doc) showError(exportError.value)
+}
+
+// Delete needs an explicit confirm step (destructive, no undo toast): the menu
+// sets `deleteTarget`, the dialog confirms, then the shared action runs.
+const deleteTarget = ref(null)
+async function confirmDeleteBoard() {
+	if (!deleteTarget.value) return
+	if (await deleteBoardNow(deleteTarget.value.id)) {
+		deleteTarget.value = null
+	} else {
+		showError(deleteBoardError.value)
+	}
 }
 
 async function submitNewBoard() {
@@ -1114,6 +1199,12 @@ button.board-tile:hover,
 .board-list-error {
 	color: var(--color-error);
 	padding: 16px;
+}
+
+/* ── Delete-board confirm dialog (#3750) ────────────────────────────────── */
+.board-delete-confirm__hint {
+	margin: 0 12px 12px;
+	color: var(--color-main-text);
 }
 
 .board-list__hidden-file {

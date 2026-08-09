@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
@@ -25,6 +27,7 @@ class InboxServiceTest extends TestCase {
 	private CommentMapper&MockObject $commentMapper;
 	private ChangeMapper&MockObject $changeMapper;
 	private IUserManager&MockObject $userManager;
+	private BoardAccess&MockObject $boardAccess;
 	private InboxService $service;
 
 	protected function setUp(): void {
@@ -34,12 +37,14 @@ class InboxServiceTest extends TestCase {
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->changeMapper = $this->createMock(ChangeMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->service = new InboxService(
 			$this->boardService,
 			$this->subscriptionMapper,
 			$this->commentMapper,
 			$this->changeMapper,
-			$this->userManager
+			$this->userManager,
+			$this->boardAccess
 		);
 	}
 
@@ -53,13 +58,15 @@ class InboxServiceTest extends TestCase {
 	public function testFindMineReturnsCommentsOnFollowedCardsInReadableBoards(): void {
 		$this->boardService->method('findAll')->with('bob')->willReturn([$this->board(1), $this->board(2)]);
 		$this->subscriptionMapper->method('findSubscribedCardIds')->with('bob')->willReturn([9, 10]);
+		$roles = [1 => ViewerContext::ROLE_INTERNAL, 2 => ViewerContext::ROLE_EXTERNAL];
+		$this->boardAccess->expects(self::once())->method('rolesFor')->willReturn($roles);
 		$rows = [[
 			'id' => 5, 'cardId' => 9, 'boardId' => 1, 'cardTitle' => 'Card', 'boardTitle' => 'Board',
 			'author' => 'alice', 'body' => 'hi', 'createdAt' => 100,
 		]];
 		$this->commentMapper->expects(self::once())
 			->method('findInboxForCards')
-			->with([9, 10], [1, 2], 'bob', 50)
+			->with([9, 10], [1, 2], 'bob', 50, $roles)
 			->willReturn($rows);
 		$alice = $this->createMock(IUser::class);
 		$alice->method('getDisplayName')->willReturn('Alice Doe');
@@ -74,6 +81,8 @@ class InboxServiceTest extends TestCase {
 	public function testFindMineMergesCommentsAndStatusChangesNewestFirst(): void {
 		$this->boardService->method('findAll')->with('bob')->willReturn([$this->board(1)]);
 		$this->subscriptionMapper->method('findSubscribedCardIds')->with('bob')->willReturn([9]);
+		$roles = [1 => ViewerContext::ROLE_INTERNAL];
+		$this->boardAccess->method('rolesFor')->willReturn($roles);
 		$this->commentMapper->method('findInboxForCards')->willReturn([[
 			'id' => 5, 'cardId' => 9, 'boardId' => 1, 'cardTitle' => 'C', 'boardTitle' => 'B',
 			'author' => 'alice', 'body' => 'hi', 'createdAt' => 100,
@@ -81,7 +90,7 @@ class InboxServiceTest extends TestCase {
 		// Only the two surfaced verbs are requested; the change is newer.
 		$this->changeMapper->expects(self::once())
 			->method('findInboxForCards')
-			->with([9], [1], 'bob', [Change::VERB_ASSIGNED, Change::VERB_REVIEW_REQUESTED], 50)
+			->with([9], [1], 'bob', [Change::VERB_ASSIGNED, Change::VERB_REVIEW_REQUESTED], 50, $roles)
 			->willReturn([[
 				'id' => 7, 'cardId' => 9, 'boardId' => 1, 'cardTitle' => 'C', 'boardTitle' => 'B',
 				'author' => 'carol', 'verb' => Change::VERB_REVIEW_REQUESTED, 'createdAt' => 200,

@@ -179,7 +179,11 @@ class TrelloImportServiceTest extends TestCase {
 				[
 					'id' => 'cl1', 'idCard' => 'cardA1', 'pos' => 100,
 					'checkItems' => [
-						['name' => 'step two', 'state' => 'incomplete', 'pos' => 200],
+						// Rich-step fields (#3745): `due` is KEPT as the step due
+						// date; `idMember` is a Trello member id with no NC uid
+						// mapping and must be DROPPED (clone-path policy).
+						['name' => 'step two', 'state' => 'incomplete', 'pos' => 200,
+							'due' => '2026-02-01T09:00:00.000Z', 'idMember' => 'tr-member-1'],
 						['name' => 'step one', 'state' => 'complete', 'pos' => 100],
 					],
 				],
@@ -238,6 +242,11 @@ class TrelloImportServiceTest extends TestCase {
 		self::assertSame('step two', $checklistItems[1]->getTitle());
 		self::assertFalse($checklistItems[1]->getDone());
 		self::assertTrue($checklistItems[0]->getSortKey() < $checklistItems[1]->getSortKey());
+		// Rich-step clone policy (#3745): checkItem `due` becomes the step due
+		// date; the Trello member never becomes an assignee.
+		self::assertSame(strtotime('2026-02-01T09:00:00.000Z'), $checklistItems[1]->getDueDate()?->getTimestamp());
+		self::assertNull($checklistItems[1]->getAssignedUser());
+		self::assertNull($checklistItems[0]->getDueDate());
 	}
 
 	public function testTruncatesLongTitlesToFitColumns(): void {

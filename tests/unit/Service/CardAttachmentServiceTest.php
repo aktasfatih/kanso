@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardAttachment;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\CardAttachmentService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -40,6 +41,7 @@ class CardAttachmentServiceTest extends TestCase {
 	private ISecureRandom&MockObject $secureRandom;
 	private IRootFolder&MockObject $rootFolder;
 	private ISimpleFolder&MockObject $folder;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardAttachmentService $service;
 
 	/** @var string[] Temp files created for upload tests, cleaned up in tearDown. */
@@ -62,6 +64,8 @@ class CardAttachmentServiceTest extends TestCase {
 		$this->appData->method('newFolder')->willReturn($this->folder);
 		$this->secureRandom->method('generate')->willReturn('deadbeefdeadbeefdeadbeefdeadbeef');
 
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CardAttachmentService(
 			$this->attachmentMapper,
 			$this->cardMapper,
@@ -71,6 +75,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->appData,
 			$this->secureRandom,
 			$this->rootFolder,
+			$this->visibilityGuard,
 		);
 	}
 
@@ -375,6 +380,20 @@ class CardAttachmentServiceTest extends TestCase {
 		$this->service->download(9, 5, 'bob');
 	}
 
+	public function testDownloadFromHiddenCardReadsAsNotFound(): void {
+		// A card the actor cannot see must not leak its attachments (#3743):
+		// the failure is a 404, indistinguishable from a missing card id.
+		$this->expectCardLoaded();
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+		// Bail before any attachment row or bytes are touched.
+		$this->attachmentMapper->expects(self::never())->method('find');
+		$this->folder->expects(self::never())->method('getFile');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->download(9, 5, 'bob');
+	}
+
 	// ---- inline (#3525) ---------------------------------------------------
 
 	public function testInlineRequiresRead(): void {
@@ -614,6 +633,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->appData,
 			$this->secureRandom,
 			$this->rootFolder,
+			$this->visibilityGuard,
 		);
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
 

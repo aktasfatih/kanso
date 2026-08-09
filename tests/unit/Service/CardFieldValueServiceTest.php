@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\CardFieldValueService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -31,6 +32,7 @@ class CardFieldValueServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardFieldValueService $service;
 
 	protected function setUp(): void {
@@ -41,13 +43,16 @@ class CardFieldValueServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new CardFieldValueService(
 			$this->cardFieldValueMapper,
 			$this->cardFieldMapper,
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
-			$this->permissionService
+			$this->permissionService,
+			$this->visibilityGuard,
 		);
 	}
 

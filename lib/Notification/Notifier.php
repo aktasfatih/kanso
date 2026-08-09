@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Notification;
 
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IURLGenerator;
@@ -30,6 +32,8 @@ class Notifier implements INotifier {
 		private IURLGenerator $urlGenerator,
 		private IUserManager $userManager,
 		private CardMapper $cardMapper,
+		private BoardMapper $boardMapper,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -61,18 +65,32 @@ class Notifier implements INotifier {
 			&& $subject !== NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
 			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY
 			&& $subject !== NotificationService::SUBJECT_CARD_DUE
-			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON) {
+			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON
+			&& $subject !== NotificationService::SUBJECT_STEP_ASSIGNED) {
 			throw new UnknownNotificationException();
 		}
 
 		$params = $notification->getSubjectParameters();
 		$actorUid = (string)($params['actor'] ?? '');
-		$cardId = (int)$notification->getObjectId();
+		// Step notifications are keyed by the checklist-item id (per-step
+		// dismissal, #3745); their card id rides in the subject parameters.
+		$cardId = $subject === NotificationService::SUBJECT_STEP_ASSIGNED
+			? (int)($params['cardId'] ?? 0)
+			: (int)$notification->getObjectId();
 
 		try {
 			$card = $this->cardMapper->find($cardId);
+			$board = $this->boardMapper->find($card->getBoardId());
 		} catch (DoesNotExistException) {
-			// The card was purged after the notification was queued.
+			// The card (or its board) was purged after the notification was queued.
+			throw new UnknownNotificationException();
+		}
+
+		// Render-time audience gate (#3760), defense-in-depth behind the send-time
+		// filters: if the card's visibility narrowed past the recipient AFTER the
+		// notification was queued, the bell entry (title + link) must not render -
+		// it behaves exactly like a purged card.
+		if (!$this->visibilityGuard->isVisible($board, $card, $notification->getUser())) {
 			throw new UnknownNotificationException();
 		}
 
@@ -89,7 +107,7 @@ class Notifier implements INotifier {
 
 			$notification
 				->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
-				->setLink($this->cardLink($card->getBoardId(), $cardId))
+				->setLink($this->cardLink($cardId))
 				->setParsedSubject($plain)
 				->setRichSubject(
 					$rich,
@@ -102,6 +120,8 @@ class Notifier implements INotifier {
 		[$plain, $rich] = match ($subject) {
 			NotificationService::SUBJECT_CARD_ASSIGNED
 				=> [$l->t('%1$s assigned you to %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you to {card}')],
+			NotificationService::SUBJECT_STEP_ASSIGNED
+				=> [$l->t('%1$s assigned you a step on %2$s', [$actorName, $cardTitle]), $l->t('{actor} assigned you a step on {card}')],
 			NotificationService::SUBJECT_CARD_MENTIONED
 				=> [$l->t('%1$s mentioned you in %2$s', [$actorName, $cardTitle]), $l->t('{actor} mentioned you in {card}')],
 			NotificationService::SUBJECT_CARD_REVIEW_REQUESTED
@@ -114,7 +134,7 @@ class Notifier implements INotifier {
 
 		$notification
 			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
-			->setLink($this->cardLink($card->getBoardId(), $cardId))
+			->setLink($this->cardLink($cardId))
 			->setParsedSubject($plain)
 			->setRichSubject(
 				$rich,
@@ -128,10 +148,12 @@ class Notifier implements INotifier {
 	}
 
 	/**
-	 * Deep link to the card inside the board (the app is a hash-routed SPA).
+	 * Deep link to the card via the fragment-free SERVER route (#3744): a hash
+	 * route would lose its fragment on the login round-trip - exactly the
+	 * guests/externals these notification links are for. The $boardId parameter
+	 * is intentionally gone: the server route resolves the board itself.
 	 */
-	private function cardLink(int $boardId, int $cardId): string {
-		return $this->urlGenerator->linkToRouteAbsolute('kanso.page.index')
-			. '#/board/' . $boardId . '/card/' . $cardId;
+	private function cardLink(int $cardId): string {
+		return $this->urlGenerator->linkToRouteAbsolute('kanso.deepLink.card', ['id' => $cardId]);
 	}
 }

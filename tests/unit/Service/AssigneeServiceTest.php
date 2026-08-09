@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\AssigneeService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotificationService;
@@ -37,6 +38,7 @@ class AssigneeServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private NotificationService&MockObject $notificationService;
 	private SubscriptionService&MockObject $subscriptionService;
+	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private AssigneeService $service;
 
 	protected function setUp(): void {
@@ -48,6 +50,8 @@ class AssigneeServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
+		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->service = new AssigneeService(
 			$this->cardAssigneeMapper,
 			$this->cardMapper,
@@ -55,7 +59,8 @@ class AssigneeServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->notificationService,
-			$this->subscriptionService
+			$this->subscriptionService,
+			$this->visibilityGuard,
 		);
 	}
 
@@ -206,7 +211,8 @@ class AssigneeServiceTest extends TestCase {
 			$this->changeNotifier,
 			new PermissionService($aclMapper, $groupManager, $userManager),
 			$this->notificationService,
-			$this->subscriptionService
+			$this->subscriptionService,
+			$this->visibilityGuard,
 		);
 
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());

@@ -90,7 +90,7 @@ class ActivityPublisher {
 			$cardId = $boardObject ? 0 : $objectId;
 			$link = $boardObject
 				? $this->boardLink($boardId)
-				: $this->cardLink($boardId, $objectId);
+				: $this->cardLink($objectId);
 
 			foreach ($recipients as $uid) {
 				$event = $this->activityManager->generateEvent();
@@ -119,9 +119,13 @@ class ActivityPublisher {
 		}
 	}
 
-	private function cardLink(int $boardId, int $cardId): string {
-		return $this->urlGenerator->linkToRouteAbsolute('kanso.page.index')
-			. '#/board/' . $boardId . '/card/' . $cardId;
+	/**
+	 * Card links use the fragment-free SERVER route (#3744): hash routes lose
+	 * their fragment on a login round-trip, and Activity emails reach people
+	 * who are not logged in.
+	 */
+	private function cardLink(int $cardId): string {
+		return $this->urlGenerator->linkToRouteAbsolute('kanso.deepLink.card', ['id' => $cardId]);
 	}
 
 	private function boardLink(int $boardId): string {

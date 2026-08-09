@@ -37,6 +37,7 @@ class SubscriptionService {
 		private PermissionService $permissionService,
 		private NotificationService $notificationService,
 		private BoardSubscriptionMapper $boardSubscriptionMapper,
+		private CardVisibilityGuard $visibilityGuard,
 	) {
 	}
 
@@ -52,6 +53,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		return $this->buildCardSubscription($cardId, $actorUid);
 	}
@@ -67,6 +69,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_SUBSCRIBED);
 
@@ -85,6 +88,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_OPTED_OUT);
 
@@ -107,6 +111,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Directly or via a group ACL, the target must at least see the board.
 		// Unknown users hold no permissions, so they fail this too.
@@ -134,6 +139,7 @@ class SubscriptionService {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		// Only tombstone an EXISTING subscription row. Planting an opt-out for a
 		// user who is not currently watching would silently suppress a later
@@ -167,6 +173,12 @@ class SubscriptionService {
 	 * watchers of the card (and of the specific thread when it's a reply).
 	 * $parentCommentId is the replied-to top-level comment id, or null for a
 	 * new top-level comment.
+	 *
+	 * The watcher fan-out is RESTRICTED to watchers who can still SEE the card
+	 * (#3760): a watcher subscribed while the card was visible to them must
+	 * stop receiving artifacts once its visibility narrows past them - the
+	 * bell entry would be an existence oracle. One batched role resolution
+	 * ({@see CardVisibilityGuard::filterVisible()}), no per-watcher queries.
 	 */
 	public function handleNewComment(int $cardId, ?int $parentCommentId, string $actorUid): void {
 		$threadId = $parentCommentId ?? SubscriptionMapper::THREAD_CARD;
@@ -177,10 +189,16 @@ class SubscriptionService {
 			$this->autoSubscribe($cardId, $parentCommentId, $actorUid);
 		}
 
-		foreach ($this->subscriptionMapper->findNotifyUids($cardId, $threadId) as $uid) {
-			if ($uid === $actorUid) {
-				continue;
-			}
+		$watchers = array_filter(
+			$this->subscriptionMapper->findNotifyUids($cardId, $threadId),
+			static fn (string $uid): bool => $uid !== $actorUid,
+		);
+		if ($watchers === []) {
+			return;
+		}
+		$card = $this->loadCard($cardId);
+		$board = $this->loadBoard($card->getBoardId());
+		foreach ($this->visibilityGuard->filterVisible($board, $card, $watchers) as $uid) {
 			$this->notificationService->notifyCardComment($cardId, $uid, $actorUid);
 		}
 	}
@@ -294,16 +312,20 @@ class SubscriptionService {
 	/**
 	 * A card was created on a board: fan a "board activity" notification out to
 	 * the board's watchers (never the creator, never a watcher who has since
-	 * lost READ). No permission check on the caller - CardService::create has
-	 * already gated the create with EDIT.
+	 * lost READ, and never a watcher outside the card's visibility - most
+	 * creates are 'public', but a recurrence spawn inherits its template's
+	 * narrower class, #3760). No permission check on the caller -
+	 * CardService::create has already gated the create with EDIT.
 	 */
-	public function notifyBoardCardCreated(int $boardId, int $cardId, string $actorUid): void {
+	public function notifyBoardCardCreated(int $boardId, Card $card, string $actorUid): void {
 		$watchers = $this->boardSubscriptionMapper->findBoardSubscriberUids($boardId);
 		if ($watchers === []) {
 			return;
 		}
 		$board = $this->boardMapper->find($boardId);
-		foreach ($watchers as $uid) {
+		// Batched visibility filter first (a public card short-circuits), then
+		// the per-watcher READ re-check the fan-out always did.
+		foreach ($this->visibilityGuard->filterVisible($board, $card, $watchers) as $uid) {
 			if ($uid === $actorUid) {
 				continue;
 			}
@@ -313,7 +335,7 @@ class SubscriptionService {
 			} catch (NotPermittedException) {
 				continue;
 			}
-			$this->notificationService->notifyBoardActivity($cardId, $uid, $actorUid);
+			$this->notificationService->notifyBoardActivity($card->getId(), $uid, $actorUid);
 		}
 	}
 

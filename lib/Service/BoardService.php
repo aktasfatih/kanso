@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -25,6 +27,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  */
 class BoardService {
 	private const MAX_TITLE_LENGTH = 100;
+	// Matches the kanso_boards.chat_url column length (#3748).
+	private const MAX_CHAT_URL_LENGTH = 4000;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -34,6 +38,7 @@ class BoardService {
 		private CardReviewMapper $cardReviewMapper,
 		private BoardGroupMemberMapper $boardGroupMemberMapper,
 		private BoardPinMapper $boardPinMapper,
+		private BoardAccess $boardAccess,
 	) {
 	}
 
@@ -75,12 +80,17 @@ class BoardService {
 		$boards = $this->findAll($uid);
 		$boardIds = array_map(static fn (Board $b): int => $b->getId(), $boards);
 
+		// The viewer's per-board role map scopes every count below (#3743):
+		// hidden cards must not surface through a tile number either. ONE
+		// batched ACL fetch, mirroring getPermissionsForBoards.
+		$rolesByBoard = $this->boardAccess->rolesFor($boards, $uid);
+
 		// A fixed set of batched aggregates over the readable board-id set - the
 		// count is constant no matter how many boards the user has.
-		$counts = $this->cardMapper->countByBoards($boardIds);
-		$ratios = $this->cardMapper->doneRatioByBoards($boardIds);
-		$overdue = $this->cardMapper->overdueCountByBoards($boardIds, new \DateTime('@' . time()));
-		$needsReview = $this->cardReviewMapper->needsReviewCountByBoards($boardIds);
+		$counts = $this->cardMapper->countByBoards($boardIds, $uid, $rolesByBoard);
+		$ratios = $this->cardMapper->doneRatioByBoards($boardIds, $uid, $rolesByBoard);
+		$overdue = $this->cardMapper->overdueCountByBoards($boardIds, new \DateTime('@' . time()), $uid, $rolesByBoard);
+		$needsReview = $this->cardReviewMapper->needsReviewCountByBoards($boardIds, $uid, $rolesByBoard);
 		// Per-user board folder (#3529): ONE batched WHERE uid = ? AND board_id
 		// IN (...) over the same readable set - not one query per board. A board
 		// absent from the map is Ungrouped (groupId null).
@@ -89,6 +99,10 @@ class BoardService {
 		// IN (...) over the same readable set - not one query per board. A board
 		// absent from the map is not pinned by this user.
 		$pinned = $this->boardPinMapper->pinnedMap($uid, $boardIds);
+		// Effective permission bitmask per board (#3750): the tile menu gates
+		// manager-only entries (archive/delete) on it. ONE batched ACL fetch over
+		// the readable set - not a per-board getPermissions() call.
+		$permissions = $this->permissionService->getPermissionsForBoards($boards, $uid);
 
 		$out = [];
 		foreach ($boards as $board) {
@@ -101,6 +115,15 @@ class BoardService {
 				'groupId' => $groupIds[$id] ?? null,
 				// Whether THIS user has pinned this board (#3632).
 				'pinned' => $pinned[$id] ?? false,
+				// This user's permission bitmask on the board (#3750), same shape
+				// as the single-board payload's `permissions`.
+				'permissions' => $permissions[$id] ?? 0,
+				// This user's board side (#3744) - 'internal' or 'external'. The
+				// tile menu hides internal-only entries (export/duplicate) on it.
+				// Every board in this list resolved a membership, so the fallback
+				// is unreachable; internal keeps the pre-role behaviour if it ever
+				// fires for an owner row.
+				'role' => $rolesByBoard[$id] ?? ViewerContext::ROLE_INTERNAL,
 				'stats' => [
 					'cardCount' => $counts[$id] ?? 0,
 					'doneCount' => $done,
@@ -163,9 +186,9 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title, color, background, estimate scale or prefix
+	 * @throws InvalidInputException on invalid title, color, background, estimate scale, prefix or chat URL
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -200,6 +223,14 @@ class BoardService {
 				throw new InvalidInputException('Prefix must contain at least one letter or digit');
 			}
 			$board->setPrefix($normalized);
+		}
+		if ($chatUrl !== null) {
+			// "Project chat" link (#3748): a pure display address, deliberately
+			// dumb (no Talk API coupling). An empty string clears it; a non-empty
+			// value must be a plain http(s) URL - the scheme allow-list is the
+			// XSS gate (rejects javascript:, data:, etc.) since the client
+			// renders this as an <a href>.
+			$board->setChatUrl($this->validateChatUrl($chatUrl));
 		}
 
 		$now = time();
@@ -252,6 +283,29 @@ class BoardService {
 			throw new DoesNotExistException('Board ' . $id . ' is deleted');
 		}
 		return $board;
+	}
+
+	/**
+	 * Normalizes a chat-URL update: '' clears (NULL), anything else must be a
+	 * plain absolute http:// or https:// URL without whitespace and fit the
+	 * column (4000 chars).
+	 *
+	 * @throws InvalidInputException
+	 */
+	private function validateChatUrl(string $chatUrl): ?string {
+		$chatUrl = trim($chatUrl);
+		if ($chatUrl === '') {
+			return null;
+		}
+		if (mb_strlen($chatUrl) > self::MAX_CHAT_URL_LENGTH) {
+			throw new InvalidInputException(
+				'Chat link must not exceed ' . self::MAX_CHAT_URL_LENGTH . ' characters'
+			);
+		}
+		if (preg_match('#^https?://\S+$#i', $chatUrl) !== 1) {
+			throw new InvalidInputException('Chat link must be an http:// or https:// URL');
+		}
+		return $chatUrl;
 	}
 
 	/**

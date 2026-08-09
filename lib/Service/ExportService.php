@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\ArchiveRuleMapper;
 use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
@@ -68,10 +69,23 @@ class ExportService {
 	 * Builds the full export envelope for a board. The board must already be
 	 * loaded and READ-authorized by the caller.
 	 *
+	 * Visibility (#3743): the export carries ONLY cards the exporting viewer
+	 * can see - a READ-gated export would otherwise dump every internal/
+	 * private card (with descriptions and comments) to the other side. The
+	 * per-card children (comments, checklist, reviews) hang off the surviving
+	 * card set, so a hidden card's discussion never rides along either.
+	 *
+	 * $viewer = null is the SYSTEM scope: the FULL card set, hidden cards
+	 * included. It exists for exactly one caller - the admin backup cron
+	 * ({@see BackupService}), whose output lands in an admin-controlled
+	 * folder, never in an HTTP response. Every user-facing caller MUST pass
+	 * the requesting viewer; the parameter has no default so that choice is
+	 * always explicit at the call site.
+	 *
 	 * @return array{kanso: int, exportedAt: int, board: array<string, mixed>}
 	 * @throws \OCP\DB\Exception
 	 */
-	public function export(Board $board): array {
+	public function export(Board $board, ?ViewerContext $viewer): array {
 		$boardId = $board->getId();
 
 		// One stack fetch drives BOTH the stack list and the per-stack card walk
@@ -109,13 +123,16 @@ class ExportService {
 			];
 		}
 
-		// Live cards only: findSummariesByBoard already excludes soft-deleted
-		// rows. The summary query omits the description, so re-fetch each card
-		// in full for a lossless export.
+		// Live, viewer-visible cards in ONE full-row query (description
+		// included), grouped back into the stack walk so per-stack card order
+		// matches the old per-stack reads byte-for-byte.
+		$byStack = [];
+		foreach ($this->cardMapper->findExportableByBoard($boardId, $viewer) as $card) {
+			$byStack[$card->getStackId()][] = $card;
+		}
 		$cards = [];
 		foreach ($boardStacks as $stack) {
-			foreach ($this->cardMapper->findByStack($stack->getId()) as $summary) {
-				$card = $this->cardMapper->find($summary->getId());
+			foreach ($byStack[$stack->getId()] ?? [] as $card) {
 				$cards[] = $this->serializeCard($card);
 			}
 		}
@@ -197,11 +214,16 @@ class ExportService {
 
 		$checklist = [];
 		foreach ($this->checklistItemMapper->findByCard($cardId) as $item) {
+			// Clone-path policy for rich steps (#3745): the due date round-trips
+			// (unix timestamp, like the card dates above); assignee, frozen role
+			// and done_at deliberately do NOT - an import lands on a board with
+			// its own membership, so steps arrive unassigned and unstamped.
 			$checklist[] = [
 				'title' => $item->getTitle(),
 				'done' => $item->getDone(),
 				'sortKey' => $item->getSortKey(),
 				'createdAt' => $item->getCreatedAt(),
+				'dueDate' => $item->getDueDate()?->getTimestamp(),
 			];
 		}
 
@@ -246,6 +268,10 @@ class ExportService {
 			'parentCardId' => $card->getParentCardId(),
 			'priority' => $card->getPriority(),
 			'estimate' => $card->getEstimate(),
+			// Visibility (#3741/#3743) round-trips so a duplicate/import can
+			// never silently widen a card back to 'public'.
+			'visibility' => $card->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+			'creatorRole' => $card->getCreatorRole() ?? ViewerContext::ROLE_INTERNAL,
 			'labelIds' => $this->cardLabelMapper->findLabelIdsByCard($cardId),
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByCard($cardId),
 			'checklist' => $checklist,
