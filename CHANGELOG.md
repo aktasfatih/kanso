@@ -188,6 +188,7 @@ First public release. Targets Nextcloud 30–32 and PHP 8.2+.
   available, with an automatic light polling fallback everywhere else.
 
 [Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.31...HEAD
-[0.9.31]: https://github.com/aktasfatih/kanso/releases/tag/v0.9.31
+[0.9.31]: https://github.com/aktasfatih/kanso/compare/v0.9.2...v0.9.31
+[0.9.2]: https://github.com/aktasfatih/kanso/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aktasfatih/kanso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aktasfatih/kanso/releases/tag/v0.9.0
