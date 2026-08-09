@@ -176,6 +176,30 @@ class CsvImportServiceTest extends TestCase {
 		self::assertTrue($cards[0]->getSortKey() < $cards[1]->getSortKey());
 	}
 
+	public function testImportsFarBeyondOldRowCap(): void {
+		// Guards the "import ALL the cards" contract: a spreadsheet with many more
+		// rows than the old 2000 hard cap imports every titled row, streamed off the
+		// handle rather than capped or held in one big array.
+		$this->primeTarget();
+		$this->db->method('beginTransaction');
+		$this->db->method('commit');
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+
+		$count = 0;
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$count): Card {
+			$c->setId(1000 + $count);
+			$count++;
+			return $c;
+		});
+
+		$rowCount = 5000;
+		$csv = "title\n" . str_repeat("Task\n", $rowCount);
+		$result = $this->service->import($csv, self::BOARD_ID, self::STACK_ID, ['title' => 0], true, 'alice');
+
+		self::assertSame($rowCount, $result['cards']);
+		self::assertSame($rowCount, $count);
+	}
+
 	public function testTruncatesLongTitles(): void {
 		$this->primeTarget();
 		$this->db->method('beginTransaction');
