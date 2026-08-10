@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **My Work pages stay current without a manual reload.** My Tasks, My Reviews
+  and Inbox now refresh when you change something (e.g. assign yourself a card),
+  when you navigate to them, and on a live poll while the page is open —
+  previously they could keep showing data from earlier in the session until a
+  browser refresh.
+- **Open cards update in realtime across tabs and sessions.** Edits to a card's
+  title, description, comments or checklist now appear in an already-open card
+  in another tab as the change arrives (near-instant when notify_push is
+  available, on the delta poll otherwise), without overwriting an edit you have
+  in progress.
+
 ## [0.9.35] - 2026-08-09
 
 Consolidates the 2026-08-09 sprint. Versions 0.9.32–0.9.34 were internal
