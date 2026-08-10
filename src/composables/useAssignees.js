@@ -8,6 +8,7 @@ import {
 	unassignUser as apiUnassignUser,
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
+import { invalidateMyWork } from './queryKeys.js'
 
 /**
  * Resolve a boardId argument that may be a plain value, a Vue ref (.value),
@@ -98,6 +99,8 @@ export function useAssignees(boardId) {
 			// Sync card detail query and board query with server truth
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Assign/unassign changes My Tasks membership (#3766).
+			invalidateMyWork(queryClient)
 		},
 	})
 

@@ -4,7 +4,7 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { fetchCard, updateCard as apiUpdateCard } from '../services/api.js'
-import { boardQueryKey } from './queryKeys.js'
+import { boardQueryKey, invalidateMyWork } from './queryKeys.js'
 
 export function useCard(id, enabled) {
 	const queryClient = useQueryClient()
@@ -41,6 +41,9 @@ export function useCard(id, enabled) {
 				// Invalidate all board queries as a fallback
 				queryClient.invalidateQueries({ queryKey: ['board'] })
 			}
+			// Card updates can change My Work membership (done) or the card
+			// context the feeds render (title, due date) (#3766).
+			invalidateMyWork(queryClient)
 		},
 	})
 

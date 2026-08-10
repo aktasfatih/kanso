@@ -3,7 +3,7 @@
 
 import { ref, computed } from 'vue'
 import { bulkApplyCards } from '../services/api.js'
-import { boardQueryKey } from './queryKeys.js'
+import { boardQueryKey, invalidateMyWork } from './queryKeys.js'
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -118,6 +118,8 @@ export function useBulkSelect(boardId, queryClient) {
 			const result = await bulkApplyCards([...selected.value], action, params)
 			lastResult.value = result
 			await queryClient.invalidateQueries({ queryKey: boardQueryKey(resolve(boardId)) })
+			// Bulk assign/archive/delete/move can change My Work membership (#3766).
+			invalidateMyWork(queryClient)
 			clear()
 			return result
 		} finally {

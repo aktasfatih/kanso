@@ -602,7 +602,7 @@ import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { useBoardSubscription } from '../composables/useBoardSubscription.js'
-import { boardQueryKey } from '../composables/queryKeys.js'
+import { boardQueryKey, invalidateMyWork } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { provideAnnouncer } from '../composables/useAnnouncer.js'
@@ -1410,6 +1410,8 @@ function handleKeydown(e) {
 			})
 			.finally(() => {
 				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
+				// Done-state changes My Tasks membership (#3766).
+				invalidateMyWork(queryClient)
 			})
 		return
 	}

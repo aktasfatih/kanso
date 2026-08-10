@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { getMyReviews as apiGetMyReviews, setReviewState as apiSetReviewState } from '../services/api.js'
-import { boardQueryKey } from './queryKeys.js'
+import { boardQueryKey, invalidateMyWork, MY_WORK_POLL_INTERVAL } from './queryKeys.js'
 
 /**
  * Composable for the "My Reviews" feed - all review requests assigned to the
@@ -15,6 +15,14 @@ export function useMyReviews() {
 	const query = useQuery({
 		queryKey: ['my-reviews'],
 		queryFn: apiGetMyReviews,
+		// #3766: the nav badges keep this query permanently mounted, so a default
+		// mount refetch is suppressed within staleTime - 'always' makes every
+		// navigation to My Reviews revalidate against the server.
+		refetchOnMount: 'always',
+		// #3768: other users' review requests must appear while the user sits on
+		// the page - polling is the only channel for this cross-board feed.
+		// Paused on hidden tabs (TanStack default refetchIntervalInBackground).
+		refetchInterval: MY_WORK_POLL_INTERVAL,
 	})
 
 	/**
@@ -44,7 +52,9 @@ export function useMyReviews() {
 		},
 
 		onSettled: (_data, _err, { cardId, boardId }) => {
-			queryClient.invalidateQueries({ queryKey: ['my-reviews'] })
+			// A verdict changes My Reviews membership (pending → answered), and the
+			// other feeds render card context too - refresh the whole family (#3766).
+			invalidateMyWork(queryClient)
 			// Best-effort invalidation of related board/card caches
 			if (cardId) {
 				queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })

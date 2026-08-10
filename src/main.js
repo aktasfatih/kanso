@@ -9,7 +9,8 @@ import App from './App.vue'
 import { router } from './router/index.js'
 import { initRealtime } from './services/realtime.js'
 import { isBoardMovePending } from './composables/useCardMove.js'
-import { syncBoardDelta } from './composables/useBoardDelta.js'
+import { syncBoardDelta, onBoardChangesApplied } from './composables/useBoardDelta.js'
+import { invalidateMyWork } from './composables/queryKeys.js'
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -60,6 +61,43 @@ if (openCard) {
 	})
 }
 
+// My Work live-updates, fast path (#3768). The PRIMARY freshness mechanism for
+// the cross-board feeds (My Tasks / My Reviews / Inbox) is their own 60s
+// visible-tab refetchInterval (MY_WORK_POLL_INTERVAL) - it works everywhere,
+// including a user parked on a My Work page with no board mounted. This funnel
+// is the free upgrade on top: a push event ("a board you participate in
+// changed") or an applied board delta is exactly a "my feeds may have changed"
+// signal, so we invalidate the always-mounted feed queries and the change shows
+// up near-instantly instead of at the next 60s tick.
+//
+// Guards (both mirror the delta machinery's own conventions):
+//  - throttle: board deltas can arrive every few seconds on a busy board; the
+//    feeds are refreshed at most once per 30s (global staleTime) - the 60s
+//    interval is the backstop for anything a throttled window skipped.
+//  - isMutating: never race an optimistic my-work patch (review verdict) with
+//    a refetch; the mutation's own settle-phase invalidateMyWork covers it.
+//  - hidden tab: push events still arrive there, and invalidateQueries
+//    refetches active queries regardless of focus (the feeds' own interval is
+//    focus-gated by TanStack) - skip, and let refetchOnWindowFocus +
+//    refetchOnMount 'always' catch the tab up when it returns.
+const MY_WORK_SIGNAL_THROTTLE = 30_000
+let lastMyWorkSignal = 0
+function invalidateMyWorkThrottled() {
+	if (document.visibilityState === 'hidden') {
+		return
+	}
+	const now = Date.now()
+	if (now - lastMyWorkSignal < MY_WORK_SIGNAL_THROTTLE) {
+		return
+	}
+	if (queryClient.isMutating() > 0) {
+		return
+	}
+	lastMyWorkSignal = now
+	invalidateMyWork(queryClient)
+}
+onBoardChangesApplied(invalidateMyWorkThrottled)
+
 // Realtime: a push event means someone changed the board - delta-sync it (#3675)
 // instead of re-downloading the whole board. syncBoardDelta fetches only the
 // changes since our cursor and PATCHES the cache (O(delta), not O(boardSize));
@@ -67,6 +105,10 @@ if (openCard) {
 // re-checks the move-pending guard internally so it never clobbers an optimistic
 // move (the move queue's drain invalidate reconciles afterwards).
 initRealtime((boardId) => {
+	// The push body names a board, but the my-work feeds are cross-board and
+	// need no cursor: refresh them even when the board itself was never opened
+	// this session (syncBoardDelta would early-return without a cursor) (#3768).
+	invalidateMyWorkThrottled()
 	if (isBoardMovePending(boardId)) {
 		return
 	}
