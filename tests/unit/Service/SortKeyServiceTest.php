@@ -195,6 +195,67 @@ class SortKeyServiceTest extends TestCase {
 		self::assertLessThan(0, strcmp($keys[count($keys) - 1], $tail));
 	}
 
+	// ---- appendSequence (bulk tail append, e.g. CSV import) ---------------
+
+	public function testAppendSequenceZeroReturnsEmpty(): void {
+		self::assertSame([], $this->service->appendSequence(0, null));
+		self::assertSame([], $this->service->appendSequence(0, 'I'));
+	}
+
+	public function testAppendSequenceRejectsNegative(): void {
+		$this->expectException(InvalidInputException::class);
+		$this->service->appendSequence(-1, null);
+	}
+
+	/**
+	 * The core scaling guarantee: even far past the ~2000-append wall where
+	 * chaining after() overflows a 64-char key, a block stays short, strictly
+	 * increasing, valid, and (when anchored) entirely above the existing tail.
+	 */
+	public function testAppendSequenceScalesToLargeBlocks(): void {
+		foreach ([1, 2, 50, 2000, 50000] as $n) {
+			foreach ([null, 'I', 'ZZ'] as $after) {
+				$keys = $this->service->appendSequence($n, $after);
+				self::assertCount($n, $keys);
+				for ($i = 0; $i < $n; $i++) {
+					self::assertMatchesRegularExpression('/^[0-9A-Z]+$/', $keys[$i]);
+					self::assertStringEndsNotWith('0', $keys[$i]);
+					self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($keys[$i]));
+					if ($after !== null) {
+						self::assertLessThan(
+							0,
+							strcmp($after, $keys[$i]),
+							"appendSequence($n, $after) key #$i must sort after the tail"
+						);
+					}
+					if ($i > 0) {
+						self::assertLessThan(
+							0,
+							strcmp($keys[$i - 1], $keys[$i]),
+							"appendSequence($n, " . var_export($after, true) . ") not strictly increasing at $i"
+						);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * A block appended after an existing tail must slot in AFTER it and still
+	 * leave room to insert between the fresh keys.
+	 */
+	public function testAppendSequenceAnchorsAboveTailAndLeavesGaps(): void {
+		$tail = $this->service->initial();
+		$keys = $this->service->appendSequence(200, $tail);
+		self::assertLessThan(0, strcmp($tail, $keys[0]));
+		for ($i = 1; $i < count($keys); $i++) {
+			$mid = $this->service->between($keys[$i - 1], $keys[$i]);
+			self::assertLessThan(0, strcmp($keys[$i - 1], $mid));
+			self::assertLessThan(0, strcmp($mid, $keys[$i]));
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($mid));
+		}
+	}
+
 	/**
 	 * A stack that has hit the overflow wall (colliding/at-capacity long keys)
 	 * is rescued: the rewritten keys are short and a subsequent between() no

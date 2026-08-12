@@ -43,11 +43,12 @@ use OCP\IDBConnection;
 class TrelloImportService {
 	/**
 	 * Hard ceiling on the accepted document size, in bytes. Trello exports are
-	 * plain JSON; anything past this is rejected before parsing to bound memory.
-	 * 12 MiB comfortably fits very large boards while stopping a pathological
-	 * upload (matches {@see ImportService::MAX_DOCUMENT_BYTES}).
+	 * plain JSON decoded as a whole (json_decode) before the rows are inserted one
+	 * at a time, so the cap bounds the decode's memory rather than a card count.
+	 * 32 MiB comfortably fits very large boards while staying within a normal PHP
+	 * memory limit (matches {@see ImportService::MAX_DOCUMENT_BYTES}).
 	 */
-	public const MAX_DOCUMENT_BYTES = 12 * 1024 * 1024;
+	public const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 
 	/** Fallback label colour when Trello's colour is blank/unknown. */
 	private const DEFAULT_LABEL_COLOR = 'b3b3b3';

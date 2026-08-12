@@ -61,11 +61,14 @@ use OCP\IUserManager;
 class ImportService {
 	/**
 	 * Hard ceiling on the accepted document size, in bytes. A board export is
-	 * plain structured text; anything past this is rejected before parsing to
-	 * bound memory. 12 MiB comfortably fits very large boards while stopping a
-	 * pathological upload.
+	 * plain structured text; anything past this is rejected before parsing. The
+	 * cap exists to bound memory: unlike the CSV importer this decodes the whole
+	 * export with json_decode (the graph must be resolved as a whole to remap ids),
+	 * so the decoded structure - not just the raw bytes - has to fit. The rows are
+	 * then inserted one at a time, so 32 MiB comfortably fits tens of thousands of
+	 * cards while keeping the decode well within a normal PHP memory limit.
 	 */
-	public const MAX_DOCUMENT_BYTES = 12 * 1024 * 1024;
+	public const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 
 	public function __construct(
 		private BoardService $boardService,

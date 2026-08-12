@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the unfiltered board — an easy exit from an applied saved view or any ad-hoc
   filter.
 
+### Changed
+
+- **Importers no longer cap how many cards you can bring in.** The CSV /
+  spreadsheet import row limit is raised from 2,000 to 200,000 and its file-size
+  cap from 5 MiB to 64 MiB; the Deck and Trello whole-board import file-size caps
+  go from 12 MiB to 32 MiB. The CSV importer now streams rows off the file one at
+  a time instead of loading them all into memory, so peak memory tracks the file
+  size rather than the card count. The remaining caps are generous backstops
+  against a pathological upload, not a ceiling on a real board.
+
 ### Fixed
 
 - **Sort / view / swimlane menus now show the active option and switch on one
@@ -53,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in another tab as the change arrives (near-instant when notify_push is
   available, on the delta poll otherwise), without overwriting an edit you have
   in progress.
+- **Large CSV imports no longer fail with a sort-key overflow.** The CSV importer
+  assigned each imported card a sort key by chaining `after()` off the previous
+  one, which grew the key by a character every ~two dozen cards and overflowed the
+  64-character `sort_key` column at roughly 2,000 rows — the hidden reason the row
+  cap sat there. Imported cards now get a single bounded, evenly-spaced key block
+  (new `SortKeyService::appendSequence`), so a block of any realistic size stays
+  well within the column and preserves file order.
 
 ## [0.9.35] - 2026-08-09
 

@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Shows a "Sponsor" button on the repo and enables Sponsor links in PRs.
+# Only GitHub Sponsors is set up for now; add other platforms here if enabled.
+github: aktasfatih
