@@ -31,6 +31,13 @@ async function ncLogin(page) {
 	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
+// Density now lives under the Display popover (radios), not a standalone toggle.
+async function setDensity(page, label) {
+	await page.locator('.board-view__display-menu button').first().click()
+	await page.getByRole('menuitemradio', { name: label, exact: true }).click()
+	await page.keyboard.press('Escape')
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Compact density mode (#3415)
 //
@@ -80,10 +87,8 @@ test.describe('Compact density (#3415)', () => {
 		await expect(firstTile).not.toHaveClass(/card-tile--compact/)
 		const comfortableHeight = (await firstTile.boundingBox()).height
 
-		// Flip to compact via the header toggle.
-		const toggle = page.locator('.board-view__density-toggle')
-		await expect(toggle).toBeVisible({ timeout: 6_000 })
-		await toggle.click()
+		// Flip to compact via Display → Density.
+		await setDensity(page, 'Compact')
 
 		// Tiles gain the compact class and become measurably shorter.
 		await expect(firstTile).toHaveClass(/card-tile--compact/, { timeout: 6_000 })
@@ -96,7 +101,7 @@ test.describe('Compact density (#3415)', () => {
 		await expect(page.locator('.card-tile').first()).toHaveClass(/card-tile--compact/, { timeout: 8_000 })
 
 		// Flip back to comfortable and confirm it also persists.
-		await page.locator('.board-view__density-toggle').click()
+		await setDensity(page, 'Comfortable')
 		await expect(page.locator('.card-tile').first()).not.toHaveClass(/card-tile--compact/, { timeout: 6_000 })
 		await page.reload()
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
@@ -125,7 +130,7 @@ test.describe('Compact density (#3415)', () => {
 		expect(beforeCount).toBeGreaterThan(0)
 
 		// Flip to compact — the virtualizer must re-measure, not jump to the top.
-		await page.locator('.board-view__density-toggle').click()
+		await setDensity(page, 'Compact')
 		await expect(page.locator('.card-tile').first()).toHaveClass(/card-tile--compact/, { timeout: 6_000 })
 		await page.waitForTimeout(400)
 

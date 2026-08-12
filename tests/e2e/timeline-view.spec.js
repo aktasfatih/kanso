@@ -81,7 +81,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// Switch to Timeline.
-		await page.locator('.board-view__view-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 
 		// A ranged card → a bar; a due-only card → a milestone diamond.
@@ -120,7 +120,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.addInitScript(() => { try { localStorage.clear() } catch (e) {} })
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
-		await page.locator('.board-view__view-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 
 		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
@@ -185,7 +185,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
-		await page.locator('.board-view__view-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 
 		// The track must be present (there are already scheduled cards on this board).
@@ -237,7 +237,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 
 		await page.reload()
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
-		await page.locator('.board-view__view-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 		await expect(page.locator('.timeline__inner')).toBeVisible({ timeout: 8_000 })
 		// It appears on the track and is no longer offered as unscheduled.
@@ -250,7 +250,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
-		await page.locator('.board-view__view-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 
 		const lane = page.locator('.timeline__lane', { hasText: 'Ranged task' })

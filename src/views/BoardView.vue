@@ -33,52 +33,47 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:board-id="props.id"
 				:compact="isNarrow" />
 
-			<!-- View switch - Board (columns) vs List (table). Persisted per board. -->
+			<!-- Display: one popover for HOW the board is arranged - view type,
+			     grouping (swimlanes), sort and density (Linear-style). Replaces the
+			     separate view/sort/density controls and the swimlanes section that used
+			     to live in the more menu. Icon-only on a narrow header. -->
 			<NcActions
-				v-if="boardData && !isNarrow"
-				class="board-view__view-menu"
-				:menu-name="viewModeLabel">
+				v-if="boardData"
+				class="board-view__display-menu"
+				:menu-name="isNarrow ? undefined : t('kanso', 'Display')"
+				:aria-label="t('kanso', 'Display options')">
 				<template #icon>
-					<ChartTimelineIcon v-if="viewMode === 'timeline'" :size="20" />
-					<FormatListBulletedIcon v-else-if="viewMode === 'list'" :size="20" />
-					<ViewColumnIcon v-else :size="20" />
+					<TuneVariantIcon :size="20" />
 				</template>
-				<NcActionRadio
-					:model-value="viewMode"
-					value="board"
-					name="kanso-viewmode"
-					@update:model-value="setViewMode">
+
+				<NcActionCaption :name="t('kanso', 'View')" />
+				<NcActionRadio :model-value="viewMode" value="board" name="kanso-viewmode" @update:model-value="setViewMode">
 					{{ t('kanso', 'Board') }}
 				</NcActionRadio>
-				<NcActionRadio
-					:model-value="viewMode"
-					value="list"
-					name="kanso-viewmode"
-					@update:model-value="setViewMode">
+				<NcActionRadio :model-value="viewMode" value="list" name="kanso-viewmode" @update:model-value="setViewMode">
 					{{ t('kanso', 'List') }}
 				</NcActionRadio>
-				<NcActionRadio
-					:model-value="viewMode"
-					value="timeline"
-					name="kanso-viewmode"
-					@update:model-value="setViewMode">
+				<NcActionRadio :model-value="viewMode" value="timeline" name="kanso-viewmode" @update:model-value="setViewMode">
 					{{ t('kanso', 'Timeline') }}
 				</NcActionRadio>
-			</NcActions>
 
-			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
-			<NcActions
-				v-if="boardData && !isNarrow"
-				class="board-view__sort-menu"
-				:menu-name="t('kanso', 'Sort: {mode}', { mode: sortModeMenuName })">
-				<template #icon>
-					<SortIcon :size="20" />
+				<template v-if="viewMode === 'board'">
+					<NcActionCaption :name="t('kanso', 'Group by')" />
+					<NcActionRadio :model-value="swimlaneMode" value="none" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'None') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="swimlaneMode" value="assignee" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'Assignee') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="swimlaneMode" value="label" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'Label') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="swimlaneMode" value="priority" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'Priority') }}
+					</NcActionRadio>
 				</template>
-				<!-- Radio GROUP idiom: model-value is the group's current value and each
-				     radio carries its own `value` (checked = model === value). This
-				     reflects the active mode when the menu reopens, and switches on a
-				     single click via @update:model-value (a boolean-per-radio +
-				     @change binding shows nothing selected and needs a double click). -->
+
+				<NcActionCaption :name="t('kanso', 'Sort')" />
 				<NcActionRadio :model-value="sortMode" value="manual" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Manual') }}
 				</NcActionRadio>
@@ -99,9 +94,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@update:model-value="setSortMode">
 					{{ t('kanso', 'Estimate') }}
 				</NcActionRadio>
-				<!-- Direction toggle — hidden for Manual (which has no direction). -->
 				<template v-if="sortMode !== 'manual'">
-					<NcActionSeparator />
 					<NcActionRadio :model-value="sortDir" value="asc" name="kanso-sort-dir" @update:model-value="setSortDir">
 						{{ t('kanso', 'Ascending') }}
 					</NcActionRadio>
@@ -109,26 +102,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						{{ t('kanso', 'Descending') }}
 					</NcActionRadio>
 				</template>
+
+				<NcActionCaption :name="t('kanso', 'Density')" />
+				<NcActionRadio :model-value="density" value="comfortable" name="kanso-density" @update:model-value="setDensity">
+					{{ t('kanso', 'Comfortable') }}
+				</NcActionRadio>
+				<NcActionRadio :model-value="density" value="compact" name="kanso-density" @update:model-value="setDensity">
+					{{ t('kanso', 'Compact') }}
+				</NcActionRadio>
 			</NcActions>
 
-			<!-- Compact density toggle (#3415) — a per-user, view-only switch that
-			     tightens every card tile so more cards fit on screen. Persisted per
-			     board per user. A pressed icon button sits with the other view
-			     controls; aria-pressed reflects the state for assistive tech. -->
-			<NcButton
-				v-if="boardData && !isNarrow"
-				class="board-view__density-toggle"
-				type="tertiary"
-				:pressed="isCompact"
-				:aria-pressed="isCompact ? 'true' : 'false'"
-				:aria-label="isCompact ? t('kanso', 'Switch to comfortable density') : t('kanso', 'Switch to compact density')"
-				:title="isCompact ? t('kanso', 'Comfortable density') : t('kanso', 'Compact density')"
-				@click="toggleDensity">
-				<template #icon>
-					<ViewCompactIcon v-if="isCompact" :size="20" />
-					<ViewAgendaIcon v-else :size="20" />
-				</template>
-			</NcButton>
+
 
 			<!-- Project chat (#3748): a plain deep link (typically a Talk room)
 			     set in board settings (MANAGE); visible to every member when set.
@@ -188,61 +172,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     Clicking reveals an on-demand composer at the end of the board and
 				     focuses it (a text INPUT here would strip the menu's role=menuitem
 				     semantics, so this stays a plain action button). -->
-				<!-- Responsive consolidation (#mobile): when the header is too narrow
-				     for the full toolbar, the view / sort / density controls collapse
-				     in here so nothing is pushed off-screen. Same handlers/state as the
-				     toolbar versions; distinct radio-group names avoid any overlap. -->
-				<template v-if="isNarrow">
-					<NcActionCaption :name="t('kanso', 'View')" />
-					<NcActionRadio :model-value="viewMode" value="board" name="kanso-viewmode-m" @update:model-value="setViewMode">
-						{{ t('kanso', 'Board') }}
-					</NcActionRadio>
-					<NcActionRadio :model-value="viewMode" value="list" name="kanso-viewmode-m" @update:model-value="setViewMode">
-						{{ t('kanso', 'List') }}
-					</NcActionRadio>
-					<NcActionRadio :model-value="viewMode" value="timeline" name="kanso-viewmode-m" @update:model-value="setViewMode">
-						{{ t('kanso', 'Timeline') }}
-					</NcActionRadio>
-
-					<NcActionCaption :name="t('kanso', 'Sort')" />
-					<NcActionRadio :model-value="sortMode" value="manual" name="kanso-sort-m" @update:model-value="setSortMode">
-						{{ t('kanso', 'Manual') }}
-					</NcActionRadio>
-					<NcActionRadio :model-value="sortMode" value="priority" name="kanso-sort-m" @update:model-value="setSortMode">
-						{{ t('kanso', 'Priority') }}
-					</NcActionRadio>
-					<NcActionRadio :model-value="sortMode" value="due" name="kanso-sort-m" @update:model-value="setSortMode">
-						{{ t('kanso', 'Due date') }}
-					</NcActionRadio>
-					<NcActionRadio :model-value="sortMode" value="title" name="kanso-sort-m" @update:model-value="setSortMode">
-						{{ t('kanso', 'Title') }}
-					</NcActionRadio>
-					<NcActionRadio
-						v-if="boardData?.board?.estimateScale && boardData.board.estimateScale !== 'none'"
-						:model-value="sortMode"
-						value="estimate"
-						name="kanso-sort-m"
-						@update:model-value="setSortMode">
-						{{ t('kanso', 'Estimate') }}
-					</NcActionRadio>
-					<template v-if="sortMode !== 'manual'">
-						<NcActionRadio :model-value="sortDir" value="asc" name="kanso-sort-dir-m" @update:model-value="setSortDir">
-							{{ t('kanso', 'Ascending') }}
-						</NcActionRadio>
-						<NcActionRadio :model-value="sortDir" value="desc" name="kanso-sort-dir-m" @update:model-value="setSortDir">
-							{{ t('kanso', 'Descending') }}
-						</NcActionRadio>
-					</template>
-
-					<NcActionButton :aria-pressed="isCompact ? 'true' : 'false'" @click="toggleDensity">
-						<template #icon>
-							<ViewCompactIcon v-if="isCompact" :size="20" />
-							<ViewAgendaIcon v-else :size="20" />
-						</template>
-						{{ isCompact ? t('kanso', 'Comfortable density') : t('kanso', 'Compact density') }}
-					</NcActionButton>
-					<NcActionSeparator />
-				</template>
 
 				<template v-if="canEditBoard">
 					<NcActionButton
@@ -257,42 +186,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<NcActionSeparator />
 				</template>
 
-				<!-- Swimlanes - client-side grouping of the Board view into
-				     horizontal lanes by assignee / label / priority. View-only over
-				     the summary payload; persisted per board per user. Only shown in
-				     Board view. -->
-				<template v-if="viewMode === 'board'">
-					<NcActionCaption :name="t('kanso', 'Swimlanes')" />
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="none"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'No swimlanes') }}
-					</NcActionRadio>
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="assignee"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'Group by assignee') }}
-					</NcActionRadio>
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="label"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'Group by label') }}
-					</NcActionRadio>
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="priority"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'Group by priority') }}
-					</NcActionRadio>
-					<NcActionSeparator />
-				</template>
 
 				<!-- Archived cards page - only offered when ≥1 archived card. The
 				     visible label already carries the count, so no separate aria-label
@@ -670,6 +563,7 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
+import TuneVariantIcon from 'vue-material-design-icons/TuneVariant.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'

@@ -54,9 +54,21 @@ test.describe('Display sort (#3442)', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
+		// View + Sort now live in one Display popover. Pick an option then Escape to
+		// close, so the next open() is deterministic (radios don't close the menu).
+		const pick = async (name) => {
+			await page.locator('.board-view__display-menu button').first().click()
+			// Let the teleported popover settle before clicking (a click landing mid
+			// open/re-render can miss the freshly-mounted radio).
+			await page.waitForTimeout(400)
+			await page.locator('.action-radio__text', { hasText: new RegExp('^' + name + '$') }).click()
+			await page.waitForTimeout(150)
+			await page.keyboard.press('Escape')
+			await page.waitForTimeout(200)
+		}
+
 		// Switch to List view for a deterministic row order.
-		await page.locator('.board-view__view-menu button').first().click()
-		await page.getByText('List', { exact: true }).click()
+		await pick('List')
 		await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
 
 		const titles = () => page.locator('.board-list-row__title').allTextContents()
@@ -65,15 +77,13 @@ test.describe('Display sort (#3442)', () => {
 		expect((await titles()).map((s) => s.trim())).toEqual(created)
 
 		// Sort by Title → alphabetical.
-		await page.locator('.board-view__sort-menu button').first().click()
-		await page.getByText('Title', { exact: true }).click()
+		await pick('Title')
 		await expect
 			.poll(async () => (await titles()).map((s) => s.trim()))
 			.toEqual(['Alpha', 'Bravo', 'Charlie'])
 
 		// Back to Manual → fractional order restored (view-only sort, keys intact).
-		await page.locator('.board-view__sort-menu button').first().click()
-		await page.getByText('Manual', { exact: true }).click()
+		await pick('Manual')
 		await expect
 			.poll(async () => (await titles()).map((s) => s.trim()))
 			.toEqual(created)

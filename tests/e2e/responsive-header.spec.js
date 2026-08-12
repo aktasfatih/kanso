@@ -44,44 +44,39 @@ test.describe('Responsive board header', () => {
 		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('wide: view/sort live in the toolbar, not the ⋯ menu', async ({ page }) => {
+	test('view / sort / group / density all live under one Display popover', async ({ page }) => {
 		await page.setViewportSize({ width: 1500, height: 900 })
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		// Standalone view + sort menus are in the toolbar.
-		await expect(page.locator('.board-view__view-menu')).toBeVisible({ timeout: 8_000 })
-		await expect(page.locator('.board-view__sort-menu')).toBeVisible()
+		// One Display control; the old standalone view/sort menus are gone.
+		await expect(page.locator('.board-view__display-menu')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.board-view__view-menu')).toHaveCount(0)
+		await expect(page.locator('.board-view__sort-menu')).toHaveCount(0)
 
-		// …and are NOT duplicated inside the ⋯ menu.
-		await page.getByRole('button', { name: 'More' }).click()
-		await expect(page.getByRole('menuitemradio', { name: 'Timeline' })).toHaveCount(0)
+		// It holds View + Sort (+ Group + Density).
+		await page.locator('.board-view__display-menu button').first().click()
+		await expect(page.getByRole('menuitemradio', { name: 'Timeline' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('menuitemradio', { name: 'Manual', exact: true })).toBeVisible()
 	})
 
-	test('narrow: view/sort/density consolidate into the ⋯ menu; nothing off-screen', async ({ page }) => {
-		// A phone-width viewport → the NC sidebar collapses and the board header is
-		// well under the consolidation threshold.
+	test('narrow: header stays compact and Display remains reachable; nothing off-screen', async ({ page }) => {
+		// Phone-width → the NC sidebar collapses and the header is compact.
 		await page.setViewportSize({ width: 480, height: 900 })
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		// The standalone view + sort menus are gone from the toolbar.
-		await expect(page.locator('.board-view__view-menu')).toHaveCount(0, { timeout: 8_000 })
-		await expect(page.locator('.board-view__sort-menu')).toHaveCount(0)
-
-		// Search, filter and ⋯ remain reachable in the bar.
+		// Search, filter, Display and ⋯ all remain reachable in the bar.
 		await expect(page.locator('.board-view__search')).toBeVisible()
 		await expect(page.locator('.board-filter-bar__filter')).toBeVisible()
-		const more = page.getByRole('button', { name: 'More' })
-		await expect(more).toBeVisible()
+		await expect(page.getByRole('button', { name: 'More' })).toBeVisible()
+		const display = page.locator('.board-view__display-menu button').first()
+		await expect(display).toBeVisible()
 
-		// The consolidated View + Sort controls now live inside the ⋯ menu.
-		await more.click()
-		await expect(page.getByRole('menuitemradio', { name: 'Timeline' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.getByRole('menuitemradio', { name: 'Priority', exact: true })).toBeVisible()
-		// And they work: switch to List from the menu.
+		// Display still drives the view: switch to List from it.
+		await display.click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await expect(page.locator('.board-list-table')).toBeVisible({ timeout: 8_000 })
 	})
