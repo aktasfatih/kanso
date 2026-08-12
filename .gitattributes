@@ -1,0 +1,7 @@
+# Keep BOTH sides' entries when two branches touch the changelog instead of
+# raising a merge conflict. The `union` driver concatenates the conflicting
+# hunks, so parallel PRs each adding lines under `## [Unreleased]` merge cleanly.
+# Order within a section isn't significant, and the only artefact is the rare
+# duplicate `### Added/Changed/Fixed` header — trivially tidied when the
+# `[Unreleased]` block is renamed at release time. GitHub honours this on merge.
+CHANGELOG.md merge=union
