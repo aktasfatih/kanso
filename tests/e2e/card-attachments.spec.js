@@ -211,6 +211,46 @@ test.describe('Card file attachments', () => {
 		expect(up.status).toBe(400)
 	})
 
+	// Regression for the CSRF rejection (#3784): download + inline are GET
+	// endpoints reached by a plain `<a download>` navigation / `<img src>` load
+	// — i.e. a browser *session-cookie* request that carries NO requesttoken.
+	// Nextcloud enforces CSRF on cookie-authenticated requests, so without
+	// `#[NoCSRFRequired]` these 412'd in the real app.
+	//
+	// IMPORTANT: this must go through the browser session, NOT the Basic-auth
+	// `api()`/`fetch()` helpers above — Nextcloud skips the CSRF check for
+	// non-cookie auth (Basic / app password), which is exactly why every other
+	// download assertion in this file passed even while the app was broken.
+	// `page.request` shares the logged-in context's cookies but adds no CSRF
+	// token, faithfully reproducing the `<a href>` / `<img>` fetch.
+	test('download and inline succeed over a browser session (no CSRF rejection)', async ({ page }) => {
+		await ncLogin(page)
+
+		// Seed one downloadable file and one inline-able png (setup via the API
+		// helper is fine; the assertion below is what must use the session).
+		const txt = await uploadFile(cardId, 'session-dl.txt', 'via session cookie', 'text/plain')
+		expect(txt.ok).toBe(true)
+		const png = await uploadBytes(cardId, 'session.png', PNG_1x1, 'image/png')
+		expect(png.ok).toBe(true)
+
+		// Download over the session cookie (no requesttoken) — the exact path a
+		// user's `<a download>` click takes. 412 here == the CSRF regression.
+		const dl = await page.request.get(`${API}/cards/${cardId}/attachments/${txt.body.id}`)
+		expect(dl.status(), 'attachment download rejected — likely missing NoCSRFRequired').toBe(200)
+		expect((dl.headers()['content-disposition'] || '')).toContain('attachment')
+		expect(await dl.text()).toBe('via session cookie')
+
+		// Inline serve over the session cookie — the path an `<img src>` takes.
+		const inline = await page.request.get(`${API}/cards/${cardId}/attachments/${png.body.id}/inline`)
+		expect(inline.status(), 'inline attachment rejected — likely missing NoCSRFRequired').toBe(200)
+		expect(inline.headers()['content-type']).toContain('image/png')
+		expect((inline.headers()['content-disposition'] || '')).toContain('inline')
+
+		// Cleanup.
+		await api('DELETE', `/cards/${cardId}/attachments/${txt.body.id}`)
+		await api('DELETE', `/cards/${cardId}/attachments/${png.body.id}`)
+	})
+
 	test('upload/list/download/delete through the CardModal UI', async ({ page }) => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`

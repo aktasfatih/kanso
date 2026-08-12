@@ -11,6 +11,7 @@ use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
@@ -73,6 +74,7 @@ class CardAttachmentController extends Controller {
 	 * (DownloadResponse) so an untrusted file is never rendered inline.
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function download(int $cardId, int $attachmentId): DataDownloadResponse|JSONResponse {
 		try {
 			[$attachment, $bytes] = $this->attachmentService->download(
@@ -114,6 +116,7 @@ class CardAttachmentController extends Controller {
 	 * the bytes as a scriptable type.
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function inline(int $cardId, int $attachmentId): DataDisplayResponse|JSONResponse {
 		try {
 			[$attachment, $bytes] = $this->attachmentService->inline(

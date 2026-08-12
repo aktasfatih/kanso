@@ -58,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Downloading (and inline-previewing) card attachments no longer fails with a
+  CSRF error.** The attachment `download` and `inline` endpoints are plain GET
+  requests reached by a browser navigation / `<img>` load, which cannot carry a
+  CSRF token — they now declare `NoCSRFRequired` (auth is still enforced by the
+  session and board-read permission check), so attachments download and preview
+  reliably again.
 - **Sort / view / swimlane menus now show the active option and switch on one
   click.** The radio menus (Sort, board view mode, Swimlanes) previously rendered
   nothing as selected when reopened and needed a double click to change — they now
