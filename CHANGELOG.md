@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The board toolbar adapts to narrow / mobile widths.** When the header is too
+  narrow for the full toolbar (small screens, or a wide screen with the navigation
+  sidebar open), the View / Sort / Density controls fold into the ⋯ menu and the
+  back and filter buttons become icon-only, so no toolbar control is ever pushed
+  off-screen. It reacts to the header's actual width, so it also kicks in when the
+  sidebar opens — not just on true mobile.
 - **Importers no longer cap how many cards you can bring in.** The CSV /
   spreadsheet import row limit is raised from 2,000 to 200,000 and its file-size
   cap from 5 MiB to 64 MiB; the Deck and Trello whole-board import file-size caps

@@ -9,11 +9,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:style="boardBackground ? { '--board-background': boardBackground } : {}">
 		<!-- Header -->
 		<div ref="headerRef" class="board-view__header">
-			<NcButton class="board-view__back" @click="goBack">
+			<NcButton class="board-view__back" :aria-label="t('kanso', 'All boards')" @click="goBack">
 				<template #icon>
 					<ArrowLeftIcon :size="20" />
 				</template>
-				{{ t('kanso', 'All boards') }}
+				<template v-if="!isNarrow">{{ t('kanso', 'All boards') }}</template>
 			</NcButton>
 			<h1 v-if="boardData" class="board-view__title">
 				<span
@@ -34,7 +34,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- View switch - Board (columns) vs List (table). Persisted per board. -->
 			<NcActions
-				v-if="boardData"
+				v-if="boardData && !isNarrow"
 				class="board-view__view-menu"
 				:menu-name="viewModeLabel">
 				<template #icon>
@@ -67,7 +67,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
 			<NcActions
-				v-if="boardData"
+				v-if="boardData && !isNarrow"
 				class="board-view__sort-menu"
 				:menu-name="t('kanso', 'Sort: {mode}', { mode: sortModeMenuName })">
 				<template #icon>
@@ -115,7 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			     board per user. A pressed icon button sits with the other view
 			     controls; aria-pressed reflects the state for assistive tech. -->
 			<NcButton
-				v-if="boardData"
+				v-if="boardData && !isNarrow"
 				class="board-view__density-toggle"
 				type="tertiary"
 				:pressed="isCompact"
@@ -160,6 +160,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
 				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
+				:compact="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
 				@delete-saved="handleDeleteSavedFilter" />
@@ -186,6 +187,62 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     Clicking reveals an on-demand composer at the end of the board and
 				     focuses it (a text INPUT here would strip the menu's role=menuitem
 				     semantics, so this stays a plain action button). -->
+				<!-- Responsive consolidation (#mobile): when the header is too narrow
+				     for the full toolbar, the view / sort / density controls collapse
+				     in here so nothing is pushed off-screen. Same handlers/state as the
+				     toolbar versions; distinct radio-group names avoid any overlap. -->
+				<template v-if="isNarrow">
+					<NcActionCaption :name="t('kanso', 'View')" />
+					<NcActionRadio :model-value="viewMode" value="board" name="kanso-viewmode-m" @update:model-value="setViewMode">
+						{{ t('kanso', 'Board') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="viewMode" value="list" name="kanso-viewmode-m" @update:model-value="setViewMode">
+						{{ t('kanso', 'List') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="viewMode" value="timeline" name="kanso-viewmode-m" @update:model-value="setViewMode">
+						{{ t('kanso', 'Timeline') }}
+					</NcActionRadio>
+
+					<NcActionCaption :name="t('kanso', 'Sort')" />
+					<NcActionRadio :model-value="sortMode" value="manual" name="kanso-sort-m" @update:model-value="setSortMode">
+						{{ t('kanso', 'Manual') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="sortMode" value="priority" name="kanso-sort-m" @update:model-value="setSortMode">
+						{{ t('kanso', 'Priority') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="sortMode" value="due" name="kanso-sort-m" @update:model-value="setSortMode">
+						{{ t('kanso', 'Due date') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="sortMode" value="title" name="kanso-sort-m" @update:model-value="setSortMode">
+						{{ t('kanso', 'Title') }}
+					</NcActionRadio>
+					<NcActionRadio
+						v-if="boardData?.board?.estimateScale && boardData.board.estimateScale !== 'none'"
+						:model-value="sortMode"
+						value="estimate"
+						name="kanso-sort-m"
+						@update:model-value="setSortMode">
+						{{ t('kanso', 'Estimate') }}
+					</NcActionRadio>
+					<template v-if="sortMode !== 'manual'">
+						<NcActionRadio :model-value="sortDir" value="asc" name="kanso-sort-dir-m" @update:model-value="setSortDir">
+							{{ t('kanso', 'Ascending') }}
+						</NcActionRadio>
+						<NcActionRadio :model-value="sortDir" value="desc" name="kanso-sort-dir-m" @update:model-value="setSortDir">
+							{{ t('kanso', 'Descending') }}
+						</NcActionRadio>
+					</template>
+
+					<NcActionButton :aria-pressed="isCompact ? 'true' : 'false'" @click="toggleDensity">
+						<template #icon>
+							<ViewCompactIcon v-if="isCompact" :size="20" />
+							<ViewAgendaIcon v-else :size="20" />
+						</template>
+						{{ isCompact ? t('kanso', 'Comfortable density') : t('kanso', 'Compact density') }}
+					</NcActionButton>
+					<NcActionSeparator />
+				</template>
+
 				<template v-if="canEditBoard">
 					<NcActionButton
 						class="board-view__add-column-btn"
@@ -1029,6 +1086,15 @@ function openShortcutsFromHint() {
 const searchBoxRef = ref(null)
 const headerRef = ref(null)
 
+// Responsive header (#mobile). When the header is too narrow to hold the full
+// toolbar with labels, the secondary controls (view mode, sort, density) collapse
+// into the ⋯ More menu and the back button + filter go icon-only, so nothing is
+// ever pushed off-screen. Driven by the header's OWN width (a ResizeObserver, see
+// onHeaderResize) — not a viewport media query — because the available width also
+// changes when the app-navigation sidebar opens/closes, not just on real mobile.
+const NARROW_HEADER_PX = 860
+const isNarrow = ref(false)
+
 function dismissActionError() {
 	dismissMoveError()
 	shortcutError.value = ''
@@ -1553,9 +1619,12 @@ function handleKeydown(e) {
 // dock BELOW the toolbar instead of over it — otherwise the panel covers the gear
 // button and a second gear click can't toggle it closed.
 let toolbarResizeObserver = null
-function publishToolbarHeight() {
-	const h = headerRef.value ? headerRef.value.offsetHeight : 0
-	document.documentElement.style.setProperty('--kanso-board-toolbar-height', `${h}px`)
+function onHeaderResize() {
+	if (!headerRef.value) return
+	document.documentElement.style.setProperty('--kanso-board-toolbar-height', `${headerRef.value.offsetHeight}px`)
+	// Header width is parent-driven (flex-shrink:0), so toggling isNarrow doesn't
+	// change it — no observer feedback loop.
+	isNarrow.value = headerRef.value.offsetWidth < NARROW_HEADER_PX
 }
 
 onMounted(() => {
@@ -1568,10 +1637,10 @@ onMounted(() => {
 	document.addEventListener('keydown', handleKeydown)
 
 	if (headerRef.value && typeof ResizeObserver !== 'undefined') {
-		toolbarResizeObserver = new ResizeObserver(publishToolbarHeight)
+		toolbarResizeObserver = new ResizeObserver(onHeaderResize)
 		toolbarResizeObserver.observe(headerRef.value)
 	}
-	publishToolbarHeight()
+	onHeaderResize()
 
 	const cleanups = [
 		monitorForElements({

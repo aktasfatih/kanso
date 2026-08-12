@@ -10,10 +10,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     the predicate. Mirrors the old label/priority dropdown, generalised. -->
 		<NcActions
 			class="board-filter-bar__filter"
-			:aria-label="t('kanso', 'Filter cards')"
-			:menu-name="count > 0
-				? t('kanso', 'Filter · {count}', { count })
-				: t('kanso', 'Filter')"
+			:aria-label="count > 0 ? t('kanso', 'Filter · {count}', { count }) : t('kanso', 'Filter cards')"
+			:menu-name="compact
+				? undefined
+				: (count > 0
+					? t('kanso', 'Filter · {count}', { count })
+					: t('kanso', 'Filter'))"
 			:primary="count > 0">
 			<template #icon>
 				<FilterVariantIcon :size="20" />
@@ -123,6 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     saved view, or delete one. Bookmark icon; highlighted when the active
 		     filter matches a saved view. -->
 		<NcActions
+			v-if="!compact"
 			class="board-filter-bar__saved"
 			:aria-label="t('kanso', 'Saved filters')"
 			:menu-name="activeSavedName || t('kanso', 'Saved')">
@@ -233,6 +236,8 @@ const props = defineProps({
 	activeSavedName: { type: String, default: '' },
 	/** The board's estimation scale key (e.g. 'fibonacci'); 'none' hides the facet. */
 	estimateScale: { type: String, default: 'none' },
+	/** Compact (narrow header): icon-only filter trigger, and hide the Saved menu. */
+	compact: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['save', 'apply-saved', 'delete-saved'])
