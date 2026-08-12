@@ -195,7 +195,7 @@ test.describe('Estimate sorting & filtering', () => {
 
 		// Switch the display sort to Estimate (radio only present because the board
 		// has a scale). The estimate ranks by scale position, not string value.
-		await page.locator('.board-view__sort-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.locator('.action-radio__text', { hasText: 'Estimate' }).click()
 		await page.keyboard.press('Escape')
 
@@ -206,7 +206,7 @@ test.describe('Estimate sorting & filtering', () => {
 		}, { timeout: 8_000 }).toBe(true)
 
 		// Reopening the menu shows the active mode as selected (not blank).
-		await page.locator('.board-view__sort-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await expect(page.getByRole('menuitemradio', { name: 'Estimate' }))
 			.toHaveAttribute('aria-checked', 'true', { timeout: 8_000 })
 

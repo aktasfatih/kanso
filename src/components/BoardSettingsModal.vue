@@ -81,6 +81,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						role="tabpanel"
 						aria-labelledby="bs-rail-tab-general">
 					<div class="board-settings__general">
+							<template v-if="canManage">
+								<label class="board-settings__prefix-label" for="bs-board-name">
+									{{ t('kanso', 'Board name') }}
+								</label>
+								<div class="board-settings__prefix-row">
+									<input
+										id="bs-board-name"
+										v-model="nameDraft"
+										class="board-settings__prefix-input board-settings__name-input"
+										type="text"
+										maxlength="100"
+										:disabled="nameSaving"
+										:placeholder="t('kanso', 'Board name')"
+										@keydown.enter.prevent="saveName">
+									<NcButton
+										:disabled="nameSaving || !nameDirty"
+										@click="saveName">
+										{{ t('kanso', 'Save') }}
+									</NcButton>
+								</div>
+								<span v-if="nameError" class="label-settings__error">{{ nameError }}</span>
+							</template>
+
 						<NcCheckboxRadioSwitch
 							:model-value="isDefaultBoard"
 							:disabled="settingsBusy"
@@ -2672,6 +2695,35 @@ async function applyBackground(key) {
 		backgroundError.value = err?.response?.data?.error || t('kanso', 'Failed to update background.')
 	} finally {
 		backgroundSaving.value = false
+	}
+}
+
+// ── Board name (rename) ──────────────────────────────────────────────────────
+// Renaming lives here (not inline in the board header) so it's always reachable
+// regardless of how cramped the header is. The draft mirrors the cache value and
+// is re-seeded whenever the board payload changes (a save invalidates + refetches,
+// and the ['boards'] list too, so the sidebar/command palette update live).
+const boardTitle = computed(() => boardQueryData.value?.board?.title || '')
+const nameDraft = ref('')
+const nameSaving = ref(false)
+const nameError = ref('')
+watch(boardTitle, (val) => { nameDraft.value = val }, { immediate: true })
+// Dirty when the trimmed draft is non-empty and differs from the stored title
+// (an empty title is rejected server-side).
+const nameDirty = computed(() => {
+	const draft = nameDraft.value.trim()
+	return draft !== '' && draft !== boardTitle.value
+})
+async function saveName() {
+	if (!nameDirty.value) return
+	nameSaving.value = true
+	nameError.value = ''
+	try {
+		await updateBoard.mutateAsync({ title: nameDraft.value.trim() })
+	} catch (err) {
+		nameError.value = err?.response?.data?.error || t('kanso', 'Failed to rename board.')
+	} finally {
+		nameSaving.value = false
 	}
 }
 

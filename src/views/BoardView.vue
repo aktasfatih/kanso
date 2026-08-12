@@ -9,18 +9,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:style="boardBackground ? { '--board-background': boardBackground } : {}">
 		<!-- Header -->
 		<div ref="headerRef" class="board-view__header">
-			<NcButton class="board-view__back" @click="goBack">
+			<NcButton class="board-view__back" :aria-label="t('kanso', 'All boards')" @click="goBack">
 				<template #icon>
 					<ArrowLeftIcon :size="20" />
 				</template>
-				{{ t('kanso', 'All boards') }}
+				<template v-if="!isNarrow">{{ t('kanso', 'All boards') }}</template>
 			</NcButton>
 			<h1 v-if="boardData" class="board-view__title">
 				<span
 					v-if="boardData.board.color"
 					class="board-view__color-dot"
 					:style="{ background: boardData.board.color }" />
-				{{ boardData.board.title }}
+				<span class="board-view__title-text">{{ boardData.board.title }}</span>
 			</h1>
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
@@ -30,54 +30,50 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-if="boardData"
 				ref="searchBoxRef"
 				class="board-view__search"
-				:board-id="props.id" />
+				:board-id="props.id"
+				:compact="isNarrow" />
 
-			<!-- View switch - Board (columns) vs List (table). Persisted per board. -->
+			<!-- Display: one popover for HOW the board is arranged - view type,
+			     grouping (swimlanes), sort and density (Linear-style). Replaces the
+			     separate view/sort/density controls and the swimlanes section that used
+			     to live in the more menu. Icon-only on a narrow header. -->
 			<NcActions
 				v-if="boardData"
-				class="board-view__view-menu"
-				:menu-name="viewModeLabel">
+				class="board-view__display-menu"
+				:menu-name="isNarrow ? undefined : t('kanso', 'Display')"
+				:aria-label="t('kanso', 'Display options')">
 				<template #icon>
-					<ChartTimelineIcon v-if="viewMode === 'timeline'" :size="20" />
-					<FormatListBulletedIcon v-else-if="viewMode === 'list'" :size="20" />
-					<ViewColumnIcon v-else :size="20" />
+					<TuneVariantIcon :size="20" />
 				</template>
-				<NcActionRadio
-					:model-value="viewMode"
-					value="board"
-					name="kanso-viewmode"
-					@update:model-value="setViewMode">
+
+				<NcActionCaption :name="t('kanso', 'View')" />
+				<NcActionRadio :model-value="viewMode" value="board" name="kanso-viewmode" @update:model-value="setViewMode">
 					{{ t('kanso', 'Board') }}
 				</NcActionRadio>
-				<NcActionRadio
-					:model-value="viewMode"
-					value="list"
-					name="kanso-viewmode"
-					@update:model-value="setViewMode">
+				<NcActionRadio :model-value="viewMode" value="list" name="kanso-viewmode" @update:model-value="setViewMode">
 					{{ t('kanso', 'List') }}
 				</NcActionRadio>
-				<NcActionRadio
-					:model-value="viewMode"
-					value="timeline"
-					name="kanso-viewmode"
-					@update:model-value="setViewMode">
+				<NcActionRadio :model-value="viewMode" value="timeline" name="kanso-viewmode" @update:model-value="setViewMode">
 					{{ t('kanso', 'Timeline') }}
 				</NcActionRadio>
-			</NcActions>
 
-			<!-- Display sort - a view-only reorder within each stack (Board + List). -->
-			<NcActions
-				v-if="boardData"
-				class="board-view__sort-menu"
-				:menu-name="t('kanso', 'Sort: {mode}', { mode: sortModeMenuName })">
-				<template #icon>
-					<SortIcon :size="20" />
+				<template v-if="viewMode === 'board'">
+					<NcActionCaption :name="t('kanso', 'Group by')" />
+					<NcActionRadio :model-value="swimlaneMode" value="none" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'None') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="swimlaneMode" value="assignee" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'Assignee') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="swimlaneMode" value="label" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'Label') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="swimlaneMode" value="priority" name="kanso-swimlane" @update:model-value="setSwimlaneMode">
+						{{ t('kanso', 'Priority') }}
+					</NcActionRadio>
 				</template>
-				<!-- Radio GROUP idiom: model-value is the group's current value and each
-				     radio carries its own `value` (checked = model === value). This
-				     reflects the active mode when the menu reopens, and switches on a
-				     single click via @update:model-value (a boolean-per-radio +
-				     @change binding shows nothing selected and needs a double click). -->
+
+				<NcActionCaption :name="t('kanso', 'Sort')" />
 				<NcActionRadio :model-value="sortMode" value="manual" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Manual') }}
 				</NcActionRadio>
@@ -98,9 +94,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@update:model-value="setSortMode">
 					{{ t('kanso', 'Estimate') }}
 				</NcActionRadio>
-				<!-- Direction toggle — hidden for Manual (which has no direction). -->
 				<template v-if="sortMode !== 'manual'">
-					<NcActionSeparator />
 					<NcActionRadio :model-value="sortDir" value="asc" name="kanso-sort-dir" @update:model-value="setSortDir">
 						{{ t('kanso', 'Ascending') }}
 					</NcActionRadio>
@@ -108,26 +102,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						{{ t('kanso', 'Descending') }}
 					</NcActionRadio>
 				</template>
+
+				<NcActionCaption :name="t('kanso', 'Density')" />
+				<NcActionRadio :model-value="density" value="comfortable" name="kanso-density" @update:model-value="setDensity">
+					{{ t('kanso', 'Comfortable') }}
+				</NcActionRadio>
+				<NcActionRadio :model-value="density" value="compact" name="kanso-density" @update:model-value="setDensity">
+					{{ t('kanso', 'Compact') }}
+				</NcActionRadio>
 			</NcActions>
 
-			<!-- Compact density toggle (#3415) — a per-user, view-only switch that
-			     tightens every card tile so more cards fit on screen. Persisted per
-			     board per user. A pressed icon button sits with the other view
-			     controls; aria-pressed reflects the state for assistive tech. -->
-			<NcButton
-				v-if="boardData"
-				class="board-view__density-toggle"
-				type="tertiary"
-				:pressed="isCompact"
-				:aria-pressed="isCompact ? 'true' : 'false'"
-				:aria-label="isCompact ? t('kanso', 'Switch to comfortable density') : t('kanso', 'Switch to compact density')"
-				:title="isCompact ? t('kanso', 'Comfortable density') : t('kanso', 'Compact density')"
-				@click="toggleDensity">
-				<template #icon>
-					<ViewCompactIcon v-if="isCompact" :size="20" />
-					<ViewAgendaIcon v-else :size="20" />
-				</template>
-			</NcButton>
+
 
 			<!-- Project chat (#3748): a plain deep link (typically a Talk room)
 			     set in board settings (MANAGE); visible to every member when set.
@@ -160,6 +145,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
 				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
+				:compact="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
 				@delete-saved="handleDeleteSavedFilter" />
@@ -175,48 +161,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-if="boardData"
 				v-model:open="moreMenuOpen"
 				class="board-view__more-menu"
-				:menu-name="t('kanso', 'More')"
+				:menu-name="isNarrow ? undefined : t('kanso', 'More')"
 				:aria-label="t('kanso', 'More board actions')">
 				<template #icon>
 					<DotsHorizontalIcon :size="20" />
 				</template>
 
-				<!-- Swimlanes - client-side grouping of the Board view into
-				     horizontal lanes by assignee / label / priority. View-only over
-				     the summary payload; persisted per board per user. Only shown in
-				     Board view. -->
-				<template v-if="viewMode === 'board'">
-					<NcActionCaption :name="t('kanso', 'Swimlanes')" />
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="none"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'No swimlanes') }}
-					</NcActionRadio>
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="assignee"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'Group by assignee') }}
-					</NcActionRadio>
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="label"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'Group by label') }}
-					</NcActionRadio>
-					<NcActionRadio
-						:model-value="swimlaneMode"
-						value="priority"
-						name="kanso-swimlane"
-						@update:model-value="setSwimlaneMode">
-						{{ t('kanso', 'Group by priority') }}
-					</NcActionRadio>
+				<!-- Add column — moved off the board (was a persistent trailing input)
+				     into this menu so the board stays uncluttered. Editors only.
+				     Clicking reveals an on-demand composer at the end of the board and
+				     focuses it (a text INPUT here would strip the menu's role=menuitem
+				     semantics, so this stays a plain action button). -->
+
+				<template v-if="canEditBoard">
+					<NcActionButton
+						class="board-view__add-column-btn"
+						:close-after-click="true"
+						@click="revealAddColumn">
+						<template #icon>
+							<PlusIcon :size="20" />
+						</template>
+						{{ t('kanso', 'Add column') }}
+					</NcActionButton>
 					<NcActionSeparator />
 				</template>
+
 
 				<!-- Archived cards page - only offered when ≥1 archived card. The
 				     visible label already carries the count, so no separate aria-label
@@ -389,24 +358,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-toggle-collapsed="toggleStackCollapsed"
 					:compact="isCompact" />
 
-				<!-- Add stack inline input -->
-				<div class="add-stack">
-					<!-- Empty-board onboarding hint (#3413): when the board has no
-					     stacks yet, point the user at this composer. -->
-					<p
-						v-if="sortedStacks.length === 0"
-						class="add-stack__hint"
-						data-test="empty-board-hint">
+				<!-- Column composer (#3413). No longer a PERSISTENT trailing input: it
+				     appears only when revealed from the ⋯ More menu ("Add column"), or
+				     as onboarding on a brand-new empty board so a fresh board isn't a
+				     dead end. Editors only. Esc or an empty blur collapses it again. -->
+				<div
+					v-if="canEditBoard && (showAddColumn || sortedStacks.length === 0)"
+					class="add-stack add-stack--empty">
+					<p v-if="sortedStacks.length === 0" class="add-stack__hint" data-test="empty-board-hint">
 						{{ t('kanso', 'Start by adding a column, e.g. “To do”.') }}
 					</p>
 					<form @submit.prevent="submitNewStack">
 						<input
+							ref="addColumnInputRef"
 							v-model="newStackTitle"
 							class="add-stack__input"
 							type="text"
-							:placeholder="t('kanso', 'Add stack…')"
+							maxlength="100"
+							:placeholder="t('kanso', 'Add column…')"
 							:disabled="createStack.isPending.value"
-							@keydown.enter.prevent="submitNewStack" />
+							@keydown.enter.prevent="submitNewStack"
+							@keydown.esc.prevent="collapseAddColumn"
+							@blur="onAddColumnBlur" />
 						<p v-if="stackError" class="add-stack__error">{{ stackError }}</p>
 					</form>
 				</div>
@@ -590,6 +563,8 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
+import TuneVariantIcon from 'vue-material-design-icons/TuneVariant.vue'
+import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -1005,6 +980,15 @@ function openShortcutsFromHint() {
 // ── Search box ref (for programmatic focus via '/' shortcut) ─────────────────
 const searchBoxRef = ref(null)
 const headerRef = ref(null)
+
+// Responsive header (#mobile). When the header is too narrow to hold the full
+// toolbar with labels, the secondary controls (view mode, sort, density) collapse
+// into the ⋯ More menu and the back button + filter go icon-only, so nothing is
+// ever pushed off-screen. Driven by the header's OWN width (a ResizeObserver, see
+// onHeaderResize) — not a viewport media query — because the available width also
+// changes when the app-navigation sidebar opens/closes, not just on real mobile.
+const NARROW_HEADER_PX = 860
+const isNarrow = ref(false)
 
 function dismissActionError() {
 	dismissMoveError()
@@ -1530,9 +1514,12 @@ function handleKeydown(e) {
 // dock BELOW the toolbar instead of over it — otherwise the panel covers the gear
 // button and a second gear click can't toggle it closed.
 let toolbarResizeObserver = null
-function publishToolbarHeight() {
-	const h = headerRef.value ? headerRef.value.offsetHeight : 0
-	document.documentElement.style.setProperty('--kanso-board-toolbar-height', `${h}px`)
+function onHeaderResize() {
+	if (!headerRef.value) return
+	document.documentElement.style.setProperty('--kanso-board-toolbar-height', `${headerRef.value.offsetHeight}px`)
+	// Header width is parent-driven (flex-shrink:0), so toggling isNarrow doesn't
+	// change it — no observer feedback loop.
+	isNarrow.value = headerRef.value.offsetWidth < NARROW_HEADER_PX
 }
 
 onMounted(() => {
@@ -1545,10 +1532,10 @@ onMounted(() => {
 	document.addEventListener('keydown', handleKeydown)
 
 	if (headerRef.value && typeof ResizeObserver !== 'undefined') {
-		toolbarResizeObserver = new ResizeObserver(publishToolbarHeight)
+		toolbarResizeObserver = new ResizeObserver(onHeaderResize)
 		toolbarResizeObserver.observe(headerRef.value)
 	}
-	publishToolbarHeight()
+	onHeaderResize()
 
 	const cleanups = [
 		monitorForElements({
@@ -1808,6 +1795,38 @@ async function submitNewStack() {
 	}
 }
 
+// On-demand column composer revealed from the ⋯ More menu. Kept off the board by
+// default (was a persistent trailing input); shown when revealed here or when the
+// board is empty (onboarding). Esc / empty-blur collapses it.
+const showAddColumn = ref(false)
+const addColumnInputRef = ref(null)
+
+function revealAddColumn() {
+	stackError.value = ''
+	showAddColumn.value = true
+	nextTick(() => {
+		// Scroll the composer into view (it sits at the far right of the columns row)
+		// and focus it so the user can type immediately.
+		addColumnInputRef.value?.scrollIntoView?.({ inline: 'end', block: 'nearest' })
+		addColumnInputRef.value?.focus()
+	})
+}
+
+function collapseAddColumn() {
+	showAddColumn.value = false
+	newStackTitle.value = ''
+	stackError.value = ''
+}
+
+// Blur collapses the on-demand composer only when it's empty; a non-empty draft
+// stays open (mirrors the card composer) so a stray blur doesn't lose typing. The
+// empty-board onboarding composer never collapses (there's nothing to collapse to).
+function onAddColumnBlur() {
+	if (showAddColumn.value && newStackTitle.value.trim() === '') {
+		showAddColumn.value = false
+	}
+}
+
 async function handleCreateCard(stackId, title, duedate = null, allDay = false) {
 	// Only carry a due date when a natural-date token resolved to one (#3416);
 	// a plain create stays the exact same payload as before (back-compat).
@@ -1984,6 +2003,13 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	border-radius: 50%;
 }
 
+.board-view__title-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .board-view__title-skeleton {
 	width: 200px;
 	height: 20px;
@@ -2151,6 +2177,12 @@ const onBulkDelete = () => runBulkAction('delete', {})
 .add-stack {
 	flex-shrink: 0;
 	width: 240px;
+}
+
+/* Empty-board first-column composer: a little breathing room so a fresh board
+   reads as an intentional prompt rather than a stray input. */
+.add-stack--empty {
+	padding-top: 8px;
 }
 
 .add-stack__input {

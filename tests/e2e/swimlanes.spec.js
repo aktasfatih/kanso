@@ -61,10 +61,10 @@ test.describe('Swimlanes (#3406)', () => {
 		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible()
 		await expect(page.locator('.swimlane')).toHaveCount(0)
 
-		// Swimlanes now live under the consolidated ⋯ More overflow menu. Open it
-		// and pick "Group by label".
-		await page.getByRole('button', { name: 'More' }).click()
-		await page.getByText('Group by label', { exact: true }).click()
+		// Swimlanes now live under Display → Group by. Open it and pick "Label".
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'Label', exact: true }).click()
+		await page.keyboard.press('Escape')
 
 		// Lanes appear: the "Frontend" label lane and the trailing "No label" lane.
 		await expect(page.locator('.swimlane')).toHaveCount(2)
@@ -85,9 +85,10 @@ test.describe('Swimlanes (#3406)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await expect(page.locator('.swimlane')).toHaveCount(2)
 
-		// Toggle back to "No swimlanes" → flat board restored, lanes gone.
-		await page.getByRole('button', { name: 'More' }).click()
-		await page.getByText('No swimlanes', { exact: true }).click()
+		// Toggle back to "None" (Group by) → flat board restored, lanes gone.
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'None', exact: true }).click()
+		await page.keyboard.press('Escape')
 		await expect(page.locator('.swimlane')).toHaveCount(0)
 		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible()
 		await expect(page.locator('.card-tile__title', { hasText: 'Labelled Card' })).toHaveCount(1)

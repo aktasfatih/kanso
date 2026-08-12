@@ -30,9 +30,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"Default (no filter)" entry in the Saved-filters menu.** A one-click way back
   to the unfiltered board — an easy exit from an applied saved view or any ad-hoc
   filter.
+- **Rename a board.** Board Settings → General now has a *Board name* field
+  (managers only); saving updates the header, the app-navigation sidebar, the
+  command palette and the boards grid live.
+- **"Add column" moved into the ⋯ More menu.** The board no longer carries a
+  persistent "Add stack" text box taking up a column of space; adding a column is
+  now an action in the ⋯ menu that reveals a focused composer on demand (a
+  brand-new empty board still shows an inline first-column prompt). The composer
+  and the menu action are shown to editors only.
 
 ### Changed
 
+- **Board toolbar consolidated behind a "Display" control.** How the board is
+  arranged — view (Board / List / Timeline), Group by (swimlanes), Sort (+
+  direction) and Density — now lives in a single *Display* popover instead of
+  several separate toolbar menus (Linear-style). This declutters the header and
+  makes it fit narrow / mobile widths without pushing controls off-screen; on a
+  narrow header the back, Display and ⋯ buttons go icon-only and the search box
+  collapses to a magnifier.
 - **Importers no longer cap how many cards you can bring in.** The CSV /
   spreadsheet import row limit is raised from 2,000 to 200,000 and its file-size
   cap from 5 MiB to 64 MiB; the Deck and Trello whole-board import file-size caps

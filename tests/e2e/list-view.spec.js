@@ -55,8 +55,10 @@ test.describe('Board List view (#3444)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		const setView = async (name) => {
-			await page.locator('.board-view__view-menu button').first().click()
-			await page.getByText(name, { exact: true }).click()
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByRole('menuitemradio', { name, exact: true }).click()
+			// Close the popover so the next open() is a fresh open, not a toggle-shut.
+			await page.keyboard.press('Escape')
 		}
 
 		// Switch to List → card renders as a row, Board columns hidden.
@@ -89,7 +91,7 @@ test.describe('Board List view (#3444)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// Switch to List view.
-		await page.locator('.board-view__view-menu button').first().click()
+		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('List', { exact: true }).click()
 
 		const row = page.locator('.board-list-row', { hasText: state.cardTitle })
