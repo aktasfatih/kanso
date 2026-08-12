@@ -204,9 +204,16 @@ class BoardService {
 		if ($archived !== null) {
 			$board->setArchived($archived);
 		}
+		// A scale change may strand card estimates that no longer fit the new
+		// scale; capture the transition so we can clear them below (after the
+		// board row is persisted).
+		$scaleChangedTo = null;
 		if ($estimateScale !== null) {
 			if (!EstimateScale::isValidScale($estimateScale)) {
 				throw new InvalidInputException('Unknown estimate scale');
+			}
+			if ($estimateScale !== $board->getEstimateScale()) {
+				$scaleChangedTo = $estimateScale;
 			}
 			$board->setEstimateScale($estimateScale);
 		}
@@ -236,6 +243,33 @@ class BoardService {
 		$now = time();
 		$board->setLastModified($now);
 		$board = $this->boardMapper->update($board);
+
+		// Clear card estimates stranded by a scale change (e.g. fibonacci "8" after
+		// a switch to t-shirt, or every estimate when switching to 'none'). Each
+		// cleared card gets a change row so delta-sync/realtime clients patch their
+		// cache; the single board push below (notify with push=true) covers the
+		// whole batch, so these are recorded WITHOUT their own push.
+		if ($scaleChangedTo !== null) {
+			$staleIds = [];
+			foreach ($this->cardMapper->findEstimatedCards($id) as $row) {
+				if (!EstimateScale::allows($scaleChangedTo, $row['estimate'])) {
+					$staleIds[] = $row['id'];
+				}
+			}
+			if ($staleIds !== []) {
+				$this->cardMapper->clearEstimatesByIds($staleIds);
+				foreach ($staleIds as $cardId) {
+					$this->changeNotifier->recordChange(
+						$id,
+						Change::ENTITY_CARD,
+						$cardId,
+						Change::ACTION_UPDATE,
+						$uid,
+						Change::VERB_UPDATED
+					);
+				}
+			}
+		}
 
 		$this->changeNotifier->notify(
 			$id,

@@ -18,6 +18,11 @@
  *   - types:       Set<string>  → OR within (built-in card type: bug/feature/
  *                                 task/chore). '' (none) is expressed by leaving
  *                                 the dimension unfiltered (#3402).
+ *   - estimates:   Set<string>  → OR within (raw scale token), plus the sentinel
+ *                                 '__none__' which matches cards with NO estimate.
+ *                                 Tokens are board-scale-dependent, so they are not
+ *                                 validated here — a stale token simply matches
+ *                                 nothing.
  *   - due:         string|null  → one of 'overdue' | 'week' | 'none' | null.
  *   - done:        string|null  → 'done' | 'open' | null (tri-state).
  *   - waiting:     string|null  → 'waiting' | 'not_waiting' | null (tri-state)
@@ -37,6 +42,9 @@ import { reactive, computed } from 'vue'
 
 /** Sentinel assignee id meaning "no assignee". */
 export const UNASSIGNED = '__none__'
+
+/** Sentinel estimate token meaning "no estimate". */
+export const UNESTIMATED = '__none__'
 
 /** Built-in card types selectable as a filter facet (#3402). */
 export const FILTERABLE_TYPES = ['bug', 'feature', 'task', 'chore']
@@ -73,6 +81,7 @@ export function createFilterState() {
 		assignees: new Set(),
 		priorities: new Set(),
 		types: new Set(),
+		estimates: new Set(),
 		due: null,
 		done: null,
 		waiting: null,
@@ -91,6 +100,7 @@ export function serializeFilter(s) {
 	if (s.assignees.size) out.assignees = [...s.assignees].sort()
 	if (s.priorities.size) out.priorities = [...s.priorities].sort((a, b) => a - b)
 	if (s.types.size) out.types = [...s.types].sort()
+	if (s.estimates.size) out.estimates = [...s.estimates].sort()
 	if (s.due) out.due = s.due
 	if (s.done) out.done = s.done
 	if (s.waiting) out.waiting = s.waiting
@@ -109,6 +119,7 @@ export function applyFilter(state, obj) {
 	state.assignees.clear()
 	state.priorities.clear()
 	state.types.clear()
+	state.estimates.clear()
 	state.due = null
 	state.done = null
 	state.waiting = null
@@ -135,6 +146,14 @@ export function applyFilter(state, obj) {
 			if (FILTERABLE_TYPES.includes(tp)) state.types.add(tp)
 		}
 	}
+	if (Array.isArray(obj.estimates)) {
+		// Tokens are board-scale-dependent (validated against the live scale by
+		// the UI, not here); accept any non-empty string, incl. the UNESTIMATED
+		// sentinel. A stale token just matches nothing.
+		for (const tok of obj.estimates) {
+			if (typeof tok === 'string' && tok) state.estimates.add(tok)
+		}
+	}
 	if (DUE_OPTIONS.some((o) => o.value === obj.due)) state.due = obj.due
 	if (DONE_OPTIONS.some((o) => o.value === obj.done)) state.done = obj.done
 	if (WAITING_OPTIONS.some((o) => o.value === obj.waiting)) state.waiting = obj.waiting
@@ -155,6 +174,7 @@ export function filterToQuery(ser) {
 	if (ser.assignees?.length) q.fa = ser.assignees.join(',')
 	if (ser.priorities?.length) q.fp = ser.priorities.join(',')
 	if (ser.types?.length) q.ft = ser.types.join(',')
+	if (ser.estimates?.length) q.fe = ser.estimates.join(',')
 	if (ser.due) q.fd = ser.due
 	if (ser.done) q.fs = ser.done
 	if (ser.waiting) q.fw = ser.waiting
@@ -175,6 +195,7 @@ export function queryToFilter(query) {
 	if (query.fa != null) out.assignees = csv(query.fa)
 	if (query.fp != null) out.priorities = csv(query.fp)
 	if (query.ft != null) out.types = csv(query.ft)
+	if (query.fe != null) out.estimates = csv(query.fe)
 	if (query.fd != null) out.due = String(first(query.fd))
 	if (query.fs != null) out.done = String(first(query.fs))
 	if (query.fw != null) out.waiting = String(first(query.fw))
@@ -190,6 +211,7 @@ export function filterIsEmpty(ser) {
 		&& !ser.assignees?.length
 		&& !ser.priorities?.length
 		&& !ser.types?.length
+		&& !ser.estimates?.length
 		&& !ser.due
 		&& !ser.done
 		&& !ser.waiting
@@ -210,6 +232,7 @@ export function makePredicate(s, now = Date.now()) {
 	const hasAssignees = s.assignees.size > 0
 	const hasPriorities = s.priorities.size > 0
 	const hasTypes = s.types.size > 0
+	const hasEstimates = s.estimates.size > 0
 	const due = s.due
 	const done = s.done
 	const waiting = s.waiting
@@ -241,6 +264,15 @@ export function makePredicate(s, now = Date.now()) {
 		// A typeless card ('') never matches a type facet.
 		if (hasTypes) {
 			if (!s.types.has(card.type ?? '')) return false
+		}
+		// Estimates (OR within): match the card's raw token, or the UNESTIMATED
+		// sentinel for cards with no estimate. An off-scale legacy token still
+		// matches if explicitly selected.
+		if (hasEstimates) {
+			const est = card.estimate ?? ''
+			const matchesToken = est !== '' && s.estimates.has(est)
+			const matchesNone = est === '' && s.estimates.has(UNESTIMATED)
+			if (!matchesToken && !matchesNone) return false
 		}
 		// Due (single-select): overdue / this-week / no-due-date.
 		if (due) {
@@ -281,6 +313,7 @@ export function useFilterCount(s) {
 		+ s.assignees.size
 		+ s.priorities.size
 		+ s.types.size
+		+ s.estimates.size
 		+ (s.due ? 1 : 0)
 		+ (s.done ? 1 : 0)
 		+ (s.waiting ? 1 : 0),

@@ -168,6 +168,81 @@ class BoardServiceTest extends TestCase {
 		$this->service->update(1, null, null, null, 'alice', 'made-up-scale');
 	}
 
+	public function testUpdateClearsEstimatesStrandedByScaleChange(): void {
+		$board = $this->board();
+		$board->setEstimateScale('fibonacci');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+
+		// fibonacci -> tshirt: '8' and '2' no longer fit (cleared); 'M' does (kept).
+		$this->cardMapper->expects(self::once())
+			->method('findEstimatedCards')
+			->with(1)
+			->willReturn([
+				['id' => 10, 'estimate' => '8'],
+				['id' => 11, 'estimate' => 'M'],
+				['id' => 12, 'estimate' => '2'],
+			]);
+		$this->cardMapper->expects(self::once())
+			->method('clearEstimatesByIds')
+			->with([10, 12]);
+
+		// One card change row per cleared card, plus the single board change row.
+		$clearedIds = [];
+		$this->changeNotifier->method('recordChange')
+			->willReturnCallback(function (int $boardId, int $type, int $cardId, int $action, ?string $actor, ?int $verb = null) use (&$clearedIds): Change {
+				self::assertSame(1, $boardId);
+				self::assertSame(Change::ENTITY_CARD, $type);
+				self::assertSame(Change::ACTION_UPDATE, $action);
+				self::assertSame('alice', $actor);
+				self::assertSame(Change::VERB_UPDATED, $verb);
+				$clearedIds[] = $cardId;
+				return new Change();
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_BOARD, 1, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', 'tshirt');
+		self::assertSame('tshirt', $updated->getEstimateScale());
+		self::assertSame([10, 12], $clearedIds);
+	}
+
+	public function testUpdateToNoneScaleClearsEveryEstimate(): void {
+		$board = $this->board();
+		$board->setEstimateScale('hours');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->cardMapper->method('findEstimatedCards')->with(1)->willReturn([
+			['id' => 7, 'estimate' => '4'],
+			['id' => 8, 'estimate' => '16'],
+		]);
+		// 'none' allows nothing, so every estimated card is cleared.
+		$this->cardMapper->expects(self::once())
+			->method('clearEstimatesByIds')
+			->with([7, 8]);
+
+		$this->service->update(1, null, null, null, 'alice', 'none');
+	}
+
+	public function testUpdateWithUnchangedScaleDoesNotSweepEstimates(): void {
+		$board = $this->board();
+		$board->setEstimateScale('tshirt');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Re-setting the SAME scale is not a transition: no card sweep at all.
+		$this->cardMapper->expects(self::never())->method('findEstimatedCards');
+		$this->cardMapper->expects(self::never())->method('clearEstimatesByIds');
+
+		$this->service->update(1, null, null, null, 'alice', 'tshirt');
+	}
+
 	public function testUpdateNormalizesPrefix(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);

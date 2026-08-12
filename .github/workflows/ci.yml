@@ -167,13 +167,14 @@ jobs:
 
   e2e:
     runs-on: kanso-runners
-    # Boots a full Nextcloud + runs ~170 serial tests (workers:1, retries:1).
+    # Boots a full Nextcloud + runs the serial spec suite (workers:1, retries:1).
     # The self-hosted runner is ~4-5x slower than a dev box (~28s/test observed),
-    # so the serial suite needs ~85 min of test time + ~8 min setup. Cap at 120
-    # to leave comfortable margin (still bounds a hung stack under the 6h default).
-    # If this ever needs to be faster, shard the specs across parallel jobs
-    # rather than raising per-Nextcloud worker count (specs share one instance).
-    timeout-minutes: 120
+    # and the suite keeps growing, so runs were pushing against the old 120-min
+    # cap. Raised to 180 to restore comfortable margin (still bounds a hung stack
+    # well under the 6h default). If this ever needs to be faster, shard the specs
+    # across parallel jobs rather than raising the per-Nextcloud worker count
+    # (specs share one instance).
+    timeout-minutes: 180
     env:
       # Realtime push isn't needed for the UI specs (they poll); skip it so a
       # flaky appstore release can't fail the boot.

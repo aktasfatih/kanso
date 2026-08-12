@@ -64,6 +64,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:model-value="state.types.has(tp.value)"
 				@update:model-value="toggleSet('types', tp.value)">{{ t('kanso', tp.label) }}</NcActionCheckbox>
 
+			<!-- Estimate (OR within) - scale tokens + the Unestimated sentinel.
+			     Only shown when the board has an estimation scale set. -->
+			<template v-if="estimateTokens.length">
+				<NcActionCaption :name="t('kanso', 'Estimate')" />
+				<NcActionCheckbox
+					:model-value="state.estimates.has(UNESTIMATED)"
+					@update:model-value="toggleSet('estimates', UNESTIMATED)">{{ t('kanso', 'Unestimated') }}</NcActionCheckbox>
+				<NcActionCheckbox
+					v-for="token in estimateTokens"
+					:key="'e-' + token"
+					:model-value="state.estimates.has(token)"
+					@update:model-value="toggleSet('estimates', token)">{{ token }}</NcActionCheckbox>
+			</template>
+
 			<!-- Due (single-select radio; a re-click of the active one clears it) -->
 			<NcActionCaption :name="t('kanso', 'Due date')" />
 			<NcActionRadio
@@ -116,6 +130,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<BookmarkIcon v-if="activeSavedName" :size="20" />
 				<BookmarkOutlineIcon v-else :size="20" />
 			</template>
+
+			<!-- Default view: always present so there's a one-click way back to the
+			     unfiltered board — both out of a saved view and out of any ad-hoc
+			     filter. Highlighted when no filter is active (i.e. we ARE default). -->
+			<NcActionCaption :name="t('kanso', 'Views')" />
+			<NcActionButton
+				class="board-filter-bar__saved-item"
+				:class="{ 'board-filter-bar__saved-item--active': !activeSavedName && count === 0 }"
+				@click="clearAll">
+				<template #icon>
+					<CheckIcon v-if="!activeSavedName && count === 0" :size="20" />
+					<FilterVariantRemoveIcon v-else :size="20" />
+				</template>
+				{{ t('kanso', 'Default (no filter)') }}
+			</NcActionButton>
 
 			<template v-if="savedFilters.length">
 				<NcActionCaption :name="t('kanso', 'Saved filters')" />
@@ -181,8 +210,10 @@ import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { CARD_TYPES } from '../composables/useCardType.js'
+import { scaleTokens } from '../services/estimateScales.js'
 import {
 	UNASSIGNED,
+	UNESTIMATED,
 	DUE_OPTIONS,
 	DONE_OPTIONS,
 	WAITING_OPTIONS,
@@ -200,6 +231,8 @@ const props = defineProps({
 	savedFilters: { type: Array, default: () => [] },
 	/** Name of the saved view the current filter equals, or '' if none. */
 	activeSavedName: { type: String, default: '' },
+	/** The board's estimation scale key (e.g. 'fibonacci'); 'none' hides the facet. */
+	estimateScale: { type: String, default: 'none' },
 })
 
 const emit = defineEmits(['save', 'apply-saved', 'delete-saved'])
@@ -212,6 +245,9 @@ const priorityLevels = computed(() => PRIORITY_LEVELS.filter((l) => l.value > 0)
 // Built-in card types facet (#3402). "None" is expressed by leaving the type
 // dimension unfiltered - no explicit "None" checkbox (mirrors the priority facet).
 const cardTypes = CARD_TYPES
+
+// Estimate facet tokens for the board's scale (empty ⇒ facet hidden).
+const estimateTokens = computed(() => scaleTokens(props.estimateScale))
 
 const count = useFilterCount(props.state)
 
@@ -235,6 +271,7 @@ function clearAll() {
 	props.state.assignees.clear()
 	props.state.priorities.clear()
 	props.state.types.clear()
+	props.state.estimates.clear()
 	props.state.due = null
 	props.state.done = null
 	props.state.waiting = null

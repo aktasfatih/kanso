@@ -151,4 +151,25 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 		await expect(page.locator('.card-tile__title', { hasText: 'Overdue Only Card' })).toHaveCount(0)
 		await expect(page.locator('.card-tile__title', { hasText: 'Plain Card' })).toHaveCount(0)
 	})
+
+	test('the "Default (no filter)" view exits a saved view back to unfiltered', async ({ page }) => {
+		await ncLogin(page)
+		// Land on the board with the saved view active straight from the URL.
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}?fl=${state.labelId}&fd=overdue`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		// Filtered: only the Match Card is shown.
+		await expect(page.locator('.card-tile__title', { hasText: 'Match Card' })).toHaveCount(1)
+		await expect(page.locator('.card-tile__title', { hasText: 'Plain Card' })).toHaveCount(0)
+
+		// Open the Saved menu and pick "Default (no filter)".
+		await page.locator('.board-filter-bar__saved button').first().click()
+		await page.locator('.action-button__text', { hasText: 'Default (no filter)' }).click()
+		await page.keyboard.press('Escape')
+
+		// Back to unfiltered: every card returns and the URL filter params are gone.
+		await expect(page.locator('.card-tile__title', { hasText: 'Plain Card' })).toHaveCount(1)
+		await expect(page.locator('.card-tile__title', { hasText: 'Overdue Only Card' })).toHaveCount(1)
+		await expect.poll(() => page.url()).not.toContain('fl=')
+		expect(page.url()).not.toContain('fd=')
+	})
 })

@@ -1030,6 +1030,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</label>
 						<select
 							:id="`estimate-scale-${boardId}`"
+							:key="`estimate-scale-${scaleSelectKey}`"
 							class="workflow__select"
 							:disabled="!canManage || estimateScaleSaving"
 							:value="currentEstimateScale"
@@ -2040,6 +2041,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
+import { showConfirmation } from '@nextcloud/dialogs'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -2078,7 +2080,7 @@ import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
-import { getScaleOptions } from '../services/estimateScales.js'
+import { getScaleOptions, scaleTokens } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
@@ -2574,14 +2576,56 @@ const currentEstimateScale = computed(
 
 const estimateScaleSaving = ref(false)
 const estimateScaleError = ref('')
+// Bumping this remounts the native <select> so a cancelled change snaps its
+// displayed option back to the persisted scale (a one-way :value bind alone
+// won't reset the DOM when the reactive value is unchanged).
+const scaleSelectKey = ref(0)
+
+/**
+ * How many live cards carry an estimate that the target scale would reject
+ * (and therefore get cleared). Reads the board's card summaries already in
+ * props — no extra request. Switching to 'none' rejects every estimate.
+ * @param {string} newScale
+ * @return {number}
+ */
+function countOffScaleEstimates(newScale) {
+	const allowed = new Set(scaleTokens(newScale))
+	return props.cards.filter(
+		(c) => c && !c.archived && c.estimate && !allowed.has(c.estimate),
+	).length
+}
 
 async function onEstimateScaleChange(newScale) {
 	estimateScaleError.value = ''
+	if (newScale === currentEstimateScale.value) return
+
+	// Warn before a scale change that would strand existing estimates: the
+	// backend clears them, so make the data loss explicit and reversible.
+	const affected = countOffScaleEstimates(newScale)
+	if (affected > 0) {
+		const ok = await showConfirmation({
+			name: t('kanso', 'Change estimation scale?'),
+			text: t(
+				'kanso',
+				'{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.',
+				{ count: affected },
+			),
+			labelConfirm: t('kanso', 'Change and clear'),
+			labelReject: t('kanso', 'Cancel'),
+			severity: 'warning',
+		})
+		if (!ok) {
+			scaleSelectKey.value++ // revert the <select> to the persisted scale
+			return
+		}
+	}
+
 	estimateScaleSaving.value = true
 	try {
 		await updateBoard.mutateAsync({ estimateScale: newScale })
 	} catch (err) {
 		estimateScaleError.value = err?.response?.data?.error || t('kanso', 'Failed to update estimation scale.')
+		scaleSelectKey.value++ // a failed save shouldn't leave the wrong option shown
 	} finally {
 		estimateScaleSaving.value = false
 	}

@@ -43,21 +43,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<ViewColumnIcon v-else :size="20" />
 				</template>
 				<NcActionRadio
-					:model-value="viewMode === 'board'"
+					:model-value="viewMode"
+					value="board"
 					name="kanso-viewmode"
-					@change="setViewMode('board')">
+					@update:model-value="setViewMode">
 					{{ t('kanso', 'Board') }}
 				</NcActionRadio>
 				<NcActionRadio
-					:model-value="viewMode === 'list'"
+					:model-value="viewMode"
+					value="list"
 					name="kanso-viewmode"
-					@change="setViewMode('list')">
+					@update:model-value="setViewMode">
 					{{ t('kanso', 'List') }}
 				</NcActionRadio>
 				<NcActionRadio
-					:model-value="viewMode === 'timeline'"
+					:model-value="viewMode"
+					value="timeline"
 					name="kanso-viewmode"
-					@change="setViewMode('timeline')">
+					@update:model-value="setViewMode">
 					{{ t('kanso', 'Timeline') }}
 				</NcActionRadio>
 			</NcActions>
@@ -66,22 +69,45 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<NcActions
 				v-if="boardData"
 				class="board-view__sort-menu"
-				:menu-name="t('kanso', 'Sort: {mode}', { mode: sortModeLabel })">
+				:menu-name="t('kanso', 'Sort: {mode}', { mode: sortModeMenuName })">
 				<template #icon>
 					<SortIcon :size="20" />
 				</template>
-				<NcActionRadio :model-value="sortMode === 'manual'" name="kanso-sort" @change="setSortMode('manual')">
+				<!-- Radio GROUP idiom: model-value is the group's current value and each
+				     radio carries its own `value` (checked = model === value). This
+				     reflects the active mode when the menu reopens, and switches on a
+				     single click via @update:model-value (a boolean-per-radio +
+				     @change binding shows nothing selected and needs a double click). -->
+				<NcActionRadio :model-value="sortMode" value="manual" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Manual') }}
 				</NcActionRadio>
-				<NcActionRadio :model-value="sortMode === 'priority'" name="kanso-sort" @change="setSortMode('priority')">
+				<NcActionRadio :model-value="sortMode" value="priority" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Priority') }}
 				</NcActionRadio>
-				<NcActionRadio :model-value="sortMode === 'due'" name="kanso-sort" @change="setSortMode('due')">
+				<NcActionRadio :model-value="sortMode" value="due" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Due date') }}
 				</NcActionRadio>
-				<NcActionRadio :model-value="sortMode === 'title'" name="kanso-sort" @change="setSortMode('title')">
+				<NcActionRadio :model-value="sortMode" value="title" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Title') }}
 				</NcActionRadio>
+				<NcActionRadio
+					v-if="boardData?.board?.estimateScale && boardData.board.estimateScale !== 'none'"
+					:model-value="sortMode"
+					value="estimate"
+					name="kanso-sort"
+					@update:model-value="setSortMode">
+					{{ t('kanso', 'Estimate') }}
+				</NcActionRadio>
+				<!-- Direction toggle — hidden for Manual (which has no direction). -->
+				<template v-if="sortMode !== 'manual'">
+					<NcActionSeparator />
+					<NcActionRadio :model-value="sortDir" value="asc" name="kanso-sort-dir" @update:model-value="setSortDir">
+						{{ t('kanso', 'Ascending') }}
+					</NcActionRadio>
+					<NcActionRadio :model-value="sortDir" value="desc" name="kanso-sort-dir" @update:model-value="setSortDir">
+						{{ t('kanso', 'Descending') }}
+					</NcActionRadio>
+				</template>
 			</NcActions>
 
 			<!-- Compact density toggle (#3415) — a per-user, view-only switch that
@@ -133,6 +159,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:participants="participants.data.value ?? []"
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
+				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
 				@delete-saved="handleDeleteSavedFilter" />
@@ -161,27 +188,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<template v-if="viewMode === 'board'">
 					<NcActionCaption :name="t('kanso', 'Swimlanes')" />
 					<NcActionRadio
-						:model-value="swimlaneMode === 'none'"
+						:model-value="swimlaneMode"
+						value="none"
 						name="kanso-swimlane"
-						@change="setSwimlaneMode('none')">
+						@update:model-value="setSwimlaneMode">
 						{{ t('kanso', 'No swimlanes') }}
 					</NcActionRadio>
 					<NcActionRadio
-						:model-value="swimlaneMode === 'assignee'"
+						:model-value="swimlaneMode"
+						value="assignee"
 						name="kanso-swimlane"
-						@change="setSwimlaneMode('assignee')">
+						@update:model-value="setSwimlaneMode">
 						{{ t('kanso', 'Group by assignee') }}
 					</NcActionRadio>
 					<NcActionRadio
-						:model-value="swimlaneMode === 'label'"
+						:model-value="swimlaneMode"
+						value="label"
 						name="kanso-swimlane"
-						@change="setSwimlaneMode('label')">
+						@update:model-value="setSwimlaneMode">
 						{{ t('kanso', 'Group by label') }}
 					</NcActionRadio>
 					<NcActionRadio
-						:model-value="swimlaneMode === 'priority'"
+						:model-value="swimlaneMode"
+						value="priority"
 						name="kanso-swimlane"
-						@change="setSwimlaneMode('priority')">
+						@update:model-value="setSwimlaneMode">
 						{{ t('kanso', 'Group by priority') }}
 					</NcActionRadio>
 					<NcActionSeparator />
@@ -608,6 +639,7 @@ import { useCardMove } from '../composables/useCardMove.js'
 import { provideAnnouncer } from '../composables/useAnnouncer.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
+import { scaleTokens } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
 import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings } from '../services/api.js'
@@ -652,16 +684,36 @@ const viewModeLabel = computed(() => ({
 // rewrites sort keys; 'manual' is the persisted fractional order. Persisted per
 // board per user. While a non-manual sort is active, card drag-reorder is
 // suppressed (see the card onDrop guard) so manual order is preserved.
-const SORT_MODES = ['manual', 'priority', 'due', 'title']
+const SORT_MODES = ['manual', 'priority', 'due', 'title', 'estimate']
+// Each non-manual mode has a "natural" default direction (the intuitive first
+// orientation): priority urgent-first, due soonest-first, title A→Z, estimate
+// biggest-first. Selecting a mode resets to its natural direction; the user can
+// then flip it. 'manual' has no direction (it IS the persisted fractional order).
+const NATURAL_SORT_DIR = { priority: 'desc', due: 'asc', title: 'asc', estimate: 'desc' }
 const sortMode = ref('manual')
+const sortDir = ref('asc')
 try {
 	const saved = localStorage.getItem(`kanso.sortMode.${props.id}`)
 	if (saved && SORT_MODES.includes(saved)) sortMode.value = saved
 } catch (e) { /* default to manual */ }
+try {
+	const savedDir = localStorage.getItem(`kanso.sortDir.${props.id}`)
+	sortDir.value = (savedDir === 'asc' || savedDir === 'desc')
+		? savedDir
+		: (NATURAL_SORT_DIR[sortMode.value] ?? 'asc')
+} catch (e) { sortDir.value = NATURAL_SORT_DIR[sortMode.value] ?? 'asc' }
 function setSortMode(mode) {
 	sortMode.value = mode
 	try {
 		localStorage.setItem(`kanso.sortMode.${props.id}`, mode)
+	} catch (e) { /* ignore persistence failure */ }
+	// Selecting a mode resets to its natural direction (Title → A→Z, etc.).
+	if (mode !== 'manual') setSortDir(NATURAL_SORT_DIR[mode] ?? 'asc')
+}
+function setSortDir(dir) {
+	sortDir.value = dir
+	try {
+		localStorage.setItem(`kanso.sortDir.${props.id}`, dir)
 	} catch (e) { /* ignore persistence failure */ }
 }
 const sortModeLabel = computed(() => ({
@@ -669,7 +721,13 @@ const sortModeLabel = computed(() => ({
 	priority: t('kanso', 'Priority'),
 	due: t('kanso', 'Due date'),
 	title: t('kanso', 'Title'),
+	estimate: t('kanso', 'Estimate'),
 }[sortMode.value] ?? t('kanso', 'Manual')))
+// Menu-name suffix: an arrow so the active direction is visible on the toolbar
+// without opening the menu. Manual has no direction.
+const sortModeMenuName = computed(() => sortMode.value === 'manual'
+	? sortModeLabel.value
+	: `${sortModeLabel.value} ${sortDir.value === 'asc' ? '↑' : '↓'}`)
 
 // Swimlanes - client-side grouping of the Board view into horizontal lanes by
 // assignee / label / priority (#3406). Purely a view over the board summary
@@ -765,21 +823,55 @@ function expandStack(stackId) {
  */
 function sortCards(cards) {
 	const arr = [...cards]
+	if (sortMode.value === 'manual') return arr.sort(bySortKey)
+
+	// Each mode maps a card to a comparable value, or null when the field is
+	// "missing" (no due date / no estimate). Missing values ALWAYS sort last,
+	// independent of direction; present values flip with sortDir. `compare` is
+	// always ascending — sortDir applies the sign. Ties fall back to the
+	// fractional sort key.
+	let valueOf
+	let compare
 	if (sortMode.value === 'priority') {
-		return arr.sort((a, b) => (Number(b.priority ?? 0) - Number(a.priority ?? 0)) || bySortKey(a, b))
-	}
-	if (sortMode.value === 'due') {
-		const due = (c) => {
-			if (!c.duedate) return Infinity
+		// 0 ("no priority") is a real low value here, not "missing".
+		valueOf = (c) => Number(c.priority ?? 0)
+		compare = (a, b) => a - b
+	} else if (sortMode.value === 'due') {
+		valueOf = (c) => {
+			if (!c.duedate) return null
 			const t2 = new Date(c.duedate).getTime()
-			return Number.isNaN(t2) ? Infinity : t2
+			return Number.isNaN(t2) ? null : t2
 		}
-		return arr.sort((a, b) => (due(a) - due(b)) || bySortKey(a, b))
+		compare = (a, b) => a - b
+	} else if (sortMode.value === 'title') {
+		valueOf = (c) => String(c.title ?? '')
+		compare = (a, b) => a.localeCompare(b)
+	} else if (sortMode.value === 'estimate') {
+		// Rank by ordinal position in the board's scale (NOT string value: "13"
+		// vs "2" mis-orders, and XS…XL has no numeric value). Unestimated /
+		// off-scale tokens are "missing" → sorted last in both directions.
+		const tokens = scaleTokens(boardData.value?.board?.estimateScale ?? 'none')
+		valueOf = (c) => {
+			const i = c.estimate ? tokens.indexOf(c.estimate) : -1
+			return i === -1 ? null : i
+		}
+		compare = (a, b) => a - b
+	} else {
+		return arr.sort(bySortKey)
 	}
-	if (sortMode.value === 'title') {
-		return arr.sort((a, b) => String(a.title).localeCompare(String(b.title)) || bySortKey(a, b))
-	}
-	return arr.sort(bySortKey)
+
+	const mult = sortDir.value === 'asc' ? 1 : -1
+	return arr.sort((a, b) => {
+		const va = valueOf(a)
+		const vb = valueOf(b)
+		const ma = va === null
+		const mb = vb === null
+		if (ma || mb) {
+			if (ma && mb) return bySortKey(a, b)
+			return ma ? 1 : -1 // missing always last, regardless of direction
+		}
+		return (compare(va, vb) * mult) || bySortKey(a, b)
+	})
 }
 const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
 
