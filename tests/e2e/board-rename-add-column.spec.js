@@ -49,32 +49,29 @@ test.describe('Board rename + Add column', () => {
 		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('rename the board inline from the header', async ({ page }) => {
+	test('rename the board from Board settings → General', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		const titleText = page.locator('.board-view__title-text')
-		await expect(titleText).toBeVisible({ timeout: 8_000 })
+		// Open Board settings (in the ⋯ More menu) and the General tab.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		await page.getByRole('tab', { name: /general/i }).click()
 
-		// Esc cancels: open the editor, type, press Escape → title unchanged.
-		await titleText.click()
-		let input = page.locator('.board-view__title-input')
-		await expect(input).toBeFocused({ timeout: 5_000 })
-		await input.fill('Should not stick')
-		await input.press('Escape')
-		await expect(page.locator('.board-view__title-text')).toContainText('Rename me', { timeout: 6_000 })
+		const nameInput = page.locator('#bs-board-name')
+		await expect(nameInput).toBeVisible({ timeout: 8_000 })
 
-		// Enter saves: rename to a new title → header + server both reflect it.
 		const newTitle = 'Renamed board ' + Math.floor(Date.now() / 1000)
-		await page.locator('.board-view__title-text').click()
-		input = page.locator('.board-view__title-input')
-		await input.fill(newTitle)
-		await input.press('Enter')
+		await nameInput.fill(newTitle)
+		await nameInput.press('Enter')
 
-		await expect(page.locator('.board-view__title-text')).toContainText(newTitle, { timeout: 8_000 })
+		// Server reflects the rename…
 		await expect.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
 			.toBe(newTitle)
+		// …and so does the header once the modal is dismissed.
+		await page.keyboard.press('Escape')
+		await expect(page.locator('.board-view__title-text')).toContainText(newTitle, { timeout: 8_000 })
 	})
 
 	test('add a column from the ⋯ More menu; no persistent trailing input remains', async ({ page }) => {
@@ -117,13 +114,17 @@ test.describe('Board rename + Add column', () => {
 		const navLink = (title) => page.locator('.app-navigation .app-navigation-entry-link', { hasText: title })
 		await expect(navLink(before)).toBeVisible({ timeout: 8_000 })
 
-		// Rename from the header.
+		// Rename via Board settings → General.
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		await page.getByRole('tab', { name: /general/i }).click()
 		const after = 'Sidebar rename ' + Math.floor(Date.now() / 1000)
-		await page.locator('.board-view__title-text').click()
-		const input = page.locator('.board-view__title-input')
-		await input.fill(after)
-		await input.press('Enter')
-		await expect(page.locator('.board-view__title-text')).toContainText(after, { timeout: 8_000 })
+		const nameInput = page.locator('#bs-board-name')
+		await expect(nameInput).toBeVisible({ timeout: 8_000 })
+		await nameInput.fill(after)
+		await nameInput.press('Enter')
+		await expect.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+			.toBe(after)
 
 		// The sidebar reflects the new name and drops the old one — no manual reload.
 		await expect(navLink(after)).toBeVisible({ timeout: 8_000 })

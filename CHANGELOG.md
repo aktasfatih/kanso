@@ -30,9 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"Default (no filter)" entry in the Saved-filters menu.** A one-click way back
   to the unfiltered board — an easy exit from an applied saved view or any ad-hoc
   filter.
-- **Rename a board from its header.** Click the board title to edit it inline
-  (Enter saves, Esc cancels); the app-navigation sidebar, command palette and
-  boards grid update live. Editors only.
+- **Rename a board.** Board Settings → General now has a *Board name* field
+  (managers only); saving updates the header, the app-navigation sidebar, the
+  command palette and the boards grid live.
 - **"Add column" moved into the ⋯ More menu.** The board no longer carries a
   persistent "Add stack" text box taking up a column of space; adding a column is
   now an action in the ⋯ menu that reveals a focused composer on demand (a
