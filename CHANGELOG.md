@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sort a board by estimate.** The display-sort menu gains an *Estimate* option
+  (shown on boards that have an estimation scale) — cards order by their position
+  in the board's scale (so `13 > 8 > … > 2` and `XL > … > XS`, not string order),
+  with unestimated cards last. View-only, per-user, like the other sorts.
+- **Ascending / descending sort direction.** Every sort (Priority, Due date,
+  Title, Estimate) now has an Ascending/Descending toggle in the sort menu, with a
+  ↑/↓ indicator on the toolbar. Selecting a sort starts in its natural direction
+  (urgent-first, soonest-first, A→Z, biggest-first); missing values (no due date /
+  no estimate) always sort last regardless of direction. Persisted per user.
+- **Filter a board by estimate.** The filter bar gains an *Estimate* facet: pick
+  one or more scale tokens, or *Unestimated*, to narrow the board. Combines with
+  the other filter dimensions and round-trips through the shareable URL and saved
+  views.
+- **"Default (no filter)" entry in the Saved-filters menu.** A one-click way back
+  to the unfiltered board — an easy exit from an applied saved view or any ad-hoc
+  filter.
+
 ### Changed
 
 - **Importers no longer cap how many cards you can bring in.** The CSV /
@@ -24,6 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sort / view / swimlane menus now show the active option and switch on one
+  click.** The radio menus (Sort, board view mode, Swimlanes) previously rendered
+  nothing as selected when reopened and needed a double click to change — they now
+  highlight the current choice and switch with a single click.
+- **Changing a board's estimation scale no longer strands card estimates.**
+  Switching scales (or turning estimation off) now clears any card estimate that
+  doesn't fit the new scale — previously an off-scale value (e.g. a Fibonacci `8`
+  after a switch to T-shirt) lingered on the card and could neither be re-selected
+  nor cleared. The board settings dialog warns how many cards are affected and
+  asks to confirm before clearing.
 - **My Work pages stay current without a manual reload.** My Tasks, My Reviews
   and Inbox now refresh when you change something (e.g. assign yourself a card),
   when you navigate to them, and on a live poll while the page is open —
@@ -41,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cap sat there. Imported cards now get a single bounded, evenly-spaced key block
   (new `SortKeyService::appendSequence`), so a block of any realistic size stays
   well within the column and preserves file order.
+
 ## [0.9.35] - 2026-08-09
 
 Consolidates the 2026-08-09 sprint. Versions 0.9.32–0.9.34 were internal

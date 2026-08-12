@@ -1025,6 +1025,55 @@ class CardMapper extends QBMapper {
 		return $rows;
 	}
 
+	/**
+	 * Every non-deleted card on a board that carries an estimate, as (id, token)
+	 * pairs. Used by a board scale change to find estimates that no longer fit the
+	 * new scale so they can be cleared {@see self::clearEstimatesByIds()}. NOT
+	 * viewer-scoped and NOT archived/template-filtered on purpose: a scale change
+	 * is a board-wide data-integrity fix that must reach every stranded token, not
+	 * only the ones the acting manager can currently see.
+	 *
+	 * @return list<array{id: int, estimate: string}>
+	 * @throws Exception
+	 */
+	public function findEstimatedCards(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'estimate')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNotNull('estimate'));
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = ['id' => (int)$row['id'], 'estimate' => (string)$row['estimate']];
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * Clears (sets NULL) the estimate of the given cards in one UPDATE and bumps
+	 * their last_modified. No-op for an empty id list. The caller records a
+	 * per-card change row for delta-sync/realtime.
+	 *
+	 * @param list<int> $cardIds
+	 * @throws Exception
+	 */
+	public function clearEstimatesByIds(array $cardIds): void {
+		if ($cardIds === []) {
+			return;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('estimate', $qb->createNamedParameter(null))
+			->set('last_modified', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)));
+		$qb->executeStatement();
+	}
+
 	// ── Board-id-set variants (boards-list per-board signal) ──────────────────
 	//
 	// These mirror the single-board aggregates above but group by `board_id` over
