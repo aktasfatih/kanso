@@ -96,7 +96,13 @@ export function useBoard(id) {
 
 	const updateBoard = useMutation({
 		mutationFn: (data) => apiUpdateBoard(typeof id === 'object' ? id.value : id, data),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: boardKey.value }),
+		// Invalidate BOTH the single-board query and the boards list: a board-level
+		// edit (rename, colour, …) must also refresh the app-navigation sidebar,
+		// command palette and boards grid, which all read the ['boards'] list.
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: boardKey.value })
+			queryClient.invalidateQueries({ queryKey: ['boards'] })
+		},
 	})
 
 	return {

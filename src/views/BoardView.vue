@@ -15,12 +15,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 				{{ t('kanso', 'All boards') }}
 			</NcButton>
-			<h1 v-if="boardData" class="board-view__title">
+			<h1 v-if="boardData" class="board-view__title" :class="{ 'board-view__title--editing': editingBoardTitle }">
 				<span
 					v-if="boardData.board.color"
 					class="board-view__color-dot"
 					:style="{ background: boardData.board.color }" />
-				{{ boardData.board.title }}
+				<input
+					v-if="editingBoardTitle"
+					ref="boardTitleInputRef"
+					v-model="boardTitleDraft"
+					class="board-view__title-input"
+					type="text"
+					maxlength="100"
+					:aria-label="t('kanso', 'Board name')"
+					@keydown.enter.prevent="saveBoardTitle"
+					@keydown.esc.prevent="cancelEditBoardTitle"
+					@blur="onBoardTitleBlur">
+				<span
+					v-else
+					class="board-view__title-text"
+					:class="{ 'board-view__title-text--editable': canEditBoard }"
+					:role="canEditBoard ? 'button' : null"
+					:tabindex="canEditBoard ? 0 : null"
+					:title="canEditBoard ? t('kanso', 'Rename board') : null"
+					@click="startEditBoardTitle"
+					@keydown.enter="startEditBoardTitle">{{ boardData.board.title }}</span>
 			</h1>
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
@@ -179,6 +198,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:aria-label="t('kanso', 'More board actions')">
 				<template #icon>
 					<DotsHorizontalIcon :size="20" />
+				</template>
+
+				<!-- Add column — moved off the board (was a persistent trailing input)
+				     into this menu so the board stays uncluttered. Editors only.
+				     Clicking reveals an on-demand composer at the end of the board and
+				     focuses it (a text INPUT here would strip the menu's role=menuitem
+				     semantics, so this stays a plain action button). -->
+				<template v-if="canEditBoard">
+					<NcActionButton
+						class="board-view__add-column-btn"
+						:close-after-click="true"
+						@click="revealAddColumn">
+						<template #icon>
+							<PlusIcon :size="20" />
+						</template>
+						{{ t('kanso', 'Add column') }}
+					</NcActionButton>
+					<NcActionSeparator />
 				</template>
 
 				<!-- Swimlanes - client-side grouping of the Board view into
@@ -389,24 +426,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-toggle-collapsed="toggleStackCollapsed"
 					:compact="isCompact" />
 
-				<!-- Add stack inline input -->
-				<div class="add-stack">
-					<!-- Empty-board onboarding hint (#3413): when the board has no
-					     stacks yet, point the user at this composer. -->
-					<p
-						v-if="sortedStacks.length === 0"
-						class="add-stack__hint"
-						data-test="empty-board-hint">
+				<!-- Column composer (#3413). No longer a PERSISTENT trailing input: it
+				     appears only when revealed from the ⋯ More menu ("Add column"), or
+				     as onboarding on a brand-new empty board so a fresh board isn't a
+				     dead end. Editors only. Esc or an empty blur collapses it again. -->
+				<div
+					v-if="canEditBoard && (showAddColumn || sortedStacks.length === 0)"
+					class="add-stack add-stack--empty">
+					<p v-if="sortedStacks.length === 0" class="add-stack__hint" data-test="empty-board-hint">
 						{{ t('kanso', 'Start by adding a column, e.g. “To do”.') }}
 					</p>
 					<form @submit.prevent="submitNewStack">
 						<input
+							ref="addColumnInputRef"
 							v-model="newStackTitle"
 							class="add-stack__input"
 							type="text"
-							:placeholder="t('kanso', 'Add stack…')"
+							maxlength="100"
+							:placeholder="t('kanso', 'Add column…')"
 							:disabled="createStack.isPending.value"
-							@keydown.enter.prevent="submitNewStack" />
+							@keydown.enter.prevent="submitNewStack"
+							@keydown.esc.prevent="collapseAddColumn"
+							@blur="onAddColumnBlur" />
 						<p v-if="stackError" class="add-stack__error">{{ stackError }}</p>
 					</form>
 				</div>
@@ -580,7 +621,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
-import { showSuccess, showWarning } from '@nextcloud/dialogs'
+import { showSuccess, showWarning, showError } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -590,6 +631,7 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
+import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -873,7 +915,7 @@ function sortCards(cards) {
 		return (compare(va, vb) * mult) || bySortKey(a, b)
 	})
 }
-const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, updateBoard, deleteStack, restoreStack } = useBoard(boardId)
 
 // Status-aware board error copy (#3662). A dead deep-link/notification to a
 // deleted board 404s; a revoked share 403s. Both should read as an explanatory
@@ -943,6 +985,52 @@ const showManageTemplates = ref(false)
 
 /** Whether the current user may EDIT this board (bit 2). Gates template mutations. */
 const canEditBoard = computed(() => ((boardData.value?.permissions ?? 0) & 2) !== 0)
+
+// ── Inline board rename (#header) ─────────────────────────────────────────────
+// Click the board title to edit it in place (Enter saves, Esc cancels, blur
+// saves). Mirrors the column-title editor in StackColumn, including the blur
+// guard that swallows the spurious blur a closing menu / focus-trap can fire.
+const editingBoardTitle = ref(false)
+const boardTitleDraft = ref('')
+const boardTitleInputRef = ref(null)
+const boardTitleEditReady = ref(false)
+
+function startEditBoardTitle() {
+	if (!canEditBoard.value) return
+	boardTitleDraft.value = boardData.value?.board?.title ?? ''
+	editingBoardTitle.value = true
+	boardTitleEditReady.value = false
+	nextTick(() => {
+		boardTitleInputRef.value?.focus()
+		boardTitleInputRef.value?.select()
+		setTimeout(() => { boardTitleEditReady.value = true }, 200)
+	})
+}
+
+function onBoardTitleBlur() {
+	if (!boardTitleEditReady.value) {
+		nextTick(() => boardTitleInputRef.value?.focus())
+		return
+	}
+	saveBoardTitle()
+}
+
+function cancelEditBoardTitle() {
+	boardTitleEditReady.value = true
+	editingBoardTitle.value = false
+}
+
+async function saveBoardTitle() {
+	if (!editingBoardTitle.value) return
+	editingBoardTitle.value = false
+	const next = boardTitleDraft.value.trim()
+	if (next === '' || next === boardData.value?.board?.title) return
+	try {
+		await updateBoard.mutateAsync({ title: next })
+	} catch (err) {
+		showError(err?.response?.data?.error || t('kanso', 'Failed to rename board.'))
+	}
+}
 
 /** First (sorted, non-archived) stack id — hosts a freshly created blank template. */
 const firstStackId = computed(() => sortedStacks.value[0]?.id ?? null)
@@ -1808,6 +1896,38 @@ async function submitNewStack() {
 	}
 }
 
+// On-demand column composer revealed from the ⋯ More menu. Kept off the board by
+// default (was a persistent trailing input); shown when revealed here or when the
+// board is empty (onboarding). Esc / empty-blur collapses it.
+const showAddColumn = ref(false)
+const addColumnInputRef = ref(null)
+
+function revealAddColumn() {
+	stackError.value = ''
+	showAddColumn.value = true
+	nextTick(() => {
+		// Scroll the composer into view (it sits at the far right of the columns row)
+		// and focus it so the user can type immediately.
+		addColumnInputRef.value?.scrollIntoView?.({ inline: 'end', block: 'nearest' })
+		addColumnInputRef.value?.focus()
+	})
+}
+
+function collapseAddColumn() {
+	showAddColumn.value = false
+	newStackTitle.value = ''
+	stackError.value = ''
+}
+
+// Blur collapses the on-demand composer only when it's empty; a non-empty draft
+// stays open (mirrors the card composer) so a stray blur doesn't lose typing. The
+// empty-board onboarding composer never collapses (there's nothing to collapse to).
+function onAddColumnBlur() {
+	if (showAddColumn.value && newStackTitle.value.trim() === '') {
+		showAddColumn.value = false
+	}
+}
+
 async function handleCreateCard(stackId, title, duedate = null, allDay = false) {
 	// Only carry a due date when a natural-date token resolved to one (#3416);
 	// a plain create stays the exact same payload as before (back-compat).
@@ -1984,6 +2104,60 @@ const onBulkDelete = () => runBulkAction('delete', {})
 	border-radius: 50%;
 }
 
+/* Inline-editable board title: the display span reads as clickable when the
+   viewer can edit. The parent h1 already handles nowrap/ellipsis clipping, so the
+   span must NOT set overflow/min-width itself (that collapsed it to ~0 width in
+   the flex header and hid the title). */
+.board-view__title-text {
+	border-radius: 4px;
+}
+
+.board-view__title-text--editable {
+	cursor: text;
+	padding: 2px 4px;
+	margin: -2px -4px;
+}
+
+.board-view__title-text--editable:hover {
+	background: var(--color-background-hover);
+}
+
+/* While editing, the title box overlays the full header width so the input can
+   actually be large. A flex approach can't achieve this: the toolbar packs the
+   header and the search's margin-left:auto eats any slack, leaving the title only
+   a sliver. The toolbar isn't interactive mid-rename, so absolutely positioning
+   the editing title across the header (left = header padding-left, right = padding-
+   right) and letting the input fill it is the reliable way to "cover the space". */
+.board-view__title--editing {
+	position: absolute;
+	left: 52px;
+	right: 20px;
+	top: 6px;
+	bottom: 6px;
+	/* Above the toolbar buttons (each NcActions makes its own stacking context, so
+	   a small z-index isn't enough) — an opaque strip that cleanly covers them. */
+	z-index: 100;
+	background: var(--color-main-background);
+}
+
+.board-view__title-input {
+	flex: 1 1 auto;
+	width: 100%;
+	min-width: 0;
+	font-size: inherit;
+	font-weight: inherit;
+	color: var(--color-main-text);
+	background: var(--color-main-background);
+	border: 2px solid var(--color-primary-element);
+	border-radius: var(--border-radius);
+	padding: 2px 6px;
+	margin: -2px 0;
+}
+
+.board-view__title-input:focus {
+	outline: none;
+}
+
 .board-view__title-skeleton {
 	width: 200px;
 	height: 20px;
@@ -2151,6 +2325,12 @@ const onBulkDelete = () => runBulkAction('delete', {})
 .add-stack {
 	flex-shrink: 0;
 	width: 240px;
+}
+
+/* Empty-board first-column composer: a little breathing room so a fresh board
+   reads as an intentional prompt rather than a stray input. */
+.add-stack--empty {
+	padding-top: 8px;
 }
 
 .add-stack__input {
