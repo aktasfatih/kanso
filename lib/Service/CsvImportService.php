@@ -29,12 +29,18 @@ use OCP\IUserManager;
  *
  * The transactional, all-or-nothing convention mirrors the other importers:
  * every row's card is inserted in ONE DB transaction (any failure rolls the
- * whole import back), the document is byte-capped BEFORE parsing, the row count
- * is capped, and a title too long for the VARCHAR(100) column is truncated
- * rather than failing the import. Unlike the whole-board importers this writes
+ * whole import back), the document is byte-capped BEFORE parsing, and a title
+ * too long for the VARCHAR(100) column is truncated rather than failing the
+ * import. Rows are STREAMED out of the CSV lexer one at a time (never
+ * materialised into one big in-memory array), so peak memory stays proportional
+ * to the document size no matter how many cards it holds; the row count is
+ * capped only as a generous backstop against a pathological upload. Unlike the
+ * whole-board importers this writes
  * into an existing board, so it follows {@see CardService::create}'s conventions
- * for that board: cards APPEND to the stack via {@see SortKeyService::after},
- * each gets a per-board sequence number, an {@see Change::ACTION_CREATE} row is
+ * for that board: cards APPEND to the stack via a single bounded
+ * {@see SortKeyService::appendSequence} block (so a big import never grows the
+ * sort key per card), each gets a per-board sequence number, an
+ * {@see Change::ACTION_CREATE} row is
  * appended to the board's change log, and a single realtime push fires after the
  * commit so the board updates live.
  *
@@ -52,16 +58,19 @@ use OCP\IUserManager;
 class CsvImportService {
 	/**
 	 * Hard ceiling on the accepted CSV size, in bytes, enforced BEFORE parsing to
-	 * bound memory. 5 MiB comfortably fits a large task spreadsheet while stopping
-	 * a pathological upload.
+	 * bound memory. Because rows are streamed (not held all at once) this is the
+	 * dominant memory cost, so it can be generous: 64 MiB fits a very large task
+	 * spreadsheet while still stopping a pathological upload.
 	 */
-	public const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+	public const MAX_DOCUMENT_BYTES = 64 * 1024 * 1024;
 
 	/**
-	 * Hard ceiling on the number of DATA rows (header excluded) turned into cards.
-	 * A file with more rows is rejected up-front rather than silently truncated.
+	 * Backstop on the number of DATA rows (header excluded) turned into cards. The
+	 * point is to import ALL of a real spreadsheet, so this sits far above any
+	 * hand-maintained board; a file past it is rejected up-front (before any DB
+	 * write) rather than silently truncated.
 	 */
-	public const MAX_ROWS = 2000;
+	public const MAX_ROWS = 200000;
 
 	/** Card/label title columns are VARCHAR(100); long values truncate to fit. */
 	private const MAX_TITLE_LENGTH = 100;
@@ -112,30 +121,36 @@ class CsvImportService {
 			throw new InvalidInputException('A title column must be mapped');
 		}
 
-		$rows = $this->parseCsv($rawDocument);
-		if ($hasHeader) {
-			array_shift($rows);
-		}
-		if (count($rows) > self::MAX_ROWS) {
-			throw new InvalidInputException('The CSV has too many rows to import (limit ' . self::MAX_ROWS . ')');
-		}
-
-		// Load + EDIT-gate the target board and stack up-front, before any write,
-		// so a permission denial never leaves a partial import.
-		$board = $this->boardService->find($boardId, $actorUid);
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$stack = $this->stackMapper->find($stackId);
-		if ($stack->getBoardId() !== $boardId) {
-			throw new InvalidInputException('That stack does not belong to the chosen board');
-		}
-
-		$this->db->beginTransaction();
+		// The document is lexed into a temp stream once and read row-by-row from it
+		// (twice: a cheap counting pass, then the insert pass), so no full array of
+		// rows is ever held - peak memory tracks the document, not the card count.
+		$handle = $this->openCsv($rawDocument);
 		try {
-			$result = $this->rebuild($rows, $board, $stack, $mapping, $actorUid);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
+			$dataRows = $this->countDataRows($handle, $hasHeader);
+			if ($dataRows > self::MAX_ROWS) {
+				throw new InvalidInputException('The CSV has too many rows to import (limit ' . self::MAX_ROWS . ')');
+			}
+
+			// Load + EDIT-gate the target board and stack up-front, before any write,
+			// so a permission denial never leaves a partial import.
+			$board = $this->boardService->find($boardId, $actorUid);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$stack = $this->stackMapper->find($stackId);
+			if ($stack->getBoardId() !== $boardId) {
+				throw new InvalidInputException('That stack does not belong to the chosen board');
+			}
+
+			rewind($handle);
+			$this->db->beginTransaction();
+			try {
+				$result = $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			fclose($handle);
 		}
 
 		// Commit succeeded - broadcast the board change exactly once for the whole
@@ -147,11 +162,17 @@ class CsvImportService {
 	}
 
 	/**
-	 * @param list<list<string>> $rows
+	 * Streams the data rows off $handle (skipping the header when present) and
+	 * inserts one card per titled row. Reads a row at a time via {@see readRow} so
+	 * the whole file is never held in memory at once.
+	 *
+	 * @param resource $handle a rewound CSV stream positioned at the first record
 	 * @param array{title: int, description?: ?int, duedate?: ?int, labels?: ?int, assignees?: ?int} $mapping
+	 * @param int $dataRows the number of data rows counted in the pre-pass; sizes
+	 *                      the sort-key block so it never runs short
 	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int}
 	 */
-	private function rebuild(array $rows, Board $board, Stack $stack, array $mapping, string $actorUid): array {
+	private function rebuild($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
 		$boardId = $board->getId();
 		$stackId = $stack->getId();
 		$now = time();
@@ -164,10 +185,14 @@ class CsvImportService {
 		}
 		$labelsCreated = 0;
 
-		// Append after the current tail of the stack; each new card advances the
-		// sort key so the imported block preserves file order at the bottom.
+		// Append after the current tail of the stack. The whole block's sort keys
+		// are laid out in one shot as a bounded, evenly-spaced sequence past the
+		// tail, so the imported cards preserve file order at the bottom WITHOUT the
+		// key length growing per card (chaining after() would overflow a big
+		// import). Keys are handed out in order to the titled rows that survive.
 		$last = $this->cardMapper->findLastInStack($stackId);
-		$cardKey = $last === null ? null : $last->getSortKey();
+		$sortKeys = $this->sortKeyService->appendSequence($dataRows, $last?->getSortKey());
+		$keyIndex = 0;
 
 		$titleIdx = $mapping['title'];
 		$descIdx = $mapping['description'] ?? null;
@@ -175,9 +200,14 @@ class CsvImportService {
 		$labelsIdx = $mapping['labels'] ?? null;
 		$assigneesIdx = $mapping['assignees'] ?? null;
 
+		// The header row (if any) is consumed and discarded before the data loop.
+		if ($hasHeader) {
+			$this->readRow($handle);
+		}
+
 		$cards = 0;
 		$skipped = 0;
-		foreach ($rows as $row) {
+		while (($row = $this->readRow($handle)) !== null) {
 			$title = $this->title($this->cell($row, $titleIdx));
 			if ($title === '') {
 				// A row with no title cannot become a card - skipped, never fatal.
@@ -191,8 +221,8 @@ class CsvImportService {
 			$card->setTitle($title);
 			$description = $descIdx === null ? '' : trim($this->cell($row, $descIdx));
 			$card->setDescription($description !== '' ? $description : null);
-			$cardKey = $cardKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($cardKey);
-			$card->setSortKey($cardKey);
+			$card->setSortKey($sortKeys[$keyIndex]);
+			$keyIndex++;
 			$card->setBoardSeq($this->cardMapper->nextBoardSeq($boardId));
 			$due = $dueIdx === null ? null : $this->toDate($this->cell($row, $dueIdx));
 			$card->setDuedate($due);
@@ -320,15 +350,15 @@ class CsvImportService {
 	// ── parsing / helpers ────────────────────────────────────────────────────────
 
 	/**
-	 * Parses the raw CSV into rows of string cells. Uses PHP's own CSV lexer
-	 * (via a memory stream) so quoted fields, embedded newlines and escaped
-	 * quotes are handled correctly rather than a naive split. A blank line
-	 * produces an empty row that later title-skipping drops.
+	 * Loads the raw CSV into a rewound temp stream ready to be read record by
+	 * record. Using PHP's own CSV lexer (via the stream) means quoted fields,
+	 * embedded newlines and escaped quotes are handled correctly rather than by a
+	 * naive split. The caller is responsible for fclose()-ing the handle.
 	 *
-	 * @return list<list<string>>
-	 * @throws InvalidInputException if the document is not decodable text
+	 * @return resource
+	 * @throws InvalidInputException if the document cannot be buffered
 	 */
-	private function parseCsv(string $raw): array {
+	private function openCsv(string $raw) {
 		// Strip a UTF-8 BOM so the first header cell is not prefixed with it.
 		if (str_starts_with($raw, "\xEF\xBB\xBF")) {
 			$raw = substr($raw, 3);
@@ -339,12 +369,20 @@ class CsvImportService {
 		}
 		fwrite($handle, $raw);
 		rewind($handle);
+		return $handle;
+	}
 
-		$rows = [];
+	/**
+	 * The next CSV record off $handle as normalised string cells, or null at EOF.
+	 * fgetcsv can yield a non-array on a read error (skipped) or a `[null]` row for
+	 * a blank line; both null cells and that blank row are normalised to '' so
+	 * later mapping never hits a null (a blank row later title-skips itself).
+	 *
+	 * @param resource $handle
+	 * @return list<string>|null
+	 */
+	private function readRow($handle): ?array {
 		while (($cells = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
-			// fgetcsv can yield null (on read error) or a `[null]` row for a blank
-			// line; normalise both to string cells so later mapping never hits a
-			// null.
 			if (!is_array($cells)) {
 				continue;
 			}
@@ -352,10 +390,30 @@ class CsvImportService {
 			foreach ($cells as $cell) {
 				$normalised[] = $cell ?? '';
 			}
-			$rows[] = $normalised;
+			return $normalised;
 		}
-		fclose($handle);
-		return $rows;
+		return null;
+	}
+
+	/**
+	 * Counts the data records on $handle (excluding the header when present) by
+	 * streaming through it, then rewinds it for the caller. Holds no rows in
+	 * memory - it exists so an over-limit file is rejected BEFORE any board load
+	 * or DB write, without materialising the document.
+	 *
+	 * @param resource $handle
+	 */
+	private function countDataRows($handle, bool $hasHeader): int {
+		rewind($handle);
+		if ($hasHeader) {
+			$this->readRow($handle);
+		}
+		$count = 0;
+		while ($this->readRow($handle) !== null) {
+			$count++;
+		}
+		rewind($handle);
+		return $count;
 	}
 
 	/**

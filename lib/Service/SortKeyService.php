@@ -117,6 +117,78 @@ class SortKeyService {
 	}
 
 	/**
+	 * Returns $n short, strictly-increasing keys for appending an ordered BLOCK
+	 * at the tail of a list in one shot - e.g. a bulk CSV import. Every key sorts
+	 * after $after (or from the start of the key space when $after is null).
+	 *
+	 * This exists because calling {@see after} once per item does NOT scale: each
+	 * append can grow the key by a character every ~half-alphabet steps, so a few
+	 * thousand sequential appends overflow MAX_KEY_LENGTH mid-batch. Here the keys
+	 * are instead drawn from a FIXED-WIDTH base-36 grid sized to $n (width w with
+	 * 36^w >= 2*(n+1), so ~log36(n) characters with a gap between neighbours for
+	 * later between()-inserts). When $after is given they are anchored above it by
+	 * a single {@see after} prefix that is strictly greater than $after and shares
+	 * no card's key, so every returned key sorts after the existing tail. The
+	 * result stays well under MAX_KEY_LENGTH for any realistic import.
+	 *
+	 * @param int $n how many keys to produce (>= 0)
+	 * @param string|null $after the current tail key to append past, or null for
+	 *                           an empty list
+	 * @return list<string> $n keys, strictly increasing, each > $after
+	 * @throws InvalidInputException if $n is negative or $after is malformed
+	 * @throws OverflowException if a key would exceed MAX_KEY_LENGTH (the target
+	 *                           list's existing keys are already at the wall and
+	 *                           need a rebalance first)
+	 */
+	public function appendSequence(int $n, ?string $after): array {
+		if ($n < 0) {
+			throw new InvalidInputException('appendSequence() requires n >= 0, got ' . $n);
+		}
+		if ($n === 0) {
+			return [];
+		}
+
+		// Widen the grid until it has at least two slots per item, so consecutive
+		// keys leave a gap (a later between() then fits without extending).
+		$slots = self::BASE;
+		$width = 1;
+		while ($slots < ($n + 1) * 2) {
+			$slots *= self::BASE;
+			$width++;
+		}
+
+		// A single bounded prefix strictly greater than the current tail lifts the
+		// whole block above every existing key at once (empty list needs none).
+		$prefix = $after === null ? '' : $this->after($after);
+
+		$keys = [];
+		for ($i = 0; $i < $n; $i++) {
+			$position = intdiv(($i + 1) * ($slots - 1), $n + 1);
+			$key = $this->encodeFixedWidth($position, $width);
+			if ($key[$width - 1] === '0') {
+				// Never end in '0' (blocks before()); the >=2 slot gap guarantees
+				// position + 1 stays below the next item's slot, so order holds.
+				$key = $this->encodeFixedWidth($position + 1, $width);
+			}
+			$keys[] = $this->guardLength($prefix . $key);
+		}
+		return $keys;
+	}
+
+	/**
+	 * $value as an exactly-$width-digit base-36 string (high digits zero-padded).
+	 * Used to lay out the fixed-width grid in {@see appendSequence}.
+	 */
+	private function encodeFixedWidth(int $value, int $width): string {
+		$out = '';
+		for ($i = 0; $i < $width; $i++) {
+			$out = self::ALPHABET[$value % self::BASE] . $out;
+			$value = intdiv($value, self::BASE);
+		}
+		return $out;
+	}
+
+	/**
 	 * Returns a key k with $a < k < $b (byte comparison).
 	 *
 	 * The result is at most one character longer than the longer input.
