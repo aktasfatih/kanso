@@ -30,7 +30,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-if="boardData"
 				ref="searchBoxRef"
 				class="board-view__search"
-				:board-id="props.id" />
+				:board-id="props.id"
+				:compact="isNarrow" />
 
 			<!-- View switch - Board (columns) vs List (table). Persisted per board. -->
 			<NcActions
@@ -176,7 +177,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-if="boardData"
 				v-model:open="moreMenuOpen"
 				class="board-view__more-menu"
-				:menu-name="t('kanso', 'More')"
+				:menu-name="isNarrow ? undefined : t('kanso', 'More')"
 				:aria-label="t('kanso', 'More board actions')">
 				<template #icon>
 					<DotsHorizontalIcon :size="20" />

@@ -80,33 +80,54 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@update:model-value="toggleSet('estimates', token)">{{ token }}</NcActionCheckbox>
 			</template>
 
-			<!-- Due (single-select radio; a re-click of the active one clears it) -->
+			<!-- Due (single-select). Radio GROUP idiom (model-value = the selected
+			     value, each radio carries its own `value`) so the selected indicator
+			     actually renders — a boolean-per-radio binding shows nothing checked.
+			     An explicit "Any" (value '') is the clear. -->
 			<NcActionCaption :name="t('kanso', 'Due date')" />
+			<NcActionRadio
+				:model-value="state.due ?? ''"
+				value=""
+				name="kanso-filter-due"
+				@update:model-value="(v) => setSingleRadio('due', v)">{{ t('kanso', 'Any') }}</NcActionRadio>
 			<NcActionRadio
 				v-for="opt in DUE_OPTIONS"
 				:key="'d-' + opt.value"
-				:model-value="state.due === opt.value"
+				:model-value="state.due ?? ''"
+				:value="opt.value"
 				name="kanso-filter-due"
-				@update:model-value="setSingle('due', opt.value)">{{ t('kanso', opt.label) }}</NcActionRadio>
+				@update:model-value="(v) => setSingleRadio('due', v)">{{ t('kanso', opt.label) }}</NcActionRadio>
 
-			<!-- Done state (tri-state via radios) -->
+			<!-- Done state (single-select + Any) -->
 			<NcActionCaption :name="t('kanso', 'Status')" />
+			<NcActionRadio
+				:model-value="state.done ?? ''"
+				value=""
+				name="kanso-filter-done"
+				@update:model-value="(v) => setSingleRadio('done', v)">{{ t('kanso', 'Any') }}</NcActionRadio>
 			<NcActionRadio
 				v-for="opt in DONE_OPTIONS"
 				:key="'s-' + opt.value"
-				:model-value="state.done === opt.value"
+				:model-value="state.done ?? ''"
+				:value="opt.value"
 				name="kanso-filter-done"
-				@update:model-value="setSingle('done', opt.value)">{{ t('kanso', opt.label) }}</NcActionRadio>
+				@update:model-value="(v) => setSingleRadio('done', v)">{{ t('kanso', opt.label) }}</NcActionRadio>
 
-			<!-- Waiting on client (#3746, tri-state via radios) - reads the derived
-			     waitingOnExternal summary flag, no extra request -->
+			<!-- Waiting on client (#3746) - reads the derived waitingOnExternal
+			     summary flag, no extra request. Single-select + Any. -->
 			<NcActionCaption :name="t('kanso', 'Client status')" />
+			<NcActionRadio
+				:model-value="state.waiting ?? ''"
+				value=""
+				name="kanso-filter-waiting"
+				@update:model-value="(v) => setSingleRadio('waiting', v)">{{ t('kanso', 'Any') }}</NcActionRadio>
 			<NcActionRadio
 				v-for="opt in WAITING_OPTIONS"
 				:key="'w-' + opt.value"
-				:model-value="state.waiting === opt.value"
+				:model-value="state.waiting ?? ''"
+				:value="opt.value"
 				name="kanso-filter-waiting"
-				@update:model-value="setSingle('waiting', opt.value)">{{ t('kanso', opt.label) }}</NcActionRadio>
+				@update:model-value="(v) => setSingleRadio('waiting', v)">{{ t('kanso', opt.label) }}</NcActionRadio>
 
 			<!-- Clear (only when something is active) -->
 			<template v-if="count > 0">
@@ -265,10 +286,10 @@ function toggleSet(dim, value) {
 	else set.add(value)
 }
 
-// Radio dimensions are single-select but re-selecting the active option clears
-// it (tri-state feel): NcActionRadio only emits true on select, so we compare.
-function setSingle(dim, value) {
-	props.state[dim] = props.state[dim] === value ? null : value
+// Single-select radio dimensions (due / done / waiting). The group's value is the
+// selected token, with '' meaning "Any" → stored as null (the empty state).
+function setSingleRadio(dim, value) {
+	props.state[dim] = value || null
 }
 
 function clearAll() {

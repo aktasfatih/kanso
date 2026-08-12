@@ -3,9 +3,12 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="search-box" role="search">
+	<div
+		class="search-box"
+		:class="{ 'search-box--compact': compact, 'search-box--has-term': term.length > 0 }"
+		role="search">
 		<!-- Input row with magnify icon -->
-		<div class="search-box__input-wrap">
+		<div class="search-box__input-wrap" @click="focusInput">
 			<MagnifyIcon class="search-box__magnify" :size="18" aria-hidden="true" />
 			<input
 				ref="inputRef"
@@ -113,6 +116,11 @@ const props = defineProps({
 		type: [String, Number],
 		required: true,
 	},
+	/** Compact (narrow header): collapse to a magnify icon until focused/non-empty. */
+	compact: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 const emit = defineEmits(['open-card'])
@@ -123,6 +131,12 @@ const router = useRouter()
 const term = ref('')
 const activeIndex = ref(-1)
 const inputRef = ref(null)
+
+// Focus the input when the (collapsed) compact box is clicked, so tapping the
+// magnify icon expands it (via :focus-within) and lets you type immediately.
+function focusInput() {
+	inputRef.value?.focus()
+}
 const dropdownRef = ref(null)
 
 // ── Search composable ──────────────────────────────────────────────────────────
@@ -241,6 +255,35 @@ defineExpose({ focus: () => inputRef.value?.focus() })
 .search-box {
 	position: relative;
 	flex-shrink: 0;
+}
+
+/* Compact (narrow header): collapse to just the magnify icon to reclaim space,
+   then expand on focus or while a query is present. Pure CSS — the input stays
+   mounted so focus/typing keeps working; only its box width animates. */
+.search-box--compact {
+	flex-shrink: 1;
+	min-width: 0;
+}
+
+.search-box--compact .search-box__input-wrap {
+	min-width: 0;
+	width: 40px;
+	transition: width 0.15s ease;
+}
+
+.search-box--compact .search-box__input {
+	/* Hide the text field until expanded so a stray click lands on the icon. */
+	opacity: 0;
+}
+
+.search-box--compact:focus-within .search-box__input-wrap,
+.search-box--compact.search-box--has-term .search-box__input-wrap {
+	width: min(240px, 60vw);
+}
+
+.search-box--compact:focus-within .search-box__input,
+.search-box--compact.search-box--has-term .search-box__input {
+	opacity: 1;
 }
 
 .search-box__input-wrap {
