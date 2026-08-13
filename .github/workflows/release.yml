@@ -49,6 +49,40 @@ jobs:
           OCC: ${{ steps.occ.outputs.path }}
         run: bash scripts/build-release.sh
 
+      # Build user-facing release notes from the matching CHANGELOG section
+      # (Keep a Changelog) so the release description is the actual "what
+      # changed", not maintainer packaging notes. GitHub then appends its own
+      # auto-generated "What's Changed" / contributors / full-changelog block.
+      - name: Assemble release notes from CHANGELOG
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes="$RUNNER_TEMP/release-notes.md"
+          section="$(awk -v v="$version" '
+            $0 ~ ("^## \\[" v "\\]") {f=1; next}
+            /^## \[/ {f=0}
+            f {print}
+          ' CHANGELOG.md)"
+          {
+            if [ -n "$section" ]; then
+              printf '%s\n' "$section"
+            else
+              echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+            fi
+            echo
+            echo '## Install'
+            echo
+            echo 'Extract `kanso.tar.gz` into your Nextcloud `custom_apps/` (or `apps/`) directory and enable it:'
+            echo
+            echo '```sh'
+            echo 'tar -xzf kanso.tar.gz -C /path/to/nextcloud/custom_apps'
+            echo 'sudo -u www-data php /path/to/nextcloud/occ app:enable kanso'
+            echo '```'
+            echo
+            echo 'Requires Nextcloud 30–34 on PHP 8.2–8.3.'
+          } > "$notes"
+          echo "path=$notes" >> "$GITHUB_OUTPUT"
+
       - name: Attach tarball to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -56,10 +90,5 @@ jobs:
             build/kanso.tar.gz
             build/kanso.tar.gz.sig.base64
           fail_on_unmatched_files: false
-          body: |
-            Kanso ${{ github.ref_name }}
-
-            Runtime tarball `kanso.tar.gz` for manual install and App Store
-            submission. See `docs/RELEASING.md` for the store-upload steps
-            (the base64 in `kanso.tar.gz.sig.base64` is the detached signature
-            required by apps.nextcloud.com).
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: true
