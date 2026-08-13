@@ -175,7 +175,6 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
 
 		// Exactly ONE img element survives: the same-origin inline-attachment one.
@@ -217,12 +216,10 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
 
 		// Reload to verify persistence
 		await page.reload()
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
 
 		// Strong and link still rendered

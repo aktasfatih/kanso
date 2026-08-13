@@ -118,7 +118,6 @@ test.describe('CardTile compact layout', () => {
 	test('priority badge, checklist badge, and label chip are all visible and on the same row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Meta Row Card' })
@@ -159,7 +158,6 @@ test.describe('CardTile compact layout', () => {
 	test('tile opens card modal on click', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Meta Row Card' })
@@ -178,7 +176,6 @@ test.describe('CardTile compact layout', () => {
 	test('assignee avatars are pushed to the right of the meta row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Meta Row Card' })

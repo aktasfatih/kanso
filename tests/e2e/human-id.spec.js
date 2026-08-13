@@ -100,7 +100,6 @@ test.describe('Human-readable card identifiers', () => {
 	test('the KAN-<n> reference shows on the card tile', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const firstRef = `${state.prefix}-1`
@@ -121,7 +120,6 @@ test.describe('Human-readable card identifiers', () => {
 	test('the reference shows in the card modal header and is copyable', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const firstRef = `${state.prefix}-1`

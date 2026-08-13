@@ -126,7 +126,6 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('Watch button shows unsubscribed state initially', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
@@ -146,7 +145,6 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('clicking Watch subscribes the user and shows count 1', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
@@ -170,7 +168,6 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('Watching state persists after page reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
@@ -186,7 +183,6 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('clicking Watching again unsubscribes and shows count 0', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
@@ -226,7 +222,6 @@ test.describe('Card Subscriptions / Watchers', () => {
 
 		await ncLogin(page)
 		await page.goto(freshUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
@@ -274,7 +269,6 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 	test('no standalone watchers section remains in the modal body', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The old "Add watcher" pill lived in the attribute bar; it must be gone.
@@ -286,7 +280,6 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 	test('caret opens the panel; add + remove a watcher from it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const caret = page.locator('.card-modal__watch-caret')
@@ -321,7 +314,6 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 	test('Escape closes the dropdown before the modal', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const caret = page.locator('.card-modal__watch-caret')

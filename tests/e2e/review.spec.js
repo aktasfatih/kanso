@@ -76,7 +76,6 @@ test.describe('Card review flow', () => {
 	test('modal shows the pending review chip and a verdict prompt', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const chip = page.locator('.card-modal__review-pill--pending')
@@ -93,7 +92,6 @@ test.describe('Card review flow', () => {
 	test('approving flips the review chip to approved', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		await page.locator('.card-modal__verdict').getByRole('button', { name: 'Approve' }).click()
@@ -106,7 +104,6 @@ test.describe('Card review flow', () => {
 	test('board tile shows the review-state chip', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// After the approval above, the tile carries an approved review chip.

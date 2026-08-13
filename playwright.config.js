@@ -29,6 +29,11 @@ export default defineConfig({
 	use: {
 		baseURL: 'http://localhost:8891',
 		screenshot: 'only-on-failure',
+		// Reuse the authenticated session captured in global-setup so specs start
+		// already logged in — their ncLogin() then detects the live session and
+		// returns immediately instead of driving the full UI login form. Removes
+		// ~245 redundant logins and the cold-start login race (top flake source).
+		storageState: 'tests/e2e/.auth/admin.json',
 	},
 	// Exclude the perf spec from the default `npm run test:e2e` run.
 	// It requires a separately seeded 2 001-card board (scripts/seed-board.mjs)

@@ -60,7 +60,6 @@ test.describe('Card cover colour', () => {
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Cover Card' })

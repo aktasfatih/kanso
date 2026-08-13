@@ -50,6 +50,12 @@ async function ncLogin(page, user, pass) {
 }
 
 test.describe('My Work live updates (#3768)', () => {
+	// This spec drives TWO distinct users (tester in the browser, admin via the
+	// API) and logs in explicitly, so it must NOT inherit the shared authenticated
+	// storageState from the config — otherwise every browser context starts as
+	// admin, ncLogin short-circuits, and the tester never actually logs in.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
 	const ts = Date.now()
 	const REVIEW_TITLE = `Live ReviewReq ${ts}`
 	const TASK_TITLE = `Live Assign ${ts}`

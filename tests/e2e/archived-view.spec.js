@@ -55,7 +55,6 @@ test.describe('Archived cards page', () => {
 	test('archived card appears on the routed page and unarchive returns it to the board', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Archive the card via the API, then reload so the board reflects it.

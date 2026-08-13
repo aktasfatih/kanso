@@ -59,7 +59,6 @@ test.describe('Compact multi-review attribute bar', () => {
 	test('3+ reviews render as compact chips on a single row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const pills = page.locator('.card-modal__review-pill')

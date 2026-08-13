@@ -81,7 +81,6 @@ test.describe('Comment reactions (#3550)', () => {
 	test('react to a comment → chip shows count 1 + highlighted; toggle off → chip gone', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The seeded comment should be present.
@@ -112,7 +111,6 @@ test.describe('Comment reactions (#3550)', () => {
 	test('reaction persists across reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()

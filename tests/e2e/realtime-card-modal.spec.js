@@ -75,6 +75,11 @@ async function ncLogin(page, user, pass) {
 }
 
 test.describe('Realtime card modal freshness', () => {
+	// Drives two distinct users (admin + tester) and logs each in explicitly — so
+	// it must NOT inherit the shared authenticated storageState, or every context
+	// would start as admin and ncLogin would no-op.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
 	const state = { boardId: 0, cardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {

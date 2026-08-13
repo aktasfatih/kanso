@@ -121,7 +121,6 @@ test.describe('Trash', () => {
 	test('soft-deleted card appears in the Trash page', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Soft-delete the card via the API (existing DELETE endpoint).

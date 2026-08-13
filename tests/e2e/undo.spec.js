@@ -98,7 +98,6 @@ test.describe('Undo toasts', () => {
 	test('deleting a card shows an Undo toast; clicking Undo restores the card', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the card modal by clicking the card tile.

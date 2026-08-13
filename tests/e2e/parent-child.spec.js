@@ -110,7 +110,6 @@ test.describe('Parent / Child cards', () => {
 	test('add two sub-cards via UI, assert Children section shows 2 items and progress 0/2', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the parent card modal
@@ -161,7 +160,6 @@ test.describe('Parent / Child cards', () => {
 
 		// Open the board and the parent card modal
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
@@ -192,7 +190,6 @@ test.describe('Parent / Child cards', () => {
 	test('reload board and assert parent tile persists child badge 1/2', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Tile badge should show 1/2 after fresh load
@@ -211,7 +208,6 @@ test.describe('Parent / Child cards', () => {
 	test('open a child card from parent modal - child shows its Parent row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open parent modal
@@ -253,7 +249,6 @@ test.describe('Parent / Child cards', () => {
 		expect(undoneChild).toBeTruthy()
 
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the parent card modal

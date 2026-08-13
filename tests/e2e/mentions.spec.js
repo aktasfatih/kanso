@@ -118,7 +118,6 @@ test.describe('@mentions in comments', () => {
 	test('a mention renders as a chip in the comment body', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The comment posted in the first test contains @BOB — it should render as

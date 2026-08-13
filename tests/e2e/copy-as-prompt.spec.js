@@ -175,7 +175,6 @@ test.describe('Copy as prompt', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Open the overflow (⋯) actions menu in the card modal header.

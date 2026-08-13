@@ -131,7 +131,6 @@ test.describe('Checklist', () => {
 	test('add two checklist items via UI, toggle one done, assert progress and persistence', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the card modal by clicking the card tile
@@ -209,7 +208,6 @@ test.describe('Checklist', () => {
 		// URL rather than page.reload() so the check is independent of the
 		// post-Escape route).
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Tile badge should still show 1/2 after reload
@@ -237,7 +235,6 @@ test.describe('Checklist', () => {
 	test('complete all items - badge turns success color, progress bar turns green', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open card modal
@@ -302,7 +299,6 @@ test.describe('Checklist steps', () => {
 	test('assign a step, set an overdue due date, complete it - done_at stamps and my-steps tracks it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Card With Steps' })
