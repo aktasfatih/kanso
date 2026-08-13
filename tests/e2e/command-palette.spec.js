@@ -88,7 +88,6 @@ test.describe('Command Palette', () => {
 	async function goToBoard(page) {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 	}
 

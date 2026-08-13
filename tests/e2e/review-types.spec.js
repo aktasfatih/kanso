@@ -158,7 +158,6 @@ test.describe('Review types', () => {
 	test('type selector appears in the request-review popover', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
 		// Open the request-review popover - the "Request" pill lives in the
@@ -187,7 +186,6 @@ test.describe('Review types', () => {
 		})
 
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
 		// A pending review chip should be present

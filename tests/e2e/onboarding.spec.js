@@ -50,6 +50,11 @@ async function loginAs(page, user, pass) {
 }
 
 test.describe('First-run onboarding (#3413)', () => {
+	// Logs in as a freshly provisioned (non-admin) user on the default page to
+	// exercise the first-run flow, so it must NOT inherit the shared authenticated
+	// storageState — otherwise the page starts as admin and loginAs no-ops.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
 	test.beforeAll(async () => {
 		await provisionUser(UID, PASS)
 	})

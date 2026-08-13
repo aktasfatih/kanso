@@ -143,7 +143,6 @@ test.describe('Custom fields', () => {
 	test('card modal renders the custom fields with their values', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
 		const section = page.locator('[data-test="card-custom-fields"]')
@@ -160,7 +159,6 @@ test.describe('Custom fields', () => {
 	test('editing a text field in the modal persists the new value', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 
 		const input = page.locator(`[data-test="cf-input-${state.fields.text}"]`)

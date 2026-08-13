@@ -96,7 +96,6 @@ test.describe('Card priorities', () => {
 	test('set priority to High via the card modal UI; assert tile shows indicator', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the "High Priority Card" modal
@@ -134,7 +133,6 @@ test.describe('Card priorities', () => {
 	test('set Urgent card priority via UI; assert its tile shows urgent indicator', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the "Urgent Priority Card" modal
@@ -166,7 +164,6 @@ test.describe('Card priorities', () => {
 	test('filter to Urgent only - High card is hidden; clear filter restores it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Both cards should be visible initially
@@ -214,7 +211,6 @@ test.describe('Card priorities', () => {
 	test('priority persists after page reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// After reload the High Priority Card tile should still carry the badge

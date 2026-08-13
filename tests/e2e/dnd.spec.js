@@ -152,7 +152,6 @@ test.describe('Card drag and drop', () => {
 
 		// Reload and verify persistence
 		await page.reload()
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		const s2After = page.locator('.stack-column').nth(1)
@@ -165,7 +164,6 @@ test.describe('Card drag and drop', () => {
 	test('rapid successive drags end in server-consistent order', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// After test 1: A and B are both in S2. S1 is empty.
@@ -222,7 +220,6 @@ test.describe('Card drag and drop', () => {
 
 		// Reload to confirm server persisted both moves
 		await page.reload()
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		const s1After = page.locator('.stack-column').nth(0)
@@ -238,7 +235,6 @@ test.describe('Card drag and drop', () => {
 	test('drag stack S2 header to the left edge of S1 flips column order, persists after reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Starting order: S1, S2
@@ -257,7 +253,6 @@ test.describe('Card drag and drop', () => {
 
 		// Reload and verify persistence
 		await page.reload()
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		const titlesAfter = page.locator('.stack-column__title')

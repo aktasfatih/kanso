@@ -95,7 +95,6 @@ test.describe('Keyboard navigation', () => {
 	test('ArrowDown seeds to first card, navigates down and right', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// ArrowDown with no focus should seed to first card of first stack
@@ -115,7 +114,6 @@ test.describe('Keyboard navigation', () => {
 
 		// ArrowDown at bottom clamps - still second card
 		await page.keyboard.press('ArrowDown')
-		await page.waitForTimeout(200)
 		await expect(secondCard).toBeFocused({ timeout: 3000 })
 
 		// ArrowRight → move to S2, card index clamped to 1
@@ -135,7 +133,6 @@ test.describe('Keyboard navigation', () => {
 	test("'e' opens card modal for the focused card (URL check), Esc closes", async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Seed focus
@@ -167,7 +164,6 @@ test.describe('Keyboard navigation', () => {
 	test("'d' toggles done styling on the focused tile", async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Seed focus to first card S1
@@ -192,7 +188,6 @@ test.describe('Keyboard navigation', () => {
 	test("'n' focuses the composer of the focused card's stack", async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Seed focus to S1
@@ -222,7 +217,6 @@ test.describe('Keyboard navigation', () => {
 	test("'?' opens the shortcuts overlay and Esc closes it", async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// '?' should open the shortcuts overlay
@@ -235,14 +229,12 @@ test.describe('Keyboard navigation', () => {
 
 		// Esc should close it (NcModal native close)
 		await page.keyboard.press('Escape')
-		await page.waitForTimeout(300)
 		await expect(modal).not.toBeVisible({ timeout: 3000 })
 	})
 
 	test('hjkl alias the arrow-key navigation (j/k cards, l/h stacks)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// 'j' with no focus should seed to first card of first stack (like ArrowDown)
@@ -260,7 +252,6 @@ test.describe('Keyboard navigation', () => {
 
 		// 'k' → back to first card in S1 (ArrowUp)
 		await page.keyboard.press('k')
-		await page.waitForTimeout(200)
 		await expect(firstCard).toBeFocused({ timeout: 3000 })
 
 		// 'l' → move to S2 (ArrowRight)
@@ -272,14 +263,12 @@ test.describe('Keyboard navigation', () => {
 
 		// 'h' → back to S1 (ArrowLeft)
 		await page.keyboard.press('h')
-		await page.waitForTimeout(200)
 		await expect(firstCard).toBeFocused({ timeout: 3000 })
 	})
 
 	test('typing h/j/k/l in the composer inserts the letters (guard holds)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Seed focus to S1, then open its composer with 'n'
@@ -294,14 +283,12 @@ test.describe('Keyboard navigation', () => {
 
 		// Typing the vim nav letters must insert them, not navigate
 		await page.keyboard.type('hjkl')
-		await page.waitForTimeout(200)
 		await expect(composer).toHaveValue('hjkl')
 	})
 
 	test('mouse click on tile keeps focusedCardId in sync (tile click syncs keyboard state)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Click on the second card in S2 to open the modal

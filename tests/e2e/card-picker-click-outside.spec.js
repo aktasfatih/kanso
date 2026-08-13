@@ -89,7 +89,6 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 
 	async function openCardModal(page) {
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 		const tile = page.locator('.card-tile').filter({ hasText: 'Picker Outside Card' })
 		await expect(tile).toBeVisible({ timeout: 5000 })

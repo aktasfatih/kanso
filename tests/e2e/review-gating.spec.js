@@ -131,7 +131,6 @@ test.describe('Review-type stage gating', () => {
 		// The QA chip should render distinctly gated in the modal.
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })
 		const gatedChip = page.locator('.card-modal__review-pill--gated')
 		await expect(gatedChip).toBeVisible({ timeout: 8_000 })

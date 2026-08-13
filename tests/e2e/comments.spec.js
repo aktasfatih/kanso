@@ -83,7 +83,6 @@ test.describe('Comments / Discussion', () => {
 	test('post a top-level comment with markdown, assert rendering', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Discussion pane should be visible
@@ -108,7 +107,6 @@ test.describe('Comments / Discussion', () => {
 	test('post a reply under the top-level comment, assert nested rendering', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Wait for the first comment to appear
@@ -140,7 +138,6 @@ test.describe('Comments / Discussion', () => {
 	test('card tile shows commentCount badge after closing modal', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Card With Discussion' })
@@ -156,7 +153,6 @@ test.describe('Comments / Discussion', () => {
 	test('edit the top-level comment and assert "edited" marker appears', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Wait for the top-level comment and its author controls
@@ -184,7 +180,6 @@ test.describe('Comments / Discussion', () => {
 	test('delete top-level comment removes it and its reply from the UI', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Confirm the top-level comment and reply both exist
@@ -205,7 +200,6 @@ test.describe('Comments / Discussion', () => {
 	test('reload confirms deletion is persisted', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// After reload there should be no comments
@@ -222,7 +216,6 @@ test.describe('Comments / Discussion', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Post a comment containing an XSS payload

@@ -50,7 +50,6 @@ test.describe('Description formatting toolbar', () => {
 	test('toolbar wraps the selection in markdown and the preview renders it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Enter description edit via the empty-state placeholder.
@@ -82,7 +81,6 @@ test.describe('Description formatting toolbar', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		await page.locator('.card-modal__desc-placeholder').click()
@@ -107,7 +105,6 @@ test.describe('Description formatting toolbar', () => {
 	test('list button prefixes each selected line', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Prior test saved a description → edit via the pencil/desc view.

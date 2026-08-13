@@ -113,7 +113,6 @@ test.describe('Labels', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Open the label popover (admin owns the board → MANAGE, so the create row shows).

@@ -80,6 +80,11 @@ function occSafe(command) {
 }
 
 test.describe('Board delta sync (#3675)', () => {
+	// Drives two distinct users (admin + tester) and logs each in explicitly — so
+	// it must NOT inherit the shared authenticated storageState, or every context
+	// would start as admin and ncLogin would no-op.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
 	const state = { boardId: 0, stackId: 0, cardId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {

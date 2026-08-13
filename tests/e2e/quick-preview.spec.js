@@ -94,7 +94,6 @@ test.describe('Quick-look preview (Space)', () => {
 	test('hover + Space opens a preview showing title + description; Space closes it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		const firstTile = page.locator('.card-tile').first()
@@ -122,7 +121,6 @@ test.describe('Quick-look preview (Space)', () => {
 	test('keyboard-focused card + Space opens the preview; Escape closes it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Seed keyboard focus to the first card (no mouse hover).
@@ -144,7 +142,6 @@ test.describe('Quick-look preview (Space)', () => {
 	test('Enter from an open preview opens the full card modal', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		await page.keyboard.press('ArrowDown')
@@ -153,8 +150,8 @@ test.describe('Quick-look preview (Space)', () => {
 		await expect(page.locator('.card-preview')).toBeVisible({ timeout: 3000 })
 
 		await page.keyboard.press('Enter')
-		await page.waitForTimeout(400)
-		expect(page.url()).toContain('/card/')
+		// Wait for the route to actually change (auto-waiting; replaces a fixed sleep).
+		await page.waitForURL(/\/card\//, { timeout: 5_000 })
 		// Preview is dismissed when the modal opens.
 		await expect(page.locator('.card-preview')).not.toBeVisible({ timeout: 3000 })
 	})
@@ -162,7 +159,6 @@ test.describe('Quick-look preview (Space)', () => {
 	test('click-away on the backdrop dismisses the preview', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		await page.keyboard.press('ArrowDown')
@@ -183,7 +179,6 @@ test.describe('Quick-look preview (Space)', () => {
 	test('typing space in the composer inserts a space (guard holds, no preview)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		const s1 = page.locator('.stack-column').nth(0)
@@ -193,7 +188,6 @@ test.describe('Quick-look preview (Space)', () => {
 
 		// A title with an embedded space must insert the space, not open a preview.
 		await page.keyboard.type('hello world')
-		await page.waitForTimeout(200)
 		await expect(composer).toHaveValue('hello world')
 		await expect(page.locator('.card-preview')).not.toBeVisible()
 	})
