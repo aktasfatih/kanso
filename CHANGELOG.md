@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.36] - 2026-08-12
+
 ### Added
 
 - **Sort a board by estimate.** The display-sort menu gains an *Estimate* option
@@ -323,8 +325,8 @@ First public release. Targets Nextcloud 30–32 and PHP 8.2+.
 - **Realtime updates** via `notify_push` (High Performance Backend) when
   available, with an automatic light polling fallback everywhere else.
 
-[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.35...HEAD
-[0.9.35]: https://github.com/aktasfatih/kanso/compare/v0.9.31...v0.9.35
+[Unreleased]: https://github.com/aktasfatih/kanso/compare/v0.9.36...HEAD
+[0.9.36]: https://github.com/aktasfatih/kanso/compare/v0.9.31...v0.9.36
 [0.9.31]: https://github.com/aktasfatih/kanso/compare/v0.9.2...v0.9.31
 [0.9.2]: https://github.com/aktasfatih/kanso/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/aktasfatih/kanso/compare/v0.9.0...v0.9.1
