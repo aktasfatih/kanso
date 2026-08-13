@@ -11,6 +11,10 @@ const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
 
 async function ncLogin(page) {
+	// Session is preloaded via storageState (see playwright.config.js) for the
+	// default admin context — skip the UI login round-trip entirely. Specs that
+	// opt out of storageState start with no cookies and fall through to log in.
+	if ((await page.context().cookies()).some((c) => c.name === 'nc_username' || c.name === 'nc_session_id')) return
 	await page.goto(BASE + '/index.php/login')
 	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
 	const userInput = page.locator('#user')
