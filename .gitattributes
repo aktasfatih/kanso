@@ -5,3 +5,10 @@
 # duplicate `### Added/Changed/Fixed` header — trivially tidied when the
 # `[Unreleased]` block is renamed at release time. GitHub honours this on merge.
 CHANGELOG.md merge=union
+
+# The Python MCP server (mcp/) is a SEPARATE artifact shipped inside this repo
+# for convenience; it must never land in the Nextcloud app tarball. The release
+# build (scripts/build-release.sh) already stages only an explicit allowlist, so
+# mcp/ is excluded there regardless — this `export-ignore` additionally keeps it
+# out of any `git archive`-produced tarball.
+mcp/ export-ignore
