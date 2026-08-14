@@ -5,7 +5,7 @@
 Transports:
   - default: stdio (so an MCP client such as Claude Code can spawn it)
   - --http:  streamable-http (host/port from MCP_HOST / MCP_PORT, default
-             127.0.0.1:8001)
+             127.0.0.1:7654)
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def build_server() -> FastMCP:
     """
     config = KansoConfig.from_env()
     host = os.environ.get("MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("MCP_PORT", "8001"))
+    port = int(os.environ.get("MCP_PORT", "7654"))
     mcp = FastMCP("kanso", host=host, port=port)
     client = KansoClient(config)
     register_tools(mcp, client)
@@ -46,7 +46,7 @@ def main() -> None:
         "--http",
         action="store_true",
         help="Run the streamable-http transport instead of stdio "
-        "(host/port from MCP_HOST / MCP_PORT, default 127.0.0.1:8001).",
+        "(host/port from MCP_HOST / MCP_PORT, default 127.0.0.1:7654).",
     )
     parser.add_argument(
         "--version", action="version", version=f"kanso-mcp {__version__}"

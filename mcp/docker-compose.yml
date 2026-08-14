@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Run the Kanso MCP server as a local service:  docker compose up -d
+# Credentials are read from ./.env (copy from .env.sample first).
+services:
+  kanso-mcp:
+    build: .
+    image: kanso-mcp
+    env_file: .env            # NEXTCLOUD_HOST / NEXTCLOUD_USERNAME / NEXTCLOUD_PASSWORD
+    ports:
+      - "127.0.0.1:7654:7654" # local-only; client points at http://127.0.0.1:7654/mcp
+    restart: unless-stopped

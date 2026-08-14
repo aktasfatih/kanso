@@ -7,6 +7,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+try:  # optional: load a server-side .env so credentials never live in a client config
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    load_dotenv = None
+
 
 class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
@@ -41,6 +46,11 @@ class KansoConfig:
 
     @classmethod
     def from_env(cls) -> "KansoConfig":
+        # Load a `.env` from the working directory (or a parent) if present, so
+        # the server can hold its own credentials and MCP clients need none.
+        if load_dotenv is not None:
+            load_dotenv()
+
         host = os.environ.get("NEXTCLOUD_HOST", "").strip()
         username = os.environ.get("NEXTCLOUD_USERNAME", "").strip()
         password = os.environ.get("NEXTCLOUD_PASSWORD", "")

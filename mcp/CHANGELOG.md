@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial Kanso MCP server (Python, FastMCP + httpx + pydantic).
 - stdio transport (default) plus an optional `--http` streamable-http mode
-  (host/port from `MCP_HOST` / `MCP_PORT`, default `127.0.0.1:8001`).
+  (host/port from `MCP_HOST` / `MCP_PORT`, default `127.0.0.1:7654`).
 - HTTP Basic auth with a Nextcloud app password; every request sends the
   `OCS-APIRequest: true` header so Nextcloud treats it as an API call (CSRF-skip).
 - Board tools: `kanso_list_boards`, `kanso_get_board`, `kanso_create_board`,
