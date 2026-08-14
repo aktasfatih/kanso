@@ -90,15 +90,16 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 		await expect(page.locator('.card-tile__title', { hasText: 'Match Card' })).toHaveCount(1)
 		await expect(page.locator('.card-tile__title', { hasText: 'Plain Card' })).toHaveCount(1)
 
-		// ── Apply a label + overdue filter ────────────────────────────────────────
-		// Open the filter dropdown and check the "Backend" label + "Overdue" due.
-		// The NcActionCheckbox input is visually covered by its icon, so click the
-		// label span (which only exists inside the menu — a card's "Backend" chip
-		// is .card-tile__label-chip, so this is unambiguous).
+		// ── Apply a label + overdue filter (progressive drill-in, #3785) ──────────
+		// The Filter popover opens at the ROOT dimension list. Drill into "Labels",
+		// check "Backend", go back, drill into "Due date", pick "Overdue".
 		await page.locator('.board-filter-bar__filter button').first().click()
-		await page.locator('.action-checkbox__text', { hasText: 'Backend' }).click()
-		await page.locator('.action-radio__text', { hasText: 'Overdue' }).click()
-		// Close the menu by pressing Escape so the board is interactable.
+		await page.locator('.board-filter-bar__dim-row[data-dim="labels"]').click()
+		await page.locator('.board-filter-bar__opt-text', { hasText: 'Backend' }).click()
+		await page.locator('.board-filter-bar__back').click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="due"]').click()
+		await page.locator('.board-filter-bar__opt-text', { hasText: 'Overdue' }).click()
+		// Close the popover by pressing Escape so the board is interactable.
 		await page.keyboard.press('Escape')
 
 		// Only the Match Card (label AND overdue) remains.
@@ -112,18 +113,17 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 		await expect.poll(() => page.url()).toContain('fd=overdue')
 		expect(page.url()).toContain(`fl=${state.labelId}`)
 
-		// ── Save it as a named view ───────────────────────────────────────────────
-		// The saved-views menu (and its NcActionInput) is teleported to the body,
-		// so target the input by its placeholder globally.
-		await page.locator('.board-filter-bar__saved button').first().click()
+		// ── Save it as a named view (Saved views now live INSIDE Filter, #3785) ───
+		// The save-as input is an NcTextField in the Filter popover root; it is
+		// teleported to the body, so target it by its placeholder globally.
+		await page.locator('.board-filter-bar__filter button').first().click()
 		const nameInput = page.getByPlaceholder('View name')
 		await nameInput.fill('Backend overdue')
 		await nameInput.press('Enter')
-		// The saved view now appears in the saved menu (reopen it). Scope to the
-		// menu item text — the toggle button also shows the active view's name.
+		// The saved view now appears as a saved-item row (reopen the popover).
 		await page.keyboard.press('Escape')
-		await page.locator('.board-filter-bar__saved button').first().click()
-		await expect(page.locator('.action-button__text', { hasText: 'Backend overdue' })).toBeVisible()
+		await page.locator('.board-filter-bar__filter button').first().click()
+		await expect(page.locator('.board-filter-bar__saved-item', { hasText: 'Backend overdue' })).toBeVisible()
 		await page.keyboard.press('Escape')
 
 		// ── Reload → clear the filter → re-apply the saved view ──────────────────
@@ -133,9 +133,9 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 		// All cards back (filter cleared).
 		await expect(page.locator('.card-tile__title', { hasText: 'Plain Card' })).toHaveCount(1)
 
-		// Apply the saved view.
-		await page.locator('.board-filter-bar__saved button').first().click()
-		await page.locator('.action-button__text', { hasText: 'Backend overdue' }).click()
+		// Apply the saved view (from the Filter popover's Views section).
+		await page.locator('.board-filter-bar__filter button').first().click()
+		await page.locator('.board-filter-bar__saved-item', { hasText: 'Backend overdue' }).click()
 		await page.keyboard.press('Escape')
 		// Filter re-applied: only the Match Card remains.
 		await expect(page.locator('.card-tile__title', { hasText: 'Match Card' })).toHaveCount(1)
@@ -161,9 +161,9 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 		await expect(page.locator('.card-tile__title', { hasText: 'Match Card' })).toHaveCount(1)
 		await expect(page.locator('.card-tile__title', { hasText: 'Plain Card' })).toHaveCount(0)
 
-		// Open the Saved menu and pick "Default (no filter)".
-		await page.locator('.board-filter-bar__saved button').first().click()
-		await page.locator('.action-button__text', { hasText: 'Default (no filter)' }).click()
+		// Open the Filter popover and pick "Default (no filter)" from its Views.
+		await page.locator('.board-filter-bar__filter button').first().click()
+		await page.locator('.board-filter-bar__saved-item', { hasText: 'Default (no filter)' }).click()
 		await page.keyboard.press('Escape')
 
 		// Back to unfiltered: every card returns and the URL filter params are gone.

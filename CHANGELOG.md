@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Progressive filter (toolbar redesign, phase 2).** The board *Filter* control is
+  now a progressive drill-in popover instead of dumping every value at once:
+  the top level lists the dimensions (Labels, Assignees, Priority, Type, Estimate,
+  Due date, Status, Client status) each with an active-value summary and a count
+  badge, and clicking one drills into only that dimension's values with a back
+  arrow. Saved views (apply / save / delete a named view, plus *Default (no filter)*)
+  now live inside the Filter control, so the separate *Saved* header button is gone
+  — the toolbar is now just `[Display] [Filter] [⋯]`. Filtering behaviour, the
+  shareable URL, and saved views are unchanged.
+
 ## [0.9.36] - 2026-08-12
 
 ### Added
@@ -46,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Board toolbar consolidated behind a "Display" control.** How the board is
   arranged — view (Board / List / Timeline), Group by (swimlanes), Sort (+
   direction) and Density — now lives in a single *Display* popover instead of
-  several separate toolbar menus (Linear-style). This declutters the header and
+  several separate toolbar menus. This declutters the header and
   makes it fit narrow / mobile widths without pushing controls off-screen; on a
   narrow header the back, Display and ⋯ buttons go icon-only and the search box
   collapses to a magnifier.

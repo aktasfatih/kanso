@@ -109,8 +109,10 @@ test.describe.serial('Waiting on client (#3746)', () => {
 		await expect(plainTile.locator('.card-tile__waiting')).toHaveCount(0)
 
 		// ── Filter facet: "Waiting on client" hides the non-waiting card ──────
+		// Drill into the "Client status" dimension (#3785) and pick the facet.
 		await page.locator('.board-filter-bar__filter button').first().click()
-		await page.locator('.action-radio__text', { hasText: 'Waiting on client' }).click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="waiting"]').click()
+		await page.locator('.board-filter-bar__opt-text', { hasText: 'Waiting on client' }).click()
 		await page.keyboard.press('Escape')
 		await expect(page.locator('.card-tile__title', { hasText: 'Ball With Client' })).toHaveCount(1)
 		await expect(page.locator('.card-tile__title', { hasText: 'Ball With Us' })).toHaveCount(0)
@@ -120,14 +122,16 @@ test.describe.serial('Waiting on client (#3746)', () => {
 
 		// ...and the mirror facet ("Not waiting") flips the visible set.
 		await page.locator('.board-filter-bar__filter button').first().click()
-		await page.locator('.action-radio__text', { hasText: 'Not waiting' }).click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="waiting"]').click()
+		await page.locator('.board-filter-bar__opt-text', { hasText: 'Not waiting' }).click()
 		await page.keyboard.press('Escape')
 		await expect(page.locator('.card-tile__title', { hasText: 'Ball With Us' })).toHaveCount(1)
 		await expect(page.locator('.card-tile__title', { hasText: 'Ball With Client' })).toHaveCount(0)
 
-		// Clear the filter so the chip-clearing assertions see both cards.
+		// Clear the filter (the root panel's "Clear filters") so the chip-clearing
+		// assertions see both cards.
 		await page.locator('.board-filter-bar__filter button').first().click()
-		await page.locator('.action-button__text', { hasText: 'Clear filters' }).click()
+		await page.locator('.board-filter-bar__clear').click()
 		await page.keyboard.press('Escape')
 		await expect(page.locator('.card-tile__title', { hasText: 'Ball With Client' })).toHaveCount(1)
 

@@ -172,10 +172,11 @@ test.describe('Card types', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
 			.toBeVisible({ timeout: 5000 })
 
-		// Open the filter menu (the filter toggle, not the adjacent saved-views one)
+		// Open the filter popover and drill into the Type dimension (#3785).
 		const filterMenu = page.locator('.board-filter-bar__filter button').first()
 		await expect(filterMenu).toBeVisible({ timeout: 5000 })
 		await filterMenu.click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 
 		// Check the "Bug" type filter
 		const bugFilter = page.locator('.board-filter-bar__type-item--bug')
@@ -191,8 +192,9 @@ test.describe('Card types', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
 			.not.toBeVisible({ timeout: 5000 })
 
-		// Clear the filter by unchecking Bug
+		// Clear the filter by re-opening, drilling into Type, and unchecking Bug
 		await filterMenu.click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 		const bugAgain = page.locator('.board-filter-bar__type-item--bug')
 		await expect(bugAgain).toBeVisible({ timeout: 5000 })
 		await bugAgain.click()

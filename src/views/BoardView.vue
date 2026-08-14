@@ -145,7 +145,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
 				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
-				:compact="isNarrow"
+				:icon-only="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
 				@delete-saved="handleDeleteSavedFilter" />
