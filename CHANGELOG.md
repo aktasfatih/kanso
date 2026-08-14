@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — the toolbar is now just `[Display] [Filter] [⋯]`. Filtering behaviour, the
   shareable URL, and saved views are unchanged.
 
+### Fixed
+
+- **Clearing a Type, Estimate, or Client-status filter now cleans up the shareable
+  URL.** Previously, clearing one of those filters left a stale `ft=`/`fe=`/`fw=`
+  parameter dangling in the address bar (so a copied link still carried the removed
+  filter). Clearing any filter dimension now strips its parameter from the URL.
+
 ## [0.9.36] - 2026-08-12
 
 ### Added
