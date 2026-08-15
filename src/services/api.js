@@ -540,6 +540,23 @@ export const saveSavedFilter = (boardId, name, filter) =>
 export const deleteSavedFilter = (boardId, name) =>
 	axios.delete(url(`/api/boards/${boardId}/saved-filters/${encodeURIComponent(name)}`)).then((r) => r.data)
 
+// Cross-board saved "Views" (#3815) — per-user, board-agnostic named filters in
+// NC user config. A View runs its (client-side) predicate over the readable
+// cross-board card feed; the server stays filter-agnostic.
+export const fetchViews = () =>
+	axios.get(url('/api/views')).then((r) => r.data)
+
+export const saveView = (name, filter) =>
+	axios.put(url('/api/views'), { name, filter }).then((r) => r.data)
+
+export const deleteView = (name) =>
+	axios.delete(url(`/api/views/${encodeURIComponent(name)}`)).then((r) => r.data)
+
+// The readable cross-board card feed a View filters over, plus the label /
+// assignee catalogs for the filter facets. ACL-restricted to the readable set.
+export const getViewCards = () =>
+	axios.get(url('/api/views/cards')).then((r) => r.data)
+
 // Projects (cross-board card collections)
 export const getProjects = () =>
 	axios.get(url('/api/projects')).then((r) => r.data)

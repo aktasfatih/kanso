@@ -150,6 +150,16 @@ return [
 
 		['name' => 'myCards#index', 'url' => '/api/my-cards', 'verb' => 'GET'],
 
+		// Cross-board saved "Views" (#3815). Board-agnostic named filters in
+		// user config (index/create-upsert/destroy), plus `cards` — the readable
+		// cross-board card feed a View runs its client-side predicate over. The
+		// {name} path segment identifies a view for deletion (URL-encoded by the
+		// client).
+		['name' => 'view#index', 'url' => '/api/views', 'verb' => 'GET'],
+		['name' => 'view#create', 'url' => '/api/views', 'verb' => 'PUT'],
+		['name' => 'view#cards', 'url' => '/api/views/cards', 'verb' => 'GET'],
+		['name' => 'view#destroy', 'url' => '/api/views/{name}', 'verb' => 'DELETE'],
+
 		['name' => 'mySteps#index', 'url' => '/api/my-steps', 'verb' => 'GET'],
 
 		['name' => 'review#mine', 'url' => '/api/reviews/mine', 'verb' => 'GET'],

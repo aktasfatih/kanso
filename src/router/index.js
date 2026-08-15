@@ -72,6 +72,16 @@ const routes = [
 		component: () => import('../views/InboxView.vue'),
 	},
 	{
+		// Cross-board saved "Views" (#3815). The route param is the View's unique
+		// NAME (Views are keyed by name in user config); the surface renders a
+		// virtualized cross-board card-summary list filtered by that View's
+		// predicate.
+		path: '/views/:name',
+		name: 'view',
+		component: () => import('../views/ViewsView.vue'),
+		props: true,
+	},
+	{
 		path: '/projects',
 		name: 'projects',
 		component: () => import('../views/ProjectsView.vue'),
