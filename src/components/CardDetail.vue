@@ -370,6 +370,39 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Copy as prompt') }}
 							</NcActionButton>
 							<NcActionSeparator />
+							<NcActionButton
+								:close-after-click="true"
+								@click="scheduleReminder(reminderPresets()[0].at)">
+								<template #icon>
+									<BellOutlineIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Remind me later today') }}
+							</NcActionButton>
+							<NcActionButton
+								:close-after-click="true"
+								@click="scheduleReminder(reminderPresets()[1].at)">
+								<template #icon>
+									<BellOutlineIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Remind me tomorrow') }}
+							</NcActionButton>
+							<NcActionButton
+								:close-after-click="true"
+								@click="scheduleReminder(reminderPresets()[2].at)">
+								<template #icon>
+									<BellOutlineIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Remind me next week') }}
+							</NcActionButton>
+							<NcActionButton
+								:close-after-click="true"
+								@click="openCustomReminder(null)">
+								<template #icon>
+									<BellPlusOutlineIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Remind me at a custom time…') }}
+							</NcActionButton>
+							<NcActionSeparator />
 							<NcActionButton :close-after-click="true" @click="handleArchiveToggle">
 								<template #icon>
 									<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
@@ -388,6 +421,45 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</header>
 				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">{{ actionError }}</span>
 				<span v-if="subscriptionError" class="card-modal__save-error">{{ subscriptionError }}</span>
+				<span v-if="reminderError" class="card-modal__save-error">{{ reminderError }}</span>
+
+				<!-- Personal reminders (#3816): the viewer's OWN pending reminders on
+				     this card, each cancellable. Private per-user. -->
+				<div v-if="myReminders.length > 0" class="card-modal__reminders">
+					<span
+						v-for="reminder in myReminders"
+						:key="reminder.id"
+						class="card-modal__reminder-chip"
+						:title="reminder.commentId ? t('kanso', 'Reminder about a comment') : t('kanso', 'Reminder')">
+						<BellOutlineIcon :size="14" />
+						<span class="card-modal__reminder-time">{{ formatReminderTime(reminder.remindAt) }}</span>
+						<button
+							class="card-modal__reminder-cancel"
+							:title="t('kanso', 'Cancel reminder')"
+							:disabled="cancelReminder.isPending.value"
+							@click="handleCancelReminder(reminder)">
+							<CloseIcon :size="12" />
+						</button>
+					</span>
+				</div>
+
+				<!-- Inline custom date-time picker, shared by the card menu and the
+				     comment "Remind me" action. -->
+				<div v-if="customReminderFor !== undefined" class="card-modal__reminder-custom">
+					<label class="card-modal__reminder-custom-label">
+						{{ customReminderFor ? t('kanso', 'Remind me about this comment at') : t('kanso', 'Remind me at') }}
+					</label>
+					<input
+						v-model="customReminderValue"
+						type="datetime-local"
+						class="card-modal__reminder-custom-input"
+						@keydown.enter.prevent="submitCustomReminder"
+						@keydown.escape.stop="cancelCustomReminder">
+					<NcButton type="primary" :disabled="createReminder.isPending.value || !customReminderValue" @click="submitCustomReminder">
+						{{ t('kanso', 'Set reminder') }}
+					</NcButton>
+					<NcButton @click="cancelCustomReminder">{{ t('kanso', 'Cancel') }}</NcButton>
+				</div>
 
 				<!-- Attribute bar: every card attribute on one scannable row -->
 				<div class="card-modal__attrbar">
@@ -1703,6 +1775,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													@click="openReplyBox(topComment.id)">
 													{{ t('kanso', 'Reply') }}
 												</button>
+												<!-- Personal "remind me" about this comment (#3816). Any
+												     reader can set a private reminder - not gated by canEdit. -->
+												<NcActions v-if="editingCommentId !== topComment.id" :force-menu="true" type="tertiary">
+													<template #icon>
+														<BellOutlineIcon :size="14" />
+													</template>
+													<NcActionButton :close-after-click="true" @click="scheduleReminder(reminderPresets()[0].at, topComment.id)">
+														<template #icon><BellOutlineIcon :size="20" /></template>
+														{{ t('kanso', 'Remind me later today') }}
+													</NcActionButton>
+													<NcActionButton :close-after-click="true" @click="scheduleReminder(reminderPresets()[1].at, topComment.id)">
+														<template #icon><BellOutlineIcon :size="20" /></template>
+														{{ t('kanso', 'Remind me tomorrow') }}
+													</NcActionButton>
+													<NcActionButton :close-after-click="true" @click="scheduleReminder(reminderPresets()[2].at, topComment.id)">
+														<template #icon><BellOutlineIcon :size="20" /></template>
+														{{ t('kanso', 'Remind me next week') }}
+													</NcActionButton>
+													<NcActionButton :close-after-click="true" @click="openCustomReminder(topComment.id)">
+														<template #icon><BellPlusOutlineIcon :size="20" /></template>
+														{{ t('kanso', 'Remind me at a custom time…') }}
+													</NcActionButton>
+												</NcActions>
 												<template v-if="canEdit && currentUserId === topComment.author">
 													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
 														<PencilIcon :size="14" />
@@ -2071,6 +2166,8 @@ import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
+import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
 import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
@@ -2093,6 +2190,7 @@ import { useAssignees } from '../composables/useAssignees.js'
 import { useContacts } from '../composables/useContacts.js'
 import { fetchCardContacts } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
+import { useReminders, reminderPresets } from '../composables/useReminders.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
@@ -2548,6 +2646,82 @@ runContactSearch('')
 onBeforeUnmount(() => {
 	if (contactSearchTimer) clearTimeout(contactSearchTimer)
 })
+
+// ── Personal reminders (#3816) ────────────────────────────────────────────────
+// One-shot "remind me" on this card / a specific comment. Personal per-user: the
+// pending list comes from cardData.myReminders (the viewer's own rows only).
+const { createReminder, cancelReminder } = useReminders()
+const reminderError = ref('')
+// The comment the "Custom date-time…" picker is being opened for (null = the
+// card overflow menu, i.e. a card-level reminder). Undefined = picker closed.
+const customReminderFor = ref(undefined)
+const customReminderValue = ref('')
+
+const myReminders = computed(() => {
+	const list = cardData.value?.myReminders
+	return Array.isArray(list) ? list : []
+})
+
+// datetime-local needs "YYYY-MM-DDTHH:mm" in local time (same shaping as the
+// card due date + step due inputs). Default the custom picker to +1 hour.
+function defaultReminderInputValue() {
+	const d = new Date(Date.now() + 60 * 60 * 1000)
+	const pad = (n) => String(n).padStart(2, '0')
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatReminderTime(tsSeconds) {
+	return new Date(Number(tsSeconds) * 1000).toLocaleString(undefined, {
+		day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+	})
+}
+
+// Schedule a preset reminder (at a unix ts). commentId null = card-level.
+async function scheduleReminder(at, commentId = null) {
+	reminderError.value = ''
+	try {
+		await createReminder.mutateAsync({ cardId: props.cardId, remindAt: at, commentId })
+		showSuccess(t('kanso', 'Reminder set'))
+	} catch (err) {
+		reminderError.value = err?.response?.data?.error || t('kanso', 'Failed to set reminder.')
+		showError(reminderError.value)
+	}
+}
+
+// Open the custom date-time picker for a card-level (commentId null) or
+// comment-scoped reminder.
+function openCustomReminder(commentId = null) {
+	customReminderFor.value = commentId
+	customReminderValue.value = defaultReminderInputValue()
+}
+
+function cancelCustomReminder() {
+	customReminderFor.value = undefined
+	customReminderValue.value = ''
+}
+
+async function submitCustomReminder() {
+	if (!customReminderValue.value) return
+	const at = Math.floor(new Date(customReminderValue.value).getTime() / 1000)
+	if (!Number.isFinite(at) || at <= Math.floor(Date.now() / 1000)) {
+		reminderError.value = t('kanso', 'Pick a time in the future.')
+		showError(reminderError.value)
+		return
+	}
+	const commentId = customReminderFor.value ?? null
+	cancelCustomReminder()
+	await scheduleReminder(at, commentId)
+}
+
+async function handleCancelReminder(reminder) {
+	reminderError.value = ''
+	try {
+		await cancelReminder.mutateAsync({ cardId: props.cardId, reminderId: reminder.id })
+	} catch (err) {
+		reminderError.value = err?.response?.data?.error || t('kanso', 'Failed to cancel reminder.')
+		showError(reminderError.value)
+	}
+}
 
 // ── Reviews ──────────────────────────────────────────────────────────────────
 const { requestReview, withdrawReview, setReviewState } = useReviews(boardId)
@@ -6858,6 +7032,50 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__action-error {
 	padding: 0 24px 8px;
+}
+
+/* ── Personal reminders (#3816) ──────────────────────────────────────────── */
+.card-modal__reminders {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0 24px 8px;
+}
+.card-modal__reminder-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 4px 2px 8px;
+	border-radius: var(--border-radius-pill, 16px);
+	background: var(--color-background-hover);
+	font-size: 0.85em;
+}
+.card-modal__reminder-time { color: var(--color-main-text); }
+.card-modal__reminder-cancel {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	padding: 2px;
+	border-radius: 50%;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__reminder-cancel:hover:not(:disabled) {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+}
+.card-modal__reminder-custom {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 0 24px 8px;
+}
+.card-modal__reminder-custom-label { font-size: 0.9em; color: var(--color-text-maxcontrast); }
+.card-modal__reminder-custom-input {
+	padding: 4px 8px;
 }
 
 /* ── Mobile tab bar (hidden on desktop) ──────────────────────────────────── */

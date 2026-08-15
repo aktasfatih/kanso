@@ -66,6 +66,7 @@ class Notifier implements INotifier {
 			&& $subject !== NotificationService::SUBJECT_BOARD_ACTIVITY
 			&& $subject !== NotificationService::SUBJECT_CARD_DUE
 			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON
+			&& $subject !== NotificationService::SUBJECT_CARD_REMINDER
 			&& $subject !== NotificationService::SUBJECT_STEP_ASSIGNED) {
 			throw new UnknownNotificationException();
 		}
@@ -98,16 +99,30 @@ class Notifier implements INotifier {
 		$actorName = $actor !== null ? $actor->getDisplayName() : $actorUid;
 		$cardTitle = (string)$card->getTitle();
 
-		// The due reminders are actor-less system events - no {actor} placeholder.
+		// The due reminders and the personal "remind me" are actor-less system
+		// events - no {actor} placeholder.
 		if ($subject === NotificationService::SUBJECT_CARD_DUE
-			|| $subject === NotificationService::SUBJECT_CARD_DUE_SOON) {
-			[$plain, $rich] = $subject === NotificationService::SUBJECT_CARD_DUE_SOON
-				? [$l->t('%1$s is due tomorrow', [$cardTitle]), $l->t('{card} is due tomorrow')]
-				: [$l->t('%1$s is due', [$cardTitle]), $l->t('{card} is due')];
+			|| $subject === NotificationService::SUBJECT_CARD_DUE_SOON
+			|| $subject === NotificationService::SUBJECT_CARD_REMINDER) {
+			[$plain, $rich] = match ($subject) {
+				NotificationService::SUBJECT_CARD_DUE_SOON
+					=> [$l->t('%1$s is due tomorrow', [$cardTitle]), $l->t('{card} is due tomorrow')],
+				NotificationService::SUBJECT_CARD_REMINDER
+					=> [$l->t('Reminder: %1$s', [$cardTitle]), $l->t('Reminder: {card}')],
+				default
+				=> [$l->t('%1$s is due', [$cardTitle]), $l->t('{card} is due')],
+			};
+
+			// The personal reminder may point at a specific comment (#3816); the
+			// comment id rides the deep link as a fragment (the SPA scrolls to it
+			// if comment-scroll exists, otherwise the card opens as normal).
+			$commentId = $subject === NotificationService::SUBJECT_CARD_REMINDER
+				? (($params['commentId'] ?? null) !== null ? (int)$params['commentId'] : null)
+				: null;
 
 			$notification
 				->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
-				->setLink($this->cardLink($cardId))
+				->setLink($this->cardLink($cardId, $commentId))
 				->setParsedSubject($plain)
 				->setRichSubject(
 					$rich,
@@ -152,8 +167,17 @@ class Notifier implements INotifier {
 	 * route would lose its fragment on the login round-trip - exactly the
 	 * guests/externals these notification links are for. The $boardId parameter
 	 * is intentionally gone: the server route resolves the board itself.
+	 *
+	 * An optional $commentId is carried as a `#comment-<id>` fragment (#3816): a
+	 * personal reminder set from a comment deep-links to the card and, where the
+	 * SPA supports scroll-to-comment, to that comment. Card-level reminders (and
+	 * every other notification) pass none.
 	 */
-	private function cardLink(int $cardId): string {
-		return $this->urlGenerator->linkToRouteAbsolute('kanso.deepLink.card', ['id' => $cardId]);
+	private function cardLink(int $cardId, ?int $commentId = null): string {
+		$link = $this->urlGenerator->linkToRouteAbsolute('kanso.deepLink.card', ['id' => $cardId]);
+		if ($commentId !== null) {
+			$link .= '#comment-' . $commentId;
+		}
+		return $link;
 	}
 }

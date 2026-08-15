@@ -28,6 +28,7 @@ use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ReminderService;
 use OCA\Kanso\Service\ReviewService;
 use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Controller;
@@ -57,6 +58,7 @@ class CardController extends Controller {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardContactMapper $cardContactMapper,
 		private ReviewService $reviewService,
+		private ReminderService $reminderService,
 		private ChecklistItemMapper $checklistItemMapper,
 		private CardMapper $cardMapper,
 		private CommentMapper $commentMapper,
@@ -160,6 +162,9 @@ class CardController extends Controller {
 			+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
 			+ ['contacts' => $this->cardContactMapper->findContactsByCard($id)]
 			+ ['reviews' => $this->reviewService->serializeReviewsForCard($id)]
+			// The viewer's OWN pending personal reminders on this card (#3816) -
+			// per-user + private, so another member sees only their own.
+			+ ['myReminders' => $this->reminderService->listMineForCard($id, $uid)]
 			+ ['checklistItems' => $checklistItems]
 			+ ['checklist' => ['total' => count($checklistItems), 'done' => $checklistDone]]
 			+ ['parent' => $parent]

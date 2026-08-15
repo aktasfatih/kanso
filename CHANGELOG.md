@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Personal "Remind me" on cards and comments.** You can now set a private,
+  one-shot reminder for yourself on a card — from the card's overflow menu or from
+  a specific comment (the *Remind me* action in the comment's menu). Pick a preset
+  (*Later today*, *Tomorrow*, *Next week*) or a custom date and time. At the chosen
+  time you get a Nextcloud notification (bell + push) that deep-links to the card
+  (and, for a comment reminder, carries the comment). Reminders are personal: only
+  you see or receive yours, another member on the same card never does. Your pending
+  reminders show on the card with a one-click cancel, firing happens once and catches
+  up if the reminder is overdue, and a reminder on a card that has become invisible
+  to you is silently skipped (no leak).
 - **Cross-board saved Views.** You can now save a named *View* — a filter (labels,
   assignees, priority, type, estimate, due date, status, client status) — that runs
   across *every board you can read* and lists the matching cards in one place. Views
