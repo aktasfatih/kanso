@@ -55,7 +55,7 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 		// Give the board an estimate scale so the "Estimate" filter dimension is
 		// offered (it is hidden on a 'none'-scale board) — needed by the
 		// clear-removes-URL-param test below.
-		await api('PUT', `/boards/${board.id}`, { estimateScale: 'fibonacci' })
+		await api('PATCH', `/boards/${board.id}`, { estimateScale: 'fibonacci' })
 
 		const label = await api('POST', '/labels', { boardId: board.id, title: 'Backend', color: 'e74c3c' })
 		state.labelId = label.id
