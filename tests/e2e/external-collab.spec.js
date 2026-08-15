@@ -43,6 +43,12 @@ async function loginAs(page, user, pass) {
 //     entries are hidden; board structure (stacks) is internal-only too;
 //   - a deep link to a card hidden from the viewer is an existence-safe 404.
 test.describe.serial('External collaboration + deep links (#3744)', () => {
+	// Logs in as a non-admin (tester) on the default page and asserts the login
+	// screen itself, so it must NOT inherit the shared authenticated storageState
+	// — otherwise the page starts as admin, the #user login form never shows, and
+	// loginAs no-ops.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
 	const token = 'xc' + Math.floor(Date.now() / 1000)
 	const state = { boardId: 0, stackId: 0, clientCardId: 0, internalCardId: 0 }
 

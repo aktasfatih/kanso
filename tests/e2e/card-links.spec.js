@@ -109,7 +109,6 @@ test.describe('Card GitHub links', () => {
 
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The link row is present.

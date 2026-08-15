@@ -101,7 +101,6 @@ test.describe('My Reviews page', () => {
 	test('clicking Approve moves the row out of "Needs your review"', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.reviewsUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.my-reviews-view', { timeout: 10_000 })
 
 		const pendingSection = page.locator('.my-reviews-view__section').filter({
@@ -130,7 +129,6 @@ test.describe('My Reviews page', () => {
 	test('clicking "Open card" affordance navigates to the card modal', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.reviewsUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.my-reviews-view', { timeout: 10_000 })
 
 		// After previous test the card is approved - click the approved row

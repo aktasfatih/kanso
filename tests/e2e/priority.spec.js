@@ -96,7 +96,6 @@ test.describe('Card priorities', () => {
 	test('set priority to High via the card modal UI; assert tile shows indicator', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the "High Priority Card" modal
@@ -134,7 +133,6 @@ test.describe('Card priorities', () => {
 	test('set Urgent card priority via UI; assert its tile shows urgent indicator', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Open the "Urgent Priority Card" modal
@@ -166,7 +164,6 @@ test.describe('Card priorities', () => {
 	test('filter to Urgent only - High card is hidden; clear filter restores it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Both cards should be visible initially
@@ -175,17 +172,18 @@ test.describe('Card priorities', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'Urgent Priority Card' }))
 			.toBeVisible({ timeout: 5000 })
 
-		// Open the filter menu (the filter toggle, not the adjacent saved-views one)
+		// Open the filter popover and drill into the Priority dimension (#3785).
 		const filterMenu = page.locator('.board-filter-bar__filter button').first()
 		await expect(filterMenu).toBeVisible({ timeout: 5000 })
 		await filterMenu.click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="priorities"]').click()
 
-		// Click the "Urgent" priority filter checkbox (level 4)
+		// Click the "Urgent" priority filter option (level 4)
 		const urgentFilterCheckbox = page.locator('.board-filter-bar__priority-item--4')
 		await expect(urgentFilterCheckbox).toBeVisible({ timeout: 5000 })
 		await urgentFilterCheckbox.click()
 
-		// Close the menu by pressing Escape
+		// Close the popover by pressing Escape
 		await page.keyboard.press('Escape')
 		await page.waitForTimeout(300)
 
@@ -195,9 +193,9 @@ test.describe('Card priorities', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'High Priority Card' }))
 			.not.toBeVisible({ timeout: 5000 })
 
-		// Clear the filter by reopening the menu and unchecking Urgent (robust -
-		// avoids the teleported "Clear filters" NcActionButton).
+		// Clear the filter by reopening, drilling into Priority, and unchecking Urgent.
 		await filterMenu.click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="priorities"]').click()
 		const urgentAgain = page.locator('.board-filter-bar__priority-item--4')
 		await expect(urgentAgain).toBeVisible({ timeout: 5000 })
 		await urgentAgain.click()
@@ -214,7 +212,6 @@ test.describe('Card priorities', () => {
 	test('priority persists after page reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// After reload the High Priority Card tile should still carry the badge

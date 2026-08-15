@@ -132,7 +132,6 @@ test.describe('Card cross-references (KAN-123 → title link)', () => {
 	test('a KAN-<n> reference renders as a link showing the target title and opens it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.sourceUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
 		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
 

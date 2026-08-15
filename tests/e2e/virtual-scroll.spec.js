@@ -156,7 +156,6 @@ test.describe('Virtualized card list', () => {
 	test('only a subset of 30 tiles rendered in DOM (virtualization proof)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 
 		// Wait for at least one card tile to appear
@@ -177,7 +176,6 @@ test.describe('Virtualized card list', () => {
 	test('drag first visible tile toward bottom, drop after initially-offscreen tile, order persists on reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 		await page.waitForSelector('.card-tile-wrap', { timeout: 10_000 })
 
@@ -217,7 +215,6 @@ test.describe('Virtualized card list', () => {
 
 		// Reload and verify the board state is consistent (server persisted the move)
 		await page.reload()
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.stack-column', { timeout: 10_000 })
 		await page.waitForSelector('.card-tile-wrap', { timeout: 10_000 })
 

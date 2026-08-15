@@ -225,9 +225,10 @@ test.describe('Estimate sorting & filtering', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
-		// Filter to just the "13" token → only EstBig remains.
+		// Filter to just the "13" token → only EstBig remains (drill into Estimate, #3785).
 		await page.locator('.board-filter-bar__filter button').first().click()
-		await page.locator('.action-checkbox__text', { hasText: /^13$/ }).click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="estimates"]').click()
+		await page.locator('.board-filter-bar__opt-text', { hasText: /^13$/ }).click()
 		await page.keyboard.press('Escape')
 		await expect(page.locator('.card-tile__title', { hasText: 'EstBig' })).toHaveCount(1)
 		await expect(page.locator('.card-tile__title', { hasText: 'EstSmall' })).toHaveCount(0)
@@ -237,8 +238,9 @@ test.describe('Estimate sorting & filtering', () => {
 
 		// Swap to the "Unestimated" facet → only EstNone remains.
 		await page.locator('.board-filter-bar__filter button').first().click()
-		await page.locator('.action-checkbox__text', { hasText: /^13$/ }).click() // uncheck 13
-		await page.locator('.action-checkbox__text', { hasText: 'Unestimated' }).click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="estimates"]').click()
+		await page.locator('.board-filter-bar__opt-text', { hasText: /^13$/ }).click() // uncheck 13
+		await page.locator('.board-filter-bar__opt-text', { hasText: 'Unestimated' }).click()
 		await page.keyboard.press('Escape')
 		await expect(page.locator('.card-tile__title', { hasText: 'EstNone' })).toHaveCount(1)
 		await expect(page.locator('.card-tile__title', { hasText: 'EstBig' })).toHaveCount(0)

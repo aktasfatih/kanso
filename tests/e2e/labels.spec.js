@@ -100,9 +100,11 @@ test.describe('Labels', () => {
 		const filterBtn = page.locator('.board-view__filter-menu button', { hasText: /filter/i })
 		await expect(filterBtn).toHaveCount(1)
 
-		// Opening the filter menu shows a checkbox row for the new label
+		// Opening the filter popover and drilling into Labels shows a row for the
+		// new label (progressive drill-in, #3785).
 		await filterBtn.click()
-		await expect(page.locator('.board-filter-bar__label-item .action-checkbox__text', { hasText: 'ColoredE2E' })).toHaveCount(1)
+		await page.locator('.board-filter-bar__dim-row[data-dim="labels"]').click()
+		await expect(page.locator('.board-filter-bar__label-item .board-filter-bar__opt-text', { hasText: 'ColoredE2E' })).toHaveCount(1)
 	})
 
 	test('inline create from the card view: new label is assigned + present on the board', async ({ page }) => {
@@ -113,7 +115,6 @@ test.describe('Labels', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Open the label popover (admin owns the board → MANAGE, so the create row shows).

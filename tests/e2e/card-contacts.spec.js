@@ -110,7 +110,6 @@ test.describe('Card contacts (#3530)', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The picker only appears when the Contacts app is available (feature-detected).

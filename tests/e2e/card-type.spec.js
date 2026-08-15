@@ -102,7 +102,6 @@ test.describe('Card types', () => {
 	test('set type to Bug via the card modal UI; assert tile shows the type icon', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Bug Type Card' })
@@ -135,7 +134,6 @@ test.describe('Card types', () => {
 	test('set type to Feature on the second card; assert its tile icon', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		const featureTile = page.locator('.card-tile').filter({ hasText: 'Feature Type Card' })
@@ -163,7 +161,6 @@ test.describe('Card types', () => {
 	test('filter to Bug only - Feature card is hidden; clear filter restores it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Both cards visible initially
@@ -172,10 +169,11 @@ test.describe('Card types', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
 			.toBeVisible({ timeout: 5000 })
 
-		// Open the filter menu (the filter toggle, not the adjacent saved-views one)
+		// Open the filter popover and drill into the Type dimension (#3785).
 		const filterMenu = page.locator('.board-filter-bar__filter button').first()
 		await expect(filterMenu).toBeVisible({ timeout: 5000 })
 		await filterMenu.click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 
 		// Check the "Bug" type filter
 		const bugFilter = page.locator('.board-filter-bar__type-item--bug')
@@ -191,8 +189,9 @@ test.describe('Card types', () => {
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
 			.not.toBeVisible({ timeout: 5000 })
 
-		// Clear the filter by unchecking Bug
+		// Clear the filter by re-opening, drilling into Type, and unchecking Bug
 		await filterMenu.click()
+		await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 		const bugAgain = page.locator('.board-filter-bar__type-item--bug')
 		await expect(bugAgain).toBeVisible({ timeout: 5000 })
 		await bugAgain.click()
@@ -209,7 +208,6 @@ test.describe('Card types', () => {
 	test('type persists after page reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// The Bug Type Card tile should still carry the bug type icon

@@ -191,7 +191,6 @@ test.describe('Inbox feed', () => {
 
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
-		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
 
 		// Click the first item that mentions our card
@@ -214,7 +213,6 @@ test.describe('Inbox feed', () => {
 
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
-		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
 
 		const item = page.locator('.inbox-view__item').filter({ has: page.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }) }).first()
@@ -237,7 +235,6 @@ test.describe('Inbox feed', () => {
 
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
-		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
 
 		// The review-request event (by tester) shows with its verb phrase, on our
@@ -263,7 +260,6 @@ test.describe('Inbox feed', () => {
 		// assert the page renders consistently (no crash, correct DOM present).
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
-		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 		await page.waitForSelector('.inbox-view', { timeout: 15_000 })
 
 		// Either the list or the empty-content must be visible - never both

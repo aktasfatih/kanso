@@ -255,7 +255,6 @@ test.describe('Card file attachments', () => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Upload a small file through the hidden file input.
@@ -286,7 +285,6 @@ test.describe('Card file attachments', () => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// Enter description edit mode (empty description shows a placeholder button).
