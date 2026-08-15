@@ -1,0 +1,139 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Pydantic models mirroring the JSON the Kanso API returns.
+
+The models are intentionally permissive (``extra='ignore'`` + ``Optional``
+fields): the API payloads are rich and evolve, and the MCP server only needs a
+stable, typed core to hand back to the LLM. Unknown fields are dropped rather
+than raising.
+"""
+
+from __future__ import annotations
+
+from typing import Any, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class _Base(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+
+class BoardStats(_Base):
+    cardCount: int = 0
+    doneCount: int = 0
+    progress: float = 0
+    needsReview: int = 0
+    overdue: int = 0
+
+
+class BoardSummary(_Base):
+    """A board row from ``GET /boards`` (list view, carries stats)."""
+
+    id: int
+    title: str
+    owner: Optional[str] = None
+    color: Optional[str] = None
+    background: Optional[str] = None
+    archived: bool = False
+    lastModified: int = 0
+    estimateScale: Optional[str] = None
+    newCardsOnTop: bool = False
+    prefix: Optional[str] = None
+    chatUrl: Optional[str] = None
+    groupId: Optional[int] = None
+    pinned: bool = False
+    permissions: Optional[int] = None
+    role: Optional[str] = None
+    stats: Optional[BoardStats] = None
+
+
+class Board(_Base):
+    """A board's own record (as embedded under ``board`` in ``GET /boards/{id}``)."""
+
+    id: int
+    title: str
+    owner: Optional[str] = None
+    color: Optional[str] = None
+    background: Optional[str] = None
+    archived: bool = False
+    lastModified: int = 0
+    estimateScale: Optional[str] = None
+    newCardsOnTop: bool = False
+    prefix: Optional[str] = None
+    chatUrl: Optional[str] = None
+
+
+class Stack(_Base):
+    id: int
+    boardId: Optional[int] = None
+    title: str
+    sortKey: Optional[str] = None
+    archived: bool = False
+    role: Optional[int] = None
+    wipLimit: Optional[int] = None
+    color: Optional[str] = None
+
+
+class Label(_Base):
+    id: int
+    boardId: Optional[int] = None
+    title: Optional[str] = None
+    color: Optional[str] = None
+
+
+class CardSummary(_Base):
+    """A card summary (board payload / delta upsert): no description."""
+
+    id: int
+    boardId: Optional[int] = None
+    stackId: Optional[int] = None
+    title: str
+    sortKey: Optional[str] = None
+    duedate: Optional[str] = None
+    startDate: Optional[str] = None
+    doneAt: int = 0
+    archived: bool = False
+    allDay: bool = False
+    owner: Optional[str] = None
+    createdAt: int = 0
+    lastModified: int = 0
+    parentCardId: Optional[int] = None
+    priority: int = 0
+    estimate: Optional[str] = None
+    boardSeq: Optional[int] = None
+    coverColor: Optional[str] = None
+    type: Optional[str] = None
+    isTemplate: bool = False
+    visibility: Optional[str] = None
+    labelIds: List[int] = Field(default_factory=list)
+    assigneeIds: List[str] = Field(default_factory=list)
+
+
+class Card(CardSummary):
+    """A full card (``GET /cards/{id}``): summary + description + detail arrays."""
+
+    description: Optional[str] = None
+    contacts: List[Any] = Field(default_factory=list)
+    reviews: List[Any] = Field(default_factory=list)
+    checklistItems: List[Any] = Field(default_factory=list)
+    children: List[Any] = Field(default_factory=list)
+    parent: Optional[Any] = None
+    commentCount: int = 0
+    attachmentCount: int = 0
+    timeSpent: int = 0
+    projectIds: List[int] = Field(default_factory=list)
+    fieldValues: List[Any] = Field(default_factory=list)
+    relations: Optional[Any] = None
+
+
+class BoardDetail(_Base):
+    """The full ``GET /boards/{id}`` payload: board + stacks + card summaries + labels."""
+
+    board: Board
+    stacks: List[Stack] = Field(default_factory=list)
+    cards: List[CardSummary] = Field(default_factory=list)
+    labels: List[Label] = Field(default_factory=list)
+    permissions: Optional[int] = None
+    role: Optional[str] = None
+    cursor: Optional[int] = None

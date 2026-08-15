@@ -74,6 +74,10 @@ your work, on your own Nextcloud, laid out plainly.
   intake**: pick a column in the board's webhook settings and every newly
   opened issue (optionally filtered to one GitHub label) becomes a linked card
   there — title plus issue link only, no body copy. No credentials, no OAuth.
+- **MCP server (AI access)**: an optional
+  [Model Context Protocol](https://modelcontextprotocol.io) server (under
+  [`mcp/`](mcp/README.md)) lets Claude and other MCP clients read and manage
+  your boards through Kanso's API — see [MCP server](#mcp-server-ai-access).
 
 ### 📊 Views
 - **Board, List and Timeline** views: switch per board (remembered per user).
@@ -177,6 +181,33 @@ NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on Postgres
 NC_VERSION=30 KANSO_DB=sqlite   ./setup.sh   # NC 30 on SQLite (no db container)
 NC_VERSION=34 KANSO_DB=mysql    ./setup.sh   # NC 34 on MariaDB
 ```
+
+## MCP server (AI access)
+
+Kanso ships an optional **[Model Context Protocol](https://modelcontextprotocol.io)
+server** (under [`mcp/`](mcp/README.md)) so AI assistants — Claude Code, Claude
+Desktop, and any MCP client — can read and manage your boards: list/create
+boards, add columns and cards, move cards, set labels and assignees, and pull
+the cards assigned to you. It talks to Kanso's REST API using a Nextcloud **app
+password**, so there's nothing extra to install on the server.
+
+It authenticates with a revocable Nextcloud **app password** (not your login
+password) kept in the **server's** own `.env` or environment — so **no
+credentials ever live in your MCP client config**.
+
+**Quickstart (Claude Code)** — needs Python 3.11+ and [`uv`](https://docs.astral.sh/uv/):
+
+```sh
+# 1. In Nextcloud: Settings → Security → Create new app password (revocable; not your login password)
+# 2. Give it to the server — credentials stay server-side:
+cd mcp && cp .env.sample .env       # then edit .env with your host, user and the app password
+# 3. Register the server with your client — note: NO credentials here:
+claude mcp add kanso -- uv run --directory /path/to/kanso/mcp kanso-mcp
+```
+
+For the HTTP-service setup, Claude Desktop config, and the full tool list, see
+**[`mcp/README.md`](mcp/README.md)**. The MCP server is a separate artifact — it
+is **not** bundled into the installed Nextcloud app.
 
 ## Development
 
