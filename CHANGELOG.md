@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Open a card as a full page.** A card can now be viewed on its own full-width
+  page at `/card/<id>` instead of only as a dialog overlay. An expand button in the
+  card dialog's header switches to the full-page view, which shows a breadcrumb for
+  the card's board and a *Back to board* affordance. The full page and the dialog
+  render from the same component, so they behave identically — the existing
+  click-a-card-to-open-a-dialog flow is unchanged.
+
 ### Changed
 
 - **Progressive filter (toolbar redesign, phase 2).** The board *Filter* control is

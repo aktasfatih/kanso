@@ -24,6 +24,16 @@ const routes = [
 		],
 	},
 	{
+		// Standalone full-page card view (#3817). Top-level (NOT nested under
+		// BoardView) so it renders full-page instead of as a board overlay. Shares
+		// the CardDetail component with the nested card-modal route; the board id is
+		// resolved from the loaded card, not the URL.
+		path: '/card/:cardId',
+		name: 'card-page',
+		component: () => import('../views/CardPage.vue'),
+		props: true,
+	},
+	{
 		path: '/board/:id/stats',
 		name: 'board-stats',
 		component: () => import('../views/BoardStats.vue'),
