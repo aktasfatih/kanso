@@ -145,7 +145,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
 				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
-				:compact="isNarrow"
+				:icon-only="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
 				@delete-saved="handleDeleteSavedFilter" />
@@ -1058,11 +1058,6 @@ const filterState = createFilterState()
 // A live predicate rebuilt whenever the filter changes. `now` is captured once
 // per rebuild so the "this week" / "overdue" windows stay stable across a pass.
 const filterPredicate = computed(() => makePredicate(filterState, Date.now()))
-const totalActiveFilters = computed(() => {
-	const s = filterState
-	return s.labels.size + s.assignees.size + s.priorities.size
-		+ (s.due ? 1 : 0) + (s.done ? 1 : 0)
-})
 
 // ── Saved views (#3407) ───────────────────────────────────────────────────────
 // Per-user, per-board named filter snapshots persisted in NC user config.
@@ -1119,9 +1114,10 @@ async function handleDeleteSavedFilter(name) {
 // Two watchers keep the live filter and the URL query in lock-step. There is NO
 // mutation guard flag: the feedback loop is broken purely by value-equality —
 // each watcher no-ops when the two sides already encode the same filter, so an
-// edit propagates exactly one hop and then settles. Only the five filter keys
-// (fl/fa/fp/fd/fs) are owned here; other query params are preserved untouched.
-const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'fd', 'fs']
+// edit propagates exactly one hop and then settles. Only the filter keys
+// (fl/fa/fp/ft/fe/fd/fs/fw — one per filter dimension, matching filterToQuery)
+// are owned here; other query params are preserved untouched.
+const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'ft', 'fe', 'fd', 'fs', 'fw']
 
 // Apply the URL's filter params onto the state (shared link / back-forward).
 function applyUrlToFilter() {
