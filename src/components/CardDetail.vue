@@ -2255,18 +2255,6 @@ const emit = defineEmits(['close', 'update:title', 'board-context'])
 const router = useRouter()
 const route = useRoute()
 
-// Effective board id. Prefer an explicit prop, then the route param (modal route),
-// then the loaded card's boardId (full-page route, once the card resolves). Kept a
-// computed so the page shell reacts when cardData arrives. For the modal route this
-// is byte-identical to the old `route.params.id` (the prop/card fallbacks are null
-// there until the same value shows up), so modal behaviour is unchanged.
-const boardId = computed(() => {
-	if (props.boardId != null) return String(props.boardId)
-	if (route.params.id) return route.params.id
-	const fromCard = cardData.value?.boardId
-	return fromCard != null ? String(fromCard) : undefined
-})
-
 // Modal is open when this component is mounted - enabled is always true here
 const isOpen = ref(true)
 
@@ -2278,6 +2266,32 @@ const isOpen = ref(true)
 // existing not-found modal state.
 const isNumericCardId = computed(() => /^\d+$/.test(String(props.cardId)))
 const refResolveError = ref(false)
+
+// The card query. Declared BEFORE `boardId` and the {immediate:true} resolve watch
+// below, on purpose: the full-page route derives boardId from the loaded card
+// (`cardData.value?.boardId`), and the immediate watch reads `boardId` synchronously
+// during setup. If `cardData` were declared after them, that synchronous read would
+// hit it in the temporal dead zone and throw ("Cannot access before initialization"),
+// blanking the page. The modal route dodged it by short-circuiting boardId on
+// route.params.id and never touching cardData - the page route has no id param, so it
+// falls through to cardData. Keep this ordering. (#3817)
+const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, error: cardError, refetch: cardRefetch, updateCard } = useCard(
+	computed(() => props.cardId),
+	// Only fetch once the id is numeric (a human ref is redirected first).
+	computed(() => isOpen.value && isNumericCardId.value),
+)
+
+// Effective board id. Prefer an explicit prop, then the route param (modal route),
+// then the loaded card's boardId (full-page route, once the card resolves). Kept a
+// computed so the page shell reacts when cardData arrives. For the modal route this
+// is byte-identical to the old `route.params.id` (the prop/card fallbacks are null
+// there until the same value shows up), so modal behaviour is unchanged.
+const boardId = computed(() => {
+	if (props.boardId != null) return String(props.boardId)
+	if (route.params.id) return route.params.id
+	const fromCard = cardData.value?.boardId
+	return fromCard != null ? String(fromCard) : undefined
+})
 
 watch([() => props.cardId, boardId], async ([cardId, bId]) => {
 	refResolveError.value = false
@@ -2297,12 +2311,6 @@ watch([() => props.cardId, boardId], async ([cardId, bId]) => {
 		refResolveError.value = true
 	}
 }, { immediate: true })
-
-const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, error: cardError, refetch: cardRefetch, updateCard } = useCard(
-	computed(() => props.cardId),
-	// Only fetch once the id is numeric (a human ref is redirected first).
-	computed(() => isOpen.value && isNumericCardId.value),
-)
 // While a human reference is being resolved to its numeric id, show the loading
 // skeleton (the card query is still disabled at that point).
 const isLoading = computed(() => cardIsLoading.value || (!isNumericCardId.value && !refResolveError.value))
@@ -2570,10 +2578,15 @@ const cardContactUris = computed(() => new Set(cardContacts.value.map((c) => c.c
 // successful call as "available" and only hide on a hard failure). We surface
 // the picker whenever the card already has contacts, or the probe succeeded.
 async function runContactSearch(query) {
+	const bId = resolveContactBoardId()
+	// Board id not known yet (full-page route, card still loading). Skip the probe;
+	// the boardId watch below re-runs it once the id resolves. Avoids a bogus
+	// GET /boards/undefined/contacts.
+	if (bId === null || bId === undefined || bId === 'undefined') return
 	const seq = ++contactSearchSeq
 	contactSearching.value = true
 	try {
-		const results = await fetchCardContacts(resolveContactBoardId(), query)
+		const results = await fetchCardContacts(bId, query)
 		if (seq !== contactSearchSeq) return
 		contactResults.value = Array.isArray(results) ? results : []
 		contactsAvailable.value = true
@@ -2594,7 +2607,10 @@ async function runContactSearch(query) {
 function resolveContactBoardId() {
 	const b = boardId
 	if (typeof b === 'function') return b()
-	if (b !== null && typeof b === 'object' && b.value !== undefined) return b.value
+	// Return `.value` even when it's undefined (ref not resolved yet) rather than
+	// the ref object itself — the latter stringifies to "[object Object]" in the
+	// URL. On the full-page route boardId resolves only after the card loads.
+	if (b !== null && typeof b === 'object' && 'value' in b) return b.value
 	return b
 }
 
@@ -2639,9 +2655,14 @@ watch(cardContacts, (list) => {
 	if (list.length > 0) contactsAvailable.value = true
 }, { immediate: true })
 
-// Probe availability on mount so the picker shows for an enabled instance even
-// before the user interacts (an empty-query search doubles as the probe).
-runContactSearch('')
+// Probe availability once the board id is known so the picker shows for an enabled
+// instance even before the user interacts (an empty-query search doubles as the
+// probe). On the modal route boardId is set immediately (fires at once); on the
+// full-page route it resolves after the card loads, so this re-probes then instead
+// of firing a GET /boards/undefined/contacts at setup.
+watch(boardId, (id) => {
+	if (id !== null && id !== undefined && id !== 'undefined') runContactSearch('')
+}, { immediate: true })
 
 onBeforeUnmount(() => {
 	if (contactSearchTimer) clearTimeout(contactSearchTimer)

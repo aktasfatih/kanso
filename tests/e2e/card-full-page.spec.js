@@ -29,6 +29,16 @@ async function apiPost(path, body) {
 	return r.json()
 }
 
+async function apiPatch(path, body) {
+	const r = await fetch(API + path, {
+		method: 'PATCH',
+		headers: { ...HEADERS, Authorization: AUTH },
+		body: JSON.stringify(body),
+	})
+	if (!r.ok) throw new Error(`PATCH ${path} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
+
 async function apiDelete(path) {
 	const r = await fetch(API + path, {
 		method: 'DELETE',
@@ -82,9 +92,13 @@ test.describe('Full-page card view (#3817)', () => {
 		const card = await apiPost('/cards', {
 			stackId: stack.id,
 			title: 'Full Page Test Card',
-			description: DESCRIPTION,
 		})
 		state.cardId = card.id
+		// The create endpoint sets title only; the description (which loads lazily on
+		// card open — the summary payload omits it) is set via PATCH, matching how the
+		// app writes descriptions. This is what makes the "description renders on the
+		// full page" assertions below meaningful.
+		await apiPatch(`/cards/${card.id}`, { description: DESCRIPTION })
 	})
 
 	test.afterAll(async () => {

@@ -35,6 +35,13 @@ export function useBoard(id) {
 
 	const query = useQuery({
 		queryKey: boardKey,
+		// Don't fetch until the id is a real value. On the full-page card route the
+		// board id is only known once the card loads (it's derived from cardData),
+		// so without this guard the first render fires GET /boards/undefined.
+		enabled: computed(() => {
+			const b = typeof id === 'object' ? id.value : id
+			return b !== null && b !== undefined && b !== 'undefined'
+		}),
 		queryFn: async () => {
 			const boardId = typeof id === 'object' ? id.value : id
 			const data = await fetchBoard(boardId)
