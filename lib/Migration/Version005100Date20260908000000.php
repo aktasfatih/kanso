@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace OCA\Kanso\Migration;
 
 use Closure;
+use OCA\Kanso\Cron\SendPersonalReminders;
+use OCP\BackgroundJob\IJobList;
 use OCP\DB\ISchemaWrapper;
 use OCP\DB\Types;
 use OCP\Migration\IOutput;
@@ -25,8 +27,20 @@ use OCP\Migration\SimpleMigrationStep;
  * due scan and on (user_id, card_id) for the card-detail "your reminders" list.
  *
  * Guarded (hasTable) so the step is idempotent.
+ *
+ * postSchemaChange also registers the {@see SendPersonalReminders} cron job:
+ * Nextcloud only syncs info.xml <background-jobs> on a FRESH install, not on an
+ * upgrade of an existing install, so a job newly added in this version would
+ * otherwise never be registered on upgrading instances (and reminders would
+ * silently never fire). Registering it here covers install + upgrade; the
+ * jobList add is idempotent-guarded.
  */
 class Version005100Date20260908000000 extends SimpleMigrationStep {
+	public function __construct(
+		private IJobList $jobList,
+	) {
+	}
+
 	/**
 	 * @psalm-suppress UndefinedDocblockClass ISchemaWrapper::getTable() is
 	 *  docblocked as Doctrine\DBAL\Schema\Table, not part of the OCP stubs.
@@ -81,5 +95,18 @@ class Version005100Date20260908000000 extends SimpleMigrationStep {
 		$table->addIndex(['card_id'], 'kanso_rem_card');
 
 		return $schema;
+	}
+
+	/**
+	 * Ensure the personal-reminder sweep is registered on this instance. Runs on
+	 * install and on upgrade (info.xml only auto-registers <background-jobs> on a
+	 * fresh install), guarded so re-running is a no-op.
+	 */
+	#[\Override]
+	public function postSchemaChange(IOutput $output, Closure $schemaClosure, array $options): void {
+		if (!$this->jobList->has(SendPersonalReminders::class, null)) {
+			$this->jobList->add(SendPersonalReminders::class);
+			$output->info('Registered background job: SendPersonalReminders');
+		}
 	}
 }

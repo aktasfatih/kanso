@@ -55,8 +55,12 @@ async function kansoNotifications() {
 // 15-minute schedule.
 function firePersonalReminders() {
 	const cls = 'OCA\\Kanso\\Cron\\SendPersonalReminders'
+	// --limit is high on purpose: background-job:list defaults to 500 rows, and on
+	// an instance with many jobs our freshly-registered sweep (highest id) can fall
+	// outside that window, making a find-by-class over the default page spuriously
+	// "not registered".
 	const list = execSync(
-		'docker exec -u www-data kanso-dev php occ background-job:list --output=json',
+		'docker exec -u www-data kanso-dev php occ background-job:list --output=json --limit=100000',
 		{ encoding: 'utf8' },
 	)
 	const jobs = JSON.parse(list)
@@ -112,6 +116,11 @@ test.describe('Personal reminders (remind me)', () => {
 
 		const list = await apiGet(`/cards/${state.cardId}/reminders`)
 		expect(list.some((r) => r.id === created.id)).toBeTruthy()
+
+		// Clean up: leave no lingering pending reminder on the shared card, or the
+		// later UI test (which asserts the card has exactly zero chips after its own
+		// add/cancel) sees this leftover and fails.
+		await apiDelete(`/cards/${state.cardId}/reminders/${created.id}`)
 	})
 
 	test('a past reminder time is rejected (400)', async () => {
@@ -139,11 +148,13 @@ test.describe('Personal reminders (remind me)', () => {
 	})
 
 	test('firing delivers a Kanso notification once and is overdue-safe / idempotent', async () => {
-		// Schedule for ~1s out (the API requires a future time), then let it lapse
-		// so the sweep treats it as overdue-owed.
-		const at = Math.floor(Date.now() / 1000) + 1
+		// Schedule a few seconds out — enough margin that the API's "must be in the
+		// future" check still passes after client→server latency (a 1s margin flaked
+		// on slow CI: the server saw the time as already past and 400'd) — then let it
+		// lapse so the sweep treats it as overdue-owed.
+		const at = Math.floor(Date.now() / 1000) + 5
 		const created = await apiPost(`/cards/${state.cardId}/reminders`, { remindAt: at })
-		await new Promise((res) => setTimeout(res, 2500))
+		await new Promise((res) => setTimeout(res, 6500))
 
 		const before = (await kansoNotifications()).length
 		firePersonalReminders()
