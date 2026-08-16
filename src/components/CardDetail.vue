@@ -7285,7 +7285,8 @@ async function handleToggleProject(projectId) {
 /* Full-page shell: the card content is no longer inside a fixed-width modal
    container, so give it a centred, comfortable max width. */
 .card-modal--mode-page {
-	width: min(1180px, 100%);
-	margin: 0 auto;
+	/* Full-page view fills the available width (the content panes keep their own
+	   inner padding, so text isn't flush to the edges). */
+	width: 100%;
 }
 </style>
