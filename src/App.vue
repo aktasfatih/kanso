@@ -39,41 +39,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<NcCounterBubble :count="inboxCount" type="highlighted" />
 					</template>
 				</NcAppNavigationItem>
-				<!-- Cross-board saved "Views" (#3815): named filters that run across
-				     every board the user can read. Collapsible list of the user's
-				     saved views; each opens a virtualized cross-board card list.
-				     "New view" opens the create surface with an empty filter. -->
-				<NcAppNavigationItem
-					:name="t('kanso', 'Views')"
-					:active="isViewsActive"
-					:allow-collapse="views.length > 0"
-					:open="viewsSectionOpen"
-					@update:open="viewsSectionOpen = $event"
-					@click="openNewView">
-					<template #icon>
-						<FilterVariantIcon :size="20" />
-					</template>
-					<template #actions>
-						<NcActionButton close-after-click @click="openNewView">
-							<template #icon>
-								<PlusIcon :size="20" />
-							</template>
-							{{ t('kanso', 'New view') }}
-						</NcActionButton>
-					</template>
-					<template #default>
-						<NcAppNavigationItem
-							v-for="view in views"
-							:key="view.name"
-							:name="view.name"
-							:to="{ name: 'view', params: { name: view.name } }"
-							:active="isViewActive(view.name)">
-							<template #icon>
-								<FilterVariantIcon :size="18" />
-							</template>
-						</NcAppNavigationItem>
-					</template>
-				</NcAppNavigationItem>
 				<NcAppNavigationItem
 					:name="t('kanso', 'Projects')"
 					:to="{ name: 'projects' }"
@@ -187,14 +152,11 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
-import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
-import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
-import { useViews } from './composables/useViews.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -294,20 +256,6 @@ const isMyTasksActive = computed(() => route.name === 'my-cards')
 const isMyReviewsActive = computed(() => route.name === 'my-reviews')
 const isInboxActive = computed(() => route.name === 'inbox')
 const isProjectsActive = computed(() => route.name === 'projects' || route.name === 'project')
-
-// Cross-board saved Views (#3815): the definition list drives the nav sub-items.
-// Sentinel param '__new__' opens the create surface with an empty filter.
-const NEW_VIEW = '__new__'
-const { data: viewsData } = useViews()
-const views = computed(() => viewsData.value ?? [])
-const viewsSectionOpen = ref(true)
-const isViewsActive = computed(() => route.name === 'view')
-function isViewActive(name) {
-	return route.name === 'view' && String(route.params.name) === String(name)
-}
-function openNewView() {
-	router.push({ name: 'view', params: { name: NEW_VIEW } })
-}
 
 // Badge counts for the three My Work nav items. Reuses the existing feed
 // queries from the shared query cache (no new polling); mounting the nav warms

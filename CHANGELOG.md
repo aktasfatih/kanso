@@ -24,15 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reminders show on the card with a one-click cancel, firing happens once and catches
   up if the reminder is overdue, and a reminder on a card that has become invisible
   to you is silently skipped (no leak).
-- **Cross-board saved Views.** You can now save a named *View* — a filter (labels,
-  assignees, priority, type, estimate, due date, status, client status) — that runs
-  across *every board you can read* and lists the matching cards in one place. Views
-  live in the left navigation under a *Views* section; opening one shows a
-  virtualized cross-board list of every matching card, grouped by board, and clicking
-  a card jumps straight to it. Create, rename (save over the same name) and delete
-  Views from the same filter control used on a board. Views are stored per user and
-  only ever show cards from boards you already have access to — never cards from
-  boards you cannot read.
 - **Open a card as a full page.** A card can now be viewed on its own full-width
   page at `/card/<id>` instead of only as a dialog overlay. An expand button in the
   card dialog's header switches to the full-page view, which shows a breadcrumb for

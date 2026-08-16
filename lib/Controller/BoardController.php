@@ -11,15 +11,21 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardFieldMapper;
+use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRelationMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
+use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
-use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ParticipantService;
@@ -46,13 +52,19 @@ class BoardController extends Controller {
 		private StackMapper $stackMapper,
 		private CardMapper $cardMapper,
 		private LabelMapper $labelMapper,
+		private CardLabelMapper $cardLabelMapper,
+		private CardAssigneeMapper $cardAssigneeMapper,
+		private CardContactMapper $cardContactMapper,
+		private CardReviewMapper $cardReviewMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
 		private CardFieldMapper $cardFieldMapper,
+		private ChecklistItemMapper $checklistItemMapper,
+		private CommentMapper $commentMapper,
 		private AclMapper $aclMapper,
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
+		private CardRelationMapper $cardRelationMapper,
 		private BoardAccess $boardAccess,
-		private CardSummaryService $cardSummaryService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -241,17 +253,46 @@ class BoardController extends Controller {
 	 * Enriches card summaries with the same per-card signal the board payload
 	 * carries (labelIds / assigneeIds / contacts / checklist / waitingOnExternal
 	 * + waitingSince / childProgress / commentCount / reviewState / blocked).
-	 * Delegates to {@see CardSummaryService} so {@see self::show()},
-	 * {@see self::changes()} AND cross-board surfaces (Views, #3815) produce a
-	 * BYTE-IDENTICAL card shape - the delta-sync upsert must be indistinguishable
-	 * from a full-board card, or a patched cache entry would drift from a freshly
-	 * fetched one.
+	 * Extracted from {@see self::show()} so
+	 * {@see self::changes()} produces a BYTE-IDENTICAL card shape - the delta-sync
+	 * upsert must be indistinguishable from a full-board card, or a patched cache
+	 * entry would drift from a freshly fetched one. The enrichment maps are board-
+	 * wide (one query each, no N+1); the per-card lookups just index into them, so
+	 * passing a subset of the board's cards is safe and cheap.
 	 *
 	 * @param Card[] $cards
 	 * @return list<array<string, mixed>>
 	 */
 	private function serializeCardSummaries(int $boardId, array $cards, ViewerContext $viewer): array {
-		return $this->cardSummaryService->serialize($boardId, $cards, $viewer);
+		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($boardId);
+		$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($boardId);
+		$contactsByCard = $this->cardContactMapper->findContactsByBoard($boardId);
+		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId, $viewer);
+		// Derived "waiting on client" (#3746): cardId => oldest open external
+		// step's assigned_at. Presence = waiting; never stored, always computed.
+		$waitingByCard = $this->checklistItemMapper->waitingByBoard($boardId, $viewer);
+		$childProgressByCard = $this->cardMapper->childProgressByBoard($boardId, $viewer);
+		$commentCountByCard = $this->commentMapper->countsByBoard($boardId);
+		$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($boardId);
+		// Card ids blocked by a not-done card - drives the tile "blocked" badge.
+		$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($boardId));
+
+		// array_values so the result is a genuine list (Card[] may be keyed by the
+		// mapper); the delta-sync consumer serializes it as a JSON array.
+		return array_values(array_map(
+			static fn (Card $card): array => $card->jsonSerializeSummary()
+				+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
+				+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
+				+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
+				+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['waitingOnExternal' => \array_key_exists($card->getId(), $waitingByCard)]
+				+ ['waitingSince' => $waitingByCard[$card->getId()] ?? null]
+				+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
+				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
+				+ ['blocked' => isset($blockedIds[$card->getId()])],
+			$cards
+		));
 	}
 
 	/**
