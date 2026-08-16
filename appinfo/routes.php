@@ -150,6 +150,17 @@ return [
 
 		['name' => 'myCards#index', 'url' => '/api/my-cards', 'verb' => 'GET'],
 
+		// Cross-board saved "Views" (#3815): per-user named filters over ALL the
+		// boards the user can read. CRUD lives in NC user-config (opaque filter
+		// blob, no table). The literal /api/views/cards feed segment is declared
+		// BEFORE the /api/views/{id} CRUD so the router never captures "cards" as
+		// a view id. Create is an upsert-by-name (PUT); rename is PATCH {id}.
+		['name' => 'view#index', 'url' => '/api/views', 'verb' => 'GET'],
+		['name' => 'view#create', 'url' => '/api/views', 'verb' => 'PUT'],
+		['name' => 'view#cards', 'url' => '/api/views/cards', 'verb' => 'GET'],
+		['name' => 'view#rename', 'url' => '/api/views/{id}', 'verb' => 'PATCH'],
+		['name' => 'view#destroy', 'url' => '/api/views/{id}', 'verb' => 'DELETE'],
+
 		['name' => 'mySteps#index', 'url' => '/api/my-steps', 'verb' => 'GET'],
 
 		['name' => 'review#mine', 'url' => '/api/reviews/mine', 'verb' => 'GET'],

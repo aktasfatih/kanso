@@ -134,6 +134,103 @@ export function buildLanes(mode, cardsByStack, labels, participants) {
 }
 
 /**
+ * Group-by fields the cross-board Views surface (#3815) offers. Distinct from
+ * SWIMLANE_MODES: Views group a FLAT cross-board card array (no stacks), and add
+ * 'status' (done/in-progress/todo) and 'board' on top of the shared
+ * assignee/priority logic below.
+ */
+export const VIEW_GROUP_BY = ['status', 'priority', 'assignee', 'board']
+
+/** Card status buckets for the 'status' group-by, in display order. */
+const STATUS_ORDER = [
+	{ key: 'status:in_progress', label: 'In progress', match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) > 0 },
+	{ key: 'status:todo', label: 'To do', match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) === 0 },
+	{ key: 'status:done', label: 'Done', match: (c) => Number(c.doneAt ?? 0) > 0 },
+]
+
+/**
+ * Group a FLAT card array by an arbitrary field for the cross-board Views
+ * surface (#3815). Reuses the assignee/priority partitioning logic from
+ * {@see buildLanes} (multi-value assignees surface in each lane; priority is
+ * single-valued) and adds 'status' and 'board'. Cards with no value for the
+ * field fall into a trailing catch-all group.
+ *
+ * Returns an ordered list of `{ key, title, cards }` groups (empty groups
+ * omitted, catch-all last) - the render shape the generalized List/Timeline
+ * consume. It does NOT touch stacks, so it is orthogonal to buildLanes.
+ *
+ * @param {string} field - one of VIEW_GROUP_BY
+ * @param {object[]} cards - the flat cross-board card summaries
+ * @param {object} [opts]
+ * @param {Map<string,string>} [opts.nameByUid] - assignee uid → display name
+ * @param {Map<number,string>} [opts.titleByBoard] - board id → board title
+ * @return {Array<{ key: string, title: string, cards: object[] }>}
+ */
+export function groupCardsByField(field, cards, opts = {}) {
+	const all = Array.isArray(cards) ? cards : []
+
+	if (field === 'priority') {
+		const byLevel = new Map()
+		for (const card of all) {
+			const lvl = Number(card.priority ?? 0)
+			if (!byLevel.has(lvl)) byLevel.set(lvl, [])
+			byLevel.get(lvl).push(card)
+		}
+		const groups = []
+		for (const level of [...PRIORITY_LEVELS].filter((l) => l.value > 0).sort((a, b) => b.value - a.value)) {
+			const bucket = byLevel.get(level.value) ?? []
+			if (bucket.length > 0) groups.push({ key: 'priority:' + level.value, title: t('kanso', level.label), cards: bucket })
+		}
+		const none = byLevel.get(0) ?? []
+		if (none.length > 0) groups.push({ key: 'priority:0', title: t('kanso', 'No priority'), cards: none })
+		return groups
+	}
+
+	if (field === 'assignee') {
+		const nameByUid = opts.nameByUid ?? new Map()
+		const laneOrder = []
+		const laneDefs = new Map()
+		const none = []
+		for (const card of all) {
+			const ids = Array.isArray(card.assigneeIds) ? card.assigneeIds : []
+			if (ids.length === 0) { none.push(card); continue }
+			for (const uid of ids) {
+				const key = 'assignee:' + uid
+				if (!laneDefs.has(key)) { laneDefs.set(key, { key, title: nameByUid.get(uid) || uid, cards: [] }); laneOrder.push(key) }
+				laneDefs.get(key).cards.push(card)
+			}
+		}
+		const groups = laneOrder.map((k) => laneDefs.get(k))
+		groups.sort((a, b) => String(a.title).localeCompare(String(b.title)))
+		if (none.length > 0) groups.push({ key: 'assignee:none', title: t('kanso', 'Unassigned'), cards: none })
+		return groups
+	}
+
+	if (field === 'board') {
+		const titleByBoard = opts.titleByBoard ?? new Map()
+		const laneOrder = []
+		const laneDefs = new Map()
+		for (const card of all) {
+			const bid = Number(card.boardId ?? 0)
+			const key = 'board:' + bid
+			if (!laneDefs.has(key)) { laneDefs.set(key, { key, title: titleByBoard.get(bid) || card.boardTitle || String(bid), cards: [] }); laneOrder.push(key) }
+			laneDefs.get(key).cards.push(card)
+		}
+		const groups = laneOrder.map((k) => laneDefs.get(k))
+		groups.sort((a, b) => String(a.title).localeCompare(String(b.title)))
+		return groups
+	}
+
+	// field === 'status' (default): the three status buckets, in fixed order.
+	const groups = []
+	for (const bucket of STATUS_ORDER) {
+		const cardsIn = all.filter(bucket.match)
+		if (cardsIn.length > 0) groups.push({ key: bucket.key, title: t('kanso', bucket.label), cards: cardsIn })
+	}
+	return groups
+}
+
+/**
  * Convert a lane accumulator ({ key, title, color, cards }) into the render
  * shape: cards re-partitioned into a Map<stackId, card[]>, preserving the
  * incoming (already display-sorted) order within each stack.

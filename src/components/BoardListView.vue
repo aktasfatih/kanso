@@ -22,10 +22,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<button
 					v-if="rows[vRow.index].type === 'header'"
 					class="board-list-group"
-					:aria-expanded="!isCollapsed(rows[vRow.index].stack.id)"
-					@click="toggleGroup(rows[vRow.index].stack.id)">
+					:aria-expanded="!isCollapsed(rows[vRow.index].key)"
+					@click="toggleGroup(rows[vRow.index].key)">
 					<ChevronDownIcon
-						v-if="!isCollapsed(rows[vRow.index].stack.id)"
+						v-if="!isCollapsed(rows[vRow.index].key)"
 						:size="18"
 						class="board-list-group__chevron" />
 					<ChevronRightIcon
@@ -34,8 +34,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						class="board-list-group__chevron" />
 					<span
 						class="board-list-group__dot"
-						:style="rows[vRow.index].stack.color ? { background: cssColor(rows[vRow.index].stack.color) } : {}" />
-					<span class="board-list-group__title">{{ rows[vRow.index].stack.title }}</span>
+						:style="rows[vRow.index].color ? { background: cssColor(rows[vRow.index].color) } : {}" />
+					<span class="board-list-group__title">{{ rows[vRow.index].title }}</span>
 
 					<!-- WIP indicator when a limit is set, plain count otherwise -->
 					<span
@@ -74,7 +74,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<button
 					v-else
 					class="board-list-row"
-					@click="openCard(rows[vRow.index].card.id)">
+					@click="openCard(rows[vRow.index].card)">
 					<span
 						class="board-list-row__status"
 						:class="`board-list-row__status--${statusOf(rows[vRow.index].card)}`"
@@ -186,40 +186,56 @@ const props = defineProps({
 	/** Non-archived stacks in display order (already filtered by BoardView). */
 	stacks: { type: Array, default: () => [] },
 	/** Map<stackId, card[]> - already filter+sort applied by BoardView. */
-	cardsByStack: { type: Object, required: true },
+	cardsByStack: { type: Object, default: null },
+	/**
+	 * Generalized group-by mode (#3815): an ordered list of arbitrary groups
+	 * `[{ key, title, cards }]` (e.g. cross-board Views grouped by status /
+	 * priority / assignee / board). When provided it DRIVES the row model
+	 * instead of the stack/cardsByStack path - so the same virtualized list,
+	 * collapse and card row render for a board or a cross-board View. Backward
+	 * compatible: absent → the classic per-stack rendering is unchanged.
+	 */
+	groups: { type: Array, default: null },
 	/** Map<labelId, label>. */
 	labelsById: { type: Object, required: true },
 	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq. */
 	boardPrefix: { type: String, default: '' },
-	boardId: { type: [String, Number], required: true },
+	/**
+	 * The deep-link board id for a card. For a single-board list every card
+	 * shares this; for a cross-board View pass null and each card's own boardId
+	 * is used (see openCard).
+	 */
+	boardId: { type: [String, Number], default: null },
 })
 
 const router = useRouter()
 const scrollRef = ref(null)
 
-// Collapsed stack ids, persisted per board (mirrors viewMode/sortMode storage).
-const collapsedKey = computed(() => `kanso.listCollapsed.${props.boardId}`)
+// Persisted collapse scope: per board for the classic path, or a fixed 'views'
+// scope for the generalized group-by path (#3815) where there is no board id.
+const collapseScope = computed(() => (props.groups ? 'views' : props.boardId))
+const collapsedKey = computed(() => `kanso.listCollapsed.${collapseScope.value}`)
 const collapsed = ref(loadCollapsed())
 
 function loadCollapsed() {
 	try {
-		const saved = localStorage.getItem(`kanso.listCollapsed.${props.boardId}`)
+		const saved = localStorage.getItem(`kanso.listCollapsed.${props.groups ? 'views' : props.boardId}`)
 		if (saved) return new Set(JSON.parse(saved))
 	} catch (e) { /* localStorage unavailable - default to all expanded */ }
 	return new Set()
 }
 
-// Reload persisted state when the board changes (component is reused across boards).
-watch(() => props.boardId, () => { collapsed.value = loadCollapsed() })
+// Reload persisted state when the scope changes (component reused across boards/views).
+watch(collapseScope, () => { collapsed.value = loadCollapsed() })
 
-function isCollapsed(stackId) {
-	return collapsed.value.has(stackId)
+function isCollapsed(groupKey) {
+	return collapsed.value.has(groupKey)
 }
 
-function toggleGroup(stackId) {
+function toggleGroup(groupKey) {
 	const next = new Set(collapsed.value)
-	if (next.has(stackId)) next.delete(stackId)
-	else next.add(stackId)
+	if (next.has(groupKey)) next.delete(groupKey)
+	else next.add(groupKey)
 	collapsed.value = next
 	try {
 		localStorage.setItem(collapsedKey.value, JSON.stringify([...next]))
@@ -253,23 +269,42 @@ function groupHints(cards) {
 	return { overdue, blocked }
 }
 
-// A flat row model: one header per stack, then its cards (unless collapsed).
+// Normalize the two grouping sources into one shape: { key, title, color,
+// wipLimit, cards }. Classic path = one group per stack (carrying its color +
+// WIP limit); generalized path (#3815) = the caller-supplied groups (no
+// stack/WIP concept). Everything below renders off this uniform list.
+const normalizedGroups = computed(() => {
+	if (props.groups) {
+		return props.groups.map((g) => ({ key: g.key, title: g.title, color: null, wipLimit: null, cards: g.cards ?? [] }))
+	}
+	const byStack = props.cardsByStack
+	return props.stacks.map((stack) => ({
+		key: `stack:${stack.id}`,
+		title: stack.title,
+		color: stack.color ?? null,
+		wipLimit: (typeof stack.wipLimit === 'number' && stack.wipLimit > 0) ? stack.wipLimit : null,
+		cards: (byStack && byStack.get(stack.id)) ?? [],
+	}))
+})
+
+// A flat row model: one header per group, then its cards (unless collapsed).
 // Collapsed groups drop their card rows entirely so virtualization stays exact.
 const rows = computed(() => {
 	const out = []
-	for (const stack of props.stacks) {
-		const cards = props.cardsByStack.get(stack.id) ?? []
-		const hasWip = typeof stack.wipLimit === 'number' && stack.wipLimit > 0
+	for (const group of normalizedGroups.value) {
+		const cards = group.cards
 		out.push({
 			type: 'header',
-			id: `h${stack.id}`,
-			stack,
+			id: `h${group.key}`,
+			key: group.key,
+			title: group.title,
+			color: group.color,
 			count: cards.length,
-			wip: hasWip ? { count: cards.length, limit: stack.wipLimit, over: cards.length > stack.wipLimit } : null,
+			wip: group.wipLimit !== null ? { count: cards.length, limit: group.wipLimit, over: cards.length > group.wipLimit } : null,
 			progress: groupProgress(cards),
 			hints: groupHints(cards),
 		})
-		if (isCollapsed(stack.id)) continue
+		if (isCollapsed(group.key)) continue
 		for (const card of cards) {
 			out.push({ type: 'card', id: `c${card.id}`, card })
 		}
@@ -289,8 +324,11 @@ const virtualizer = useVirtualizer(computed(() => ({
 	getItemKey: (i) => rows.value[i]?.id ?? i,
 })))
 
-function openCard(cardId) {
-	router.push({ name: 'card-modal', params: { id: String(props.boardId), cardId: String(cardId) } })
+function openCard(card) {
+	// Prefer the card's own boardId (cross-board Views, #3815); fall back to the
+	// single-board prop for the classic per-board list.
+	const boardId = card.boardId ?? props.boardId
+	router.push({ name: 'card-modal', params: { id: String(boardId), cardId: String(card.id) } })
 }
 
 function cardHumanId(card) {

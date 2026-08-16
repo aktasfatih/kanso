@@ -454,6 +454,25 @@ export const getInbox = () =>
 export const getMyCards = () =>
 	axios.get(url('/api/my-cards')).then((r) => r.data)
 
+// Cross-board saved "Views" (#3815). CRUD lives in NC user-config (opaque
+// filter blob); the server stays filter-agnostic. create is upsert-by-name.
+export const getViews = () =>
+	axios.get(url('/api/views')).then((r) => r.data.views)
+
+export const saveView = ({ name, filter, groupBy, display }) =>
+	axios.put(url('/api/views'), { name, filter, groupBy, display }).then((r) => r.data.views)
+
+export const renameView = (id, name) =>
+	axios.patch(url(`/api/views/${encodeURIComponent(id)}`), { name }).then((r) => r.data.views)
+
+export const deleteView = (id) =>
+	axios.delete(url(`/api/views/${encodeURIComponent(id)}`)).then((r) => r.data.views)
+
+// The cross-board card feed a View renders over: enriched summaries from every
+// readable board. The client applies the View's saved filter + group-by.
+export const getViewCards = () =>
+	axios.get(url('/api/views/cards')).then((r) => r.data)
+
 // Review types
 export const createReviewType = (boardId, title, color, stage) =>
 	axios.post(url('/api/review-types'), {

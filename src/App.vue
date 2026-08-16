@@ -39,6 +39,50 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<NcCounterBubble :count="inboxCount" type="highlighted" />
 					</template>
 				</NcAppNavigationItem>
+				<!-- Cross-board saved "Views" (#3815): named saved filters over ALL
+				     readable boards, each opening a List/Timeline surface. Rendered
+				     like the boards list; the section only shows once the user has
+				     at least one saved view. -->
+				<NcAppNavigationItem
+					v-if="views.length > 0"
+					:name="t('kanso', 'Views')"
+					:allow-collapse="true"
+					:open="viewsSectionOpen"
+					@update:open="viewsSectionOpen = $event">
+					<template #icon>
+						<FilterVariantIcon :size="20" />
+					</template>
+					<template #counter>
+						<NcCounterBubble :count="views.length" />
+					</template>
+					<template #default>
+						<NcAppNavigationItem
+							v-for="v in views"
+							:key="v.id"
+							:name="v.name"
+							:to="{ name: 'view', params: { id: String(v.id) } }"
+							:active="isViewActive(v.id)">
+							<template #icon>
+								<FilterVariantIcon :size="18" />
+							</template>
+							<template #actions>
+								<NcActionButton close-after-click @click="promptRenameView(v)">
+									<template #icon>
+										<PencilOutlineIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Rename') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="confirmDeleteView(v)">
+									<template #icon>
+										<DeleteOutlineIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Delete') }}
+								</NcActionButton>
+							</template>
+						</NcAppNavigationItem>
+					</template>
+				</NcAppNavigationItem>
+
 				<NcAppNavigationItem
 					:name="t('kanso', 'Projects')"
 					:to="{ name: 'projects' }"
@@ -154,9 +198,13 @@ import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleO
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
+import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
+import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
+import { useViews } from './composables/useViews.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -256,6 +304,31 @@ const isMyTasksActive = computed(() => route.name === 'my-cards')
 const isMyReviewsActive = computed(() => route.name === 'my-reviews')
 const isInboxActive = computed(() => route.name === 'inbox')
 const isProjectsActive = computed(() => route.name === 'projects' || route.name === 'project')
+
+// Cross-board saved "Views" (#3815). The nav section lists the user's views and
+// offers rename/delete; each item opens /views/:id. Kept mounted so the list
+// warms once. viewsSectionOpen is transient (defaults open).
+const { data: viewsData, rename: renameView, remove: removeView } = useViews()
+const views = computed(() => viewsData.value ?? [])
+const viewsSectionOpen = ref(true)
+function isViewActive(id) {
+	return route.name === 'view' && String(route.params.id) === String(id)
+}
+function promptRenameView(view) {
+	// eslint-disable-next-line no-alert
+	const name = window.prompt(t('kanso', 'Rename view'), view.name)
+	if (name === null) return
+	const trimmed = name.trim()
+	if (trimmed === '' || trimmed === view.name) return
+	renameView.mutate({ id: view.id, name: trimmed })
+}
+function confirmDeleteView(view) {
+	// eslint-disable-next-line no-alert
+	if (!window.confirm(t('kanso', 'Delete view "{name}"?', { name: view.name }))) return
+	// If the deleted view is open, fall back to the board list.
+	if (isViewActive(view.id)) router.push({ name: 'board-list' })
+	removeView.mutate(view.id)
+}
 
 // Badge counts for the three My Work nav items. Reuses the existing feed
 // queries from the shared query cache (no new polling); mounting the nav warms
