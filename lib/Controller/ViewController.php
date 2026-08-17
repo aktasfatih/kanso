@@ -48,8 +48,8 @@ class ViewController extends Controller {
 	private const MAX_FILTER_BYTES = 4096;
 	private const MAX_TOTAL_BYTES = 262144; // 256 KB
 
-	/** The group-by fields the surface offers (mirrors the client selector). */
-	private const GROUP_BY = ['status', 'priority', 'assignee', 'board'];
+	/** The group-by fields the surface offers (mirrors the client selector / VIEW_GROUP_BY). */
+	private const GROUP_BY = ['status', 'priority', 'assignee', 'board', 'type', 'review', 'due', 'owner'];
 
 	/** The display modes the surface offers (Kanban is a separate Phase 2 card). */
 	private const DISPLAYS = ['list', 'timeline'];
