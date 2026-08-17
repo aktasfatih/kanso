@@ -40,6 +40,11 @@ jobs:
         if: env.HAVE_SIGNING_KEY == 'yes'
         run: |
           git clone --depth=1 --branch=v34.0.2 https://github.com/nextcloud/server.git "$RUNNER_TEMP/server"
+          # occ needs the composer autoloader, which nextcloud/server vendors in the
+          # `3rdparty` submodule (absent from a bare clone). Without it, occ aborts
+          # with "Composer autoloader not found" and integrity:sign-app never writes
+          # appinfo/signature.json.
+          git -C "$RUNNER_TEMP/server" submodule update --init --depth=1 3rdparty
           echo "path=$RUNNER_TEMP/server/occ" >> "$GITHUB_OUTPUT"
 
       - name: Build release tarball
