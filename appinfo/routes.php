@@ -163,6 +163,13 @@ return [
 
 		['name' => 'mySteps#index', 'url' => '/api/my-steps', 'verb' => 'GET'],
 
+		// Personal one-shot "remind me" on a card / comment (#3816). All private
+		// to the caller: list own pending reminders, create one (body: remindAt +
+		// optional commentId), cancel one by id. Nested under a card id.
+		['name' => 'reminder#index', 'url' => '/api/cards/{cardId}/reminders', 'verb' => 'GET'],
+		['name' => 'reminder#create', 'url' => '/api/cards/{cardId}/reminders', 'verb' => 'POST'],
+		['name' => 'reminder#destroy', 'url' => '/api/cards/{cardId}/reminders/{reminderId}', 'verb' => 'DELETE'],
+
 		['name' => 'review#mine', 'url' => '/api/reviews/mine', 'verb' => 'GET'],
 		['name' => 'review#request', 'url' => '/api/cards/{id}/reviews/{userId}', 'verb' => 'PUT'],
 		['name' => 'review#withdraw', 'url' => '/api/cards/{id}/reviews/{reviewId}', 'verb' => 'DELETE'],

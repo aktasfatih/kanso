@@ -31,6 +31,7 @@ use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ReminderService;
 use OCA\Kanso\Service\ReviewService;
 use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -50,6 +51,7 @@ class CardControllerTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardContactMapper&MockObject $cardContactMapper;
 	private ReviewService&MockObject $reviewService;
+	private ReminderService&MockObject $reminderService;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private CardMapper&MockObject $cardMapper;
 	private CommentMapper&MockObject $commentMapper;
@@ -78,6 +80,8 @@ class CardControllerTest extends TestCase {
 		$this->cardContactMapper->method('findContactsByCard')->willReturn([]);
 		$this->reviewService = $this->createMock(ReviewService::class);
 		$this->reviewService->method('serializeReviewsForCard')->willReturn([]);
+		$this->reminderService = $this->createMock(ReminderService::class);
+		$this->reminderService->method('listMineForCard')->willReturn([]);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
@@ -127,6 +131,7 @@ class CardControllerTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->cardContactMapper,
 			$this->reviewService,
+			$this->reminderService,
 			$this->checklistItemMapper,
 			$this->cardMapper,
 			$this->commentMapper,

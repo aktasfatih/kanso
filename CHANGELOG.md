@@ -29,6 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dimensions are now available on the board filter bar too. (Kanban display arrives
   in a later phase.)
 
+### Added
+
+- **Personal "Remind me" on cards and comments.** You can now set a private,
+  one-shot reminder for yourself on a card — from the card's overflow menu or from
+  a specific comment (the *Remind me* action in the comment's menu). Pick a preset
+  (*Later today*, *Tomorrow*, *Next week*) or a custom date and time. At the chosen
+  time you get a Nextcloud notification (bell + push) that deep-links to the card
+  (and, for a comment reminder, carries the comment). Reminders are personal: only
+  you see or receive yours, another member on the same card never does. Your pending
+  reminders show on the card with a one-click cancel, firing happens once and catches
+  up if the reminder is overdue, and a reminder on a card that has become invisible
+  to you is silently skipped (no leak).
+- **Open a card as a full page.** A card can now be viewed on its own full-width
+  page at `/card/<id>` instead of only as a dialog overlay. An expand button in the
+  card dialog's header switches to the full-page view, which shows a breadcrumb for
+  the card's board and a *Back to board* affordance. The full page and the dialog
+  render from the same component, so they behave identically — the existing
+  click-a-card-to-open-a-dialog flow is unchanged.
+
 ### Changed
 
 - **Progressive filter (toolbar redesign, phase 2).** The board *Filter* control is

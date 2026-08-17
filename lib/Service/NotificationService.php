@@ -29,6 +29,7 @@ class NotificationService {
 	public const SUBJECT_CARD_DUE = 'card_due';
 	public const SUBJECT_CARD_DUE_SOON = 'card_due_soon';
 	public const SUBJECT_STEP_ASSIGNED = 'step_assigned';
+	public const SUBJECT_CARD_REMINDER = 'card_reminder';
 	public const OBJECT_CARD = 'card';
 	public const OBJECT_CHECKLIST_ITEM = 'checklist_item';
 
@@ -157,6 +158,28 @@ class NotificationService {
 			->setDateTime((new \DateTime())->setTimestamp(time()))
 			->setObject(self::OBJECT_CARD, (string)$cardId)
 			->setSubject($subject, ['cardId' => $cardId]);
+
+		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Fires a personal, one-shot "remind me" (#3816) for $targetUid - the user
+	 * who set the reminder IS the recipient (self-notification is the whole
+	 * point, so there is no self-suppression). Actor-less system event, delivered
+	 * by the personal-reminder cron ({@see \OCA\Kanso\Service\ReminderService}).
+	 * The optional $commentId rides in the subject parameters so the deep link
+	 * can point at the specific comment the reminder was about.
+	 */
+	public function notifyCardReminder(int $cardId, string $targetUid, ?int $commentId = null): void {
+		$notification = $this->manager->createNotification();
+		$notification->setApp('kanso')
+			->setUser($targetUid)
+			->setDateTime((new \DateTime())->setTimestamp(time()))
+			->setObject(self::OBJECT_CARD, (string)$cardId)
+			->setSubject(self::SUBJECT_CARD_REMINDER, [
+				'cardId' => $cardId,
+				'commentId' => $commentId,
+			]);
 
 		$this->manager->notify($notification);
 	}
