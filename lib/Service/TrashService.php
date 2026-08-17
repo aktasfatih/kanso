@@ -24,6 +24,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\ReminderMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
@@ -63,6 +64,7 @@ class TrashService {
 		private CardAttachmentService $cardAttachmentService,
 		private CardTimeEntryService $cardTimeEntryService,
 		private CardFieldValueMapper $cardFieldValueMapper,
+		private ReminderMapper $reminderMapper,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
 	) {
@@ -154,6 +156,9 @@ class TrashService {
 		// Custom-field values (#3537) are plain rows scoped by card_id; drop them
 		// so a purged card strands no field values.
 		$this->cardFieldValueMapper->deleteByCard($cardId);
+		// Personal reminders (#3816) are plain per-user rows scoped by card_id;
+		// drop them so a purged card strands no pending reminders.
+		$this->reminderMapper->deleteByCard($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(

@@ -25,6 +25,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\ReminderMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\CardTimeEntryService;
@@ -57,6 +58,7 @@ class TrashServiceTest extends TestCase {
 	private CardAttachmentService&MockObject $cardAttachmentService;
 	private CardTimeEntryService&MockObject $cardTimeEntryService;
 	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
+	private ReminderMapper&MockObject $reminderMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private TrashService $service;
@@ -81,6 +83,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
 		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
 		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
+		$this->reminderMapper = $this->createMock(ReminderMapper::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->boardAccess->method('contextFor')->willReturnCallback(
 			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
@@ -106,6 +109,7 @@ class TrashServiceTest extends TestCase {
 			$this->cardAttachmentService,
 			$this->cardTimeEntryService,
 			$this->cardFieldValueMapper,
+			$this->reminderMapper,
 			$this->boardAccess,
 			$this->visibilityGuard,
 		);
@@ -242,6 +246,8 @@ class TrashServiceTest extends TestCase {
 		$this->cardTimeEntryService->expects(self::once())->method('deleteAllForCard')->with(9);
 		// Custom-field values are cascaded too (#3537).
 		$this->cardFieldValueMapper->expects(self::once())->method('deleteByCard')->with(9);
+		// Personal reminders are cascaded too (#3816).
+		$this->reminderMapper->expects(self::once())->method('deleteByCard')->with(9);
 		$this->cardMapper->expects(self::once())->method('delete')->with($card);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')

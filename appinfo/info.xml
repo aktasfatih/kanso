@@ -49,6 +49,7 @@ links and webhook, and one-click Import from Deck.
 		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>
 		<job>OCA\Kanso\Cron\SpawnRecurringCards</job>
 		<job>OCA\Kanso\Cron\SendDueReminders</job>
+		<job>OCA\Kanso\Cron\SendPersonalReminders</job>
 		<job>OCA\Kanso\Cron\BackupBoards</job>
 	</background-jobs>
 	<settings>

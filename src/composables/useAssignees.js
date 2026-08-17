@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { computed } from 'vue'
 import { useQueryClient, useQuery, useMutation } from '@tanstack/vue-query'
 import {
 	fetchParticipants as apiFetchParticipants,
@@ -13,11 +14,22 @@ import { invalidateMyWork } from './queryKeys.js'
 /**
  * Resolve a boardId argument that may be a plain value, a Vue ref (.value),
  * a computed ref (.value), or a plain getter function (e.g. () => props.boardId).
+ * When the ref hasn't resolved yet its `.value` is undefined — return that
+ * undefined (NOT the ref object), so callers see a clean "not known yet" and can
+ * guard the query. Returning the ref itself would stringify to "[object Object]"
+ * in the URL (a bogus /boards/[object Object]/participants request). This happens
+ * on the full-page card route, where boardId is only known once the card loads.
  */
 function resolveBoardId(boardId) {
 	if (typeof boardId === 'function') return boardId()
-	if (boardId !== null && typeof boardId === 'object' && boardId.value !== undefined) return boardId.value
+	if (boardId !== null && typeof boardId === 'object' && 'value' in boardId) return boardId.value
 	return boardId
+}
+
+// A board id is usable in a request only once it's a real primitive (number or a
+// numeric string) — undefined/null (ref not resolved yet) must not be fetched.
+function isUsableBoardId(id) {
+	return id !== null && id !== undefined && id !== 'undefined'
 }
 
 /**
@@ -36,10 +48,15 @@ export function useAssignees(boardId) {
 	}
 
 	// ── Participants query ──────────────────────────────────────────────────────
-	// staleTime: 3 minutes - participants list changes rarely
+	// staleTime: 3 minutes - participants list changes rarely.
+	// Key/fetch/enabled are all reactive to boardId: on the full-page card route the
+	// board id is undefined at setup and only resolves once the card loads, so a
+	// non-reactive read would freeze this query on the unresolved value and never
+	// refetch (a broken assignee picker). Guarded so it doesn't fire until known.
 	const participants = useQuery({
-		queryKey: ['participants', resolveBoardId(boardId)],
+		queryKey: computed(() => ['participants', resolveBoardId(boardId)]),
 		queryFn: () => apiFetchParticipants(resolveBoardId(boardId)),
+		enabled: computed(() => isUsableBoardId(resolveBoardId(boardId))),
 		staleTime: 3 * 60 * 1000,
 	})
 
