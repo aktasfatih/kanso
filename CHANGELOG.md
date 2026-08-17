@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.37] - 2026-08-17
+
 ### Added
 
 - **Cross-board saved Views (phase 1: List & Timeline).** A *View* is a named saved
