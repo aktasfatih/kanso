@@ -167,6 +167,10 @@ const GROUP_LABELS = {
 	priority: t('kanso', 'Priority'),
 	assignee: t('kanso', 'Assignee'),
 	board: t('kanso', 'Board'),
+	type: t('kanso', 'Type'),
+	review: t('kanso', 'Review'),
+	due: t('kanso', 'Due date'),
+	owner: t('kanso', 'Owner'),
 }
 const groupByOptions = VIEW_GROUP_BY.map((id) => ({ id, label: GROUP_LABELS[id] }))
 const groupBySel = ref(groupByOptions[0])
@@ -201,7 +205,10 @@ const filteredCards = computed(() => {
 // loaded cross-board cards (no extra request).
 const nameByUid = computed(() => {
 	const m = new Map()
-	for (const c of cards.value) for (const uid of c.assigneeIds || []) if (!m.has(uid)) m.set(uid, uid)
+	for (const c of cards.value) {
+		for (const uid of c.assigneeIds || []) if (!m.has(uid)) m.set(uid, uid)
+		if (c.owner && !m.has(c.owner)) m.set(c.owner, c.owner)
+	}
 	return m
 })
 const titleByBoard = computed(() => {

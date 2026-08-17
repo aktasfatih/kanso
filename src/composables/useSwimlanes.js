@@ -31,6 +31,7 @@
 
 import { translate as t } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from './usePriority.js'
+import { CARD_TYPES } from './useCardType.js'
 
 export const SWIMLANE_MODES = ['none', 'assignee', 'label', 'priority']
 
@@ -136,16 +137,24 @@ export function buildLanes(mode, cardsByStack, labels, participants) {
 /**
  * Group-by fields the cross-board Views surface (#3815) offers. Distinct from
  * SWIMLANE_MODES: Views group a FLAT cross-board card array (no stacks), and add
- * 'status' (done/in-progress/todo) and 'board' on top of the shared
- * assignee/priority logic below.
+ * 'status' (done/in-progress/todo), 'board', 'type', 'review', 'due' and 'owner'
+ * on top of the shared assignee/priority logic below.
  */
-export const VIEW_GROUP_BY = ['status', 'priority', 'assignee', 'board']
+export const VIEW_GROUP_BY = ['status', 'priority', 'assignee', 'board', 'type', 'review', 'due', 'owner']
 
 /** Card status buckets for the 'status' group-by, in display order. */
 const STATUS_ORDER = [
 	{ key: 'status:in_progress', label: 'In progress', match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) > 0 },
 	{ key: 'status:todo', label: 'To do', match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) === 0 },
 	{ key: 'status:done', label: 'Done', match: (c) => Number(c.doneAt ?? 0) > 0 },
+]
+
+/** Review-state buckets for the 'review' group-by, in fixed display order. */
+const REVIEW_ORDER = [
+	{ key: 'review:pending', label: 'Needs review', match: (c) => c.reviewState === 'pending' },
+	{ key: 'review:approved', label: 'Approved', match: (c) => c.reviewState === 'approved' },
+	{ key: 'review:changes_requested', label: 'Changes requested', match: (c) => c.reviewState === 'changes_requested' },
+	{ key: 'review:none', label: 'No review', match: (c) => c.reviewState == null },
 ]
 
 /**
@@ -214,6 +223,76 @@ export function groupCardsByField(field, cards, opts = {}) {
 			const bid = Number(card.boardId ?? 0)
 			const key = 'board:' + bid
 			if (!laneDefs.has(key)) { laneDefs.set(key, { key, title: titleByBoard.get(bid) || card.boardTitle || String(bid), cards: [] }); laneOrder.push(key) }
+			laneDefs.get(key).cards.push(card)
+		}
+		const groups = laneOrder.map((k) => laneDefs.get(k))
+		groups.sort((a, b) => String(a.title).localeCompare(String(b.title)))
+		return groups
+	}
+
+	if (field === 'type') {
+		// One group per built-in type, fixed order, plus a trailing "No type".
+		const byType = new Map()
+		for (const card of all) {
+			const tp = card.type || ''
+			if (!byType.has(tp)) byType.set(tp, [])
+			byType.get(tp).push(card)
+		}
+		const groups = []
+		for (const def of CARD_TYPES) {
+			const bucket = byType.get(def.value) ?? []
+			if (bucket.length > 0) groups.push({ key: 'type:' + def.value, title: t('kanso', def.label), cards: bucket })
+		}
+		const none = byType.get('') ?? []
+		if (none.length > 0) groups.push({ key: 'type:none', title: t('kanso', 'No type'), cards: none })
+		return groups
+	}
+
+	if (field === 'review') {
+		// Fixed-order review buckets; empty ones omitted.
+		const groups = []
+		for (const bucket of REVIEW_ORDER) {
+			const cardsIn = all.filter(bucket.match)
+			if (cardsIn.length > 0) groups.push({ key: bucket.key, title: t('kanso', bucket.label), cards: cardsIn })
+		}
+		return groups
+	}
+
+	if (field === 'due') {
+		// Overdue / This week / Later / No due date, mirroring the due FILTER
+		// buckets. `now` is read once for a stable window across the pass.
+		const now = Date.now()
+		const weekAhead = now + 7 * 24 * 60 * 60 * 1000
+		const overdue = []
+		const week = []
+		const later = []
+		const none = []
+		for (const card of all) {
+			const raw = card.duedate
+			if (!raw) { none.push(card); continue }
+			const time = new Date(raw).getTime()
+			if (Number.isNaN(time)) { none.push(card); continue }
+			if (time < now) overdue.push(card)
+			else if (time <= weekAhead) week.push(card)
+			else later.push(card)
+		}
+		const groups = []
+		if (overdue.length > 0) groups.push({ key: 'due:overdue', title: t('kanso', 'Overdue'), cards: overdue })
+		if (week.length > 0) groups.push({ key: 'due:week', title: t('kanso', 'This week'), cards: week })
+		if (later.length > 0) groups.push({ key: 'due:later', title: t('kanso', 'Later'), cards: later })
+		if (none.length > 0) groups.push({ key: 'due:none', title: t('kanso', 'No due date'), cards: none })
+		return groups
+	}
+
+	if (field === 'owner') {
+		// One group per owner uid (single-valued), locale-sorted by display name.
+		const nameByUid = opts.nameByUid ?? new Map()
+		const laneOrder = []
+		const laneDefs = new Map()
+		for (const card of all) {
+			const uid = card.owner || ''
+			const key = 'owner:' + uid
+			if (!laneDefs.has(key)) { laneDefs.set(key, { key, title: nameByUid.get(uid) || uid || t('kanso', 'No owner'), cards: [] }); laneOrder.push(key) }
 			laneDefs.get(key).cards.push(card)
 		}
 		const groups = laneOrder.map((k) => laneDefs.get(k))

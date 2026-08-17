@@ -107,6 +107,82 @@ test.describe('Cross-board Views (#3815)', () => {
 		await expect(page.locator('.board-list-group__title', { hasText: /ViewsBoardB/ })).toBeVisible()
 	})
 
+	test('richer filter dimensions + new group-by narrow a View (#3815)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		// Seed distinguishing summary fields on the two test cards so the new filter
+		// dimensions + group-by have something deterministic to bite on:
+		//   - card A: type=bug + one comment (commentCount>0)
+		//   - card B: type=feature + no comment
+		// Both are owned by the same admin user (creator), so owner grouping/filter
+		// keeps both, while type/comments narrow to exactly one.
+		await api('PATCH', `/cards/${state.cardAId}`, { type: 'bug' })
+		await api('PATCH', `/cards/${state.cardBId}`, { type: 'feature' })
+		await api('POST', `/cards/${state.cardAId}/comments`, { body: 'a comment for filtering' })
+
+		// A View spanning both boards, filtered to the two per-board labels so it
+		// resolves to EXACTLY the two test cards, grouped by TYPE (a new group-by).
+		const created = await api('PUT', '/views', {
+			name: 'Views filters ' + Math.floor(Date.now() / 1000),
+			filter: { labels: [state.labelA, state.labelB] },
+			groupBy: 'type',
+			display: 'list',
+		})
+		const view = created.views[created.views.length - 1]
+		const filterViewId = view.id
+		expect(filterViewId).toBeTruthy()
+
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${filterViewId}`)
+
+			// Baseline: both cards visible, and the new TYPE group-by renders a "Bug"
+			// and a "Feature" group header.
+			const rowA = page.locator('.board-list-row__title', { hasText: state.cardA })
+			const rowB = page.locator('.board-list-row__title', { hasText: state.cardB })
+			await expect(rowA).toBeVisible({ timeout: 15_000 })
+			await expect(rowB).toBeVisible({ timeout: 15_000 })
+			await expect(page.locator('.board-list-group__title', { hasText: /^Bug$/ })).toBeVisible()
+			await expect(page.locator('.board-list-group__title', { hasText: /^Feature$/ })).toBeVisible()
+
+			// ── New filter dimension #1: TYPE (multi-select, OR within) ──────────────
+			// Open the progressive drill-in filter, drill into Type, pick Bug.
+			await page.locator('.board-filter-bar__trigger').click()
+			await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
+			await page.locator('.board-filter-bar__opt', { hasText: /^Bug$/ }).click()
+			// Only the bug card (A) survives; the feature card (B) drops out.
+			await expect(rowA).toBeVisible({ timeout: 10_000 })
+			await expect(rowB).toHaveCount(0, { timeout: 10_000 })
+
+			// Clear filters back to both cards before exercising the next dimension.
+			await page.locator('.board-filter-bar__back').click()
+			await page.locator('.board-filter-bar__clear').click()
+			await expect(rowB).toBeVisible({ timeout: 10_000 })
+
+			// ── New filter dimension #2: COMMENTS (single-select radio) ──────────────
+			await page.locator('.board-filter-bar__dim-row[data-dim="comments"]').click()
+			await page.locator('.board-filter-bar__opt', { hasText: /Has comments/ }).click()
+			// Only card A (which has a comment) remains.
+			await expect(rowA).toBeVisible({ timeout: 10_000 })
+			await expect(rowB).toHaveCount(0, { timeout: 10_000 })
+
+			// Clear again, close the popover.
+			await page.locator('.board-filter-bar__back').click()
+			await page.locator('.board-filter-bar__clear').click()
+			await page.keyboard.press('Escape')
+			await expect(rowB).toBeVisible({ timeout: 10_000 })
+
+			// ── New group-by: switch to REVIEW ──────────────────────────────────────
+			// Neither card has a review requested, so a "No review" group appears.
+			const groupSelect = page.locator('.view-page__select .vs__dropdown-toggle')
+			await groupSelect.click()
+			await page.locator('.vs__dropdown-option', { hasText: /^Review$/ }).click()
+			await expect(page.locator('.board-list-group__title', { hasText: /No review/ })).toBeVisible({ timeout: 10_000 })
+		} finally {
+			await api('DELETE', `/views/${filterViewId}`).catch(() => {})
+		}
+	})
+
 	test('create a view from the nav (UI, not the API) → opens it → inline rename persists (#3891)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 		await ncLogin(page)

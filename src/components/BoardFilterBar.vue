@@ -247,7 +247,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</li>
 					</ul>
 
-					<!-- Single-select dimensions (Due / Status / Client status): a
+					<!-- Owners (OR within) - reuses the participants list (#3815). No
+					     "unassigned" sentinel: owner is always set. -->
+					<ul v-else-if="activeDim === 'owners'" class="board-filter-bar__opts" role="menu">
+						<li v-for="p in participants" :key="'o-' + p.uid" role="none">
+							<button
+								type="button"
+								role="menuitemcheckbox"
+								:aria-checked="state.owners.has(p.uid) ? 'true' : 'false'"
+								class="board-filter-bar__opt"
+								@click="toggleSet('owners', p.uid)">
+								<span class="board-filter-bar__opt-text">{{ p.displayName || p.uid }}</span>
+								<CheckIcon v-if="state.owners.has(p.uid)" class="board-filter-bar__opt-check" :size="20" />
+							</button>
+						</li>
+					</ul>
+
+					<!-- Review state (OR within) - pending / approved / changes /
+					     no-review sentinel. -->
+					<ul v-else-if="activeDim === 'reviews'" class="board-filter-bar__opts" role="menu">
+						<li v-for="rv in reviewOptions" :key="'r-' + rv.value" role="none">
+							<button
+								type="button"
+								role="menuitemcheckbox"
+								:aria-checked="state.reviews.has(rv.value) ? 'true' : 'false'"
+								class="board-filter-bar__opt"
+								@click="toggleSet('reviews', rv.value)">
+								<span class="board-filter-bar__opt-text">{{ t('kanso', rv.label) }}</span>
+								<CheckIcon v-if="state.reviews.has(rv.value)" class="board-filter-bar__opt-check" :size="20" />
+							</button>
+						</li>
+					</ul>
+
+					<!-- Single-select dimensions (Due / Status / Client status /
+					     Blocked / Checklist / Start date / Sub-card / Comments): a
 					     radio group with an explicit "Any" (value '') clear. -->
 					<ul v-else class="board-filter-bar__opts" role="menu">
 						<li role="none">
@@ -299,9 +332,15 @@ import { scaleTokens } from '../services/estimateScales.js'
 import {
 	UNASSIGNED,
 	UNESTIMATED,
+	REVIEW_NONE,
 	DUE_OPTIONS,
 	DONE_OPTIONS,
 	WAITING_OPTIONS,
+	BLOCKED_OPTIONS,
+	CHECKLIST_OPTIONS,
+	START_OPTIONS,
+	SUBCARD_OPTIONS,
+	COMMENTS_OPTIONS,
 	useFilterCount,
 } from '../composables/useBoardFilters.js'
 
@@ -333,6 +372,15 @@ const cardTypes = CARD_TYPES
 
 // Estimate facet tokens for the board's scale (empty ⇒ facet hidden).
 const estimateTokens = computed(() => scaleTokens(props.estimateScale))
+
+// Review-state facet options (multi-select), fixed order. The 'none' sentinel
+// (REVIEW_NONE) matches cards with no review requested.
+const reviewOptions = [
+	{ value: 'pending', label: 'Needs review' },
+	{ value: 'approved', label: 'Approved' },
+	{ value: 'changes_requested', label: 'Changes requested' },
+	{ value: REVIEW_NONE, label: 'No review' },
+]
 
 const count = useFilterCount(props.state)
 
@@ -423,6 +471,23 @@ const dimensions = computed(() => {
 			summary: setSummary(s.estimates, (tok) => tok === UNESTIMATED ? t('kanso', 'Unestimated') : tok),
 		},
 		{
+			key: 'owners',
+			label: t('kanso', 'Owner'),
+			show: props.participants.length > 0,
+			count: s.owners.size,
+			summary: setSummary(s.owners, (uid) => participantNameByUid.value.get(uid) || uid),
+		},
+		{
+			key: 'reviews',
+			label: t('kanso', 'Review'),
+			show: true,
+			count: s.reviews.size,
+			summary: setSummary(s.reviews, (v) => {
+				const rv = reviewOptions.find((o) => o.value === v)
+				return rv ? t('kanso', rv.label) : ''
+			}),
+		},
+		{
 			key: 'due',
 			label: t('kanso', 'Due date'),
 			show: true,
@@ -446,6 +511,46 @@ const dimensions = computed(() => {
 			count: s.waiting ? 1 : 0,
 			summary: singleSummary(s.waiting, WAITING_OPTIONS),
 		},
+		{
+			key: 'blocked',
+			label: t('kanso', 'Blocked'),
+			show: true,
+			options: BLOCKED_OPTIONS,
+			count: s.blocked ? 1 : 0,
+			summary: singleSummary(s.blocked, BLOCKED_OPTIONS),
+		},
+		{
+			key: 'checklist',
+			label: t('kanso', 'Checklist'),
+			show: true,
+			options: CHECKLIST_OPTIONS,
+			count: s.checklist ? 1 : 0,
+			summary: singleSummary(s.checklist, CHECKLIST_OPTIONS),
+		},
+		{
+			key: 'startDate',
+			label: t('kanso', 'Start date'),
+			show: true,
+			options: START_OPTIONS,
+			count: s.startDate ? 1 : 0,
+			summary: singleSummary(s.startDate, START_OPTIONS),
+		},
+		{
+			key: 'subcard',
+			label: t('kanso', 'Sub-cards'),
+			show: true,
+			options: SUBCARD_OPTIONS,
+			count: s.subcard ? 1 : 0,
+			summary: singleSummary(s.subcard, SUBCARD_OPTIONS),
+		},
+		{
+			key: 'comments',
+			label: t('kanso', 'Comments'),
+			show: true,
+			options: COMMENTS_OPTIONS,
+			count: s.comments ? 1 : 0,
+			summary: singleSummary(s.comments, COMMENTS_OPTIONS),
+		},
 	]
 })
 
@@ -454,13 +559,12 @@ const visibleDimensions = computed(() => dimensions.value.filter((d) => d.show))
 const activeDimMeta = computed(() =>
 	dimensions.value.find((d) => d.key === activeDim.value) ?? {})
 
-// The current value of the drilled-in single-select dimension (due/done/waiting).
-const currentSingleValue = computed(() => {
-	if (activeDim.value === 'due') return props.state.due
-	if (activeDim.value === 'done') return props.state.done
-	if (activeDim.value === 'waiting') return props.state.waiting
-	return null
-})
+// The current value of the drilled-in single-select dimension. All single-select
+// dimensions store their value directly under a state key matching activeDim.
+const SINGLE_SELECT_DIMS = ['due', 'done', 'waiting', 'blocked', 'checklist', 'startDate', 'subcard', 'comments']
+const currentSingleValue = computed(() =>
+	SINGLE_SELECT_DIMS.includes(activeDim.value) ? props.state[activeDim.value] : null,
+)
 
 function toggleSet(dim, value) {
 	const set = props.state[dim]
@@ -479,9 +583,16 @@ function clearAll() {
 	props.state.priorities.clear()
 	props.state.types.clear()
 	props.state.estimates.clear()
+	props.state.owners.clear()
+	props.state.reviews.clear()
 	props.state.due = null
 	props.state.done = null
 	props.state.waiting = null
+	props.state.blocked = null
+	props.state.checklist = null
+	props.state.startDate = null
+	props.state.subcard = null
+	props.state.comments = null
 }
 
 function submitSave() {
