@@ -1114,10 +1114,10 @@ async function handleDeleteSavedFilter(name) {
 // Two watchers keep the live filter and the URL query in lock-step. There is NO
 // mutation guard flag: the feedback loop is broken purely by value-equality —
 // each watcher no-ops when the two sides already encode the same filter, so an
-// edit propagates exactly one hop and then settles. Only the filter keys
-// (fl/fa/fp/ft/fe/fd/fs/fw — one per filter dimension, matching filterToQuery)
-// are owned here; other query params are preserved untouched.
-const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'ft', 'fe', 'fd', 'fs', 'fw']
+// edit propagates exactly one hop and then settles. Only the filter keys (one
+// per filter dimension, matching filterToQuery / FILTER_QUERY_KEYS) are owned
+// here; other query params are preserved untouched.
+const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'ft', 'fe', 'fo', 'fr', 'fd', 'fs', 'fw', 'fb', 'fk', 'fsd', 'fsc', 'fcm']
 
 // Apply the URL's filter params onto the state (shared link / back-forward).
 function applyUrlToFilter() {

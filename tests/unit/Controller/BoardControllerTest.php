@@ -31,6 +31,7 @@ use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -104,6 +105,21 @@ class BoardControllerTest extends TestCase {
 		$user->method('getUID')->willReturn('alice');
 		$this->userSession->method('getUser')->willReturn($user);
 
+		// The per-card summary enrichment now lives in a shared CardSummaryService
+		// (#3815). Inject a REAL service built from the same mapper mocks the tests
+		// stub, so every existing show()/changes() assertion still exercises the
+		// same enrichment fold through the controller.
+		$cardSummaryService = new CardSummaryService(
+			$this->cardLabelMapper,
+			$this->cardAssigneeMapper,
+			$this->cardContactMapper,
+			$this->checklistItemMapper,
+			$this->cardMapper,
+			$this->commentMapper,
+			$this->cardReviewMapper,
+			$this->cardRelationMapper,
+		);
+
 		$this->controller = new BoardController(
 			'kanso',
 			$this->request,
@@ -115,19 +131,13 @@ class BoardControllerTest extends TestCase {
 			$this->stackMapper,
 			$this->cardMapper,
 			$this->labelMapper,
-			$this->cardLabelMapper,
-			$this->cardAssigneeMapper,
-			$this->cardContactMapper,
-			$this->cardReviewMapper,
 			$this->reviewTypeMapper,
 			$this->cardFieldMapper,
-			$this->checklistItemMapper,
-			$this->commentMapper,
 			$this->aclMapper,
 			$this->permissionService,
 			$this->subscriptionService,
-			$this->cardRelationMapper,
-			$this->boardAccess
+			$this->boardAccess,
+			$cardSummaryService
 		);
 	}
 

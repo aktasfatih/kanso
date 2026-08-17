@@ -39,6 +39,61 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<NcCounterBubble :count="inboxCount" type="highlighted" />
 					</template>
 				</NcAppNavigationItem>
+				<!-- Cross-board saved "Views" (#3815): named saved filters over ALL
+				     readable boards, each opening a List/Timeline surface. Always
+				     shown (even with none yet) so the first view can be created from
+				     here — the "New view" entry at the bottom; otherwise it lists
+				     views like the boards list. -->
+				<NcAppNavigationItem
+					:name="t('kanso', 'Views')"
+					:allow-collapse="true"
+					:open="viewsSectionOpen"
+					@click="onViewsHeaderClick"
+					@update:open="viewsSectionOpen = $event">
+					<template #icon>
+						<FilterVariantIcon :size="20" />
+					</template>
+					<template v-if="views.length > 0" #counter>
+						<NcCounterBubble :count="views.length" />
+					</template>
+					<template #default>
+						<NcAppNavigationItem
+							v-for="v in views"
+							:key="v.id"
+							:name="v.name"
+							:to="{ name: 'view', params: { id: String(v.id) } }"
+							:active="isViewActive(v.id)">
+							<template #icon>
+								<FilterVariantIcon :size="18" />
+							</template>
+							<template #actions>
+								<NcActionButton close-after-click @click="promptRenameView(v)">
+									<template #icon>
+										<PencilOutlineIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Rename') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="confirmDeleteView(v)">
+									<template #icon>
+										<DeleteOutlineIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Delete') }}
+								</NcActionButton>
+							</template>
+						</NcAppNavigationItem>
+						<!-- Create entry — the only way to make the first view (#3891). -->
+						<NcAppNavigationItem
+							class="app-nav__view-new"
+							:name="views.length > 0 ? t('kanso', 'New view') : t('kanso', 'Create your first view')"
+							:loading="creatingView"
+							@click="createView">
+							<template #icon>
+								<PlusIcon :size="18" />
+							</template>
+						</NcAppNavigationItem>
+					</template>
+				</NcAppNavigationItem>
+
 				<NcAppNavigationItem
 					:name="t('kanso', 'Projects')"
 					:to="{ name: 'projects' }"
@@ -154,9 +209,14 @@ import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleO
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
+import PlusIcon from 'vue-material-design-icons/Plus.vue'
+import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
+import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
+import { useViews } from './composables/useViews.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -256,6 +316,63 @@ const isMyTasksActive = computed(() => route.name === 'my-cards')
 const isMyReviewsActive = computed(() => route.name === 'my-reviews')
 const isInboxActive = computed(() => route.name === 'inbox')
 const isProjectsActive = computed(() => route.name === 'projects' || route.name === 'project')
+
+// Cross-board saved "Views" (#3815). The nav section lists the user's views and
+// offers rename/delete; each item opens /views/:id. Kept mounted so the list
+// warms once. viewsSectionOpen is transient (defaults open).
+const { data: viewsData, save: saveView, rename: renameView, remove: removeView } = useViews()
+const views = computed(() => viewsData.value ?? [])
+const viewsSectionOpen = ref(true)
+function isViewActive(id) {
+	return route.name === 'view' && String(route.params.id) === String(id)
+}
+// The "Views" header is a collapsible section with no page of its own. Without
+// this, NcAppNavigationItem renders it as an <a href="#"> that only preventDefaults
+// for real router links, so a bare click fell through to the hash router and
+// navigated to "/" (the boards page). Swallow the navigation and just toggle the
+// section instead.
+function onViewsHeaderClick(event) {
+	event?.preventDefault?.()
+	viewsSectionOpen.value = !viewsSectionOpen.value
+}
+
+// Create a new (empty, all-boards) view and open it so the user can set its
+// filter / group-by / display and rename it in place. This is the entry point a
+// user with zero views needs — without it the feature is unreachable (#3891).
+const creatingView = ref(false)
+async function createView() {
+	if (creatingView.value) return
+	creatingView.value = true
+	try {
+		// Unique default name so the upsert-by-name create never collides with an
+		// existing view; the user renames it from the view header.
+		const base = t('kanso', 'New view')
+		const taken = new Set(views.value.map((v) => v.name))
+		let name = base
+		for (let n = 2; taken.has(name); n++) name = `${base} ${n}`
+		const list = await saveView.mutateAsync({ name, filter: {}, groupBy: 'status', display: 'list' })
+		viewsSectionOpen.value = true
+		const created = (list ?? []).find((v) => v.name === name)
+		if (created) router.push({ name: 'view', params: { id: String(created.id) } })
+	} finally {
+		creatingView.value = false
+	}
+}
+function promptRenameView(view) {
+	// eslint-disable-next-line no-alert
+	const name = window.prompt(t('kanso', 'Rename view'), view.name)
+	if (name === null) return
+	const trimmed = name.trim()
+	if (trimmed === '' || trimmed === view.name) return
+	renameView.mutate({ id: view.id, name: trimmed })
+}
+function confirmDeleteView(view) {
+	// eslint-disable-next-line no-alert
+	if (!window.confirm(t('kanso', 'Delete view "{name}"?', { name: view.name }))) return
+	// If the deleted view is open, fall back to the board list.
+	if (isViewActive(view.id)) router.push({ name: 'board-list' })
+	removeView.mutate(view.id)
+}
 
 // Badge counts for the three My Work nav items. Reuses the existing feed
 // queries from the shared query cache (no new polling); mounting the nav warms

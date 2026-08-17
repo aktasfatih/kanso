@@ -72,6 +72,14 @@ const routes = [
 		component: () => import('../views/InboxView.vue'),
 	},
 	{
+		// Cross-board saved "Views" (#3815): a named saved filter over all
+		// readable boards, opening a board-like List/Timeline surface.
+		path: '/views/:id',
+		name: 'view',
+		component: () => import('../views/ViewPage.vue'),
+		props: true,
+	},
+	{
 		path: '/projects',
 		name: 'projects',
 		component: () => import('../views/ProjectsView.vue'),

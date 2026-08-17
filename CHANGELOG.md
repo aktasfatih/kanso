@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cross-board saved Views (phase 1: List & Timeline).** A *View* is a named saved
+  filter that spans **every board you can read**. Create one from the **New view**
+  entry in the left-nav *Views* section, then set its filter, **group-by** (Status,
+  Priority, Assignee, Board, Type, Review, Due date, or Owner) and **display** (List
+  or Timeline) and rename it in place from the view header (or from the nav's
+  rename/delete). Views appear in a collapsible *Views* section in the left nav like
+  your boards; opening one shows a board-like surface over the matching cards from
+  all your boards at once. Views reuse the same filter engine as the board filter
+  bar — including the full dimension set (labels, assignees, priority, type,
+  estimate, owner, review state, due/start date, done, client status, blocked,
+  checklist, sub-cards, and comments) — and only ever read boards you have access to,
+  so a View never surfaces cards from a board you can't see. The same richer filter
+  dimensions are now available on the board filter bar too. (Kanban display arrives
+  in a later phase.)
+
+### Added
+
 - **Personal "Remind me" on cards and comments.** You can now set a private,
   one-shot reminder for yourself on a card — from the card's overflow menu or from
   a specific comment (the *Remind me* action in the comment's menu). Pick a preset

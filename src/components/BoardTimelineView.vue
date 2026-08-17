@@ -238,12 +238,25 @@ const props = defineProps({
 	stacks: { type: Array, default: () => [] },
 	/** Map<stackId, card[]> from BoardView - same source the List view groups on. */
 	cardsByStack: { type: Object, default: null },
+	/**
+	 * Generalized group-by mode (#3815): an ordered list of arbitrary groups
+	 * `[{ key, title, cards }]` (cross-board Views grouped by status / priority /
+	 * assignee / board). When provided it drives the timeline row grouping instead
+	 * of the stack path. Backward compatible: absent → the classic stack (or flat
+	 * single-group) rendering is unchanged.
+	 */
+	groups: { type: Array, default: null },
 	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq. */
 	boardPrefix: { type: String, default: '' },
 	/** Whether the current user may edit cards (board permission bit 2). Gates
 	 *  drag-to-schedule: read-only viewers get no draggable footer cards. */
 	canEdit: { type: Boolean, default: false },
-	boardId: { type: [String, Number], required: true },
+	/**
+	 * The single-board id (classic per-board timeline). Null for a cross-board
+	 * View (#3815), where each card carries its own boardId and drag-to-schedule
+	 * is disabled (canEdit=false), so no board-scoped mutation ever runs.
+	 */
+	boardId: { type: [String, Number], default: null },
 })
 
 const router = useRouter()
@@ -362,7 +375,26 @@ function layoutOf(card) {
 const grouped = computed(() => {
 	const groupsOut = []
 	const unsched = []
-	if (props.stacks.length && props.cardsByStack) {
+	if (props.groups) {
+		// Generalized group-by (#3815): each caller group becomes a synthetic
+		// "stack" (string id = collapse key, no color), keeping the pane/track
+		// grouping render identical. A card may appear in MULTIPLE groups (e.g.
+		// group-by-assignee surfaces a multi-assignee card in each lane), so the
+		// flat unscheduled footer is de-duplicated by id to avoid duplicate keys.
+		const seenUnsched = new Set()
+		for (const group of props.groups) {
+			const rows = []
+			for (const card of group.cards ?? []) {
+				const l = layoutOf(card)
+				if (l === null) {
+					if (!seenUnsched.has(card.id)) { seenUnsched.add(card.id); unsched.push(card) }
+				} else {
+					rows.push(l)
+				}
+			}
+			if (rows.length) groupsOut.push({ stack: { id: group.key, title: group.title, color: null }, rows })
+		}
+	} else if (props.stacks.length && props.cardsByStack) {
 		for (const stack of props.stacks) {
 			const cards = props.cardsByStack.get(stack.id) ?? []
 			const rows = []
@@ -553,7 +585,14 @@ function cardHumanId(card) {
 }
 
 function openCard(cardId) {
-	router.push({ name: 'card-modal', params: { id: String(props.boardId), cardId: String(cardId) } })
+	// Cross-board Views (#3815): resolve each card's own boardId for the deep
+	// link; fall back to the single-board prop for the classic per-board timeline.
+	let boardId = props.boardId
+	if (props.groups) {
+		const found = props.cards.find((c) => c.id === cardId)
+		if (found && found.boardId != null) boardId = found.boardId
+	}
+	router.push({ name: 'card-modal', params: { id: String(boardId), cardId: String(cardId) } })
 }
 
 // Scroll the track so today's marker is centered (or as close as the range allows).
