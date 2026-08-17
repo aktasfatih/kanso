@@ -40,11 +40,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 				</NcAppNavigationItem>
 				<!-- Cross-board saved "Views" (#3815): named saved filters over ALL
-				     readable boards, each opening a List/Timeline surface. Rendered
-				     like the boards list; the section only shows once the user has
-				     at least one saved view. -->
+				     readable boards, each opening a List/Timeline surface. Always
+				     shown (even with none yet) so the first view can be created from
+				     here — the "New view" entry at the bottom; otherwise it lists
+				     views like the boards list. -->
 				<NcAppNavigationItem
-					v-if="views.length > 0"
 					:name="t('kanso', 'Views')"
 					:allow-collapse="true"
 					:open="viewsSectionOpen"
@@ -52,7 +52,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<template #icon>
 						<FilterVariantIcon :size="20" />
 					</template>
-					<template #counter>
+					<template v-if="views.length > 0" #counter>
 						<NcCounterBubble :count="views.length" />
 					</template>
 					<template #default>
@@ -78,6 +78,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									</template>
 									{{ t('kanso', 'Delete') }}
 								</NcActionButton>
+							</template>
+						</NcAppNavigationItem>
+						<!-- Create entry — the only way to make the first view (#3891). -->
+						<NcAppNavigationItem
+							class="app-nav__view-new"
+							:name="views.length > 0 ? t('kanso', 'New view') : t('kanso', 'Create your first view')"
+							:loading="creatingView"
+							@click="createView">
+							<template #icon>
+								<PlusIcon :size="18" />
 							</template>
 						</NcAppNavigationItem>
 					</template>
@@ -199,6 +209,7 @@ import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
+import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import { useBoards } from './composables/useBoards.js'
@@ -308,11 +319,34 @@ const isProjectsActive = computed(() => route.name === 'projects' || route.name 
 // Cross-board saved "Views" (#3815). The nav section lists the user's views and
 // offers rename/delete; each item opens /views/:id. Kept mounted so the list
 // warms once. viewsSectionOpen is transient (defaults open).
-const { data: viewsData, rename: renameView, remove: removeView } = useViews()
+const { data: viewsData, save: saveView, rename: renameView, remove: removeView } = useViews()
 const views = computed(() => viewsData.value ?? [])
 const viewsSectionOpen = ref(true)
 function isViewActive(id) {
 	return route.name === 'view' && String(route.params.id) === String(id)
+}
+
+// Create a new (empty, all-boards) view and open it so the user can set its
+// filter / group-by / display and rename it in place. This is the entry point a
+// user with zero views needs — without it the feature is unreachable (#3891).
+const creatingView = ref(false)
+async function createView() {
+	if (creatingView.value) return
+	creatingView.value = true
+	try {
+		// Unique default name so the upsert-by-name create never collides with an
+		// existing view; the user renames it from the view header.
+		const base = t('kanso', 'New view')
+		const taken = new Set(views.value.map((v) => v.name))
+		let name = base
+		for (let n = 2; taken.has(name); n++) name = `${base} ${n}`
+		const list = await saveView.mutateAsync({ name, filter: {}, groupBy: 'status', display: 'list' })
+		viewsSectionOpen.value = true
+		const created = (list ?? []).find((v) => v.name === name)
+		if (created) router.push({ name: 'view', params: { id: String(created.id) } })
+	} finally {
+		creatingView.value = false
+	}
 }
 function promptRenameView(view) {
 	// eslint-disable-next-line no-alert

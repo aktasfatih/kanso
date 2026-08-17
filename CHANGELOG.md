@@ -15,14 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Cross-board saved Views (phase 1: List & Timeline).** A *View* is a named saved
-  filter that spans **every board you can read** — create one from any filter, name
-  it, and it appears in a collapsible *Views* section in the left nav (with rename
-  and delete). Opening a View shows a board-like surface over the matching cards
-  from all your boards at once, with a **display switcher** (List or Timeline) and a
-  **group-by selector** (Status, Priority, Assignee, or Board). Views reuse the same
-  filter engine as the board filter bar and only ever read boards you have access to
-  — a View never surfaces cards from a board you can't see. (Kanban display arrives
-  in a later phase.)
+  filter that spans **every board you can read**. Create one from the **New view**
+  entry in the left-nav *Views* section, then set its filter, **group-by** (Status,
+  Priority, Assignee, or Board) and **display** (List or Timeline) and rename it in
+  place from the view header (or from the nav's rename/delete). Views appear in a
+  collapsible *Views* section in the left nav like your boards; opening one shows a
+  board-like surface over the matching cards from all your boards at once. Views
+  reuse the same filter engine as the board filter bar and only ever read boards you
+  have access to — a View never surfaces cards from a board you can't see. (Kanban
+  display arrives in a later phase.)
 
 ### Changed
 

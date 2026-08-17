@@ -106,4 +106,36 @@ test.describe('Cross-board Views (#3815)', () => {
 		await expect(page.locator('.board-list-group__title', { hasText: /ViewsBoardA/ })).toBeVisible()
 		await expect(page.locator('.board-list-group__title', { hasText: /ViewsBoardB/ })).toBeVisible()
 	})
+
+	test('create a view from the nav (UI, not the API) → opens it → inline rename persists (#3891)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/`)
+
+		// The "New view" create entry is present in the Views nav section (this is the
+		// only way to make the first view; it exists even with zero views).
+		const newViewEntry = page.locator('.app-nav__view-new').first()
+		await expect(newViewEntry).toBeVisible({ timeout: 15_000 })
+		await newViewEntry.click()
+
+		// Clicking it creates a view and opens the View surface at /views/:id.
+		await expect(page).toHaveURL(/#\/views\/[^/]+$/, { timeout: 15_000 })
+		const uiViewId = page.url().split('/views/')[1]
+		expect(uiViewId).toBeTruthy()
+
+		// Rename it in place via the editable title; the new name persists to the nav.
+		const newName = 'UI View ' + Math.floor(Date.now() / 1000)
+		await page.locator('.view-page__title').click()
+		const input = page.locator('.view-page__title-input')
+		await expect(input).toBeVisible({ timeout: 5_000 })
+		await input.fill(newName)
+		await input.press('Enter')
+
+		await expect(
+			page.locator('.app-navigation').getByText(newName, { exact: true }),
+		).toBeVisible({ timeout: 10_000 })
+
+		// Cleanup the UI-created view.
+		await api('DELETE', `/views/${uiViewId}`).catch(() => {})
+	})
 })

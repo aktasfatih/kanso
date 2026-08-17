@@ -5,7 +5,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <template>
 	<div class="view-page">
 		<div class="view-page__header kanso-page-header">
-			<h1 class="view-page__title">{{ view ? view.name : t('kanso', 'View') }}</h1>
+			<input
+				v-if="view && editingTitle"
+				ref="titleInput"
+				v-model="titleDraft"
+				class="view-page__title-input"
+				:aria-label="t('kanso', 'View name')"
+				@keyup.enter="commitTitle"
+				@keyup.escape="cancelTitle"
+				@blur="commitTitle">
+			<h1
+				v-else
+				class="view-page__title"
+				:class="{ 'view-page__title--editable': !!view }"
+				:title="view ? t('kanso', 'Rename view') : ''"
+				@click="startTitleEdit">
+				{{ view ? view.name : t('kanso', 'View') }}
+			</h1>
 
 			<div class="view-page__controls">
 				<!-- Filter editor: the SAME progressive filter control the board uses
@@ -91,7 +107,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
@@ -117,10 +133,32 @@ const props = defineProps({
 	id: { type: String, required: true },
 })
 
-const { data: viewsData, save } = useViews()
+const { data: viewsData, save, rename } = useViews()
 const { data: cardsData, isLoading, isError } = useViewCards()
 
 const view = computed(() => (viewsData.value ?? []).find((v) => String(v.id) === String(props.id)) ?? null)
+
+// ── Inline rename of the view title (rename by id — distinct from the filter
+// bar's save-as-name, which forks a new view) ────────────────────────────────
+const editingTitle = ref(false)
+const titleDraft = ref('')
+const titleInput = ref(null)
+function startTitleEdit() {
+	if (!view.value) return
+	titleDraft.value = view.value.name
+	editingTitle.value = true
+	nextTick(() => titleInput.value?.focus())
+}
+async function commitTitle() {
+	if (!editingTitle.value) return
+	editingTitle.value = false
+	const name = titleDraft.value.trim()
+	if (!view.value || name === '' || name === view.value.name) return
+	await rename.mutateAsync({ id: view.value.id, name })
+}
+function cancelTitle() {
+	editingTitle.value = false
+}
 
 // ── Group-by + display state (declared BEFORE the view watch so the immediate
 // run can seed them even when the views list is already cache-warm) ──────────
@@ -241,6 +279,26 @@ async function onSaveFromBar(name) {
 	font-size: 1.4rem;
 	font-weight: 600;
 	margin: 0;
+	border-radius: var(--border-radius);
+	padding: 2px 6px;
+	margin-inline-start: -6px;
+}
+.view-page__title--editable {
+	cursor: text;
+}
+.view-page__title--editable:hover {
+	background: var(--color-background-hover);
+}
+.view-page__title-input {
+	font-size: 1.4rem;
+	font-weight: 600;
+	margin: 0 0 0 -6px;
+	padding: 2px 6px;
+	border: 2px solid var(--color-primary-element);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	min-width: 320px;
 }
 
 .view-page__controls {
