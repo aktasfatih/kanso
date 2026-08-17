@@ -48,6 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:name="t('kanso', 'Views')"
 					:allow-collapse="true"
 					:open="viewsSectionOpen"
+					@click="onViewsHeaderClick"
 					@update:open="viewsSectionOpen = $event">
 					<template #icon>
 						<FilterVariantIcon :size="20" />
@@ -324,6 +325,15 @@ const views = computed(() => viewsData.value ?? [])
 const viewsSectionOpen = ref(true)
 function isViewActive(id) {
 	return route.name === 'view' && String(route.params.id) === String(id)
+}
+// The "Views" header is a collapsible section with no page of its own. Without
+// this, NcAppNavigationItem renders it as an <a href="#"> that only preventDefaults
+// for real router links, so a bare click fell through to the hash router and
+// navigated to "/" (the boards page). Swallow the navigation and just toggle the
+// section instead.
+function onViewsHeaderClick(event) {
+	event?.preventDefault?.()
+	viewsSectionOpen.value = !viewsSectionOpen.value
 }
 
 // Create a new (empty, all-boards) view and open it so the user can set its
