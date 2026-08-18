@@ -11,6 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.9.38](https://github.com/aktasfatih/kanso/compare/v0.9.37...v0.9.38) (2026-08-18)
+
+
+### Bug Fixes
+
+* **import:** survive long/edge-case titles in Deck import ([8b05072](https://github.com/aktasfatih/kanso/commit/8b05072834ec07024e8872b3b1d7a7055e604f95)), closes [#40](https://github.com/aktasfatih/kanso/issues/40)
+* **ui:** legible error-red on card tiles in dark mode ([fa6d864](https://github.com/aktasfatih/kanso/commit/fa6d864f90ed86b72eac543cbd553b15fa0c5dd6)), closes [#40](https://github.com/aktasfatih/kanso/issues/40)
+
 ## [0.9.37] - 2026-08-17
 
 ### Added
