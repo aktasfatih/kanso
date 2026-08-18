@@ -6,13 +6,17 @@ on:
   # Changes land via PRs (the pull_request run is the merge gate). We ALSO run the
   # full suite on pushes to main so the repo page shows main's status: each merge
   # to main re-runs the matrix and stamps that commit green. Feature-branch pushes
-  # are NOT matched here (only main + release tags), so a PR still fires exactly
-  # one run via pull_request — no double-runs. This does repeat the ~1.5h suite the
-  # PR already passed; that is the deliberate cost of an always-visible green
-  # status on main.
+  # are NOT matched here (only main), so a PR still fires exactly one run via
+  # pull_request — no double-runs. This does repeat the ~1.5h suite the PR already
+  # passed; that is the deliberate cost of an always-visible green status on main.
+  #
+  # Tags are intentionally NOT triggered: releases are cut by semantic-release
+  # from an already-green main commit, so the tag inherits that commit's status
+  # (statuses attach to the SHA, not the ref) — re-running the suite on the tag
+  # would just repeat the identical tree. The release commit also carries
+  # `[skip ci]`, so it never triggers this workflow either.
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
 
 # Cancel an in-progress run when a newer commit is pushed to the same branch

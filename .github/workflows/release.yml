@@ -2,14 +2,26 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 name: Release
 
-# Tag a release: git tag v0.9.0 && git push origin v0.9.0
+# semantic-release owns the whole release: it reads the Conventional-Commit
+# history since the last tag, computes the next version, updates the changelog,
+# builds + signs the tarball, publishes the GitHub release, uploads to the
+# Nextcloud App Store, and commits the version bump back to main.
+#
+# Trigger: manual button (a human gate on public-store releases). Run it from
+# Actions → Release → "Run workflow" whenever you want to cut a release.
+#
+# To go fully continuous instead (a release on every push to main that contains
+# a fix:/feat: commit), add:
+#   push:
+#     branches: [main]
+# The release commit is tagged `[skip ci]`, so it never re-triggers CI.
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write        # create the tag/release and push the release commit
+  issues: write          # semantic-release comments on released issues
+  pull-requests: write   # …and on released PRs
 
 jobs:
   release:
@@ -20,6 +32,15 @@ jobs:
       HAVE_SIGNING_KEY: ${{ secrets.APP_PRIVATE_KEY != '' && 'yes' || '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # semantic-release needs the full history + all tags to find the last
+          # release and analyse commits since. RELEASE_TOKEN (a PAT/App token
+          # allowed to push to protected main) is preferred; without it the push
+          # of the version-bump commit to main will be rejected by branch
+          # protection. Falls back to GITHUB_TOKEN for dry runs / forks.
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v7
         with:
@@ -31,69 +52,32 @@ jobs:
           php-version: '8.3'
           tools: composer
 
-      # Nextcloud occ is only needed to embed appinfo/signature.json. We fetch a
-      # matching server checkout so `occ integrity:sign-app` is available in CI.
-      # Signing is gated on the APP_PRIVATE_KEY secret being present; without it
-      # the build still produces a valid (unsigned) tarball.
+      # occ is only needed to embed appinfo/signature.json. Fetch a matching
+      # server checkout so `occ integrity:sign-app` is available; gated on the
+      # signing key being present. The 3rdparty submodule provides occ's
+      # composer autoloader (a bare clone lacks it and occ aborts).
       - name: Provide occ for signing
         id: occ
         if: env.HAVE_SIGNING_KEY == 'yes'
         run: |
           git clone --depth=1 --branch=v34.0.2 https://github.com/nextcloud/server.git "$RUNNER_TEMP/server"
-          # occ needs the composer autoloader, which nextcloud/server vendors in the
-          # `3rdparty` submodule (absent from a bare clone). Without it, occ aborts
-          # with "Composer autoloader not found" and integrity:sign-app never writes
-          # appinfo/signature.json.
           git -C "$RUNNER_TEMP/server" submodule update --init --depth=1 3rdparty
           echo "path=$RUNNER_TEMP/server/occ" >> "$GITHUB_OUTPUT"
 
-      - name: Build release tarball
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Build js/ once here; build-release.sh then reuses it (SKIP_BUILD=1)
+      # instead of running a second npm ci + vite build inside prepare.
+      - name: Build frontend
+        run: npm run build
+
+      - name: Semantic release
         env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           APP_CERTIFICATE: ${{ secrets.APP_CERTIFICATE }}
           OCC: ${{ steps.occ.outputs.path }}
-        run: bash scripts/build-release.sh
-
-      # Build user-facing release notes from the matching CHANGELOG section
-      # (Keep a Changelog) so the release description is the actual "what
-      # changed", not maintainer packaging notes. GitHub then appends its own
-      # auto-generated "What's Changed" / contributors / full-changelog block.
-      - name: Assemble release notes from CHANGELOG
-        id: notes
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          notes="$RUNNER_TEMP/release-notes.md"
-          section="$(awk -v v="$version" '
-            $0 ~ ("^## \\[" v "\\]") {f=1; next}
-            /^## \[/ {f=0}
-            f {print}
-          ' CHANGELOG.md)"
-          {
-            if [ -n "$section" ]; then
-              printf '%s\n' "$section"
-            else
-              echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
-            fi
-            echo
-            echo '## Install'
-            echo
-            echo 'Extract `kanso.tar.gz` into your Nextcloud `custom_apps/` (or `apps/`) directory and enable it:'
-            echo
-            echo '```sh'
-            echo 'tar -xzf kanso.tar.gz -C /path/to/nextcloud/custom_apps'
-            echo 'sudo -u www-data php /path/to/nextcloud/occ app:enable kanso'
-            echo '```'
-            echo
-            echo 'Requires Nextcloud 30–34 on PHP 8.2–8.3.'
-          } > "$notes"
-          echo "path=$notes" >> "$GITHUB_OUTPUT"
-
-      - name: Attach tarball to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            build/kanso.tar.gz
-            build/kanso.tar.gz.sig.base64
-          fail_on_unmatched_files: false
-          body_path: ${{ steps.notes.outputs.path }}
-          generate_release_notes: true
+          NC_APPSTORE_TOKEN: ${{ secrets.NC_APPSTORE_TOKEN }}
+          SKIP_BUILD: '1'
+        run: npx semantic-release

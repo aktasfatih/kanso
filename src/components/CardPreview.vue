@@ -274,6 +274,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .card-preview {
+	/* Legible error red for the overdue date + urgent priority chips. Mirrors
+	 * CardTile (#3905): stock --color-error in light, brighter red under dark. */
+	--kanso-error-legible: var(--color-error, #e30000);
+	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
+
 	position: fixed;
 	z-index: 2100;
 	display: flex;
@@ -285,6 +290,21 @@ onBeforeUnmount(() => {
 	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
 	overflow: hidden;
 	cursor: pointer;
+}
+
+body.theme--dark .card-preview,
+[data-theme-dark] .card-preview,
+[data-themes*='dark'] .card-preview {
+	--kanso-error-legible: #ff6b6b;
+	--kanso-error-legible-rgb: 255, 107, 107;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .card-preview,
+	body:not(.theme--light):not(.theme--dark) .card-preview {
+		--kanso-error-legible: #ff6b6b;
+		--kanso-error-legible-rgb: 255, 107, 107;
+	}
 }
 
 .card-preview__head {
@@ -360,12 +380,12 @@ onBeforeUnmount(() => {
 .card-preview__priority--1 { color: #888; border-color: #888; background: rgba(136, 136, 136, 0.1); }
 .card-preview__priority--2 { color: var(--color-primary-element, #0082c9); border-color: var(--color-primary-element, #0082c9); background: rgba(0, 130, 201, 0.1); }
 .card-preview__priority--3 { color: #e07b00; border-color: #e07b00; background: rgba(224, 123, 0, 0.1); }
-.card-preview__priority--4 { color: var(--color-error, #e30000); border-color: var(--color-error, #e30000); background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1); }
+.card-preview__priority--4 { color: var(--kanso-error-legible); border-color: var(--kanso-error-legible); background: rgba(var(--kanso-error-legible-rgb), 0.1); }
 
 .card-preview__due--overdue {
-	color: var(--color-error);
-	border-color: var(--color-error);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+	color: var(--kanso-error-legible);
+	border-color: var(--kanso-error-legible);
+	background: rgba(var(--kanso-error-legible-rgb), 0.08);
 }
 
 .card-preview__due--soon {

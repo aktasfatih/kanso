@@ -43,6 +43,16 @@ use OCP\Security\ISecureRandom;
  * still out of scope for v1 (it needs participant remapping).
  */
 class DeckImportService {
+	/**
+	 * Import-side title column limits, matching the STRING(100) title columns
+	 * in {@see \OCA\Kanso\Migration\Version000100Date20260722000000} for boards,
+	 * stacks, and labels. Card titles reuse {@see CardService::MAX_TITLE_LENGTH}
+	 * (also 100), which owns the canonical card-title cap.
+	 */
+	private const MAX_BOARD_TITLE_LENGTH = 100;
+	private const MAX_STACK_TITLE_LENGTH = 100;
+	private const MAX_LABEL_TITLE_LENGTH = 100;
+
 	public function __construct(
 		private DeckReader $deckReader,
 		private BoardService $boardService,
@@ -107,7 +117,11 @@ class DeckImportService {
 		$writtenObjects = [];
 		$this->db->beginTransaction();
 		try {
-			$board = $this->boardService->create($deckBoard['title'], $deckBoard['color'], $actorUid);
+			// BoardService::create() validates the title and would throw on a
+			// >100-char source (aborting the whole import), so pre-truncate it
+			// here to the same STRING(100) board-title limit.
+			$boardTitle = TitleSanitizer::truncate($deckBoard['title'], self::MAX_BOARD_TITLE_LENGTH);
+			$board = $this->boardService->create($boardTitle, $deckBoard['color'], $actorUid);
 			$boardId = $board->getId();
 			$now = time();
 
@@ -116,7 +130,8 @@ class DeckImportService {
 			foreach ($this->deckReader->readLabels($deckBoardId) as $dl) {
 				$label = new Label();
 				$label->setBoardId($boardId);
-				$label->setTitle($dl['title']);
+				// Label title column is STRING(100); safe multibyte truncation.
+				$label->setTitle(TitleSanitizer::truncate($dl['title'], self::MAX_LABEL_TITLE_LENGTH));
 				$label->setColor($dl['color']);
 				$labelIdMap[$dl['id']] = $this->labelMapper->insert($label)->getId();
 			}
@@ -130,7 +145,9 @@ class DeckImportService {
 			foreach ($this->deckReader->readStacks($deckBoardId) as $ds) {
 				$stack = new Stack();
 				$stack->setBoardId($boardId);
-				$stack->setTitle($ds['title']);
+				// Stack title column is STRING(100); no description to spill the
+				// remainder into, so a long title is just safely truncated.
+				$stack->setTitle(TitleSanitizer::truncate($ds['title'], self::MAX_STACK_TITLE_LENGTH));
 				$stackKey = $stackKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($stackKey);
 				$stack->setSortKey($stackKey);
 				$stack->setArchived(false);
@@ -145,8 +162,20 @@ class DeckImportService {
 					$card = new Card();
 					$card->setBoardId($boardId);
 					$card->setStackId($newStackId);
-					$card->setTitle($dc['title']);
-					$card->setDescription($dc['description']);
+					// A Deck title longer than the STRING(100) column would abort
+					// the import. Truncate it (multibyte-safe) and preserve the
+					// full original by prepending it to the (unbounded TEXT)
+					// description, so no data is lost. Empty/whitespace titles get
+					// a placeholder - Kanso requires a non-empty title.
+					$title = (string)$dc['title'];
+					$description = (string)$dc['description'];
+					if (TitleSanitizer::isOverLength($title, CardService::MAX_TITLE_LENGTH)) {
+						$fullTitle = trim($title);
+						$description = 'Full title: ' . $fullTitle
+							. ($description !== '' ? "\n\n" . $description : '');
+					}
+					$card->setTitle(TitleSanitizer::truncate($title, CardService::MAX_TITLE_LENGTH));
+					$card->setDescription($description);
 					$cardKey = $cardKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($cardKey);
 					$card->setSortKey($cardKey);
 					$card->setDuedate($dc['duedate'] !== null ? (new \DateTime())->setTimestamp($dc['duedate']) : null);

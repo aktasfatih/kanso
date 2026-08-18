@@ -197,6 +197,198 @@ class DeckImportServiceTest extends TestCase {
 		self::assertLessThan($capturedCards[1]->getSortKey(), $capturedCards[0]->getSortKey());
 	}
 
+	// ---- long / edge-case titles (#3906) ----------------------------------
+
+	/**
+	 * Stubs a readable Deck board with a single stack whose only card carries
+	 * the given title + description, and captures every inserted card. Returns
+	 * the captured Card so a test can assert on the stored title/description.
+	 */
+	private function importSingleCard(string $cardTitle, string $cardDescription = ''): Card {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => 'B', 'color' => null, 'owner' => 'carol']);
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('B');
+		$this->boardService->method('create')->willReturn($board);
+
+		$this->deckReader->method('readLabels')->willReturn([]);
+		$this->deckReader->method('readStacks')->willReturn([['id' => 11, 'title' => 'To do']]);
+		$this->deckReader->method('readCards')->willReturn([
+			['id' => 21, 'title' => $cardTitle, 'description' => $cardDescription, 'archived' => false, 'duedate' => null, 'doneAt' => 0, 'createdAt' => 0],
+		]);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([]);
+		$this->deckReader->method('countFileReferenceAttachments')->willReturn(0);
+
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId());
+
+		$captured = null;
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$captured): Card {
+			$c->setId(500);
+			$captured = $c;
+			return $c;
+		});
+
+		$this->service->importBoard(2, 'alice');
+		self::assertNotNull($captured);
+		return $captured;
+	}
+
+	public function testImportTruncatesLongCardTitleAndPreservesFullInDescription(): void {
+		$longTitle = str_repeat('a', 101);
+		$card = $this->importSingleCard($longTitle, str_repeat('d', 5000));
+
+		// Stored title fits the STRING(100) column.
+		self::assertSame(100, mb_strlen($card->getTitle()));
+		self::assertSame(str_repeat('a', 100), $card->getTitle());
+		// The full original title is preserved into the (unbounded) description.
+		self::assertStringStartsWith('Full title: ' . $longTitle . "\n\n", $card->getDescription());
+		self::assertStringContainsString(str_repeat('d', 5000), $card->getDescription());
+	}
+
+	public function testImportOverLongTitleWithEmptyDescriptionStillPreservesFullTitle(): void {
+		$longTitle = str_repeat('x', 250);
+		$card = $this->importSingleCard($longTitle, '');
+
+		self::assertSame(100, mb_strlen($card->getTitle()));
+		// No trailing blank lines when the original description was empty.
+		self::assertSame('Full title: ' . $longTitle, $card->getDescription());
+	}
+
+	public function testImportEmptyCardTitleBecomesPlaceholder(): void {
+		$card = $this->importSingleCard('   ', 'body');
+
+		self::assertSame('Untitled', $card->getTitle());
+		// A short title is not over-length, so the description is untouched.
+		self::assertSame('body', $card->getDescription());
+	}
+
+	public function testImportTruncatesUnicodeTitleOnCharBoundary(): void {
+		// 101 emoji: each is a single "character" to mb_strlen but multiple bytes.
+		// Truncation must cut on a char boundary - never mid-sequence (no mojibake).
+		$emoji = '😀';
+		$longTitle = str_repeat($emoji, 101);
+		$card = $this->importSingleCard($longTitle);
+
+		self::assertSame(100, mb_strlen($card->getTitle()));
+		self::assertSame(str_repeat($emoji, 100), $card->getTitle());
+		// Round-trips cleanly as UTF-8 (a byte-split emoji would fail this).
+		self::assertSame($card->getTitle(), mb_convert_encoding($card->getTitle(), 'UTF-8', 'UTF-8'));
+		self::assertStringContainsString('Full title: ' . $longTitle, $card->getDescription());
+	}
+
+	public function testImportLongUnicodeDescriptionImportsUnchanged(): void {
+		// A short title (not over-length) with a very long unicode/emoji/markdown
+		// description imports verbatim - TEXT is unbounded, description untouched.
+		$description = str_repeat('héllo 😀 **bold** ', 1000);
+		$card = $this->importSingleCard('Short', $description);
+
+		self::assertSame('Short', $card->getTitle());
+		self::assertSame($description, $card->getDescription());
+	}
+
+	public function testImportTruncatesLongStackTitle(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => 'B', 'color' => null, 'owner' => 'carol']);
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('B');
+		$this->boardService->method('create')->willReturn($board);
+
+		$this->deckReader->method('readLabels')->willReturn([]);
+		$this->deckReader->method('readStacks')->willReturn([['id' => 11, 'title' => str_repeat('s', 150)]]);
+		$this->deckReader->method('readCards')->willReturn([]);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([]);
+		$this->deckReader->method('countFileReferenceAttachments')->willReturn(0);
+
+		$captured = null;
+		$this->stackMapper->method('insert')->willReturnCallback(function (Stack $s) use (&$captured): Stack {
+			$s->setId(1);
+			$captured = $s;
+			return $s;
+		});
+
+		$this->service->importBoard(2, 'alice');
+
+		self::assertNotNull($captured);
+		self::assertSame(100, mb_strlen($captured->getTitle()));
+	}
+
+	public function testImportTruncatesLongLabelTitle(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => 'B', 'color' => null, 'owner' => 'carol']);
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('B');
+		$this->boardService->method('create')->willReturn($board);
+
+		$this->deckReader->method('readLabels')->willReturn([
+			['id' => 6, 'title' => str_repeat('L', 200), 'color' => '31CC7C'],
+		]);
+		$this->deckReader->method('readStacks')->willReturn([]);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([]);
+		$this->deckReader->method('countFileReferenceAttachments')->willReturn(0);
+
+		$captured = null;
+		$this->labelMapper->method('insert')->willReturnCallback(function (Label $l) use (&$captured): Label {
+			$l->setId(1);
+			$captured = $l;
+			return $l;
+		});
+
+		$this->service->importBoard(2, 'alice');
+
+		self::assertNotNull($captured);
+		self::assertSame(100, mb_strlen($captured->getTitle()));
+	}
+
+	public function testImportTruncatesLongBoardTitle(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => str_repeat('B', 300), 'color' => null, 'owner' => 'carol']);
+
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('B');
+		$capturedTitle = null;
+		$this->boardService->method('create')
+			->willReturnCallback(function (string $title) use (&$capturedTitle, $board): Board {
+				$capturedTitle = $title;
+				return $board;
+			});
+
+		$this->deckReader->method('readLabels')->willReturn([]);
+		$this->deckReader->method('readStacks')->willReturn([]);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([]);
+		$this->deckReader->method('countFileReferenceAttachments')->willReturn(0);
+
+		$this->service->importBoard(2, 'alice');
+
+		// The board title handed to BoardService::create() is pre-truncated to
+		// its STRING(100) limit, so create()'s own validateTitle() never throws.
+		self::assertNotNull($capturedTitle);
+		self::assertSame(100, mb_strlen($capturedTitle));
+	}
+
 	public function testListImportableEmptyWhenDeckUnavailable(): void {
 		$this->deckReader->method('isAvailable')->willReturn(false);
 		self::assertSame([], $this->service->listImportableBoards('alice'));
