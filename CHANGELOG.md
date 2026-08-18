@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Deck import no longer fails on long or edge-case titles.** Importing a Deck
+  board whose card, stack, label, or board title exceeded 100 characters used to
+  abort the whole import. Over-long titles are now truncated (multibyte-safe, so
+  an emoji or accented character is never split), and for cards the full original
+  title is preserved by prepending a `Full title: …` line to the card
+  description so nothing is lost. Empty or whitespace-only card titles import as
+  `Untitled` instead of failing.
+
 ## [0.9.37] - 2026-08-17
 
 ### Added

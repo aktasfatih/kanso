@@ -28,6 +28,9 @@ test.describe('Import from Deck', () => {
 	let deckBoardId = 0
 	let kansoBoardId = 0
 	const title = 'E2E Import ' + Math.floor(Date.now() / 1000)
+	// A Deck title longer than Kanso's STRING(100) title column (#3906): the
+	// import must truncate it rather than fail on the varchar overflow.
+	const longTitle = 'LONG ' + 'x'.repeat(200)
 
 	test.beforeAll(async () => {
 		const board = await deck('POST', '/boards', { title, color: '0082c9' })
@@ -39,6 +42,9 @@ test.describe('Import from Deck', () => {
 			{ title: 'Alpha', type: 'plain', order: 1, description: 'first card' })
 		await deck('POST', `/boards/${deckBoardId}/stacks/${stack.id}/cards`,
 			{ title: 'Beta', type: 'plain', order: 2 })
+		// A card whose title exceeds Kanso's 100-char title column (#3906).
+		await deck('POST', `/boards/${deckBoardId}/stacks/${stack.id}/cards`,
+			{ title: longTitle, type: 'plain', order: 3, description: 'has a very long title' })
 		await deck('PUT', `/boards/${deckBoardId}/stacks/${stack.id}/cards/${card.id}/assignLabel`, { labelId })
 	})
 
@@ -54,13 +60,13 @@ test.describe('Import from Deck', () => {
 		const entry = list.boards.find((b) => b.id === deckBoardId)
 		expect(entry).toBeTruthy()
 		expect(entry.title).toBe(title)
-		expect(entry.cardCount).toBe(2)
+		expect(entry.cardCount).toBe(3)
 
-		// Import it.
+		// Import it - the >100-char card title must NOT abort the import.
 		const res = await kanso('POST', `/deck-import/boards/${deckBoardId}`)
 		kansoBoardId = res.boardId
 		expect(res.stacks).toBe(2)
-		expect(res.cards).toBe(2)
+		expect(res.cards).toBe(3)
 		expect(res.labels).toBeGreaterThan(0)
 
 		// The imported Kanso board mirrors the source.
@@ -70,11 +76,19 @@ test.describe('Import from Deck', () => {
 		expect(stacks.map((s) => s.title)).toEqual(['To do', 'Done'])
 
 		const cards = payload.cards.slice().sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1))
-		expect(cards.map((c) => c.title)).toEqual(['Alpha', 'Beta'])
-		// Both cards landed on the first (To do) stack, in order.
+		expect(cards.map((c) => c.title)).toEqual(['Alpha', 'Beta', longTitle.slice(0, 100)])
+		// All three cards landed on the first (To do) stack, in order.
 		expect(cards[0].stackId).toBe(stacks[0].id)
 		expect(cards[1].stackId).toBe(stacks[0].id)
+		expect(cards[2].stackId).toBe(stacks[0].id)
 		// The label assignment carried across to the first card.
 		expect(cards[0].labelIds.length).toBeGreaterThan(0)
+
+		// The long-titled card exists with a title truncated to the 100-char
+		// column limit, and its full original title is preserved in the body.
+		const longCard = cards[2]
+		expect(longCard.title.length).toBe(100)
+		const detail = await kanso('GET', `/cards/${longCard.id}`)
+		expect(detail.description).toContain('Full title: ' + longTitle)
 	})
 })
