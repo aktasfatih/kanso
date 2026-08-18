@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Red card-tile elements are now legible in dark mode.** The bug type icon and
+  the overdue due-date chip (plus the Urgent priority, blocked, and
+  changes-requested chips) used the theme's `--color-error`, whose dark shade was
+  too dim to read on the dark tile surface. They now use a brighter red under dark
+  themes (explicit dark and auto/`prefers-color-scheme`) while keeping the stock
+  error red unchanged in light mode; the same fix applies to the hover card
+  preview.
 - **Deck import no longer fails on long or edge-case titles.** Importing a Deck
   board whose card, stack, label, or board title exceeded 100 characters used to
   abort the whole import. Over-long titles are now truncated (multibyte-safe, so

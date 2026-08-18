@@ -439,6 +439,13 @@ const extraAssigneeCount = computed(() => {
 }
 
 .card-tile {
+	/* Legible error red for small foreground elements (bug icon, overdue date,
+	 * urgent priority, blocked chip). NC's --color-error dark shade is too dim on
+	 * the dark tile surface (#3905); brighten it under dark themes while keeping
+	 * the stock error red in light mode. Scoped to the tile so it can't leak. */
+	--kanso-error-legible: var(--color-error, #e30000);
+	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
+
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
@@ -451,6 +458,23 @@ const extraAssigneeCount = computed(() => {
 	cursor: pointer;
 	text-align: left;
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Explicit dark themes (theme picker) + auto (prefers-color-scheme) dark.
+ * #ff6b6b reads clearly on the dark surface and still passes AA as border/icon. */
+body.theme--dark .card-tile,
+[data-theme-dark] .card-tile,
+[data-themes*='dark'] .card-tile {
+	--kanso-error-legible: #ff6b6b;
+	--kanso-error-legible-rgb: 255, 107, 107;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .card-tile,
+	body:not(.theme--light):not(.theme--dark) .card-tile {
+		--kanso-error-legible: #ff6b6b;
+		--kanso-error-legible-rgb: 255, 107, 107;
+	}
 }
 
 .card-tile:hover {
@@ -534,9 +558,9 @@ const extraAssigneeCount = computed(() => {
 }
 
 .card-tile__due--overdue {
-	color: var(--color-error);
-	border-color: var(--color-error);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+	color: var(--kanso-error-legible);
+	border-color: var(--kanso-error-legible);
+	background: rgba(var(--kanso-error-legible-rgb), 0.08);
 }
 
 .card-tile__due--soon {
@@ -658,7 +682,7 @@ const extraAssigneeCount = computed(() => {
 }
 /* Type icons use theme tokens so they keep WCAG contrast in both light and dark
    themes (bare #e74c3c/#27ae60/#7f8c8d fail contrast on the dark surface). */
-.card-tile__type--bug { color: var(--color-error, #e74c3c); }
+.card-tile__type--bug { color: var(--kanso-error-legible); }
 .card-tile__type--feature { color: var(--color-success, #27ae60); }
 .card-tile__type--task { color: var(--color-primary-element, #0082c9); }
 .card-tile__type--chore { color: var(--color-text-maxcontrast, #7f8c8d); }
@@ -699,9 +723,9 @@ const extraAssigneeCount = computed(() => {
 
 /* Urgent: red */
 .card-tile__priority--4 {
-	color: var(--color-error, #e30000);
-	border-color: var(--color-error, #e30000);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+	color: var(--kanso-error-legible);
+	border-color: var(--kanso-error-legible);
+	background: rgba(var(--kanso-error-legible-rgb), 0.1);
 }
 
 /* Review state chip */
@@ -729,9 +753,9 @@ const extraAssigneeCount = computed(() => {
 }
 
 .card-tile__review--changes_requested {
-	color: var(--color-error, #e30000);
-	border-color: var(--color-error, #e30000);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
+	color: var(--kanso-error-legible);
+	border-color: var(--kanso-error-legible);
+	background: rgba(var(--kanso-error-legible-rgb), 0.1);
 }
 
 /* Visibility badge (#3743) - neutral lock chip for internal/private cards */
@@ -757,9 +781,9 @@ const extraAssigneeCount = computed(() => {
 	font-weight: 600;
 	padding: 1px 6px;
 	border-radius: 8px;
-	color: var(--color-error, #e30000);
-	border: 1px solid var(--color-error, #e30000);
-	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.08);
+	color: var(--kanso-error-legible);
+	border: 1px solid var(--kanso-error-legible);
+	background: rgba(var(--kanso-error-legible-rgb), 0.08);
 }
 
 /* Waiting-on-client chip (#3746) - amber "ball is with the client" signal.
