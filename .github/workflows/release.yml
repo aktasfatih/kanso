@@ -30,6 +30,11 @@ jobs:
     # "do we have a signing key?" as a job-level env var (which IS allowed).
     env:
       HAVE_SIGNING_KEY: ${{ secrets.APP_PRIVATE_KEY != '' && 'yes' || '' }}
+      # Disable husky hooks in CI: semantic-release's own `chore(release)` commit
+      # carries the release notes in its body, which the local commit-msg hook
+      # (commitlint) would reject (body-max-line-length) and abort the release.
+      # The hook is a human-dev guard; the bot commit must not run it.
+      HUSKY: '0'
     steps:
       - uses: actions/checkout@v7
         with:
