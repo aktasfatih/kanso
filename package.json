@@ -9,7 +9,10 @@
     "build": "vite build --mode production",
     "dev": "vite build --mode development",
     "watch": "vite build --mode development --watch",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "release": "semantic-release",
+    "release:dry": "semantic-release --dry-run --no-ci",
+    "prepare": "husky || true"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^2.0.2",
@@ -31,8 +34,15 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
     "@nextcloud/vite-config": "^2.2.0",
     "@playwright/test": "^1.62.1",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "husky": "^9.1.7",
+    "semantic-release": "^24.2.1",
     "typescript": "~5.9",
     "vite": "^7.0.0"
   },
