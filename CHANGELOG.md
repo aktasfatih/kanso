@@ -11,6 +11,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.11.0](https://github.com/aktasfatih/kanso/compare/v0.10.0...v0.11.0) (2026-08-19)
+
+
+### Bug Fixes
+
+* **board:** align colour swatches with their labels in the column options menu ([a86ebe0](https://github.com/aktasfatih/kanso/commit/a86ebe0f93d0ec22ccb69a3add126f70966abe46))
+* **import:** bring over both kinds of Deck card attachment ([12a079b](https://github.com/aktasfatih/kanso/commit/12a079be336d1a4073fcfdd659e27c374efde14d))
+* **public:** make shared board scroll and open cards for full details ([2fcbcd9](https://github.com/aktasfatih/kanso/commit/2fcbcd9053da2008c7081c5ff9e37befb474cc56))
+* **views:** open cards in the View as an overlay and match board tiles ([ffd3c37](https://github.com/aktasfatih/kanso/commit/ffd3c378652c9e82067e985287b98e9032c561ec))
+
+
+### Features
+
+* **public:** richer read-only public card detail (cover, dates, estimate, markdown) ([a6f0c96](https://github.com/aktasfatih/kanso/commit/a6f0c96ac67ab0487d8f71931c17948934a87413))
+* **views:** add a Kanban display that groups a saved View into columns ([3a936e3](https://github.com/aktasfatih/kanso/commit/3a936e30bb54bbcfa9b288e2070ab5f485fd9568))
+
 # [0.10.0](https://github.com/aktasfatih/kanso/compare/v0.9.38...v0.10.0) (2026-08-19)
 
 
