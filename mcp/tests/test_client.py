@@ -195,6 +195,44 @@ async def test_list_my_cards():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_list_board_members():
+    route = respx.get(f"{BASE}/boards/7/participants").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"uid": "alice", "displayName": "Alice"},
+                {"uid": "bob", "displayName": "Bob"},
+            ],
+        )
+    )
+    async with _client() as c:
+        members = await c.list_board_members(7)
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/boards/7/participants"
+    # No filter => no ?q= param is sent.
+    assert "q" not in req.url.params
+    assert members[0].uid == "alice"
+    assert members[0].displayName == "Alice"
+    assert members[1].uid == "bob"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_board_members_forwards_q():
+    route = respx.get(f"{BASE}/boards/7/participants").mock(
+        return_value=httpx.Response(200, json=[{"uid": "bob", "displayName": "Bob"}])
+    )
+    async with _client() as c:
+        members = await c.list_board_members(7, q="bo")
+    assert route.called
+    assert route.calls.last.request.url.params.get("q") == "bo"
+    assert members[0].uid == "bob"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_error_raises_kanso_api_error():
     respx.post(f"{BASE}/boards").mock(
         return_value=httpx.Response(412, text="CSRF check failed")

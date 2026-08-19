@@ -134,6 +134,7 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_list_boards` — list all boards (with per-board stats)
 - `kanso_get_board` — read a board: stacks, labels, card summaries
+- `kanso_list_board_members` — list assignable users (uid + name) for a board
 - `kanso_create_board` / `kanso_update_board` / `kanso_delete_board`
 
 **Stacks (columns)**

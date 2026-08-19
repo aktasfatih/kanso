@@ -48,6 +48,27 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """
         return (await client.get_board(board_id)).model_dump()
 
+    @mcp.tool(
+        title="List Kanso board members",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_board_members(
+        board_id: int, q: Optional[str] = None
+    ) -> List[dict]:
+        """List the users who can be assigned to cards on a board.
+
+        Returns each participant's `uid` and `displayName`. Feed a returned
+        `uid` into `kanso_assign_user` to assign that person to a card. Results
+        are capped server-side (~25); pass `q` to filter by name/uid substring
+        when a board has more members than that.
+
+        Args:
+            board_id: The numeric board id.
+            q: Optional case-insensitive substring filter over uid / display name.
+        """
+        members = await client.list_board_members(board_id, q)
+        return [m.model_dump() for m in members]
+
     @mcp.tool(title="Create a Kanso board")
     async def kanso_create_board(title: str, color: Optional[str] = None) -> dict:
         """Create a new board.

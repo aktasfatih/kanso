@@ -18,6 +18,7 @@ from kanso_mcp.config import KansoConfig
 from kanso_mcp.models import (
     Board,
     BoardDetail,
+    BoardMember,
     BoardSummary,
     Card,
     CardSummary,
@@ -97,6 +98,16 @@ class KansoClient:
     async def get_board(self, board_id: int) -> BoardDetail:
         data = await self._request("GET", f"/boards/{board_id}")
         return BoardDetail.model_validate(data)
+
+    async def list_board_members(
+        self, board_id: int, q: Optional[str] = None
+    ) -> List[BoardMember]:
+        # ?q= is only sent when set (an absent filter returns all participants).
+        params = {"q": q} if q is not None else None
+        data = await self._request(
+            "GET", f"/boards/{board_id}/participants", params=params
+        )
+        return [BoardMember.model_validate(m) for m in (data or [])]
 
     async def create_board(self, title: str, color: Optional[str] = None) -> Board:
         data = await self._request(

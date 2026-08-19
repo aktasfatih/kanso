@@ -82,6 +82,16 @@ class Label(_Base):
     color: Optional[str] = None
 
 
+class BoardMember(_Base):
+    """A board participant from ``GET /boards/{id}/participants``: an assignable
+    Nextcloud user (uid + display name). The uid is what ``kanso_assign_user``
+    expects.
+    """
+
+    uid: str
+    displayName: Optional[str] = None
+
+
 class CardSummary(_Base):
     """A card summary (board payload / delta upsert): no description."""
 
