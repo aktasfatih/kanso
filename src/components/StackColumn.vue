@@ -1269,12 +1269,19 @@ async function createFromTemplate(templateId) {
 	/* height is dynamic - measured by TanStack Virtual per item */
 }
 
+/* Empty-column drop zone (#3905 follow-up): when a column has no cards, the
+   placeholder IS the drop target the user aims at. A 48px strip was easy to
+   miss — the highlight would fire but the pointer often sat just below it, so
+   the drop landed on nothing. Give it a generous min-height so an empty column
+   offers a comfortably large, easy-to-hit drop area. It only sizes the empty
+   state (rendered solely when cards.length === 0), so populated columns — whose
+   card list sizes to its cards — are unaffected. */
 .stack-column__empty-placeholder {
 	display: flex;
 	align-items: flex-start;
 	justify-content: center;
-	min-height: 48px;
-	padding: 12px 8px;
+	min-height: 160px;
+	padding: 16px 8px;
 	border-radius: var(--border-radius);
 }
 
