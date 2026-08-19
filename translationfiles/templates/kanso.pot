@@ -901,6 +901,10 @@ msgstr ""
 msgid "Cards measured"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
+msgstr ""
+
 #: src/views/ArchivedView.vue
 msgid "Cards you archive from the board will show up here."
 msgstr ""
@@ -4001,6 +4005,10 @@ msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Show this board in my calendar"
 msgstr ""
 
 #: src/components/CardDetail.vue

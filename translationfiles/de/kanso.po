@@ -902,6 +902,10 @@ msgstr "Karten im Projekt"
 msgid "Cards measured"
 msgstr "Gemessene Karten"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
+msgstr "Karten mit Fälligkeitsdatum werden als Aufgaben mit deinem Kalender und Telefon synchronisiert (via CalDAV/DAVx5). Schalte dies aus, um dieses Board aus deinem eigenen Kalender herauszuhalten. Betrifft nur dich."
+
 #: src/views/ArchivedView.vue
 msgid "Cards you archive from the board will show up here."
 msgstr "Karten, die du vom Board archivierst, erscheinen hier."
@@ -4003,6 +4007,10 @@ msgstr "Freigabe"
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
 msgstr "Tastaturkürzel-Übersicht ein-/ausblenden"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Show this board in my calendar"
+msgstr "Dieses Board in meinem Kalender anzeigen"
 
 #: src/components/CardDetail.vue
 msgid "Show watchers"
