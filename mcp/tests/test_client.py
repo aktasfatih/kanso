@@ -243,6 +243,81 @@ async def test_assign_user_put_path():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_list_comments_parses():
+    route = respx.get(f"{BASE}/cards/100/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 1,
+                    "cardId": 100,
+                    "parentCommentId": None,
+                    "author": "alice",
+                    "authorDisplayName": "Alice",
+                    "body": "first",
+                    "createdAt": 1700000000,
+                    "editedAt": 0,
+                    "reactions": [{"emoji": "👍", "count": 1}],
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        comments = await c.list_comments(100)
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/comments"
+    assert comments[0].id == 1
+    assert comments[0].author == "alice"
+    assert comments[0].authorDisplayName == "Alice"
+    assert comments[0].body == "first"
+    assert comments[0].createdAt == 1700000000
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_comment_body_uses_body_field():
+    route = respx.post(f"{BASE}/cards/100/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json={"id": 2, "cardId": 100, "author": "bob", "body": "hi"},
+        )
+    )
+    async with _client() as c:
+        comment = await c.add_comment(100, "hi")
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    # The controller field is `body`, NOT `text`; parentCommentId is dropped
+    # when None (a top-level comment).
+    assert _json.loads(req.content) == {"body": "hi"}
+    assert comment.id == 2
+    assert comment.body == "hi"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_comment_forwards_parent_comment_id():
+    route = respx.post(f"{BASE}/cards/100/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json={"id": 3, "cardId": 100, "parentCommentId": 2, "body": "re"},
+        )
+    )
+    async with _client() as c:
+        await c.add_comment(100, "re", parent_comment_id=2)
+    import json as _json
+
+    assert _json.loads(route.calls.last.request.content) == {
+        "body": "re",
+        "parentCommentId": 2,
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_list_my_cards():
     route = respx.get(f"{BASE}/my-cards").mock(
         return_value=httpx.Response(200, json=[{"id": 100, "title": "Mine", "stackId": 1}])

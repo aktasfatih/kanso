@@ -22,6 +22,7 @@ from kanso_mcp.models import (
     BoardSummary,
     Card,
     CardSummary,
+    Comment,
     Label,
     Stack,
 )
@@ -267,6 +268,23 @@ class KansoClient:
 
     async def unassign_user(self, card_id: int, user_id: str) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}/assignees/{user_id}")
+
+    # ---------------------------------------------------------------- comments
+    async def list_comments(self, card_id: int) -> List[Comment]:
+        data = await self._request("GET", f"/cards/{card_id}/comments")
+        return [Comment.model_validate(c) for c in (data or [])]
+
+    async def add_comment(
+        self, card_id: int, body: str, parent_comment_id: Optional[int] = None
+    ) -> Comment:
+        # The controller field is `body` (NOT `text`); parentCommentId is
+        # dropped by _request when None (a top-level comment).
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/comments",
+            json={"body": body, "parentCommentId": parent_comment_id},
+        )
+        return Comment.model_validate(data)
 
     # ------------------------------------------------------------------ labels
     async def create_label(

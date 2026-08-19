@@ -92,6 +92,24 @@ class BoardMember(_Base):
     displayName: Optional[str] = None
 
 
+class Comment(_Base):
+    """A card comment from ``GET /api/cards/{id}/comments`` (or the single
+    comment returned by a create). The body is raw markdown; ``author`` is the
+    uid and ``authorDisplayName`` its resolved display name. ``createdAt`` /
+    ``editedAt`` are unix timestamps. Reactions are passed through untyped.
+    """
+
+    id: int
+    cardId: Optional[int] = None
+    parentCommentId: Optional[int] = None
+    author: Optional[str] = None
+    authorDisplayName: Optional[str] = None
+    body: Optional[str] = None
+    createdAt: int = 0
+    editedAt: int = 0
+    reactions: List[Any] = Field(default_factory=list)
+
+
 class CardSummary(_Base):
     """A card summary (board payload / delta upsert): no description."""
 

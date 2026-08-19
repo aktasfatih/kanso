@@ -154,6 +154,11 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 - `kanso_assign_label` / `kanso_unassign_label`
 - `kanso_assign_user` / `kanso_unassign_user`
 
+**Comments**
+
+- `kanso_list_comments` — read a card's comments (author + body + timestamps)
+- `kanso_add_comment` — post a comment (optionally reply to a comment)
+
 **My work**
 
 - `kanso_list_my_cards` — cards assigned to you across all boards

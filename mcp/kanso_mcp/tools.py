@@ -343,6 +343,41 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         await client.unassign_user(card_id, user_id)
         return {"unassigned": True, "cardId": card_id, "userId": user_id}
 
+    # ---------------------------------------------------------------- comments
+    @mcp.tool(
+        title="List a Kanso card's comments",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_comments(card_id: int) -> List[dict]:
+        """List the comments on a card, oldest first.
+
+        Each comment carries its `author` (uid), `authorDisplayName`, markdown
+        `body`, `createdAt`/`editedAt` timestamps and, for replies, the
+        `parentCommentId` of the top-level comment it answers.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        comments = await client.list_comments(card_id)
+        return [c.model_dump() for c in comments]
+
+    @mcp.tool(title="Add a comment to a Kanso card")
+    async def kanso_add_comment(
+        card_id: int, body: str, parent_comment_id: Optional[int] = None
+    ) -> dict:
+        """Post a comment on a card. Pass `parent_comment_id` to reply to an
+        existing top-level comment (replies are one level deep).
+
+        Args:
+            card_id: The numeric card id.
+            body: The comment text (markdown).
+            parent_comment_id: Optional id of the top-level comment to reply to;
+                omit (null) for a new top-level comment.
+        """
+        return (
+            await client.add_comment(card_id, body, parent_comment_id)
+        ).model_dump()
+
     # ------------------------------------------------------------------ labels
     @mcp.tool(title="Create a Kanso label")
     async def kanso_create_label(
