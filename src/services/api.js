@@ -490,6 +490,9 @@ export const getViewCards = () =>
 		const d = r.data ?? {}
 		return {
 			cards: Array.isArray(d.cards) ? d.cards : [],
+			// Union of label metadata (id/title/color) across the readable boards, so
+			// the client can build a labelsById map and colour card-tile label chips.
+			labels: Array.isArray(d.labels) ? d.labels : [],
 			capped: !!d.capped,
 			total: Number.isFinite(d.total) ? d.total : (Array.isArray(d.cards) ? d.cards.length : 0),
 			limit: Number.isFinite(d.limit) ? d.limit : 0,

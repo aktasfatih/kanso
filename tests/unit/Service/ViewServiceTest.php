@@ -12,6 +12,8 @@ use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Label;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\ViewService;
@@ -23,6 +25,7 @@ class ViewServiceTest extends TestCase {
 	private CardMapper&MockObject $cardMapper;
 	private CardSummaryService&MockObject $cardSummaryService;
 	private BoardAccess&MockObject $boardAccess;
+	private LabelMapper&MockObject $labelMapper;
 	private ViewService $service;
 
 	protected function setUp(): void {
@@ -31,20 +34,33 @@ class ViewServiceTest extends TestCase {
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->cardSummaryService = $this->createMock(CardSummaryService::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->labelMapper = $this->createMock(LabelMapper::class);
+		// Default: no labels on any board unless a test says otherwise.
+		$this->labelMapper->method('findByBoard')->willReturn([]);
 		$this->service = new ViewService(
 			$this->boardService,
 			$this->cardMapper,
 			$this->cardSummaryService,
 			$this->boardAccess,
+			$this->labelMapper,
 		);
 	}
 
-	private function board(int $id, string $title): Board {
+	private function board(int $id, string $title, ?string $prefix = null): Board {
 		$board = new Board();
 		$board->setId($id);
 		$board->setTitle($title);
 		$board->setOwner('alice');
+		$board->setPrefix($prefix);
 		return $board;
+	}
+
+	private function label(int $id, string $title, ?string $color): Label {
+		$label = new Label();
+		$label->setId($id);
+		$label->setTitle($title);
+		$label->setColor($color);
+		return $label;
 	}
 
 	private function summaryCard(int $id, int $boardId): Card {
@@ -92,6 +108,57 @@ class ViewServiceTest extends TestCase {
 		self::assertSame(22, $rows[1]['id']);
 		self::assertSame(9, $rows[1]['boardId']);
 		self::assertSame('Beta', $rows[1]['boardTitle']);
+	}
+
+	/**
+	 * Tile parity (#3950): each card carries its board's human-id prefix and the
+	 * envelope carries the union of label metadata across the readable boards, so
+	 * the client can render card refs (e.g. "KAN-123") and label COLOURS matching
+	 * the board tiles - all from this one feed with no extra request.
+	 */
+	public function testFindMineEnrichesCardsWithBoardPrefixAndUnionsLabels(): void {
+		$b3 = $this->board(3, 'Alpha', 'ALP');
+		// A board with no explicit prefix falls back to the shared default.
+		$b9 = $this->board(9, 'Beta', null);
+		$this->boardService->method('findAll')->with('alice')->willReturn([$b3, $b9]);
+
+		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
+		$ctx9 = ViewerContext::forMember('alice', 9, ViewerContext::ROLE_INTERNAL, true);
+		$this->boardAccess->method('contextFor')->willReturnMap([
+			[$b3, 'alice', $ctx3],
+			[$b9, 'alice', $ctx9],
+		]);
+
+		$this->cardMapper->method('findSummariesByBoard')
+			->willReturnCallback(fn (int $boardId): array => [$this->summaryCard($boardId === 3 ? 11 : 22, $boardId)]);
+		$this->cardSummaryService->method('serialize')
+			->willReturnCallback(fn (int $boardId): array => [['id' => $boardId === 3 ? 11 : 22]]);
+
+		// Board 3 has two labels, board 9 one; the envelope unions them.
+		$labelMapper = $this->createMock(LabelMapper::class);
+		$labelMapper->method('findByBoard')->willReturnCallback(fn (int $boardId): array => $boardId === 3
+			? [$this->label(1, 'Bug', '#ff0000'), $this->label(2, 'Chore', null)]
+			: [$this->label(5, 'Idea', '#00ff00')]);
+		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper);
+
+		$result = $service->findMine('alice');
+
+		$rows = $result['cards'];
+		// Explicit prefix carried through; missing prefix falls back to the default.
+		self::assertSame('ALP', $rows[0]['boardPrefix']);
+		self::assertSame('KAN', $rows[1]['boardPrefix']);
+
+		// Label union across boards, id/title/color preserved for the client lookup.
+		$labels = $result['labels'];
+		self::assertCount(3, $labels);
+		$byId = [];
+		foreach ($labels as $l) {
+			$byId[$l['id']] = $l;
+		}
+		self::assertSame('Bug', $byId[1]['title']);
+		self::assertSame('#ff0000', $byId[1]['color']);
+		self::assertNull($byId[2]['color']);
+		self::assertSame('Idea', $byId[5]['title']);
 	}
 
 	/**

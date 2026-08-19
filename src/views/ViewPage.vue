@@ -114,7 +114,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-if="display === 'list'"
 				:groups="groups"
 				:labels-by-id="labelsById"
-				:board-id="null" />
+				:board-id="null"
+				@open="openCard" />
 
 			<!-- Timeline display over the same groups -->
 			<BoardTimelineView
@@ -122,15 +123,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:cards="filteredCards"
 				:groups="groups"
 				:can-edit="false"
-				:board-id="null" />
+				:board-id="null"
+				@open="openCard" />
 
 			<!-- Kanban display: the same groups as columns (display-only, no
 			     cross-column drag in v1 — a documented v1 stretch). -->
 			<ViewKanban
 				v-else
 				:groups="groups"
-				:labels-by-id="labelsById" />
+				:labels-by-id="labelsById"
+				@open="openCard" />
 		</template>
+
+		<!-- Card detail opens as an in-place overlay ON the View (#3950): the SAME
+		     CardModal → CardDetail the board uses, but in controlled mode so closing
+		     just tears the overlay down and leaves the URL at /views/:id — you stay in
+		     the View instead of being dumped on the card's board. -->
+		<CardModal
+			v-if="selectedCardId"
+			:key="selectedCardId"
+			:card-id="selectedCardId"
+			:board-id="selectedBoardId"
+			controlled
+			@navigate="navigateCard"
+			@close="closeCard" />
 	</div>
 </template>
 
@@ -148,6 +164,7 @@ import BoardListView from '../components/BoardListView.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
 import ViewKanban from '../components/ViewKanban.vue'
 import BoardFilterBar from '../components/BoardFilterBar.vue'
+import CardModal from '../components/CardModal.vue'
 import { useViews } from '../composables/useViews.js'
 import { useViewCards } from '../composables/useViewCards.js'
 import {
@@ -267,9 +284,41 @@ const participants = computed(() =>
 	[...nameByUid.value.keys()].map((uid) => ({ uid, displayName: uid })),
 )
 
-// The generalized List needs a labelsById map; cross-board label metadata isn't
-// loaded, so pass an empty map (label dots simply fall back to a neutral colour).
-const labelsById = computed(() => new Map())
+// Real cross-board labelsById map (#3950): the feed envelope carries the union of
+// label metadata (id/title/color) across the readable boards, so card tiles render
+// the actual label COLOURS — matching the board tiles — rather than neutral dots.
+const labelsById = computed(() => {
+	const m = new Map()
+	for (const label of cardsData.value?.labels ?? []) {
+		if (label && label.id != null) m.set(label.id, label)
+	}
+	return m
+})
+
+// ── Card detail overlay (#3950) ───────────────────────────────────────────────
+// Opening a card from any display renders the shared CardModal → CardDetail as an
+// in-place overlay here, in controlled mode, so the URL stays /views/:id and closing
+// returns to the View (never the card's board). We track the card id + its own board
+// id (Views are cross-board — CardDetail needs the board for its board-scoped fetches
+// and can also derive it from the loaded card, but passing it avoids a first-paint gap).
+const selectedCardId = ref(null)
+const selectedBoardId = ref(null)
+function openCard(card) {
+	selectedCardId.value = String(card.id)
+	selectedBoardId.value = card.boardId != null ? String(card.boardId) : null
+}
+function closeCard() {
+	selectedCardId.value = null
+	selectedBoardId.value = null
+}
+// An in-card link (parent/sub-card/relation/cross-ref) targeted another card:
+// swap the overlay to it in place (#3950). Its board id isn't known up front — the
+// re-mounted CardDetail derives it from the freshly loaded card (nulled here so we
+// don't carry the previous card's board into the fetch).
+function navigateCard(cardId) {
+	selectedBoardId.value = null
+	selectedCardId.value = String(cardId)
+}
 
 // ── Persist ──────────────────────────────────────────────────────────────────
 const saving = ref(false)

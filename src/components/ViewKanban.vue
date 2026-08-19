@@ -13,13 +13,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:key="group.key"
 				:group="group"
 				:labels-by-id="labelsById"
-				@open="openCard" />
+				@open="$emit('open', $event)" />
 		</div>
 	</div>
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import ViewKanbanColumn from './ViewKanbanColumn.vue'
 
@@ -30,20 +29,16 @@ defineProps({
 	 */
 	groups: { type: Array, default: () => [] },
 	/**
-	 * Map<labelId, label>. Cross-board label metadata isn't loaded, so this is an
-	 * empty map (label chips fall back to a neutral colour), mirroring the List.
+	 * Map<labelId, label> built from the view feed's cross-board label union, so
+	 * card-tile chips render the real label colours (matches the board tiles, #3950).
 	 */
 	labelsById: { type: Map, default: () => new Map() },
 })
 
-const router = useRouter()
-
-// Deep-link to the card modal on its OWN board (cross-board correct): the card's
-// boardId — never the current route — drives the target. CardTile's own click
-// path uses route.params.id, wrong here, so the click is wired at this level.
-function openCard(card) {
-	router.push({ name: 'card-modal', params: { id: String(card.boardId), cardId: String(card.id) } })
-}
+// The parent ViewPage owns the card-detail overlay (#3950): bubble the clicked card
+// up rather than route-navigating to card-modal (which is a child of the board route
+// and would swap the whole View out for the board). The card carries its own boardId.
+defineEmits(['open'])
 </script>
 
 <style scoped>

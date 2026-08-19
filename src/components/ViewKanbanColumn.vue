@@ -31,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CardTile
 						:card="cards[vRow.index]"
 						:labels-by-id="labelsById"
-						:board-prefix="''"
+						:board-prefix="cards[vRow.index].boardPrefix || ''"
 						@click="$emit('open', cards[vRow.index])" />
 				</div>
 			</div>
@@ -47,7 +47,7 @@ import CardTile from './CardTile.vue'
 const props = defineProps({
 	/** One group `{ key, title, cards }` from groupCardsByField. */
 	group: { type: Object, required: true },
-	/** Map<labelId, label> (empty for cross-board Views). */
+	/** Map<labelId, label> from the view feed's cross-board label union (#3950). */
 	labelsById: { type: Map, default: () => new Map() },
 })
 
