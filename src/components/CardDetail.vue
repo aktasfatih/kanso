@@ -3611,7 +3611,12 @@ const {
 	createRule: createRecurRule,
 	updateRule: updateRecurRule,
 	deleteRule: deleteRecurRule,
-} = useRecurRules(boardId)
+} = useRecurRules(boardId, {
+	// Hold the fetch until the board id has resolved (the full-page card route
+	// learns it only after the card loads - firing early 404s, #3817) and only
+	// for managers, the only ones who ever see the Repeat control.
+	enabled: computed(() => !!boardId.value && canManage.value),
+})
 
 // The (first) recurrence rule anchored on this card, if any.
 const cardRecurRule = computed(() =>
