@@ -139,7 +139,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:close-after-click="true"
 						@click="handleSetColor(opt.hex)">
 						<template #icon>
-							<span class="stack-column__swatch" :style="{ background: cssColor(opt.hex) }" />
+							<span class="stack-column__swatch-box">
+								<span class="stack-column__swatch" :style="{ background: cssColor(opt.hex) }" />
+							</span>
 						</template>
 						{{ opt.name }}
 					</NcActionButton>
@@ -148,7 +150,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:close-after-click="true"
 						@click="handleSetColor('')">
 						<template #icon>
-							<span class="stack-column__swatch stack-column__swatch--none" />
+							<span class="stack-column__swatch-box">
+								<span class="stack-column__swatch stack-column__swatch--none" />
+							</span>
 						</template>
 						{{ t('kanso', 'No colour') }}
 					</NcActionButton>
@@ -1084,8 +1088,22 @@ async function createFromTemplate(templateId) {
 .stack-column__role-chip + .stack-column__actions {
 	margin-left: 4px;
 }
+/* The swatch sits in NcActionButton's #icon slot, which normally holds an icon
+   sized to the full clickable-area box (see .action-button__icon in @nextcloud/vue).
+   The .action-button flex row is align-items:flex-start, so a bare 16px dot pins to
+   the top and reads as misaligned with its (vertically-centred) label. This box fills
+   the same clickable-area square and flex-centres the 16px dot, so dot and label share
+   a centre line. */
+.stack-column__swatch-box {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--default-clickable-area);
+	height: var(--default-clickable-area);
+	flex: 0 0 auto;
+}
 .stack-column__swatch {
-	display: inline-block;
+	display: block;
 	width: 16px;
 	height: 16px;
 	border-radius: 50%;
