@@ -30,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:style="{ background: cssColor(card.coverColor) }"
 				aria-hidden="true" />
 			<!-- Label chips row - only rendered when the card has assigned labels -->
-			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
+			<div v-if="cardLabels.length" class="card-tile__labels" :aria-label="t('kanso', 'Labels')">
 				<span
 					v-for="label in cardLabels"
 					:key="label.id"

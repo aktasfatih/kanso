@@ -876,6 +876,16 @@ msgstr "Karten nach Spalte"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
+msgid "Cards completed per week"
+msgstr "Pro Woche abgeschlossene Karten"
+
+#: src/views/BoardStats.vue
+#: src/views/ProjectStats.vue
+msgid "Cards created per day"
+msgstr "Pro Tag erstellte Karten"
+
+#: src/views/BoardStats.vue
+#: src/views/ProjectStats.vue
 msgid "Cards created per day (30d)"
 msgstr "Erstellte Karten pro Tag (30 Tage)"
 
@@ -2633,6 +2643,7 @@ msgstr "Labelname…"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardTile.vue
 msgid "Labels"
 msgstr "Labels"
 
@@ -4234,6 +4245,11 @@ msgstr "Diese Woche"
 #: src/views/ProjectStats.vue
 msgid "Throughput — done per day (30d)"
 msgstr "Durchsatz – erledigte Aufgaben pro Tag (30 Tage)"
+
+#: src/views/BoardStats.vue
+#: src/views/ProjectStats.vue
+msgid "Throughput per day"
+msgstr "Durchsatz pro Tag"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Thu"

@@ -875,6 +875,16 @@ msgstr ""
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
+msgid "Cards completed per week"
+msgstr ""
+
+#: src/views/BoardStats.vue
+#: src/views/ProjectStats.vue
+msgid "Cards created per day"
+msgstr ""
+
+#: src/views/BoardStats.vue
+#: src/views/ProjectStats.vue
 msgid "Cards created per day (30d)"
 msgstr ""
 
@@ -2632,6 +2642,7 @@ msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardTile.vue
 msgid "Labels"
 msgstr ""
 
@@ -4232,6 +4243,11 @@ msgstr ""
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Throughput — done per day (30d)"
+msgstr ""
+
+#: src/views/BoardStats.vue
+#: src/views/ProjectStats.vue
+msgid "Throughput per day"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
