@@ -574,6 +574,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<div class="card-modal__field-row">
 										<select
 											class="card-modal__date-input"
+											data-recur="freq"
 											:value="recurFreq"
 											:disabled="recurBusy"
 											@change="onRecurFreqChange($event.target.value)">
@@ -588,6 +589,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										<span class="card-modal__recur-every">{{ t('kanso', 'every') }}</span>
 										<input
 											class="card-modal__date-input card-modal__recur-interval-input"
+											data-recur="interval"
 											type="number"
 											min="1"
 											:value="recurInterval"

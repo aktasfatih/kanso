@@ -32,18 +32,22 @@ async function ncLogin(page) {
 }
 
 const ROLE_IN_PROGRESS = 3
+const ROLE_DONE = 5
 
 test.describe('Card status (#3481)', () => {
-	const state = { boardId: 0, todoStackId: 0, progStackId: 0, autoCardId: 0, manualCardId: 0 }
+	const state = { boardId: 0, todoStackId: 0, progStackId: 0, doneStackId: 0, autoCardId: 0, manualCardId: 0, syncCardId: 0 }
 
 	test.beforeAll(async () => {
 		const board = await api('POST', '/boards', { title: 'Status ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
 		state.todoStackId = (await api('POST', '/stacks', { boardId: board.id, title: 'To do' })).id
 		state.progStackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Doing' })).id
+		state.doneStackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Done' })).id
 		await api('PATCH', `/stacks/${state.progStackId}`, { role: ROLE_IN_PROGRESS })
+		await api('PATCH', `/stacks/${state.doneStackId}`, { role: ROLE_DONE })
 		state.autoCardId = (await api('POST', '/cards', { stackId: state.todoStackId, title: 'Auto-started card' })).id
 		state.manualCardId = (await api('POST', '/cards', { stackId: state.todoStackId, title: 'Manual status card' })).id
+		state.syncCardId = (await api('POST', '/cards', { stackId: state.todoStackId, title: 'Status sync card' })).id
 	})
 
 	test.afterAll(async () => {
@@ -75,5 +79,30 @@ test.describe('Card status (#3481)', () => {
 		await page.keyboard.press('Escape')
 		const tile = page.locator('.card-tile', { hasText: 'Manual status card' })
 		await expect(tile.locator('.card-tile__inprogress')).toBeVisible({ timeout: 8_000 })
+	})
+
+	test('setting a card Done from the card view moves it into the Done-role column (#54)', async ({ page }) => {
+		// Precondition: the card starts in the To-do column, not started.
+		let card = await api('GET', `/cards/${state.syncCardId}`)
+		expect(card.stackId).toBe(state.todoStackId)
+		expect(Number(card.doneAt)).toBe(0)
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.syncCardId}`)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
+
+		// Mark it Done from the card's status control.
+		await page.locator('.card-modal__status-chip--btn').click()
+		await page.locator('.card-modal__status-wrap .card-modal__popover-opt', { hasText: 'Done' }).click()
+		await expect(page.locator('.card-modal__status-chip--done')).toBeVisible({ timeout: 6_000 })
+
+		// The status change carries the card into the Done-role column (#54), and it
+		// is stamped done - status and board position stay in sync.
+		await expect.poll(
+			async () => (await api('GET', `/cards/${state.syncCardId}`)).stackId,
+			{ timeout: 8_000 },
+		).toBe(state.doneStackId)
+		card = await api('GET', `/cards/${state.syncCardId}`)
+		expect(Number(card.doneAt)).toBeGreaterThan(0)
 	})
 })
