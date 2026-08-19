@@ -114,6 +114,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Kanso opens the board list by default. Turn this on to open this board instead.') }}
 						</p>
 						<NcCheckboxRadioSwitch
+							:model-value="inMyCalendar"
+							:disabled="calendarSyncBusy"
+							@update:model-value="setInMyCalendar">
+							{{ t('kanso', 'Show this board in my calendar') }}
+						</NcCheckboxRadioSwitch>
+						<p class="board-settings__general-hint">
+							{{ t('kanso', 'Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you.') }}
+						</p>
+						<NcCheckboxRadioSwitch
 							v-if="canManage"
 							:model-value="newCardsOnTop"
 							:disabled="newCardsOnTopSaving"
@@ -2115,6 +2124,8 @@ import {
 	fetchCalendarFeedConfig,
 	enableCalendarFeed as apiEnableCalendarFeed,
 	disableCalendarFeed as apiDisableCalendarFeed,
+	fetchCalendarSync,
+	setCalendarSync,
 	getSettings,
 	updateSettings,
 } from '../services/api.js'
@@ -2549,6 +2560,30 @@ async function setDefaultBoard(checked) {
 		isDefaultBoard.value = !checked // revert on failure
 	} finally {
 		settingsBusy.value = false
+	}
+}
+
+// ── General: per-user "show this board in my calendar" (CalDAV, issue #49) ────
+// Personal preference; boards sync to your calendar by default, this hides them.
+const inMyCalendar = ref(true)
+const calendarSyncBusy = ref(false)
+onMounted(async () => {
+	try {
+		const res = await fetchCalendarSync(props.boardId)
+		inMyCalendar.value = res.enabled !== false
+	} catch {
+		// Non-fatal: default to on (its server-side default).
+	}
+})
+async function setInMyCalendar(checked) {
+	calendarSyncBusy.value = true
+	try {
+		const res = await setCalendarSync(props.boardId, checked)
+		inMyCalendar.value = res.enabled !== false
+	} catch {
+		inMyCalendar.value = !checked // revert on failure
+	} finally {
+		calendarSyncBusy.value = false
 	}
 }
 

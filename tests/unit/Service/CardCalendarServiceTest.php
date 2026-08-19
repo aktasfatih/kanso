@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\CardCalendarService;
 use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IConfig;
 use OCP\IURLGenerator;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -29,6 +30,7 @@ class CardCalendarServiceTest extends TestCase {
 	private BoardAccess&MockObject $boardAccess;
 	private PermissionService&MockObject $permissionService;
 	private IURLGenerator&MockObject $urlGenerator;
+	private IConfig&MockObject $config;
 	private CardCalendarService $service;
 
 	protected function setUp(): void {
@@ -38,6 +40,7 @@ class CardCalendarServiceTest extends TestCase {
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
+		$this->config = $this->createMock(IConfig::class);
 		$this->urlGenerator->method('linkToRouteAbsolute')
 			->willReturnCallback(static fn (string $route, array $args): string => 'https://nc/index.php/apps/kanso/card/' . $args['id']);
 		$this->service = new CardCalendarService(
@@ -46,6 +49,7 @@ class CardCalendarServiceTest extends TestCase {
 			$this->boardAccess,
 			$this->permissionService,
 			$this->urlGenerator,
+			$this->config,
 		);
 	}
 
@@ -124,6 +128,44 @@ class CardCalendarServiceTest extends TestCase {
 
 		// A group/system principal gets nothing (never even queries the mapper).
 		self::assertSame([], $this->service->boardsForPrincipal('principals/groups/team'));
+	}
+
+	public function testBoardsForPrincipalHidesUserHiddenBoards(): void {
+		$this->permissionService->method('getUserGroupIds')->willReturn([]);
+		$this->boardMapper->method('findAllForUser')->willReturn([
+			$this->board(1), $this->board(2), $this->board(3),
+		]);
+		// alice has hidden board 2 from her calendar.
+		$this->config->method('getUserValue')
+			->with('alice', 'kanso', 'calendar_hidden_boards', '')
+			->willReturn('[2]');
+
+		$boards = $this->service->boardsForPrincipal(self::PRINCIPAL);
+		self::assertSame([1, 3], array_map(static fn (Board $b): int => (int)$b->getId(), $boards));
+		self::assertFalse($this->service->isEnabledForUser('alice', 2));
+		self::assertTrue($this->service->isEnabledForUser('alice', 1));
+	}
+
+	public function testSetEnabledForUserHidesAMemberBoard(): void {
+		$board = $this->board(7);
+		$this->boardMapper->method('find')->with(7)->willReturn($board);
+		$this->boardAccess->expects(self::once())->method('contextFor')
+			->with($board, 'alice')->willReturn($this->member());
+		$this->config->method('getUserValue')->willReturn(''); // nothing hidden yet
+		$this->config->expects(self::once())->method('setUserValue')
+			->with('alice', 'kanso', 'calendar_hidden_boards', '[7]');
+
+		$this->service->setEnabledForUser('alice', 7, false);
+	}
+
+	public function testSetEnabledForUserRejectsNonMember(): void {
+		$board = $this->board(7);
+		$this->boardMapper->method('find')->with(7)->willReturn($board);
+		$this->boardAccess->method('contextFor')->willThrowException(new NotAMemberException('nope'));
+		$this->config->expects(self::never())->method('setUserValue');
+
+		$this->expectException(NotAMemberException::class);
+		$this->service->setEnabledForUser('alice', 7, false);
 	}
 
 	public function testBoardForPrincipalReturnsBoardForMember(): void {

@@ -14,6 +14,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IConfig;
 use OCP\IURLGenerator;
 use Sabre\VObject\Component\VCalendar;
 
@@ -55,12 +56,25 @@ class CardCalendarService {
 
 	private const PRODID = '-//Kanso//Card calendar//EN';
 
+	/**
+	 * Per-user config key holding the JSON list of board ids the user has hidden
+	 * from THEIR calendar. Opt-out: a board a user can access syncs by default;
+	 * this list removes the noisy ones. Personal preference, so it lives in the
+	 * NC user config (like {@see \OCA\Kanso\Controller\SavedFilterController}) -
+	 * no schema change, and it never affects another user's calendar.
+	 */
+	private const HIDDEN_BOARDS_KEY = 'calendar_hidden_boards';
+
+	/** Bounds the stored list so a scripted client can't grow the value forever. */
+	private const MAX_HIDDEN_BOARDS = 2000;
+
 	public function __construct(
 		private BoardMapper $boardMapper,
 		private CardMapper $cardMapper,
 		private BoardAccess $boardAccess,
 		private PermissionService $permissionService,
 		private IURLGenerator $urlGenerator,
+		private IConfig $config,
 	) {
 	}
 
@@ -95,10 +109,64 @@ class CardCalendarService {
 			$uid,
 			$this->permissionService->getUserGroupIds($uid),
 		);
+		$hidden = $this->hiddenBoardIds($uid);
 		return array_values(array_filter(
 			$boards,
-			static fn (Board $board): bool => !$board->getArchived(),
+			static fn (Board $board): bool => !$board->getArchived() && !\in_array((int)$board->getId(), $hidden, true),
 		));
+	}
+
+	/**
+	 * The board ids this user has hidden from their calendar (empty by default).
+	 *
+	 * @return int[]
+	 */
+	public function hiddenBoardIds(string $uid): array {
+		$raw = $this->config->getUserValue($uid, 'kanso', self::HIDDEN_BOARDS_KEY, '');
+		if (!\is_string($raw) || $raw === '') {
+			return [];
+		}
+		$decoded = json_decode($raw, true);
+		if (!\is_array($decoded)) {
+			return [];
+		}
+		return array_values(array_unique(array_map('intval', $decoded)));
+	}
+
+	/** Whether this board currently syncs to $uid's calendar (default: yes). */
+	public function isEnabledForUser(string $uid, int $boardId): bool {
+		return !\in_array($boardId, $this->hiddenBoardIds($uid), true);
+	}
+
+	/**
+	 * Show or hide a board in $uid's own calendar. Requires the user to be a
+	 * member of the board (you cannot set a preference for a board you can't see),
+	 * which also bounds the stored list to real, accessible boards.
+	 *
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws \OCA\Kanso\Access\NotAMemberException if $uid is not a member
+	 */
+	public function setEnabledForUser(string $uid, int $boardId, bool $enabled): void {
+		$board = $this->boardMapper->find($boardId);
+		if ($board->getDeletedAt() > 0) {
+			throw new DoesNotExistException('Board ' . $boardId . ' is deleted');
+		}
+		// Throws NotAMemberException for a non-member.
+		$this->boardAccess->contextFor($board, $uid);
+
+		$hidden = $this->hiddenBoardIds($uid);
+		$isHidden = \in_array($boardId, $hidden, true);
+		if ($enabled && $isHidden) {
+			$hidden = array_values(array_filter($hidden, static fn (int $id): bool => $id !== $boardId));
+		} elseif (!$enabled && !$isHidden) {
+			if (\count($hidden) >= self::MAX_HIDDEN_BOARDS) {
+				return;
+			}
+			$hidden[] = $boardId;
+		} else {
+			return; // already in the desired state
+		}
+		$this->config->setUserValue($uid, 'kanso', self::HIDDEN_BOARDS_KEY, json_encode($hidden) ?: '[]');
 	}
 
 	/**
