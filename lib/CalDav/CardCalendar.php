@@ -116,7 +116,12 @@ class CardCalendar extends ExternalCalendar {
 		$matches = [];
 		foreach ($this->cards() as $card) {
 			$vObject = Reader::read($this->service->serializeCard($this->board, $card));
-			if ($vObject instanceof VCalendar && $validator->validate($vObject, $filters)) {
+			// serializeCard always yields a VCALENDAR; the guard also narrows the
+			// type so destroy() is never called on a possibly-null Reader result.
+			if (!$vObject instanceof VCalendar) {
+				continue;
+			}
+			if ($validator->validate($vObject, $filters)) {
 				$matches[] = $this->service->objectName($card);
 			}
 			$vObject->destroy();
