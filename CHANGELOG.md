@@ -11,6 +11,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.10.0](https://github.com/aktasfatih/kanso/compare/v0.9.38...v0.10.0) (2026-08-19)
+
+
+### Bug Fixes
+
+* **views:** cap the cross-board Views feed and flag truncation ([0448650](https://github.com/aktasfatih/kanso/commit/0448650dfe4390f44b1d0814b86f808f180c82d1))
+
+
+### Features
+
+* **board:** quick-look preview follows keyboard selection ([acad1d0](https://github.com/aktasfatih/kanso/commit/acad1d01335f187ec870d7bdee2e86d2947d664b))
+* **card:** reminder links scroll to and highlight the exact comment ([37ba244](https://github.com/aktasfatih/kanso/commit/37ba2441e91f0318109ed7e5015cbcebe7bf7084))
+* **mcp:** add, toggle and list card checklist items over MCP ([b1d39e9](https://github.com/aktasfatih/kanso/commit/b1d39e941fce16e80dd57d3dc0b78dcfbb3c9b14))
+* **mcp:** expose all card fields (status, type, visibility, cover) over MCP ([3935072](https://github.com/aktasfatih/kanso/commit/3935072af02b9545fa61eb05e1848632922ea781))
+* **mcp:** list a board's assignable members to enable user assignment ([37f84d3](https://github.com/aktasfatih/kanso/commit/37f84d3660cf21dfaab584c53dd614d419a78f3a))
+* **mcp:** manage card relations and subtask parents over MCP ([5363477](https://github.com/aktasfatih/kanso/commit/5363477b0da048ca8dea3d8a954f2b8c40eeeffd))
+* **mcp:** read and post card comments over MCP ([d957141](https://github.com/aktasfatih/kanso/commit/d957141805778f20879be339b82d89c56db684a9))
+* **nav:** add a help menu to file an issue or set up MCP ([bea4935](https://github.com/aktasfatih/kanso/commit/bea493542e8fdaf33da40482947fbf5c1d97aa85))
+
 ## [0.9.38](https://github.com/aktasfatih/kanso/compare/v0.9.37...v0.9.38) (2026-08-18)
 
 
