@@ -196,6 +196,11 @@ class ViewController extends Controller {
 	 * every board the user can read (ACL enforced in {@see ViewService}). The
 	 * server stays filter-agnostic - the client applies the View's saved filter
 	 * and group-by client-side, reusing the board filter predicate.
+	 *
+	 * Returns an envelope `{cards, capped, total, limit}` (see
+	 * {@see ViewService::findMine()}): `cards` is hard-capped to keep this single
+	 * unbounded feed bounded, and `capped`/`total` let the client honestly report
+	 * when it is showing only the first N of M readable cards.
 	 */
 	#[NoAdminRequired]
 	public function cards(): JSONResponse {

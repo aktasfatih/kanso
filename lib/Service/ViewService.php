@@ -27,6 +27,16 @@ use OCA\Kanso\Db\CardMapper;
  * a board A cannot read (covered by ViewServiceTest's leak-denial test).
  */
 class ViewService {
+	/**
+	 * Hard cap on the cross-board feed payload. The readable-set + #3743 masking
+	 * still gate every row BEFORE this slice (leak-safety unchanged); the cap only
+	 * bounds how many summaries a single unbounded feed can ship, no matter how
+	 * many boards/cards the user can read. When the readable set exceeds it the
+	 * envelope's `capped` flag is set so the client surfaces an honest "showing
+	 * the first N of M" hint rather than silently truncating.
+	 */
+	public const MAX_CARDS = 5000;
+
 	public function __construct(
 		private BoardService $boardService,
 		private CardMapper $cardMapper,
@@ -43,7 +53,13 @@ class ViewService {
 	 * boardTitle - so the client's reused board filter predicate and group-by can
 	 * run over them with no extra request.
 	 *
-	 * @return list<array<string, mixed>>
+	 * Returned as an envelope so the client can honestly report truncation:
+	 *   ['cards' => list<array>, 'capped' => bool, 'total' => int, 'limit' => int]
+	 * where `total` is the pre-cap readable-set count and `cards` is capped to at
+	 * most {@see self::MAX_CARDS} rows. The cap is applied AFTER the per-board ACL
+	 * + #3743 masking loop, so every row is still gated before the slice.
+	 *
+	 * @return array{cards: list<array<string, mixed>>, capped: bool, total: int, limit: int}
 	 */
 	public function findMine(string $uid): array {
 		$boards = $this->boardService->findAll($uid);
@@ -70,6 +86,25 @@ class ViewService {
 			}
 		}
 
-		return $out;
+		// Order by a STABLE deterministic key (boardId, then card id) so the cap
+		// always slices the same first-N window across requests - never a random
+		// subset. Runs over the already ACL-gated set, so it moves no leak boundary.
+		usort($out, static function (array $a, array $b): int {
+			return [(int)($a['boardId'] ?? 0), (int)($a['id'] ?? 0)]
+				<=> [(int)($b['boardId'] ?? 0), (int)($b['id'] ?? 0)];
+		});
+
+		$total = count($out);
+		$capped = $total > self::MAX_CARDS;
+		if ($capped) {
+			$out = array_slice($out, 0, self::MAX_CARDS);
+		}
+
+		return [
+			'cards' => $out,
+			'capped' => $capped,
+			'total' => $total,
+			'limit' => self::MAX_CARDS,
+		];
 	}
 }
