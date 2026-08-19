@@ -87,4 +87,24 @@ test.describe('CalDAV board calendar (read-only VTODOs)', () => {
 		// Sabre maps the Forbidden the calendar throws to 403 (never 201/204).
 		expect(r.status).toBe(403)
 	})
+
+	test('visibility can be toggled: PROPPATCH calendar-enabled is accepted', async () => {
+		// Clicking a calendar in the Calendar app toggles its visibility via this
+		// PROPPATCH. The calendar grants write-properties, so Nextcloud persists it
+		// as a per-user property (it never touches card data) - it must NOT 403.
+		const body = '<?xml version="1.0"?>\n'
+			+ '<d:propertyupdate xmlns:d="DAV:" xmlns:x="http://owncloud.org/ns">'
+			+ '<d:set><d:prop><x:calendar-enabled>0</x:calendar-enabled></d:prop></d:set>'
+			+ '</d:propertyupdate>'
+		const r = await fetch(DAV + `/${calUri}/`, {
+			method: 'PROPPATCH',
+			headers: { Authorization: AUTH, 'Content-Type': 'application/xml' },
+			body,
+		})
+		expect(r.status).toBe(207)
+		const text = await r.text()
+		expect(text).toContain('calendar-enabled')
+		expect(text).toContain('200 OK')
+		expect(text).not.toContain('403')
+	})
 })

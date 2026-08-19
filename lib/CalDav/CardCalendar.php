@@ -60,8 +60,14 @@ class CardCalendar extends ExternalCalendar {
 	/**
 	 * @inheritDoc
 	 *
-	 * Read-only for the owner: the read privileges, no write. That is what makes
-	 * a client (DAVx5, Calendar, Tasks) treat the calendar as non-editable.
+	 * Read + write-properties for the owner. `write-properties` is deliberately
+	 * NOT `write`/`write-content`/`bind` - it only lets Nextcloud persist the
+	 * per-user calendar properties a client sets (visibility toggle, personal
+	 * colour) in its own property store; it never permits changing card data
+	 * (object PUT/DELETE are still refused). Without it, toggling the calendar's
+	 * visibility in the Calendar app fails with "unable to change visibility of
+	 * the calendar" (the PROPPATCH is denied). Same rationale as Deck's board
+	 * calendars.
 	 */
 	#[\Override]
 	public function getACL() {
@@ -72,8 +78,8 @@ class CardCalendar extends ExternalCalendar {
 				'protected' => true,
 			],
 			[
-				'privilege' => '{' . Plugin::NS_CALDAV . '}read-free-busy',
-				'principal' => '{DAV:}authenticated',
+				'privilege' => '{DAV:}write-properties',
+				'principal' => $this->getOwner(),
 				'protected' => true,
 			],
 		];
