@@ -230,11 +230,22 @@ class DeckReader {
 	}
 
 	/**
+	 * Deck's share types for a card-attached user file. Deck's `file`-kind
+	 * attachments are NOT stored in `deck_attachment`; each is an `oc_share` row
+	 * whose `share_with` is the card id (see Deck's FilesAppService). The share is
+	 * of type {@see \OCP\Share\IShare::TYPE_DECK} (12); Deck also defines
+	 * TYPE_DECK_USER (13) for per-user shares, so we accept both to avoid silently
+	 * missing an attachment. Mirrored as literals so the importer never depends on
+	 * Deck's PHP being loadable.
+	 */
+	private const SHARE_TYPES_DECK = [12, 13];
+
+	/**
 	 * A card's file attachments (`deck_file` kind only), non-deleted. The `data`
 	 * column holds the stored FILENAME (not the bytes) - the bytes live in Deck's
 	 * app-data, read separately by {@see DeckImportService}. The user-Files
-	 * reference kind (`file`) is intentionally NOT returned here; the caller
-	 * counts those skips separately.
+	 * reference kind (`file`) is NOT returned here; those are Deck SHARES, read by
+	 * {@see self::readFileReferenceAttachments()}.
 	 *
 	 * @param int[] $cardIds
 	 * @return list<array{id: int, cardId: int, type: string, data: string, createdBy: string, createdAt: int}>
@@ -260,26 +271,54 @@ class DeckReader {
 	}
 
 	/**
-	 * Count of non-deleted user-Files reference attachments (`file` kind) on the
-	 * given cards. These are deliberately NOT imported (re-linking user Files is
-	 * out of scope); the importer surfaces this count in its result summary.
+	 * The user-Files reference attachments (`file` kind) on the given cards.
+	 *
+	 * Deck stores these as SHARES, not as `deck_attachment` rows: each is an
+	 * `oc_share` of type {@see self::SHARE_TYPE_DECK} whose `share_with` is the
+	 * (stringified) card id, pointing at a node in the sharer's Files. We join
+	 * `oc_share` → `oc_filecache` to resolve the source `fileId`/`filename`/owner
+	 * so {@see DeckImportService} can copy the bytes into Kanso. A share whose
+	 * permissions are 0 (Deck's soft-delete for a file attachment) is skipped.
 	 *
 	 * @param int[] $cardIds
+	 * @return list<array{cardId: int, fileId: int, filename: string, owner: string, createdBy: string, createdAt: int}>
 	 */
-	public function countFileReferenceAttachments(array $cardIds): int {
+	public function readFileReferenceAttachments(array $cardIds): array {
 		if ($cardIds === []) {
-			return 0;
+			return [];
 		}
+		// share_with holds the card id as a STRING; compare as strings.
+		$idStrings = array_map(static fn (int $id): string => (string)$id, $cardIds);
+
 		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->count('id', 'cnt'))
-			->from('deck_attachment')
-			->where($qb->expr()->in('card_id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
-			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter('file')))
-			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
-		$result = $qb->executeQuery();
-		$row = $result->fetch();
-		$result->closeCursor();
-		return (int)($row['cnt'] ?? 0);
+		$qb->select('s.share_with', 's.file_source', 's.uid_owner', 's.uid_initiator', 's.stime', 'f.name')
+			->from('share', 's')
+			->leftJoin('s', 'filecache', 'f', $qb->expr()->eq('s.file_source', 'f.fileid'))
+			->where($qb->expr()->in('s.share_type', $qb->createNamedParameter(self::SHARE_TYPES_DECK, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in('s.share_with', $qb->createNamedParameter($idStrings, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->isNull('s.parent'))
+			->andWhere($qb->expr()->neq('s.permissions', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		$out = [];
+		foreach ($this->fetchAll($qb) as $r) {
+			$fileId = (int)($r['file_source'] ?? 0);
+			if ($fileId <= 0) {
+				continue;
+			}
+			// The file's owner is the authoritative uid for resolving the node
+			// (uid_owner); uid_initiator is who created the share. Prefer the
+			// owner, falling back to the initiator.
+			$owner = (string)($r['uid_owner'] ?? '');
+			$initiator = (string)($r['uid_initiator'] ?? '');
+			$out[] = [
+				'cardId' => (int)$r['share_with'],
+				'fileId' => $fileId,
+				'filename' => (string)($r['name'] ?? ''),
+				'owner' => $owner !== '' ? $owner : $initiator,
+				'createdBy' => $initiator !== '' ? $initiator : $owner,
+				'createdAt' => (int)($r['stime'] ?? 0),
+			];
+		}
+		return $out;
 	}
 
 	// -------------------------------------------------------------------------

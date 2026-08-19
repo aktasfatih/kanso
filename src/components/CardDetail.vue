@@ -2252,12 +2252,26 @@ const props = defineProps({
 		type: [String, Number],
 		default: null,
 	},
+	// Controlled overlay mode (#3950): the card is opened as an in-place overlay by
+	// a parent that owns the open/close state (e.g. a cross-board View), NOT via the
+	// nested card-modal route. In this mode close is purely an `emit('close')` — the
+	// component performs NO router navigation on close, so the parent surface (the
+	// View's URL) is preserved instead of being swapped for the card's own board.
+	// Everything else (data fetch, mutations, realtime, expand-to-page) is unchanged.
+	controlled: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 // The shell owns closing: the modal navigates back to its board overlay origin,
 // the page has an explicit back-to-board affordance. CardDetail emits `close` and
 // lets each shell decide, so no navigation policy is duplicated across shells.
-const emit = defineEmits(['close', 'update:title', 'board-context'])
+// `navigate` is emitted (controlled mode only, #3950) when an in-card link (a
+// parent/sub-card/relation chip or a KAN-123 cross-reference) targets a DIFFERENT
+// card: the parent that owns the overlay swaps to it, since there is no card-modal
+// route to push to on a View surface.
+const emit = defineEmits(['close', 'update:title', 'board-context', 'navigate'])
 
 const router = useRouter()
 const route = useRoute()
@@ -3937,6 +3951,13 @@ const MY_WORK_RETURN_ROUTES = ['my-work', 'my-cards', 'my-reviews', 'inbox']
 
 function closeModal() {
 	isOpen.value = false
+	// Controlled overlay (#3950): the parent owns open/close and the surrounding
+	// URL (e.g. a View at /views/:id). Do NOT navigate — just tell the parent to
+	// tear the overlay down, leaving the user exactly where they were.
+	if (props.controlled) {
+		emit('close')
+		return
+	}
 	const from = route.query.from
 	if (MY_WORK_RETURN_ROUTES.includes(from)) {
 		// Preserve the hub tab when returning to the /my-work hub.
@@ -3961,6 +3982,12 @@ function closeModal() {
 // may itself no longer exist.
 function goToBoards() {
 	isOpen.value = false
+	// Controlled overlay (#3950): no board to route to — the parent surface owns
+	// navigation. Just close the overlay in place.
+	if (props.controlled) {
+		emit('close')
+		return
+	}
 	const from = route.query.from
 	if (MY_WORK_RETURN_ROUTES.includes(from)) {
 		const query = from === 'my-work' && route.query.tab ? { tab: route.query.tab } : undefined
@@ -4090,6 +4117,13 @@ const parentTitle = computed(() => {
  * @param {number|string} cardId target card id
  */
 function openCard(cardId) {
+	// Controlled overlay (#3950): there is no card-modal route to push to (the View
+	// URL carries no board id — route.params.id is undefined here). Hand the target
+	// card up so the parent re-opens the overlay on it, staying in the View.
+	if (props.controlled) {
+		emit('navigate', String(cardId))
+		return
+	}
 	if (props.mode === 'page') {
 		router.push({ name: 'card-page', params: { cardId: String(cardId) } })
 		return

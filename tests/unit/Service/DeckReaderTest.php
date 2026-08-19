@@ -38,4 +38,17 @@ class DeckReaderTest extends TestCase {
 		self::assertNull($this->bareColor('12345'), 'wrong length → null');
 		self::assertNull($this->bareColor('gggggg'), 'non-hex → null');
 	}
+
+	/**
+	 * With no card ids there is nothing to read; the file-reference reader must
+	 * short-circuit to [] WITHOUT touching the DB (the share→filecache join is
+	 * only built for a non-empty id set). The full join is exercised end-to-end
+	 * against a real Deck+Files instance in the import integration run.
+	 */
+	public function testReadFileReferenceAttachmentsEmptyIdsSkipsQuery(): void {
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::never())->method('getQueryBuilder');
+		$reader = new DeckReader($db, $this->createMock(IAppManager::class));
+		self::assertSame([], $reader->readFileReferenceAttachments([]));
+	}
 }

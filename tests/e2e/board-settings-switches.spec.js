@@ -70,8 +70,12 @@ test.describe('Board settings enable switches (public link + calendar feed)', ()
 		await expect(page.getByText('Feed active')).toBeVisible({ timeout: 8_000 })
 
 		// --- Public link (#3531) ---
+		// The public-link control moved out of Automation and into the
+		// Sharing pane (220f7d7), so switch tabs before toggling it.
+		await page.getByRole('tab', { name: /sharing/i }).click()
+		await expect(page.locator('#bs-pane-sharing')).toBeVisible({ timeout: 8_000 })
 		await page.getByRole('button', { name: /Public link/i }).click() // expand the group
-		const pubBody = page.locator('#bs-automation-public-link')
+		const pubBody = page.locator('#bs-sharing-public-link')
 		await expect(pubBody).toBeVisible()
 		await pubBody.getByText('Enable public link').click()
 		await expect(page.getByText('Link active')).toBeVisible({ timeout: 8_000 })

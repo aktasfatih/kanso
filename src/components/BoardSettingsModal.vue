@@ -863,12 +863,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</section>
 
 				<section
-					v-if="canShare"
+					v-if="canShare || canManage"
 					v-show="activeTab === 'sharing'"
 					id="bs-pane-sharing"
 					class="bs-pane"
 					role="tabpanel"
 					aria-labelledby="bs-rail-tab-sharing">
+				<!-- Member sharing (ACL) needs the Share right; a manage-only member
+				     still reaches this pane for the public link below. -->
+				<template v-if="canShare">
 				<!-- Sharee search -->
 				<div class="sharing__search-wrap">
 					<input
@@ -1028,6 +1031,61 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Cancel') }}
 						</button>
 						<span v-if="leaveError" class="label-settings__error">{{ leaveError }}</span>
+					</div>
+				</div>
+				</template>
+
+				<!-- Public / read-only link group (#3531) — lives with sharing so
+				     public-link creation sits next to member sharing. -->
+				<div class="automation__group sharing__public-link">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.publicLink ? 'true' : 'false'"
+						aria-controls="bs-sharing-public-link"
+						@click="toggleAutomationGroup('publicLink')">
+						<LinkVariantIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Public link') }}</span>
+						<span v-if="publicShare.enabled" class="automation__group-badge">{{ t('kanso', 'Link active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.publicLink" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.publicLink" id="bs-sharing-public-link" class="automation__group-body">
+						<p v-if="!canManage" class="workflow__readonly-notice">
+							{{ t('kanso', 'You need manage permission to configure the public link.') }}
+						</p>
+						<template v-else>
+							<p class="github-webhook__hint">
+								{{ t('kanso', 'Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Assignees, comments, activity and members are never shown.') }}
+							</p>
+
+							<div class="github-webhook__actions">
+								<NcCheckboxRadioSwitch
+									type="switch"
+									:model-value="publicShare.enabled"
+									:disabled="publicShareBusy"
+									@update:model-value="togglePublicShare">
+									{{ t('kanso', 'Enable public link') }}
+								</NcCheckboxRadioSwitch>
+							</div>
+
+							<template v-if="publicShare.enabled && publicShare.url">
+								<label class="github-webhook__label">{{ t('kanso', 'Public link') }}</label>
+								<div class="github-webhook__row">
+									<input class="github-webhook__input" type="text" readonly :value="publicShare.url">
+									<NcButton :disabled="!publicShare.url" @click="copyText(publicShare.url)">
+										{{ t('kanso', 'Copy') }}
+									</NcButton>
+								</div>
+								<div class="github-webhook__actions">
+									<NcButton :disabled="publicShareBusy" @click="handleRotatePublicShare">
+										{{ t('kanso', 'Rotate link') }}
+									</NcButton>
+									<span class="bs-share__hint">{{ t('kanso', 'Anyone with the link can view this board read-only.') }}</span>
+								</div>
+							</template>
+							<span v-if="publicShareError" class="label-settings__error">{{ publicShareError }}</span>
+						</template>
 					</div>
 				</div>
 				</section>
@@ -1248,59 +1306,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					<span v-if="webhookError" class="label-settings__error">{{ webhookError }}</span>
 				</template>
-					</div>
-				</div>
-
-				<!-- Public / read-only link group (#3531) -->
-				<div class="automation__group">
-					<button
-						class="automation__group-header"
-						type="button"
-						:aria-expanded="automationGroups.publicLink ? 'true' : 'false'"
-						aria-controls="bs-automation-public-link"
-						@click="toggleAutomationGroup('publicLink')">
-						<LinkVariantIcon :size="16" class="automation__group-icon" />
-						<span class="automation__group-title">{{ t('kanso', 'Public link') }}</span>
-						<span v-if="publicShare.enabled" class="automation__group-badge">{{ t('kanso', 'Link active') }}</span>
-						<ChevronUpIcon v-if="automationGroups.publicLink" :size="16" class="automation__group-chevron" />
-						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
-					</button>
-					<div v-show="automationGroups.publicLink" id="bs-automation-public-link" class="automation__group-body">
-						<p v-if="!canManage" class="workflow__readonly-notice">
-							{{ t('kanso', 'You need manage permission to configure the public link.') }}
-						</p>
-						<template v-else>
-							<p class="github-webhook__hint">
-								{{ t('kanso', 'Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Assignees, comments, activity and members are never shown.') }}
-							</p>
-
-							<div class="github-webhook__actions">
-								<NcCheckboxRadioSwitch
-									type="switch"
-									:model-value="publicShare.enabled"
-									:disabled="publicShareBusy"
-									@update:model-value="togglePublicShare">
-									{{ t('kanso', 'Enable public link') }}
-								</NcCheckboxRadioSwitch>
-							</div>
-
-							<template v-if="publicShare.enabled && publicShare.url">
-								<label class="github-webhook__label">{{ t('kanso', 'Public link') }}</label>
-								<div class="github-webhook__row">
-									<input class="github-webhook__input" type="text" readonly :value="publicShare.url">
-									<NcButton :disabled="!publicShare.url" @click="copyText(publicShare.url)">
-										{{ t('kanso', 'Copy') }}
-									</NcButton>
-								</div>
-								<div class="github-webhook__actions">
-									<NcButton :disabled="publicShareBusy" @click="handleRotatePublicShare">
-										{{ t('kanso', 'Rotate link') }}
-									</NcButton>
-									<span class="bs-share__hint">{{ t('kanso', 'Anyone with the link can view this board read-only.') }}</span>
-								</div>
-							</template>
-							<span v-if="publicShareError" class="label-settings__error">{{ publicShareError }}</span>
-						</template>
 					</div>
 				</div>
 
@@ -2433,7 +2438,8 @@ function canToggleBit(entry, bit) {
 // ── Tab / section-rail state ──────────────────────────────────────────────────
 const activeTab = ref('labels')
 
-// Section rail items. Sharing is gated behind canShare (mirrors the old tab's v-if).
+// Section rail items. Sharing shows for anyone who can share (member ACL) OR
+// manage (the public link lives here now), mirroring the pane's v-if.
 const railSections = computed(() => {
 	const sections = [
 		{ id: 'general', name: t('kanso', 'General'), icon: CogIcon },
@@ -2441,7 +2447,7 @@ const railSections = computed(() => {
 		{ id: 'review-types', name: t('kanso', 'Review types'), icon: CheckDecagramIcon },
 		{ id: 'card-fields', name: t('kanso', 'Custom fields'), icon: TableColumnIcon },
 	]
-	if (canShare.value) {
+	if (canShare.value || canManage.value) {
 		sections.push({ id: 'sharing', name: t('kanso', 'Sharing'), icon: ShareVariantIcon })
 	}
 	sections.push({ id: 'workflow', name: t('kanso', 'Workflow'), icon: SwapHorizontalIcon })

@@ -8,7 +8,9 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\LabelMapper;
 
 /**
  * The cross-board feed behind saved "Views" (#3815) - every non-deleted card
@@ -42,6 +44,7 @@ class ViewService {
 		private CardMapper $cardMapper,
 		private CardSummaryService $cardSummaryService,
 		private BoardAccess $boardAccess,
+		private LabelMapper $labelMapper,
 	) {
 	}
 
@@ -54,17 +57,26 @@ class ViewService {
 	 * run over them with no extra request.
 	 *
 	 * Returned as an envelope so the client can honestly report truncation:
-	 *   ['cards' => list<array>, 'capped' => bool, 'total' => int, 'limit' => int]
+	 *   ['cards' => list<array>, 'labels' => list<array>, 'capped' => bool, 'total' => int, 'limit' => int]
 	 * where `total` is the pre-cap readable-set count and `cards` is capped to at
 	 * most {@see self::MAX_CARDS} rows. The cap is applied AFTER the per-board ACL
 	 * + #3743 masking loop, so every row is still gated before the slice.
 	 *
-	 * @return array{cards: list<array<string, mixed>>, capped: bool, total: int, limit: int}
+	 * Each card additionally carries `boardPrefix` (its board's human-id prefix) and
+	 * `labels` is the union of each readable board's serialized labels (the label's
+	 * own shape: id/boardId/title/color) across the same readable boards - all
+	 * already-readable board metadata, no leak beyond the readable set the card rows
+	 * come from - so the client can render card tiles with the real human ref
+	 * (e.g. "KAN-123") and label COLOURS — matching the board tiles (#3950) — from
+	 * this one feed, with no extra per-board request.
+	 *
+	 * @return array{cards: list<array<string, mixed>>, labels: list<array<string, mixed>>, capped: bool, total: int, limit: int}
 	 */
 	public function findMine(string $uid): array {
 		$boards = $this->boardService->findAll($uid);
 
 		$out = [];
+		$labels = [];
 		foreach ($boards as $board) {
 			$boardId = (int)$board->getId();
 			// The viewer's resolved side on THIS board scopes every card row
@@ -77,12 +89,25 @@ class ViewService {
 				$viewer,
 			);
 			$boardTitle = (string)$board->getTitle();
+			$boardPrefix = (string)($board->getPrefix() ?? BoardPrefix::DEFAULT);
 			foreach ($cards as $card) {
 				// Carry the board identity so the client can group by board and
 				// deep-link back without a per-card board lookup.
 				$card['boardId'] = $boardId;
 				$card['boardTitle'] = $boardTitle;
+				// The board's human-id prefix, so a card tile can render its real
+				// reference (prefix + '-' + boardSeq), same as the board tiles.
+				$card['boardPrefix'] = $boardPrefix;
 				$out[] = $card;
+			}
+			// Union the readable board's labels so the client can colour the card
+			// label chips. Labels are board-scoped and ids are unique per board's
+			// creation table; across boards ids can collide, but a View's tiles only
+			// reference a card's own labelIds against a single lookup — collisions are
+			// acceptable for chip colouring (the same trade-off the board makes with
+			// its per-board labelsById). Keyed by id keeps the payload deduplicated.
+			foreach ($this->labelMapper->findByBoard($boardId) as $label) {
+				$labels[(int)$label->getId()] = $label->jsonSerialize();
 			}
 		}
 
@@ -102,6 +127,7 @@ class ViewService {
 
 		return [
 			'cards' => $out,
+			'labels' => array_values($labels),
 			'capped' => $capped,
 			'total' => $total,
 			'limit' => self::MAX_CARDS,

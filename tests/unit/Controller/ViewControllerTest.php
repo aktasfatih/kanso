@@ -97,7 +97,14 @@ class ViewControllerTest extends TestCase {
 
 	public function testCreateRejectsUnknownGroupByAndDisplay(): void {
 		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'nope')->getStatus());
-		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'kanban')->getStatus());
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'grid')->getStatus());
+	}
+
+	public function testCreateAcceptsKanbanDisplay(): void {
+		$response = $this->controller->create('Kanban view', ['a' => 1], 'status', 'kanban');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$views = $response->getData()['views'];
+		self::assertSame('kanban', $views[0]['display']);
 	}
 
 	public function testRenameChangesNameByIdAndRejectsDuplicate(): void {

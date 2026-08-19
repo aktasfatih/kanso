@@ -166,7 +166,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -207,6 +207,17 @@ const props = defineProps({
 	 */
 	boardId: { type: [String, Number], default: null },
 })
+
+const emit = defineEmits(['open'])
+
+// When a parent handles `@open` (a cross-board View owns a card-detail overlay,
+// #3950), emit the card up and let the parent open it in place — do NOT route to
+// card-modal (a child of the board route, which would swap the whole View out for
+// the board). Inside an actual board no `@open` is attached, so the classic
+// router.push deep-link behaviour is preserved unchanged.
+// A parent's `@open` presence is fixed at mount (it never toggles at runtime), so
+// this is a one-off static read, not a reactive dependency.
+const hasOpenHandler = !!getCurrentInstance()?.vnode?.props?.onOpen
 
 const router = useRouter()
 const scrollRef = ref(null)
@@ -325,6 +336,12 @@ const virtualizer = useVirtualizer(computed(() => ({
 })))
 
 function openCard(card) {
+	// A parent-owned overlay (cross-board View, #3950) takes precedence: hand the
+	// card up and stay on the current surface instead of navigating.
+	if (hasOpenHandler) {
+		emit('open', card)
+		return
+	}
 	// Prefer the card's own boardId (cross-board Views, #3815); fall back to the
 	// single-board prop for the classic per-board list.
 	const boardId = card.boardId ?? props.boardId

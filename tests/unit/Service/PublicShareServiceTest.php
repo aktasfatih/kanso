@@ -249,8 +249,10 @@ class PublicShareServiceTest extends TestCase {
 		sort($cardKeys);
 		// `type` is a public-safe display attribute (renders as a tile icon like a
 		// label/cover - no PII, no internal identifier), so it is a permitted key.
+		// `coverColor`, `startDate` and `estimate` (#3951) are presentational,
+		// non-person card content too - they carry no assignee/comment/member data.
 		self::assertSame(
-			['allDay', 'checklist', 'description', 'duedate', 'humanId', 'id', 'labels', 'priority', 'stackId', 'status', 'title', 'type'],
+			['allDay', 'checklist', 'coverColor', 'description', 'duedate', 'estimate', 'humanId', 'id', 'labels', 'priority', 'stackId', 'startDate', 'status', 'title', 'type'],
 			$cardKeys
 		);
 

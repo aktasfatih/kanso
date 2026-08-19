@@ -116,6 +116,128 @@ test.describe('Cross-board Views (#3815)', () => {
 		await expect(page.locator('.board-list-group__title', { hasText: /ViewsBoardB/ })).toBeVisible()
 	})
 
+	test('List display: clicking a card opens it as an overlay IN the View and closing stays in the View (#3950)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		const created = await api('PUT', '/views', {
+			name: 'Views list-open ' + Math.floor(Date.now() / 1000),
+			filter: { labels: [state.labelA, state.labelB] },
+			groupBy: 'board',
+			display: 'list',
+		})
+		const view = created.views[created.views.length - 1]
+		const listViewId = view.id
+		expect(listViewId).toBeTruthy()
+
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${listViewId}`)
+
+			const rowA = page.locator('.board-list-row__title', { hasText: state.cardA })
+			await expect(rowA).toBeVisible({ timeout: 15_000 })
+
+			// Clicking the row opens the shared card overlay ON the View (not the board).
+			await rowA.click()
+			const modal = page.locator('.card-modal-modal')
+			await expect(modal).toBeVisible({ timeout: 15_000 })
+			await expect(page).toHaveURL(new RegExp(`/views/${listViewId}`))
+			expect(page.url()).not.toMatch(/\/board\//)
+
+			// Close → overlay gone, still in the View.
+			await page.keyboard.press('Escape')
+			await expect(modal).toHaveCount(0, { timeout: 10_000 })
+			await expect(page).toHaveURL(new RegExp(`/views/${listViewId}`))
+			expect(page.url()).not.toMatch(/\/board\//)
+			await expect(rowA).toBeVisible()
+		} finally {
+			await api('DELETE', `/views/${listViewId}`).catch(() => {})
+		}
+	})
+
+	test('Kanban display groups the feed into columns; a tile opens the card IN the View (#3950)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		// A View spanning both boards, filtered to the two per-board labels so it
+		// resolves to EXACTLY the two test cards, grouped by BOARD and saved with
+		// the new Kanban display so it re-seeds Kanban on reload.
+		const created = await api('PUT', '/views', {
+			name: 'Views kanban ' + Math.floor(Date.now() / 1000),
+			filter: { labels: [state.labelA, state.labelB] },
+			groupBy: 'board',
+			display: 'kanban',
+		})
+		const view = created.views[created.views.length - 1]
+		const kanbanViewId = view.id
+		expect(kanbanViewId).toBeTruthy()
+
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${kanbanViewId}`)
+
+			// Saved display:'kanban' re-seeds the Kanban surface on load (no click needed),
+			// and the Kanban button reads as active.
+			const kanbanBtn = page.locator('.view-page__display-btn', { hasText: 'Kanban' })
+			await expect(kanbanBtn).toHaveClass(/view-page__display-btn--active/, { timeout: 15_000 })
+
+			// One column per board group (grouped by board) → ≥2 columns with the
+			// expected board-name headers.
+			const columns = page.locator('.view-kanban-col')
+			await expect(columns).toHaveCount(2, { timeout: 15_000 })
+			await expect(page.locator('.view-kanban-col__title', { hasText: /ViewsBoardA/ })).toBeVisible()
+			await expect(page.locator('.view-kanban-col__title', { hasText: /ViewsBoardB/ })).toBeVisible()
+
+			// Each card renders as a CardTile; both test cards are present.
+			await expect(page.locator('.card-tile__title', { hasText: state.cardA })).toBeVisible({ timeout: 10_000 })
+			const tileB = page.locator('.card-tile__title', { hasText: state.cardB })
+			await expect(tileB).toBeVisible()
+
+			// Tile parity (#3950): the Kanban tile carries the real human ref (KAN-…
+			// style prefix + seq) and the label chip renders with its board colour, not
+			// a neutral dot — same as the board tiles. Card B's label is green (00ff00).
+			await expect(page.locator('.view-kanban-col .card-tile__ref').first()).toBeVisible({ timeout: 10_000 })
+			const chipBg = await page.locator('.view-kanban-col__cards .card-tile__label-chip', { hasText: /vlabelB/ })
+				.first().evaluate((el) => getComputedStyle(el).backgroundColor)
+			// A coloured chip resolves to a non-transparent rgb() background.
+			expect(chipBg).toMatch(/^rgb/)
+			expect(chipBg).not.toBe('rgba(0, 0, 0, 0)')
+
+			// Clicking a tile opens the card detail as an in-place overlay ON the View
+			// (#3950): the shared CardModal → CardDetail opens, the URL STAYS on the
+			// View (never swaps to the card's board), and closing returns to the View.
+			await tileB.click()
+			const modal = page.locator('.card-modal-modal')
+			await expect(modal).toBeVisible({ timeout: 15_000 })
+			// URL unchanged: still the View, NOT /board/:id/card/:cardId.
+			await expect(page).toHaveURL(new RegExp(`/views/${kanbanViewId}`))
+			expect(page.url()).not.toMatch(/\/board\//)
+			// The overlay shows card B's content.
+			await expect(modal.getByText(state.cardB, { exact: false }).first()).toBeVisible({ timeout: 10_000 })
+
+			// Close the overlay (Escape) → the modal is gone and we are STILL in the
+			// View at /views/:id, not on any board.
+			await page.keyboard.press('Escape')
+			await expect(modal).toHaveCount(0, { timeout: 10_000 })
+			await expect(page).toHaveURL(new RegExp(`/views/${kanbanViewId}`))
+			expect(page.url()).not.toMatch(/\/board\//)
+			// The Kanban columns are still rendered underneath (we never left the View).
+			await expect(columns.first()).toBeVisible()
+
+			// Switch to List, then back to Kanban via the switcher to prove the toggle
+			// works in-session too.
+			await page.locator('.view-page__display-btn', { hasText: 'List' }).click()
+			await expect(page.locator('.board-list-row__title', { hasText: state.cardA })).toBeVisible({ timeout: 10_000 })
+			await kanbanBtn.click()
+			await expect(columns.first()).toBeVisible({ timeout: 10_000 })
+
+			// Reload → the saved display:'kanban' still re-seeds Kanban.
+			await page.reload()
+			await expect(kanbanBtn).toHaveClass(/view-page__display-btn--active/, { timeout: 15_000 })
+			await expect(page.locator('.view-kanban-col').first()).toBeVisible({ timeout: 10_000 })
+		} finally {
+			await api('DELETE', `/views/${kanbanViewId}`).catch(() => {})
+		}
+	})
+
 	test('richer filter dimensions + new group-by narrow a View (#3815)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 
