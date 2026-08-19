@@ -21,12 +21,15 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Files\AppData\IAppDataFactory;
+use OCP\Files\File;
 use OCP\Files\IAppData;
+use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IDBConnection;
 use OCP\IUserManager;
 use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
 
 /**
  * One-click import of a Deck board into Kanso. Reads the source via
@@ -36,11 +39,13 @@ use OCP\Security\ISecureRandom;
  * v1 imports the structure that maps cleanly: board (title/color), stacks
  * (order preserved), cards (title/description/archived/due date/done state),
  * labels + their card assignments, user assignees that still exist, card
- * comments (author remapped to the importer when the uid is gone), and
- * `deck_file` attachments (the bytes copied out of Deck's app-data into Kanso's
- * own). Deck's user-Files reference attachments (the `file` kind) are NOT
- * re-linked - they are counted and reported as skipped. Board SHARING/ACL is
- * still out of scope for v1 (it needs participant remapping).
+ * comments (author remapped to the importer when the uid is gone), and BOTH
+ * kinds of card attachment: `deck_file` uploads (bytes copied out of Deck's
+ * app-data into Kanso's own) AND `file` user-Files references (Deck stores these
+ * as shares; the referenced file's bytes are read from the owner's Files and
+ * copied in the same way). A reference whose source file is gone/unreadable is
+ * logged and skipped (counted in `skippedFileAttachments`), never fatal. Board
+ * SHARING/ACL is still out of scope for v1 (it needs participant remapping).
  */
 class DeckImportService {
 	/**
@@ -69,6 +74,8 @@ class DeckImportService {
 		private IAppData $appData,
 		private IAppDataFactory $appDataFactory,
 		private ISecureRandom $secureRandom,
+		private IRootFolder $rootFolder,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -198,7 +205,7 @@ class DeckImportService {
 			$this->importUserAssignees($deckCardIds, $cardIdMap);
 			$commentCount = $this->importComments($deckCardIds, $cardIdMap, $actorUid);
 			$attachmentCount = $this->importAttachments($deckCardIds, $cardIdMap, $actorUid, $writtenObjects);
-			$skippedFileAttachments = $this->deckReader->countFileReferenceAttachments($deckCardIds);
+			[$fileRefCount, $skippedFileAttachments] = $this->importFileReferenceAttachments($deckCardIds, $cardIdMap, $actorUid, $writtenObjects);
 
 			$result = [
 				'boardId' => $boardId,
@@ -207,7 +214,7 @@ class DeckImportService {
 				'cards' => $cardCount,
 				'labels' => count($labelIdMap),
 				'comments' => $commentCount,
-				'attachments' => $attachmentCount,
+				'attachments' => $attachmentCount + $fileRefCount,
 				'skippedFileAttachments' => $skippedFileAttachments,
 			];
 			$this->db->commit();
@@ -308,8 +315,8 @@ class DeckImportService {
 	 * Copies Deck's `deck_file` attachments into the new Kanso cards: the bytes
 	 * are read from Deck's app-data and re-stored under a server-generated
 	 * storage key in Kanso's own app-data, then a `kanso_card_attachments` row is
-	 * inserted. The user-Files reference kind (`file`) is not handled here (it is
-	 * counted separately and reported as skipped).
+	 * inserted. The user-Files reference kind (`file`) is handled separately by
+	 * {@see self::importFileReferenceAttachments()} (Deck stores it as a share).
 	 *
 	 * A `deck_attachment` row whose source object is MISSING - or whose source
 	 * exceeds {@see AttachmentSanitizer::MAX_SIZE} - is skipped and NOT counted,
@@ -338,11 +345,19 @@ class DeckImportService {
 				continue;
 			}
 
-			// Resolve the source object from Deck's app-data. A missing source
-			// object (row present but file gone) is skipped, not fatal.
+			// Resolve the source object from Deck's app-data. Deck stores the bytes
+			// under `file-card-<cardId>` (its FileService::getFolder()), NOT under
+			// the bare card id. A missing source object (row present but file gone,
+			// e.g. an app-data key mismatch) is LOGGED and skipped, not fatal.
 			try {
-				$sourceFile = $deckAppData->getFolder((string)$att['cardId'])->getFile($att['data']);
+				$sourceFile = $deckAppData
+					->getFolder('file-card-' . $att['cardId'])
+					->getFile($att['data']);
 			} catch (NotFoundException) {
+				$this->logger->warning(
+					'Kanso Deck import: skipping deck_file attachment with missing source object',
+					['deckCardId' => $att['cardId'], 'data' => $att['data']]
+				);
 				continue;
 			}
 
@@ -350,41 +365,195 @@ class DeckImportService {
 			// Files-copy paths). An oversized source is skipped-and-not-counted,
 			// exactly like a missing source - never fatal to the whole import.
 			if ((int)$sourceFile->getSize() > AttachmentSanitizer::MAX_SIZE) {
+				$this->logger->warning(
+					'Kanso Deck import: skipping oversized deck_file attachment',
+					['deckCardId' => $att['cardId'], 'data' => $att['data'], 'size' => (int)$sourceFile->getSize()]
+				);
 				continue;
 			}
-			$bytes = $sourceFile->getContent();
 
-			$card = $this->cardMapper->find($newCardId);
-			$boardId = $card->getBoardId();
-
-			// Server-generated opaque object name - the Deck filename never selects
-			// a storage path (mirrors CardAttachmentService).
-			$storageKey = $this->secureRandom->generate(
-				32,
-				ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
-			);
-			$folder = $this->kansoCardFolder($newCardId);
-			$folder->newFile($storageKey, $bytes);
-			$writtenObjects[] = ['cardId' => $newCardId, 'storageKey' => $storageKey];
-
-			$author = $att['createdBy'];
-			if ($author === '' || !$this->userManager->userExists($author)) {
-				$author = $actorUid;
+			// The read itself can still fail (storage error / corruption) even when
+			// the object resolved - guard it so one unreadable object is logged +
+			// skipped, never fatal to the whole import (same as the file-ref path).
+			try {
+				$bytes = $sourceFile->getContent();
+			} catch (\Throwable $e) {
+				$this->logger->warning(
+					'Kanso Deck import: could not read deck_file attachment bytes',
+					['deckCardId' => $att['cardId'], 'data' => $att['data'], 'exception' => $e]
+				);
+				continue;
 			}
 
-			$attachment = new CardAttachment();
-			$attachment->setCardId($newCardId);
-			$attachment->setBoardId($boardId);
-			$attachment->setFilename(AttachmentSanitizer::filename($att['data']));
-			$attachment->setMime(AttachmentSanitizer::mime($sourceFile->getMimeType()));
-			$attachment->setSize((int)$sourceFile->getSize());
-			$attachment->setStorageKey($storageKey);
-			$attachment->setUploadedBy($author);
-			$attachment->setCreatedAt($att['createdAt'] > 0 ? $att['createdAt'] : time());
-			$this->cardAttachmentMapper->insert($attachment);
+			$this->storeAttachment(
+				$newCardId,
+				$bytes,
+				AttachmentSanitizer::filename($att['data']),
+				AttachmentSanitizer::mime($sourceFile->getMimeType()),
+				(int)$sourceFile->getSize(),
+				$att['createdBy'],
+				$att['createdAt'],
+				$actorUid,
+				$writtenObjects,
+			);
 			$count++;
 		}
 		return $count;
+	}
+
+	/**
+	 * Imports Deck's `file` (user-Files reference) attachments. Unlike
+	 * `deck_file`, Deck stores these as SHARES (see {@see DeckReader::readFileReferenceAttachments()}),
+	 * pointing at a node in the sharer's Files. We resolve the node from the file
+	 * owner's userfolder, cap its size, then COPY the bytes into Kanso's app-data
+	 * through the SAME sanitized store path as an upload - so the imported card
+	 * owns an independent copy (a later edit/unshare of the source can't leak to,
+	 * or break for, board members). A reference whose file is gone, inaccessible,
+	 * or oversized is LOGGED and skipped (counted as skipped), never fatal.
+	 *
+	 * @param int[] $deckCardIds
+	 * @param array<int, int> $cardIdMap deck card id → kanso card id
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
+	 * @return array{0: int, 1: int} [imported count, skipped count]
+	 */
+	private function importFileReferenceAttachments(array $deckCardIds, array $cardIdMap, string $actorUid, array &$writtenObjects): array {
+		$refs = $this->deckReader->readFileReferenceAttachments($deckCardIds);
+		if ($refs === []) {
+			return [0, 0];
+		}
+
+		$imported = 0;
+		$skipped = 0;
+		foreach ($refs as $ref) {
+			$newCardId = $cardIdMap[$ref['cardId']] ?? null;
+			if ($newCardId === null) {
+				continue;
+			}
+
+			$node = $this->resolveFileReferenceNode($ref['owner'], $ref['fileId']);
+			if ($node === null) {
+				$this->logger->warning(
+					'Kanso Deck import: skipping file-reference attachment with missing/inaccessible source',
+					['deckCardId' => $ref['cardId'], 'fileId' => $ref['fileId'], 'owner' => $ref['owner']]
+				);
+				$skipped++;
+				continue;
+			}
+
+			$size = (int)$node->getSize();
+			if ($size <= 0 || $size > AttachmentSanitizer::MAX_SIZE) {
+				$this->logger->warning(
+					'Kanso Deck import: skipping empty/oversized file-reference attachment',
+					['deckCardId' => $ref['cardId'], 'fileId' => $ref['fileId'], 'size' => $size]
+				);
+				$skipped++;
+				continue;
+			}
+
+			try {
+				$bytes = $node->getContent();
+			} catch (\Throwable $e) {
+				$this->logger->warning(
+					'Kanso Deck import: could not read file-reference attachment bytes',
+					['deckCardId' => $ref['cardId'], 'fileId' => $ref['fileId'], 'exception' => $e]
+				);
+				$skipped++;
+				continue;
+			}
+
+			$filename = $ref['filename'] !== '' ? $ref['filename'] : $node->getName();
+			$this->storeAttachment(
+				$newCardId,
+				$bytes,
+				AttachmentSanitizer::filename($filename),
+				AttachmentSanitizer::mime($node->getMimetype()),
+				$size,
+				$ref['createdBy'],
+				$ref['createdAt'],
+				$actorUid,
+				$writtenObjects,
+			);
+			$imported++;
+		}
+		return [$imported, $skipped];
+	}
+
+	/**
+	 * Resolves the file node behind a Deck `file` reference from the file OWNER's
+	 * userfolder by file id - the same by-id resolution Kanso's own "Share from
+	 * Files" path uses. Returns null when the owner is unknown, has no userfolder,
+	 * or the id resolves to no readable file node (gone/inaccessible) - the caller
+	 * logs + skips.
+	 */
+	private function resolveFileReferenceNode(string $owner, int $fileId): ?File {
+		if ($owner === '' || $fileId <= 0) {
+			return null;
+		}
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($owner);
+		} catch (\Throwable) {
+			return null;
+		}
+		try {
+			$nodes = $userFolder->getById($fileId);
+		} catch (\Throwable) {
+			return null;
+		}
+		foreach ($nodes as $node) {
+			if ($node instanceof File) {
+				return $node;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Writes attachment bytes into Kanso's per-card app-data under a
+	 * server-generated storage key and inserts the `kanso_card_attachments` row.
+	 * Shared by both attachment kinds so the store/tracking logic never diverges.
+	 * The author uid falls back to the importer when the source uid is gone.
+	 *
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
+	 */
+	private function storeAttachment(
+		int $newCardId,
+		string $bytes,
+		string $filename,
+		string $mime,
+		int $size,
+		string $sourceUid,
+		int $createdAt,
+		string $actorUid,
+		array &$writtenObjects,
+	): void {
+		$card = $this->cardMapper->find($newCardId);
+		$boardId = $card->getBoardId();
+
+		// Server-generated opaque object name - the Deck filename never selects
+		// a storage path (mirrors CardAttachmentService).
+		$storageKey = $this->secureRandom->generate(
+			32,
+			ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
+		);
+		$folder = $this->kansoCardFolder($newCardId);
+		$folder->newFile($storageKey, $bytes);
+		$writtenObjects[] = ['cardId' => $newCardId, 'storageKey' => $storageKey];
+
+		$author = $sourceUid;
+		if ($author === '' || !$this->userManager->userExists($author)) {
+			$author = $actorUid;
+		}
+
+		$attachment = new CardAttachment();
+		$attachment->setCardId($newCardId);
+		$attachment->setBoardId($boardId);
+		$attachment->setFilename($filename);
+		$attachment->setMime($mime);
+		$attachment->setSize($size);
+		$attachment->setStorageKey($storageKey);
+		$attachment->setUploadedBy($author);
+		$attachment->setCreatedAt($createdAt > 0 ? $createdAt : time());
+		$this->cardAttachmentMapper->insert($attachment);
 	}
 
 	/**

@@ -216,7 +216,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
@@ -258,6 +258,17 @@ const props = defineProps({
 	 */
 	boardId: { type: [String, Number], default: null },
 })
+
+const emit = defineEmits(['open'])
+
+// When a parent handles `@open` (a cross-board View owns a card-detail overlay,
+// #3950), emit the card up and let the parent open it in place — do NOT route to
+// card-modal (a child of the board route, which would swap the whole View out for
+// the board). Inside an actual board no `@open` is attached, so the classic
+// router.push deep-link is preserved unchanged.
+// A parent's `@open` presence is fixed at mount (it never toggles at runtime), so
+// this is a one-off static read, not a reactive dependency.
+const hasOpenHandler = !!getCurrentInstance()?.vnode?.props?.onOpen
 
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -585,6 +596,13 @@ function cardHumanId(card) {
 }
 
 function openCard(cardId) {
+	// A parent-owned overlay (cross-board View, #3950) takes precedence: hand the
+	// card up and stay on the View instead of navigating to its board.
+	if (hasOpenHandler) {
+		const card = props.cards.find((c) => c.id === cardId)
+		if (card) emit('open', card)
+		return
+	}
 	// Cross-board Views (#3815): resolve each card's own boardId for the deep
 	// link; fall back to the single-board prop for the classic per-board timeline.
 	let boardId = props.boardId

@@ -40,9 +40,10 @@ use OCP\Security\ISecureRandom;
  *    narrow field list. It NEVER reuses the authenticated board payload, and it
  *    NEVER touches assignees, comments, watchers, activity/changes, ACL/members,
  *    owner uids, reviews, or the webhook config. Only board title + stacks +
- *    per-card {title, description, labels, dates, checklist counts, priority,
- *    status, human id} are exposed - nothing that identifies a person or leaks
- *    internal metadata. Archived stacks/cards are omitted.
+ *    per-card {title, description, labels, dates, cover colour, estimate,
+ *    checklist counts, priority, status, human id} are exposed - nothing that
+ *    identifies a person or leaks internal metadata. Archived stacks/cards are
+ *    omitted.
  *  - An unknown/disabled/rotated/expired token raises DoesNotExistException,
  *    which the controller maps to a throttled 404 (no oracle beyond the throttle,
  *    and no distinction between "wrong token" and "disabled board").
@@ -124,7 +125,7 @@ class PublicShareService {
 	 * @return array{
 	 *   board: array{title: ?string, color: ?string, prefix: string},
 	 *   stacks: list<array{id: int, title: ?string, color: ?string}>,
-	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}}>
+	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, coverColor: ?string, startDate: ?string, estimate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}}>
 	 * }
 	 * @throws DoesNotExistException if the token is unknown, disabled, or expired
 	 */
@@ -203,6 +204,12 @@ class PublicShareService {
 				'description' => $card->getDescription(),
 				'labels' => $labels,
 				'duedate' => $card->getDuedate()?->format(\DateTimeInterface::ATOM),
+				// Presentational, non-person card attributes (#3951): a cover colour
+				// band, the start date, and the estimate. These are board content, not
+				// person identifiers - no assignees/comments/members/activity here.
+				'coverColor' => $card->getCoverColor(),
+				'startDate' => $card->getStartDate()?->format(\DateTimeInterface::ATOM),
+				'estimate' => $card->getEstimate(),
 				'allDay' => $card->getAllDay() ?? false,
 				'priority' => $card->getPriority() ?? 0,
 				'type' => $card->getType() ?? '',

@@ -144,3 +144,91 @@ test.describe('Public read-only board share', () => {
 		expect((await fetchPublic('totally-made-up-token-that-does-not-exist')).status).toBe(404)
 	})
 })
+
+// The public page is an ANONYMOUS view (#3945): it must be reachable with no
+// session, scroll vertically so every card is reachable, and let a reader click
+// a card to read its FULL description (the tile truncates long text at 240 chars).
+test.describe('Public board is interactive read-only', () => {
+	// Opt OUT of the shared admin storageState: visit as a true anonymous reader,
+	// otherwise the page loads under the admin session and the test false-passes.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	// A description longer than the 240-char tile clip, so "full text visible"
+	// is a meaningful assertion (the tail only appears in the expanded detail).
+	// It leads with markdown (a **bold** run) so the detail can assert the body is
+	// rendered as HTML, not printed as raw markdown source.
+	const LONG_DESC = 'HEAD_MARKER **BOLD_MARKER_7788** ' + 'lorem ipsum dolor sit amet '.repeat(20) + 'TAIL_MARKER_UNIQUE_9317'
+	const COVER = '31CC31'
+	// A token from the board's 'hours' estimate scale (set in beforeAll).
+	const ESTIMATE = '4'
+
+	let boardId = 0
+	let token = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Interactive E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		// Enough cards to push the last one below the fold, plus one with a long
+		// description we open to read in full.
+		for (let i = 1; i <= 15; i++) {
+			await api('POST', '/cards', { stackId, title: `Card number ${i}` })
+		}
+		// Enable an estimate scale so the card can carry a (non-person) estimate.
+		await api('PATCH', `/boards/${boardId}`, { estimateScale: 'hours' })
+		const detailCard = (await api('POST', '/cards', { stackId, title: 'Card with long description' })).body.id
+		// Set the richer NON-person attributes exercised below (#3951): full
+		// markdown description, cover colour, start date, estimate.
+		await api('PATCH', `/cards/${detailCard}`, {
+			description: LONG_DESC,
+			coverColor: COVER,
+			startDate: '2026-03-04T00:00:00+00:00',
+			estimate: ESTIMATE,
+		})
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('scrolls vertically and opens a read-only card detail with full description', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Interactive E2E')
+
+		// The mount is a real scroll container (all cards reachable, not just the
+		// top of the fold).
+		const scrollable = await page.locator('#kanso-public').evaluate((el) => el.scrollHeight > el.clientHeight)
+		expect(scrollable).toBe(true)
+
+		// The long-description tile is truncated on the board (tail marker hidden).
+		const tile = page.locator('.public-card').filter({ hasText: 'Card with long description' })
+		await tile.scrollIntoViewIfNeeded()
+		await expect(tile).not.toContainText('TAIL_MARKER_UNIQUE_9317')
+
+		// Clicking opens a read-only detail showing the FULL description.
+		await tile.click()
+		const detail = page.locator('.public-detail')
+		await expect(detail).toBeVisible()
+		await expect(detail).toContainText('HEAD_MARKER')
+		await expect(detail).toContainText('TAIL_MARKER_UNIQUE_9317')
+
+		// The description is rendered as MARKDOWN (not raw source): the **bold** run
+		// becomes a <strong>, and the raw asterisks are gone.
+		await expect(detail.locator('.public-detail__desc strong')).toHaveText('BOLD_MARKER_7788')
+		await expect(detail.locator('.public-detail__desc')).not.toContainText('**BOLD_MARKER_7788**')
+
+		// The richer NON-person attributes render (#3951): a cover-colour band, the
+		// start date and the estimate. No person data is shown.
+		await expect(detail.locator('.public-detail__cover')).toBeVisible()
+		await expect(detail.locator('.public-detail__meta')).toContainText('Start')
+		await expect(detail.locator('.public-detail__meta')).toContainText('Estimate')
+		await expect(detail.locator('.public-detail__meta')).toContainText(ESTIMATE)
+
+		// No edit affordances (no inputs/textareas in the read-only detail).
+		await expect(detail.locator('input, textarea')).toHaveCount(0)
+
+		// Closes again.
+		await detail.locator('.public-detail__close').click()
+		await expect(page.locator('.public-detail')).toHaveCount(0)
+	})
+})

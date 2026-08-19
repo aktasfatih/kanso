@@ -90,6 +90,12 @@ test.describe('Card drag and drop', () => {
 	// IDs set by beforeAll, shared across tests
 	const state = { boardId: 0, stackS1Id: 0, stackS2Id: 0, cardAId: 0, cardBId: 0, boardUrl: '' }
 
+	// ── Same-column reorder fixture ─────────────────────────────────────────────
+	// A dedicated board so the reorder test is independent of the cross-column
+	// tests above (which empty S1 as a side effect). Three cards R1, R2, R3 in a
+	// single column let us assert a genuine above/below-sibling reorder + persist.
+	const reorder = { boardId: 0, stackId: 0, boardUrl: '' }
+
 	test.beforeAll(async () => {
 		// Delete any existing DnD Test Board to start clean
 		const boards = await apiGet('/boards')
@@ -117,6 +123,21 @@ test.describe('Card drag and drop', () => {
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 		console.log('Setup complete - boardUrl:', state.boardUrl)
+
+		// Reorder fixture: a separate board with one column holding R1, R2, R3
+		// (created in order, so their initial top-to-bottom order is R1, R2, R3).
+		for (const b of boards) {
+			if (b.title === 'DnD Reorder Board') await apiDelete(`/boards/${b.id}`)
+		}
+		const rBoard = await apiPost('/boards', { title: 'DnD Reorder Board' })
+		reorder.boardId = rBoard.id
+		const rStack = await apiPost('/stacks', { boardId: rBoard.id, title: 'R' })
+		reorder.stackId = rStack.id
+		// Create in order so the board renders R1 (top), R2, R3 (bottom).
+		await apiPost('/cards', { stackId: rStack.id, title: 'R1' })
+		await apiPost('/cards', { stackId: rStack.id, title: 'R2' })
+		await apiPost('/cards', { stackId: rStack.id, title: 'R3' })
+		reorder.boardUrl = `${BASE}/index.php/apps/kanso#/board/${rBoard.id}`
 	})
 
 	test('drag card A into S2 above card B, persists after reload', async ({ page }) => {
@@ -258,5 +279,43 @@ test.describe('Card drag and drop', () => {
 		const titlesAfter = page.locator('.stack-column__title')
 		await expect(titlesAfter.nth(0)).toHaveText('S2', { timeout: 8000 })
 		await expect(titlesAfter.nth(1)).toHaveText('S1')
+	})
+
+	test('same-column reorder: drag R3 above R1, order changes and persists after reload', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(reorder.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		const col = page.locator('.stack-column').nth(0)
+		const cards = col.locator('.card-tile-wrap .card-tile')
+
+		// Initial order (top-to-bottom): R1, R2, R3
+		await expect(cards).toHaveCount(3, { timeout: 8000 })
+		await expect(cards.nth(0)).toContainText('R1')
+		await expect(cards.nth(1)).toContainText('R2')
+		await expect(cards.nth(2)).toContainText('R3')
+
+		// Drag the LAST card (R3) up onto the TOP edge of the FIRST card (R1).
+		// This is a genuine same-column above-sibling reorder — a single-row
+		// fractional-key UPDATE, not a cross-stack move.
+		const r3 = cards.filter({ hasText: 'R3' })
+		const r1 = cards.filter({ hasText: 'R1' })
+		await dragWithMouse(page, r3, r1, 'top')
+
+		// New order: R3, R1, R2
+		await expect(cards.nth(0)).toContainText('R3', { timeout: 8000 })
+		await expect(cards.nth(1)).toContainText('R1')
+		await expect(cards.nth(2)).toContainText('R2')
+
+		// Persist across reload (server is source of truth for the sort keys)
+		await page.reload()
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		const colAfter = page.locator('.stack-column').nth(0)
+		const cardsAfter = colAfter.locator('.card-tile-wrap .card-tile')
+		await expect(cardsAfter).toHaveCount(3, { timeout: 8000 })
+		await expect(cardsAfter.nth(0)).toContainText('R3', { timeout: 8000 })
+		await expect(cardsAfter.nth(1)).toContainText('R1')
+		await expect(cardsAfter.nth(2)).toContainText('R2')
 	})
 })

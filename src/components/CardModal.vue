@@ -25,7 +25,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			ref="detailRef"
 			mode="modal"
 			:card-id="cardId"
+			:controlled="controlled"
+			:board-id="boardId"
 			@update:title="modalTitle = $event"
+			@navigate="$emit('navigate', $event)"
 			@close="onDetailClose" />
 	</NcModal>
 </template>
@@ -41,7 +44,24 @@ defineProps({
 		type: String,
 		required: true,
 	},
+	// Controlled mode (#3950): rendered as an in-place overlay by a parent that owns
+	// the open/close state (a cross-board View), NOT via the nested card-modal route.
+	// CardDetail then closes by emitting `close` with no router navigation, so the
+	// parent's URL/surface is preserved.
+	controlled: {
+		type: Boolean,
+		default: false,
+	},
+	// Explicit board id for the controlled overlay — the View has no board id in its
+	// URL, so the parent passes the card's own boardId. Ignored by the routed variant
+	// (which reads route.params.id), so it's null there.
+	boardId: {
+		type: [String, Number],
+		default: null,
+	},
 })
+
+const emit = defineEmits(['close', 'navigate'])
 
 const detailRef = ref(null)
 const modalTitle = ref('')
@@ -55,9 +75,12 @@ function onModalClose() {
 }
 
 // CardDetail decided the card should actually close (Escape with no popover open,
-// backdrop click, or an action that removes the card). It already performed the
-// route navigation; nothing more to do here.
-function onDetailClose() {}
+// backdrop click, or an action that removes the card). In the routed variant it
+// already performed the navigation and nothing more is needed; in controlled mode
+// it did NOT navigate, so bubble `close` up to the parent that owns the overlay.
+function onDetailClose() {
+	emit('close')
+}
 </script>
 
 <!-- Widen the modal container for the two-pane card view (teleported outside
