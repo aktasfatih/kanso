@@ -127,7 +127,7 @@ export function buildLanes(mode, cardsByStack, labels, participants) {
 	for (const level of [...PRIORITY_LEVELS].filter((l) => l.value > 0).sort((a, b) => b.value - a.value)) {
 		const cards = byLevel.get(level.value) ?? []
 		if (cards.length > 0) {
-			lanes.push(toLane({ key: 'priority:' + level.value, title: t('kanso', level.label), color: null, cards }))
+			lanes.push(toLane({ key: 'priority:' + level.value, title: level.label, color: null, cards }))
 		}
 	}
 	lanes.push(toLane({ key: 'priority:0', title: t('kanso', 'No priority'), color: null, cards: byLevel.get(0) ?? [] }))
@@ -144,17 +144,17 @@ export const VIEW_GROUP_BY = ['status', 'priority', 'assignee', 'board', 'type',
 
 /** Card status buckets for the 'status' group-by, in display order. */
 const STATUS_ORDER = [
-	{ key: 'status:in_progress', label: 'In progress', match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) > 0 },
-	{ key: 'status:todo', label: 'To do', match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) === 0 },
-	{ key: 'status:done', label: 'Done', match: (c) => Number(c.doneAt ?? 0) > 0 },
+	{ key: 'status:in_progress', label: t('kanso', 'In progress'), match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) > 0 },
+	{ key: 'status:todo', label: t('kanso', 'To do'), match: (c) => Number(c.doneAt ?? 0) === 0 && Number(c.startedAt ?? 0) === 0 },
+	{ key: 'status:done', label: t('kanso', 'Done'), match: (c) => Number(c.doneAt ?? 0) > 0 },
 ]
 
 /** Review-state buckets for the 'review' group-by, in fixed display order. */
 const REVIEW_ORDER = [
-	{ key: 'review:pending', label: 'Needs review', match: (c) => c.reviewState === 'pending' },
-	{ key: 'review:approved', label: 'Approved', match: (c) => c.reviewState === 'approved' },
-	{ key: 'review:changes_requested', label: 'Changes requested', match: (c) => c.reviewState === 'changes_requested' },
-	{ key: 'review:none', label: 'No review', match: (c) => c.reviewState == null },
+	{ key: 'review:pending', label: t('kanso', 'Needs review'), match: (c) => c.reviewState === 'pending' },
+	{ key: 'review:approved', label: t('kanso', 'Approved'), match: (c) => c.reviewState === 'approved' },
+	{ key: 'review:changes_requested', label: t('kanso', 'Changes requested'), match: (c) => c.reviewState === 'changes_requested' },
+	{ key: 'review:none', label: t('kanso', 'No review'), match: (c) => c.reviewState == null },
 ]
 
 /**
@@ -188,7 +188,7 @@ export function groupCardsByField(field, cards, opts = {}) {
 		const groups = []
 		for (const level of [...PRIORITY_LEVELS].filter((l) => l.value > 0).sort((a, b) => b.value - a.value)) {
 			const bucket = byLevel.get(level.value) ?? []
-			if (bucket.length > 0) groups.push({ key: 'priority:' + level.value, title: t('kanso', level.label), cards: bucket })
+			if (bucket.length > 0) groups.push({ key: 'priority:' + level.value, title: level.label, cards: bucket })
 		}
 		const none = byLevel.get(0) ?? []
 		if (none.length > 0) groups.push({ key: 'priority:0', title: t('kanso', 'No priority'), cards: none })
@@ -241,7 +241,7 @@ export function groupCardsByField(field, cards, opts = {}) {
 		const groups = []
 		for (const def of CARD_TYPES) {
 			const bucket = byType.get(def.value) ?? []
-			if (bucket.length > 0) groups.push({ key: 'type:' + def.value, title: t('kanso', def.label), cards: bucket })
+			if (bucket.length > 0) groups.push({ key: 'type:' + def.value, title: def.label, cards: bucket })
 		}
 		const none = byType.get('') ?? []
 		if (none.length > 0) groups.push({ key: 'type:none', title: t('kanso', 'No type'), cards: none })
@@ -253,7 +253,7 @@ export function groupCardsByField(field, cards, opts = {}) {
 		const groups = []
 		for (const bucket of REVIEW_ORDER) {
 			const cardsIn = all.filter(bucket.match)
-			if (cardsIn.length > 0) groups.push({ key: bucket.key, title: t('kanso', bucket.label), cards: cardsIn })
+			if (cardsIn.length > 0) groups.push({ key: bucket.key, title: bucket.label, cards: cardsIn })
 		}
 		return groups
 	}
@@ -304,7 +304,7 @@ export function groupCardsByField(field, cards, opts = {}) {
 	const groups = []
 	for (const bucket of STATUS_ORDER) {
 		const cardsIn = all.filter(bucket.match)
-		if (cardsIn.length > 0) groups.push({ key: bucket.key, title: t('kanso', bucket.label), cards: cardsIn })
+		if (cardsIn.length > 0) groups.push({ key: bucket.key, title: bucket.label, cards: cardsIn })
 	}
 	return groups
 }

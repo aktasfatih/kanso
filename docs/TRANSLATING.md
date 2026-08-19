@@ -77,8 +77,12 @@ browser profile) picks up the new `l10n/<lang>.js`.
 ## Notes for developers
 
 - New source strings must be wrapped in `t('kanso', …)` / `$l->t(…)` to be
-  translatable, then picked up by `npm run l10n:extract`.
-- A handful of strings are translated at render time via a variable —
-  `t('kanso', someLabel)` — where the extractor can't see the English source.
-  Those literals are enumerated in `src/l10n-extra.js`; add new ones there when
-  you introduce a new built-in enum label.
+  translatable, then picked up by `npm run l10n:extract`. CI fails if the
+  extracted template or the compiled bundles are stale (the `build-frontend`
+  job re-runs extract + compile and diffs), so commit the regenerated files.
+- Built-in enum labels (card types, priority levels, filter facets, swimlane
+  groups) are wrapped **at their definition** — `label: t('kanso', 'Bug')` in
+  `useCardType.js`, `usePriority.js`, `useBoardFilters.js`, `useSwimlanes.js`,
+  etc. — and rendered directly, so the extractor sees them like any other
+  literal. Add a new enum label the same way; there's no separate string
+  manifest to keep in sync.

@@ -266,7 +266,7 @@ const projectTitle = computed(() =>
 
 function resolvePriorityLabel(priority) {
 	const level = PRIORITY_LEVELS.find((l) => l.value === Number(priority))
-	return level ? t('kanso', level.label) : String(priority)
+	return level ? level.label : String(priority)
 }
 
 // The project's cards are already cached (ProjectView populated them); use them

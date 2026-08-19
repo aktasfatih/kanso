@@ -359,7 +359,7 @@ function resolveLabelColor(labelId) {
 
 function resolvePriorityLabel(priority) {
 	const level = PRIORITY_LEVELS.find((l) => l.value === Number(priority))
-	return level ? t('kanso', level.label) : String(priority)
+	return level ? level.label : String(priority)
 }
 
 // ── Max values for bar width calculation ─────────────────────────────────────

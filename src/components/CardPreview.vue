@@ -187,7 +187,7 @@ const hasMeta = computed(() =>
 
 const priorityLabel = computed(() => {
 	const level = PRIORITY_LEVELS.find((l) => l.value === Number(props.card.priority ?? 0))
-	return level ? t('kanso', level.label) : ''
+	return level ? level.label : ''
 })
 
 const dueLabel = computed(() => {

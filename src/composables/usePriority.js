@@ -14,6 +14,7 @@
  * Priority levels: 0=none, 1=low, 2=medium, 3=high, 4=urgent.
  */
 
+import { translate as t } from '@nextcloud/l10n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { updateCard as apiUpdateCard } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
@@ -30,11 +31,11 @@ function resolve(v) {
 
 /** Priority level metadata - used in both CardModal and CardTile. */
 export const PRIORITY_LEVELS = [
-	{ value: 0, label: 'None', shortLabel: '' },
-	{ value: 1, label: 'Low', shortLabel: 'Low' },
-	{ value: 2, label: 'Medium', shortLabel: 'Med' },
-	{ value: 3, label: 'High', shortLabel: 'High' },
-	{ value: 4, label: 'Urgent', shortLabel: 'Urgent' },
+	{ value: 0, label: t('kanso', 'None'), shortLabel: '' },
+	{ value: 1, label: t('kanso', 'Low'), shortLabel: t('kanso', 'Low') },
+	{ value: 2, label: t('kanso', 'Medium'), shortLabel: t('kanso', 'Med') },
+	{ value: 3, label: t('kanso', 'High'), shortLabel: t('kanso', 'High') },
+	{ value: 4, label: t('kanso', 'Urgent'), shortLabel: t('kanso', 'Urgent') },
 ]
 
 /**

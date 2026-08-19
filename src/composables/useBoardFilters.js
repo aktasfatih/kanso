@@ -39,6 +39,7 @@
  */
 
 import { reactive, computed } from 'vue'
+import { translate as t } from '@nextcloud/l10n'
 
 /** Sentinel assignee id meaning "no assignee". */
 export const UNASSIGNED = '__none__'
@@ -51,15 +52,15 @@ export const FILTERABLE_TYPES = ['bug', 'feature', 'task', 'chore']
 
 /** Due-date filter options (value + i18n label key). */
 export const DUE_OPTIONS = [
-	{ value: 'overdue', label: 'Overdue' },
-	{ value: 'week', label: 'Due this week' },
-	{ value: 'none', label: 'No due date' },
+	{ value: 'overdue', label: t('kanso', 'Overdue') },
+	{ value: 'week', label: t('kanso', 'Due this week') },
+	{ value: 'none', label: t('kanso', 'No due date') },
 ]
 
 /** Done-state filter options (tri-state: null = both). */
 export const DONE_OPTIONS = [
-	{ value: 'open', label: 'Not done' },
-	{ value: 'done', label: 'Done' },
+	{ value: 'open', label: t('kanso', 'Not done') },
+	{ value: 'done', label: t('kanso', 'Done') },
 ]
 
 /**
@@ -67,14 +68,14 @@ export const DONE_OPTIONS = [
  * derived `waitingOnExternal` summary flag - no extra request.
  */
 export const WAITING_OPTIONS = [
-	{ value: 'waiting', label: 'Waiting on client' },
-	{ value: 'not_waiting', label: 'Not waiting' },
+	{ value: 'waiting', label: t('kanso', 'Waiting on client') },
+	{ value: 'not_waiting', label: t('kanso', 'Not waiting') },
 ]
 
 /** Blocked filter options (single-select: null = any). Reads `card.blocked`. */
 export const BLOCKED_OPTIONS = [
-	{ value: 'blocked', label: 'Blocked' },
-	{ value: 'not_blocked', label: 'Not blocked' },
+	{ value: 'blocked', label: t('kanso', 'Blocked') },
+	{ value: 'not_blocked', label: t('kanso', 'Not blocked') },
 ]
 
 /** Sentinel review value meaning "no review requested". */
@@ -85,30 +86,30 @@ export const REVIEW_VALUES = ['pending', 'approved', 'changes_requested', REVIEW
 
 /** Checklist filter options (single-select: null = any). Reads `card.checklist`. */
 export const CHECKLIST_OPTIONS = [
-	{ value: 'has', label: 'Has checklist' },
-	{ value: 'incomplete', label: 'Checklist incomplete' },
-	{ value: 'complete', label: 'Checklist complete' },
-	{ value: 'none', label: 'No checklist' },
+	{ value: 'has', label: t('kanso', 'Has checklist') },
+	{ value: 'incomplete', label: t('kanso', 'Checklist incomplete') },
+	{ value: 'complete', label: t('kanso', 'Checklist complete') },
+	{ value: 'none', label: t('kanso', 'No checklist') },
 ]
 
 /** Start-date filter options (single-select: null = any). Reads `card.startDate`. */
 export const START_OPTIONS = [
-	{ value: 'started', label: 'Started' },
-	{ value: 'upcoming', label: 'Starts later' },
-	{ value: 'none', label: 'No start date' },
+	{ value: 'started', label: t('kanso', 'Started') },
+	{ value: 'upcoming', label: t('kanso', 'Starts later') },
+	{ value: 'none', label: t('kanso', 'No start date') },
 ]
 
 /** Sub-card relationship filter options (single-select: null = any). */
 export const SUBCARD_OPTIONS = [
-	{ value: 'top_level', label: 'Top-level' },
-	{ value: 'parent', label: 'Parent card' },
-	{ value: 'child', label: 'Sub-card' },
+	{ value: 'top_level', label: t('kanso', 'Top-level') },
+	{ value: 'parent', label: t('kanso', 'Parent card') },
+	{ value: 'child', label: t('kanso', 'Sub-card') },
 ]
 
 /** Comment filter options (single-select: null = any). Reads `card.commentCount`. */
 export const COMMENTS_OPTIONS = [
-	{ value: 'has', label: 'Has comments' },
-	{ value: 'none', label: 'No comments' },
+	{ value: 'has', label: t('kanso', 'Has comments') },
+	{ value: 'none', label: t('kanso', 'No comments') },
 ]
 
 /**

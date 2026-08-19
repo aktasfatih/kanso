@@ -14,6 +14,7 @@
  *   5. On settled: invalidate both caches so server truth wins.
  */
 
+import { translate as t } from '@nextcloud/l10n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { updateCard as apiUpdateCard } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
@@ -34,10 +35,10 @@ function resolve(v) {
  * resolved by the consuming component (keeps this composable icon-free).
  */
 export const CARD_TYPES = [
-	{ value: 'bug', label: 'Bug', color: 'e74c3c' },
-	{ value: 'feature', label: 'Feature', color: '2ecc71' },
-	{ value: 'task', label: 'Task', color: '3498db' },
-	{ value: 'chore', label: 'Chore', color: '95a5a6' },
+	{ value: 'bug', label: t('kanso', 'Bug'), color: 'e74c3c' },
+	{ value: 'feature', label: t('kanso', 'Feature'), color: '2ecc71' },
+	{ value: 'task', label: t('kanso', 'Task'), color: '3498db' },
+	{ value: 'chore', label: t('kanso', 'Chore'), color: '95a5a6' },
 ]
 
 /**

@@ -85,6 +85,17 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build frontend
         run: npm run build
+      # Guard: the extracted template and the compiled l10n bundles must match the
+      # source. Re-running extract+compile here catches a new t()/->t() string that
+      # was never extracted, or a .po edited without recompiling its bundles.
+      - name: Translations up to date
+        run: |
+          node scripts/l10n.mjs extract
+          node scripts/l10n.mjs compile
+          git diff --exit-code translationfiles/ l10n/ || {
+            echo "::error::Translations are stale — run 'npm run l10n:extract && npm run l10n:compile' and commit the result."
+            exit 1
+          }
 
   # Cross-version × cross-DB install/migration matrix. This is what actually
   # VALIDATES the info.xml claim of NC 30–34: for each (version, db) combo it

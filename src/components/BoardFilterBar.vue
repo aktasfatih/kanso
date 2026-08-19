@@ -198,7 +198,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:class="`board-filter-bar__priority-item--${level.value}`"
 								@click="toggleSet('priorities', level.value)">
 								<span class="board-filter-bar__opt-dot" />
-								<span class="board-filter-bar__opt-text">{{ t('kanso', level.label) }}</span>
+								<span class="board-filter-bar__opt-text">{{ level.label }}</span>
 								<CheckIcon v-if="state.priorities.has(level.value)" class="board-filter-bar__opt-check" :size="20" />
 							</button>
 						</li>
@@ -215,7 +215,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:class="`board-filter-bar__type-item--${tp.value}`"
 								@click="toggleSet('types', tp.value)">
 								<span class="board-filter-bar__opt-dot" />
-								<span class="board-filter-bar__opt-text">{{ t('kanso', tp.label) }}</span>
+								<span class="board-filter-bar__opt-text">{{ tp.label }}</span>
 								<CheckIcon v-if="state.types.has(tp.value)" class="board-filter-bar__opt-check" :size="20" />
 							</button>
 						</li>
@@ -273,7 +273,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:aria-checked="state.reviews.has(rv.value) ? 'true' : 'false'"
 								class="board-filter-bar__opt"
 								@click="toggleSet('reviews', rv.value)">
-								<span class="board-filter-bar__opt-text">{{ t('kanso', rv.label) }}</span>
+								<span class="board-filter-bar__opt-text">{{ rv.label }}</span>
 								<CheckIcon v-if="state.reviews.has(rv.value)" class="board-filter-bar__opt-check" :size="20" />
 							</button>
 						</li>
@@ -301,7 +301,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:aria-checked="currentSingleValue === opt.value ? 'true' : 'false'"
 								class="board-filter-bar__opt"
 								@click="setSingleRadio(activeDim, opt.value)">
-								<span class="board-filter-bar__opt-text">{{ t('kanso', opt.label) }}</span>
+								<span class="board-filter-bar__opt-text">{{ opt.label }}</span>
 								<CheckIcon v-if="currentSingleValue === opt.value" class="board-filter-bar__opt-check" :size="20" />
 							</button>
 						</li>
@@ -376,10 +376,10 @@ const estimateTokens = computed(() => scaleTokens(props.estimateScale))
 // Review-state facet options (multi-select), fixed order. The 'none' sentinel
 // (REVIEW_NONE) matches cards with no review requested.
 const reviewOptions = [
-	{ value: 'pending', label: 'Needs review' },
-	{ value: 'approved', label: 'Approved' },
-	{ value: 'changes_requested', label: 'Changes requested' },
-	{ value: REVIEW_NONE, label: 'No review' },
+	{ value: 'pending', label: t('kanso', 'Needs review') },
+	{ value: 'approved', label: t('kanso', 'Approved') },
+	{ value: 'changes_requested', label: t('kanso', 'Changes requested') },
+	{ value: REVIEW_NONE, label: t('kanso', 'No review') },
 ]
 
 const count = useFilterCount(props.state)
@@ -419,7 +419,7 @@ const participantNameByUid = computed(() => {
 function singleSummary(value, options) {
 	if (!value) return ''
 	const opt = options.find((o) => o.value === value)
-	return opt ? t('kanso', opt.label) : ''
+	return opt ? opt.label : ''
 }
 
 // The dimension metadata driving both the root list and each drill-in panel.
@@ -450,7 +450,7 @@ const dimensions = computed(() => {
 			count: s.priorities.size,
 			summary: setSummary(s.priorities, (v) => {
 				const lvl = PRIORITY_LEVELS.find((l) => l.value === v)
-				return lvl ? t('kanso', lvl.label) : ''
+				return lvl ? lvl.label : ''
 			}),
 		},
 		{
@@ -460,7 +460,7 @@ const dimensions = computed(() => {
 			count: s.types.size,
 			summary: setSummary(s.types, (v) => {
 				const tp = CARD_TYPES.find((c) => c.value === v)
-				return tp ? t('kanso', tp.label) : ''
+				return tp ? tp.label : ''
 			}),
 		},
 		{
@@ -484,7 +484,7 @@ const dimensions = computed(() => {
 			count: s.reviews.size,
 			summary: setSummary(s.reviews, (v) => {
 				const rv = reviewOptions.find((o) => o.value === v)
-				return rv ? t('kanso', rv.label) : ''
+				return rv ? rv.label : ''
 			}),
 		},
 		{

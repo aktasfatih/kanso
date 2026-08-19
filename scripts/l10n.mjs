@@ -19,9 +19,9 @@
  *     (translate / translatePlural from @nextcloud/l10n are imported as t / n)
  *   - Backend  (lib/**, templates/**):  $l->t('…')   $l->n('one', 'many', …)
  *
- * Strings translated at render time via a variable — t('kanso', someVar) — cannot
- * be seen here; their English keys are enumerated in src/l10n-extra.js so this
- * extractor still picks them up.
+ * Built-in enum labels (card types, priority levels, filter facets, …) are
+ * wrapped at their definition — label: t('kanso', 'Bug') — and rendered
+ * directly, so their English source is a literal the extractor sees here too.
  */
 
 import fs from 'node:fs'

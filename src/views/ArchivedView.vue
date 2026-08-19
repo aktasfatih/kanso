@@ -298,7 +298,7 @@ function labelTitle(labelId) {
 
 function priorityLabel(value) {
 	const level = PRIORITY_LEVELS.find((l) => l.value === value)
-	return level ? t('kanso', level.label) : ''
+	return level ? level.label : ''
 }
 
 function formatDue(duedate) {
