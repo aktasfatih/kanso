@@ -48,6 +48,27 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """
         return (await client.get_board(board_id)).model_dump()
 
+    @mcp.tool(
+        title="List Kanso board members",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_board_members(
+        board_id: int, q: Optional[str] = None
+    ) -> List[dict]:
+        """List the users who can be assigned to cards on a board.
+
+        Returns each participant's `uid` and `displayName`. Feed a returned
+        `uid` into `kanso_assign_user` to assign that person to a card. Results
+        are capped server-side (~25); pass `q` to filter by name/uid substring
+        when a board has more members than that.
+
+        Args:
+            board_id: The numeric board id.
+            q: Optional case-insensitive substring filter over uid / display name.
+        """
+        members = await client.list_board_members(board_id, q)
+        return [m.model_dump() for m in members]
+
     @mcp.tool(title="Create a Kanso board")
     async def kanso_create_board(title: str, color: Optional[str] = None) -> dict:
         """Create a new board.
@@ -199,6 +220,13 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         archived: Optional[bool] = None,
         priority: Optional[int] = None,
         estimate: Optional[str] = None,
+        start_date: Optional[str] = None,
+        status: Optional[str] = None,
+        all_day: Optional[bool] = None,
+        due_reminder_day_before: Optional[bool] = None,
+        cover_color: Optional[str] = None,
+        type: Optional[str] = None,
+        visibility: Optional[str] = None,
     ) -> dict:
         """Update a card. Only the fields you pass are changed.
 
@@ -211,6 +239,16 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             archived: Archive (true) or unarchive (false) the card.
             priority: Integer priority.
             estimate: Effort estimate token (per the board's estimate scale).
+            start_date: ISO-8601 start date/time (empty string clears it).
+            status: Workflow status automation — one of "not_started",
+                "in_progress" or "done". DISTINCT from the `done` boolean: setting
+                this stamps the card's startedAt / doneAt timestamps accordingly.
+            all_day: Whether the due date is an all-day date (no time component).
+            due_reminder_day_before: Remind the day before the due date (true/false).
+            cover_color: Card cover colour as bare 6-hex, NO leading '#',
+                e.g. "e63946"; empty string clears it.
+            type: Card type — one of "" (none), "bug", "feature", "task" or "chore".
+            visibility: Card visibility — one of "public", "internal" or "private".
         """
         return (
             await client.update_card(
@@ -222,6 +260,13 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 archived=archived,
                 priority=priority,
                 estimate=estimate,
+                start_date=start_date,
+                status=status,
+                all_day=all_day,
+                due_reminder_day_before=due_reminder_day_before,
+                cover_color=cover_color,
+                type=type,
+                visibility=visibility,
             )
         ).model_dump()
 
@@ -297,6 +342,155 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """
         await client.unassign_user(card_id, user_id)
         return {"unassigned": True, "cardId": card_id, "userId": user_id}
+
+    # ---------------------------------------------------------------- comments
+    @mcp.tool(
+        title="List a Kanso card's comments",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_comments(card_id: int) -> List[dict]:
+        """List the comments on a card, oldest first.
+
+        Each comment carries its `author` (uid), `authorDisplayName`, markdown
+        `body`, `createdAt`/`editedAt` timestamps and, for replies, the
+        `parentCommentId` of the top-level comment it answers.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        comments = await client.list_comments(card_id)
+        return [c.model_dump() for c in comments]
+
+    @mcp.tool(title="Add a comment to a Kanso card")
+    async def kanso_add_comment(
+        card_id: int, body: str, parent_comment_id: Optional[int] = None
+    ) -> dict:
+        """Post a comment on a card. Pass `parent_comment_id` to reply to an
+        existing top-level comment (replies are one level deep).
+
+        Args:
+            card_id: The numeric card id.
+            body: The comment text (markdown).
+            parent_comment_id: Optional id of the top-level comment to reply to;
+                omit (null) for a new top-level comment.
+        """
+        return (
+            await client.add_comment(card_id, body, parent_comment_id)
+        ).model_dump()
+
+    # --------------------------------------------------------------- checklist
+    @mcp.tool(
+        title="List a Kanso card's checklist",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_checklist(card_id: int) -> List[dict]:
+        """List a card's checklist items, in order.
+
+        Each item carries its `id`, `title` and `done` state. Use the item `id`
+        with `kanso_toggle_checklist_item` to tick it off.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        items = await client.list_checklist(card_id)
+        return [i.model_dump() for i in items]
+
+    @mcp.tool(title="Add a checklist item to a Kanso card")
+    async def kanso_add_checklist_item(card_id: int, title: str) -> dict:
+        """Add a checklist item (a flat todo line) to a card.
+
+        Returns the created item, including its `id` — pass that to
+        `kanso_toggle_checklist_item` to mark it done later.
+
+        Args:
+            card_id: The numeric card id.
+            title: The checklist item text.
+        """
+        return (await client.add_checklist_item(card_id, title)).model_dump()
+
+    @mcp.tool(title="Toggle a Kanso checklist item")
+    async def kanso_toggle_checklist_item(item_id: int, done: bool) -> dict:
+        """Mark a checklist item done (true) or not done (false).
+
+        Note `item_id` is the checklist item's own id (from
+        `kanso_list_checklist` or `kanso_get_card`), NOT the card id.
+
+        Args:
+            item_id: The numeric checklist item id.
+            done: Whether the item is completed.
+        """
+        return (
+            await client.update_checklist_item(item_id, done=done)
+        ).model_dump()
+
+    # --------------------------------------------------------------- relations
+    @mcp.tool(
+        title="List a Kanso card's relations",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_relations(card_id: int) -> dict:
+        """List a card's relations to other cards, grouped by kind.
+
+        Returns an object with four lists — `blocks` (cards this card blocks),
+        `blockedBy` (cards blocking this one), `duplicates` and `relates`. Each
+        entry is `{id, cardId, title, done, hidden}` where `id` is the RELATION
+        id (pass it to `kanso_remove_relation`) and `cardId` is the other card.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        return await client.list_relations(card_id)
+
+    @mcp.tool(title="Add a relation between two Kanso cards")
+    async def kanso_add_relation(card_id: int, other_card_id: int, kind: str) -> dict:
+        """Link a card to another card on the SAME board.
+
+        `kind` must be one of:
+          - "blocks"      — this card blocks `other_card_id`
+          - "blocked_by"  — this card is blocked by `other_card_id`
+          - "duplicates"  — this card duplicates `other_card_id`
+          - "relates"     — this card is related to `other_card_id`
+
+        Both cards must be on the same board. Self-relations and cycles of
+        blocking relations are rejected by the server (surfaced as an API error).
+
+        Args:
+            card_id: The card the relation is added from.
+            other_card_id: The other card to link to (same board).
+            kind: One of "blocks", "blocked_by", "duplicates", "relates".
+        """
+        return await client.add_relation(card_id, other_card_id, kind)
+
+    @mcp.tool(title="Remove a relation from a Kanso card")
+    async def kanso_remove_relation(card_id: int, relation_id: int) -> dict:
+        """Remove a card-to-card relation.
+
+        Note `relation_id` is the relation's own id (the `id` field from
+        `kanso_list_relations`), NOT the id of the other card.
+
+        Args:
+            card_id: The card the relation belongs to.
+            relation_id: The numeric relation id to remove.
+        """
+        await client.remove_relation(card_id, relation_id)
+        return {"removed": True, "cardId": card_id, "relationId": relation_id}
+
+    @mcp.tool(title="Set or clear a Kanso card's parent")
+    async def kanso_set_card_parent(
+        card_id: int, parent_card_id: Optional[int] = None
+    ) -> dict:
+        """Set (or clear) a card's parent, building a one-level subtask
+        hierarchy. Parent and child must be on the SAME board.
+
+        Pass `parent_card_id` to make `card_id` a subtask of it; pass null/omit
+        to CLEAR the parent (detach the card from its parent). Invalid requests
+        (cross-board, deeper nesting) are rejected by the server.
+
+        Args:
+            card_id: The card to (re)parent.
+            parent_card_id: The parent card id, or null to clear the parent.
+        """
+        return (await client.set_parent(card_id, parent_card_id)).model_dump()
 
     # ------------------------------------------------------------------ labels
     @mcp.tool(title="Create a Kanso label")

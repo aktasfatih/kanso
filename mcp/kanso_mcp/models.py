@@ -82,6 +82,48 @@ class Label(_Base):
     color: Optional[str] = None
 
 
+class BoardMember(_Base):
+    """A board participant from ``GET /boards/{id}/participants``: an assignable
+    Nextcloud user (uid + display name). The uid is what ``kanso_assign_user``
+    expects.
+    """
+
+    uid: str
+    displayName: Optional[str] = None
+
+
+class Comment(_Base):
+    """A card comment from ``GET /api/cards/{id}/comments`` (or the single
+    comment returned by a create). The body is raw markdown; ``author`` is the
+    uid and ``authorDisplayName`` its resolved display name. ``createdAt`` /
+    ``editedAt`` are unix timestamps. Reactions are passed through untyped.
+    """
+
+    id: int
+    cardId: Optional[int] = None
+    parentCommentId: Optional[int] = None
+    author: Optional[str] = None
+    authorDisplayName: Optional[str] = None
+    body: Optional[str] = None
+    createdAt: int = 0
+    editedAt: int = 0
+    reactions: List[Any] = Field(default_factory=list)
+
+
+class ChecklistItem(_Base):
+    """A checklist item from ``GET/POST /api/cards/{id}/checklist`` or a
+    ``PATCH /api/checklist/{itemId}``. ``done`` is the source of truth; the
+    payload also carries assignee/due-date step fields (#3745) which are passed
+    through untyped rather than modelled.
+    """
+
+    id: int
+    cardId: Optional[int] = None
+    title: Optional[str] = None
+    done: bool = False
+    sortKey: Optional[str] = None
+
+
 class CardSummary(_Base):
     """A card summary (board payload / delta upsert): no description."""
 

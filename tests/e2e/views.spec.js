@@ -64,13 +64,22 @@ test.describe('Cross-board Views (#3815)', () => {
 		if (state.boardB) await api('DELETE', `/boards/${state.boardB}`).catch(() => {})
 	})
 
-	test('the cross-board feed returns cards from every readable board', async () => {
-		const cards = await api('GET', '/views/cards')
-		const titles = cards.map((c) => c.title)
+	test('the cross-board feed returns a capped envelope of cards from every readable board', async () => {
+		// The feed is a bounded envelope { cards, capped, total, limit } (#3892) -
+		// not a bare array - so a huge readable set can never ship one unbounded
+		// payload. With only a handful of test cards it is well under the cap.
+		const feed = await api('GET', '/views/cards')
+		expect(Array.isArray(feed.cards)).toBe(true)
+		expect(typeof feed.capped).toBe('boolean')
+		expect(feed.limit).toBeGreaterThan(0)
+		expect(feed.total).toBe(feed.cards.length + (feed.capped ? feed.total - feed.cards.length : 0))
+		expect(feed.cards.length).toBeLessThanOrEqual(feed.limit)
+
+		const titles = feed.cards.map((c) => c.title)
 		expect(titles).toContain(state.cardA)
 		expect(titles).toContain(state.cardB)
 		// Each card carries its board identity for grouping + deep-link.
-		const rowA = cards.find((c) => c.title === state.cardA)
+		const rowA = feed.cards.find((c) => c.title === state.cardA)
 		expect(rowA.boardId).toBe(state.boardA)
 		expect(rowA.boardTitle).toBeTruthy()
 	})

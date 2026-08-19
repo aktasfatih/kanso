@@ -1256,6 +1256,27 @@ watch(previewCard, (card) => {
 	if (previewCardId.value != null && !card) closePreview()
 })
 
+// Live preview that follows keyboard selection (#3908). While the quick-look
+// panel is open, moving the keyboard focus (arrow / hjkl) switches the preview
+// to the newly selected card and re-anchors the popover next to its tile. Only
+// keyboard focus is followed, not mouse hover, so the panel never chases the
+// cursor. navigateTo scrolls the virtualizer + focuses on the next
+// nextTick+rAF, so we read the tile rect on the same timing (a seq guard drops
+// a stale re-anchor if focus moves again before this one resolves). If the tile
+// isn't in the DOM the rect is null and the panel falls back to centered.
+let previewFollowSeq = 0
+watch(focusedCardId, async (id) => {
+	if (previewCardId.value == null || id == null) return
+	const seq = ++previewFollowSeq
+	previewCardId.value = id
+	await nextTick()
+	await new Promise((resolve) => requestAnimationFrame(resolve))
+	// A newer focus change (or a close) superseded this one - drop the re-anchor.
+	if (seq !== previewFollowSeq || previewCardId.value !== id) return
+	const el = document.querySelector(`[data-card-id="${id}"]`)
+	previewAnchorRect.value = el ? el.getBoundingClientRect() : null
+})
+
 // ── Keyboard navigation helpers (declared after cardsByStack + sortedStacks) ──
 // NOTE: function declarations are hoisted and can reference these computeds
 // safely. Only computed() and watch() calls must follow their dependencies.

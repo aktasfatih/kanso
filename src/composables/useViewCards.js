@@ -14,6 +14,10 @@ import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
  *
  * Like the My Work feeds it is cross-board (no board delta poll covers it), so
  * refetchOnMount 'always' + a focus/interval refetch keep it current.
+ *
+ * `data` is the server envelope `{ cards, capped, total, limit }` - `cards` is
+ * hard-capped server-side to bound this single unbounded feed; `capped`/`total`
+ * let the surface honestly report when it shows only the first N of M cards.
  */
 export function useViewCards() {
 	return useQuery({

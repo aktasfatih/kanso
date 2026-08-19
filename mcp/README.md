@@ -134,6 +134,7 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_list_boards` — list all boards (with per-board stats)
 - `kanso_get_board` — read a board: stacks, labels, card summaries
+- `kanso_list_board_members` — list assignable users (uid + name) for a board
 - `kanso_create_board` / `kanso_update_board` / `kanso_delete_board`
 
 **Stacks (columns)**
@@ -147,11 +148,29 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 - `kanso_create_card` / `kanso_update_card` / `kanso_delete_card`
 - `kanso_move_card` — move a card into a stack (optionally after a card)
 
+**Relations & subtasks**
+
+- `kanso_list_relations` — a card's relations grouped by kind (blocks / blockedBy / duplicates / relates)
+- `kanso_add_relation` — link two same-board cards (blocks / blocked_by / duplicates / relates)
+- `kanso_remove_relation` — remove a relation by its id
+- `kanso_set_card_parent` — set or clear a card's parent (one-level subtasks)
+
 **Labels & assignees**
 
 - `kanso_create_label` — create a board label
 - `kanso_assign_label` / `kanso_unassign_label`
 - `kanso_assign_user` / `kanso_unassign_user`
+
+**Comments**
+
+- `kanso_list_comments` — read a card's comments (author + body + timestamps)
+- `kanso_add_comment` — post a comment (optionally reply to a comment)
+
+**Checklist**
+
+- `kanso_list_checklist` — read a card's checklist items (id + title + done)
+- `kanso_add_checklist_item` — add a checklist item to a card
+- `kanso_toggle_checklist_item` — mark an item done / not done
 
 **My work**
 

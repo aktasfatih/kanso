@@ -18,9 +18,12 @@ from kanso_mcp.config import KansoConfig
 from kanso_mcp.models import (
     Board,
     BoardDetail,
+    BoardMember,
     BoardSummary,
     Card,
     CardSummary,
+    ChecklistItem,
+    Comment,
     Label,
     Stack,
 )
@@ -97,6 +100,16 @@ class KansoClient:
     async def get_board(self, board_id: int) -> BoardDetail:
         data = await self._request("GET", f"/boards/{board_id}")
         return BoardDetail.model_validate(data)
+
+    async def list_board_members(
+        self, board_id: int, q: Optional[str] = None
+    ) -> List[BoardMember]:
+        # ?q= is only sent when set (an absent filter returns all participants).
+        params = {"q": q} if q is not None else None
+        data = await self._request(
+            "GET", f"/boards/{board_id}/participants", params=params
+        )
+        return [BoardMember.model_validate(m) for m in (data or [])]
 
     async def create_board(self, title: str, color: Optional[str] = None) -> Board:
         data = await self._request(
@@ -201,6 +214,13 @@ class KansoClient:
         archived: Optional[bool] = None,
         priority: Optional[int] = None,
         estimate: Optional[str] = None,
+        start_date: Optional[str] = None,
+        status: Optional[str] = None,
+        all_day: Optional[bool] = None,
+        due_reminder_day_before: Optional[bool] = None,
+        cover_color: Optional[str] = None,
+        type: Optional[str] = None,
+        visibility: Optional[str] = None,
     ) -> Card:
         data = await self._request(
             "PATCH",
@@ -213,6 +233,13 @@ class KansoClient:
                 "archived": archived,
                 "priority": priority,
                 "estimate": estimate,
+                "startDate": start_date,
+                "status": status,
+                "allDay": all_day,
+                "dueReminderDayBefore": due_reminder_day_before,
+                "coverColor": cover_color,
+                "type": type,
+                "visibility": visibility,
             },
         )
         return Card.model_validate(data)
@@ -243,6 +270,48 @@ class KansoClient:
     async def unassign_user(self, card_id: int, user_id: str) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}/assignees/{user_id}")
 
+    # ---------------------------------------------------------------- comments
+    async def list_comments(self, card_id: int) -> List[Comment]:
+        data = await self._request("GET", f"/cards/{card_id}/comments")
+        return [Comment.model_validate(c) for c in (data or [])]
+
+    async def add_comment(
+        self, card_id: int, body: str, parent_comment_id: Optional[int] = None
+    ) -> Comment:
+        # The controller field is `body` (NOT `text`); parentCommentId is
+        # dropped by _request when None (a top-level comment).
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/comments",
+            json={"body": body, "parentCommentId": parent_comment_id},
+        )
+        return Comment.model_validate(data)
+
+    # --------------------------------------------------------------- checklist
+    async def list_checklist(self, card_id: int) -> List[ChecklistItem]:
+        data = await self._request("GET", f"/cards/{card_id}/checklist")
+        return [ChecklistItem.model_validate(i) for i in (data or [])]
+
+    async def add_checklist_item(self, card_id: int, title: str) -> ChecklistItem:
+        data = await self._request(
+            "POST", f"/cards/{card_id}/checklist", json={"title": title}
+        )
+        return ChecklistItem.model_validate(data)
+
+    async def update_checklist_item(
+        self,
+        item_id: int,
+        *,
+        title: Optional[str] = None,
+        done: Optional[bool] = None,
+    ) -> ChecklistItem:
+        # PATCH targets the item id directly (/checklist/{itemId}), NOT nested
+        # under the card. None fields are dropped by _request.
+        data = await self._request(
+            "PATCH", f"/checklist/{item_id}", json={"title": title, "done": done}
+        )
+        return ChecklistItem.model_validate(data)
+
     # ------------------------------------------------------------------ labels
     async def create_label(
         self, board_id: int, title: str, color: Optional[str] = None
@@ -251,6 +320,50 @@ class KansoClient:
             "POST", "/labels", json={"boardId": board_id, "title": title, "color": color}
         )
         return Label.model_validate(data)
+
+    # --------------------------------------------------------------- relations
+    async def list_relations(self, card_id: int) -> Dict[str, Any]:
+        # Returns a grouped dict {blocks, blockedBy, duplicates, relates}, each
+        # a list of {id, cardId, title, done, hidden}.
+        data = await self._request("GET", f"/cards/{card_id}/relations")
+        return data or {}
+
+    async def add_relation(
+        self, card_id: int, other_card_id: int, kind: str
+    ) -> Dict[str, Any]:
+        # kind is one of "blocks" | "blocked_by" | "duplicates" | "relates";
+        # the server swaps "blocked_by" into a stored blocks row, so pass the
+        # string through unchanged (no client-side swapping). Same-board only;
+        # self-relations and blocks-cycles are rejected server-side.
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/relations",
+            json={"otherCardId": other_card_id, "kind": kind},
+        )
+        return data or {}
+
+    async def remove_relation(self, card_id: int, relation_id: int) -> Any:
+        return await self._request(
+            "DELETE", f"/cards/{card_id}/relations/{relation_id}"
+        )
+
+    async def set_parent(
+        self, card_id: int, parent_card_id: Optional[int]
+    ) -> Card:
+        # NB: _request drops None values, but here None is meaningful — it is
+        # how the caller CLEARS the parent (the controller treats a null
+        # parentCardId as "unset parent"). Send the request directly so the
+        # explicit null survives the None-filter instead of being dropped.
+        response = await self._client.request(
+            "PUT",
+            f"/cards/{card_id}/parent",
+            json={"parentCardId": parent_card_id},
+        )
+        if response.status_code < 200 or response.status_code >= 300:
+            raise KansoApiError(
+                response.status_code, "PUT", f"/cards/{card_id}/parent", response.text
+            )
+        return Card.model_validate(response.json())
 
     # ----------------------------------------------------------------- my work
     async def list_my_cards(self) -> List[CardSummary]:

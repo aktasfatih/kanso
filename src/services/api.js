@@ -481,9 +481,20 @@ export const deleteView = (id) =>
 	axios.delete(url(`/api/views/${encodeURIComponent(id)}`)).then((r) => r.data.views)
 
 // The cross-board card feed a View renders over: enriched summaries from every
-// readable board. The client applies the View's saved filter + group-by.
+// readable board. The client applies the View's saved filter + group-by. The
+// server returns an envelope `{cards, capped, total, limit}` - `cards` is hard-
+// capped to bound this single unbounded feed; `capped`/`total`/`limit` let the
+// UI honestly report when it is showing only the first N of M readable cards.
 export const getViewCards = () =>
-	axios.get(url('/api/views/cards')).then((r) => r.data)
+	axios.get(url('/api/views/cards')).then((r) => {
+		const d = r.data ?? {}
+		return {
+			cards: Array.isArray(d.cards) ? d.cards : [],
+			capped: !!d.capped,
+			total: Number.isFinite(d.total) ? d.total : (Array.isArray(d.cards) ? d.cards.length : 0),
+			limit: Number.isFinite(d.limit) ? d.limit : 0,
+		}
+	})
 
 // Review types
 export const createReviewType = (boardId, title, color, stage) =>

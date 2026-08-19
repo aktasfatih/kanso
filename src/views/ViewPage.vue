@@ -89,20 +89,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 		</NcEmptyContent>
 
-		<!-- List display over the filtered + grouped cross-board cards -->
-		<BoardListView
-			v-else-if="display === 'list'"
-			:groups="groups"
-			:labels-by-id="labelsById"
-			:board-id="null" />
+		<!-- Resolved view: an optional truncation notice, then the chosen display. -->
+		<template v-else>
+			<!-- Honest truncation notice: the readable set exceeded the server cap,
+			     so the feed carries only the first N of M cards (no silent
+			     truncation). -->
+			<div
+				v-if="capped"
+				class="view-page__capped"
+				role="status"
+				aria-live="polite">
+				{{ cappedHint }}
+			</div>
 
-		<!-- Timeline display over the same groups -->
-		<BoardTimelineView
-			v-else
-			:cards="filteredCards"
-			:groups="groups"
-			:can-edit="false"
-			:board-id="null" />
+			<!-- List display over the filtered + grouped cross-board cards -->
+			<BoardListView
+				v-if="display === 'list'"
+				:groups="groups"
+				:labels-by-id="labelsById"
+				:board-id="null" />
+
+			<!-- Timeline display over the same groups -->
+			<BoardTimelineView
+				v-else
+				:cards="filteredCards"
+				:groups="groups"
+				:can-edit="false"
+				:board-id="null" />
+		</template>
 	</div>
 </template>
 
@@ -192,7 +206,18 @@ watch(view, (v) => {
 	}
 }, { immediate: true })
 
-const cards = computed(() => cardsData.value ?? [])
+const cards = computed(() => cardsData.value?.cards ?? [])
+
+// Honest truncation hint: when the readable set exceeds the server's hard cap the
+// feed carries only the first `limit` of `total` cards. Surface that rather than
+// silently dropping rows (house rule: no silent truncation).
+const capped = computed(() => cardsData.value?.capped === true)
+const cappedHint = computed(() =>
+	t('kanso', 'Showing the first {shown} of {total} cards — refine your filter to see the rest.', {
+		shown: cardsData.value?.limit ?? cards.value.length,
+		total: cardsData.value?.total ?? cards.value.length,
+	}),
+)
 
 // Apply the reused board predicate over the cross-board card set (client-side,
 // summary fields only). now is read once per recompute for a stable window.
@@ -361,6 +386,16 @@ async function onSaveFromBar(name) {
 
 .view-page__state--error {
 	color: var(--color-error);
+}
+
+.view-page__capped {
+	flex: 0 0 auto;
+	margin: 0 24px 8px 52px;
+	padding: 8px 12px;
+	border-radius: var(--border-radius);
+	background: var(--color-warning, var(--color-background-hover));
+	color: var(--color-warning-text, var(--color-main-text));
+	font-size: 0.9rem;
 }
 
 .view-page__spinner {

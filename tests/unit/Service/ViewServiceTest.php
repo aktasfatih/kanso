@@ -75,15 +75,54 @@ class ViewServiceTest extends TestCase {
 		$this->cardSummaryService->method('serialize')
 			->willReturnCallback(fn (int $boardId): array => [['id' => $boardId === 3 ? 11 : 22]]);
 
-		$rows = $this->service->findMine('alice');
+		$result = $this->service->findMine('alice');
 
+		// The feed is an envelope: uncapped small readable set → capped=false,
+		// total = row count, limit = the hard cap.
+		self::assertFalse($result['capped']);
+		self::assertSame(2, $result['total']);
+		self::assertSame(ViewService::MAX_CARDS, $result['limit']);
+
+		$rows = $result['cards'];
 		self::assertCount(2, $rows);
+		// Rows come back in the stable (boardId, id) order the cap slices on.
 		self::assertSame(11, $rows[0]['id']);
 		self::assertSame(3, $rows[0]['boardId']);
 		self::assertSame('Alpha', $rows[0]['boardTitle']);
 		self::assertSame(22, $rows[1]['id']);
 		self::assertSame(9, $rows[1]['boardId']);
 		self::assertSame('Beta', $rows[1]['boardTitle']);
+	}
+
+	/**
+	 * The scale guard (#3892): the feed is a SINGLE unbounded payload, so it is
+	 * hard-capped. Whatever the readable-set size, `cards` never exceeds
+	 * MAX_CARDS, `total` reports the true pre-cap count, and `capped` is honest -
+	 * the cap is applied AFTER the per-board ACL loop, so it moves no leak boundary.
+	 */
+	public function testFindMineCapsThePayloadAndReportsTotalWhenReadableSetIsHuge(): void {
+		$overCap = ViewService::MAX_CARDS + 250;
+
+		// One readable board whose (viewer-gated) summary set exceeds the cap.
+		$b1 = $this->board(1, 'Huge');
+		$this->boardService->method('findAll')->with('alice')->willReturn([$b1]);
+		$ctx1 = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
+		$this->boardAccess->method('contextFor')->with($b1, 'alice')->willReturn($ctx1);
+
+		// The mapper/serializer still run once per board (ACL gate intact); they
+		// return the whole viewer-scoped set, which the cap then slices.
+		$this->cardMapper->method('findSummariesByBoard')
+			->willReturn(array_map(fn (int $i): Card => $this->summaryCard($i, 1), range(1, $overCap)));
+		$this->cardSummaryService->method('serialize')
+			->willReturn(array_map(static fn (int $i): array => ['id' => $i], range(1, $overCap)));
+
+		$result = $this->service->findMine('alice');
+
+		self::assertTrue($result['capped']);
+		self::assertSame($overCap, $result['total']);
+		self::assertSame(ViewService::MAX_CARDS, $result['limit']);
+		// The payload is bounded regardless of the readable-set size.
+		self::assertCount(ViewService::MAX_CARDS, $result['cards']);
 	}
 
 	/**
@@ -111,7 +150,7 @@ class ViewServiceTest extends TestCase {
 		$this->cardSummaryService->method('serialize')
 			->willReturn([['id' => 11, 'title' => 'Only mine']]);
 
-		$rows = $this->service->findMine('alice');
+		$rows = $this->service->findMine('alice')['cards'];
 
 		$boardIds = array_map(static fn (array $c): int => $c['boardId'], $rows);
 		self::assertSame([3], array_values(array_unique($boardIds)));
@@ -124,6 +163,9 @@ class ViewServiceTest extends TestCase {
 		$this->boardAccess->expects(self::never())->method('contextFor');
 		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
 
-		self::assertSame([], $this->service->findMine('bob'));
+		$result = $this->service->findMine('bob');
+		self::assertSame([], $result['cards']);
+		self::assertFalse($result['capped']);
+		self::assertSame(0, $result['total']);
 	}
 }

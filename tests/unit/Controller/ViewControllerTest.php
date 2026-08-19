@@ -129,7 +129,13 @@ class ViewControllerTest extends TestCase {
 	}
 
 	public function testCardsDelegatesToServiceForCurrentUser(): void {
-		$feed = [['id' => 1, 'boardId' => 3, 'boardTitle' => 'B']];
+		// The service returns the capped envelope; the controller passes it through.
+		$feed = [
+			'cards' => [['id' => 1, 'boardId' => 3, 'boardTitle' => 'B']],
+			'capped' => false,
+			'total' => 1,
+			'limit' => 5000,
+		];
 		$this->viewService->expects(self::once())
 			->method('findMine')->with('alice')->willReturn($feed);
 
