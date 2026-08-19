@@ -1734,7 +1734,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div
 									v-for="{ comment: topComment, replies } in commentThread"
 									:key="topComment.id"
-									class="card-modal__comment-group">
+									:id="`comment-${topComment.id}`"
+									class="card-modal__comment-group"
+									:class="{ 'card-modal__comment-group--highlight': highlightedCommentId === topComment.id }">
 									<div class="card-modal__comment">
 										<NcAvatar
 											:user="topComment.author"
@@ -1862,7 +1864,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									</div>
 
 									<div v-if="replies.length > 0" class="card-modal__replies">
-										<div v-for="reply in replies" :key="reply.id" class="card-modal__comment card-modal__comment--reply">
+										<div
+											v-for="reply in replies"
+											:key="reply.id"
+											:id="`comment-${reply.id}`"
+											class="card-modal__comment card-modal__comment--reply"
+											:class="{ 'card-modal__comment--highlight': highlightedCommentId === reply.id }">
 											<NcAvatar
 												:user="reply.author"
 												:display-name="reply.authorDisplayName || reply.author"
@@ -3551,6 +3558,69 @@ async function handleVisibilityChange(visibility) {
 
 const flatComments = computed(() => commentsQuery.data.value ?? [])
 const commentThread = computed(() => buildCommentTree(flatComments.value))
+
+// ── Scroll-to-comment deep links (#3870) ─────────────────────────────────────
+// A reminder notification links to the card with a `#comment-<id>` fragment (see
+// Notifier::cardLink). The fragment-free deep-link boot (main.js) stashes that id
+// into the route query (`?comment=<id>`) before it hash-routes into the SPA, since
+// the router.replace would otherwise clobber the raw fragment. We ALSO read
+// window.location.hash directly as a fallback (in-app navigation that keeps the
+// fragment). Once the thread has rendered we scroll the target into view and give
+// it a brief highlight that fades. No-op when the fragment is absent or the comment
+// isn't in the loaded thread (deleted / not yet loaded) - never throws.
+const highlightedCommentId = ref(null)
+let highlightTimer = null
+
+function parseTargetCommentId() {
+	// Prefer the query the boot handoff set; fall back to a raw location hash so
+	// an in-app link that carries `#comment-<id>` still works.
+	const fromQuery = route.query.comment
+	const raw = Array.isArray(fromQuery) ? fromQuery[0] : fromQuery
+	if (raw != null && /^\d+$/.test(String(raw))) return Number(raw)
+	const m = /(?:^|#)comment-(\d+)\s*$/.exec(window.location.hash || '')
+	return m ? Number(m[1]) : null
+}
+
+let scrollHandled = false
+
+async function scrollToTargetComment() {
+	if (scrollHandled) return
+	const id = parseTargetCommentId()
+	if (!id) return
+	// The comment must actually be in the loaded thread; otherwise (deleted, or a
+	// stale link) do nothing rather than scroll to a phantom element.
+	if (!flatComments.value.some((c) => Number(c.id) === id)) return
+	// Ensure the discussion tab (not activity) is showing so the node is rendered.
+	discussionTab.value = 'discussion'
+	// The v-for nodes are patched asynchronously after the query data lands, so a
+	// single nextTick can run before the DOM node exists; poll a few frames for it
+	// before giving up rather than silently no-op'ing on a slow first paint.
+	let el = null
+	for (let attempt = 0; attempt < 20 && !el; attempt++) {
+		await nextTick()
+		el = document.getElementById(`comment-${id}`)
+		if (!el) await new Promise((r) => requestAnimationFrame(r))
+	}
+	if (!el) return
+	scrollHandled = true
+	el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+	highlightedCommentId.value = id
+	if (highlightTimer) clearTimeout(highlightTimer)
+	highlightTimer = setTimeout(() => {
+		highlightedCommentId.value = null
+		highlightTimer = null
+	}, 4000)
+}
+
+// The thread loads async, so wait until comments actually arrive, then scroll.
+// `immediate` covers the case where the query resolved before this watcher ran.
+watch(
+	() => flatComments.value.length,
+	(len) => {
+		if (len > 0) scrollToTargetComment()
+	},
+	{ immediate: true },
+)
 // Memoized per-comment rendered markdown, keyed by comment id. renderMarkdown is
 // expensive; rendering inline in-template re-ran it on any modal re-render. This
 // map only recomputes when the comments data actually changes.
@@ -3968,6 +4038,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', onDocumentMousedown, true)
+	if (highlightTimer) clearTimeout(highlightTimer)
 })
 
 // The modal shell funnels its X button here, and the backdrop handler above does
@@ -6813,6 +6884,30 @@ async function handleToggleProject(projectId) {
 	border-radius: 10px;
 	overflow: hidden;
 	flex-shrink: 0;
+}
+/* Transient highlight when a deep link scrolls to a comment (#3870): a brief
+   background/outline flash that fades out so the target is easy to spot without
+   permanently altering the comment's chrome. */
+.card-modal__comment-group--highlight {
+	animation: kanso-comment-flash 3.6s ease-out 1;
+}
+.card-modal__comment--highlight {
+	animation: kanso-comment-flash 3.6s ease-out 1;
+	border-radius: 8px;
+}
+@keyframes kanso-comment-flash {
+	0% {
+		background: var(--color-primary-element-light, var(--color-primary-light));
+		box-shadow: 0 0 0 2px var(--color-primary-element, var(--color-primary));
+	}
+	70% {
+		background: var(--color-primary-element-light, var(--color-primary-light));
+		box-shadow: 0 0 0 2px var(--color-primary-element, var(--color-primary));
+	}
+	100% {
+		background: var(--color-main-background);
+		box-shadow: 0 0 0 2px transparent;
+	}
 }
 .card-modal__comment {
 	display: flex;

@@ -56,8 +56,18 @@ createApp(App)
 // '/' navigation settles.
 const openCard = readOpenCardState()
 if (openCard) {
+	// Scroll-to-comment deep link (#3870): a reminder link carries a
+	// `#comment-<id>` fragment after the fragment-free server route. The SPA is
+	// hash-routed, so the raw fragment would be clobbered by the replace below;
+	// capture it FIRST and carry it into the target route as `?comment=<id>` so
+	// CardDetail can scroll to + highlight that comment once the thread loads.
+	const commentMatch = /(?:^|#)comment-(\d+)\s*$/.exec(window.location.hash || '')
+	const target = {
+		path: `/board/${openCard.boardId}/card/${openCard.cardId}`,
+		...(commentMatch ? { query: { comment: commentMatch[1] } } : {}),
+	}
 	router.isReady().then(() => {
-		router.replace(`/board/${openCard.boardId}/card/${openCard.cardId}`)
+		router.replace(target)
 	})
 }
 
