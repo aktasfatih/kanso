@@ -563,6 +563,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<CloseIcon :size="14" />
 								</button>
 							</div>
+							<!-- Repeat / recurrence (#55) - managers only; reuses the
+							     recurring-card engine with this card as the source. -->
+							<template v-if="canManage">
+								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}</label>
+								<p v-if="recurIsCustom" class="card-modal__recur-note">
+									{{ t('kanso', 'Custom schedule — edit it in Board settings → Automation.') }}
+								</p>
+								<template v-else>
+									<div class="card-modal__field-row">
+										<select
+											class="card-modal__date-input"
+											:value="recurFreq"
+											:disabled="recurBusy"
+											@change="onRecurFreqChange($event.target.value)">
+											<option value="OFF">{{ t('kanso', 'Does not repeat') }}</option>
+											<option value="DAILY">{{ t('kanso', 'Daily') }}</option>
+											<option value="WEEKLY">{{ t('kanso', 'Weekly') }}</option>
+											<option value="MONTHLY">{{ t('kanso', 'Monthly') }}</option>
+											<option value="YEARLY">{{ t('kanso', 'Yearly') }}</option>
+										</select>
+									</div>
+									<div v-if="recurFreq !== 'OFF'" class="card-modal__field-row card-modal__recur-interval">
+										<span class="card-modal__recur-every">{{ t('kanso', 'every') }}</span>
+										<input
+											class="card-modal__date-input card-modal__recur-interval-input"
+											type="number"
+											min="1"
+											:value="recurInterval"
+											:disabled="recurBusy"
+											@change="onRecurIntervalChange($event.target.value)">
+										<span class="card-modal__recur-unit">{{ recurUnitLabel }}</span>
+									</div>
+								</template>
+								<span v-if="recurError" class="card-modal__save-error">{{ recurError }}</span>
+							</template>
 						</div>
 					</div>
 
@@ -2197,6 +2232,7 @@ import { useAssignees } from '../composables/useAssignees.js'
 import { useContacts } from '../composables/useContacts.js'
 import { fetchCardContacts } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
+import { useRecurRules } from '../composables/useRecurRules.js'
 import { useReminders, reminderPresets } from '../composables/useReminders.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
@@ -3559,6 +3595,136 @@ const canManage = computed(() => {
 // Card visibility (#3743): only the card's creator or a board manager may
 // change it (the server enforces the same rule).
 const canSetVisibility = computed(() => canManage.value || (cardData.value?.owner === currentUserId))
+
+// ── Repeat / recurrence (#55) ────────────────────────────────────────────────
+// A compact "Repeat" control in the due-date popover, backed by the SAME
+// recurring-card engine as Board Settings → Automation: it just creates/edits a
+// rule whose source ("template") card is THIS card and whose target is this
+// card's own column. Manager-gated to match the rule endpoints. Only the simple
+// presets (frequency + interval, clone mode, due-at-occurrence) are exposed
+// here; anything richer stays in the Automation tab, and a rule that already
+// uses those richer options is shown read-only so this control never clobbers it.
+const {
+	data: recurRulesData,
+	createRule: createRecurRule,
+	updateRule: updateRecurRule,
+	deleteRule: deleteRecurRule,
+} = useRecurRules(boardId)
+
+// The (first) recurrence rule anchored on this card, if any.
+const cardRecurRule = computed(() =>
+	(recurRulesData.value ?? []).find((r) => Number(r.templateCardId) === Number(props.cardId)) ?? null,
+)
+
+// Split an RRULE into FREQ + INTERVAL, flagging any token this simple control
+// can't represent (BYDAY / COUNT / UNTIL / …).
+function parseSimpleRrule(rrule) {
+	let freq = null
+	let interval = 1
+	let extra = false
+	for (const token of String(rrule || '').split(';')) {
+		const [k, v] = token.split('=')
+		if (k === 'FREQ') freq = v
+		else if (k === 'INTERVAL') interval = Math.max(1, parseInt(v, 10) || 1)
+		else if (token.trim()) extra = true
+	}
+	return { freq, interval, extra }
+}
+
+const RECUR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']
+
+// A card rule the presets can't round-trip (extra RRULE parts, reset mode, or a
+// non-default due-date policy) is surfaced read-only, pointing at Automation.
+const recurIsCustom = computed(() => {
+	const rule = cardRecurRule.value
+	if (!rule) return false
+	const parsed = parseSimpleRrule(rule.rrule)
+	return parsed.extra
+		|| !RECUR_FREQS.includes(parsed.freq)
+		|| Number(rule.mode) !== 0
+		|| Number(rule.duedatePolicy) !== 0
+})
+
+const recurFreq = ref('OFF')
+const recurInterval = ref(1)
+const recurError = ref('')
+
+// Mirror the card's current rule into the control (and reset when it goes away).
+watch(cardRecurRule, (rule) => {
+	if (rule && !recurIsCustom.value) {
+		const parsed = parseSimpleRrule(rule.rrule)
+		recurFreq.value = parsed.freq
+		recurInterval.value = parsed.interval
+	} else if (!rule) {
+		recurFreq.value = 'OFF'
+		recurInterval.value = 1
+	}
+}, { immediate: true })
+
+const recurBusy = computed(() =>
+	createRecurRule.isPending.value || updateRecurRule.isPending.value || deleteRecurRule.isPending.value,
+)
+
+const recurUnitLabel = computed(() => {
+	const i = Math.max(1, Number(recurInterval.value) || 1)
+	switch (recurFreq.value) {
+	case 'DAILY': return n('kanso', 'day', 'days', i)
+	case 'WEEKLY': return n('kanso', 'week', 'weeks', i)
+	case 'MONTHLY': return n('kanso', 'month', 'months', i)
+	case 'YEARLY': return n('kanso', 'year', 'years', i)
+	default: return ''
+	}
+})
+
+function buildCardRrule(freq, interval) {
+	const parts = [`FREQ=${freq}`]
+	const i = Math.max(1, Number(interval) || 1)
+	if (i > 1) parts.push(`INTERVAL=${i}`)
+	return parts.join(';')
+}
+
+// Create / update / delete the card's rule to match the control. Optimism is left
+// to the composable's cache invalidation; errors surface inline.
+async function applyRecurrence() {
+	recurError.value = ''
+	const rule = cardRecurRule.value
+	try {
+		if (recurFreq.value === 'OFF') {
+			if (rule) await deleteRecurRule.mutateAsync(rule.id)
+			return
+		}
+		const rrule = buildCardRrule(recurFreq.value, recurInterval.value)
+		if (rule) {
+			await updateRecurRule.mutateAsync({ id: rule.id, data: { rrule } })
+		} else {
+			const stackId = Number(cardData.value?.stackId)
+			if (!stackId) {
+				recurError.value = t('kanso', 'This card needs a column before it can repeat.')
+				return
+			}
+			await createRecurRule.mutateAsync({
+				templateCardId: Number(props.cardId),
+				targetStackId: stackId,
+				mode: 0,
+				rrule,
+				duedatePolicy: 0,
+			})
+		}
+	} catch (err) {
+		recurError.value = err?.response?.data?.error || t('kanso', 'Failed to update recurrence.')
+	}
+}
+
+function onRecurFreqChange(value) {
+	recurFreq.value = value
+	if (value !== 'OFF' && !(recurInterval.value >= 1)) recurInterval.value = 1
+	applyRecurrence()
+}
+
+function onRecurIntervalChange(value) {
+	recurInterval.value = Math.max(1, parseInt(value, 10) || 1)
+	if (recurFreq.value !== 'OFF') applyRecurrence()
+}
 
 const visibilityError = ref('')
 async function handleVisibilityChange(visibility) {
@@ -5990,6 +6156,29 @@ async function handleToggleProject(projectId) {
 	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
+}
+.card-modal__recur-label {
+	display: block;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--color-border);
+}
+.card-modal__recur-interval {
+	margin-top: 6px;
+}
+.card-modal__recur-interval-input {
+	flex: 0 0 64px;
+	width: 64px;
+}
+.card-modal__recur-every,
+.card-modal__recur-unit {
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__recur-note {
+	margin-top: 6px;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
 }
 .card-modal__field-clear {
 	display: inline-flex;
