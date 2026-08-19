@@ -28,7 +28,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						v-for="card in (cardsByStack[stack.id] || [])"
 						:key="card.id"
 						class="public-card"
-						:class="{ 'public-card--done': card.status === 'done' }">
+						:class="{ 'public-card--done': card.status === 'done' }"
+						tabindex="0"
+						role="button"
+						:aria-label="t('kanso', 'Open card details')"
+						@click="openCard(card)"
+						@keydown.enter.prevent="openCard(card)"
+						@keydown.space.prevent="openCard(card)">
 						<div v-if="card.labels.length" class="public-card__labels">
 							<span
 								v-for="(label, i) in card.labels"
@@ -58,6 +64,55 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<footer class="public-board__footer">
 			{{ t('kanso', 'Shared read-only via Kanso') }}
 		</footer>
+
+		<!-- Read-only card detail (#3945). All fields are already in the public
+		     payload; this only expands them - no fetch, no edit affordances. -->
+		<div
+			v-if="selectedCard"
+			class="public-detail__backdrop"
+			@click.self="closeCard"
+			@keydown.esc="closeCard">
+			<div
+				class="public-detail"
+				role="dialog"
+				aria-modal="true"
+				tabindex="-1">
+				<div class="public-detail__top">
+					<span v-if="selectedCard.humanId" class="public-detail__id">{{ selectedCard.humanId }}</span>
+					<h2 class="public-detail__title">{{ selectedCard.title }}</h2>
+					<button
+						class="public-detail__close"
+						type="button"
+						:aria-label="t('kanso', 'Close')"
+						@click="closeCard">
+						×
+					</button>
+				</div>
+				<div v-if="selectedCard.labels.length" class="public-detail__labels">
+					<span
+						v-for="(label, i) in selectedCard.labels"
+						:key="i"
+						class="public-detail__label"
+						:style="{ background: label.color ? '#' + label.color : 'var(--color-background-dark, #ededed)' }">
+						{{ label.name }}
+					</span>
+				</div>
+				<div
+					v-if="selectedCard.priority >= 4 || selectedCard.duedate || selectedCard.checklist.total > 0"
+					class="public-detail__meta">
+					<span v-if="selectedCard.priority >= 4" class="public-detail__prio">{{ t('kanso', 'Urgent') }}</span>
+					<span v-if="selectedCard.duedate">{{ formatDue(selectedCard.duedate) }}</span>
+					<span v-if="selectedCard.checklist.total > 0">
+						{{ selectedCard.checklist.done }}/{{ selectedCard.checklist.total }}
+					</span>
+				</div>
+				<p
+					class="public-detail__desc"
+					:class="{ 'public-detail__desc--empty': !selectedCard.description }">
+					{{ selectedCard.description || t('kanso', 'No description') }}
+				</p>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -78,6 +133,7 @@ export default {
 			board: null,
 			stacks: [],
 			cards: [],
+			selectedCard: null,
 		}
 	},
 	computed: {
@@ -101,9 +157,24 @@ export default {
 		} finally {
 			this.loading = false
 		}
+		document.addEventListener('keydown', this.onKeydown)
+	},
+	beforeUnmount() {
+		document.removeEventListener('keydown', this.onKeydown)
 	},
 	methods: {
 		t,
+		openCard(card) {
+			this.selectedCard = card
+		},
+		closeCard() {
+			this.selectedCard = null
+		},
+		onKeydown(e) {
+			if (e.key === 'Escape' && this.selectedCard) {
+				this.closeCard()
+			}
+		},
 		truncate(text) {
 			return text.length > 240 ? text.slice(0, 240) + '…' : text
 		},

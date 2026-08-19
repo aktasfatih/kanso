@@ -13,6 +13,10 @@
 // styles in PublicBoard.vue never reach the page and it renders as plain text.
 ?>
 <style>
+/* The public page mounts into #kanso-public inside NC's body; give it a real
+   height so the columns/cards below the fold become reachable by scrolling. */
+html, body { height: 100%; }
+#kanso-public { height: 100%; overflow-y: auto; box-sizing: border-box; }
 .public-board { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; box-sizing: border-box; }
 .public-board__header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
 .public-board__dot { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; }
@@ -21,11 +25,13 @@
 .public-board__state { color: var(--color-text-maxcontrast, #666); padding: 32px 0; }
 .public-board__state--error { color: var(--color-error, #c33); }
 .public-board__columns { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
-.public-col { flex: 0 0 300px; max-width: 300px; background: var(--color-background-hover, #f5f5f5); border-radius: 10px; padding: 10px; box-sizing: border-box; }
+.public-col { flex: 0 0 300px; max-width: 300px; max-height: calc(100vh - 180px); display: flex; flex-direction: column; background: var(--color-background-hover, #f5f5f5); border-radius: 10px; padding: 10px; box-sizing: border-box; }
 .public-col__title { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; margin: 4px 4px 12px; padding-bottom: 6px; border-bottom: 2px solid var(--color-border, #ddd); }
 .public-col__count { font-size: 12px; color: var(--color-text-maxcontrast, #888); font-weight: 500; }
-.public-col__cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.public-card { background: var(--color-main-background, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.public-col__cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.public-card { background: var(--color-main-background, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); cursor: pointer; }
+.public-card:hover { border-color: var(--color-primary-element, #0082c9); }
+.public-card:focus-visible { outline: 2px solid var(--color-primary-element, #0082c9); outline-offset: 1px; }
 .public-card--done { opacity: 0.6; }
 .public-card__labels { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .public-card__label { font-size: 11px; padding: 1px 8px; border-radius: 10px; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, 0.4); }
@@ -36,5 +42,19 @@
 .public-card__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-maxcontrast, #888); }
 .public-card__prio { color: var(--color-error, #c33); font-weight: 600; }
 .public-board__footer { margin-top: 32px; text-align: center; font-size: 12px; color: var(--color-text-maxcontrast, #999); }
+
+/* Read-only card detail modal (#3945). Self-contained; no edit affordances. */
+.public-detail__backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px; overflow-y: auto; z-index: 10000; }
+.public-detail { background: var(--color-main-background, #fff); color: var(--color-main-text, #222); border-radius: 12px; width: 100%; max-width: 640px; padding: 24px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); box-sizing: border-box; }
+.public-detail__top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.public-detail__id { font-size: 13px; color: var(--color-text-maxcontrast, #888); font-weight: 600; flex: 0 0 auto; margin-top: 2px; }
+.public-detail__title { font-size: 20px; font-weight: 700; margin: 0; flex: 1 1 auto; word-break: break-word; }
+.public-detail__close { flex: 0 0 auto; background: transparent; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--color-text-maxcontrast, #888); padding: 0 4px; }
+.public-detail__labels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.public-detail__label { font-size: 12px; padding: 2px 10px; border-radius: 10px; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, 0.4); }
+.public-detail__meta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--color-text-maxcontrast, #666); }
+.public-detail__prio { color: var(--color-error, #c33); font-weight: 600; }
+.public-detail__desc { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--color-main-text, #222); }
+.public-detail__desc--empty { color: var(--color-text-maxcontrast, #888); font-style: italic; }
 </style>
 <div id="kanso-public" data-token="<?php p($_['token'] ?? ''); ?>"></div>
