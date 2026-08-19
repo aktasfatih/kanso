@@ -51,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<p v-if="card.description" class="public-card__desc">{{ truncate(card.description) }}</p>
 						<div class="public-card__meta">
 							<span v-if="card.priority >= 4" class="public-card__prio">{{ t('kanso', 'Urgent') }}</span>
-							<span v-if="card.duedate" class="public-card__due">{{ formatDue(card.duedate) }}</span>
+							<span v-if="card.duedate" class="public-card__due">{{ formatDate(card.duedate) }}</span>
 							<span v-if="card.checklist.total > 0" class="public-card__check">
 								{{ card.checklist.done }}/{{ card.checklist.total }}
 							</span>
@@ -77,6 +77,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				role="dialog"
 				aria-modal="true"
 				tabindex="-1">
+				<!-- Cover-colour band (#3951): a presentational accent, not a person. -->
+				<div
+					v-if="selectedCard.coverColor"
+					class="public-detail__cover"
+					:style="{ background: '#' + selectedCard.coverColor }" />
 				<div class="public-detail__top">
 					<span v-if="selectedCard.humanId" class="public-detail__id">{{ selectedCard.humanId }}</span>
 					<h2 class="public-detail__title">{{ selectedCard.title }}</h2>
@@ -97,19 +102,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						{{ label.name }}
 					</span>
 				</div>
-				<div
-					v-if="selectedCard.priority >= 4 || selectedCard.duedate || selectedCard.checklist.total > 0"
-					class="public-detail__meta">
+				<div v-if="hasMeta" class="public-detail__meta">
 					<span v-if="selectedCard.priority >= 4" class="public-detail__prio">{{ t('kanso', 'Urgent') }}</span>
-					<span v-if="selectedCard.duedate">{{ formatDue(selectedCard.duedate) }}</span>
-					<span v-if="selectedCard.checklist.total > 0">
+					<span v-if="selectedCard.startDate" class="public-detail__field">
+						{{ t('kanso', 'Start') }}: {{ formatDate(selectedCard.startDate) }}
+					</span>
+					<span v-if="selectedCard.duedate" class="public-detail__field">
+						{{ t('kanso', 'Due') }}: {{ formatDate(selectedCard.duedate) }}
+					</span>
+					<span v-if="selectedCard.estimate" class="public-detail__field">
+						{{ t('kanso', 'Estimate') }}: {{ selectedCard.estimate }}
+					</span>
+					<span v-if="selectedCard.checklist.total > 0" class="public-detail__field">
 						{{ selectedCard.checklist.done }}/{{ selectedCard.checklist.total }}
 					</span>
 				</div>
-				<p
+				<!-- eslint-disable-next-line vue/no-v-html -- sanitized by renderMarkdown (DOMPurify) -->
+				<div
+					v-if="selectedCard.description"
 					class="public-detail__desc"
-					:class="{ 'public-detail__desc--empty': !selectedCard.description }">
-					{{ selectedCard.description || t('kanso', 'No description') }}
+					v-html="renderedDescription" />
+				<p v-else class="public-detail__desc public-detail__desc--empty">
+					{{ t('kanso', 'No description') }}
 				</p>
 			</div>
 		</div>
@@ -120,6 +134,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
+import { renderMarkdown } from '../services/markdown.js'
 
 export default {
 	name: 'PublicBoard',
@@ -144,6 +159,18 @@ export default {
 				(map[card.stackId] = map[card.stackId] || []).push(card)
 			}
 			return map
+		},
+		// The open card's description rendered as sanitized markdown HTML. No refs
+		// map is passed: the public payload carries no card cross-reference data, so
+		// PREFIX-123 references render as plain text (never a broken link).
+		renderedDescription() {
+			return this.selectedCard ? renderMarkdown(this.selectedCard.description) : ''
+		},
+		// Whether the open card has any presentational meta worth a meta row.
+		hasMeta() {
+			const c = this.selectedCard
+			if (!c) return false
+			return c.priority >= 4 || !!c.startDate || !!c.duedate || !!c.estimate || c.checklist.total > 0
 		},
 	},
 	async mounted() {
@@ -178,7 +205,7 @@ export default {
 		truncate(text) {
 			return text.length > 240 ? text.slice(0, 240) + '…' : text
 		},
-		formatDue(iso) {
+		formatDate(iso) {
 			try {
 				return new Date(iso).toLocaleDateString()
 			} catch (e) {

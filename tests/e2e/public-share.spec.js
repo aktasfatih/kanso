@@ -155,7 +155,12 @@ test.describe('Public board is interactive read-only', () => {
 
 	// A description longer than the 240-char tile clip, so "full text visible"
 	// is a meaningful assertion (the tail only appears in the expanded detail).
-	const LONG_DESC = 'HEAD_MARKER ' + 'lorem ipsum dolor sit amet '.repeat(20) + 'TAIL_MARKER_UNIQUE_9317'
+	// It leads with markdown (a **bold** run) so the detail can assert the body is
+	// rendered as HTML, not printed as raw markdown source.
+	const LONG_DESC = 'HEAD_MARKER **BOLD_MARKER_7788** ' + 'lorem ipsum dolor sit amet '.repeat(20) + 'TAIL_MARKER_UNIQUE_9317'
+	const COVER = '31CC31'
+	// A token from the board's 'hours' estimate scale (set in beforeAll).
+	const ESTIMATE = '4'
 
 	let boardId = 0
 	let token = ''
@@ -168,8 +173,17 @@ test.describe('Public board is interactive read-only', () => {
 		for (let i = 1; i <= 15; i++) {
 			await api('POST', '/cards', { stackId, title: `Card number ${i}` })
 		}
+		// Enable an estimate scale so the card can carry a (non-person) estimate.
+		await api('PATCH', `/boards/${boardId}`, { estimateScale: 'hours' })
 		const detailCard = (await api('POST', '/cards', { stackId, title: 'Card with long description' })).body.id
-		await api('PATCH', `/cards/${detailCard}`, { description: LONG_DESC })
+		// Set the richer NON-person attributes exercised below (#3951): full
+		// markdown description, cover colour, start date, estimate.
+		await api('PATCH', `/cards/${detailCard}`, {
+			description: LONG_DESC,
+			coverColor: COVER,
+			startDate: '2026-03-04T00:00:00+00:00',
+			estimate: ESTIMATE,
+		})
 		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
 	})
 
@@ -197,6 +211,18 @@ test.describe('Public board is interactive read-only', () => {
 		await expect(detail).toBeVisible()
 		await expect(detail).toContainText('HEAD_MARKER')
 		await expect(detail).toContainText('TAIL_MARKER_UNIQUE_9317')
+
+		// The description is rendered as MARKDOWN (not raw source): the **bold** run
+		// becomes a <strong>, and the raw asterisks are gone.
+		await expect(detail.locator('.public-detail__desc strong')).toHaveText('BOLD_MARKER_7788')
+		await expect(detail.locator('.public-detail__desc')).not.toContainText('**BOLD_MARKER_7788**')
+
+		// The richer NON-person attributes render (#3951): a cover-colour band, the
+		// start date and the estimate. No person data is shown.
+		await expect(detail.locator('.public-detail__cover')).toBeVisible()
+		await expect(detail.locator('.public-detail__meta')).toContainText('Start')
+		await expect(detail.locator('.public-detail__meta')).toContainText('Estimate')
+		await expect(detail.locator('.public-detail__meta')).toContainText(ESTIMATE)
 
 		// No edit affordances (no inputs/textareas in the read-only detail).
 		await expect(detail.locator('input, textarea')).toHaveCount(0)

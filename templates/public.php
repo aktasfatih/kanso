@@ -52,9 +52,22 @@ html, body { height: 100%; }
 .public-detail__close { flex: 0 0 auto; background: transparent; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--color-text-maxcontrast, #888); padding: 0 4px; }
 .public-detail__labels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .public-detail__label { font-size: 12px; padding: 2px 10px; border-radius: 10px; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, 0.4); }
+.public-detail__cover { height: 8px; border-radius: 6px; margin: -8px 0 14px; }
 .public-detail__meta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--color-text-maxcontrast, #666); }
 .public-detail__prio { color: var(--color-error, #c33); font-weight: 600; }
-.public-detail__desc { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--color-main-text, #222); }
+.public-detail__desc { font-size: 14px; line-height: 1.5; word-break: break-word; color: var(--color-main-text, #222); }
 .public-detail__desc--empty { color: var(--color-text-maxcontrast, #888); font-style: italic; }
+/* Rendered-markdown description: keep block spacing sane inside the modal. */
+.public-detail__desc p { margin: 0 0 10px; }
+.public-detail__desc p:last-child { margin-bottom: 0; }
+.public-detail__desc ul, .public-detail__desc ol { margin: 0 0 10px; padding-left: 22px; }
+.public-detail__desc h1, .public-detail__desc h2, .public-detail__desc h3,
+.public-detail__desc h4, .public-detail__desc h5, .public-detail__desc h6 { margin: 12px 0 6px; line-height: 1.3; }
+.public-detail__desc pre { background: var(--color-background-dark, #f0f0f0); padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+.public-detail__desc code { background: var(--color-background-dark, #f0f0f0); padding: 1px 4px; border-radius: 4px; font-size: 0.92em; }
+.public-detail__desc pre code { background: none; padding: 0; }
+.public-detail__desc blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--color-border, #ddd); color: var(--color-text-maxcontrast, #666); }
+.public-detail__desc a { color: var(--color-primary-element, #0082c9); }
+.public-detail__desc img { max-width: 100%; height: auto; border-radius: 6px; }
 </style>
 <div id="kanso-public" data-token="<?php p($_['token'] ?? ''); ?>"></div>
