@@ -31,6 +31,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     Files" (#3645) event listener. The real class is autoloaded at runtime
 		     (the Files app is always enabled). -->
 		<file name="tests/stubs/files.php" />
+		<!-- OCA\DAV\CalDAV\Integration\* (DAV app) and Sabre\DAV\* / Sabre\CalDAV\* /
+		     Sabre\DAVACL\* (server 3rdparty) are not in composer - only sabre/vobject
+		     is. Stub the CalDAV integration surface so psalm can resolve the
+		     read-only VTODO calendar adapters (#3534 / issue #49) in lib/CalDav. The
+		     real classes are autoloaded at runtime (the DAV app is always enabled). -->
+		<file name="tests/stubs/caldav.php" />
 	</stubs>
 	<issueHandlers>
 		<!-- Psalm wants every class marked `final`. We deliberately do NOT: the

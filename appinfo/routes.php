@@ -206,6 +206,13 @@ return [
 		['name' => 'calendarFeed#enable', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'POST'],
 		['name' => 'calendarFeed#disable', 'url' => '/api/boards/{id}/calendar-feed', 'verb' => 'DELETE'],
 
+		// Per-user "show this board in my calendar" toggle for the CalDAV VTODO
+		// calendars (#3534 / issue #49). Personal preference (any member, not
+		// MANAGE); boards sync by default, this hides the noisy ones. Distinct
+		// from the board-wide calendar-feed above.
+		['name' => 'calendarSync#show', 'url' => '/api/boards/{id}/calendar-sync', 'verb' => 'GET'],
+		['name' => 'calendarSync#update', 'url' => '/api/boards/{id}/calendar-sync', 'verb' => 'PUT'],
+
 		// Per-user board pinning (#3632). Nested under a board id, distinct from
 		// board#show. Pin = PUT (READ-gated), unpin = DELETE (own pin only).
 		['name' => 'boardPin#pin', 'url' => '/api/boards/{id}/pin', 'verb' => 'PUT'],

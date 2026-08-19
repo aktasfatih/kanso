@@ -30,6 +30,12 @@ links and webhook, and one-click Import from Deck.
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>
+	<!-- Marks Kanso as a DAV-integration app so the DAV app's PluginManager loads
+	     the <sabre> calendar plugin below (read-only board VTODO calendars, #3534
+	     / issue #49). Without the `dav` type the plugin is silently skipped. -->
+	<types>
+		<dav/>
+	</types>
 	<category>organization</category>
 	<website>https://github.com/aktasfatih/kanso</website>
 	<bugs>https://github.com/aktasfatih/kanso/issues</bugs>
@@ -71,4 +77,13 @@ links and webhook, and one-click Import from Deck.
 			<icon>app.svg</icon>
 		</navigation>
 	</navigations>
+	<!-- Read-only CalDAV VTODO calendars, one per board (#3534 / issue #49). The
+	     DAV app instantiates this provider through the app container, so it is
+	     dependency-injected; it surfaces each board a user can access as a
+	     calendar of card due dates, auto-discovered by Nextcloud Calendar + DAVx5. -->
+	<sabre>
+		<calendar-plugins>
+			<plugin>OCA\Kanso\CalDav\CalendarProvider</plugin>
+		</calendar-plugins>
+	</sabre>
 </info>
