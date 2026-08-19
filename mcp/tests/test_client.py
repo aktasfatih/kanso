@@ -318,6 +318,93 @@ async def test_add_comment_forwards_parent_comment_id():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_list_checklist_parses():
+    route = respx.get(f"{BASE}/cards/100/checklist").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 5,
+                    "cardId": 100,
+                    "title": "step one",
+                    "done": False,
+                    "sortKey": "aaa",
+                    "assignedUser": "bob",
+                    "dueDate": "2026-09-01T17:00:00+00:00",
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        items = await c.list_checklist(100)
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/checklist"
+    assert items[0].id == 5
+    assert items[0].title == "step one"
+    assert items[0].done is False
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_checklist_item_body_uses_title():
+    route = respx.post(f"{BASE}/cards/100/checklist").mock(
+        return_value=httpx.Response(
+            200, json={"id": 6, "cardId": 100, "title": "new step", "done": False}
+        )
+    )
+    async with _client() as c:
+        item = await c.add_checklist_item(100, "new step")
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/checklist"
+    assert _json.loads(req.content) == {"title": "new step"}
+    assert item.id == 6
+    assert item.title == "new step"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_checklist_item_toggles_done():
+    route = respx.patch(f"{BASE}/checklist/6").mock(
+        return_value=httpx.Response(
+            200, json={"id": 6, "cardId": 100, "title": "new step", "done": True}
+        )
+    )
+    async with _client() as c:
+        item = await c.update_checklist_item(6, done=True)
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    # PATCH targets the item id directly, NOT nested under the card.
+    assert req.url.path == "/index.php/apps/kanso/api/checklist/6"
+    # title is None => dropped; only done is sent.
+    assert _json.loads(req.content) == {"done": True}
+    assert item.done is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_checklist_item_renames():
+    route = respx.patch(f"{BASE}/checklist/6").mock(
+        return_value=httpx.Response(
+            200, json={"id": 6, "cardId": 100, "title": "renamed", "done": False}
+        )
+    )
+    async with _client() as c:
+        await c.update_checklist_item(6, title="renamed")
+    import json as _json
+
+    # done is None => dropped; only title is sent.
+    assert _json.loads(route.calls.last.request.content) == {"title": "renamed"}
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_list_my_cards():
     route = respx.get(f"{BASE}/my-cards").mock(
         return_value=httpx.Response(200, json=[{"id": 100, "title": "Mine", "stackId": 1}])

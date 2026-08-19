@@ -159,6 +159,12 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 - `kanso_list_comments` — read a card's comments (author + body + timestamps)
 - `kanso_add_comment` — post a comment (optionally reply to a comment)
 
+**Checklist**
+
+- `kanso_list_checklist` — read a card's checklist items (id + title + done)
+- `kanso_add_checklist_item` — add a checklist item to a card
+- `kanso_toggle_checklist_item` — mark an item done / not done
+
 **My work**
 
 - `kanso_list_my_cards` — cards assigned to you across all boards

@@ -110,6 +110,20 @@ class Comment(_Base):
     reactions: List[Any] = Field(default_factory=list)
 
 
+class ChecklistItem(_Base):
+    """A checklist item from ``GET/POST /api/cards/{id}/checklist`` or a
+    ``PATCH /api/checklist/{itemId}``. ``done`` is the source of truth; the
+    payload also carries assignee/due-date step fields (#3745) which are passed
+    through untyped rather than modelled.
+    """
+
+    id: int
+    cardId: Optional[int] = None
+    title: Optional[str] = None
+    done: bool = False
+    sortKey: Optional[str] = None
+
+
 class CardSummary(_Base):
     """A card summary (board payload / delta upsert): no description."""
 

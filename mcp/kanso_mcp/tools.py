@@ -378,6 +378,51 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             await client.add_comment(card_id, body, parent_comment_id)
         ).model_dump()
 
+    # --------------------------------------------------------------- checklist
+    @mcp.tool(
+        title="List a Kanso card's checklist",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_checklist(card_id: int) -> List[dict]:
+        """List a card's checklist items, in order.
+
+        Each item carries its `id`, `title` and `done` state. Use the item `id`
+        with `kanso_toggle_checklist_item` to tick it off.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        items = await client.list_checklist(card_id)
+        return [i.model_dump() for i in items]
+
+    @mcp.tool(title="Add a checklist item to a Kanso card")
+    async def kanso_add_checklist_item(card_id: int, title: str) -> dict:
+        """Add a checklist item (a flat todo line) to a card.
+
+        Returns the created item, including its `id` — pass that to
+        `kanso_toggle_checklist_item` to mark it done later.
+
+        Args:
+            card_id: The numeric card id.
+            title: The checklist item text.
+        """
+        return (await client.add_checklist_item(card_id, title)).model_dump()
+
+    @mcp.tool(title="Toggle a Kanso checklist item")
+    async def kanso_toggle_checklist_item(item_id: int, done: bool) -> dict:
+        """Mark a checklist item done (true) or not done (false).
+
+        Note `item_id` is the checklist item's own id (from
+        `kanso_list_checklist` or `kanso_get_card`), NOT the card id.
+
+        Args:
+            item_id: The numeric checklist item id.
+            done: Whether the item is completed.
+        """
+        return (
+            await client.update_checklist_item(item_id, done=done)
+        ).model_dump()
+
     # ------------------------------------------------------------------ labels
     @mcp.tool(title="Create a Kanso label")
     async def kanso_create_label(

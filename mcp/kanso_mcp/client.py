@@ -22,6 +22,7 @@ from kanso_mcp.models import (
     BoardSummary,
     Card,
     CardSummary,
+    ChecklistItem,
     Comment,
     Label,
     Stack,
@@ -285,6 +286,31 @@ class KansoClient:
             json={"body": body, "parentCommentId": parent_comment_id},
         )
         return Comment.model_validate(data)
+
+    # --------------------------------------------------------------- checklist
+    async def list_checklist(self, card_id: int) -> List[ChecklistItem]:
+        data = await self._request("GET", f"/cards/{card_id}/checklist")
+        return [ChecklistItem.model_validate(i) for i in (data or [])]
+
+    async def add_checklist_item(self, card_id: int, title: str) -> ChecklistItem:
+        data = await self._request(
+            "POST", f"/cards/{card_id}/checklist", json={"title": title}
+        )
+        return ChecklistItem.model_validate(data)
+
+    async def update_checklist_item(
+        self,
+        item_id: int,
+        *,
+        title: Optional[str] = None,
+        done: Optional[bool] = None,
+    ) -> ChecklistItem:
+        # PATCH targets the item id directly (/checklist/{itemId}), NOT nested
+        # under the card. None fields are dropped by _request.
+        data = await self._request(
+            "PATCH", f"/checklist/{item_id}", json={"title": title, "done": done}
+        )
+        return ChecklistItem.model_validate(data)
 
     # ------------------------------------------------------------------ labels
     async def create_label(
