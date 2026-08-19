@@ -146,6 +146,66 @@ async def test_create_card_body_uses_stackId():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_update_card_serializes_all_fields():
+    route = respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
+    )
+    async with _client() as c:
+        card = await c.update_card(
+            100,
+            title="T",
+            description="d",
+            duedate="2026-09-01T17:00:00+00:00",
+            done=True,
+            archived=False,
+            priority=3,
+            estimate="M",
+            start_date="2026-08-20T09:00:00+00:00",
+            status="in_progress",
+            all_day=False,
+            due_reminder_day_before=True,
+            cover_color="e63946",
+            type="bug",
+            visibility="private",
+        )
+    import json as _json
+
+    # camelCase key names are what CardController::update expects.
+    assert _json.loads(route.calls.last.request.content) == {
+        "title": "T",
+        "description": "d",
+        "duedate": "2026-09-01T17:00:00+00:00",
+        "done": True,
+        "archived": False,
+        "priority": 3,
+        "estimate": "M",
+        "startDate": "2026-08-20T09:00:00+00:00",
+        "status": "in_progress",
+        "allDay": False,
+        "dueReminderDayBefore": True,
+        "coverColor": "e63946",
+        "type": "bug",
+        "visibility": "private",
+    }
+    assert card.id == 100
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_card_drops_none():
+    route = respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
+    )
+    async with _client() as c:
+        await c.update_card(100, status="done")
+    import json as _json
+
+    # Every unset field (incl. the new ones) must be dropped; only status is sent.
+    assert _json.loads(route.calls.last.request.content) == {"status": "done"}
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_move_card_body_uses_targetStackId():
     route = respx.post(f"{BASE}/cards/100/move").mock(
         return_value=httpx.Response(200, json={})

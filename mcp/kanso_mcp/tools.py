@@ -220,6 +220,13 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         archived: Optional[bool] = None,
         priority: Optional[int] = None,
         estimate: Optional[str] = None,
+        start_date: Optional[str] = None,
+        status: Optional[str] = None,
+        all_day: Optional[bool] = None,
+        due_reminder_day_before: Optional[bool] = None,
+        cover_color: Optional[str] = None,
+        type: Optional[str] = None,
+        visibility: Optional[str] = None,
     ) -> dict:
         """Update a card. Only the fields you pass are changed.
 
@@ -232,6 +239,16 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             archived: Archive (true) or unarchive (false) the card.
             priority: Integer priority.
             estimate: Effort estimate token (per the board's estimate scale).
+            start_date: ISO-8601 start date/time (empty string clears it).
+            status: Workflow status automation — one of "not_started",
+                "in_progress" or "done". DISTINCT from the `done` boolean: setting
+                this stamps the card's startedAt / doneAt timestamps accordingly.
+            all_day: Whether the due date is an all-day date (no time component).
+            due_reminder_day_before: Remind the day before the due date (true/false).
+            cover_color: Card cover colour as bare 6-hex, NO leading '#',
+                e.g. "e63946"; empty string clears it.
+            type: Card type — one of "" (none), "bug", "feature", "task" or "chore".
+            visibility: Card visibility — one of "public", "internal" or "private".
         """
         return (
             await client.update_card(
@@ -243,6 +260,13 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 archived=archived,
                 priority=priority,
                 estimate=estimate,
+                start_date=start_date,
+                status=status,
+                all_day=all_day,
+                due_reminder_day_before=due_reminder_day_before,
+                cover_color=cover_color,
+                type=type,
+                visibility=visibility,
             )
         ).model_dump()
 

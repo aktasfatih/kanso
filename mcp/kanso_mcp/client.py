@@ -212,6 +212,13 @@ class KansoClient:
         archived: Optional[bool] = None,
         priority: Optional[int] = None,
         estimate: Optional[str] = None,
+        start_date: Optional[str] = None,
+        status: Optional[str] = None,
+        all_day: Optional[bool] = None,
+        due_reminder_day_before: Optional[bool] = None,
+        cover_color: Optional[str] = None,
+        type: Optional[str] = None,
+        visibility: Optional[str] = None,
     ) -> Card:
         data = await self._request(
             "PATCH",
@@ -224,6 +231,13 @@ class KansoClient:
                 "archived": archived,
                 "priority": priority,
                 "estimate": estimate,
+                "startDate": start_date,
+                "status": status,
+                "allDay": all_day,
+                "dueReminderDayBefore": due_reminder_day_before,
+                "coverColor": cover_color,
+                "type": type,
+                "visibility": visibility,
             },
         )
         return Card.model_validate(data)
