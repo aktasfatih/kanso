@@ -183,6 +183,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 				</NcAppNavigationItem>
 			</template>
+			<!-- Always-visible help affordance (#3901). Lives in the nav footer so
+			     it's reachable from anywhere in the app (any board/view/page), not
+			     only inside a board. A single "Help" menu holds two external links:
+			     file a bug/issue, and reach the MCP setup docs. NcActionLink renders
+			     a real <a> with target="_blank" and rel="…noreferrer noopener". -->
+			<template #footer>
+				<div class="app-nav__footer">
+					<NcActions :force-menu="true" :aria-label="t('kanso', 'Help')">
+						<template #icon>
+							<HelpCircleOutlineIcon :size="20" />
+						</template>
+						<NcActionLink
+							:href="ISSUES_URL"
+							target="_blank"
+							data-test="menu-file-issue">
+							<template #icon>
+								<BugOutlineIcon :size="20" />
+							</template>
+							{{ t('kanso', 'File an issue') }}
+						</NcActionLink>
+						<NcActionLink
+							:href="MCP_SETUP_URL"
+							target="_blank"
+							data-test="menu-setup-mcp">
+							<template #icon>
+								<ConnectionIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Set up MCP') }}
+						</NcActionLink>
+					</NcActions>
+				</div>
+			</template>
 		</NcAppNavigation>
 		<NcAppContent>
 			<router-view />
@@ -199,6 +231,8 @@ import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
@@ -213,6 +247,9 @@ import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
+import HelpCircleOutlineIcon from 'vue-material-design-icons/HelpCircleOutline.vue'
+import BugOutlineIcon from 'vue-material-design-icons/BugOutline.vue'
+import ConnectionIcon from 'vue-material-design-icons/Connection.vue'
 import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
@@ -220,6 +257,12 @@ import { useViews } from './composables/useViews.js'
 
 const route = useRoute()
 const router = useRouter()
+
+// Help-menu destinations (#3901). Static external URLs — deliberately NOT
+// translated (they're addresses, not copy). Rendered by the nav-footer help
+// menu as real anchors opening in a new tab.
+const ISSUES_URL = 'https://github.com/aktasfatih/kanso/issues'
+const MCP_SETUP_URL = 'https://github.com/aktasfatih/kanso/tree/main/mcp'
 
 // Default-board-on-start: only when the app opened on the board list (never
 // override a deep link). On first load, if the user picked a default board and
@@ -395,6 +438,14 @@ const { tasksCount, reviewsCount, inboxCount } = useMyWorkBadges()
 	color: var(--color-text-maxcontrast);
 	font-size: 0.85rem;
 	font-style: italic;
+}
+
+/* Nav-footer help affordance (#3901): keep the trigger tucked to the start so
+   it reads as a quiet, always-present help control rather than a primary CTA. */
+.app-nav__footer {
+	display: flex;
+	align-items: center;
+	padding: 4px;
 }
 </style>
 
