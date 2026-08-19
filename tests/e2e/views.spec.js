@@ -116,6 +116,65 @@ test.describe('Cross-board Views (#3815)', () => {
 		await expect(page.locator('.board-list-group__title', { hasText: /ViewsBoardB/ })).toBeVisible()
 	})
 
+	test('Kanban display groups the feed into columns; a tile opens its own board (#3886)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		// A View spanning both boards, filtered to the two per-board labels so it
+		// resolves to EXACTLY the two test cards, grouped by BOARD and saved with
+		// the new Kanban display so it re-seeds Kanban on reload.
+		const created = await api('PUT', '/views', {
+			name: 'Views kanban ' + Math.floor(Date.now() / 1000),
+			filter: { labels: [state.labelA, state.labelB] },
+			groupBy: 'board',
+			display: 'kanban',
+		})
+		const view = created.views[created.views.length - 1]
+		const kanbanViewId = view.id
+		expect(kanbanViewId).toBeTruthy()
+
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${kanbanViewId}`)
+
+			// Saved display:'kanban' re-seeds the Kanban surface on load (no click needed),
+			// and the Kanban button reads as active.
+			const kanbanBtn = page.locator('.view-page__display-btn', { hasText: 'Kanban' })
+			await expect(kanbanBtn).toHaveClass(/view-page__display-btn--active/, { timeout: 15_000 })
+
+			// One column per board group (grouped by board) → ≥2 columns with the
+			// expected board-name headers.
+			const columns = page.locator('.view-kanban-col')
+			await expect(columns).toHaveCount(2, { timeout: 15_000 })
+			await expect(page.locator('.view-kanban-col__title', { hasText: /ViewsBoardA/ })).toBeVisible()
+			await expect(page.locator('.view-kanban-col__title', { hasText: /ViewsBoardB/ })).toBeVisible()
+
+			// Each card renders as a CardTile; both test cards are present.
+			await expect(page.locator('.card-tile__title', { hasText: state.cardA })).toBeVisible({ timeout: 10_000 })
+			const tileB = page.locator('.card-tile__title', { hasText: state.cardB })
+			await expect(tileB).toBeVisible()
+
+			// Clicking a tile opens the card modal on its OWN board (cross-board
+			// correct): card B lives on board B, so the deep-link id must be boardB.
+			await tileB.click()
+			await expect(page).toHaveURL(new RegExp(`/board/${state.boardB}/card/${state.cardBId}`), { timeout: 15_000 })
+
+			// Close the modal and switch to List, then back to Kanban via the switcher
+			// to prove the toggle works in-session too.
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${kanbanViewId}`)
+			await page.locator('.view-page__display-btn', { hasText: 'List' }).click()
+			await expect(page.locator('.board-list-row__title', { hasText: state.cardA })).toBeVisible({ timeout: 10_000 })
+			await kanbanBtn.click()
+			await expect(columns.first()).toBeVisible({ timeout: 10_000 })
+
+			// Reload → the saved display:'kanban' still re-seeds Kanban.
+			await page.reload()
+			await expect(kanbanBtn).toHaveClass(/view-page__display-btn--active/, { timeout: 15_000 })
+			await expect(page.locator('.view-kanban-col').first()).toBeVisible({ timeout: 10_000 })
+		} finally {
+			await api('DELETE', `/views/${kanbanViewId}`).catch(() => {})
+		}
+	})
+
 	test('richer filter dimensions + new group-by narrow a View (#3815)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 

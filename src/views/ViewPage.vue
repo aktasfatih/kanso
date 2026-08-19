@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:aria-label="t('kanso', 'Group by')" />
 				</div>
 
-				<!-- Display switcher: List | Timeline (Kanban is Phase 2). -->
+				<!-- Display switcher: List | Timeline | Kanban. -->
 				<div class="view-page__display" role="group" :aria-label="t('kanso', 'Display mode')">
 					<button
 						class="view-page__display-btn"
@@ -59,6 +59,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						@click="setDisplay('timeline')">
 						<ChartTimelineIcon :size="18" />
 						{{ t('kanso', 'Timeline') }}
+					</button>
+					<button
+						class="view-page__display-btn"
+						:class="{ 'view-page__display-btn--active': display === 'kanban' }"
+						@click="setDisplay('kanban')">
+						<ViewColumnOutlineIcon :size="18" />
+						{{ t('kanso', 'Kanban') }}
 					</button>
 				</div>
 
@@ -111,11 +118,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Timeline display over the same groups -->
 			<BoardTimelineView
-				v-else
+				v-else-if="display === 'timeline'"
 				:cards="filteredCards"
 				:groups="groups"
 				:can-edit="false"
 				:board-id="null" />
+
+			<!-- Kanban display: the same groups as columns (display-only, no
+			     cross-column drag in v1 — a documented v1 stretch). -->
+			<ViewKanban
+				v-else
+				:groups="groups"
+				:labels-by-id="labelsById" />
 		</template>
 	</div>
 </template>
@@ -128,9 +142,11 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
+import ViewColumnOutlineIcon from 'vue-material-design-icons/ViewColumnOutline.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import BoardListView from '../components/BoardListView.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
+import ViewKanban from '../components/ViewKanban.vue'
 import BoardFilterBar from '../components/BoardFilterBar.vue'
 import { useViews } from '../composables/useViews.js'
 import { useViewCards } from '../composables/useViewCards.js'
@@ -201,7 +217,7 @@ const filterState = createFilterState()
 watch(view, (v) => {
 	applyFilter(filterState, v ? v.filter : {})
 	if (v) {
-		display.value = v.display === 'timeline' ? 'timeline' : 'list'
+		display.value = ['list', 'timeline', 'kanban'].includes(v.display) ? v.display : 'list'
 		groupBySel.value = groupByOptions.find((o) => o.id === v.groupBy) ?? groupByOptions[0]
 	}
 }, { immediate: true })

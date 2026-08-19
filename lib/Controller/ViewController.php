@@ -51,8 +51,8 @@ class ViewController extends Controller {
 	/** The group-by fields the surface offers (mirrors the client selector / VIEW_GROUP_BY). */
 	private const GROUP_BY = ['status', 'priority', 'assignee', 'board', 'type', 'review', 'due', 'owner'];
 
-	/** The display modes the surface offers (Kanban is a separate Phase 2 card). */
-	private const DISPLAYS = ['list', 'timeline'];
+	/** The display modes the surface offers (Kanban groups the feed into columns by the group-by field). */
+	private const DISPLAYS = ['list', 'timeline', 'kanban'];
 
 	public function __construct(
 		string $appName,
