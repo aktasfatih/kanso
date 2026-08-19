@@ -109,6 +109,11 @@ your work, on your own Nextcloud, laid out plainly.
 - **Keyboard-first** navigation, **undo toasts** for destructive actions, and a
   **trash** with restore.
 
+### 🌍 Localization
+- **Follows your Nextcloud language** automatically. German ships today; more
+  languages are welcome — see [docs/TRANSLATING.md](docs/TRANSLATING.md)
+  (no code required).
+
 ## Installation
 
 Kanso targets **Nextcloud 30–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
