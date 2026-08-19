@@ -405,6 +405,116 @@ async def test_update_checklist_item_renames():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_list_relations_parses_grouped():
+    payload = {
+        "blocks": [{"id": 1, "cardId": 200, "title": "B", "done": False, "hidden": False}],
+        "blockedBy": [],
+        "duplicates": [],
+        "relates": [{"id": 2, "cardId": 201, "title": "R", "done": True, "hidden": False}],
+    }
+    route = respx.get(f"{BASE}/cards/100/relations").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    async with _client() as c:
+        relations = await c.list_relations(100)
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/relations"
+    assert relations["blocks"][0]["cardId"] == 200
+    assert relations["relates"][0]["id"] == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_relation_body_uses_other_card_id_and_kind():
+    route = respx.post(f"{BASE}/cards/100/relations").mock(
+        return_value=httpx.Response(200, json={"blocks": [], "blockedBy": []})
+    )
+    async with _client() as c:
+        await c.add_relation(100, 200, "blocks")
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/relations"
+    assert _json.loads(req.content) == {"otherCardId": 200, "kind": "blocks"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_relation_forwards_blocked_by_kind_unchanged():
+    # The client must NOT swap blocked_by; the server does the swap.
+    route = respx.post(f"{BASE}/cards/100/relations").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    async with _client() as c:
+        await c.add_relation(100, 200, "blocked_by")
+    import json as _json
+
+    assert _json.loads(route.calls.last.request.content) == {
+        "otherCardId": 200,
+        "kind": "blocked_by",
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_remove_relation_delete_path():
+    route = respx.delete(f"{BASE}/cards/100/relations/9").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.remove_relation(100, 9)
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.method == "DELETE"
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/relations/9"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_set_parent_put_path_and_body():
+    route = respx.put(f"{BASE}/cards/100/parent").mock(
+        return_value=httpx.Response(
+            200, json={"id": 100, "title": "T", "stackId": 11, "parentCardId": 50}
+        )
+    )
+    async with _client() as c:
+        card = await c.set_parent(100, 50)
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.method == "PUT"
+    assert req.url.path == "/index.php/apps/kanso/api/cards/100/parent"
+    assert _json.loads(req.content) == {"parentCardId": 50}
+    assert card.parentCardId == 50
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_set_parent_clear_sends_explicit_null():
+    # Clearing the parent MUST send {"parentCardId": null} — not drop the key,
+    # which would make the clear a silent no-op server-side.
+    route = respx.put(f"{BASE}/cards/100/parent").mock(
+        return_value=httpx.Response(
+            200, json={"id": 100, "title": "T", "stackId": 11, "parentCardId": None}
+        )
+    )
+    async with _client() as c:
+        card = await c.set_parent(100, None)
+    import json as _json
+
+    body = _json.loads(route.calls.last.request.content)
+    assert body == {"parentCardId": None}
+    assert "parentCardId" in body  # key present, value explicitly null
+    assert card.parentCardId is None
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_list_my_cards():
     route = respx.get(f"{BASE}/my-cards").mock(
         return_value=httpx.Response(200, json=[{"id": 100, "title": "Mine", "stackId": 1}])

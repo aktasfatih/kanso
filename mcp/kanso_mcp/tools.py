@@ -423,6 +423,75 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             await client.update_checklist_item(item_id, done=done)
         ).model_dump()
 
+    # --------------------------------------------------------------- relations
+    @mcp.tool(
+        title="List a Kanso card's relations",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_relations(card_id: int) -> dict:
+        """List a card's relations to other cards, grouped by kind.
+
+        Returns an object with four lists — `blocks` (cards this card blocks),
+        `blockedBy` (cards blocking this one), `duplicates` and `relates`. Each
+        entry is `{id, cardId, title, done, hidden}` where `id` is the RELATION
+        id (pass it to `kanso_remove_relation`) and `cardId` is the other card.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        return await client.list_relations(card_id)
+
+    @mcp.tool(title="Add a relation between two Kanso cards")
+    async def kanso_add_relation(card_id: int, other_card_id: int, kind: str) -> dict:
+        """Link a card to another card on the SAME board.
+
+        `kind` must be one of:
+          - "blocks"      — this card blocks `other_card_id`
+          - "blocked_by"  — this card is blocked by `other_card_id`
+          - "duplicates"  — this card duplicates `other_card_id`
+          - "relates"     — this card is related to `other_card_id`
+
+        Both cards must be on the same board. Self-relations and cycles of
+        blocking relations are rejected by the server (surfaced as an API error).
+
+        Args:
+            card_id: The card the relation is added from.
+            other_card_id: The other card to link to (same board).
+            kind: One of "blocks", "blocked_by", "duplicates", "relates".
+        """
+        return await client.add_relation(card_id, other_card_id, kind)
+
+    @mcp.tool(title="Remove a relation from a Kanso card")
+    async def kanso_remove_relation(card_id: int, relation_id: int) -> dict:
+        """Remove a card-to-card relation.
+
+        Note `relation_id` is the relation's own id (the `id` field from
+        `kanso_list_relations`), NOT the id of the other card.
+
+        Args:
+            card_id: The card the relation belongs to.
+            relation_id: The numeric relation id to remove.
+        """
+        await client.remove_relation(card_id, relation_id)
+        return {"removed": True, "cardId": card_id, "relationId": relation_id}
+
+    @mcp.tool(title="Set or clear a Kanso card's parent")
+    async def kanso_set_card_parent(
+        card_id: int, parent_card_id: Optional[int] = None
+    ) -> dict:
+        """Set (or clear) a card's parent, building a one-level subtask
+        hierarchy. Parent and child must be on the SAME board.
+
+        Pass `parent_card_id` to make `card_id` a subtask of it; pass null/omit
+        to CLEAR the parent (detach the card from its parent). Invalid requests
+        (cross-board, deeper nesting) are rejected by the server.
+
+        Args:
+            card_id: The card to (re)parent.
+            parent_card_id: The parent card id, or null to clear the parent.
+        """
+        return (await client.set_parent(card_id, parent_card_id)).model_dump()
+
     # ------------------------------------------------------------------ labels
     @mcp.tool(title="Create a Kanso label")
     async def kanso_create_label(

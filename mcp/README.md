@@ -148,6 +148,13 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 - `kanso_create_card` / `kanso_update_card` / `kanso_delete_card`
 - `kanso_move_card` — move a card into a stack (optionally after a card)
 
+**Relations & subtasks**
+
+- `kanso_list_relations` — a card's relations grouped by kind (blocks / blockedBy / duplicates / relates)
+- `kanso_add_relation` — link two same-board cards (blocks / blocked_by / duplicates / relates)
+- `kanso_remove_relation` — remove a relation by its id
+- `kanso_set_card_parent` — set or clear a card's parent (one-level subtasks)
+
 **Labels & assignees**
 
 - `kanso_create_label` — create a board label

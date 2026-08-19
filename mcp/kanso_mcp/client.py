@@ -321,6 +321,50 @@ class KansoClient:
         )
         return Label.model_validate(data)
 
+    # --------------------------------------------------------------- relations
+    async def list_relations(self, card_id: int) -> Dict[str, Any]:
+        # Returns a grouped dict {blocks, blockedBy, duplicates, relates}, each
+        # a list of {id, cardId, title, done, hidden}.
+        data = await self._request("GET", f"/cards/{card_id}/relations")
+        return data or {}
+
+    async def add_relation(
+        self, card_id: int, other_card_id: int, kind: str
+    ) -> Dict[str, Any]:
+        # kind is one of "blocks" | "blocked_by" | "duplicates" | "relates";
+        # the server swaps "blocked_by" into a stored blocks row, so pass the
+        # string through unchanged (no client-side swapping). Same-board only;
+        # self-relations and blocks-cycles are rejected server-side.
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/relations",
+            json={"otherCardId": other_card_id, "kind": kind},
+        )
+        return data or {}
+
+    async def remove_relation(self, card_id: int, relation_id: int) -> Any:
+        return await self._request(
+            "DELETE", f"/cards/{card_id}/relations/{relation_id}"
+        )
+
+    async def set_parent(
+        self, card_id: int, parent_card_id: Optional[int]
+    ) -> Card:
+        # NB: _request drops None values, but here None is meaningful — it is
+        # how the caller CLEARS the parent (the controller treats a null
+        # parentCardId as "unset parent"). Send the request directly so the
+        # explicit null survives the None-filter instead of being dropped.
+        response = await self._client.request(
+            "PUT",
+            f"/cards/{card_id}/parent",
+            json={"parentCardId": parent_card_id},
+        )
+        if response.status_code < 200 or response.status_code >= 300:
+            raise KansoApiError(
+                response.status_code, "PUT", f"/cards/{card_id}/parent", response.text
+            )
+        return Card.model_validate(response.json())
+
     # ----------------------------------------------------------------- my work
     async def list_my_cards(self) -> List[CardSummary]:
         data = await self._request("GET", "/my-cards")
