@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3460
+#: src/components/CardDetail.vue:3474
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3458
+#: src/components/CardDetail.vue:3472
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3456
+#: src/components/CardDetail.vue:3470
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1011,6 +1011,7 @@ msgid "close"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
+#: src/views/PublicBoard.vue
 msgid "Close"
 msgstr ""
 
@@ -1579,6 +1580,10 @@ msgstr ""
 msgid "Drop cards here · press n"
 msgstr ""
 
+#: src/views/PublicBoard.vue
+msgid "Due"
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BulkActionBar.vue
@@ -1720,6 +1725,7 @@ msgstr ""
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/PublicBoard.vue
 msgid "Estimate"
 msgstr ""
 
@@ -2565,6 +2571,10 @@ msgstr ""
 msgid "just now"
 msgstr ""
 
+#: src/views/ViewPage.vue
+msgid "Kanban"
+msgstr ""
+
 #: lib/Settings/AdminSection.php
 msgid "Kanso"
 msgstr ""
@@ -3046,6 +3056,7 @@ msgid "No cards to group."
 msgstr ""
 
 #: src/components/BoardListView.vue
+#: src/components/ViewKanban.vue
 msgid "No cards to show."
 msgstr ""
 
@@ -3091,6 +3102,10 @@ msgstr ""
 
 #: src/views/TrashView.vue
 msgid "No deleted cards match “{query}”."
+msgstr ""
+
+#: src/views/PublicBoard.vue
+msgid "No description"
 msgstr ""
 
 #: src/components/CardPreview.vue
@@ -3282,6 +3297,10 @@ msgstr ""
 
 #: src/views/ArchivedView.vue
 msgid "Open card"
+msgstr ""
+
+#: src/views/PublicBoard.vue
+msgid "Open card details"
 msgstr ""
 
 #: src/views/BoardView.vue
@@ -4032,6 +4051,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Stage turns them into a pipeline: a review is held — its reviewer is not notified and its chip shows greyed with a lock — until every lower-stage review on the card is approved. Types on the same stage run in parallel. Keep every stage at 0 to notify all reviewers at once."
+msgstr ""
+
+#: src/views/PublicBoard.vue
+msgid "Start"
 msgstr ""
 
 #: src/components/CardDetail.vue

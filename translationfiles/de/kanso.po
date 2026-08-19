@@ -230,19 +230,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:3460
+#: src/components/CardDetail.vue:3474
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
 msgstr[1] "vor %n Tagen"
 
-#: src/components/CardDetail.vue:3458
+#: src/components/CardDetail.vue:3472
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
 msgstr[1] "vor %n Stunden"
 
-#: src/components/CardDetail.vue:3456
+#: src/components/CardDetail.vue:3470
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -464,9 +464,10 @@ msgstr "Alle Personen mit dem Link können dieses Board schreibgeschützt anzeig
 msgid "Approve"
 msgstr "Genehmigen"
 
+#: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/components/ReviewRow.vue
-#: src/l10n-extra.js
+#: src/composables/useSwimlanes.js
 #: src/views/MyReviewsView.vue
 msgid "Approved"
 msgstr "Genehmigt"
@@ -646,7 +647,7 @@ msgstr "Backups pro Board behalten"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardTile.vue
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Blocked"
 msgstr "Blockiert"
 
@@ -735,7 +736,7 @@ msgstr "Ende der Spalte"
 msgid "Branch"
 msgstr "Branch"
 
-#: src/l10n-extra.js
+#: src/composables/useCardType.js
 msgid "Bug"
 msgstr "Fehler"
 
@@ -923,8 +924,9 @@ msgstr "Schätzskala ändern?"
 msgid "Change status"
 msgstr "Status ändern"
 
+#: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
-#: src/l10n-extra.js
+#: src/composables/useSwimlanes.js
 #: src/views/MyReviewsView.vue
 msgid "Changes requested"
 msgstr "Änderungen angefordert"
@@ -934,7 +936,7 @@ msgstr "Änderungen angefordert"
 msgid "Checklist"
 msgstr "Checkliste"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Checklist complete"
 msgstr "Checkliste abgeschlossen"
 
@@ -943,7 +945,7 @@ msgstr "Checkliste abgeschlossen"
 msgid "Checklist done"
 msgstr "Checkliste erledigt"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Checklist incomplete"
 msgstr "Checkliste unvollständig"
 
@@ -963,7 +965,7 @@ msgstr "Spalte auswählen…"
 msgid "Choose a CSV file"
 msgstr "CSV-Datei auswählen"
 
-#: src/l10n-extra.js
+#: src/composables/useCardType.js
 msgid "Chore"
 msgstr "Wartungsaufgabe"
 
@@ -1010,6 +1012,7 @@ msgid "close"
 msgstr "Schließen"
 
 #: src/components/BoardSettingsModal.vue
+#: src/views/PublicBoard.vue
 msgid "Close"
 msgstr "Schließen"
 
@@ -1535,7 +1538,8 @@ msgstr "In Bearbeitung"
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
 #: src/components/StackColumn.vue
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
+#: src/composables/useSwimlanes.js
 #: src/views/BoardList.vue
 msgid "Done"
 msgstr "Fertig"
@@ -1577,6 +1581,10 @@ msgstr "Zum Sortieren ziehen"
 msgid "Drop cards here · press n"
 msgstr "Karten hier ablegen · N drücken"
 
+#: src/views/PublicBoard.vue
+msgid "Due"
+msgstr "Fällig"
+
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BulkActionBar.vue
@@ -1587,7 +1595,7 @@ msgstr "Karten hier ablegen · N drücken"
 msgid "Due date"
 msgstr "Fälligkeitsdatum"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Due this week"
 msgstr "Diese Woche fällig"
 
@@ -1718,6 +1726,7 @@ msgstr "Esc abbrechen · Strg+Eingabe speichern"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/PublicBoard.vue
 msgid "Estimate"
 msgstr "Schätzung"
 
@@ -2312,7 +2321,7 @@ msgstr "Bild konnte nicht hochgeladen werden."
 msgid "Failed to withdraw review request."
 msgstr "Reviewanforderung konnte nicht zurückgezogen werden."
 
-#: src/l10n-extra.js
+#: src/composables/useCardType.js
 msgid "Feature"
 msgstr "Feature"
 
@@ -2442,11 +2451,11 @@ msgstr "Gruppe"
 msgid "Group by"
 msgstr "Gruppieren nach"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Has checklist"
 msgstr "Hat Checkliste"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Has comments"
 msgstr "Hat Kommentare"
 
@@ -2467,7 +2476,7 @@ msgstr "Ausgeblendete Karte"
 msgid "Hide this board without deleting it. You can restore it later."
 msgstr "Dieses Board ausblenden, ohne es zu löschen. Du kannst es später wiederherstellen."
 
-#: src/l10n-extra.js
+#: src/composables/usePriority.js
 msgid "High"
 msgstr "Hoch"
 
@@ -2510,7 +2519,7 @@ msgstr "Wird importiert…"
 #: src/components/CardDetail.vue
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
-#: src/l10n-extra.js
+#: src/composables/useSwimlanes.js
 msgid "In progress"
 msgstr "In Bearbeitung"
 
@@ -2562,6 +2571,10 @@ msgstr "Zu heute springen"
 #: src/views/InboxView.vue
 msgid "just now"
 msgstr "gerade eben"
+
+#: src/views/ViewPage.vue
+msgid "Kanban"
+msgstr "Kanban"
 
 #: lib/Settings/AdminSection.php
 msgid "Kanso"
@@ -2728,7 +2741,7 @@ msgstr "Deine Deck-Boards werden geladen…"
 msgid "Loading…"
 msgstr "Wird geladen…"
 
-#: src/l10n-extra.js
+#: src/composables/usePriority.js
 msgid "Low"
 msgstr "Niedrig"
 
@@ -2764,7 +2777,7 @@ msgstr "Als Vorlage markieren"
 msgid "Mark done"
 msgstr "Als erledigt markieren"
 
-#: src/l10n-extra.js
+#: src/composables/usePriority.js
 msgid "Med"
 msgstr "Mittel"
 
@@ -2773,7 +2786,7 @@ msgstr "Mittel"
 msgid "Median days"
 msgstr "Mediantage"
 
-#: src/l10n-extra.js
+#: src/composables/usePriority.js
 msgid "Medium"
 msgstr "Mittel"
 
@@ -2891,7 +2904,8 @@ msgstr "Navigieren"
 msgid "Navigate cards up / down"
 msgstr "Karten nach oben / unten navigieren"
 
-#: src/l10n-extra.js
+#: src/components/BoardFilterBar.vue
+#: src/composables/useSwimlanes.js
 msgid "Needs review"
 msgstr "Wartet auf Review"
 
@@ -3043,10 +3057,11 @@ msgid "No cards to group."
 msgstr "Keine Karten zum Gruppieren."
 
 #: src/components/BoardListView.vue
+#: src/components/ViewKanban.vue
 msgid "No cards to show."
 msgstr "Keine Karten anzuzeigen."
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "No checklist"
 msgstr "Keine Checkliste"
 
@@ -3061,7 +3076,7 @@ msgstr "Keine Farbe"
 msgid "No colour"
 msgstr "Keine Farbe"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "No comments"
 msgstr "Keine Kommentare"
 
@@ -3090,12 +3105,16 @@ msgstr "Keine Deck-Boards zum Importieren gefunden."
 msgid "No deleted cards match “{query}”."
 msgstr "Keine gelöschten Karten passen zu „{query}\"."
 
+#: src/views/PublicBoard.vue
+msgid "No description"
+msgstr "Keine Beschreibung"
+
 #: src/components/CardPreview.vue
 msgid "No description."
 msgstr "Keine Beschreibung."
 
+#: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
-#: src/l10n-extra.js
 #: src/views/MyCardsView.vue
 msgid "No due date"
 msgstr "Kein Fälligkeitsdatum"
@@ -3156,7 +3175,8 @@ msgstr "Noch keine wiederkehrenden Kartenregeln."
 msgid "No results for \"{q}\""
 msgstr "Keine Ergebnisse für „{q}\""
 
-#: src/l10n-extra.js
+#: src/components/BoardFilterBar.vue
+#: src/composables/useSwimlanes.js
 msgid "No review"
 msgstr "Kein Review"
 
@@ -3172,7 +3192,7 @@ msgstr "Keine dir zugewiesenen Reviews"
 msgid "No stacks yet."
 msgstr "Noch keine Spalten."
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "No start date"
 msgstr "Kein Startdatum"
 
@@ -3198,17 +3218,17 @@ msgstr "Kein Typ"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
-#: src/l10n-extra.js
+#: src/composables/usePriority.js
 #: src/services/estimateScales.js
 #: src/views/BoardView.vue
 msgid "None"
 msgstr "Keine"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Not blocked"
 msgstr "Nicht blockiert"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Not done"
 msgstr "Nicht erledigt"
 
@@ -3222,7 +3242,7 @@ msgstr "Noch mit niemandem geteilt."
 msgid "Not started"
 msgstr "Nicht begonnen"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Not waiting"
 msgstr "Wartet nicht"
 
@@ -3280,6 +3300,10 @@ msgstr "Als ganze Seite öffnen"
 msgid "Open card"
 msgstr "Karte öffnen"
 
+#: src/views/PublicBoard.vue
+msgid "Open card details"
+msgstr "Kartendetails öffnen"
+
 #: src/views/BoardView.vue
 msgid "Open command palette"
 msgstr "Befehlspalette öffnen"
@@ -3326,8 +3350,8 @@ msgid "Orange"
 msgstr "Orange"
 
 #: src/components/BoardTimelineView.vue
+#: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
-#: src/l10n-extra.js
 #: src/views/BoardStats.vue
 #: src/views/MyCardsView.vue
 #: src/views/ProjectStats.vue
@@ -3340,7 +3364,7 @@ msgid "Owner"
 msgstr "Eigentümer"
 
 #: src/components/CardDetail.vue
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Parent card"
 msgstr "Übergeordnete Karte"
 
@@ -4030,6 +4054,10 @@ msgstr "Stufe des Review-Typs {title}"
 msgid "Stage turns them into a pipeline: a review is held — its reviewer is not notified and its chip shows greyed with a lock — until every lower-stage review on the card is approved. Types on the same stage run in parallel. Keep every stage at 0 to notify all reviewers at once."
 msgstr "Stufen verwandeln Reviews in eine Pipeline: Ein Review wird zurückgehalten – der Prüfer wird nicht benachrichtigt und der Chip erscheint grau mit einem Schloss – bis alle Reviews niedrigerer Stufe auf der Karte genehmigt sind. Typen auf derselben Stufe laufen parallel. Alle Stufen auf 0 setzen, um alle Prüfer gleichzeitig zu benachrichtigen."
 
+#: src/views/PublicBoard.vue
+msgid "Start"
+msgstr "Start"
+
 #: src/components/CardDetail.vue
 msgid "Start a new thread…"
 msgstr "Neuen Thread starten…"
@@ -4047,11 +4075,11 @@ msgstr "Startdatum"
 msgid "Start with a template"
 msgstr "Mit einer Vorlage beginnen"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Started"
 msgstr "Gestartet"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Starts later"
 msgstr "Beginnt später"
 
@@ -4068,7 +4096,7 @@ msgstr "Fälligkeitsdatum des Schritts"
 msgid "Stop watching this card"
 msgstr "Diese Karte nicht mehr beobachten"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Sub-card"
 msgstr "Unterkarte"
 
@@ -4109,7 +4137,7 @@ msgstr "Zielordner (Nextcloud-Pfad unter diesem Konto)"
 msgid "Target stack"
 msgstr "Zielspalte"
 
-#: src/l10n-extra.js
+#: src/composables/useCardType.js
 msgid "Task"
 msgstr "Aufgabe"
 
@@ -4241,7 +4269,7 @@ msgstr "titel,beschreibung,fälligkeitsdatum,labels,zugewiesen\nLogin gestalten,
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/StackColumn.vue
-#: src/l10n-extra.js
+#: src/composables/useSwimlanes.js
 #: src/views/BoardList.vue
 msgid "To do"
 msgstr "Zu erledigen"
@@ -4267,7 +4295,7 @@ msgstr "Vorschau umschalten"
 msgid "Top of the column"
 msgstr "Spaltenanfang"
 
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Top-level"
 msgstr "Oberste Ebene"
 
@@ -4411,7 +4439,7 @@ msgstr "Bild wird hochgeladen…"
 msgid "Uploading…"
 msgstr "Wird hochgeladen…"
 
-#: src/l10n-extra.js
+#: src/composables/usePriority.js
 #: src/views/PublicBoard.vue
 msgid "Urgent"
 msgstr "Dringend"
@@ -4469,7 +4497,7 @@ msgid "Waiting on an earlier review"
 msgstr "Wartet auf ein früheres Review"
 
 #: src/components/CardTile.vue
-#: src/l10n-extra.js
+#: src/composables/useBoardFilters.js
 msgid "Waiting on client"
 msgstr "Wartet auf Kunden"
 
