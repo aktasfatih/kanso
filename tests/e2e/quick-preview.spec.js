@@ -66,9 +66,10 @@ async function ncLogin(page) {
 }
 
 const DESC = 'Peekaboo description text for the quick look preview.'
+const DESC_B = 'Beta body content that only the second card shows.'
 
 test.describe('Quick-look preview (Space)', () => {
-	const state = { boardId: 0, stackId: 0, card1Id: 0, boardUrl: '' }
+	const state = { boardId: 0, stackId: 0, card1Id: 0, card2Id: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
 		const boards = await apiGet('/boards')
@@ -83,10 +84,13 @@ test.describe('Quick-look preview (Space)', () => {
 		const s1 = await apiPost('/stacks', { boardId: board.id, title: 'Stack One' })
 		state.stackId = s1.id
 		const c1 = await apiPost('/cards', { stackId: s1.id, title: 'Preview Alpha' })
-		await apiPost('/cards', { stackId: s1.id, title: 'Preview Beta' })
+		const c2 = await apiPost('/cards', { stackId: s1.id, title: 'Preview Beta' })
 		state.card1Id = c1.id
-		// Give the first card a description so the preview has body content to show.
+		state.card2Id = c2.id
+		// Give both cards distinct descriptions so the preview body proves WHICH
+		// card is being shown as the selection moves.
 		await apiPatch(`/cards/${c1.id}`, { description: DESC })
+		await apiPatch(`/cards/${c2.id}`, { description: DESC_B })
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
@@ -174,6 +178,64 @@ test.describe('Quick-look preview (Space)', () => {
 		await expect(preview).not.toBeVisible({ timeout: 3000 })
 		// Click-away must not have opened the card modal.
 		expect(page.url()).not.toContain('/card/')
+	})
+
+	test('open preview follows keyboard selection and re-anchors to the new tile (#3908)', async ({ page }) => {
+		const errors = []
+		page.on('console', (msg) => {
+			if (msg.type() === 'error') errors.push(msg.text())
+		})
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		// Focus the first card (Alpha) and Space to open the preview on it.
+		await page.keyboard.press('ArrowDown')
+		await page.waitForTimeout(200)
+		const alphaTile = page.locator(`[data-card-id="${state.card1Id}"]`)
+		const betaTile = page.locator(`[data-card-id="${state.card2Id}"]`)
+		await expect(alphaTile).toBeFocused({ timeout: 3000 })
+
+		await page.keyboard.press('Space')
+		const preview = page.locator('.card-preview')
+		await expect(preview).toBeVisible({ timeout: 3000 })
+		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha')
+		await expect(preview.locator('.card-preview__desc-rendered')).toContainText(DESC, { timeout: 5000 })
+
+		// Record where the panel is anchored while showing Alpha.
+		const alphaLeft = await preview.evaluate((el) => el.getBoundingClientRect().left)
+		const alphaPanelTop = await preview.evaluate((el) => el.getBoundingClientRect().top)
+
+		// Move the keyboard selection down: the OPEN preview must switch to Beta.
+		await page.keyboard.press('ArrowDown')
+		await expect(betaTile).toBeFocused({ timeout: 3000 })
+		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Beta', { timeout: 3000 })
+		// No stale content: it must now show Beta's body, not Alpha's.
+		await expect(preview.locator('.card-preview__desc-rendered')).toContainText(DESC_B, { timeout: 5000 })
+
+		// The panel re-anchored to Beta's tile: it moved DOWN from where it sat for
+		// Alpha (Beta is below Alpha in the same column) and now tracks Beta's top.
+		const betaBox = await betaTile.boundingBox()
+		const betaPanelTop = await preview.evaluate((el) => el.getBoundingClientRect().top)
+		expect(betaPanelTop).toBeGreaterThan(alphaPanelTop + 10)
+		expect(Math.abs(betaPanelTop - betaBox.y)).toBeLessThan(80)
+
+		// Move back up: preview follows to Alpha again and re-anchors.
+		await page.keyboard.press('ArrowUp')
+		await expect(alphaTile).toBeFocused({ timeout: 3000 })
+		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha', { timeout: 3000 })
+		const alphaLeft2 = await preview.evaluate((el) => el.getBoundingClientRect().left)
+		const alphaPanelTop2 = await preview.evaluate((el) => el.getBoundingClientRect().top)
+		// Same column → same horizontal anchor, and the panel returned up to Alpha.
+		expect(Math.abs(alphaLeft2 - alphaLeft)).toBeLessThan(2)
+		expect(Math.abs(alphaPanelTop2 - alphaPanelTop)).toBeLessThan(10)
+
+		// Escape still dismisses.
+		await page.keyboard.press('Escape')
+		await expect(preview).not.toBeVisible({ timeout: 3000 })
+
+		expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 	})
 
 	test('typing space in the composer inserts a space (guard holds, no preview)', async ({ page }) => {

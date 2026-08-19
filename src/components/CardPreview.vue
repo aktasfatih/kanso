@@ -109,7 +109,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
@@ -254,6 +254,20 @@ function onPanelClick(e) {
 	if (e.target.closest('a')) return
 	emit('open')
 }
+
+// Live preview that follows keyboard selection (#3908): when the parent feeds a
+// new anchor rect (and swaps in the newly focused card), re-anchor the panel to
+// the new tile. Re-clamp after nextTick so the height for the new card's meta is
+// measured before the vertical clamp. Card id is watched too so a same-position
+// swap still repositions if the rect object is reused.
+watch(
+	() => [props.anchorRect, props.card.id],
+	async () => {
+		computePosition()
+		await nextTick()
+		computePosition()
+	},
+)
 
 onMounted(async () => {
 	computePosition()
