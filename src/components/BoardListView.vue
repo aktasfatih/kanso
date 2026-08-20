@@ -402,10 +402,28 @@ function isOverdue(card) {
 
 <style scoped>
 .board-list-table {
+	/* Legible success green for the approved-review indicator: stock green in
+	 * light, brighter #3fb950 under dark so it stays readable on the dark row. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
 	padding: 8px 24px 24px 52px;
+}
+
+/* Brighten success green under dark themes (explicit picker + auto). */
+body.theme--dark .board-list-table,
+[data-theme-dark] .board-list-table,
+[data-themes*='dark'] .board-list-table {
+	--kanso-success-legible: #3fb950;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .board-list-table,
+	body:not(.theme--light):not(.theme--dark) .board-list-table {
+		--kanso-success-legible: #3fb950;
+	}
 }
 
 .board-list-table__host {
@@ -633,7 +651,7 @@ function isOverdue(card) {
 	font-weight: 600;
 }
 
-.board-list-row__review--approved { color: var(--color-success, #2fb344); }
+.board-list-row__review--approved { color: var(--kanso-success-legible); }
 .board-list-row__review--changes { color: var(--color-error); }
 
 .board-list-row__assignees {

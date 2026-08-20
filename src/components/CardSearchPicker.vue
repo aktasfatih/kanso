@@ -118,9 +118,27 @@ defineExpose({ focus: () => searchInputRef.value?.focus() })
 
 <style scoped>
 .card-search-picker {
+	/* Legible success green for the "selected" checkmark: stock green in light,
+	 * brighter #3fb950 under dark so the tick stays visible on the dark row. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+
+/* Brighten success green under dark themes (explicit picker + auto). */
+body.theme--dark .card-search-picker,
+[data-theme-dark] .card-search-picker,
+[data-themes*='dark'] .card-search-picker {
+	--kanso-success-legible: #3fb950;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .card-search-picker,
+	body:not(.theme--light):not(.theme--dark) .card-search-picker {
+		--kanso-success-legible: #3fb950;
+	}
 }
 
 .card-search-picker__input {
@@ -195,7 +213,7 @@ defineExpose({ focus: () => searchInputRef.value?.focus() })
 	right: 10px;
 	top: 50%;
 	transform: translateY(-50%);
-	color: var(--color-success);
+	color: var(--kanso-success-legible);
 }
 
 .card-search-picker__error {

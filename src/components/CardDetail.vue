@@ -5407,12 +5407,34 @@ async function handleToggleProject(projectId) {
 
 /* ── Modal shell ─────────────────────────────────────────────────────────── */
 .card-modal {
+	/* Legible success green for the feature-type pill, approved-review pill and
+	 * the "done" toggle: stock --color-success in light, a brighter green
+	 * (#3fb950) under dark so text/border stay readable on the dark surface. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+	--kanso-success-legible-rgb: 70, 186, 97;
+
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 15px;
+}
+
+/* Brighten success green under dark themes (explicit picker + auto). */
+body.theme--dark .card-modal,
+[data-theme-dark] .card-modal,
+[data-themes*='dark'] .card-modal {
+	--kanso-success-legible: #3fb950;
+	--kanso-success-legible-rgb: 63, 185, 80;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .card-modal,
+	body:not(.theme--light):not(.theme--dark) .card-modal {
+		--kanso-success-legible: #3fb950;
+		--kanso-success-legible-rgb: 63, 185, 80;
+	}
 }
 
 /* ── Loading skeleton (shimmer, real layout) ─────────────────────────────── */
@@ -5668,9 +5690,9 @@ async function handleToggleProject(projectId) {
 	color: var(--color-primary-element);
 }
 .card-modal__done-btn--done {
-	border-color: var(--color-success);
-	color: var(--color-success-text, var(--color-success));
-	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 10%, var(--color-main-background)));
+	border-color: var(--kanso-success-legible);
+	color: var(--kanso-success-legible);
+	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
 /* Watch control: a single split-button pill — the watch toggle (left half) and
    the watchers caret (right half) sit flush, sharing one border with a thin 1px
@@ -5874,7 +5896,7 @@ async function handleToggleProject(projectId) {
 .card-modal__pill--priority-3 { border-color: #e07b00; color: #e07b00; font-weight: 600; }
 .card-modal__pill--priority-4 { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
 .card-modal__pill--type-bug { border-color: #e74c3c; color: #e74c3c; font-weight: 600; }
-.card-modal__pill--type-feature { border-color: #27ae60; color: #27ae60; font-weight: 600; }
+.card-modal__pill--type-feature { border-color: var(--kanso-success-legible); color: var(--kanso-success-legible); font-weight: 600; }
 .card-modal__pill--type-task { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
 .card-modal__pill--type-chore { border-color: #7f8c8d; color: #7f8c8d; font-weight: 600; }
 .card-modal__pill--overdue { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
@@ -5943,7 +5965,7 @@ async function handleToggleProject(projectId) {
 	font-size: 0.75rem;
 }
 .card-modal__review-pill--pending { border-color: var(--color-warning-text); background: rgba(236, 167, 0, 0.08); }
-.card-modal__review-pill--approved { border-color: var(--color-success-text); background: rgba(70, 186, 97, 0.08); }
+.card-modal__review-pill--approved { border-color: var(--kanso-success-legible); background: rgba(var(--kanso-success-legible-rgb), 0.08); }
 .card-modal__review-pill--changes_requested { border-color: var(--color-error-text); background: rgba(233, 50, 45, 0.08); }
 /* A gated (deferred) review reads as inert: greyed out, dashed border, muted
    colours. The lock icon + hover tooltip explain it's waiting on an earlier
@@ -5977,7 +5999,7 @@ async function handleToggleProject(projectId) {
 	font-weight: 600;
 }
 .card-modal__review-state--pending { color: var(--color-warning-text); }
-.card-modal__review-state--approved { color: var(--color-success-text); }
+.card-modal__review-state--approved { color: var(--kanso-success-legible); }
 .card-modal__review-state--changes_requested { color: var(--color-error-text); }
 .card-modal__review-state--gated { color: var(--color-text-maxcontrast); }
 /* Compact mode (3+ reviews): drop the reviewer name and the state text so the
