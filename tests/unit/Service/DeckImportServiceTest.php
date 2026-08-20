@@ -205,6 +205,11 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame(1, $capturedCards[1]->getStackId());
 		// Sort keys are strictly increasing within the stack.
 		self::assertLessThan($capturedCards[1]->getSortKey(), $capturedCards[0]->getSortKey());
+		// ...and every key stays within the varchar(64) sort_key column - the
+		// invariant that a large import must not break (#rebalance_required).
+		foreach ($capturedCards as $c) {
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($c->getSortKey()));
+		}
 	}
 
 	// ---- long / edge-case titles (#3906) ----------------------------------

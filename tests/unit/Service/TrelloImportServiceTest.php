@@ -247,6 +247,12 @@ class TrelloImportServiceTest extends TestCase {
 		self::assertSame(strtotime('2026-02-01T09:00:00.000Z'), $checklistItems[1]->getDueDate()?->getTimestamp());
 		self::assertNull($checklistItems[1]->getAssignedUser());
 		self::assertNull($checklistItems[0]->getDueDate());
+
+		// Every generated key stays within the varchar(64) sort_key column - the
+		// invariant that a large import must not break (#rebalance_required).
+		foreach ([...$stacks, ...$cards, ...$checklistItems] as $entity) {
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($entity->getSortKey()));
+		}
 	}
 
 	public function testTruncatesLongTitlesToFitColumns(): void {
