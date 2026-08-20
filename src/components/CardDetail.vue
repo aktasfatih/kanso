@@ -134,7 +134,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<button
 									class="card-modal__status-chip card-modal__status-chip--btn"
 									:class="`card-modal__status-chip--${currentStatus}`"
-									:disabled="updateCard.isPending.value"
+									:disabled="updateCard.isPending.value || stageMoving"
 									:aria-expanded="openPicker === 'status'"
 									:title="t('kanso', 'Change status')"
 									@click="togglePicker('status')">
@@ -142,15 +142,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<ChevronDownIcon :size="12" />
 								</button>
 								<div v-if="openPicker === 'status'" class="card-modal__popover">
-									<button
-										v-for="opt in STATUS_OPTIONS"
-										:key="opt.key"
-										class="card-modal__popover-opt"
-										:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
-										:disabled="updateCard.isPending.value"
-										@click="setStatus(opt.key); openPicker = null">
-										{{ opt.label }}
-									</button>
+									<!-- Workflow board: every column is an option (#54); pick the exact one. -->
+									<template v-if="stageMode">
+										<button
+											v-for="col in boardColumns"
+											:key="`stage-col-${col.id}`"
+											class="card-modal__popover-opt"
+											:class="{ 'card-modal__popover-opt--active': Number(col.id) === Number(cardData.stackId) }"
+											:disabled="updateCard.isPending.value || stageMoving"
+											@click="setStage(col); openPicker = null">
+											{{ stageLabel(col) }}
+										</button>
+									</template>
+									<!-- Board with no workflow roles: the three generic states. -->
+									<template v-else>
+										<button
+											v-for="opt in STATUS_OPTIONS"
+											:key="opt.key"
+											class="card-modal__popover-opt"
+											:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
+											:disabled="updateCard.isPending.value"
+											@click="setStatus(opt.key); openPicker = null">
+											{{ opt.label }}
+										</button>
+									</template>
 								</div>
 							</span>
 							<span class="card-modal__crumb-dot">·</span>
@@ -563,6 +578,43 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<CloseIcon :size="14" />
 								</button>
 							</div>
+							<!-- Repeat / recurrence (#55) - managers only; reuses the
+							     recurring-card engine with this card as the source. -->
+							<template v-if="canManage">
+								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}</label>
+								<p v-if="recurIsCustom" class="card-modal__recur-note">
+									{{ t('kanso', 'Custom schedule — edit it in Board settings → Automation.') }}
+								</p>
+								<template v-else>
+									<div class="card-modal__field-row">
+										<select
+											class="card-modal__date-input"
+											data-recur="freq"
+											:value="recurFreq"
+											:disabled="recurBusy"
+											@change="onRecurFreqChange($event.target.value)">
+											<option value="OFF">{{ t('kanso', 'Does not repeat') }}</option>
+											<option value="DAILY">{{ t('kanso', 'Daily') }}</option>
+											<option value="WEEKLY">{{ t('kanso', 'Weekly') }}</option>
+											<option value="MONTHLY">{{ t('kanso', 'Monthly') }}</option>
+											<option value="YEARLY">{{ t('kanso', 'Yearly') }}</option>
+										</select>
+									</div>
+									<div v-if="recurFreq !== 'OFF'" class="card-modal__field-row card-modal__recur-interval">
+										<span class="card-modal__recur-every">{{ t('kanso', 'every') }}</span>
+										<input
+											class="card-modal__date-input card-modal__recur-interval-input"
+											data-recur="interval"
+											type="number"
+											min="1"
+											:value="recurInterval"
+											:disabled="recurBusy"
+											@change="onRecurIntervalChange($event.target.value)">
+										<span class="card-modal__recur-unit">{{ recurUnitLabel }}</span>
+									</div>
+								</template>
+								<span v-if="recurError" class="card-modal__save-error">{{ recurError }}</span>
+							</template>
 						</div>
 					</div>
 
@@ -2197,6 +2249,7 @@ import { useAssignees } from '../composables/useAssignees.js'
 import { useContacts } from '../composables/useContacts.js'
 import { fetchCardContacts } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
+import { useRecurRules } from '../composables/useRecurRules.js'
 import { useReminders, reminderPresets } from '../composables/useReminders.js'
 import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
@@ -2213,7 +2266,7 @@ import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, moveCard as apiMoveCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
@@ -2915,6 +2968,62 @@ async function setStatus(status) {
 	}
 }
 
+// ── Workflow stages (#54) ────────────────────────────────────────────────────
+// When a board maps any column to a workflow role, the status control turns into
+// a stage picker (Linear-style): EVERY live column is an option, so two "In
+// progress" columns both appear (disambiguated by name) and you pick the exact
+// one rather than always landing in the first. Picking a column moves the card
+// there; the server's move automation stamps started_at / done_at from the
+// column's role. A role-less column is a stage in its own right (its own name,
+// no lifecycle timestamps). A board with NO roles keeps the 3-state control.
+const WORKFLOW_ROLE_LABELS = {
+	1: t('kanso', 'Backlog'),
+	2: t('kanso', 'To do'),
+	3: t('kanso', 'In progress'),
+	4: t('kanso', 'Review'),
+	5: t('kanso', 'Done'),
+}
+// Every live column, in board order - the options the stage picker offers.
+const boardColumns = computed(() =>
+	(boardData.value?.stacks ?? [])
+		.filter((s) => !s.archived)
+		.slice()
+		.sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey))),
+)
+// Stage picker is active once the board uses workflow roles at all.
+const stageMode = computed(() => boardColumns.value.some((s) => Number(s.role) > 0))
+const currentColumn = computed(() =>
+	boardColumns.value.find((s) => Number(s.id) === Number(cardData.value?.stackId)) ?? null,
+)
+// A column's stage label: its role (Backlog / … / Done) qualified by the column
+// name when they differ, so duplicate-role columns stay distinct; a role-less
+// column is shown by its bare name.
+function stageLabel(col) {
+	if (!col) return ''
+	const roleLabel = WORKFLOW_ROLE_LABELS[Number(col.role)]
+	const title = col.title ?? ''
+	if (!roleLabel) return title
+	if (!title || title === roleLabel) return roleLabel
+	return `${roleLabel} (${title})`
+}
+const stageMoving = ref(false)
+async function setStage(col) {
+	// Already in this column - nothing to do.
+	if (!col || Number(col.id) === Number(cardData.value?.stackId)) return
+	stageMoving.value = true
+	saveError.value = ''
+	try {
+		await apiMoveCard(props.cardId, { targetStackId: col.id, afterCardId: null })
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		invalidateMyWork(queryClient)
+	} catch (err) {
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+	} finally {
+		stageMoving.value = false
+	}
+}
+
 // ── Priority ─────────────────────────────────────────────────────────────────
 const { setPriority } = usePriority(boardId, computed(() => props.cardId))
 const priorityError = ref('')
@@ -3559,6 +3668,141 @@ const canManage = computed(() => {
 // Card visibility (#3743): only the card's creator or a board manager may
 // change it (the server enforces the same rule).
 const canSetVisibility = computed(() => canManage.value || (cardData.value?.owner === currentUserId))
+
+// ── Repeat / recurrence (#55) ────────────────────────────────────────────────
+// A compact "Repeat" control in the due-date popover, backed by the SAME
+// recurring-card engine as Board Settings → Automation: it just creates/edits a
+// rule whose source ("template") card is THIS card and whose target is this
+// card's own column. Manager-gated to match the rule endpoints. Only the simple
+// presets (frequency + interval, clone mode, due-at-occurrence) are exposed
+// here; anything richer stays in the Automation tab, and a rule that already
+// uses those richer options is shown read-only so this control never clobbers it.
+const {
+	data: recurRulesData,
+	createRule: createRecurRule,
+	updateRule: updateRecurRule,
+	deleteRule: deleteRecurRule,
+} = useRecurRules(boardId, {
+	// Hold the fetch until the board id has resolved (the full-page card route
+	// learns it only after the card loads - firing early 404s, #3817) and only
+	// for managers, the only ones who ever see the Repeat control.
+	enabled: computed(() => !!boardId.value && canManage.value),
+})
+
+// The (first) recurrence rule anchored on this card, if any.
+const cardRecurRule = computed(() =>
+	(recurRulesData.value ?? []).find((r) => Number(r.templateCardId) === Number(props.cardId)) ?? null,
+)
+
+// Split an RRULE into FREQ + INTERVAL, flagging any token this simple control
+// can't represent (BYDAY / COUNT / UNTIL / …).
+function parseSimpleRrule(rrule) {
+	let freq = null
+	let interval = 1
+	let extra = false
+	for (const token of String(rrule || '').split(';')) {
+		const [k, v] = token.split('=')
+		if (k === 'FREQ') freq = v
+		else if (k === 'INTERVAL') interval = Math.max(1, parseInt(v, 10) || 1)
+		else if (token.trim()) extra = true
+	}
+	return { freq, interval, extra }
+}
+
+const RECUR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']
+
+// A card rule the presets can't round-trip (extra RRULE parts, reset mode, or a
+// non-default due-date policy) is surfaced read-only, pointing at Automation.
+const recurIsCustom = computed(() => {
+	const rule = cardRecurRule.value
+	if (!rule) return false
+	const parsed = parseSimpleRrule(rule.rrule)
+	return parsed.extra
+		|| !RECUR_FREQS.includes(parsed.freq)
+		|| Number(rule.mode) !== 0
+		|| Number(rule.duedatePolicy) !== 0
+})
+
+const recurFreq = ref('OFF')
+const recurInterval = ref(1)
+const recurError = ref('')
+
+// Mirror the card's current rule into the control (and reset when it goes away).
+watch(cardRecurRule, (rule) => {
+	if (rule && !recurIsCustom.value) {
+		const parsed = parseSimpleRrule(rule.rrule)
+		recurFreq.value = parsed.freq
+		recurInterval.value = parsed.interval
+	} else if (!rule) {
+		recurFreq.value = 'OFF'
+		recurInterval.value = 1
+	}
+}, { immediate: true })
+
+const recurBusy = computed(() =>
+	createRecurRule.isPending.value || updateRecurRule.isPending.value || deleteRecurRule.isPending.value,
+)
+
+const recurUnitLabel = computed(() => {
+	const i = Math.max(1, Number(recurInterval.value) || 1)
+	switch (recurFreq.value) {
+	case 'DAILY': return n('kanso', 'day', 'days', i)
+	case 'WEEKLY': return n('kanso', 'week', 'weeks', i)
+	case 'MONTHLY': return n('kanso', 'month', 'months', i)
+	case 'YEARLY': return n('kanso', 'year', 'years', i)
+	default: return ''
+	}
+})
+
+function buildCardRrule(freq, interval) {
+	const parts = [`FREQ=${freq}`]
+	const i = Math.max(1, Number(interval) || 1)
+	if (i > 1) parts.push(`INTERVAL=${i}`)
+	return parts.join(';')
+}
+
+// Create / update / delete the card's rule to match the control. Optimism is left
+// to the composable's cache invalidation; errors surface inline.
+async function applyRecurrence() {
+	recurError.value = ''
+	const rule = cardRecurRule.value
+	try {
+		if (recurFreq.value === 'OFF') {
+			if (rule) await deleteRecurRule.mutateAsync(rule.id)
+			return
+		}
+		const rrule = buildCardRrule(recurFreq.value, recurInterval.value)
+		if (rule) {
+			await updateRecurRule.mutateAsync({ id: rule.id, data: { rrule } })
+		} else {
+			const stackId = Number(cardData.value?.stackId)
+			if (!stackId) {
+				recurError.value = t('kanso', 'This card needs a column before it can repeat.')
+				return
+			}
+			await createRecurRule.mutateAsync({
+				templateCardId: Number(props.cardId),
+				targetStackId: stackId,
+				mode: 0,
+				rrule,
+				duedatePolicy: 0,
+			})
+		}
+	} catch (err) {
+		recurError.value = err?.response?.data?.error || t('kanso', 'Failed to update recurrence.')
+	}
+}
+
+function onRecurFreqChange(value) {
+	recurFreq.value = value
+	if (value !== 'OFF' && !(recurInterval.value >= 1)) recurInterval.value = 1
+	applyRecurrence()
+}
+
+function onRecurIntervalChange(value) {
+	recurInterval.value = Math.max(1, parseInt(value, 10) || 1)
+	if (recurFreq.value !== 'OFF') applyRecurrence()
+}
 
 const visibilityError = ref('')
 async function handleVisibilityChange(visibility) {
@@ -4865,9 +5109,14 @@ async function copyCardRef() {
 		showError(t('kanso', 'Could not copy to clipboard.'))
 	}
 }
-const statusChipLabel = computed(() =>
-	(STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase(),
-)
+const statusChipLabel = computed(() => {
+	// On a workflow board the chip shows the card's current column stage.
+	if (stageMode.value) {
+		const lbl = stageLabel(currentColumn.value)
+		if (lbl) return lbl.toUpperCase()
+	}
+	return (STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase()
+})
 
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
@@ -5990,6 +6239,29 @@ async function handleToggleProject(projectId) {
 	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
+}
+.card-modal__recur-label {
+	display: block;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--color-border);
+}
+.card-modal__recur-interval {
+	margin-top: 6px;
+}
+.card-modal__recur-interval-input {
+	flex: 0 0 64px;
+	width: 64px;
+}
+.card-modal__recur-every,
+.card-modal__recur-unit {
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__recur-note {
+	margin-top: 6px;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
 }
 .card-modal__field-clear {
 	display: inline-flex;

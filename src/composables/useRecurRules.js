@@ -20,7 +20,7 @@ function resolveBoardId(boardId) {
 	return boardId
 }
 
-export function useRecurRules(boardId) {
+export function useRecurRules(boardId, { enabled } = {}) {
 	const queryClient = useQueryClient()
 
 	function getQueryKey() {
@@ -32,9 +32,14 @@ export function useRecurRules(boardId) {
 	}
 
 	// ── Fetch ─────────────────────────────────────────────────────────────────
+	// `enabled` lets a caller hold the fetch until the board id has resolved -
+	// the full-page card route only learns its boardId after the card loads, and
+	// firing with an empty id would 404 (and spam the console). Undefined keeps
+	// the default always-on behaviour for the board-settings caller.
 	const query = useQuery({
 		queryKey: ['recur-rules', boardId],
 		queryFn: () => apiFetchRecurRules(resolveBoardId(boardId)),
+		enabled,
 	})
 
 	// ── Create ────────────────────────────────────────────────────────────────

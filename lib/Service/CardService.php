@@ -1003,11 +1003,30 @@ class CardService {
 		if ($archived !== null) {
 			$card->setArchived($archived);
 		}
+		// A status change maps to a workflow column: resolve the target stack up
+		// front so the card can be MOVED there (#54), keeping its board position and
+		// status in lock-step. When no matching column exists (the board doesn't use
+		// that role) the status is applied timestamp-only, exactly as before.
+		$statusMoveTarget = null;
 		if ($status !== null) {
-			$this->applyStatus($card, $status);
+			$statusMoveTarget = $this->resolveStatusMoveTarget($card, $status);
+			if ($statusMoveTarget === null) {
+				$this->applyStatus($card, $status);
+			}
 		}
 		if ($visibility !== null) {
 			$this->applyVisibility($card, $board, $visibility, $uid);
+		}
+
+		// Status was the ONLY thing supplied and it maps to a workflow column: hand
+		// straight off to move(), which stamps the status from the target column's
+		// role and writes a single MOVE row - no redundant status-only UPDATE row.
+		$otherFieldSupplied = $title !== null || $description !== null || $duedate !== null
+			|| $done !== null || $archived !== null || $priority !== null || $startDate !== null
+			|| $estimate !== null || $allDay !== null || $dueReminderDayBefore !== null
+			|| $coverColor !== null || $type !== null || $visibility !== null;
+		if ($statusMoveTarget !== null && !$otherFieldSupplied) {
+			return $this->move($id, $statusMoveTarget->getId(), null, $uid);
 		}
 
 		$now = time();
@@ -1034,6 +1053,12 @@ class CardService {
 
 		// Completing (or archiving) the last open child auto-completes the parent.
 		$this->maybeCompleteParent($card, $uid);
+
+		// Other fields changed alongside the status: they are persisted now, so move
+		// the card into the column mapped to its new status (#54).
+		if ($statusMoveTarget !== null) {
+			return $this->move($id, $statusMoveTarget->getId(), null, $uid);
+		}
 
 		return $card;
 	}
@@ -1417,6 +1442,61 @@ class CardService {
 			default:
 				throw new InvalidInputException('Unknown status: ' . $status);
 		}
+	}
+
+	/**
+	 * Resolves the workflow column a status change should move the card into
+	 * (#54), or null when no move applies. A column's role IS its status, so the
+	 * card-view status control is the mirror image of the drag automation in
+	 * {@see self::applyDoneAutomation()}: setting a status carries the card to the
+	 * column that owns it. Each status maps to its canonical role - done → Done,
+	 * in_progress → In progress, not_started → To do (Review and Backlog are
+	 * reachable only by an explicit drag, never as an auto-target).
+	 *
+	 * Returns null - leaving the status to apply timestamp-only - when:
+	 *   - the status is unknown ({@see self::applyStatus()} then raises the error);
+	 *   - the card already sits in a column whose role matches the status (don't
+	 *     yank it out of Review just because "In progress" was re-selected);
+	 *   - the board has no column with the target role (workflow auto-move is
+	 *     naturally opt-in - a board that maps no roles never moves cards);
+	 *   - the target column is the card's current column (nothing to move).
+	 */
+	private function resolveStatusMoveTarget(Card $card, string $status): ?Stack {
+		$targetRole = match ($status) {
+			'done' => Stack::ROLE_DONE,
+			'in_progress' => Stack::ROLE_IN_PROGRESS,
+			'not_started' => Stack::ROLE_TODO,
+			default => null,
+		};
+		if ($targetRole === null) {
+			return null;
+		}
+
+		$currentRole = $this->stackMapper->find($card->getStackId())->getRole();
+		if ($this->roleMatchesStatus($currentRole, $status)) {
+			return null;
+		}
+
+		$target = $this->stackMapper->findByBoardAndRole($card->getBoardId(), $targetRole);
+		if ($target === null || $target->getId() === $card->getStackId()) {
+			return null;
+		}
+		return $target;
+	}
+
+	/**
+	 * Whether a column's role already represents the given status - the inverse of
+	 * {@see self::applyDoneAutomation()}'s role → status table. In progress folds
+	 * in Review, and Not started folds in Backlog, so re-selecting a status a
+	 * card's column already implies never bounces it to the canonical column.
+	 */
+	private function roleMatchesStatus(int $role, string $status): bool {
+		return match ($status) {
+			'done' => $role === Stack::ROLE_DONE,
+			'in_progress' => $role === Stack::ROLE_IN_PROGRESS || $role === Stack::ROLE_REVIEW,
+			'not_started' => $role === Stack::ROLE_TODO || $role === Stack::ROLE_BACKLOG,
+			default => false,
+		};
 	}
 
 	/**

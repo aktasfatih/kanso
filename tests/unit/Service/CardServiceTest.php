@@ -1778,6 +1778,9 @@ class CardServiceTest extends TestCase {
 		$card = $this->card();
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// The card's column carries no workflow role and the board maps none
+		// (findByBoardAndRole → null by default), so status stays timestamp-only.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
 		$this->cardMapper->method('update')->willReturnArgument(0);
 		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
@@ -1802,6 +1805,93 @@ class CardServiceTest extends TestCase {
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'bogus');
+	}
+
+	public function testUpdateStatusToDoneMovesCardIntoDoneColumn(): void {
+		// #54: setting the status to Done from the card view moves the card into the
+		// board's Done-role column (6), not just stamps done_at in place. The change
+		// is realised as a single MOVE row, never a status-only UPDATE.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(6, 1, Stack::ROLE_DONE));
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_MOVE, 'alice', Change::VERB_MOVED)
+			->willReturn(new Change());
+
+		$moved = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');
+		self::assertSame(6, $moved->getStackId());
+		self::assertGreaterThan(0, $moved->getDoneAt());
+	}
+
+	public function testUpdateStatusNotStartedMovesCardBackToTodoColumn(): void {
+		// #54: the sync runs backward too - marking a Done-column card "Not started"
+		// carries it into the To do-role column and clears both timestamps.
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(12345);
+		$card->setStartedAt(500);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $this->stack(5, 1, Stack::ROLE_DONE),
+			6 => $this->stack(6, 1, Stack::ROLE_TODO),
+		});
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_TODO)
+			->willReturn($this->stack(6, 1, Stack::ROLE_TODO));
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$moved = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'not_started');
+		self::assertSame(6, $moved->getStackId());
+		self::assertSame(0, $moved->getDoneAt());
+		self::assertSame(0, $moved->getStartedAt());
+	}
+
+	public function testUpdateStatusLeavesCardWhenColumnAlreadyMatchesRole(): void {
+		// A card in a Review-role column re-marked "In progress" stays put - Review
+		// already represents that status, so it is not yanked into the In progress
+		// column. Status still applies (started stamped), via a plain UPDATE.
+		$card = $this->card(9, 5, 1, 'V');
+		$card->setDoneAt(999);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 1, Stack::ROLE_REVIEW));
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', Change::VERB_UPDATED)
+			->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'in_progress');
+		self::assertSame(5, $updated->getStackId());
+		self::assertGreaterThan(0, $updated->getStartedAt());
+		self::assertSame(0, $updated->getDoneAt());
+	}
+
+	public function testUpdateStatusStaysTimestampOnlyWhenNoWorkflowColumnMapped(): void {
+		// A board that maps no workflow roles (findByBoardAndRole → null) keeps the
+		// old behaviour: status stamps timestamps in place, the card never moves.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', Change::VERB_UPDATED)
+			->willReturn(new Change());
+
+		$moved = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');
+		self::assertSame(5, $moved->getStackId());
+		self::assertGreaterThan(0, $moved->getDoneAt());
 	}
 
 	public function testMoveBetweenNonDoneStacksLeavesDoneAtUntouched(): void {
