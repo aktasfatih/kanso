@@ -9,6 +9,8 @@
     "build": "vite build --mode production",
     "dev": "vite build --mode development",
     "watch": "vite build --mode development --watch",
+    "l10n:extract": "node scripts/l10n.mjs extract",
+    "l10n:compile": "node scripts/l10n.mjs compile",
     "test:e2e": "playwright test",
     "release": "semantic-release",
     "release:dry": "semantic-release --dry-run --no-ci",

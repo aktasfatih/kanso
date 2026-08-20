@@ -473,7 +473,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="togglePicker('priority')">
 							<FlagIcon v-if="currentPriority > 0" :size="14" />
 							<FlagOutlineIcon v-else :size="14" />
-							{{ currentPriority > 0 ? t('kanso', currentPriorityLevel.label) : t('kanso', 'Priority') }}
+							{{ currentPriority > 0 ? currentPriorityLevel.label : t('kanso', 'Priority') }}
 						</button>
 						<div v-if="openPicker === 'priority'" class="card-modal__popover">
 							<button
@@ -483,7 +483,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:class="{ 'card-modal__popover-opt--active': currentPriority === level.value }"
 								:disabled="setPriority.isPending.value"
 								@click="handleSetPriority(level.value); openPicker = null">
-								{{ level.value === 0 ? t('kanso', 'None') : t('kanso', level.label) }}
+								{{ level.value === 0 ? t('kanso', 'None') : level.label }}
 							</button>
 							<span v-if="priorityError" class="card-modal__save-error">{{ priorityError }}</span>
 						</div>
@@ -498,7 +498,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:aria-expanded="openPicker === 'type'"
 							@click="togglePicker('type')">
 							<component :is="typeIcon(currentType?.value)" :size="14" />
-							{{ currentType ? t('kanso', currentType.label) : t('kanso', 'Type') }}
+							{{ currentType ? currentType.label : t('kanso', 'Type') }}
 						</button>
 						<div v-if="openPicker === 'type'" class="card-modal__popover">
 							<button
@@ -516,7 +516,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:disabled="setType.isPending.value"
 								@click="handleSetType(tp.value); openPicker = null">
 								<component :is="typeIcon(tp.value)" :size="14" />
-								{{ t('kanso', tp.label) }}
+								{{ tp.label }}
 							</button>
 							<span v-if="typeError" class="card-modal__save-error">{{ typeError }}</span>
 						</div>

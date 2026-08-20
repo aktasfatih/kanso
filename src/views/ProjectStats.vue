@@ -70,7 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<!-- ── Cards by priority ──────────────────────────────────────── -->
 			<section v-if="stats.byPriority?.length" class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Cards by priority') }}</h2>
-				<ul class="board-stats__bar-list" aria-label="Cards by priority">
+				<ul class="board-stats__bar-list" :aria-label="t('kanso', 'Cards by priority')">
 					<li
 						v-for="row in stats.byPriority"
 						:key="row.priority"
@@ -90,7 +90,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<!-- ── Cards by assignee ──────────────────────────────────────── -->
 			<section v-if="stats.byAssignee?.length" class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Cards by assignee') }}</h2>
-				<ul class="board-stats__bar-list" aria-label="Cards by assignee">
+				<ul class="board-stats__bar-list" :aria-label="t('kanso', 'Cards by assignee')">
 					<li
 						v-for="row in stats.byAssignee"
 						:key="row.uid"
@@ -112,7 +112,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			     same-id labels from different boards never collapse into one. -->
 			<section v-if="stats.byLabel?.length" class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Cards by label') }}</h2>
-				<ul class="board-stats__bar-list" aria-label="Cards by label">
+				<ul class="board-stats__bar-list" :aria-label="t('kanso', 'Cards by label')">
 					<li
 						v-for="row in stats.byLabel"
 						:key="`${row.boardId}:${row.labelId}`"
@@ -143,7 +143,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span class="board-stats__stat-label">{{ t('kanso', 'Cards / week (avg)') }}</span>
 					</div>
 				</div>
-				<div class="board-stats__timeline" aria-label="Cards completed per week">
+				<div class="board-stats__timeline" :aria-label="t('kanso', 'Cards completed per week')">
 					<template v-if="velocity.weekly.length">
 						<div
 							v-for="w in velocity.weekly"
@@ -188,7 +188,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<!-- ── Throughput (done cards last 30d) ───────────────────────── -->
 			<section class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Throughput — done per day (30d)') }}</h2>
-				<div class="board-stats__timeline" aria-label="Throughput per day">
+				<div class="board-stats__timeline" :aria-label="t('kanso', 'Throughput per day')">
 					<template v-if="throughputDays.length">
 						<div
 							v-for="d in throughputDays"
@@ -211,7 +211,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<!-- ── Created cards last 30d ─────────────────────────────────── -->
 			<section class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Cards created per day (30d)') }}</h2>
-				<div class="board-stats__timeline" aria-label="Cards created per day">
+				<div class="board-stats__timeline" :aria-label="t('kanso', 'Cards created per day')">
 					<template v-if="createdDays.length">
 						<div
 							v-for="d in createdDays"
@@ -266,7 +266,7 @@ const projectTitle = computed(() =>
 
 function resolvePriorityLabel(priority) {
 	const level = PRIORITY_LEVELS.find((l) => l.value === Number(priority))
-	return level ? t('kanso', level.label) : String(priority)
+	return level ? level.label : String(priority)
 }
 
 // The project's cards are already cached (ProjectView populated them); use them

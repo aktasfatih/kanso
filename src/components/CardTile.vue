@@ -30,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:style="{ background: cssColor(card.coverColor) }"
 				aria-hidden="true" />
 			<!-- Label chips row - only rendered when the card has assigned labels -->
-			<div v-if="cardLabels.length" class="card-tile__labels" aria-label="Labels">
+			<div v-if="cardLabels.length" class="card-tile__labels" :aria-label="t('kanso', 'Labels')">
 				<span
 					v-for="label in cardLabels"
 					:key="label.id"
@@ -91,8 +91,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-if="cardType"
 					class="card-tile__type"
 					:class="`card-tile__type--${cardType.value}`"
-					:aria-label="t('kanso', 'Type: {type}', { type: t('kanso', cardType.label) })"
-					:title="t('kanso', cardType.label)">
+					:aria-label="t('kanso', 'Type: {type}', { type: cardType.label })"
+					:title="cardType.label">
 					<BugIcon v-if="cardType.value === 'bug'" :size="14" />
 					<StarIcon v-else-if="cardType.value === 'feature'" :size="14" />
 					<CheckboxMarkedCircleOutlineIcon v-else-if="cardType.value === 'task'" :size="14" />
