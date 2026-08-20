@@ -148,15 +148,24 @@ class DeckImportService {
 			$deckCardIds = [];
 			$stackCount = 0;
 			$cardCount = 0;
-			$stackKey = null;
-			foreach ($this->deckReader->readStacks($deckBoardId) as $ds) {
+			// Lay out sort keys as one bounded, evenly-spaced block per level
+			// (stacks here, each stack's cards below) rather than chaining after()
+			// once per item. A single append grows the fractional key by a
+			// character every ~26 items, so a stack of ~1150+ cards (or that many
+			// stacks) would push a key past the varchar(64) column and abort the
+			// whole import with a spurious "rebalance_required". appendSequence
+			// keeps every key short (<= 4 chars even for 200k items) while
+			// preserving source order - the same layout the CSV importer uses.
+			$stacks = $this->deckReader->readStacks($deckBoardId);
+			$stackKeys = $this->sortKeyService->appendSequence(count($stacks), null);
+			$stackIndex = 0;
+			foreach ($stacks as $ds) {
 				$stack = new Stack();
 				$stack->setBoardId($boardId);
 				// Stack title column is STRING(100); no description to spill the
 				// remainder into, so a long title is just safely truncated.
 				$stack->setTitle(TitleSanitizer::truncate($ds['title'], self::MAX_STACK_TITLE_LENGTH));
-				$stackKey = $stackKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($stackKey);
-				$stack->setSortKey($stackKey);
+				$stack->setSortKey($stackKeys[$stackIndex++]);
 				$stack->setArchived(false);
 				$stack->setRole(Stack::ROLE_NONE);
 				$stack->setWipLimit(null);
@@ -164,8 +173,10 @@ class DeckImportService {
 				$newStackId = $this->stackMapper->insert($stack)->getId();
 				$stackCount++;
 
-				$cardKey = null;
-				foreach ($this->deckReader->readCards($ds['id']) as $dc) {
+				$cards = $this->deckReader->readCards($ds['id']);
+				$cardKeys = $this->sortKeyService->appendSequence(count($cards), null);
+				$cardIndex = 0;
+				foreach ($cards as $dc) {
 					$card = new Card();
 					$card->setBoardId($boardId);
 					$card->setStackId($newStackId);
@@ -183,8 +194,7 @@ class DeckImportService {
 					}
 					$card->setTitle(TitleSanitizer::truncate($title, CardService::MAX_TITLE_LENGTH));
 					$card->setDescription($description);
-					$cardKey = $cardKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($cardKey);
-					$card->setSortKey($cardKey);
+					$card->setSortKey($cardKeys[$cardIndex++]);
 					$card->setDuedate($dc['duedate'] !== null ? (new \DateTime())->setTimestamp($dc['duedate']) : null);
 					$card->setDoneAt($dc['doneAt']);
 					$card->setArchived($dc['archived']);

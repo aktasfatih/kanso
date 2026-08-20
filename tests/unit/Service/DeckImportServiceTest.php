@@ -205,6 +205,11 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame(1, $capturedCards[1]->getStackId());
 		// Sort keys are strictly increasing within the stack.
 		self::assertLessThan($capturedCards[1]->getSortKey(), $capturedCards[0]->getSortKey());
+		// ...and every key stays within the varchar(64) sort_key column - the
+		// invariant that a large import must not break (#rebalance_required).
+		foreach ($capturedCards as $c) {
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($c->getSortKey()));
+		}
 	}
 
 	// ---- long / edge-case titles (#3906) ----------------------------------
@@ -402,6 +407,73 @@ class DeckImportServiceTest extends TestCase {
 	public function testListImportableEmptyWhenDeckUnavailable(): void {
 		$this->deckReader->method('isAvailable')->willReturn(false);
 		self::assertSame([], $this->service->listImportableBoards('alice'));
+	}
+
+	// ---- large stacks do not overflow the sort key (#rebalance_required) ----
+
+	/**
+	 * A stack far larger than ~1150 cards used to abort the import: chaining
+	 * after() once per card grew the fractional sort key past the varchar(64)
+	 * column, surfacing as a spurious "rebalance_required" 409. The block is now
+	 * laid out with a single bounded appendSequence, so a huge stack imports with
+	 * short, strictly-increasing, source-ordered keys.
+	 */
+	public function testImportLargeStackDoesNotOverflowSortKey(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => 'B', 'color' => null, 'owner' => 'carol']);
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('B');
+		$this->boardService->method('create')->willReturn($board);
+
+		// Well past the old ~1153-card overflow threshold.
+		$cardCount = 2000;
+		$deckCards = [];
+		for ($i = 0; $i < $cardCount; $i++) {
+			$deckCards[] = [
+				'id' => $i + 1,
+				'title' => 'Card ' . $i,
+				'description' => '',
+				'archived' => false,
+				'duedate' => null,
+				'doneAt' => 0,
+				'createdAt' => 0,
+			];
+		}
+
+		$this->deckReader->method('readLabels')->willReturn([]);
+		$this->deckReader->method('readStacks')->willReturn([['id' => 11, 'title' => 'To do']]);
+		$this->deckReader->method('readCards')->willReturn($deckCards);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([]);
+		$this->deckReader->method('readFileReferenceAttachments')->willReturn([]);
+
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId());
+
+		$sortKeys = [];
+		$cardId = 500;
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$sortKeys, &$cardId): Card {
+			$c->setId($cardId++);
+			$sortKeys[] = $c->getSortKey();
+			return $c;
+		});
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame($cardCount, $result['cards']);
+		self::assertCount($cardCount, $sortKeys);
+		// Every key stays well under the varchar(64) column and preserves order.
+		foreach ($sortKeys as $key) {
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($key));
+		}
+		$sorted = $sortKeys;
+		sort($sorted, SORT_STRING);
+		self::assertSame($sorted, $sortKeys, 'imported sort keys must be strictly increasing in source order');
+		self::assertSame(count(array_unique($sortKeys)), count($sortKeys), 'sort keys must be unique');
 	}
 
 	// ---- transaction (#3478) ----------------------------------------------

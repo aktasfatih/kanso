@@ -207,8 +207,13 @@ class TrelloImportService {
 		$lists = $this->rows($doc, 'lists');
 		usort($lists, static fn (array $a, array $b): int => ((float)($a['pos'] ?? 0)) <=> ((float)($b['pos'] ?? 0)));
 
+		// One bounded, evenly-spaced key block instead of chaining after() per
+		// list: a board with ~1150+ lists would otherwise overflow the varchar(64)
+		// sort_key column and abort the import. See the note in importCards().
+		$listKeys = $this->sortKeyService->appendSequence(count($lists), null);
+		$listIndex = 0;
+
 		$map = [];
-		$stackKey = null;
 		foreach ($lists as $row) {
 			$trelloId = isset($row['id']) ? (string)$row['id'] : null;
 			if ($trelloId === null) {
@@ -217,8 +222,7 @@ class TrelloImportService {
 			$stack = new Stack();
 			$stack->setBoardId($boardId);
 			$stack->setTitle($this->title(isset($row['name']) && is_string($row['name']) ? $row['name'] : ''));
-			$stackKey = $stackKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($stackKey);
-			$stack->setSortKey($stackKey);
+			$stack->setSortKey($listKeys[$listIndex++]);
 			$stack->setArchived((bool)($row['closed'] ?? false));
 			$stack->setRole(Stack::ROLE_NONE);
 			$stack->setWipLimit(null);
@@ -262,15 +266,21 @@ class TrelloImportService {
 			$cards = $byList[$trelloListId] ?? [];
 			usort($cards, static fn (array $a, array $b): int => ((float)($a['pos'] ?? 0)) <=> ((float)($b['pos'] ?? 0)));
 
-			$cardKey = null;
+			// One bounded, evenly-spaced key block per list rather than chaining
+			// after() per card: an append grows the fractional key by a character
+			// every ~26 cards, so a list of ~1150+ cards would push a key past the
+			// varchar(64) sort_key column and abort the whole import with a
+			// spurious "rebalance_required". appendSequence keeps keys short (<= 4
+			// chars for 200k cards) while preserving Trello `pos` order.
+			$cardKeys = $this->sortKeyService->appendSequence(count($cards), null);
+			$cardIndex = 0;
 			foreach ($cards as $row) {
 				$card = new Card();
 				$card->setBoardId($boardId);
 				$card->setStackId($newStackId);
 				$card->setTitle($this->title(isset($row['name']) && is_string($row['name']) ? $row['name'] : ''));
 				$card->setDescription(isset($row['desc']) && is_string($row['desc']) && $row['desc'] !== '' ? $row['desc'] : null);
-				$cardKey = $cardKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($cardKey);
-				$card->setSortKey($cardKey);
+				$card->setSortKey($cardKeys[$cardIndex++]);
 				$due = $this->toTimestamp($row['due'] ?? null);
 				$card->setDuedate($due !== null ? (new \DateTime())->setTimestamp($due) : null);
 				// Trello marks a due date complete with `dueComplete`; treat that as
@@ -350,7 +360,12 @@ class TrelloImportService {
 	 * @param list<array<string, mixed>> $checklists
 	 */
 	private function attachChecklists(array $checklists, int $newCardId, int $now): void {
-		$itemKey = null;
+		// Flatten every checkItem across the card's checklists into one ordered run
+		// first, then hand the whole run a single bounded, evenly-spaced key block.
+		// Chaining after() per item would grow the fractional key a character every
+		// ~26 items, so a card with ~1150+ checklist items would overflow the
+		// varchar(64) sort_key column and abort the import (see importCards()).
+		$ordered = [];
 		foreach ($checklists as $checklist) {
 			$items = [];
 			foreach ((array)($checklist['checkItems'] ?? []) as $item) {
@@ -359,21 +374,24 @@ class TrelloImportService {
 				}
 			}
 			usort($items, static fn (array $a, array $b): int => ((float)($a['pos'] ?? 0)) <=> ((float)($b['pos'] ?? 0)));
-
 			foreach ($items as $item) {
-				$entity = new ChecklistItem();
-				$entity->setCardId($newCardId);
-				$entity->setTitle($this->title(isset($item['name']) && is_string($item['name']) ? $item['name'] : ''));
-				$entity->setDone(($item['state'] ?? null) === 'complete');
-				$itemKey = $itemKey === null ? $this->sortKeyService->initial() : $this->sortKeyService->after($itemKey);
-				$entity->setSortKey($itemKey);
-				$entity->setCreatedAt($now);
-				$due = $this->parseCheckItemDue($item['due'] ?? null);
-				if ($due !== null) {
-					$entity->setDueDate($due);
-				}
-				$this->checklistItemMapper->insert($entity);
+				$ordered[] = $item;
 			}
+		}
+
+		$itemKeys = $this->sortKeyService->appendSequence(count($ordered), null);
+		foreach ($ordered as $index => $item) {
+			$entity = new ChecklistItem();
+			$entity->setCardId($newCardId);
+			$entity->setTitle($this->title(isset($item['name']) && is_string($item['name']) ? $item['name'] : ''));
+			$entity->setDone(($item['state'] ?? null) === 'complete');
+			$entity->setSortKey($itemKeys[$index]);
+			$entity->setCreatedAt($now);
+			$due = $this->parseCheckItemDue($item['due'] ?? null);
+			if ($due !== null) {
+				$entity->setDueDate($due);
+			}
+			$this->checklistItemMapper->insert($entity);
 		}
 	}
 

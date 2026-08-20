@@ -247,6 +247,12 @@ class TrelloImportServiceTest extends TestCase {
 		self::assertSame(strtotime('2026-02-01T09:00:00.000Z'), $checklistItems[1]->getDueDate()?->getTimestamp());
 		self::assertNull($checklistItems[1]->getAssignedUser());
 		self::assertNull($checklistItems[0]->getDueDate());
+
+		// Every generated key stays within the varchar(64) sort_key column - the
+		// invariant that a large import must not break (#rebalance_required).
+		foreach ([...$stacks, ...$cards, ...$checklistItems] as $entity) {
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($entity->getSortKey()));
+		}
 	}
 
 	public function testTruncatesLongTitlesToFitColumns(): void {
@@ -279,6 +285,67 @@ class TrelloImportServiceTest extends TestCase {
 
 		self::assertSame(100, mb_strlen($capturedStack->getTitle()));
 		self::assertSame(100, mb_strlen($capturedCard->getTitle()));
+	}
+
+	/**
+	 * A list of far more than ~1150 cards - and a card with that many checklist
+	 * items - used to abort the import: chaining after() once per item grew the
+	 * fractional sort key past the varchar(64) column ("rebalance_required").
+	 * Both are now laid out with a single bounded appendSequence, so a huge board
+	 * imports with short, strictly-increasing, source-ordered keys.
+	 */
+	public function testImportLargeListAndChecklistDoNotOverflowSortKey(): void {
+		$this->db->expects(self::once())->method('commit');
+		$this->boardService->method('create')->willReturn($this->newBoard('Big'));
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
+
+		$cardKeys = [];
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$cardKeys): Card {
+			$this->seq['card'] ??= 100;
+			$c->setId($this->seq['card']++);
+			$cardKeys[] = $c->getSortKey();
+			return $c;
+		});
+
+		$itemKeys = [];
+		$this->checklistItemMapper->method('insert')->willReturnCallback(function (ChecklistItem $i) use (&$itemKeys): ChecklistItem {
+			$i->setId(count($itemKeys) + 5000);
+			$itemKeys[] = $i->getSortKey();
+			return $i;
+		});
+
+		// Well past the old ~1153-item overflow threshold, on ONE list.
+		$count = 2000;
+		$cards = [];
+		$checkItems = [];
+		for ($i = 0; $i < $count; $i++) {
+			$cards[] = ['id' => 'C' . $i, 'idList' => 'L1', 'name' => 'Card ' . $i, 'pos' => $i + 1];
+			$checkItems[] = ['name' => 'Item ' . $i, 'pos' => $i + 1, 'state' => 'incomplete'];
+		}
+		// One card also carries a huge single checklist (its items share one key run).
+		$checklists = [['id' => 'CL1', 'idCard' => 'C0', 'pos' => 1, 'checkItems' => $checkItems]];
+
+		$doc = [
+			'name' => 'Big',
+			'lists' => [['id' => 'L1', 'name' => 'To do', 'pos' => 1]],
+			'cards' => $cards,
+			'checklists' => $checklists,
+		];
+
+		$result = $this->service->import(json_encode($doc), 'importer');
+
+		self::assertSame($count, $result['cards']);
+		self::assertCount($count, $cardKeys);
+		self::assertCount($count, $itemKeys);
+		foreach ([$cardKeys, $itemKeys] as $keys) {
+			foreach ($keys as $key) {
+				self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($key));
+			}
+			$sorted = $keys;
+			sort($sorted, SORT_STRING);
+			self::assertSame($sorted, $keys, 'keys must be strictly increasing in source order');
+			self::assertSame(count(array_unique($keys)), count($keys), 'keys must be unique');
+		}
 	}
 
 	public function testImportRollsBackOnFailure(): void {
