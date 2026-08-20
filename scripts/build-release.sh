@@ -116,6 +116,41 @@ find "$STAGE_DIR" \
 	-type d -prune -exec rm -rf {} +
 
 # ---------------------------------------------------------------------------
+# 2b. Rewrite the bundled CHANGELOG.md into the App Store's format (#57)
+# ---------------------------------------------------------------------------
+# The store reads CHANGELOG.md from the archive and imports the released
+# version's notes (nextcloudappstore/api/v1/release/parser.py). It matches
+# version headings with `^## (?:\[)?(?:v)?(\d+\.\d+(\.\d+)?)`, keyed on
+# appinfo/info.xml's <version>: the heading MUST be level-2 (`## `), but a `[`
+# bracket, a `v` prefix and any trailing text (dates, links) are ignored — and
+# only the lines BELOW the heading are shown as the notes. semantic-release
+# writes minor/major headings as level-1 `# [X.Y.Z](compare-url) (date)`, which
+# the `^## ` anchor never matches, so those releases import empty notes. Rewrite
+# every version heading in the STAGED copy to `## X.Y.Z - date` (the repo's rich
+# human changelog is untouched), BEFORE signing so the rewrite is covered by the
+# integrity signature (a later edit would break it).
+if [[ -f "$STAGE_DIR/CHANGELOG.md" ]]; then
+	log "Normalising bundled CHANGELOG.md to the App Store heading format"
+	# `# [X.Y.Z](url) (date)` / `## [X.Y.Z](url)` / `# X.Y.Z (date)` → `## X.Y.Z - date`.
+	# Most-specific rule first; once a line is rewritten it no longer matches the
+	# looser rules, so no double-substitution.
+	sed -i -E \
+		-e 's|^#{1,3} \[([0-9]+\.[0-9]+\.[0-9]+)\]\([^)]*\)[[:space:]]*\(([0-9]{4}-[0-9]{2}-[0-9]{2})\).*|## \1 - \2|' \
+		-e 's|^#{1,3} \[([0-9]+\.[0-9]+\.[0-9]+)\]\([^)]*\).*|## \1|' \
+		-e 's|^#{1,3} ([0-9]+\.[0-9]+\.[0-9]+) \(([0-9]{4}-[0-9]{2}-[0-9]{2})\).*|## \1 - \2|' \
+		-e 's|^#{1,3} \[([0-9]+\.[0-9]+\.[0-9]+)\][[:space:]]*-[[:space:]]*([0-9]{4}-[0-9]{2}-[0-9]{2}).*|## \1 - \2|' \
+		"$STAGE_DIR/CHANGELOG.md"
+
+	# Sanity-check: the store keys on the info.xml version, so the released
+	# version MUST carry a `## X.Y.Z` heading now or the notes come through empty.
+	APP_VERSION="$(sed -n 's|.*<version>\([0-9][0-9.]*\)</version>.*|\1|p' "$STAGE_DIR/appinfo/info.xml" | head -1)"
+	if [[ -n "$APP_VERSION" ]] && ! grep -qE "^## ${APP_VERSION//./\\.}( |\$)" "$STAGE_DIR/CHANGELOG.md"; then
+		warn "CHANGELOG.md has no '## ${APP_VERSION}' heading after the rewrite —"
+		warn "the App Store will import empty release notes for v${APP_VERSION}."
+	fi
+fi
+
+# ---------------------------------------------------------------------------
 # 3. Sign the app (optional — needs a private key + certificate + occ)
 # ---------------------------------------------------------------------------
 KEY_FILE=""
