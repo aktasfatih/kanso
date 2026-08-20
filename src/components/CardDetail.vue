@@ -7540,8 +7540,36 @@ async function handleToggleProject(projectId) {
 
 /* ── Responsive: stack panes, switch via tabs ────────────────────────────── */
 @media (max-width: 680px) {
-	.card-modal__header { padding: 14px 16px 10px; }
-	.card-modal__title { font-size: 1.2rem; }
+	/* Reflow the header so the action cluster wraps below the title instead of
+	   squeezing the title column toward 0 width (which made the title render one
+	   letter per line). The title row and the actions row each take the full
+	   width; the title column can no longer be crushed by flex-shrink:0 actions. */
+	.card-modal__header {
+		flex-wrap: wrap;
+		padding: 14px 16px 10px;
+	}
+	/* In modal mode NcModal teleports its own close (X) button to the top-right of
+	   the modal container, outside this component's scoped tree. Reserve room on
+	   the right so the breadcrumb/title never slide under it. */
+	.card-modal--mode-modal .card-modal__header { padding-right: 48px; }
+	.card-modal__header-main {
+		/* Force the title column onto its own full-width row. */
+		flex: 1 0 100%;
+		min-width: 0;
+	}
+	.card-modal__header-actions {
+		/* Actions drop to their own row below the title and may wrap among
+		   themselves on very narrow screens rather than overflowing. */
+		flex-basis: 100%;
+		flex-wrap: wrap;
+	}
+	.card-modal__title {
+		font-size: 1.2rem;
+		/* Wrap on word boundaries and only break inside a word as a last resort,
+		   so a long title never renders one character per line. */
+		word-break: normal;
+		overflow-wrap: anywhere;
+	}
 	.card-modal__attrbar { flex-wrap: nowrap; overflow-x: auto; padding: 10px 16px; }
 	.card-modal__attr-right { margin-left: 0; }
 	.card-modal__body { grid-template-columns: 1fr; }

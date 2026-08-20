@@ -307,6 +307,60 @@ test.describe('Card modal two-column layout', () => {
 		await expect(page).not.toHaveURL(new RegExp(`/card/${state.cardId}`), { timeout: 8_000 })
 	})
 
+	// #60 — on a phone-width viewport the card-detail header must reflow: the
+	// title must NOT wrap one character per line (its box must be wider than it is
+	// tall), and the action cluster / teleported close (X) must not overlap the
+	// title. A long, unbroken-ish title is used so a broken layout is unmissable.
+	test('mobile: card header reflows — title stays horizontal and actions do not overlap it (#60)', async ({ page }) => {
+		const longTitle = 'Refactor the notification delivery pipeline for realtime updates'
+		const card = await apiPost('/cards', {
+			stackId: state.stackId,
+			title: longTitle,
+			description: 'Long-title card used to verify the mobile header does not break.',
+		})
+		try {
+			const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+			// ~360px is a common phone width and below the 680px reflow breakpoint.
+			await page.setViewportSize({ width: 360, height: 780 })
+			await ncLogin(page)
+			await page.goto(cardUrl)
+
+			const title = page.locator('.card-modal__title')
+			await expect(title).toBeVisible({ timeout: 15_000 })
+
+			// 1) The title renders horizontally, not one letter per line. A vertical
+			//    (one-char-per-line) wrap makes the box taller than it is wide.
+			const titleBox = await title.boundingBox()
+			expect(titleBox).not.toBeNull()
+			expect(titleBox.width).toBeGreaterThan(titleBox.height)
+
+			// 2) The action cluster must not horizontally overlap the title column.
+			//    After the reflow it sits on its own row below the title, so their
+			//    bounding boxes must not intersect.
+			const actions = page.locator('.card-modal__header-actions')
+			await expect(actions).toBeVisible()
+			const actionsBox = await actions.boundingBox()
+			expect(actionsBox).not.toBeNull()
+			const intersects = (a, b) => (
+				a.x < b.x + b.width && a.x + a.width > b.x
+				&& a.y < b.y + b.height && a.y + a.height > b.y
+			)
+			expect(intersects(titleBox, actionsBox)).toBe(false)
+
+			// 3) The teleported NcModal close (X) must not overlap the title either —
+			//    the header reserves right padding so the breadcrumb/title clear it.
+			const closeBtn = page.locator('.modal-container .modal-header button.modal-close, .modal-container button.header-close').first()
+			if (await closeBtn.count()) {
+				const closeBox = await closeBtn.boundingBox()
+				if (closeBox) {
+					expect(intersects(titleBox, closeBox)).toBe(false)
+				}
+			}
+		} finally {
+			await apiDelete(`/cards/${card.id}`).catch(() => {})
+		}
+	})
+
 	test('a text-selection drag that ends on the backdrop does NOT close the modal (#3656)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
