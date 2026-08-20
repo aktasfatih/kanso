@@ -1036,7 +1036,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						role="tab"
 						:aria-selected="viewMode === 'discussion'"
 						@click="viewMode = 'discussion'">
-						{{ t('kanso', 'Discussion') }}<span v-if="commentCount > 0"> {{ commentCount }}</span>
+						{{ t('kanso', 'Discussion') }}<span v-if="commentCount > 0" class="card-modal__tab-count">{{ commentCount }}</span>
 					</button>
 				</div>
 
@@ -7554,6 +7554,13 @@ body.theme--dark .card-modal,
 	border-bottom-color: var(--color-primary-element);
 	color: var(--color-primary-element);
 	font-weight: 600;
+}
+/* Comment-count badge on the Discussion tab — its own spacing so the number
+   never renders glued to the label (Vue condenses a leading text space away). */
+.card-modal__tab-count {
+	margin-inline-start: 6px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-maxcontrast);
 }
 
 /* Keep every round button/dot a perfect circle (#3492). Two forces turn them
