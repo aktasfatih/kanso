@@ -134,7 +134,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<button
 									class="card-modal__status-chip card-modal__status-chip--btn"
 									:class="`card-modal__status-chip--${currentStatus}`"
-									:disabled="updateCard.isPending.value"
+									:disabled="updateCard.isPending.value || stageMoving"
 									:aria-expanded="openPicker === 'status'"
 									:title="t('kanso', 'Change status')"
 									@click="togglePicker('status')">
@@ -142,15 +142,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<ChevronDownIcon :size="12" />
 								</button>
 								<div v-if="openPicker === 'status'" class="card-modal__popover">
-									<button
-										v-for="opt in STATUS_OPTIONS"
-										:key="opt.key"
-										class="card-modal__popover-opt"
-										:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
-										:disabled="updateCard.isPending.value"
-										@click="setStatus(opt.key); openPicker = null">
-										{{ opt.label }}
-									</button>
+									<!-- Workflow board: every column is an option (#54); pick the exact one. -->
+									<template v-if="stageMode">
+										<button
+											v-for="col in boardColumns"
+											:key="`stage-col-${col.id}`"
+											class="card-modal__popover-opt"
+											:class="{ 'card-modal__popover-opt--active': Number(col.id) === Number(cardData.stackId) }"
+											:disabled="updateCard.isPending.value || stageMoving"
+											@click="setStage(col); openPicker = null">
+											{{ stageLabel(col) }}
+										</button>
+									</template>
+									<!-- Board with no workflow roles: the three generic states. -->
+									<template v-else>
+										<button
+											v-for="opt in STATUS_OPTIONS"
+											:key="opt.key"
+											class="card-modal__popover-opt"
+											:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
+											:disabled="updateCard.isPending.value"
+											@click="setStatus(opt.key); openPicker = null">
+											{{ opt.label }}
+										</button>
+									</template>
 								</div>
 							</span>
 							<span class="card-modal__crumb-dot">·</span>
@@ -2251,7 +2266,7 @@ import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
-import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
+import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, moveCard as apiMoveCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
@@ -2950,6 +2965,62 @@ async function setStatus(status) {
 		await updateCard.mutateAsync({ data: { status } })
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+	}
+}
+
+// ── Workflow stages (#54) ────────────────────────────────────────────────────
+// When a board maps any column to a workflow role, the status control turns into
+// a stage picker (Linear-style): EVERY live column is an option, so two "In
+// progress" columns both appear (disambiguated by name) and you pick the exact
+// one rather than always landing in the first. Picking a column moves the card
+// there; the server's move automation stamps started_at / done_at from the
+// column's role. A role-less column is a stage in its own right (its own name,
+// no lifecycle timestamps). A board with NO roles keeps the 3-state control.
+const WORKFLOW_ROLE_LABELS = {
+	1: t('kanso', 'Backlog'),
+	2: t('kanso', 'To do'),
+	3: t('kanso', 'In progress'),
+	4: t('kanso', 'Review'),
+	5: t('kanso', 'Done'),
+}
+// Every live column, in board order - the options the stage picker offers.
+const boardColumns = computed(() =>
+	(boardData.value?.stacks ?? [])
+		.filter((s) => !s.archived)
+		.slice()
+		.sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey))),
+)
+// Stage picker is active once the board uses workflow roles at all.
+const stageMode = computed(() => boardColumns.value.some((s) => Number(s.role) > 0))
+const currentColumn = computed(() =>
+	boardColumns.value.find((s) => Number(s.id) === Number(cardData.value?.stackId)) ?? null,
+)
+// A column's stage label: its role (Backlog / … / Done) qualified by the column
+// name when they differ, so duplicate-role columns stay distinct; a role-less
+// column is shown by its bare name.
+function stageLabel(col) {
+	if (!col) return ''
+	const roleLabel = WORKFLOW_ROLE_LABELS[Number(col.role)]
+	const title = col.title ?? ''
+	if (!roleLabel) return title
+	if (!title || title === roleLabel) return roleLabel
+	return `${roleLabel} (${title})`
+}
+const stageMoving = ref(false)
+async function setStage(col) {
+	// Already in this column - nothing to do.
+	if (!col || Number(col.id) === Number(cardData.value?.stackId)) return
+	stageMoving.value = true
+	saveError.value = ''
+	try {
+		await apiMoveCard(props.cardId, { targetStackId: col.id, afterCardId: null })
+		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		invalidateMyWork(queryClient)
+	} catch (err) {
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+	} finally {
+		stageMoving.value = false
 	}
 }
 
@@ -5038,9 +5109,14 @@ async function copyCardRef() {
 		showError(t('kanso', 'Could not copy to clipboard.'))
 	}
 }
-const statusChipLabel = computed(() =>
-	(STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase(),
-)
+const statusChipLabel = computed(() => {
+	// On a workflow board the chip shows the card's current column stage.
+	if (stageMode.value) {
+		const lbl = stageLabel(currentColumn.value)
+		if (lbl) return lbl.toUpperCase()
+	}
+	return (STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase()
+})
 
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
