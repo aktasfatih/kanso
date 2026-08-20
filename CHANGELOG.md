@@ -11,6 +11,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.12.0](https://github.com/aktasfatih/kanso/compare/v0.11.0...v0.12.0) (2026-08-20)
+
+
+### Bug Fixes
+
+* don't fetch card recurrence before the board id resolves ([ea4d1bb](https://github.com/aktasfatih/kanso/commit/ea4d1bb67d33860abb065175e1b51d22e58ed030)), closes [#3817](https://github.com/aktasfatih/kanso/issues/3817)
+* **l10n:** translate analytics chart accessibility labels ([8c6213d](https://github.com/aktasfatih/kanso/commit/8c6213d7c12a4d032b3e9414e1abd3c2764daf91))
+* let calendar clients toggle the visibility of a Kanso board calendar ([04d74fd](https://github.com/aktasfatih/kanso/commit/04d74fd071f6abd93a0e8643d31d5756f7dfa60e))
+* move a card into its workflow column when you change its status ([5948bda](https://github.com/aktasfatih/kanso/commit/5948bdaa90fc1e7059f2d8684f63de4dbebce9a0)), closes [#54](https://github.com/aktasfatih/kanso/issues/54)
+* show release notes on the Nextcloud app store ([8a787a4](https://github.com/aktasfatih/kanso/commit/8a787a40c7c111a1714000ec424f25ed900e0295)), closes [#57](https://github.com/aktasfatih/kanso/issues/57)
+
+
+### Features
+
+* choose which boards appear in your calendar ([d0bc743](https://github.com/aktasfatih/kanso/commit/d0bc743fe0a829db2fab9ebcb271b409e81be92f))
+* **l10n:** translate the interface into your Nextcloud language, starting with German ([1d706a1](https://github.com/aktasfatih/kanso/commit/1d706a1d873e2ab04e9230f18b880753924c160e))
+* make a card repeat straight from its due-date menu ([8c81d4f](https://github.com/aktasfatih/kanso/commit/8c81d4ffa44947e8573e4bad234f3e2cf5fb14fc)), closes [#55](https://github.com/aktasfatih/kanso/issues/55)
+* show cards with due dates in your calendar and sync them to your phone ([407c6de](https://github.com/aktasfatih/kanso/commit/407c6deb465a316c7715a878abe6a8baddbc04ca))
+* the card status control now offers the board's workflow columns as stages ([4ccd4a2](https://github.com/aktasfatih/kanso/commit/4ccd4a2c9b418bc5a5aeb5a2b83daeece91e1cff)), closes [#54](https://github.com/aktasfatih/kanso/issues/54)
+
 # [0.11.0](https://github.com/aktasfatih/kanso/compare/v0.10.0...v0.11.0) (2026-08-19)
 
 
