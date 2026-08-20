@@ -545,7 +545,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:class="cardData.duedate ? dueDateClass : 'card-modal__pill--dashed'"
 							:aria-expanded="openPicker === 'due'"
 							@click="togglePicker('due')">
-							<CalendarIcon :size="14" />
+							<!-- A recurring card swaps the calendar glyph for a repeat
+							     icon (#61 follow-up), matching the board tile cue for
+							     all viewers. Same footprint, so no layout shift. -->
+							<RepeatIcon v-if="cardIsRecurring" :size="14" :title="t('kanso', 'Repeats')" />
+							<CalendarIcon v-else :size="14" />
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</button>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad">
@@ -2179,6 +2183,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import EmoticonHappyOutlineIcon from 'vue-material-design-icons/EmoticonHappyOutline.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -3693,6 +3698,13 @@ const {
 const cardRecurRule = computed(() =>
 	(recurRulesData.value ?? []).find((r) => Number(r.templateCardId) === Number(props.cardId)) ?? null,
 )
+
+// Does this card recur? (#61 follow-up) Drives the repeat-icon swap on the Due
+// Date pill. Prefer the detail payload's `recurring` boolean so ALL viewers see
+// the cue (matching the board tile); OR-in the manager-only rule so the icon
+// flips instantly when a manager toggles recurrence in the popover, before any
+// refetch.
+const cardIsRecurring = computed(() => !!cardData.value?.recurring || !!cardRecurRule.value)
 
 // Split an RRULE into FREQ + INTERVAL, flagging any token this simple control
 // can't represent (BYDAY / COUNT / UNTIL / …).

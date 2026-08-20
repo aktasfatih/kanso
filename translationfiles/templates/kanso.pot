@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3583
+#: src/components/CardDetail.vue:3588
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3581
+#: src/components/CardDetail.vue:3586
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3579
+#: src/components/CardDetail.vue:3584
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1356,7 +1356,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3749
+#: src/components/CardDetail.vue:3761
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2843,7 +2843,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3751
+#: src/components/CardDetail.vue:3763
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3775,6 +3775,10 @@ msgid "Repeat"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "Repeats"
+msgstr ""
+
+#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Reply"
 msgstr ""
@@ -4602,7 +4606,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3750
+#: src/components/CardDetail.vue:3762
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4678,7 +4682,7 @@ msgstr ""
 msgid "Write a reply…"
 msgstr ""
 
-#: src/components/CardDetail.vue:3752
+#: src/components/CardDetail.vue:3764
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

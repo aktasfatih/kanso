@@ -139,3 +139,53 @@ test.describe('Recurring indicator on the board tile (#61)', () => {
 		await expect(plainTile.locator('.card-tile__recurring')).toHaveCount(0)
 	})
 })
+
+test.describe('Recurring indicator on the open card Due Date pill (#61 follow-up)', () => {
+	const state = { boardId: 0, stackId: 0, recurCardId: 0, plainCardId: 0 }
+
+	test.beforeAll(async () => {
+		const board = await api('POST', '/boards', { title: 'Recur Pill ' + Math.floor(Date.now() / 1000) })
+		state.boardId = board.id
+		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Chores' })).id
+		state.recurCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'Recurring pill card' })).id
+		state.plainCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'One-off pill card' })).id
+
+		// Live weekly rule on the first card (its own column is the target, clone
+		// mode) - exactly what the due-date Repeat control creates.
+		await api('POST', `/boards/${state.boardId}/recur-rules`, {
+			templateCardId: state.recurCardId,
+			targetStackId: state.stackId,
+			mode: 0,
+			rrule: 'FREQ=WEEKLY',
+		})
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('card show() payload carries the recurring boolean derived from the rule', async () => {
+		const recur = await api('GET', `/cards/${state.recurCardId}`)
+		const plain = await api('GET', `/cards/${state.plainCardId}`)
+		expect(recur.recurring).toBe(true)
+		expect(plain.recurring).toBe(false)
+	})
+
+	test('due-date pill shows the repeat icon for a recurring card, calendar icon otherwise', async ({ page }) => {
+		await ncLogin(page)
+
+		// Recurring card → the Due Date pill renders the repeat glyph, not calendar.
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.recurCardId}`)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
+		const recurPill = page.locator('[data-pill="due"]')
+		await expect(recurPill.locator('.repeat-icon')).toBeVisible({ timeout: 10_000 })
+		await expect(recurPill.locator('.calendar-icon')).toHaveCount(0)
+
+		// Non-recurring card → the calendar glyph stays, no repeat icon.
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.plainCardId}`)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
+		const plainPill = page.locator('[data-pill="due"]')
+		await expect(plainPill.locator('.calendar-icon')).toBeVisible({ timeout: 10_000 })
+		await expect(plainPill.locator('.repeat-icon')).toHaveCount(0)
+	})
+})
