@@ -56,6 +56,30 @@ class RecurRuleMapper extends QBMapper {
 	}
 
 	/**
+	 * Template card ids on the board that carry an ENABLED recurrence rule -
+	 * powers the tile "recurring" badge in one board-scoped query (no N+1).
+	 * Disabled/exhausted rules are excluded so only live schedules badge.
+	 *
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function findTemplateCardIdsByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('template_card_id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('enabled', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+
+		$result = $qb->executeQuery();
+		$ids = [];
+		while (($row = $result->fetch()) !== false) {
+			$ids[] = (int)$row['template_card_id'];
+		}
+		$result->closeCursor();
+		return $ids;
+	}
+
+	/**
 	 * Every enabled rule due to fire now - the cron's work list. A rule is due
 	 * when it is enabled, has a cached next fire time (`next_occurrence_at > 0`,
 	 * so exhausted/never rules are excluded) and that time has passed. Hits the

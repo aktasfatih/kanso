@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Service\CardSummaryService;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -30,6 +31,7 @@ class CardSummaryServiceTest extends TestCase {
 	private CommentMapper&MockObject $commentMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private CardRelationMapper&MockObject $cardRelationMapper;
+	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private CardSummaryService $service;
 
 	protected function setUp(): void {
@@ -42,6 +44,7 @@ class CardSummaryServiceTest extends TestCase {
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
+		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->service = new CardSummaryService(
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
@@ -51,6 +54,7 @@ class CardSummaryServiceTest extends TestCase {
 			$this->commentMapper,
 			$this->cardReviewMapper,
 			$this->cardRelationMapper,
+			$this->recurRuleMapper,
 		);
 	}
 
@@ -74,6 +78,8 @@ class CardSummaryServiceTest extends TestCase {
 		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
 		$this->commentMapper->method('countsByBoard')->with(1)->willReturn([3 => 5]);
 		$this->cardRelationMapper->method('blockedCardIdsByBoard')->with(1)->willReturn([3]);
+		// Card 3 has an enabled recurrence rule; card 4 does not.
+		$this->recurRuleMapper->method('findTemplateCardIdsByBoard')->with(1)->willReturn([3]);
 
 		$viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
 		$out = $this->service->serialize(1, [$card, $bare], $viewer);
@@ -86,6 +92,7 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertTrue($out[0]['waitingOnExternal']);
 		self::assertSame(1700000000, $out[0]['waitingSince']);
 		self::assertTrue($out[0]['blocked']);
+		self::assertTrue($out[0]['recurring']);
 		self::assertArrayNotHasKey('description', $out[0]);
 
 		// A card with no signal reads defaults (present, not absent).
@@ -95,5 +102,6 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertFalse($out[1]['waitingOnExternal']);
 		self::assertNull($out[1]['waitingSince']);
 		self::assertFalse($out[1]['blocked']);
+		self::assertFalse($out[1]['recurring']);
 	}
 }

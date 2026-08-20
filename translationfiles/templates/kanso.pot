@@ -3599,6 +3599,10 @@ msgstr ""
 msgid "Read-only"
 msgstr ""
 
+#: src/components/CardTile.vue
+msgid "Recurring"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
 msgstr ""

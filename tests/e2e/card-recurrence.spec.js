@@ -93,3 +93,49 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		).toBeNull()
 	})
 })
+
+test.describe('Recurring indicator on the board tile (#61)', () => {
+	const state = { boardId: 0, stackId: 0, recurCardId: 0, plainCardId: 0, boardUrl: '' }
+
+	test.beforeAll(async () => {
+		const board = await api('POST', '/boards', { title: 'Recur Tile ' + Math.floor(Date.now() / 1000) })
+		state.boardId = board.id
+		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Chores' })).id
+		state.recurCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'Recurring chore' })).id
+		state.plainCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'One-off chore' })).id
+
+		// Give the first card a live weekly rule (its own column is the target,
+		// clone mode) - exactly what the due-date Repeat control creates.
+		await api('POST', `/boards/${state.boardId}/recur-rules`, {
+			templateCardId: state.recurCardId,
+			targetStackId: state.stackId,
+			mode: 0,
+			rrule: 'FREQ=WEEKLY',
+		})
+
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}`
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('board summary carries the recurring boolean derived from the rule', async () => {
+		const payload = await api('GET', `/boards/${state.boardId}`)
+		const byId = Object.fromEntries(payload.cards.map((c) => [c.id, c]))
+		expect(byId[state.recurCardId].recurring).toBe(true)
+		expect(byId[state.plainCardId].recurring).toBe(false)
+	})
+
+	test('repeat icon shows on the recurring tile and is absent on a normal tile', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+
+		const recurTile = page.locator('.card-tile').filter({ hasText: 'Recurring chore' })
+		const plainTile = page.locator('.card-tile').filter({ hasText: 'One-off chore' })
+
+		await expect(recurTile.locator('.card-tile__recurring')).toBeVisible({ timeout: 10_000 })
+		await expect(plainTile.locator('.card-tile__recurring')).toHaveCount(0)
+	})
+})
