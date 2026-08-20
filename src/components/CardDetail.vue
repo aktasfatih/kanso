@@ -1021,16 +1021,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 
 				<!-- Mobile tab bar - visible only on narrow viewports, sits under the attribute bar -->
-				<div class="card-modal__tabbar">
+				<div class="card-modal__tabbar" role="tablist">
 					<button
 						class="card-modal__tab"
 						:class="{ 'card-modal__tab--active': viewMode === 'card' }"
+						role="tab"
+						:aria-selected="viewMode === 'card'"
 						@click="viewMode = 'card'">
 						{{ t('kanso', 'Card') }}
 					</button>
 					<button
 						class="card-modal__tab"
 						:class="{ 'card-modal__tab--active': viewMode === 'discussion' }"
+						role="tab"
+						:aria-selected="viewMode === 'discussion'"
 						@click="viewMode = 'discussion'">
 						{{ t('kanso', 'Discussion') }}<span v-if="commentCount > 0"> {{ commentCount }}</span>
 					</button>
@@ -7604,7 +7608,9 @@ body.theme--dark .card-modal,
 		word-break: normal;
 		overflow-wrap: anywhere;
 	}
-	.card-modal__attrbar { flex-wrap: nowrap; overflow-x: auto; padding: 10px 16px; }
+	/* Attributes live in their own "Details" tab and wrap cleanly instead of
+	   scrolling as a cramped one-line strip. */
+	.card-modal__attrbar { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
 	.card-modal__attr-right { margin-left: 0; }
 	.card-modal__body { grid-template-columns: 1fr; }
 	/* Panes stack: the persisted split width and its drag handle are ignored. */
