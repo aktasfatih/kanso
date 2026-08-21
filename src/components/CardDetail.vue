@@ -556,9 +556,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}</label>
 							<div class="card-modal__field-row">
 								<input
+									ref="dueDateInputEl"
 									class="card-modal__date-input"
 									:type="isAllDay ? 'date' : 'datetime-local'"
-									:value="dueDateInputValue"
+									:value="dueDateBuf"
+									@focus="dueDateBuf = dueDateInputValue"
 									@change="handleDueDateChange">
 								<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 									<CloseIcon :size="14" />
@@ -574,9 +576,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}</label>
 							<div class="card-modal__field-row">
 								<input
+									ref="startDateInputEl"
 									class="card-modal__date-input"
 									type="datetime-local"
-									:value="startDateInputValue"
+									:value="startDateBuf"
+									@focus="startDateBuf = startDateInputValue"
 									@change="handleStartDateChange">
 								<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
 									<CloseIcon :size="14" />
@@ -3136,6 +3140,19 @@ const dueDateInputValue = computed(() => {
 	return isAllDay.value ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 })
 
+// Native segmented date inputs fire `change` per segment, and each change kicks
+// off updateCard → refetch → cardData replaced → the bound value recomputes and
+// re-applies mid-edit, resetting the caret and dropping digits (#64). Bind the
+// input to a local buffer instead, and only re-seed it from the source value
+// when the field is NOT focused — so external updates (and the all-day type
+// swap, which forces a re-render) still sync, but keystrokes aren't clobbered.
+const dueDateInputEl = ref(null)
+const dueDateBuf = ref(dueDateInputValue.value)
+watch(dueDateInputValue, (val) => {
+	if (dueDateInputEl.value && document.activeElement === dueDateInputEl.value) return
+	dueDateBuf.value = val
+})
+
 async function handleDueDateChange(event) {
 	const val = event.target.value
 	if (!val) return
@@ -3170,6 +3187,15 @@ const startDateInputValue = computed(() => {
 	const d = new Date(cardData.value.startDate)
 	const pad = (n) => String(n).padStart(2, '0')
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+})
+
+// Same buffered-input guard as the due date (#64): don't let the refetch write
+// back into the field while the user is typing into it.
+const startDateInputEl = ref(null)
+const startDateBuf = ref(startDateInputValue.value)
+watch(startDateInputValue, (val) => {
+	if (startDateInputEl.value && document.activeElement === startDateInputEl.value) return
+	startDateBuf.value = val
 })
 
 async function handleStartDateChange(event) {
