@@ -522,6 +522,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@remove-label="onBulkRemoveLabel"
 			@assign="onBulkAssign"
 			@set-due="onBulkSetDue"
+			@set-status="onBulkSetStatus"
 			@archive="onBulkArchive"
 			@delete="onBulkDelete"
 			@close="bulk.exitMode()" />
@@ -1939,6 +1940,7 @@ const onBulkAddLabel = (labelId) => runBulkAction('add_label', { labelId })
 const onBulkRemoveLabel = (labelId) => runBulkAction('remove_label', { labelId })
 const onBulkAssign = (userId) => runBulkAction('assign_user', { userId })
 const onBulkSetDue = (due) => runBulkAction('set_due_date', { duedate: due })
+const onBulkSetStatus = (status) => runBulkAction('set_status', { status })
 const onBulkArchive = () => runBulkAction('archive', {})
 const onBulkDelete = () => runBulkAction('delete', {})
 </script>

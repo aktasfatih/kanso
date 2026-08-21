@@ -1065,7 +1065,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</p>
 						<template v-else>
 							<p class="github-webhook__hint">
-								{{ t('kanso', 'Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Assignees, comments, activity and members are never shown.') }}
+								{{ publicShareNote }}
 							</p>
 
 							<div class="github-webhook__actions">
@@ -1079,6 +1079,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 
 							<template v-if="publicShare.enabled && publicShare.url">
+								<!-- Opt-in exposure toggles (#3949): deliberately widen the
+								     person-free public link. OFF by default. -->
+								<div class="github-webhook__actions">
+									<NcCheckboxRadioSwitch
+										type="switch"
+										:model-value="publicShare.commentsEnabled"
+										:disabled="publicShareBusy"
+										@update:model-value="togglePublicShareComments">
+										{{ t('kanso', 'Show comments (read-only)') }}
+									</NcCheckboxRadioSwitch>
+								</div>
+
 								<label class="github-webhook__label">{{ t('kanso', 'Public link') }}</label>
 								<div class="github-webhook__row">
 									<input class="github-webhook__input" type="text" readonly :value="publicShare.url">
@@ -2126,6 +2138,7 @@ import {
 	fetchPublicShareConfig,
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
+	setPublicShareComments as apiSetPublicShareComments,
 	fetchCalendarFeedConfig,
 	enableCalendarFeed as apiEnableCalendarFeed,
 	disableCalendarFeed as apiDisableCalendarFeed,
@@ -2317,9 +2330,18 @@ async function copyText(text) {
 }
 
 // ── Public / read-only share link (MANAGE) ───────────────────────────────────
-const publicShare = ref({ enabled: false, url: null })
+const publicShare = ref({ enabled: false, url: null, commentsEnabled: false })
 const publicShareError = ref('')
 const publicShareBusy = ref(false)
+
+// The "what's exposed" note reflects the enabled opt-in toggles (#3949): with
+// comments OFF the person-free baseline holds; with comments ON the note says so.
+const publicShareNote = computed(() => {
+	if (publicShare.value.commentsEnabled) {
+		return t('kanso', 'Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown.')
+	}
+	return t('kanso', 'Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Assignees, comments, activity and members are never shown.')
+})
 
 async function loadPublicShareConfig() {
 	if (!canManage.value) return
@@ -2364,9 +2386,22 @@ async function disablePublicLink() {
 	publicShareBusy.value = true
 	try {
 		await apiDisablePublicShare(props.boardId)
-		publicShare.value = { enabled: false, url: null }
+		publicShare.value = { enabled: false, url: null, commentsEnabled: false }
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not disable the public link.')
+	} finally {
+		publicShareBusy.value = false
+	}
+}
+
+// Opt in / out of showing read-only comments on the public board (#3949).
+async function togglePublicShareComments(checked) {
+	publicShareError.value = ''
+	publicShareBusy.value = true
+	try {
+		publicShare.value = await apiSetPublicShareComments(props.boardId, checked)
+	} catch (e) {
+		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not update the public link options.')
 	} finally {
 		publicShareBusy.value = false
 	}

@@ -13,12 +13,16 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Db\Comment;
+use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IL10N;
 use OCP\IURLGenerator;
+use OCP\IUserManager;
 use OCP\Security\ISecureRandom;
 
 /**
@@ -38,12 +42,16 @@ use OCP\Security\ISecureRandom;
  *    resolving on the very next request (revocable + rotatable).
  *  - {@see self::getPublicBoard()} builds its OWN payload from a deliberately
  *    narrow field list. It NEVER reuses the authenticated board payload, and it
- *    NEVER touches assignees, comments, watchers, activity/changes, ACL/members,
- *    owner uids, reviews, or the webhook config. Only board title + stacks +
- *    per-card {title, description, labels, dates, cover colour, estimate,
- *    checklist counts, priority, status, human id} are exposed - nothing that
- *    identifies a person or leaks internal metadata. Archived stacks/cards are
- *    omitted.
+ *    NEVER touches assignees, watchers, activity/changes, ACL/members, owner
+ *    uids, reviews, or the webhook config. Only board title + stacks + per-card
+ *    {title, description, labels, dates, cover colour, estimate, checklist
+ *    counts, priority, status, human id} are exposed - nothing that identifies a
+ *    person or leaks internal metadata. Archived stacks/cards are omitted.
+ *  - The ONE opt-in exception (#3949): a MANAGE user may DELIBERATELY widen the
+ *    link with the `public_share_comments` toggle (OFF by default). When ON, and
+ *    only then, each public card also carries a read-only comment thread - author
+ *    DISPLAY NAME only (never a uid), body, timestamps, one-level parent link;
+ *    still no reactions, members or activity. OFF keeps the person-free baseline.
  *  - An unknown/disabled/rotated/expired token raises DoesNotExistException,
  *    which the controller maps to a throttled 404 (no oracle beyond the throttle,
  *    and no distinction between "wrong token" and "disabled board").
@@ -58,9 +66,12 @@ class PublicShareService {
 		private CardLabelMapper $cardLabelMapper,
 		private ChecklistItemMapper $checklistItemMapper,
 		private LabelMapper $labelMapper,
+		private CommentMapper $commentMapper,
 		private PermissionService $permissionService,
 		private ISecureRandom $secureRandom,
 		private IURLGenerator $urlGenerator,
+		private IUserManager $userManager,
+		private IL10N $l10n,
 	) {
 	}
 
@@ -70,7 +81,7 @@ class PublicShareService {
 	 * the settings UI can render/copy the live link - it is board content the
 	 * MANAGE user already controls, unlike the webhook secret. Requires MANAGE.
 	 *
-	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int}
+	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int, commentsEnabled: bool}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not manage the board
 	 */
@@ -85,7 +96,7 @@ class PublicShareService {
 	 * token, and returns the new config incl. the token + URL. Requires MANAGE.
 	 * Any previously-issued link stops working immediately.
 	 *
-	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int}
+	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int, commentsEnabled: bool}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not manage the board
 	 */
@@ -117,15 +128,45 @@ class PublicShareService {
 	}
 
 	/**
+	 * Sets the "show comments (read-only)" opt-in for the public link. Requires
+	 * MANAGE. Independent of enable/disable: a MANAGE user can pre-set it, and it
+	 * persists across rotate. When ON, {@see self::getPublicBoard()} widens the
+	 * anonymous payload to include each public card's read-only comment thread
+	 * (author display name only). OFF (the default) keeps the person-free baseline.
+	 *
+	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int, commentsEnabled: bool}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not manage the board
+	 */
+	public function setComments(int $boardId, bool $enabled, string $actorUid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+
+		if (($board->getPublicShareComments() ?? false) !== $enabled) {
+			$board->setPublicShareComments($enabled);
+			$this->boardMapper->update($board);
+		}
+
+		return $this->configPayload($board);
+	}
+
+	/**
 	 * The STRIPPED, read-only public snapshot of the board a token points at.
 	 * This is the ONLY method that runs without a session, so it is deliberately
 	 * conservative: it builds its own narrow payload and never reads people,
 	 * comments, ACL, reviews, activity or webhook data.
 	 *
+	 * When the board's `public_share_comments` opt-in is ON (#3949), each card
+	 * also carries a `comments` list - a read-only thread of author DISPLAY NAME
+	 * (never a uid), body, timestamps and one-level parent link, scoped to the
+	 * public card set via {@see CommentMapper::findByBoardPublicOnly()}. No
+	 * reactions, no members, no activity. When OFF (default), no `comments` key
+	 * is added and the person-free baseline holds.
+	 *
 	 * @return array{
-	 *   board: array{title: ?string, color: ?string, prefix: string},
+	 *   board: array{title: ?string, color: ?string, prefix: string, commentsEnabled: bool},
 	 *   stacks: list<array{id: int, title: ?string, color: ?string}>,
-	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, coverColor: ?string, startDate: ?string, estimate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}}>
+	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, coverColor: ?string, startDate: ?string, estimate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}, comments?: list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>}>
 	 * }
 	 * @throws DoesNotExistException if the token is unknown, disabled, or expired
 	 */
@@ -156,6 +197,13 @@ class PublicShareService {
 		// only (#3743) - never fetch a hidden card's rows just to discard them.
 		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoardPublicOnly($boardId);
 		$checklistByCard = $this->checklistItemMapper->progressByBoardPublicOnly($boardId);
+
+		// Comments opt-in (#3949): ONLY fetch (and only ever expose) comments when
+		// the MANAGE user deliberately enabled the toggle for this share. Also over
+		// PUBLIC cards only, so a hidden card's discussion never surfaces.
+		$commentsEnabled = $board->getPublicShareComments() ?? false;
+		$commentsByCard = $commentsEnabled ? $this->commentMapper->findByBoardPublicOnly($boardId) : [];
+		$displayNames = [];
 
 		// Only NON-archived stacks, in display order; drop the internal board id.
 		$stacks = [];
@@ -195,7 +243,7 @@ class PublicShareService {
 			}
 
 			$seq = $card->getBoardSeq();
-			$cards[] = [
+			$cardPayload = [
 				'id' => $cardId,
 				'stackId' => $card->getStackId(),
 				'title' => $card->getTitle(),
@@ -217,6 +265,12 @@ class PublicShareService {
 				'humanId' => $seq !== null ? $prefix . '-' . $seq : null,
 				'checklist' => $checklistByCard[$cardId] ?? ['total' => 0, 'done' => 0],
 			];
+
+			if ($commentsEnabled) {
+				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $displayNames);
+			}
+
+			$cards[] = $cardPayload;
 		}
 
 		return [
@@ -224,10 +278,50 @@ class PublicShareService {
 				'title' => $board->getTitle(),
 				'color' => $board->getColor(),
 				'prefix' => $prefix,
+				'commentsEnabled' => $commentsEnabled,
 			],
 			'stacks' => $stacks,
 			'cards' => $cards,
 		];
+	}
+
+	/**
+	 * The read-only public serialization of one card's comment thread (#3949).
+	 * Emits ONLY {id, parentCommentId, author DISPLAY NAME, body, timestamps} -
+	 * deliberately NO uid (the display name is resolved from the uid, like the
+	 * authenticated comment endpoint, but the uid itself never leaves), NO
+	 * reactions, NO reactor lists. A one-level thread: a reply carries its
+	 * top-level parent id and the client nests by it.
+	 *
+	 * When the author account no longer exists (deleted user), the display-name
+	 * lookup returns null; we emit a generic "Former user" label rather than
+	 * falling back to the raw uid, so a deleted account's uid never leaks onto an
+	 * unauthenticated link (the "uid never leaves" invariant holds even then).
+	 *
+	 * @param Comment[] $comments
+	 * @param array<string, string> $displayNames uid => display name cache, reused across cards
+	 * @return list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>
+	 */
+	private function serializeComments(array $comments, array &$displayNames): array {
+		$out = [];
+		foreach ($comments as $comment) {
+			$uid = (string)$comment->getAuthor();
+			if (!isset($displayNames[$uid])) {
+				$user = $this->userManager->get($uid);
+				// A deleted author resolves to null; never leak the raw uid on the
+				// public link - substitute a generic, translatable label instead.
+				$displayNames[$uid] = $user !== null ? $user->getDisplayName() : $this->l10n->t('Former user');
+			}
+			$out[] = [
+				'id' => (int)$comment->getId(),
+				'parentCommentId' => $comment->getParentCommentId(),
+				'author' => $displayNames[$uid],
+				'body' => $comment->getBody(),
+				'createdAt' => $comment->getCreatedAt() ?? 0,
+				'editedAt' => $comment->getEditedAt() ?? 0,
+			];
+		}
+		return $out;
 	}
 
 	/**
@@ -250,7 +344,7 @@ class PublicShareService {
 	}
 
 	/**
-	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int}
+	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int, commentsEnabled: bool}
 	 */
 	private function configPayload(Board $board): array {
 		$token = $board->getPublicShareToken();
@@ -260,6 +354,9 @@ class PublicShareService {
 			'token' => $enabled ? $token : null,
 			'url' => $enabled ? $this->publicUrl((string)$token) : null,
 			'expiresAt' => $board->getPublicShareExpiresAt(),
+			// The opt-in state rides the MANAGE config so the settings UI can render
+			// the toggle; it persists independent of enable/disable.
+			'commentsEnabled' => $board->getPublicShareComments() ?? false,
 		];
 	}
 

@@ -13,6 +13,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
+use OCA\Kanso\Db\Comment;
+use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
@@ -21,7 +23,10 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\PublicShareService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IL10N;
 use OCP\IURLGenerator;
+use OCP\IUser;
+use OCP\IUserManager;
 use OCP\Security\ISecureRandom;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -35,9 +40,12 @@ class PublicShareServiceTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private LabelMapper&MockObject $labelMapper;
+	private CommentMapper&MockObject $commentMapper;
 	private PermissionService&MockObject $permissionService;
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
+	private IUserManager&MockObject $userManager;
+	private IL10N&MockObject $l10n;
 	private PublicShareService $service;
 
 	protected function setUp(): void {
@@ -48,9 +56,14 @@ class PublicShareServiceTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
+		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
+		$this->userManager = $this->createMock(IUserManager::class);
+		$this->l10n = $this->createMock(IL10N::class);
+		// Translate returns the source string verbatim (the mock just echoes it).
+		$this->l10n->method('t')->willReturnCallback(static fn (string $text): string => $text);
 		$this->service = new PublicShareService(
 			$this->boardMapper,
 			$this->stackMapper,
@@ -58,13 +71,16 @@ class PublicShareServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->checklistItemMapper,
 			$this->labelMapper,
+			$this->commentMapper,
 			$this->permissionService,
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->userManager,
+			$this->l10n,
 		);
 	}
 
-	private function board(int $id = 1, ?string $token = self::TOKEN, ?int $expiresAt = null): Board {
+	private function board(int $id = 1, ?string $token = self::TOKEN, ?int $expiresAt = null, bool $comments = false): Board {
 		$b = new Board();
 		$b->setId($id);
 		$b->setOwner('alice');
@@ -73,7 +89,21 @@ class PublicShareServiceTest extends TestCase {
 		$b->setDeletedAt(0);
 		$b->setPublicShareToken($token);
 		$b->setPublicShareExpiresAt($expiresAt);
+		$b->setPublicShareComments($comments);
 		return $b;
+	}
+
+	private function comment(int $id, int $cardId, string $author, string $body, ?int $parentCommentId = null): Comment {
+		$c = new Comment();
+		$c->setId($id);
+		$c->setCardId($cardId);
+		$c->setParentCommentId($parentCommentId);
+		$c->setAuthor($author);
+		$c->setBody($body);
+		$c->setCreatedAt(1000 + $id);
+		$c->setEditedAt(0);
+		$c->setDeletedAt(0);
+		return $c;
 	}
 
 	private function stack(int $id, string $title, bool $archived = false): Stack {
@@ -239,10 +269,14 @@ class PublicShareServiceTest extends TestCase {
 		$this->checklistItemMapper->expects(self::never())->method('waitingByBoard');
 		$payload = $this->service->getPublicBoard(self::TOKEN);
 
-		// Board: no owner, no acl, no webhook secret, no share token.
+		// Board: no owner, no acl, no webhook secret, no share token. The
+		// `commentsEnabled` flag is a public-safe boolean gate (#3949) - it says
+		// WHETHER comments are shown, never who; with the opt-in OFF here it is
+		// false and no comment data is present.
 		$boardKeys = array_keys($payload['board']);
 		sort($boardKeys);
-		self::assertSame(['color', 'prefix', 'title'], $boardKeys);
+		self::assertSame(['color', 'commentsEnabled', 'prefix', 'title'], $boardKeys);
+		self::assertFalse($payload['board']['commentsEnabled']);
 
 		// Card: exactly the whitelisted, people-free field set.
 		$cardKeys = array_keys($payload['cards'][0]);
@@ -256,11 +290,18 @@ class PublicShareServiceTest extends TestCase {
 			$cardKeys
 		);
 
+		// With the comments opt-in OFF (the default), no card carries a comment
+		// thread at all - the person-free baseline holds.
+		self::assertArrayNotHasKey('comments', $payload['cards'][0]);
+
 		// Explicitly assert the sensitive keys never appear. 'waiting' pins the
 		// #3746 exclusion: the derived waiting-on-client state is provider-side
 		// signal (who the ball is with) and must never ride the anonymous payload.
+		// ('comment' is intentionally NOT in this list: the public-safe boolean
+		// gate `commentsEnabled` contains that substring; the OFF-state absence of
+		// any comment data is asserted directly above.)
 		$json = json_encode($payload);
-		foreach (['owner', 'assignee', 'comment', 'acl', 'webhook', 'subscriber', 'watcher', 'reviewState', 'activity', 'waiting'] as $forbidden) {
+		foreach (['owner', 'assignee', 'acl', 'webhook', 'subscriber', 'watcher', 'reviewState', 'activity', 'waiting'] as $forbidden) {
 			self::assertStringNotContainsStringIgnoringCase($forbidden, $json, "public payload leaked '$forbidden'");
 		}
 	}
@@ -318,5 +359,119 @@ class PublicShareServiceTest extends TestCase {
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
 		self::assertSame('Roadmap', $payload['board']['title']);
+	}
+
+	// ── comments opt-in (#3949) ────────────────────────────────────────────
+
+	public function testCommentsOffByDefaultOmitsCommentsAndNeverQueriesThem(): void {
+		$this->primePublicBoard();
+		// With the opt-in OFF, comments must NEVER be fetched (no leak, no query).
+		$this->commentMapper->expects(self::never())->method('findByBoardPublicOnly');
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertFalse($payload['board']['commentsEnabled']);
+		self::assertArrayNotHasKey('comments', $payload['cards'][0]);
+	}
+
+	public function testCommentsOnIncludesReadOnlyThreadWithDisplayNamesOnly(): void {
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, true));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn([$this->card(100, 10, 'Live card')]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		// A top-level comment and a reply, both on the public card.
+		$this->commentMapper->expects(self::once())->method('findByBoardPublicOnly')->with(1)->willReturn([
+			100 => [
+				$this->comment(1, 100, 'bob', 'first!'),
+				$this->comment(2, 100, 'carol', 'reply to bob', 1),
+			],
+		]);
+		// The uid resolves to a display name; the uid itself must never appear.
+		$bob = $this->createMock(IUser::class);
+		$bob->method('getDisplayName')->willReturn('Bob Builder');
+		$carol = $this->createMock(IUser::class);
+		$carol->method('getDisplayName')->willReturn('Carol Danvers');
+		$this->userManager->method('get')->willReturnMap([
+			['bob', $bob],
+			['carol', $carol],
+		]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertTrue($payload['board']['commentsEnabled']);
+		$comments = $payload['cards'][0]['comments'];
+		self::assertCount(2, $comments);
+		self::assertSame('Bob Builder', $comments[0]['author']);
+		self::assertSame('first!', $comments[0]['body']);
+		self::assertNull($comments[0]['parentCommentId']);
+		self::assertSame('Carol Danvers', $comments[1]['author']);
+		self::assertSame(1, $comments[1]['parentCommentId']);
+
+		// Author DISPLAY NAMES only - the uids must not leak, nor any reaction key.
+		$json = json_encode($payload);
+		self::assertStringNotContainsString('"author":"bob"', $json);
+		self::assertStringNotContainsString('"author":"carol"', $json);
+		foreach (['reaction', 'reactor', 'assignee', 'watcher', 'member'] as $forbidden) {
+			self::assertStringNotContainsStringIgnoringCase($forbidden, $json, "public comments leaked '$forbidden'");
+		}
+	}
+
+	public function testDeletedCommentAuthorShowsGenericLabelNotRawUid(): void {
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, true));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn([$this->card(100, 10, 'Live card')]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		// A comment whose author account was deleted: 'ghostuid' is a real,
+		// identifying uid that must NEVER surface on the anonymous link.
+		$this->commentMapper->expects(self::once())->method('findByBoardPublicOnly')->with(1)->willReturn([
+			100 => [
+				$this->comment(1, 100, 'ghostuid', 'left before deletion'),
+			],
+		]);
+		// The deleted account no longer resolves - IUserManager::get() returns null.
+		$this->userManager->method('get')->with('ghostuid')->willReturn(null);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		$comments = $payload['cards'][0]['comments'];
+		self::assertCount(1, $comments);
+		// The generic label is shown instead of the raw uid.
+		self::assertSame('Former user', $comments[0]['author']);
+		self::assertSame('left before deletion', $comments[0]['body']);
+
+		// The raw uid must appear NOWHERE in the serialized public payload.
+		$json = json_encode($payload);
+		self::assertStringNotContainsString('ghostuid', $json, 'deleted author uid leaked into the public payload');
+	}
+
+	public function testSetCommentsRequiresManageAndPersists(): void {
+		$board = $this->board(1, self::TOKEN, null, false);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with($board, 'alice', PermissionService::PERMISSION_MANAGE);
+		$this->boardMapper->expects(self::once())->method('update')
+			->willReturnCallback(function (Board $b): Board {
+				self::assertTrue($b->getPublicShareComments());
+				return $b;
+			});
+
+		$config = $this->service->setComments(1, true, 'alice');
+		self::assertTrue($config['commentsEnabled']);
+	}
+
+	public function testSetCommentsDeniedWithoutManage(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setComments(1, true, 'mallory');
 	}
 }

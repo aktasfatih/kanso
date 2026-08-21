@@ -147,6 +147,51 @@ class BulkCardServiceTest extends TestCase {
 		self::assertSame([11], $result['ok']);
 	}
 
+	public function testBulkSetStatusDoneCallsUpdateWithDoneTrue(): void {
+		$this->cardService->expects(self::exactly(2))->method('update')
+			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid) {
+				self::assertNull($t);
+				self::assertNull($d);
+				self::assertNull($due);
+				self::assertTrue($done); // marks the card done
+				self::assertNull($arch);
+				self::assertSame('alice', $uid);
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12], BulkCardService::ACTION_SET_STATUS, ['status' => 'done'], 'alice');
+		self::assertSame([11, 12], $result['ok']);
+		self::assertSame([], $result['skipped']);
+	}
+
+	public function testBulkSetStatusForbiddenCardIsSkipped(): void {
+		// Card 12 lives on a board alice cannot edit → update throws
+		// NotPermittedException. The other card still gets marked done.
+		$this->cardService->method('update')
+			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid): Card {
+				if ($id === 12) {
+					throw new NotPermittedException('nope');
+				}
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12], BulkCardService::ACTION_SET_STATUS, ['status' => 'done'], 'alice');
+
+		self::assertSame([11], $result['ok']);
+		self::assertSame([['id' => 12, 'reason' => 'forbidden']], $result['skipped']);
+	}
+
+	public function testBulkSetStatusWithUnsupportedStatusThrowsInvalidInput(): void {
+		$this->cardService->expects(self::never())->method('update');
+		$this->expectException(InvalidInputException::class);
+		$this->service->apply([11], BulkCardService::ACTION_SET_STATUS, ['status' => 'open'], 'alice');
+	}
+
+	public function testBulkSetStatusWithoutStatusThrowsInvalidInput(): void {
+		$this->expectException(InvalidInputException::class);
+		$this->service->apply([11], BulkCardService::ACTION_SET_STATUS, [], 'alice');
+	}
+
 	public function testBulkArchiveCallsUpdateWithArchivedTrue(): void {
 		$this->cardService->expects(self::exactly(2))->method('update')
 			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid) {

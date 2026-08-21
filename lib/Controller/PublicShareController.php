@@ -81,6 +81,20 @@ class PublicShareController extends Controller {
 		});
 	}
 
+	/**
+	 * Sets the "show comments (read-only)" opt-in for the public link (#3949).
+	 * MANAGE-only; OFF by default. Widening an intentionally person-free surface
+	 * is a deliberate owner action, so it is its own explicit endpoint.
+	 */
+	#[NoAdminRequired]
+	public function setComments(int $id, bool $enabled = false): JSONResponse {
+		return $this->respond(function () use ($id, $enabled): JSONResponse {
+			return new JSONResponse(
+				$this->publicShareService->setComments($id, $enabled, $this->currentUserId())
+			);
+		});
+	}
+
 	// ── Public read-only (unauthenticated) ────────────────────────────────────
 
 	/**

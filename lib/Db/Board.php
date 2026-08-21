@@ -46,6 +46,8 @@ use OCP\DB\Types;
  * @method void setPublicShareToken(?string $publicShareToken)
  * @method int|null getPublicShareExpiresAt()
  * @method void setPublicShareExpiresAt(?int $publicShareExpiresAt)
+ * @method bool|null getPublicShareComments()
+ * @method void setPublicShareComments(?bool $publicShareComments)
  * @method string|null getIcalFeedToken()
  * @method void setIcalFeedToken(?string $icalFeedToken)
  * @method string|null getChatUrl()
@@ -88,6 +90,14 @@ class Board extends Entity implements \JsonSerializable {
 	// Optional unix-ts expiry for the public link (NULL / 0 = never). v1 defaults
 	// to no expiry (revocable-until-disabled).
 	protected ?int $publicShareExpiresAt = null;
+	// Public-link "show comments" opt-in (#3949). MANAGE-only, OFF by default.
+	// FALSE/NULL = the public board keeps its person-free baseline (no comments
+	// ever). TRUE = a MANAGE user has DELIBERATELY widened the public link so an
+	// anonymous reader sees each public card's read-only comment thread (author
+	// display name only - never a uid, reaction, member or activity). Like the
+	// token, deliberately NEVER emitted by jsonSerialize(); it rides only the
+	// dedicated MANAGE public-share config endpoints.
+	protected ?bool $publicShareComments = null;
 	// iCal / ICS read-only due-date feed (#3541). MANAGE-only, OFF by default. NULL
 	// = no feed; a non-null value is a long ISecureRandom token that lets any
 	// calendar client subscribe to a read-only VCALENDAR of this board's due cards.
@@ -116,6 +126,7 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('prefix', Types::STRING);
 		$this->addType('publicShareToken', Types::STRING);
 		$this->addType('publicShareExpiresAt', Types::INTEGER);
+		$this->addType('publicShareComments', Types::BOOLEAN);
 		$this->addType('icalFeedToken', Types::STRING);
 		$this->addType('chatUrl', Types::STRING);
 	}

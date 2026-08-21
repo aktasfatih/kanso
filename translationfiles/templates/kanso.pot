@@ -1098,6 +1098,7 @@ msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardTile.vue
+#: src/views/PublicBoard.vue
 msgid "Comments"
 msgstr ""
 
@@ -1246,6 +1247,10 @@ msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not update the public link options."
 msgstr ""
 
 #: src/views/BoardView.vue
@@ -2439,6 +2444,10 @@ msgstr ""
 msgid "Formatting"
 msgstr ""
 
+#: lib/Service/PublicShareService.php
+msgid "Former user"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Frequency"
 msgstr ""
@@ -2814,6 +2823,7 @@ msgstr ""
 msgid "Mark as template"
 msgstr ""
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Mark done"
 msgstr ""
@@ -3128,6 +3138,7 @@ msgid "No colour"
 msgstr ""
 
 #: src/composables/useBoardFilters.js
+#: src/views/PublicBoard.vue
 msgid "No comments"
 msgstr ""
 
@@ -4044,6 +4055,10 @@ msgstr ""
 msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Assignees, comments, activity and members are never shown."
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Shared read-only via Kanso"
 msgstr ""
@@ -4054,6 +4069,10 @@ msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Show comments (read-only)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
