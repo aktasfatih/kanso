@@ -556,12 +556,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}</label>
 							<div class="card-modal__field-row">
 								<input
-									ref="dueDateInputEl"
 									class="card-modal__date-input"
 									:type="isAllDay ? 'date' : 'datetime-local'"
-									:value="dueDateBuf"
-									@focus="dueDateBuf = dueDateInputValue"
-									@change="handleDueDateChange">
+									:value="dueDateInputValue"
+									@blur="handleDueDateChange"
+									@keyup.enter="handleDueDateChange">
 								<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 									<CloseIcon :size="14" />
 								</button>
@@ -576,12 +575,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}</label>
 							<div class="card-modal__field-row">
 								<input
-									ref="startDateInputEl"
 									class="card-modal__date-input"
 									type="datetime-local"
-									:value="startDateBuf"
-									@focus="startDateBuf = startDateInputValue"
-									@change="handleStartDateChange">
+									:value="startDateInputValue"
+									@blur="handleStartDateChange"
+									@keyup.enter="handleStartDateChange">
 								<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
 									<CloseIcon :size="14" />
 								</button>
@@ -3142,22 +3140,15 @@ const dueDateInputValue = computed(() => {
 	return isAllDay.value ? allDayInputValue(d) : timedInputValue(d)
 })
 
-// Native segmented date inputs fire `change` per segment, and each change kicks
-// off updateCard → refetch → cardData replaced → the bound value recomputes and
-// re-applies mid-edit, resetting the caret and dropping digits (#64). Bind the
-// input to a local buffer instead, and only re-seed it from the source value
-// when the field is NOT focused — so external updates (and the all-day type
-// swap, which forces a re-render) still sync, but keystrokes aren't clobbered.
-const dueDateInputEl = ref(null)
-const dueDateBuf = ref(dueDateInputValue.value)
-watch(dueDateInputValue, (val) => {
-	if (dueDateInputEl.value && document.activeElement === dueDateInputEl.value) return
-	dueDateBuf.value = val
-})
-
+// Native segmented date inputs fire `change` per segment, so committing on
+// `change` kicks off updateCard → refetch mid-edit and clobbers the field (#64).
+// Commit on blur/Enter instead: the value is bound straight to the computed and
+// only saved once the user leaves the field.
 async function handleDueDateChange(event) {
 	const val = event.target.value
 	if (!val) return
+	// Leaving the field without editing it shouldn't fire a redundant PATCH.
+	if (val === dueDateInputValue.value) return
 	// An all-day "YYYY-MM-DD" parses as UTC midnight; a datetime-local as local.
 	const iso = new Date(val).toISOString()
 	try {
@@ -3193,18 +3184,11 @@ const startDateInputValue = computed(() => {
 	return isAllDay.value ? `${allDayInputValue(d)}T00:00` : timedInputValue(d)
 })
 
-// Same buffered-input guard as the due date (#64): don't let the refetch write
-// back into the field while the user is typing into it.
-const startDateInputEl = ref(null)
-const startDateBuf = ref(startDateInputValue.value)
-watch(startDateInputValue, (val) => {
-	if (startDateInputEl.value && document.activeElement === startDateInputEl.value) return
-	startDateBuf.value = val
-})
-
 async function handleStartDateChange(event) {
 	const val = event.target.value
 	if (!val) return
+	// Leaving the field without editing it shouldn't fire a redundant PATCH.
+	if (val === startDateInputValue.value) return
 	const iso = new Date(val).toISOString()
 	try {
 		await updateCard.mutateAsync({ data: { startDate: iso } })
