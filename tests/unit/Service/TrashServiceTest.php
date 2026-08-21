@@ -25,6 +25,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\ReminderMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
@@ -59,6 +60,7 @@ class TrashServiceTest extends TestCase {
 	private CardTimeEntryService&MockObject $cardTimeEntryService;
 	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
 	private ReminderMapper&MockObject $reminderMapper;
+	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private TrashService $service;
@@ -84,6 +86,7 @@ class TrashServiceTest extends TestCase {
 		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
 		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
 		$this->reminderMapper = $this->createMock(ReminderMapper::class);
+		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->boardAccess->method('contextFor')->willReturnCallback(
 			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
@@ -110,6 +113,7 @@ class TrashServiceTest extends TestCase {
 			$this->cardTimeEntryService,
 			$this->cardFieldValueMapper,
 			$this->reminderMapper,
+			$this->recurRuleMapper,
 			$this->boardAccess,
 			$this->visibilityGuard,
 		);
@@ -248,11 +252,30 @@ class TrashServiceTest extends TestCase {
 		$this->cardFieldValueMapper->expects(self::once())->method('deleteByCard')->with(9);
 		// Personal reminders are cascaded too (#3816).
 		$this->reminderMapper->expects(self::once())->method('deleteByCard')->with(9);
+		// Recurrence rules anchored on the purged card are cascaded too (#4123),
+		// so no orphan schedule keeps failing to spawn every cron pass.
+		$this->recurRuleMapper->expects(self::once())->method('deleteByTemplateCardId')->with(9);
 		$this->cardMapper->expects(self::once())->method('delete')->with($card);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_DELETE, 'alice')
 			->willReturn(new Change());
+
+		$this->service->purge(9, 'alice');
+	}
+
+	public function testPurgeDropsRecurrenceRulesAnchoredOnTheCard(): void {
+		// #4123: a rule whose template card is purged can never spawn again - its
+		// template read throws every cron pass and logs a failed spawn forever.
+		// Purge must drop the card's recurrence rule(s) symmetric with the other
+		// cascade deleteByCard calls.
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+
+		$this->recurRuleMapper->expects(self::once())
+			->method('deleteByTemplateCardId')
+			->with(9);
 
 		$this->service->purge(9, 'alice');
 	}

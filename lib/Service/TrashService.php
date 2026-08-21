@@ -24,6 +24,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\CommentReactionMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\ReminderMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -65,6 +66,7 @@ class TrashService {
 		private CardTimeEntryService $cardTimeEntryService,
 		private CardFieldValueMapper $cardFieldValueMapper,
 		private ReminderMapper $reminderMapper,
+		private RecurRuleMapper $recurRuleMapper,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
 	) {
@@ -159,6 +161,11 @@ class TrashService {
 		// Personal reminders (#3816) are plain per-user rows scoped by card_id;
 		// drop them so a purged card strands no pending reminders.
 		$this->reminderMapper->deleteByCard($cardId);
+		// Recurrence rules anchored on this card (#4123): a rule whose template is
+		// hard-deleted can never spawn again - each cron pass would read the missing
+		// template, throw, and log a failed spawn forever. Drop them so the purge
+		// leaves no orphan schedule behind.
+		$this->recurRuleMapper->deleteByTemplateCardId($cardId);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(

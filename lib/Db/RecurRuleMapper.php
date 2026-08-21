@@ -103,6 +103,23 @@ class RecurRuleMapper extends QBMapper {
 	}
 
 	/**
+	 * Removes every recurrence rule anchored on a template card - the cascade for
+	 * a card purge. A rule whose template is hard-deleted can never spawn again
+	 * (its template read throws), so purging the card must drop its rules too;
+	 * otherwise an enabled orphan rule makes every cron pass log a failed spawn.
+	 *
+	 * @return int number of deleted rows (0 when the card anchored no rules)
+	 * @throws Exception
+	 */
+	public function deleteByTemplateCardId(int $templateCardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('template_card_id', $qb->createNamedParameter($templateCardId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Every enabled rule due to fire now - the cron's work list. A rule is due
 	 * when it is enabled, has a cached next fire time (`next_occurrence_at > 0`,
 	 * so exhausted/never rules are excluded) and that time has passed. Hits the
