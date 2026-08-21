@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3606
+#: src/components/CardDetail.vue:3561
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3604
+#: src/components/CardDetail.vue:3559
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3602
+#: src/components/CardDetail.vue:3557
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -723,7 +723,6 @@ msgstr ""
 msgid "Boards"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Bold"
 msgstr ""
@@ -748,7 +747,6 @@ msgstr ""
 msgid "Bulk card actions"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Bulleted list"
 msgstr ""
@@ -1361,7 +1359,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3779
+#: src/components/CardDetail.vue:3734
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2439,7 +2437,6 @@ msgstr ""
 msgid "Forever"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Formatting"
 msgstr ""
@@ -2508,7 +2505,6 @@ msgstr ""
 msgid "Has comments"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Heading"
 msgstr ""
@@ -2578,7 +2574,6 @@ msgstr ""
 msgid "Inbox"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Inline code"
 msgstr ""
@@ -2605,7 +2600,6 @@ msgstr ""
 msgid "Issue intake"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
 msgstr ""
@@ -2853,7 +2847,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3781
+#: src/components/CardDetail.vue:3736
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3523,7 +3517,6 @@ msgstr ""
 msgid "Press \"n\" in a column to add a card"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Preview"
 msgstr ""
@@ -3601,7 +3594,6 @@ msgstr ""
 msgid "Quick preview of the hovered / focused card"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Quote"
 msgstr ""
@@ -4382,7 +4374,6 @@ msgstr ""
 msgid "Toggle item done"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Toggle preview"
 msgstr ""
@@ -4457,6 +4448,10 @@ msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Ungrouped"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Unknown"
 msgstr ""
 
 #: src/views/ArchivedView.vue
@@ -4625,7 +4620,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3780
+#: src/components/CardDetail.vue:3735
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4701,7 +4696,11 @@ msgstr ""
 msgid "Write a reply…"
 msgstr ""
 
-#: src/components/CardDetail.vue:3782
+#: src/components/CardDetail.vue
+msgid "wrote"
+msgstr ""
+
+#: src/components/CardDetail.vue:3737
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
