@@ -2178,6 +2178,7 @@ import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
+import { generateUrl } from '@nextcloud/router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showUndo, showSuccess, showError } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
@@ -3948,11 +3949,50 @@ function setReplyRef(id, el) {
 	else delete replyRefs[id]
 }
 
-async function openReplyBox(parentId) {
-	replyingToId.value = parentId
-	replyBody.value = ''
+/**
+ * Build a markdown blockquote of `comment` for pre-filling a reply. Used when
+ * replying to a comment that ISN'T the last one in the thread, so the reply
+ * carries the context of what it answers. The body is truncated to keep the
+ * quote compact. Display name is plain text (no @mention) to avoid an
+ * unintended re-notification of the quoted author.
+ * @param {object} comment the comment being quoted
+ * @returns {string} markdown ending in a blank line, ready to type after
+ */
+function buildQuote(comment) {
+	const author = comment.authorDisplayName || comment.author || t('kanso', 'Unknown')
+	const raw = String(comment.body || '').trim()
+	const MAX = 280
+	const excerpt = raw.length > MAX ? `${raw.slice(0, MAX).trimEnd()}…` : raw
+	const quotedBody = excerpt
+		? excerpt.split('\n').map((line) => `> ${line}`).join('\n')
+		: '>'
+	return `> **${author}** ${t('kanso', 'wrote')}:\n${quotedBody}\n\n`
+}
+
+/**
+ * Open the reply composer for a thread. The composer always lives at the END of
+ * the thread (keyed on the thread root), no matter which comment you clicked
+ * Reply on — and the reply is posted against the thread root so it lands last
+ * (the server model is one level deep: replies point at the top-level comment).
+ * Replying to a comment that isn't the last one pre-fills a quote of it.
+ * @param {object} target the comment the user clicked Reply on
+ * @param {object} root the thread's top-level comment
+ */
+async function openReplyBox(target, root) {
+	const rootId = root?.id ?? target.id
+	replyingToId.value = rootId
+	const thread = commentThread.value.find((th) => th.comment.id === rootId)
+	const last = thread && thread.replies.length ? thread.replies[thread.replies.length - 1] : thread?.comment
+	replyBody.value = last && target.id !== last.id ? buildQuote(target) : ''
 	await nextTick()
-	replyRefs[parentId]?.focus()
+	const ta = replyRefs[rootId]
+	if (ta) {
+		ta.focus()
+		// Caret at the very end so the user types after any quote.
+		const end = ta.value.length
+		ta.setSelectionRange(end, end)
+		ta.scrollTop = ta.scrollHeight
+	}
 }
 
 function closeReplyBox() {
@@ -4422,6 +4462,20 @@ function expandToPage() {
  * @param {MouseEvent} event the click event
  */
 function handleRefClick(event) {
+	// A clicked @mention chip opens that user's Nextcloud profile in a new tab
+	// (keeps the card modal / in-progress edit intact). The chip carries no
+	// href; the uid comes from data-kanso-mention (set + sanitized in markdown.js).
+	const mention = event.target?.closest?.('.kanso-mention[data-kanso-mention]')
+	if (mention) {
+		const uid = mention.getAttribute('data-kanso-mention')
+		if (uid) {
+			event.preventDefault()
+			event.stopPropagation()
+			window.open(generateUrl('/u/{uid}', { uid }), '_blank', 'noopener,noreferrer')
+		}
+		return
+	}
+
 	const anchor = event.target?.closest?.('a.kanso-cardref')
 	if (!anchor) return
 	const cardId = anchor.getAttribute('data-kanso-card-id')
@@ -7696,6 +7750,10 @@ body.theme--dark .card-modal,
 	color: var(--color-primary-element, #0082c9);
 	font-weight: 500;
 	white-space: nowrap;
+	cursor: pointer;
+}
+:deep(.kanso-mention:hover) {
+	text-decoration: underline;
 }
 
 /* Card cross-reference link (KAN-123 → the target card's title). Carries no
