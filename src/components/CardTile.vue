@@ -447,6 +447,7 @@ const extraAssigneeCount = computed(() => {
 	--kanso-error-legible: var(--color-error, #e30000);
 	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
 	--kanso-warning-legible: var(--color-warning, #e07b00);
+	--kanso-success-legible: var(--color-success, #2d7d46);
 
 	display: flex;
 	flex-direction: column;
@@ -470,6 +471,7 @@ body.theme--dark .card-tile,
 	--kanso-error-legible: #ff6b6b;
 	--kanso-error-legible-rgb: 255, 107, 107;
 	--kanso-warning-legible: #d29922;
+	--kanso-success-legible: #3fb950;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -478,6 +480,7 @@ body.theme--dark .card-tile,
 		--kanso-error-legible: #ff6b6b;
 		--kanso-error-legible-rgb: 255, 107, 107;
 		--kanso-warning-legible: #d29922;
+		--kanso-success-legible: #3fb950;
 	}
 }
 
@@ -644,8 +647,8 @@ body.theme--dark .card-tile,
 }
 
 .card-tile__checklist--complete {
-	color: var(--color-success, #46ba61);
-	border-color: var(--color-success, #46ba61);
+	color: var(--kanso-success-legible);
+	border-color: var(--kanso-success-legible);
 	background: rgba(70, 186, 97, 0.1);
 }
 
@@ -662,8 +665,8 @@ body.theme--dark .card-tile,
 }
 
 .card-tile__children--complete {
-	color: var(--color-success, #46ba61);
-	border-color: var(--color-success, #46ba61);
+	color: var(--kanso-success-legible);
+	border-color: var(--kanso-success-legible);
 	background: rgba(70, 186, 97, 0.1);
 }
 
@@ -687,7 +690,7 @@ body.theme--dark .card-tile,
 /* Type icons use theme tokens so they keep WCAG contrast in both light and dark
    themes (bare #e74c3c/#27ae60/#7f8c8d fail contrast on the dark surface). */
 .card-tile__type--bug { color: var(--kanso-error-legible); }
-.card-tile__type--feature { color: var(--color-success, #27ae60); }
+.card-tile__type--feature { color: var(--kanso-success-legible); }
 .card-tile__type--task { color: var(--color-primary-element, #0082c9); }
 .card-tile__type--chore { color: var(--color-text-maxcontrast, #7f8c8d); }
 
@@ -751,8 +754,8 @@ body.theme--dark .card-tile,
 }
 
 .card-tile__review--approved {
-	color: var(--color-success, #46ba61);
-	border-color: var(--color-success, #46ba61);
+	color: var(--kanso-success-legible);
+	border-color: var(--kanso-success-legible);
 	background: rgba(70, 186, 97, 0.1);
 }
 
