@@ -11,6 +11,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.13.0](https://github.com/aktasfatih/kanso/compare/v0.12.0...v0.13.0) (2026-08-21)
+
+
+### Bug Fixes
+
+* a deleted author's account id no longer shows on a public comment thread ([6f1448e](https://github.com/aktasfatih/kanso/commit/6f1448e528fcee7374b0a9d41d54007811b9ce10)), closes [#4079](https://github.com/aktasfatih/kanso/issues/4079)
+* all-day due and start dates no longer show the previous day for users outside UTC ([c93749a](https://github.com/aktasfatih/kanso/commit/c93749ae8129a873bfd4284938f49a2139fefc24)), closes [#4122](https://github.com/aktasfatih/kanso/issues/4122)
+* card dates save when you leave the field, not mid-typing ([#64](https://github.com/aktasfatih/kanso/issues/64)) ([d7f3e74](https://github.com/aktasfatih/kanso/commit/d7f3e74a01ff6bda83221a6edab3e230ade5c880)), closes [#4126](https://github.com/aktasfatih/kanso/issues/4126)
+* green card badges stay legible in dark mode ([d9fda18](https://github.com/aktasfatih/kanso/commit/d9fda18106092ce15a1d57ef73cc5a381c901b15))
+* green status pills are now legible in dark mode ([abca4f2](https://github.com/aktasfatih/kanso/commit/abca4f220ac1ead4443a0e3eccbd37d32ff0219e)), closes [#3fb950](https://github.com/aktasfatih/kanso/issues/3fb950)
+* import boards with very large lists without a "rebalance_required" error ([ab3e09e](https://github.com/aktasfatih/kanso/commit/ab3e09e95ae8de49080a78c595a10cf7a3a24de2))
+* keep card attribute popovers on-screen on mobile ([bc5799e](https://github.com/aktasfatih/kanso/commit/bc5799e3c735b4371e65edc40f57d1f509e6acbc)), closes [#4058](https://github.com/aktasfatih/kanso/issues/4058)
+* keep the card view header readable on mobile ([828d7e2](https://github.com/aktasfatih/kanso/commit/828d7e232cc424e83e76dda85a60c5ab00ea617b)), closes [#60](https://github.com/aktasfatih/kanso/issues/60)
+* on mobile, card attributes stay at the top and wrap instead of scrolling ([aed1708](https://github.com/aktasfatih/kanso/commit/aed17083b1cfad926924ef708949d58798efb118))
+* priority, type and review chips stay legible in dark mode ([d4bf36f](https://github.com/aktasfatih/kanso/commit/d4bf36ffc9a201b90519e985394d2409062aa2b2)), closes [888/#7f8c8d](https://github.com/aktasfatih/kanso/issues/7f8c8d) [#e07b00](https://github.com/aktasfatih/kanso/issues/e07b00) [#e74c3c](https://github.com/aktasfatih/kanso/issues/e74c3c)
+* put a space between the Discussion tab label and its comment count ([57e4c27](https://github.com/aktasfatih/kanso/commit/57e4c2784ae5b8edd34f6f8984e6093e36f464bb))
+* recurring cards no longer spawn from a trashed template or lose the all-day flag ([38b23ca](https://github.com/aktasfatih/kanso/commit/38b23caf87120eef8adf2739736f35c56ee58802))
+* stop recurring cards from duplicating when their schedule is edited ([3c0afa6](https://github.com/aktasfatih/kanso/commit/3c0afa69d8173bb3bc82c89589e4cfd67061e2bd)), closes [#4107](https://github.com/aktasfatih/kanso/issues/4107) [#65](https://github.com/aktasfatih/kanso/issues/65)
+* stop recurring-card cron errors after permanently deleting a template card ([60a50e0](https://github.com/aktasfatih/kanso/commit/60a50e06cc5196e8aafb369e6bb63f2325331639))
+* typing a date by keyboard in the card no longer drops digits or jumps the cursor ([c8edd11](https://github.com/aktasfatih/kanso/commit/c8edd113c9cf63acd05313795482eed42eddb709)), closes [#64](https://github.com/aktasfatih/kanso/issues/64)
+
+
+### Features
+
+* multi-select cards can now be marked done in one action ([adc7868](https://github.com/aktasfatih/kanso/commit/adc7868495d89bc66bbe5ffc80857b3273b52f0e))
+* public links can now opt in to showing read-only comments ([a2e73a0](https://github.com/aktasfatih/kanso/commit/a2e73a0d134f18973c02903fac03c981093ea7b6))
+* recurring cards now show a repeat icon on the board ([1948072](https://github.com/aktasfatih/kanso/commit/1948072a23e77cffa527cf2fcc7d56381ccf2acd)), closes [#4052](https://github.com/aktasfatih/kanso/issues/4052) [#61](https://github.com/aktasfatih/kanso/issues/61)
+* the open card's due date now shows a repeat icon for recurring cards ([675968f](https://github.com/aktasfatih/kanso/commit/675968f35b1143ea3ba043c77b03bf3357cd0a84)), closes [#61](https://github.com/aktasfatih/kanso/issues/61)
+
 # [0.12.0](https://github.com/aktasfatih/kanso/compare/v0.11.0...v0.12.0) (2026-08-20)
 
 
