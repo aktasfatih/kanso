@@ -39,6 +39,16 @@ async function apiPatch(path, body) {
 	return r.json()
 }
 
+async function apiPut(path, body) {
+	const r = await fetch(API + path, {
+		method: 'PUT',
+		headers: { ...HEADERS, Authorization: AUTH },
+		body: JSON.stringify(body ?? {}),
+	})
+	if (!r.ok) throw new Error(`PUT ${path} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
+
 async function apiDelete(path) {
 	const r = await fetch(API + path, {
 		method: 'DELETE',
@@ -212,6 +222,140 @@ test.describe('Card modal two-column layout', () => {
 		await expect(page.locator('.card-modal__discussion')).toBeVisible({ timeout: 5_000 })
 	})
 
+	// #60 / #4057 — on a phone-width viewport the card attribute bar stays at the
+	// TOP and is always visible (like desktop), with the pills WRAPPING onto
+	// multiple lines instead of scrolling horizontally. Only the two original tabs
+	// (Card / Discussion) remain; there is no separate "Details" tab.
+	test('mobile: card attributes stay at the top and the pills wrap (#4057)', async ({ page }) => {
+		// ~360px is a common phone width, below the 680px reflow breakpoint.
+		await page.setViewportSize({ width: 360, height: 780 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+
+		await page.waitForSelector('.card-modal__tabbar', { timeout: 15_000 })
+
+		// The tab bar has exactly two tabs: Card / Discussion (no "Details").
+		const tabs = page.locator('.card-modal__tabbar .card-modal__tab')
+		await expect(tabs).toHaveCount(2)
+		await expect(tabs.nth(0)).toHaveText(/Card/)
+		await expect(tabs.nth(1)).toHaveText(/Discussion/)
+		await expect(page.locator('.card-modal__tab', { hasText: 'Details' })).toHaveCount(0)
+
+		// Tabs expose the ARIA tab role and the tablist container is a tablist.
+		await expect(page.locator('.card-modal__tabbar[role="tablist"]')).toBeVisible()
+		await expect(tabs.nth(0)).toHaveAttribute('role', 'tab')
+
+		// Default lands on the Card tab: the content is shown AND the attribute bar
+		// is visible at the top (no separate tap needed).
+		const attrbar = page.locator('.card-modal__attrbar')
+		await expect(attrbar).toBeVisible()
+		await expect(page.locator('.card-modal__content')).toBeVisible()
+		await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+
+		// The attribute bar sits ABOVE the tab bar (top of the modal, like desktop).
+		const attrBox = await attrbar.boundingBox()
+		const tabbarBox = await page.locator('.card-modal__tabbar').boundingBox()
+		expect(attrBox).not.toBeNull()
+		expect(tabbarBox).not.toBeNull()
+		expect(attrBox.y).toBeLessThan(tabbarBox.y)
+
+		// The pills WRAP: the attribute bar must not overflow horizontally
+		// (scrollWidth must not meaningfully exceed clientWidth).
+		const overflow = await attrbar.evaluate((el) => el.scrollWidth - el.clientWidth)
+		expect(overflow).toBeLessThanOrEqual(2)
+
+		// Switch to Discussion → the composer is shown AND the attribute bar stays
+		// visible at the top on this tab too.
+		await tabs.nth(1).click()
+		await expect(page.locator('.card-modal__discussion')).toBeVisible({ timeout: 5_000 })
+		await expect(attrbar).toBeVisible()
+
+		// Back to Card → content returns, attribute bar still visible.
+		await tabs.nth(0).click()
+		await expect(page.locator('.card-modal__content')).toBeVisible({ timeout: 5_000 })
+		await expect(attrbar).toBeVisible()
+	})
+
+	// #4058 — on a phone-width viewport the review "Request" picker popover and the
+	// pending-review verdict banner must stay FULLY within the viewport. #4057 removed
+	// the mobile attrbar's `overflow-x: auto` (which silently forced overflow-y and
+	// clipped the absolutely-positioned popovers); this guard asserts neither surface
+	// escapes the viewport so that regression can't return.
+	test('mobile: review Request popover + verdict banner stay within the viewport (#4058)', async ({ page }) => {
+		// A dedicated card so requesting a review of admin doesn't perturb other tests.
+		const card = await apiPost('/cards', {
+			stackId: state.stackId,
+			title: 'Review popover clip guard',
+			description: 'Card used to verify the review picker/verdict stay on-screen on mobile.',
+		})
+		try {
+			const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+			// ~360px is a common phone width, below the 680px reflow breakpoint.
+			await page.setViewportSize({ width: 360, height: 780 })
+			await ncLogin(page)
+
+			// 1) BEFORE any review is requested, admin is an unrequested participant, so
+			//    the review "Request" picker button is available in the attribute bar,
+			//    which stays visible at the top on mobile (no separate Details tab).
+			await page.goto(cardUrl)
+			await page.waitForSelector('.card-modal__tabbar', { timeout: 15_000 })
+			await expect(page.locator('.card-modal__attrbar')).toBeVisible({ timeout: 5_000 })
+
+			const requestBtn = page.locator('.card-modal__attr-right button.card-modal__pill--dashed', { hasText: 'Request' })
+			await expect(requestBtn).toBeVisible({ timeout: 5_000 })
+			await requestBtn.click()
+
+			// The custom (absolutely-positioned) review picker popover must render fully
+			// on-screen — no clipping by an overflow ancestor, no spilling past either
+			// viewport edge.
+			const popover = page.locator('.card-modal__popover--right')
+			await expect(popover).toBeVisible({ timeout: 5_000 })
+			const vw = page.viewportSize().width
+			const popBox = await popover.boundingBox()
+			expect(popBox).not.toBeNull()
+			expect(popBox.x).toBeGreaterThanOrEqual(0) // not clipped off the left edge
+			expect(popBox.x + popBox.width).toBeLessThanOrEqual(vw + 1) // not past the right edge
+			expect(popBox.height).toBeGreaterThan(0) // actually rendered (not overflow-clipped to 0)
+
+			// 2) Now request a review of admin so the pending-review VERDICT banner
+			//    ("Your review is requested" → Approve / Request changes) appears. It sits
+			//    at the top of the Card tab as normal block flow, but guard it anyway so a
+			//    future overflow ancestor can't clip it off-screen.
+			await apiPut(`/cards/${card.id}/reviews/admin`, {})
+			await page.goto(cardUrl)
+			const verdict = page.locator('.card-modal__verdict').first()
+			await expect(verdict).toBeVisible({ timeout: 15_000 })
+			const verdictBox = await verdict.boundingBox()
+			expect(verdictBox).not.toBeNull()
+			expect(verdictBox.x).toBeGreaterThanOrEqual(0)
+			expect(verdictBox.x + verdictBox.width).toBeLessThanOrEqual(vw + 1)
+
+			// The verdict actions (Approve / Request changes) must also be fully on-screen.
+			const actions = page.locator('.card-modal__verdict-actions').first()
+			await expect(actions).toBeVisible()
+			const actionsBox = await actions.boundingBox()
+			expect(actionsBox).not.toBeNull()
+			expect(actionsBox.x).toBeGreaterThanOrEqual(0)
+			expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(vw + 1)
+		} finally {
+			await apiDelete(`/cards/${card.id}`).catch(() => {})
+		}
+	})
+
+	// Desktop regression guard: on a wide viewport there is NO tab bar and the
+	// attribute bar stays visible above the side-by-side content|discussion.
+	test('desktop: attribute bar is always visible and there is no tab bar (#4057)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 800 })
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+
+		await expect(page.locator('.card-modal__attrbar')).toBeVisible()
+		// The mobile tab bar exists in the DOM but is display:none on desktop.
+		await expect(page.locator('.card-modal__tabbar')).toBeHidden()
+	})
+
 	test('round clear/× buttons are circles, not ovals (#3492)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
@@ -305,6 +449,60 @@ test.describe('Card modal two-column layout', () => {
 		pt = await backdropPoint(page)
 		await page.mouse.click(pt.x, pt.y)
 		await expect(page).not.toHaveURL(new RegExp(`/card/${state.cardId}`), { timeout: 8_000 })
+	})
+
+	// #60 — on a phone-width viewport the card-detail header must reflow: the
+	// title must NOT wrap one character per line (its box must be wider than it is
+	// tall), and the action cluster / teleported close (X) must not overlap the
+	// title. A long, unbroken-ish title is used so a broken layout is unmissable.
+	test('mobile: card header reflows — title stays horizontal and actions do not overlap it (#60)', async ({ page }) => {
+		const longTitle = 'Refactor the notification delivery pipeline for realtime updates'
+		const card = await apiPost('/cards', {
+			stackId: state.stackId,
+			title: longTitle,
+			description: 'Long-title card used to verify the mobile header does not break.',
+		})
+		try {
+			const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+			// ~360px is a common phone width and below the 680px reflow breakpoint.
+			await page.setViewportSize({ width: 360, height: 780 })
+			await ncLogin(page)
+			await page.goto(cardUrl)
+
+			const title = page.locator('.card-modal__title')
+			await expect(title).toBeVisible({ timeout: 15_000 })
+
+			// 1) The title renders horizontally, not one letter per line. A vertical
+			//    (one-char-per-line) wrap makes the box taller than it is wide.
+			const titleBox = await title.boundingBox()
+			expect(titleBox).not.toBeNull()
+			expect(titleBox.width).toBeGreaterThan(titleBox.height)
+
+			// 2) The action cluster must not horizontally overlap the title column.
+			//    After the reflow it sits on its own row below the title, so their
+			//    bounding boxes must not intersect.
+			const actions = page.locator('.card-modal__header-actions')
+			await expect(actions).toBeVisible()
+			const actionsBox = await actions.boundingBox()
+			expect(actionsBox).not.toBeNull()
+			const intersects = (a, b) => (
+				a.x < b.x + b.width && a.x + a.width > b.x
+				&& a.y < b.y + b.height && a.y + a.height > b.y
+			)
+			expect(intersects(titleBox, actionsBox)).toBe(false)
+
+			// 3) The teleported NcModal close (X) must not overlap the title either —
+			//    the header reserves right padding so the breadcrumb/title clear it.
+			const closeBtn = page.locator('.modal-container .modal-header button.modal-close, .modal-container button.header-close').first()
+			if (await closeBtn.count()) {
+				const closeBox = await closeBtn.boundingBox()
+				if (closeBox) {
+					expect(intersects(titleBox, closeBox)).toBe(false)
+				}
+			}
+		} finally {
+			await apiDelete(`/cards/${card.id}`).catch(() => {})
+		}
 	})
 
 	test('a text-selection drag that ends on the backdrop does NOT close the modal (#3656)', async ({ page }) => {

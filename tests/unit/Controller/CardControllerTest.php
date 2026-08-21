@@ -23,6 +23,7 @@ use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
@@ -64,12 +65,13 @@ class CardControllerTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private RecurRuleMapper&MockObject $recurRuleMapper;
+	private IRequest&MockObject $request;
+	private IUserSession&MockObject $userSession;
 	private CardController $controller;
 
 	protected function setUp(): void {
 		parent::setUp();
-		$request = $this->createMock(IRequest::class);
-		$userSession = $this->createMock(IUserSession::class);
 		$this->cardService = $this->createMock(CardService::class);
 		$this->labelService = $this->createMock(LabelService::class);
 		$this->assigneeService = $this->createMock(AssigneeService::class);
@@ -114,15 +116,28 @@ class CardControllerTest extends TestCase {
 			->willReturn(ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true));
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		// No recurrence rule by default; the recurring-indicator tests override this.
+		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
+		$this->recurRuleMapper->method('hasEnabledRuleForCard')->willReturn(false);
 
+		$this->request = $this->createMock(IRequest::class);
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
-		$userSession->method('getUser')->willReturn($user);
+		$this->userSession = $this->createMock(IUserSession::class);
+		$this->userSession->method('getUser')->willReturn($user);
 
+		$this->rebuildController();
+	}
+
+	/**
+	 * (Re)build the controller from the current mocks. Called by setUp and by any
+	 * test that swaps a mock (e.g. the recurring-indicator test) after setUp.
+	 */
+	private function rebuildController(): void {
 		$this->controller = new CardController(
 			'kanso',
-			$request,
-			$userSession,
+			$this->request,
+			$this->userSession,
 			$this->cardService,
 			$this->labelService,
 			$this->assigneeService,
@@ -143,7 +158,8 @@ class CardControllerTest extends TestCase {
 			$this->cardFieldValueMapper,
 			$this->boardMapper,
 			$this->boardAccess,
-			$this->visibilityGuard
+			$this->visibilityGuard,
+			$this->recurRuleMapper
 		);
 	}
 
@@ -198,6 +214,28 @@ class CardControllerTest extends TestCase {
 		self::assertSame('Full detail', $data['description']);
 		self::assertSame([3, 7], $data['labelIds']);
 		self::assertSame(['bob', 'carol'], $data['assigneeIds']);
+	}
+
+	public function testShowMarksCardRecurringWhenAnEnabledRuleExists(): void {
+		$card = $this->card();
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);
+		// A live recurrence rule anchored on this card - the open card swaps the
+		// Due Date pill's calendar icon for a repeat icon for all viewers (#61).
+		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
+		$this->recurRuleMapper->method('hasEnabledRuleForCard')->with(9)->willReturn(true);
+		$this->rebuildController();
+
+		$data = $this->controller->show(9)->getData();
+		self::assertTrue($data['recurring']);
+	}
+
+	public function testShowMarksCardNotRecurringWithoutAnEnabledRule(): void {
+		$card = $this->card();
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);
+		// Default mock: no enabled rule for the card.
+
+		$data = $this->controller->show(9)->getData();
+		self::assertFalse($data['recurring']);
 	}
 
 	public function testResolveRefReturnsCardIdAndTitle(): void {

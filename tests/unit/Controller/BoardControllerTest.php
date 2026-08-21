@@ -27,6 +27,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
@@ -68,6 +69,7 @@ class BoardControllerTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardRelationMapper&MockObject $cardRelationMapper;
+	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private BoardController $controller;
 
@@ -94,6 +96,7 @@ class BoardControllerTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
+		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		// show()/changes() resolve the viewer context once, after the READ gate
 		// (#3743); the mapper mocks just receive it.
 		$this->boardAccess = $this->createMock(BoardAccess::class);
@@ -118,6 +121,7 @@ class BoardControllerTest extends TestCase {
 			$this->commentMapper,
 			$this->cardReviewMapper,
 			$this->cardRelationMapper,
+			$this->recurRuleMapper,
 		);
 
 		$this->controller = new BoardController(

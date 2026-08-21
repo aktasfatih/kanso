@@ -545,7 +545,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:class="cardData.duedate ? dueDateClass : 'card-modal__pill--dashed'"
 							:aria-expanded="openPicker === 'due'"
 							@click="togglePicker('due')">
-							<CalendarIcon :size="14" />
+							<!-- A recurring card swaps the calendar glyph for a repeat
+							     icon (#61 follow-up), matching the board tile cue for
+							     all viewers. Same footprint, so no layout shift. -->
+							<RepeatIcon v-if="cardIsRecurring" :size="14" :title="t('kanso', 'Repeats')" />
+							<CalendarIcon v-else :size="14" />
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</button>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad">
@@ -1017,18 +1021,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 
 				<!-- Mobile tab bar - visible only on narrow viewports, sits under the attribute bar -->
-				<div class="card-modal__tabbar">
+				<div class="card-modal__tabbar" role="tablist">
 					<button
 						class="card-modal__tab"
 						:class="{ 'card-modal__tab--active': viewMode === 'card' }"
+						role="tab"
+						:aria-selected="viewMode === 'card'"
 						@click="viewMode = 'card'">
 						{{ t('kanso', 'Card') }}
 					</button>
 					<button
 						class="card-modal__tab"
 						:class="{ 'card-modal__tab--active': viewMode === 'discussion' }"
+						role="tab"
+						:aria-selected="viewMode === 'discussion'"
 						@click="viewMode = 'discussion'">
-						{{ t('kanso', 'Discussion') }}<span v-if="commentCount > 0"> {{ commentCount }}</span>
+						{{ t('kanso', 'Discussion') }}<span v-if="commentCount > 0" class="card-modal__tab-count">{{ commentCount }}</span>
 					</button>
 				</div>
 
@@ -2179,6 +2187,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import EmoticonHappyOutlineIcon from 'vue-material-design-icons/EmoticonHappyOutline.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -3693,6 +3702,13 @@ const {
 const cardRecurRule = computed(() =>
 	(recurRulesData.value ?? []).find((r) => Number(r.templateCardId) === Number(props.cardId)) ?? null,
 )
+
+// Does this card recur? (#61 follow-up) Drives the repeat-icon swap on the Due
+// Date pill. Prefer the detail payload's `recurring` boolean so ALL viewers see
+// the cue (matching the board tile); OR-in the manager-only rule so the icon
+// flips instantly when a manager toggles recurrence in the popover, before any
+// refetch.
+const cardIsRecurring = computed(() => !!cardData.value?.recurring || !!cardRecurRule.value)
 
 // Split an RRULE into FREQ + INTERVAL, flagging any token this simple control
 // can't represent (BYDAY / COUNT / UNTIL / …).
@@ -5395,12 +5411,34 @@ async function handleToggleProject(projectId) {
 
 /* ── Modal shell ─────────────────────────────────────────────────────────── */
 .card-modal {
+	/* Legible success green for the feature-type pill, approved-review pill and
+	 * the "done" toggle: stock --color-success in light, a brighter green
+	 * (#3fb950) under dark so text/border stay readable on the dark surface. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+	--kanso-success-legible-rgb: 70, 186, 97;
+
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 15px;
+}
+
+/* Brighten success green under dark themes (explicit picker + auto). */
+body.theme--dark .card-modal,
+[data-theme-dark] .card-modal,
+[data-themes*='dark'] .card-modal {
+	--kanso-success-legible: #3fb950;
+	--kanso-success-legible-rgb: 63, 185, 80;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .card-modal,
+	body:not(.theme--light):not(.theme--dark) .card-modal {
+		--kanso-success-legible: #3fb950;
+		--kanso-success-legible-rgb: 63, 185, 80;
+	}
 }
 
 /* ── Loading skeleton (shimmer, real layout) ─────────────────────────────── */
@@ -5656,9 +5694,9 @@ async function handleToggleProject(projectId) {
 	color: var(--color-primary-element);
 }
 .card-modal__done-btn--done {
-	border-color: var(--color-success);
-	color: var(--color-success-text, var(--color-success));
-	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 10%, var(--color-main-background)));
+	border-color: var(--kanso-success-legible);
+	color: var(--kanso-success-legible);
+	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
 /* Watch control: a single split-button pill — the watch toggle (left half) and
    the watchers caret (right half) sit flush, sharing one border with a thin 1px
@@ -5862,7 +5900,7 @@ async function handleToggleProject(projectId) {
 .card-modal__pill--priority-3 { border-color: #e07b00; color: #e07b00; font-weight: 600; }
 .card-modal__pill--priority-4 { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
 .card-modal__pill--type-bug { border-color: #e74c3c; color: #e74c3c; font-weight: 600; }
-.card-modal__pill--type-feature { border-color: #27ae60; color: #27ae60; font-weight: 600; }
+.card-modal__pill--type-feature { border-color: var(--kanso-success-legible); color: var(--kanso-success-legible); font-weight: 600; }
 .card-modal__pill--type-task { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
 .card-modal__pill--type-chore { border-color: #7f8c8d; color: #7f8c8d; font-weight: 600; }
 .card-modal__pill--overdue { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
@@ -5931,7 +5969,7 @@ async function handleToggleProject(projectId) {
 	font-size: 0.75rem;
 }
 .card-modal__review-pill--pending { border-color: var(--color-warning-text); background: rgba(236, 167, 0, 0.08); }
-.card-modal__review-pill--approved { border-color: var(--color-success-text); background: rgba(70, 186, 97, 0.08); }
+.card-modal__review-pill--approved { border-color: var(--kanso-success-legible); background: rgba(var(--kanso-success-legible-rgb), 0.08); }
 .card-modal__review-pill--changes_requested { border-color: var(--color-error-text); background: rgba(233, 50, 45, 0.08); }
 /* A gated (deferred) review reads as inert: greyed out, dashed border, muted
    colours. The lock icon + hover tooltip explain it's waiting on an earlier
@@ -5965,7 +6003,7 @@ async function handleToggleProject(projectId) {
 	font-weight: 600;
 }
 .card-modal__review-state--pending { color: var(--color-warning-text); }
-.card-modal__review-state--approved { color: var(--color-success-text); }
+.card-modal__review-state--approved { color: var(--kanso-success-legible); }
 .card-modal__review-state--changes_requested { color: var(--color-error-text); }
 .card-modal__review-state--gated { color: var(--color-text-maxcontrast); }
 /* Compact mode (3+ reviews): drop the reviewer name and the state text so the
@@ -7517,6 +7555,13 @@ async function handleToggleProject(projectId) {
 	color: var(--color-primary-element);
 	font-weight: 600;
 }
+/* Comment-count badge on the Discussion tab — its own spacing so the number
+   never renders glued to the label (Vue condenses a leading text space away). */
+.card-modal__tab-count {
+	margin-inline-start: 6px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-maxcontrast);
+}
 
 /* Keep every round button/dot a perfect circle (#3492). Two forces turn them
    into ovals: a flex row can shrink the width, and Nextcloud's global
@@ -7540,10 +7585,55 @@ async function handleToggleProject(projectId) {
 
 /* ── Responsive: stack panes, switch via tabs ────────────────────────────── */
 @media (max-width: 680px) {
-	.card-modal__header { padding: 14px 16px 10px; }
-	.card-modal__title { font-size: 1.2rem; }
-	.card-modal__attrbar { flex-wrap: nowrap; overflow-x: auto; padding: 10px 16px; }
+	/* Reflow the header so the action cluster wraps below the title instead of
+	   squeezing the title column toward 0 width (which made the title render one
+	   letter per line). The title row and the actions row each take the full
+	   width; the title column can no longer be crushed by flex-shrink:0 actions. */
+	.card-modal__header {
+		flex-wrap: wrap;
+		padding: 14px 16px 10px;
+	}
+	/* In modal mode NcModal teleports its own close (X) button to the top-right of
+	   the modal container, outside this component's scoped tree. Reserve room on
+	   the right so the breadcrumb/title never slide under it. */
+	.card-modal--mode-modal .card-modal__header { padding-right: 48px; }
+	.card-modal__header-main {
+		/* Force the title column onto its own full-width row. */
+		flex: 1 0 100%;
+		min-width: 0;
+	}
+	.card-modal__header-actions {
+		/* Actions drop to their own row below the title and may wrap among
+		   themselves on very narrow screens rather than overflowing. */
+		flex-basis: 100%;
+		flex-wrap: wrap;
+	}
+	.card-modal__title {
+		font-size: 1.2rem;
+		/* Wrap on word boundaries and only break inside a word as a last resort,
+		   so a long title never renders one character per line. */
+		word-break: normal;
+		overflow-wrap: anywhere;
+	}
+	/* Attributes stay at the top and wrap cleanly instead of scrolling as a
+	   cramped one-line strip. */
+	.card-modal__attrbar { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
 	.card-modal__attr-right { margin-left: 0; }
+	/* Attribute-bar popovers (review request, type, due, label, assignee…) are
+	   absolutely positioned off a small pill, so a right-anchored one can spill
+	   past the screen edge once the pill wraps mid-row (#4058). Pin them to the
+	   viewport as an inset sheet so they always render fully on-screen. */
+	.card-modal__attrbar .card-modal__popover {
+		position: fixed;
+		left: 12px;
+		right: 12px;
+		top: auto;
+		bottom: 12px;
+		width: auto;
+		min-width: 0;
+		max-width: none;
+		max-height: 60vh;
+	}
 	.card-modal__body { grid-template-columns: 1fr; }
 	/* Panes stack: the persisted split width and its drag handle are ignored. */
 	.card-modal__resizer { display: none; }
