@@ -31,6 +31,12 @@ async function fetchPublic(token) {
 // Public / read-only board share links (#3531). A MANAGE user mints a token; an
 // unauthenticated reader gets a STRIPPED read-only board; disabling 404s it.
 test.describe('Public read-only board share', () => {
+	// The unauthenticated fetchPublic / anonymous page assertions below must run as
+	// a true anonymous reader. Opt OUT of the shared admin storageState, otherwise
+	// the public payload/page loads under the admin session and the tests
+	// false-pass or false-fail.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
 	let boardId = 0
 	let todoStackId = 0
 	let cardId = 0
@@ -70,8 +76,9 @@ test.describe('Public read-only board share', () => {
 		expect(res.status).toBe(200)
 		expect(res.body.board.title).toBe('Public Share E2E')
 
-		// The board object carries no owner / acl / token / webhook.
-		expect(Object.keys(res.body.board).sort()).toEqual(['color', 'prefix', 'title'])
+		// The board object carries no owner / acl / token / webhook - only the
+		// presentational fields plus the comments opt-in flag (#3949).
+		expect(Object.keys(res.body.board).sort()).toEqual(['color', 'commentsEnabled', 'prefix', 'title'])
 
 		const card = res.body.cards.find((c) => c.title === 'Public visible card')
 		expect(card).toBeTruthy()
