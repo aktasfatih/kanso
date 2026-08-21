@@ -288,10 +288,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .card-preview {
-	/* Legible error red for the overdue date + urgent priority chips. Mirrors
-	 * CardTile (#3905): stock --color-error in light, brighter red under dark. */
+	/* Legible status colours for the priority + overdue chips. Mirrors CardTile
+	 * (#3905/#4054): stock values in light, brighter under dark where the stock
+	 * error red / warning amber / neutral grey go too dim on the dark surface. */
 	--kanso-error-legible: var(--color-error, #e30000);
 	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
+	--kanso-warning-legible: var(--color-warning, #e07b00);
+	--kanso-neutral-legible: var(--color-text-maxcontrast, #767676);
 
 	position: fixed;
 	z-index: 2100;
@@ -311,6 +314,8 @@ body.theme--dark .card-preview,
 [data-themes*='dark'] .card-preview {
 	--kanso-error-legible: #ff6b6b;
 	--kanso-error-legible-rgb: 255, 107, 107;
+	--kanso-warning-legible: #d29922;
+	--kanso-neutral-legible: #8b949e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -318,6 +323,8 @@ body.theme--dark .card-preview,
 	body:not(.theme--light):not(.theme--dark) .card-preview {
 		--kanso-error-legible: #ff6b6b;
 		--kanso-error-legible-rgb: 255, 107, 107;
+		--kanso-warning-legible: #d29922;
+		--kanso-neutral-legible: #8b949e;
 	}
 }
 
@@ -391,9 +398,9 @@ body.theme--dark .card-preview,
 	border-color: currentColor;
 }
 
-.card-preview__priority--1 { color: #888; border-color: #888; background: rgba(136, 136, 136, 0.1); }
+.card-preview__priority--1 { color: var(--kanso-neutral-legible); border-color: var(--kanso-neutral-legible); background: rgba(136, 136, 136, 0.1); }
 .card-preview__priority--2 { color: var(--color-primary-element, #0082c9); border-color: var(--color-primary-element, #0082c9); background: rgba(0, 130, 201, 0.1); }
-.card-preview__priority--3 { color: #e07b00; border-color: #e07b00; background: rgba(224, 123, 0, 0.1); }
+.card-preview__priority--3 { color: var(--kanso-warning-legible); border-color: var(--kanso-warning-legible); background: rgba(224, 123, 0, 0.1); }
 .card-preview__priority--4 { color: var(--kanso-error-legible); border-color: var(--kanso-error-legible); background: rgba(var(--kanso-error-legible-rgb), 0.1); }
 
 .card-preview__due--overdue {

@@ -439,12 +439,14 @@ const extraAssigneeCount = computed(() => {
 }
 
 .card-tile {
-	/* Legible error red for small foreground elements (bug icon, overdue date,
-	 * urgent priority, blocked chip). NC's --color-error dark shade is too dim on
-	 * the dark tile surface (#3905); brighten it under dark themes while keeping
-	 * the stock error red in light mode. Scoped to the tile so it can't leak. */
+	/* Legible status colours for small foreground elements (bug icon, overdue
+	 * date, urgent priority, blocked chip, warning/amber review + priority chips).
+	 * NC's --color-error / --color-warning dark shades are near black on the dark
+	 * tile surface (#3905/#4054); brighten them under dark themes while keeping
+	 * the stock values in light mode. Scoped to the tile so they can't leak. */
 	--kanso-error-legible: var(--color-error, #e30000);
 	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
+	--kanso-warning-legible: var(--color-warning, #e07b00);
 
 	display: flex;
 	flex-direction: column;
@@ -467,6 +469,7 @@ body.theme--dark .card-tile,
 [data-themes*='dark'] .card-tile {
 	--kanso-error-legible: #ff6b6b;
 	--kanso-error-legible-rgb: 255, 107, 107;
+	--kanso-warning-legible: #d29922;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -474,6 +477,7 @@ body.theme--dark .card-tile,
 	body:not(.theme--light):not(.theme--dark) .card-tile {
 		--kanso-error-legible: #ff6b6b;
 		--kanso-error-legible-rgb: 255, 107, 107;
+		--kanso-warning-legible: #d29922;
 	}
 }
 
@@ -564,8 +568,8 @@ body.theme--dark .card-tile,
 }
 
 .card-tile__due--soon {
-	color: var(--color-warning, #f0a844);
-	border-color: var(--color-warning, #f0a844);
+	color: var(--kanso-warning-legible);
+	border-color: var(--kanso-warning-legible);
 	background: rgba(240, 168, 68, 0.08);
 }
 
@@ -713,11 +717,11 @@ body.theme--dark .card-tile,
 	background: rgba(0, 130, 201, 0.1);
 }
 
-/* High: orange — --color-warning adapts per theme and keeps ≥4.5:1 text
-   contrast; stays distinct from Urgent's --color-error red. */
+/* High: orange — --kanso-warning-legible keeps ≥4.5:1 text contrast in both
+   themes; stays distinct from Urgent's red. */
 .card-tile__priority--3 {
-	color: var(--color-warning, #e07b00);
-	border-color: var(--color-warning, #e07b00);
+	color: var(--kanso-warning-legible);
+	border-color: var(--kanso-warning-legible);
 	background: rgba(224, 123, 0, 0.1);
 }
 
@@ -741,8 +745,8 @@ body.theme--dark .card-tile,
 }
 
 .card-tile__review--pending {
-	color: var(--color-warning, #f0a844);
-	border-color: var(--color-warning, #f0a844);
+	color: var(--kanso-warning-legible);
+	border-color: var(--kanso-warning-legible);
 	background: rgba(240, 168, 68, 0.08);
 }
 
@@ -787,8 +791,9 @@ body.theme--dark .card-tile,
 }
 
 /* Waiting-on-client chip (#3746) - amber "ball is with the client" signal.
- * --color-warning adapts per theme and keeps text contrast; distinct from the
- * blocked chip's red (blocked = stuck, waiting = parked with the other side). */
+ * --kanso-warning-legible adapts per theme and keeps text contrast; distinct
+ * from the blocked chip's red (blocked = stuck, waiting = parked with the other
+ * side). */
 .card-tile__waiting {
 	display: inline-flex;
 	align-items: center;
@@ -797,8 +802,8 @@ body.theme--dark .card-tile,
 	font-weight: 600;
 	padding: 1px 6px;
 	border-radius: 8px;
-	color: var(--color-warning, #e07b00);
-	border: 1px solid var(--color-warning, #e07b00);
+	color: var(--kanso-warning-legible);
+	border: 1px solid var(--kanso-warning-legible);
 	background: rgba(240, 168, 68, 0.1);
 }
 

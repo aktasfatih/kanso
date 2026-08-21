@@ -5395,12 +5395,41 @@ async function handleToggleProject(projectId) {
 
 /* ── Modal shell ─────────────────────────────────────────────────────────── */
 .card-modal {
+	/* Legible status colours for small chip text/border. NC's stock warning
+	 * amber (#e07b00), neutral grey (#888/#7f8c8d) and error red (#e74c3c) are
+	 * too dim on the dark modal surface (#3905/#4054); brighten them under dark
+	 * themes while keeping the stock values in light mode. Scoped to the modal
+	 * so they can't leak. */
+	--kanso-error-legible: var(--color-error, #e30000);
+	--kanso-warning-legible: var(--color-warning, #e07b00);
+	--kanso-neutral-legible: var(--color-text-maxcontrast, #767676);
+
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 15px;
+}
+
+/* Explicit dark themes (theme picker) + auto (prefers-color-scheme) dark.
+ * These brighter values read clearly on the dark surface and still pass AA
+ * as chip text/border. */
+body.theme--dark .card-modal,
+[data-theme-dark] .card-modal,
+[data-themes*='dark'] .card-modal {
+	--kanso-error-legible: #ff6b6b;
+	--kanso-warning-legible: #d29922;
+	--kanso-neutral-legible: #8b949e;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .card-modal,
+	body:not(.theme--light):not(.theme--dark) .card-modal {
+		--kanso-error-legible: #ff6b6b;
+		--kanso-warning-legible: #d29922;
+		--kanso-neutral-legible: #8b949e;
+	}
 }
 
 /* ── Loading skeleton (shimmer, real layout) ─────────────────────────────── */
@@ -5857,14 +5886,14 @@ async function handleToggleProject(projectId) {
 	color: var(--color-primary-element);
 }
 /* Priority pill colours (only colours Kanso invents) */
-.card-modal__pill--priority-1 { border-color: #888; color: #888; font-weight: 600; }
+.card-modal__pill--priority-1 { border-color: var(--kanso-neutral-legible); color: var(--kanso-neutral-legible); font-weight: 600; }
 .card-modal__pill--priority-2 { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
-.card-modal__pill--priority-3 { border-color: #e07b00; color: #e07b00; font-weight: 600; }
+.card-modal__pill--priority-3 { border-color: var(--kanso-warning-legible); color: var(--kanso-warning-legible); font-weight: 600; }
 .card-modal__pill--priority-4 { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
-.card-modal__pill--type-bug { border-color: #e74c3c; color: #e74c3c; font-weight: 600; }
+.card-modal__pill--type-bug { border-color: var(--kanso-error-legible); color: var(--kanso-error-legible); font-weight: 600; }
 .card-modal__pill--type-feature { border-color: #27ae60; color: #27ae60; font-weight: 600; }
 .card-modal__pill--type-task { border-color: var(--color-primary-element); color: var(--color-primary-element); font-weight: 600; }
-.card-modal__pill--type-chore { border-color: #7f8c8d; color: #7f8c8d; font-weight: 600; }
+.card-modal__pill--type-chore { border-color: var(--kanso-neutral-legible); color: var(--kanso-neutral-legible); font-weight: 600; }
 .card-modal__pill--overdue { border-color: var(--color-error-text); color: var(--color-error-text); font-weight: 600; }
 .card-modal__pill--soon { border-color: var(--color-warning-text); color: var(--color-warning-text); font-weight: 600; }
 
