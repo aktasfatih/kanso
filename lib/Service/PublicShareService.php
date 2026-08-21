@@ -20,6 +20,7 @@ use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\Security\ISecureRandom;
@@ -70,6 +71,7 @@ class PublicShareService {
 		private ISecureRandom $secureRandom,
 		private IURLGenerator $urlGenerator,
 		private IUserManager $userManager,
+		private IL10N $l10n,
 	) {
 	}
 
@@ -291,6 +293,11 @@ class PublicShareService {
 	 * reactions, NO reactor lists. A one-level thread: a reply carries its
 	 * top-level parent id and the client nests by it.
 	 *
+	 * When the author account no longer exists (deleted user), the display-name
+	 * lookup returns null; we emit a generic "Former user" label rather than
+	 * falling back to the raw uid, so a deleted account's uid never leaks onto an
+	 * unauthenticated link (the "uid never leaves" invariant holds even then).
+	 *
 	 * @param Comment[] $comments
 	 * @param array<string, string> $displayNames uid => display name cache, reused across cards
 	 * @return list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>
@@ -301,7 +308,9 @@ class PublicShareService {
 			$uid = (string)$comment->getAuthor();
 			if (!isset($displayNames[$uid])) {
 				$user = $this->userManager->get($uid);
-				$displayNames[$uid] = $user !== null ? $user->getDisplayName() : $uid;
+				// A deleted author resolves to null; never leak the raw uid on the
+				// public link - substitute a generic, translatable label instead.
+				$displayNames[$uid] = $user !== null ? $user->getDisplayName() : $this->l10n->t('Former user');
 			}
 			$out[] = [
 				'id' => (int)$comment->getId(),

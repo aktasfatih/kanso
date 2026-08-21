@@ -267,8 +267,10 @@ export default {
 				return ''
 			}
 		},
-		// A comment's created_at is a unix-seconds int (public payload).
+		// A comment's created_at is a unix-seconds int (public payload). Guard a
+		// missing/zero timestamp so it renders empty rather than the epoch (1970).
 		formatDateTime(ts) {
+			if (!ts) return ''
 			try {
 				return new Date(ts * 1000).toLocaleString()
 			} catch (e) {

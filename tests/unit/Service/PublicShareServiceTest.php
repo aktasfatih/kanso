@@ -23,6 +23,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\PublicShareService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -44,6 +45,7 @@ class PublicShareServiceTest extends TestCase {
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
 	private IUserManager&MockObject $userManager;
+	private IL10N&MockObject $l10n;
 	private PublicShareService $service;
 
 	protected function setUp(): void {
@@ -59,6 +61,9 @@ class PublicShareServiceTest extends TestCase {
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->l10n = $this->createMock(IL10N::class);
+		// Translate returns the source string verbatim (the mock just echoes it).
+		$this->l10n->method('t')->willReturnCallback(static fn (string $text): string => $text);
 		$this->service = new PublicShareService(
 			$this->boardMapper,
 			$this->stackMapper,
@@ -71,6 +76,7 @@ class PublicShareServiceTest extends TestCase {
 			$this->secureRandom,
 			$this->urlGenerator,
 			$this->userManager,
+			$this->l10n,
 		);
 	}
 
@@ -410,6 +416,37 @@ class PublicShareServiceTest extends TestCase {
 		foreach (['reaction', 'reactor', 'assignee', 'watcher', 'member'] as $forbidden) {
 			self::assertStringNotContainsStringIgnoringCase($forbidden, $json, "public comments leaked '$forbidden'");
 		}
+	}
+
+	public function testDeletedCommentAuthorShowsGenericLabelNotRawUid(): void {
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, true));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn([$this->card(100, 10, 'Live card')]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		// A comment whose author account was deleted: 'ghostuid' is a real,
+		// identifying uid that must NEVER surface on the anonymous link.
+		$this->commentMapper->expects(self::once())->method('findByBoardPublicOnly')->with(1)->willReturn([
+			100 => [
+				$this->comment(1, 100, 'ghostuid', 'left before deletion'),
+			],
+		]);
+		// The deleted account no longer resolves - IUserManager::get() returns null.
+		$this->userManager->method('get')->with('ghostuid')->willReturn(null);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		$comments = $payload['cards'][0]['comments'];
+		self::assertCount(1, $comments);
+		// The generic label is shown instead of the raw uid.
+		self::assertSame('Former user', $comments[0]['author']);
+		self::assertSame('left before deletion', $comments[0]['body']);
+
+		// The raw uid must appear NOWHERE in the serialized public payload.
+		$json = json_encode($payload);
+		self::assertStringNotContainsString('ghostuid', $json, 'deleted author uid leaked into the public payload');
 	}
 
 	public function testSetCommentsRequiresManageAndPersists(): void {

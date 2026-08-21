@@ -2444,6 +2444,10 @@ msgstr ""
 msgid "Formatting"
 msgstr ""
 
+#: lib/Service/PublicShareService.php
+msgid "Former user"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Frequency"
 msgstr ""
