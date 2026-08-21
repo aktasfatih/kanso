@@ -244,8 +244,12 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Updates the given fields of a rule (null = leave unchanged). Any change to
-	 * the RRULE or the enabled flag recomputes `next_occurrence_at` from now.
+	 * Updates the given fields of a rule (null = leave unchanged). The cached
+	 * `next_occurrence_at` is re-armed only when the schedule actually changes (a
+	 * different RRULE) or the rule is re-enabled (disabled → enabled), and even
+	 * then it is never rewound onto an occurrence the cron already spawned - a
+	 * no-op edit leaves the cursor exactly where it was, so editing a rule can no
+	 * longer duplicate an already-fired occurrence dated today (#65).
 	 *
 	 * @throws DoesNotExistException if the rule, its board, the template card or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
@@ -277,6 +281,13 @@ class RecurrenceService {
 		// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
 		$this->visibilityGuard->assertVisible($board, $this->loadCard($newTemplate), $uid);
 
+		// Capture the pre-edit schedule + enabled state BEFORE applying the setters
+		// so we can tell an actual schedule change from a no-op edit (#65). The
+		// cursor may only be re-armed when the schedule really changed, and never
+		// rewound onto an occurrence the cron has already spawned.
+		$originalRrule = $rule->getRrule();
+		$wasEnabled = $rule->getEnabled();
+
 		$rule->setTemplateCardId($newTemplate);
 		$rule->setTargetStackId($newStack);
 		$rule->setMode($newMode);
@@ -290,11 +301,22 @@ class RecurrenceService {
 			$rule->setEnabled($enabled);
 		}
 
-		// Re-arm the cached next fire time whenever the schedule or its enabled
-		// state might have changed (cheap; keeps the cron scan honest).
-		$now = $this->time->getTime();
-		if ($rule->getEnabled()) {
-			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $now - 1, $rule->getCreatedAt(), $rule->getTimezone()));
+		// Re-arm the cached next fire time ONLY when the schedule genuinely changed
+		// (the RRULE differs) or the rule was just re-enabled (disabled → enabled).
+		// A no-op edit (e.g. an {enabled} toggle that stays on, or re-writing the
+		// same RRULE from the card's Repeat control) must NOT recompute the cursor:
+		// recomputing from now-1 can REWIND next_occurrence_at back onto TODAY - an
+		// occurrence the cron already fired - so the next cron run spawns a duplicate
+		// clone dated today (#65). When we DO re-arm, never let the cursor move
+		// backward past where it already sits: anchor the "after" point at
+		// max(now-1, currentCursor-1) so an edit can only move it forward, never onto
+		// an already-spawned occurrence.
+		$scheduleChanged = $newRrule !== $originalRrule;
+		$reEnabled = $rule->getEnabled() && !$wasEnabled;
+		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
+			$now = $this->time->getTime();
+			$after = max($now - 1, $rule->getNextOccurrenceAt() - 1);
+			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $after, $rule->getCreatedAt(), $rule->getTimezone()));
 		}
 
 		return $this->ruleMapper->update($rule);

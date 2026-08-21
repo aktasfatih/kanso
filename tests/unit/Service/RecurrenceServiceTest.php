@@ -1013,4 +1013,105 @@ class RecurrenceServiceTest extends TestCase {
 		$this->expectException(DoesNotExistException::class);
 		$this->serviceWithHiddenTemplate()->update(3, null, null, null, null, null, null, null, null, 'mgr');
 	}
+
+	// ---- update() must not rewind the cursor onto an already-fired occurrence (#65)
+
+	/**
+	 * Common wiring for an update() that reaches the setters: the rule, board,
+	 * manage permission, visible template and target stack are all resolved.
+	 */
+	private function wireUpdate(RecurRule $rule): void {
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+	}
+
+	/**
+	 * The reported bug (#65): a daily rule that already fired TODAY has its cursor
+	 * sitting on tomorrow. Re-writing the SAME RRULE (e.g. the card's Repeat
+	 * control saving an unchanged rule) must NOT recompute the cursor - recomputing
+	 * from now-1 would rewind it back onto today, an occurrence the cron already
+	 * spawned, so the next cron run would stamp a duplicate clone dated today.
+	 */
+	public function testUpdateWithUnchangedRruleDoesNotRewindCursorOntoToday(): void {
+		// Cursor already advanced past today's fire to tomorrow.
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		// Same RRULE, no schedule change → cursor must stay put.
+		$this->service->update(3, null, null, null, 'FREQ=DAILY', null, null, null, null, 'alice');
+
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * A no-op {enabled} toggle (the rule was already enabled, e.g. saving board
+	 * settings) leaves the schedule untouched, so it must NOT re-arm the cursor
+	 * either - same duplicate-clone risk as an unchanged-RRULE edit (#65).
+	 */
+	public function testUpdateWithNoOpEnableToggleDoesNotRewindCursor(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		// enabled=true but the rule was already enabled → not a re-enable.
+		$this->service->update(3, null, null, null, null, null, null, null, true, 'alice');
+
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * A genuine schedule change (a DIFFERENT RRULE) DOES re-arm the cursor to the
+	 * next occurrence of the new schedule - the deliberate re-arm is preserved.
+	 */
+	public function testUpdateWithChangedRruleReArmsCursor(): void {
+		// Daily rule, cursor on tomorrow; switch it to weekly.
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, 'FREQ=WEEKLY', null, null, null, null, 'alice');
+
+		// Anchored at createdAt (NOW), the next weekly occurrence after the current
+		// cursor (tomorrow) is one week out - re-armed forward, not rewound.
+		self::assertSame(self::NOW + 7 * 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Even on a genuine schedule change the cursor is never rewound BEFORE where it
+	 * already sits: a rule whose cursor has walked well past now (a catch-up in
+	 * progress, or a future-anchored rule) keeps advancing forward, never back onto
+	 * an occurrence at/behind the current cursor that may already have fired (#65).
+	 */
+	public function testUpdateWithChangedRruleNeverRewindsBehindCurrentCursor(): void {
+		// Cursor sits two days in the FUTURE (already advanced past today's fire).
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 2 * 86400);
+		$this->wireUpdate($rule);
+
+		// Re-writing to hourly would, from now-1, land the cursor at now+1h - BEHIND
+		// the current cursor. The max(now-1, cursor-1) floor forbids that: the new
+		// cursor may not move backward. now+2d is an exact hourly multiple from the
+		// NOW anchor, so the re-armed cursor stays at now+2d, never earlier.
+		$this->service->update(3, null, null, null, 'FREQ=HOURLY', null, null, null, null, 'alice');
+
+		self::assertGreaterThanOrEqual(self::NOW + 2 * 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Re-enabling a disabled rule (disabled → enabled) DOES re-arm from now, so a
+	 * rule that was off for a while picks up its next future occurrence rather than
+	 * staying stuck on a stale cursor.
+	 */
+	public function testUpdateReEnablingDisabledRuleReArmsFromNow(): void {
+		// A disabled rule whose cached cursor is stale (in the past).
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 10 * 86400);
+		$rule->setEnabled(false);
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, null, null, null, null, true, 'alice');
+
+		// Re-armed to the next daily occurrence at/after now, not left in the past.
+		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
+		self::assertTrue($rule->getEnabled());
+	}
 }
