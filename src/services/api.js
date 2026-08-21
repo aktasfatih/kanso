@@ -409,6 +409,10 @@ export const enablePublicShare = (boardId) =>
 export const disablePublicShare = (boardId) =>
 	axios.delete(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)
 
+// Opt in / out of showing read-only comments on the public board (#3949).
+export const setPublicShareComments = (boardId, enabled) =>
+	axios.put(url(`/api/boards/${boardId}/public-share/comments`), { enabled }).then((r) => r.data)
+
 // Read-only iCal / ICS feed of card due dates (board-level, MANAGE)
 export const fetchCalendarFeedConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/calendar-feed`)).then((r) => r.data)

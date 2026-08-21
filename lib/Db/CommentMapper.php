@@ -68,6 +68,39 @@ class CommentMapper extends QBMapper {
 	}
 
 	/**
+	 * The anonymous-share twin of {@see self::findByCard()} (#3949): every
+	 * non-deleted comment on a board's PUBLIC cards only, oldest first, keyed by
+	 * card id. Restricted through {@see CardVisibilityScope::applyPublicOnly()} on
+	 * the joined card, so a hidden card's comments can never surface on the public
+	 * board - and (like the label/checklist public helpers) it never fetches then
+	 * discards a hidden card's rows. Mirrors
+	 * {@see CardLabelMapper::findLabelIdsByBoardPublicOnly()}. The client nests the
+	 * flat list by parent_comment_id (one level).
+	 *
+	 * @return array<int, Comment[]> map of cardId => comments in created_at order
+	 * @throws Exception
+	 */
+	public function findByBoardPublicOnly(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('cm.*')
+			->from($this->getTableName(), 'cm')
+			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('cm.created_at', 'ASC')
+			->addOrderBy('cm.id', 'ASC');
+		$this->visibilityScope->applyPublicOnly($qb, 'c');
+
+		$map = [];
+		foreach ($this->findEntities($qb) as $comment) {
+			$map[(int)$comment->getCardId()][] = $comment;
+		}
+
+		return $map;
+	}
+
+	/**
 	 * The non-deleted direct replies of a top-level comment - used to cascade a
 	 * delete over a whole thread.
 	 *

@@ -125,6 +125,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<p v-else class="public-detail__desc public-detail__desc--empty">
 					{{ t('kanso', 'No description') }}
 				</p>
+
+				<!-- Read-only comments (#3949): shown ONLY when the board owner opted
+				     in. Author DISPLAY NAME + an initials avatar (no NcAvatar / no uid),
+				     markdown body, one-level threads. No reply box, no reactions. -->
+				<section v-if="commentsEnabled" class="public-comments">
+					<h3 class="public-comments__title">{{ t('kanso', 'Comments') }}</h3>
+					<p v-if="!threadedComments.length" class="public-comments__empty">
+						{{ t('kanso', 'No comments') }}
+					</p>
+					<ul v-else class="public-comments__list">
+						<li v-for="c in threadedComments" :key="c.id" class="public-comment">
+							<div class="public-comment__head">
+								<span class="public-comment__avatar" aria-hidden="true">{{ initials(c.author) }}</span>
+								<span class="public-comment__author">{{ c.author }}</span>
+								<span class="public-comment__date">{{ formatDateTime(c.createdAt) }}</span>
+							</div>
+							<!-- eslint-disable-next-line vue/no-v-html -- sanitized by renderMarkdown (DOMPurify) -->
+							<div class="public-comment__body" v-html="renderComment(c.body)" />
+							<ul v-if="c.replies.length" class="public-comment__replies">
+								<li v-for="r in c.replies" :key="r.id" class="public-comment">
+									<div class="public-comment__head">
+										<span class="public-comment__avatar" aria-hidden="true">{{ initials(r.author) }}</span>
+										<span class="public-comment__author">{{ r.author }}</span>
+										<span class="public-comment__date">{{ formatDateTime(r.createdAt) }}</span>
+									</div>
+									<!-- eslint-disable-next-line vue/no-v-html -- sanitized by renderMarkdown (DOMPurify) -->
+									<div class="public-comment__body" v-html="renderComment(r.body)" />
+								</li>
+							</ul>
+						</li>
+					</ul>
+				</section>
 			</div>
 		</div>
 	</div>
@@ -149,6 +181,7 @@ export default {
 			stacks: [],
 			cards: [],
 			selectedCard: null,
+			commentsEnabled: false,
 		}
 	},
 	computed: {
@@ -172,6 +205,27 @@ export default {
 			if (!c) return false
 			return c.priority >= 4 || !!c.startDate || !!c.duedate || !!c.estimate || c.checklist.total > 0
 		},
+		// The open card's flat comment list nested one level by parentCommentId:
+		// top-level comments in order, each with its direct replies (also in order).
+		// The server already scopes and orders the list; this only groups it.
+		threadedComments() {
+			const list = (this.selectedCard && this.selectedCard.comments) || []
+			const byId = {}
+			const roots = []
+			for (const c of list) {
+				byId[c.id] = { ...c, replies: [] }
+			}
+			for (const c of list) {
+				const node = byId[c.id]
+				const parent = c.parentCommentId != null ? byId[c.parentCommentId] : null
+				if (parent) {
+					parent.replies.push(node)
+				} else {
+					roots.push(node)
+				}
+			}
+			return roots
+		},
 	},
 	async mounted() {
 		try {
@@ -179,6 +233,7 @@ export default {
 			this.board = data.board
 			this.stacks = data.stacks
 			this.cards = data.cards
+			this.commentsEnabled = !!(data.board && data.board.commentsEnabled)
 		} catch (e) {
 			this.error = true
 		} finally {
@@ -211,6 +266,27 @@ export default {
 			} catch (e) {
 				return ''
 			}
+		},
+		// A comment's created_at is a unix-seconds int (public payload).
+		formatDateTime(ts) {
+			try {
+				return new Date(ts * 1000).toLocaleString()
+			} catch (e) {
+				return ''
+			}
+		},
+		// Initials avatar (no NcAvatar, no uid): first letters of the display name.
+		initials(name) {
+			const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+			if (!parts.length) return '?'
+			const first = parts[0][0] || ''
+			const last = parts.length > 1 ? parts[parts.length - 1][0] : ''
+			return (first + last).toUpperCase()
+		},
+		// Comment body rendered as sanitized markdown (same pipeline as the
+		// description; no refs map, so PREFIX-123 stays plain text).
+		renderComment(body) {
+			return renderMarkdown(body || '')
 		},
 	},
 }

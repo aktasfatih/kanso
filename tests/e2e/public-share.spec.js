@@ -232,3 +232,100 @@ test.describe('Public board is interactive read-only', () => {
 		await expect(page.locator('.public-detail')).toHaveCount(0)
 	})
 })
+
+// Opt-in exposure toggle (#3949): the public board is person-free by default,
+// but a MANAGE user may DELIBERATELY enable read-only comments. When ON, an
+// anonymous reader sees the thread (author display names only); when OFF, the
+// comments never surface and the payload never carries them.
+test.describe('Public board comments opt-in', () => {
+	// True anonymous reader (opt out of the shared admin storageState).
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	let boardId = 0
+	let cardId = 0
+	let token = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Comments E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		cardId = (await api('POST', '/cards', { stackId, title: 'Card with a discussion' })).body.id
+		// A top-level comment (markdown) and a reply, both by admin.
+		const top = (await api('POST', `/cards/${cardId}/comments`, { body: 'PUBLIC_TOP **bold**' })).body
+		await api('POST', `/cards/${cardId}/comments`, { body: 'PUBLIC_REPLY here', parentCommentId: top.id })
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('OFF by default: payload carries no comments and the page hides them', async ({ page }) => {
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		expect(res.body.board.commentsEnabled).toBe(false)
+		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
+		expect(card).toBeTruthy()
+		expect(card.comments).toBeUndefined()
+		const json = JSON.stringify(res.body)
+		expect(json).not.toContain('PUBLIC_TOP')
+		expect(json).not.toContain('PUBLIC_REPLY')
+
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await page.locator('.public-card').filter({ hasText: 'Card with a discussion' }).click()
+		const detail = page.locator('.public-detail')
+		await expect(detail).toBeVisible()
+		// No comments section when the opt-in is off.
+		await expect(detail.locator('.public-comments')).toHaveCount(0)
+		await expect(detail).not.toContainText('PUBLIC_TOP')
+	})
+
+	test('ON: enabling the toggle surfaces a read-only thread with author display names', async ({ page }) => {
+		// MANAGE user opts in.
+		const cfg = (await api('PUT', `/boards/${boardId}/public-share/comments`, { enabled: true })).body
+		expect(cfg.commentsEnabled).toBe(true)
+
+		// Payload now carries the comments (author display name only, not the uid).
+		const res = await fetchPublic(token)
+		expect(res.body.board.commentsEnabled).toBe(true)
+		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
+		expect(Array.isArray(card.comments)).toBe(true)
+		expect(card.comments.length).toBe(2)
+		// The comment carries the author's DISPLAY NAME (resolved from the uid, like
+		// the authenticated endpoint) - a non-empty string - and its markdown body,
+		// timestamps and one-level parent link. (In this dev instance the admin's
+		// display name and uid coincide; the display-name resolution itself is pinned
+		// by the unit test with distinct names.)
+		expect(typeof card.comments[0].author).toBe('string')
+		expect(card.comments[0].author.length).toBeGreaterThan(0)
+		expect(card.comments[0].parentCommentId).toBeNull()
+		expect(card.comments[1].parentCommentId).toBe(card.comments[0].id)
+		const json = JSON.stringify(res.body)
+		expect(json).toContain('PUBLIC_TOP')
+		// No reactions / reactor lists / assignee data ride the public comment.
+		expect(card.comments[0].reactions).toBeUndefined()
+		expect(json).not.toContain('reactor')
+		expect(json).not.toContain('assignee')
+
+		// The anonymous page renders the read-only thread with a rendered markdown
+		// body and an initials avatar (no NcAvatar, no reply box).
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await page.locator('.public-card').filter({ hasText: 'Card with a discussion' }).click()
+		const comments = page.locator('.public-detail .public-comments')
+		await expect(comments).toBeVisible()
+		await expect(comments.locator('.public-comment__body strong').first()).toHaveText('bold')
+		await expect(comments).toContainText('PUBLIC_REPLY')
+		await expect(comments.locator('.public-comment__avatar').first()).toBeVisible()
+		// Read-only: no comment input in the public thread.
+		await expect(comments.locator('input, textarea')).toHaveCount(0)
+	})
+
+	test('toggling OFF again hides the thread and drops it from the payload', async () => {
+		const cfg = (await api('PUT', `/boards/${boardId}/public-share/comments`, { enabled: false })).body
+		expect(cfg.commentsEnabled).toBe(false)
+		const res = await fetchPublic(token)
+		expect(res.body.board.commentsEnabled).toBe(false)
+		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
+		expect(card.comments).toBeUndefined()
+		expect(JSON.stringify(res.body)).not.toContain('PUBLIC_TOP')
+	})
+})

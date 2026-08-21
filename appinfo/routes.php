@@ -199,6 +199,8 @@ return [
 		['name' => 'publicShare#config', 'url' => '/api/boards/{id}/public-share', 'verb' => 'GET'],
 		['name' => 'publicShare#enable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'POST'],
 		['name' => 'publicShare#disable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'DELETE'],
+		// "Show comments (read-only)" opt-in for the public link (#3949). MANAGE-only.
+		['name' => 'publicShare#setComments', 'url' => '/api/boards/{id}/public-share/comments', 'verb' => 'PUT'],
 
 		// Calendar-feed config (MANAGE, authenticated). Nested under a board id,
 		// distinct from board#show. Enable/rotate = POST, disable = DELETE.

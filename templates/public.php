@@ -69,5 +69,21 @@ html, body { height: 100%; }
 .public-detail__desc blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--color-border, #ddd); color: var(--color-text-maxcontrast, #666); }
 .public-detail__desc a { color: var(--color-primary-element, #0082c9); }
 .public-detail__desc img { max-width: 100%; height: auto; border-radius: 6px; }
+/* Read-only comments (#3949): shown only when the owner opted in. */
+.public-comments { margin-top: 18px; border-top: 1px solid var(--color-border, #ddd); padding-top: 14px; }
+.public-comments__title { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--color-main-text, #222); }
+.public-comments__empty { margin: 0; font-size: 13px; font-style: italic; color: var(--color-text-maxcontrast, #888); }
+.public-comments__list, .public-comment__replies { list-style: none; margin: 0; padding: 0; }
+.public-comment { margin-bottom: 14px; }
+.public-comment__replies { margin-top: 12px; padding-left: 20px; border-left: 2px solid var(--color-border, #eee); }
+.public-comment__head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.public-comment__avatar { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--color-primary-element, #0082c9); color: #fff; font-size: 11px; font-weight: 600; flex: 0 0 auto; }
+.public-comment__author { font-size: 13px; font-weight: 600; color: var(--color-main-text, #222); }
+.public-comment__date { font-size: 12px; color: var(--color-text-maxcontrast, #888); }
+.public-comment__body { font-size: 14px; line-height: 1.5; word-break: break-word; color: var(--color-main-text, #222); }
+.public-comment__body p { margin: 0 0 8px; }
+.public-comment__body p:last-child { margin-bottom: 0; }
+.public-comment__body a { color: var(--color-primary-element, #0082c9); }
+.public-comment__body code { background: var(--color-background-dark, #f0f0f0); padding: 1px 4px; border-radius: 4px; font-size: 0.92em; }
 </style>
 <div id="kanso-public" data-token="<?php p($_['token'] ?? ''); ?>"></div>
