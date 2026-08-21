@@ -7615,10 +7615,25 @@ body.theme--dark .card-modal,
 		word-break: normal;
 		overflow-wrap: anywhere;
 	}
-	/* Attributes live in their own "Details" tab and wrap cleanly instead of
-	   scrolling as a cramped one-line strip. */
+	/* Attributes stay at the top and wrap cleanly instead of scrolling as a
+	   cramped one-line strip. */
 	.card-modal__attrbar { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
 	.card-modal__attr-right { margin-left: 0; }
+	/* Attribute-bar popovers (review request, type, due, label, assignee…) are
+	   absolutely positioned off a small pill, so a right-anchored one can spill
+	   past the screen edge once the pill wraps mid-row (#4058). Pin them to the
+	   viewport as an inset sheet so they always render fully on-screen. */
+	.card-modal__attrbar .card-modal__popover {
+		position: fixed;
+		left: 12px;
+		right: 12px;
+		top: auto;
+		bottom: 12px;
+		width: auto;
+		min-width: 0;
+		max-width: none;
+		max-height: 60vh;
+	}
 	.card-modal__body { grid-template-columns: 1fr; }
 	/* Panes stack: the persisted split width and its drag handle are ignored. */
 	.card-modal__resizer { display: none; }
