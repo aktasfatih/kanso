@@ -2268,6 +2268,7 @@ import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
+import { allDayInputValue, timedInputValue, formatCardDate } from '../utils/dateDisplay.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey, invalidateMyWork } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
@@ -3135,9 +3136,10 @@ const isAllDay = computed(() => cardData.value?.allDay === true)
 const dueDateInputValue = computed(() => {
 	if (!cardData.value?.duedate) return ''
 	const d = new Date(cardData.value.duedate)
-	const pad = (n) => String(n).padStart(2, '0')
-	const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-	return isAllDay.value ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+	// All-day dates are stored at UTC midnight and the input is a plain date
+	// picker: read the day back in UTC so a date typed as the 22nd shows the 22nd
+	// west of UTC (not the 21st). Timed dates keep local time (real time-of-day).
+	return isAllDay.value ? allDayInputValue(d) : timedInputValue(d)
 })
 
 // Native segmented date inputs fire `change` per segment, and each change kicks
@@ -3185,8 +3187,10 @@ async function clearDueDate() {
 const startDateInputValue = computed(() => {
 	if (!cardData.value?.startDate) return ''
 	const d = new Date(cardData.value.startDate)
-	const pad = (n) => String(n).padStart(2, '0')
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+	// The start input is always a datetime-local field. For an all-day card the
+	// start date is stored at UTC midnight, so read the day back in UTC (matching
+	// the due date) and pin the time to 00:00; timed dates stay in local time.
+	return isAllDay.value ? `${allDayInputValue(d)}T00:00` : timedInputValue(d)
 })
 
 // Same buffered-input guard as the due date (#64): don't let the refetch write
@@ -5173,13 +5177,15 @@ const currentPriorityLevel = computed(() =>
 )
 const dueDateLabel = computed(() => {
 	if (!cardData.value?.duedate) return ''
-	const d = new Date(cardData.value.duedate)
-	if (isAllDay.value) {
-		return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-	}
-	return d.toLocaleString(undefined, {
-		weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-	})
+	// All-day → format in UTC (the stored calendar day) so the pill matches the
+	// picked day regardless of the viewer's timezone; timed → local with time.
+	return formatCardDate(
+		cardData.value.duedate,
+		isAllDay.value,
+		isAllDay.value
+			? { weekday: 'short', day: 'numeric', month: 'short' }
+			: { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+	)
 })
 // Labels actually assigned to this card (for the attribute-bar chips)
 const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelIds.value.has(l.id)))

@@ -128,7 +128,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="board-list-row__due"
 							:class="{ 'board-list-row__due--overdue': isOverdue(rows[vRow.index].card) }">
 							<CalendarIcon :size="14" />
-							{{ formatDue(rows[vRow.index].card.duedate) }}
+							{{ formatDue(rows[vRow.index].card) }}
 						</span>
 
 						<!-- Comments -->
@@ -181,6 +181,7 @@ import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
+import { formatCardDate } from '../utils/dateDisplay.js'
 
 const props = defineProps({
 	/** Non-archived stacks in display order (already filtered by BoardView). */
@@ -387,10 +388,12 @@ function priorityLabel(value) {
 	return PRIORITY_LEVELS.find((l) => l.value === value)?.label ?? ''
 }
 
-function formatDue(duedate) {
-	const d = new Date(duedate)
+function formatDue(card) {
+	const d = new Date(card.duedate)
 	if (Number.isNaN(d.getTime())) return ''
-	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+	// All-day dates are stored at UTC midnight; format them in UTC so the row
+	// shows the picked calendar day even west of UTC (not the previous day).
+	return formatCardDate(card.duedate, card.allDay === true, { month: 'short', day: 'numeric' })
 }
 
 function isOverdue(card) {
