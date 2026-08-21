@@ -109,6 +109,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcActionButton>
 		</NcActions>
 
+		<!-- Mark done -->
+		<NcButton
+			type="tertiary"
+			:disabled="applying || count === 0"
+			:title="t('kanso', 'Mark done')"
+			:aria-label="t('kanso', 'Mark done')"
+			@click="$emit('set-status', 'done')">
+			<template #icon>
+				<CheckIcon :size="20" />
+			</template>
+		</NcButton>
+
 		<!-- Archive -->
 		<NcButton
 			type="tertiary"
@@ -159,6 +171,7 @@ import LabelOffIcon from 'vue-material-design-icons/LabelOff.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import CalendarClockIcon from 'vue-material-design-icons/CalendarClock.vue'
 import CalendarRemoveIcon from 'vue-material-design-icons/CalendarRemove.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
@@ -191,7 +204,7 @@ defineProps({
 	},
 })
 
-const emit = defineEmits(['move', 'add-label', 'remove-label', 'assign', 'set-due', 'archive', 'delete', 'close'])
+const emit = defineEmits(['move', 'add-label', 'remove-label', 'assign', 'set-due', 'set-status', 'archive', 'delete', 'close'])
 
 function onDueDateSubmit(value) {
 	if (!value) return

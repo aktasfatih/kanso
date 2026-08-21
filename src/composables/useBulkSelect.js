@@ -108,7 +108,7 @@ export function useBulkSelect(boardId, queryClient) {
 	/**
 	 * Apply a bulk action to the current selection.
 	 *
-	 * @param {string} action - one of: move, add_label, remove_label, assign_user, set_due_date, archive, delete
+	 * @param {string} action - one of: move, add_label, remove_label, assign_user, set_due_date, set_status, archive, delete
 	 * @param {object} params - action-specific params
 	 * @throws on server error
 	 */

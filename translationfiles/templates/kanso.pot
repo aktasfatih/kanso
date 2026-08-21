@@ -2819,6 +2819,7 @@ msgstr ""
 msgid "Mark as template"
 msgstr ""
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Mark done"
 msgstr ""

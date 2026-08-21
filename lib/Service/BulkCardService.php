@@ -31,6 +31,7 @@ class BulkCardService {
 	public const ACTION_REMOVE_LABEL = 'remove_label';
 	public const ACTION_ASSIGN_USER = 'assign_user';
 	public const ACTION_SET_DUE_DATE = 'set_due_date';
+	public const ACTION_SET_STATUS = 'set_status';
 	public const ACTION_ARCHIVE = 'archive';
 	public const ACTION_DELETE = 'delete';
 
@@ -40,6 +41,7 @@ class BulkCardService {
 		self::ACTION_REMOVE_LABEL,
 		self::ACTION_ASSIGN_USER,
 		self::ACTION_SET_DUE_DATE,
+		self::ACTION_SET_STATUS,
 		self::ACTION_ARCHIVE,
 		self::ACTION_DELETE,
 	];
@@ -75,6 +77,7 @@ class BulkCardService {
 	 *   - remove_label:  labelId (int, > 0)
 	 *   - assign_user:   userId (non-empty string)
 	 *   - set_due_date:  duedate (string; '' clears it - same wire format as update())
+	 *   - set_status:    status ('done' stamps done_at via the single-card done path)
 	 *   - archive:       (none)
 	 *   - delete:        (none)
 	 *
@@ -200,6 +203,20 @@ class BulkCardService {
 				$duedate = (string)($params['duedate'] ?? '');
 				return function (int $cardId) use ($duedate, $uid): void {
 					$this->cardService->update($cardId, null, null, $duedate, null, null, $uid);
+				};
+
+			case self::ACTION_SET_STATUS:
+				// Only 'done' is supported: it reuses the single-card done path
+				// (CardService::update with $done=true), which stamps done_at once
+				// (idempotent), enforces the same per-card EDIT permission, and
+				// appends its own kanso_changes row. Anything else is a whole-request
+				// 400 - the client never sends another value.
+				$status = (string)($params['status'] ?? '');
+				if ($status !== 'done') {
+					throw new InvalidInputException('Unsupported status: ' . $status);
+				}
+				return function (int $cardId) use ($uid): void {
+					$this->cardService->update($cardId, null, null, null, true, null, $uid);
 				};
 
 			case self::ACTION_ARCHIVE:
