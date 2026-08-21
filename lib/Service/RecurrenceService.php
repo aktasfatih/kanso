@@ -411,6 +411,37 @@ class RecurrenceService {
 			? $rule->getNextOccurrenceAt()
 			: $this->time->getTime();
 
+		// Read the template up front - both the soft-trash pause below and the CLONE
+		// enrichment need it, so read once (a missing/hard-deleted template stays
+		// null here and falls through to the mode branch, which throws its usual
+		// DoesNotExistException that the cron logs and retries).
+		$template = $this->findTemplateOrNull($rule);
+
+		// Pause on a SOFT-trashed template (#4124): create/update guard the template
+		// via loadCard() (throws on deleted_at > 0), but the spawn hot path read it
+		// raw, so a template moved to the trash kept cloning/resetting. Treat a
+		// soft-trashed template as a pause, not an error and not a hard-disable: skip
+		// the spawn but still advance the schedule past this occurrence (like a
+		// skip_while_open skip) so the cron does not busy-loop, and leave the rule
+		// enabled so it resumes automatically when the template is restored. A PURGED
+		// template is a different case - the purge drops the rule outright (#4123).
+		if ($template !== null && $template->getDeletedAt() > 0) {
+			$this->db->beginTransaction();
+			try {
+				$this->logger->info(
+					'kanso: recurring rule ' . $rule->getId()
+					. ' paused, template card is in the trash'
+				);
+				$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
+				$this->ruleMapper->update($rule);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+			return null;
+		}
+
 		$this->db->beginTransaction();
 		try {
 			if ($rule->getMode() === RecurRule::MODE_RESET) {
@@ -429,7 +460,7 @@ class RecurrenceService {
 					$this->db->commit();
 					return null;
 				}
-				$card = $this->spawnClone($rule, $occurrenceTs);
+				$card = $this->spawnClone($rule, $occurrenceTs, $template);
 			}
 
 			$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
@@ -468,8 +499,10 @@ class RecurrenceService {
 	 * and emitted by {@see self::spawn()} after commit - a pre-commit push could
 	 * make a client refetch state the transaction may still roll back.
 	 */
-	private function spawnClone(RecurRule $rule, int $occurrenceTs): Card {
-		$template = $this->cardMapper->find($rule->getTemplateCardId());
+	private function spawnClone(RecurRule $rule, int $occurrenceTs, ?Card $template = null): Card {
+		// $template is the copy spawn() already read; null only when spawn() found
+		// no template (hard-deleted) - re-read to raise the usual DoesNotExistException.
+		$template ??= $this->cardMapper->find($rule->getTemplateCardId());
 
 		// Visibility (#3760): the spawn runs as the rule OWNER - if the template
 		// has been narrowed past them since the rule was created, copying its
@@ -496,6 +529,9 @@ class RecurrenceService {
 
 		$card->setDescription($template->getDescription());
 		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));
+		// Carry the template's all-day flag (#4125): without it the clone defaults
+		// to all_day=false and shows a spurious 00:00 time on an all-day template.
+		$card->setAllDay($template->getAllDay() ?? false);
 		$card->setLastModified($this->time->getTime());
 		$card = $this->cardMapper->update($card);
 
@@ -626,6 +662,21 @@ class RecurrenceService {
 		$rule->setNextOccurrenceAt($next);
 		if ($next === 0) {
 			$rule->setEnabled(false);
+		}
+	}
+
+	/**
+	 * The rule's template card, or null if it is hard-gone. spawn() reads it once
+	 * up front for both the soft-trash pause check (#4124) and CLONE enrichment.
+	 * A MISSING template returns null (not an exception here) so spawn() falls
+	 * through to the mode branch, which raises the usual DoesNotExistException the
+	 * cron logs and retries; a purge cascade drops the rule outright (#4123).
+	 */
+	private function findTemplateOrNull(RecurRule $rule): ?Card {
+		try {
+			return $this->cardMapper->find($rule->getTemplateCardId());
+		} catch (DoesNotExistException) {
+			return null;
 		}
 	}
 

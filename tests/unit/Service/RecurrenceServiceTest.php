@@ -440,6 +440,111 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->spawn($rule);
 	}
 
+	public function testSpawnCloneCopiesTemplateAllDayFlag(): void {
+		// #4125: an all-day template must spawn an all-day clone, else the clone
+		// defaults to all_day=false and shows a spurious 00:00 time.
+		$template = $this->templateCard();
+		$template->setAllDay(true);
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, policy: RecurRule::POLICY_AT_OCCURRENCE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardService->method('create')->willReturn($this->spawnedCard(99));
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c): Card {
+				self::assertTrue($c->getAllDay());
+				return $c;
+			});
+
+		$this->service->spawn($rule);
+	}
+
+	public function testSpawnCloneDefaultsAllDayFalseForNonAllDayTemplate(): void {
+		// A template with no all-day flag (null) spawns a timed clone (all_day=false),
+		// never null - the flag is always set explicitly on the clone.
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, policy: RecurRule::POLICY_AT_OCCURRENCE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->method('create')->willReturn($this->spawnedCard(99));
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c): Card {
+				self::assertFalse($c->getAllDay());
+				return $c;
+			});
+
+		$this->service->spawn($rule);
+	}
+
+	// ---- soft-trashed template pauses the schedule (#4124) ----------------
+
+	public function testSpawnPausesWhenTemplateIsSoftTrashed(): void {
+		// A soft-trashed template (deleted_at > 0, not purged) must NOT spawn: the
+		// spawn hot path read the template raw and kept cloning it. It pauses -
+		// no card, no error, no hard-disable - and advances the schedule so the
+		// cron does not busy-loop; the rule stays enabled to resume on restore.
+		$trashed = $this->templateCard();
+		$trashed->setDeletedAt(self::NOW - 5);
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($trashed);
+
+		// Nothing is created and no enrichment fires.
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardService->expects(self::never())->method('move');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		// The schedule still advances (rule saved) so the cron does not re-fire now.
+		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		$card = $this->service->spawn($rule);
+
+		self::assertNull($card);
+		// A pause is not an occurrence: counters untouched...
+		self::assertSame(0, $rule->getOccurrencesSpawned());
+		// ...but the cursor advanced past this occurrence to tomorrow...
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+		// ...and the rule stays enabled so it resumes when the template is restored.
+		self::assertTrue($rule->getEnabled());
+	}
+
+	public function testSpawnPausesWhenResetTemplateIsSoftTrashed(): void {
+		// RESET mode moves the template card itself - a soft-trashed template must
+		// pause too, never move a trashed card back into play.
+		$trashed = $this->templateCard();
+		$trashed->setDeletedAt(self::NOW - 5);
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($trashed);
+
+		$this->cardService->expects(self::never())->method('move');
+		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		self::assertNull($this->service->spawn($rule));
+		self::assertTrue($rule->getEnabled());
+	}
+
+	public function testSpawnResumesAfterTemplateRestored(): void {
+		// Once the template is restored (deleted_at back to 0) the very next spawn
+		// clones again - the pause left the rule enabled and did not disable it.
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW);
+		// A live (restored) template.
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->expects(self::once())->method('create')->willReturn($this->spawnedCard(99));
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$card = $this->service->spawn($rule);
+
+		self::assertNotNull($card);
+		self::assertSame(1, $rule->getOccurrencesSpawned());
+	}
+
 	// ---- spawn RESET ------------------------------------------------------
 
 	public function testSpawnResetMovesTemplateBackClearsDoneRearmsDuedate(): void {
@@ -484,8 +589,12 @@ class RecurrenceServiceTest extends TestCase {
 	public function testSpawnCloneSkipsWhenPreviousCardStillOpen(): void {
 		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42, occurrencesSpawned: 1);
 
+		// spawn() reads the (live) template first, then previousCardOpen reads the
+		// last spawned card (42), still open → skip.
 		$openCard = $this->spawnedCard(42); // done_at 0, not archived/deleted → open
-		$this->cardMapper->method('find')->with(42)->willReturn($openCard);
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($openCard): Card {
+			return $id === 42 ? $openCard : $this->templateCard();
+		});
 
 		$this->cardService->expects(self::never())->method('create');
 		// The schedule still advances (rule saved) so it does not re-fire now.
@@ -652,7 +761,10 @@ class RecurrenceServiceTest extends TestCase {
 		// so the rule does not re-fire immediately, atomically.
 		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42, occurrencesSpawned: 1);
 		$openCard = $this->spawnedCard(42);
-		$this->cardMapper->method('find')->with(42)->willReturn($openCard);
+		// spawn() reads the (live) template first, then the last spawned card (42).
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($openCard): Card {
+			return $id === 42 ? $openCard : $this->templateCard();
+		});
 		$this->cardService->expects(self::never())->method('create');
 		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
 
@@ -714,14 +826,16 @@ class RecurrenceServiceTest extends TestCase {
 
 	public function testRunDueRulesSpawnsEachAndSkipsBroken(): void {
 		$ruleA = $this->rule(id: 1, nextOccurrenceAt: self::NOW);
+		// Rule A's template card (id 11) is hard-gone; rule B's (id 10) is live.
+		$ruleA->setTemplateCardId(11);
 		$ruleB = $this->rule(id: 2, nextOccurrenceAt: self::NOW);
 		$this->ruleMapper->method('findDueEnabled')->with(self::NOW)->willReturn([$ruleA, $ruleB]);
 
-		// Rule A's template card is gone → spawn throws; rule B still runs.
+		// Rule A's template card is gone → spawn throws; rule B still runs. Keyed on
+		// the template id (not a call counter) so it survives spawn() reading the
+		// template once up front (#4124) instead of only inside spawnClone.
 		$this->cardMapper->method('find')->willReturnCallback(function (int $id): Card {
-			static $call = 0;
-			$call++;
-			if ($call === 1) {
+			if ($id === 11) {
 				throw new DoesNotExistException('template gone');
 			}
 			return $this->templateCard();
