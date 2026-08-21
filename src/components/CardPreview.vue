@@ -121,6 +121,7 @@ import { renderMarkdown } from '../services/markdown.js'
 import { cssColor, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
+import { formatCardDate } from '../utils/dateDisplay.js'
 
 const props = defineProps({
 	/** Board summary card (title, boardSeq, labelIds, assigneeIds, priority, duedate, checklist). */
@@ -192,8 +193,9 @@ const priorityLabel = computed(() => {
 
 const dueLabel = computed(() => {
 	if (!props.card.duedate) return ''
-	const d = new Date(props.card.duedate)
-	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+	// All-day dates are stored at UTC midnight; format them in UTC so the pill
+	// shows the picked calendar day even west of UTC (not the previous day).
+	return formatCardDate(props.card.duedate, props.card.allDay === true, { month: 'short', day: 'numeric' })
 })
 
 const dueDateClass = computed(() => {

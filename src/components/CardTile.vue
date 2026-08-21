@@ -224,6 +224,7 @@ import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-d
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { cssColor, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
+import { formatCardDate } from '../utils/dateDisplay.js'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 
 const props = defineProps({
@@ -348,8 +349,9 @@ const dueDateClass = computed(() => {
 })
 
 function formatDue(iso) {
-	const d = new Date(iso)
-	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+	// All-day dates are stored at UTC midnight; format them in UTC so the chip
+	// shows the picked calendar day even west of UTC (not the previous day).
+	return formatCardDate(iso, props.card.allDay === true, { month: 'short', day: 'numeric' })
 }
 
 // Priority label for the indicator badge

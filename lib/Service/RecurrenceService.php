@@ -244,8 +244,12 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Updates the given fields of a rule (null = leave unchanged). Any change to
-	 * the RRULE or the enabled flag recomputes `next_occurrence_at` from now.
+	 * Updates the given fields of a rule (null = leave unchanged). The cached
+	 * `next_occurrence_at` is re-armed only when the schedule actually changes (a
+	 * different RRULE) or the rule is re-enabled (disabled → enabled), and even
+	 * then it is never rewound onto an occurrence the cron already spawned - a
+	 * no-op edit leaves the cursor exactly where it was, so editing a rule can no
+	 * longer duplicate an already-fired occurrence dated today (#65).
 	 *
 	 * @throws DoesNotExistException if the rule, its board, the template card or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
@@ -277,6 +281,13 @@ class RecurrenceService {
 		// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
 		$this->visibilityGuard->assertVisible($board, $this->loadCard($newTemplate), $uid);
 
+		// Capture the pre-edit schedule + enabled state BEFORE applying the setters
+		// so we can tell an actual schedule change from a no-op edit (#65). The
+		// cursor may only be re-armed when the schedule really changed, and never
+		// rewound onto an occurrence the cron has already spawned.
+		$originalRrule = $rule->getRrule();
+		$wasEnabled = $rule->getEnabled();
+
 		$rule->setTemplateCardId($newTemplate);
 		$rule->setTargetStackId($newStack);
 		$rule->setMode($newMode);
@@ -290,11 +301,22 @@ class RecurrenceService {
 			$rule->setEnabled($enabled);
 		}
 
-		// Re-arm the cached next fire time whenever the schedule or its enabled
-		// state might have changed (cheap; keeps the cron scan honest).
-		$now = $this->time->getTime();
-		if ($rule->getEnabled()) {
-			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $now - 1, $rule->getCreatedAt(), $rule->getTimezone()));
+		// Re-arm the cached next fire time ONLY when the schedule genuinely changed
+		// (the RRULE differs) or the rule was just re-enabled (disabled → enabled).
+		// A no-op edit (e.g. an {enabled} toggle that stays on, or re-writing the
+		// same RRULE from the card's Repeat control) must NOT recompute the cursor:
+		// recomputing from now-1 can REWIND next_occurrence_at back onto TODAY - an
+		// occurrence the cron already fired - so the next cron run spawns a duplicate
+		// clone dated today (#65). When we DO re-arm, never let the cursor move
+		// backward past where it already sits: anchor the "after" point at
+		// max(now-1, currentCursor-1) so an edit can only move it forward, never onto
+		// an already-spawned occurrence.
+		$scheduleChanged = $newRrule !== $originalRrule;
+		$reEnabled = $rule->getEnabled() && !$wasEnabled;
+		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
+			$now = $this->time->getTime();
+			$after = max($now - 1, $rule->getNextOccurrenceAt() - 1);
+			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $after, $rule->getCreatedAt(), $rule->getTimezone()));
 		}
 
 		return $this->ruleMapper->update($rule);
@@ -389,6 +411,37 @@ class RecurrenceService {
 			? $rule->getNextOccurrenceAt()
 			: $this->time->getTime();
 
+		// Read the template up front - both the soft-trash pause below and the CLONE
+		// enrichment need it, so read once (a missing/hard-deleted template stays
+		// null here and falls through to the mode branch, which throws its usual
+		// DoesNotExistException that the cron logs and retries).
+		$template = $this->findTemplateOrNull($rule);
+
+		// Pause on a SOFT-trashed template (#4124): create/update guard the template
+		// via loadCard() (throws on deleted_at > 0), but the spawn hot path read it
+		// raw, so a template moved to the trash kept cloning/resetting. Treat a
+		// soft-trashed template as a pause, not an error and not a hard-disable: skip
+		// the spawn but still advance the schedule past this occurrence (like a
+		// skip_while_open skip) so the cron does not busy-loop, and leave the rule
+		// enabled so it resumes automatically when the template is restored. A PURGED
+		// template is a different case - the purge drops the rule outright (#4123).
+		if ($template !== null && $template->getDeletedAt() > 0) {
+			$this->db->beginTransaction();
+			try {
+				$this->logger->info(
+					'kanso: recurring rule ' . $rule->getId()
+					. ' paused, template card is in the trash'
+				);
+				$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
+				$this->ruleMapper->update($rule);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+			return null;
+		}
+
 		$this->db->beginTransaction();
 		try {
 			if ($rule->getMode() === RecurRule::MODE_RESET) {
@@ -407,7 +460,7 @@ class RecurrenceService {
 					$this->db->commit();
 					return null;
 				}
-				$card = $this->spawnClone($rule, $occurrenceTs);
+				$card = $this->spawnClone($rule, $occurrenceTs, $template);
 			}
 
 			$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
@@ -446,8 +499,10 @@ class RecurrenceService {
 	 * and emitted by {@see self::spawn()} after commit - a pre-commit push could
 	 * make a client refetch state the transaction may still roll back.
 	 */
-	private function spawnClone(RecurRule $rule, int $occurrenceTs): Card {
-		$template = $this->cardMapper->find($rule->getTemplateCardId());
+	private function spawnClone(RecurRule $rule, int $occurrenceTs, ?Card $template = null): Card {
+		// $template is the copy spawn() already read; null only when spawn() found
+		// no template (hard-deleted) - re-read to raise the usual DoesNotExistException.
+		$template ??= $this->cardMapper->find($rule->getTemplateCardId());
 
 		// Visibility (#3760): the spawn runs as the rule OWNER - if the template
 		// has been narrowed past them since the rule was created, copying its
@@ -474,6 +529,9 @@ class RecurrenceService {
 
 		$card->setDescription($template->getDescription());
 		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));
+		// Carry the template's all-day flag (#4125): without it the clone defaults
+		// to all_day=false and shows a spurious 00:00 time on an all-day template.
+		$card->setAllDay($template->getAllDay() ?? false);
 		$card->setLastModified($this->time->getTime());
 		$card = $this->cardMapper->update($card);
 
@@ -604,6 +662,21 @@ class RecurrenceService {
 		$rule->setNextOccurrenceAt($next);
 		if ($next === 0) {
 			$rule->setEnabled(false);
+		}
+	}
+
+	/**
+	 * The rule's template card, or null if it is hard-gone. spawn() reads it once
+	 * up front for both the soft-trash pause check (#4124) and CLONE enrichment.
+	 * A MISSING template returns null (not an exception here) so spawn() falls
+	 * through to the mode branch, which raises the usual DoesNotExistException the
+	 * cron logs and retries; a purge cascade drops the rule outright (#4123).
+	 */
+	private function findTemplateOrNull(RecurRule $rule): ?Card {
+		try {
+			return $this->cardMapper->find($rule->getTemplateCardId());
+		} catch (DoesNotExistException) {
+			return null;
 		}
 	}
 
