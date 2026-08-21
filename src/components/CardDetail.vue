@@ -1836,7 +1836,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<button
 													v-if="canEdit && editingCommentId !== topComment.id"
 													class="card-modal__comment-link-btn"
-													@click="openReplyBox(topComment.id)">
+													@click="openReplyBox(topComment, topComment)">
 													{{ t('kanso', 'Reply') }}
 												</button>
 												<!-- Personal "remind me" about this comment (#3816). Any
@@ -1907,24 +1907,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										</div>
 									</div>
 
-									<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
-										<textarea
-											:ref="(el) => setReplyRef(topComment.id, el)"
-											v-model="replyBody"
-											class="card-modal__comment-edit-textarea"
-											:placeholder="t('kanso', 'Write a reply…')"
-											rows="2"
-											@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
-											@keydown.meta.enter.prevent="submitReply(topComment.id)"
-											@keydown.escape.stop="closeReplyBox" />
-										<div class="card-modal__comment-edit-actions">
-											<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">
-												{{ t('kanso', 'Post reply') }}
-											</NcButton>
-											<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
-										</div>
-									</div>
-
 									<div v-if="replies.length > 0" class="card-modal__replies">
 										<div
 											v-for="reply in replies"
@@ -1965,6 +1947,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
 												<div v-if="canEdit" class="card-modal__comment-controls">
+													<button
+														v-if="editingCommentId !== reply.id"
+														class="card-modal__comment-link-btn"
+														@click="openReplyBox(reply, topComment)">
+														{{ t('kanso', 'Reply') }}
+													</button>
 													<template v-if="currentUserId === reply.author">
 														<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
 															<PencilIcon :size="14" />
@@ -2009,6 +1997,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												</div>
 											</div>
 										</div>
+									</div>
+								</div>
+								<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
+									<textarea
+										:ref="(el) => setReplyRef(topComment.id, el)"
+										v-model="replyBody"
+										class="card-modal__comment-edit-textarea"
+										:placeholder="t('kanso', 'Write a reply…')"
+										rows="2"
+										@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
+										@keydown.meta.enter.prevent="submitReply(topComment.id)"
+										@keydown.escape.stop="closeReplyBox" />
+									<div class="card-modal__comment-edit-actions">
+										<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">
+											{{ t('kanso', 'Post reply') }}
+										</NcButton>
+										<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
 									</div>
 								</div>
 							</div>
