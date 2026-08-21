@@ -916,6 +916,10 @@ async function createFromTemplate(templateId) {
    sunken board canvas. --color-main-background + a soft shadow gives the "raised"
    read against the board-view__stacks-wrap sunken background. */
 .stack-column {
+	/* Legible success green for the "Done" role chip: stock green in light,
+	 * brighter #3fb950 under dark so the tinted chip text stays readable. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+
 	position: relative;
 	flex-shrink: 0;
 	width: 280px;
@@ -928,6 +932,20 @@ async function createFromTemplate(templateId) {
 	padding: 12px;
 	max-height: calc(100vh - 140px);
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* Brighten success green under dark themes (explicit picker + auto). */
+body.theme--dark .stack-column,
+[data-theme-dark] .stack-column,
+[data-themes*='dark'] .stack-column {
+	--kanso-success-legible: #3fb950;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .stack-column,
+	body:not(.theme--light):not(.theme--dark) .stack-column {
+		--kanso-success-legible: #3fb950;
+	}
 }
 
 .stack-column--dragging {
@@ -1347,8 +1365,8 @@ async function createFromTemplate(templateId) {
 
 /* Done - success */
 .stack-column__role-chip--5 {
-	background: color-mix(in srgb, var(--color-success, #46ba61) 18%, transparent);
-	color: color-mix(in srgb, var(--color-success, #46ba61) 85%, var(--color-main-text));
+	background: color-mix(in srgb, var(--kanso-success-legible) 18%, transparent);
+	color: color-mix(in srgb, var(--kanso-success-legible) 85%, var(--color-main-text));
 }
 
 /* WIP badge over-limit warning */

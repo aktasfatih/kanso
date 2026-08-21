@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 
 /**
  * Builds board-card SUMMARIES enriched with the same per-card signal every
@@ -46,6 +47,7 @@ class CardSummaryService {
 		private CommentMapper $commentMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private CardRelationMapper $cardRelationMapper,
+		private RecurRuleMapper $recurRuleMapper,
 	) {
 	}
 
@@ -66,6 +68,10 @@ class CardSummaryService {
 		$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($boardId);
 		// Card ids blocked by a not-done card - drives the tile "blocked" badge.
 		$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($boardId));
+		// Template card ids with a live (enabled) recurrence rule - drives the
+		// tile "recurring" badge. Only the boolean presence ships to the summary;
+		// the rrule/rule object stays out of the board payload.
+		$recurringIds = array_flip($this->recurRuleMapper->findTemplateCardIdsByBoard($boardId));
 
 		// array_values so the result is a genuine list (Card[] may be keyed by the
 		// mapper); the consumer serializes it as a JSON array.
@@ -80,7 +86,8 @@ class CardSummaryService {
 				+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
 				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
 				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
-				+ ['blocked' => isset($blockedIds[$card->getId()])],
+				+ ['blocked' => isset($blockedIds[$card->getId()])]
+				+ ['recurring' => isset($recurringIds[$card->getId()])],
 			$cards
 		));
 	}

@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.recurring || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -125,6 +125,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CalendarIcon :size="14" />
 					{{ formatDue(card.duedate) }}
 				</span>
+				<!-- Recurring badge (#61) - the card carries a live recurrence rule.
+				     A single boolean rides the board summary; the rule itself is
+				     loaded only when the card is opened. -->
+				<span
+					v-if="card.recurring"
+					class="card-tile__recurring"
+					:aria-label="t('kanso', 'Recurring')"
+					:title="t('kanso', 'Recurring')">
+					<RepeatIcon :size="14" />
+				</span>
 				<!-- Checklist progress badge - only when the card has checklist items -->
 				<span
 					v-if="card.checklist && card.checklist.total > 0"
@@ -186,6 +196,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import ProgressClockIcon from 'vue-material-design-icons/ProgressClock.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
@@ -447,7 +458,11 @@ const extraAssigneeCount = computed(() => {
 	--kanso-error-legible: var(--color-error, #e30000);
 	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
 	--kanso-warning-legible: var(--color-warning, #e07b00);
-	--kanso-success-legible: var(--color-success, #2d7d46);
+	/* Legible success green twin: stock --color-success in light, a brighter
+	 * green (#3fb950) under dark so "complete"/"approved"/"feature" pills stay
+	 * readable on the dark tile surface. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+	--kanso-success-legible-rgb: 70, 186, 97;
 
 	display: flex;
 	flex-direction: column;
@@ -472,6 +487,7 @@ body.theme--dark .card-tile,
 	--kanso-error-legible-rgb: 255, 107, 107;
 	--kanso-warning-legible: #d29922;
 	--kanso-success-legible: #3fb950;
+	--kanso-success-legible-rgb: 63, 185, 80;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -481,6 +497,7 @@ body.theme--dark .card-tile,
 		--kanso-error-legible-rgb: 255, 107, 107;
 		--kanso-warning-legible: #d29922;
 		--kanso-success-legible: #3fb950;
+		--kanso-success-legible-rgb: 63, 185, 80;
 	}
 }
 
@@ -649,7 +666,7 @@ body.theme--dark .card-tile,
 .card-tile__checklist--complete {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(70, 186, 97, 0.1);
+	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
 
 /* Child-progress badge */
@@ -667,7 +684,7 @@ body.theme--dark .card-tile,
 .card-tile__children--complete {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(70, 186, 97, 0.1);
+	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
 
 /* Comment count badge */
@@ -756,7 +773,7 @@ body.theme--dark .card-tile,
 .card-tile__review--approved {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(70, 186, 97, 0.1);
+	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
 
 .card-tile__review--changes_requested {
@@ -808,6 +825,14 @@ body.theme--dark .card-tile,
 	color: var(--kanso-warning-legible);
 	border: 1px solid var(--kanso-warning-legible);
 	background: rgba(240, 168, 68, 0.1);
+}
+
+/* Recurring badge (#61) - a muted repeat glyph; neutral so it reads as an
+ * attribute of the card, not an alert. */
+.card-tile__recurring {
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-text-maxcontrast);
 }
 
 /* Estimate chip */
@@ -917,6 +942,12 @@ body.theme--dark .card-tile,
 
 .card-tile--compact .card-tile__ref {
 	font-size: 0.64rem;
+}
+
+/* Compact: shrink the icon-only recurring badge to match the denser meta row. */
+.card-tile--compact .card-tile__recurring :deep(svg) {
+	width: 12px;
+	height: 12px;
 }
 
 /* Smaller overflow badge to match the 20px compact avatars (NcAvatar itself is

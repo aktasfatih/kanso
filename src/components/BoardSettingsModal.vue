@@ -4941,7 +4941,7 @@ async function doDeleteAutoRule(rule) {
 
 .automation__archive-result {
 	font-size: 0.8rem;
-	color: var(--color-success, #46ba61);
+	color: var(--kanso-success-legible);
 	font-weight: 600;
 }
 
@@ -5103,7 +5103,7 @@ async function doDeleteAutoRule(rule) {
 }
 
 .github-webhook__status {
-	color: var(--color-success, #2fb344);
+	color: var(--kanso-success-legible);
 	font-weight: 600;
 }
 
@@ -5122,6 +5122,12 @@ async function doDeleteAutoRule(rule) {
 /* ── Board settings modal shell (replaces NcAppSidebar) ─────────────────────── */
 
 .bs-modal {
+	/* Legible success green for "active"/"enabled" status badges (e.g. "Link
+	 * active"): stock --color-success in light, a brighter green (#3fb950) under
+	 * dark so the badge text/border stays readable on the dark surface. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+	--kanso-success-legible-rgb: 70, 186, 97;
+
 	position: absolute;
 	/* Dock BELOW the board toolbar so the gear button that toggles this panel
 	   stays clickable — a second gear click must be able to close it. BoardView
@@ -5138,6 +5144,23 @@ async function doDeleteAutoRule(rule) {
 	border-left: 1px solid var(--color-border);
 	box-shadow: var(--shadow-dropdown, 0 0 12px rgba(0, 0, 0, 0.12));
 	box-sizing: border-box;
+}
+
+/* Brighten success green under dark themes (explicit picker + auto) so status
+ * badges clear WCAG AA on the dark surface. Mirrors the CardTile error token. */
+body.theme--dark .bs-modal,
+[data-theme-dark] .bs-modal,
+[data-themes*='dark'] .bs-modal {
+	--kanso-success-legible: #3fb950;
+	--kanso-success-legible-rgb: 63, 185, 80;
+}
+
+@media (prefers-color-scheme: dark) {
+	body.theme--default .bs-modal,
+	body:not(.theme--light):not(.theme--dark) .bs-modal {
+		--kanso-success-legible: #3fb950;
+		--kanso-success-legible-rgb: 63, 185, 80;
+	}
 }
 
 .bs-modal__header {
@@ -5470,10 +5493,10 @@ async function doDeleteAutoRule(rule) {
 	align-items: center;
 	gap: 3px;
 	padding: 1px 7px;
-	border: 1px solid var(--color-success);
+	border: 1px solid var(--kanso-success-legible);
 	border-radius: 10px;
-	color: var(--color-success);
-	background: var(--kanso-tint-success, color-mix(in srgb, var(--color-success) 12%, transparent));
+	color: var(--kanso-success-legible);
+	background: rgba(var(--kanso-success-legible-rgb), 0.12);
 	font-size: 0.75rem;
 	font-weight: 600;
 }

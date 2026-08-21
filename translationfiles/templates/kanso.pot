@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3583
+#: src/components/CardDetail.vue:3592
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3581
+#: src/components/CardDetail.vue:3590
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3579
+#: src/components/CardDetail.vue:3588
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1361,7 +1361,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3749
+#: src/components/CardDetail.vue:3765
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2853,7 +2853,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3751
+#: src/components/CardDetail.vue:3767
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3610,6 +3610,10 @@ msgstr ""
 msgid "Read-only"
 msgstr ""
 
+#: src/components/CardTile.vue
+msgid "Recurring"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
 msgstr ""
@@ -3779,6 +3783,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Repeat"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Repeats"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4617,7 +4625,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3750
+#: src/components/CardDetail.vue:3766
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4693,7 +4701,7 @@ msgstr ""
 msgid "Write a reply…"
 msgstr ""
 
-#: src/components/CardDetail.vue:3752
+#: src/components/CardDetail.vue:3768
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

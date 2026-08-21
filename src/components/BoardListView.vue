@@ -411,6 +411,7 @@ function isOverdue(card) {
 	--kanso-warning-legible: var(--color-warning, #c98600);
 	--kanso-success-legible: var(--color-success, #2fb344);
 
+
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
@@ -434,6 +435,7 @@ body.theme--dark .board-list-table,
 		--kanso-success-legible: #5ad07f;
 	}
 }
+
 
 .board-list-table__host {
 	position: relative;

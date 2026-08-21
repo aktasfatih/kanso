@@ -22,6 +22,7 @@ use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
@@ -71,6 +72,7 @@ class CardController extends Controller {
 		private BoardMapper $boardMapper,
 		private BoardAccess $boardAccess,
 		private \OCA\Kanso\Service\CardVisibilityGuard $visibilityGuard,
+		private RecurRuleMapper $recurRuleMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -180,7 +182,12 @@ class CardController extends Controller {
 			+ ['fieldValues' => array_map(
 				static fn (CardFieldValue $v): array => $v->jsonSerialize(),
 				$this->cardFieldValueMapper->findByCard($id)
-			)];
+			)]
+			// Live (enabled) recurrence rule present? (#61 follow-up) One boolean
+			// so the open card can swap the Due Date pill's calendar icon for a
+			// repeat icon for ALL viewers - matching the board tile. The rrule/rule
+			// object stays out; it loads via the manager-only rules fetch.
+			+ ['recurring' => $this->recurRuleMapper->hasEnabledRuleForCard($id)];
 	}
 
 	/**

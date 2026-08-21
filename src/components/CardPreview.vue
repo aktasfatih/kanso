@@ -295,6 +295,10 @@ onBeforeUnmount(() => {
 	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
 	--kanso-warning-legible: var(--color-warning, #e07b00);
 	--kanso-neutral-legible: var(--color-text-maxcontrast, #767676);
+	/* Legible success green twin for the "checklist complete" chip: stock green in
+	 * light, brighter #3fb950 under dark so it stays readable on the dark surface. */
+	--kanso-success-legible: var(--color-success, #46ba61);
+	--kanso-success-legible-rgb: 70, 186, 97;
 
 	position: fixed;
 	z-index: 2100;
@@ -316,6 +320,8 @@ body.theme--dark .card-preview,
 	--kanso-error-legible-rgb: 255, 107, 107;
 	--kanso-warning-legible: #d29922;
 	--kanso-neutral-legible: #8b949e;
+	--kanso-success-legible: #3fb950;
+	--kanso-success-legible-rgb: 63, 185, 80;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -325,6 +331,8 @@ body.theme--dark .card-preview,
 		--kanso-error-legible-rgb: 255, 107, 107;
 		--kanso-warning-legible: #d29922;
 		--kanso-neutral-legible: #8b949e;
+		--kanso-success-legible: #3fb950;
+		--kanso-success-legible-rgb: 63, 185, 80;
 	}
 }
 
@@ -416,9 +424,9 @@ body.theme--dark .card-preview,
 }
 
 .card-preview__checklist--complete {
-	color: var(--color-success, #46ba61);
-	border-color: var(--color-success, #46ba61);
-	background: rgba(70, 186, 97, 0.1);
+	color: var(--kanso-success-legible);
+	border-color: var(--kanso-success-legible);
+	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
 
 .card-preview__assignees {
