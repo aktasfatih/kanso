@@ -167,16 +167,19 @@ function positionMentionDropdown() {
 	if (!mentionGetClientRect) return
 	const rect = mentionGetClientRect()
 	if (!rect) return
-	// Position above the caret; fall back to below if not enough space
+	// Place the list just BELOW the caret line (like a normal autocomplete), so it
+	// tracks the cursor. Flip ABOVE only when there isn't room below in the
+	// viewport but there is above. `rect` is viewport-relative (getClientRect), so
+	// we position the body-teleported list with `fixed` — no scroll-offset math,
+	// no dependence on an offset parent.
 	const dropdownHeight = 260
-	const spaceAbove = rect.top
-	const top = spaceAbove > dropdownHeight
-		? rect.top + window.scrollY - dropdownHeight - 4
-		: rect.bottom + window.scrollY + 4
+	const spaceBelow = window.innerHeight - rect.bottom
+	const placeAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight
+	const top = placeAbove ? rect.top - dropdownHeight - 4 : rect.bottom + 4
 	mentionDropdownStyle.value = {
-		position: 'absolute',
+		position: 'fixed',
 		top: `${top}px`,
-		left: `${rect.left + window.scrollX}px`,
+		left: `${rect.left}px`,
 		zIndex: '10000',
 	}
 }
@@ -478,7 +481,15 @@ defineExpose({
 }
 
 /* ── ProseMirror content area ──────────────────────────────────────────────── */
+/* The EditorContent wrapper + the contenteditable must fill the container width;
+   without this the ProseMirror node shrink-wraps to its content (e.g. the
+   placeholder), leaving a tiny editable strip. */
+.kanso-md-editor__content {
+	width: 100%;
+}
 .kanso-md-editor__content :deep(.ProseMirror) {
+	width: 100%;
+	box-sizing: border-box;
 	min-height: var(--kanso-editor-min-height, 80px);
 	padding: 10px 12px;
 	font-size: 0.9rem;
