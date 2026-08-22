@@ -278,9 +278,12 @@ test.describe('Card file attachments', () => {
 			.toHaveCount(0, { timeout: 8000 })
 	})
 
-	// Paste an image into the description textarea (#3525): it uploads via the
+	// Paste an image into the description editor (#3525): it uploads via the
 	// attachment endpoint and the saved description renders an <img> pointing at
 	// the inline endpoint.
+	// The description editor is now a Tiptap WYSIWYG editor (MarkdownEditor.vue).
+	// The paste is handled by a ProseMirror plugin (kansoPasteImage) that intercepts
+	// image files on clipboardData.items, uploads them, and inserts an image node.
 	test('paste an image into the description uploads it and renders an inline <img>', async ({ page }) => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
@@ -289,22 +292,27 @@ test.describe('Card file attachments', () => {
 
 		// Enter description edit mode (empty description shows a placeholder button).
 		await page.click('.card-modal__desc-placeholder')
-		const textarea = page.locator('.card-modal__desc-textarea')
-		await expect(textarea).toBeVisible({ timeout: 5000 })
-		await textarea.focus()
 
-		// Dispatch a real paste event carrying a PNG File on the textarea. The
-		// composable reads clipboardData.items, uploads, then rewrites the markdown.
+		// Wait for the Tiptap editor — the ProseMirror contenteditable is the paste target.
+		const prose = page.locator('.card-modal__section .kanso-md-editor .ProseMirror')
+		await expect(prose).toBeVisible({ timeout: 6000 })
+		await prose.focus()
+
+		// Dispatch a real paste event carrying a PNG File on the ProseMirror element.
+		// The kansoPasteImage ProseMirror plugin reads clipboardData.items, uploads
+		// the file, then inserts a Tiptap image node at the caret position.
 		const pngArray = Array.from(PNG_1x1)
-		await textarea.evaluate((el, bytes) => {
+		await prose.evaluate((el, bytes) => {
 			const file = new File([new Uint8Array(bytes)], 'clip.png', { type: 'image/png' })
 			const dt = new DataTransfer()
 			dt.items.add(file)
 			el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
 		}, pngArray)
 
-		// The upload completes and the markdown gets the inline-endpoint URL.
-		await expect(textarea).toHaveValue(/!\[[^\]]*\]\(.*\/attachments\/\d+\/inline\)/, { timeout: 10_000 })
+		// The upload completes and the image node renders as an <img> inside the
+		// WYSIWYG editor (ProseMirror serialises it as ![alt](src) in markdown).
+		// Give the async upload up to 10s, then verify the inline <img> exists in the editor.
+		await expect(prose.locator('img')).toHaveCount(1, { timeout: 10_000 })
 
 		// Save, then the rendered description shows the same-origin inline <img>.
 		await page.locator('.card-modal__desc-actions button', { hasText: 'Save' }).click()

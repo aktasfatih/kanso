@@ -60,7 +60,7 @@ test.describe('Card Activity feed', () => {
 
 		const rows = page.locator('.card-modal__activity-row')
 		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
-		// created + commented + updated → at least 3 rows.
+		// created + commented + priority-change → at least 3 rows.
 		expect(await rows.count()).toBeGreaterThanOrEqual(3)
 
 		// The feed shows the verbs (not a stream of blank "updated").
@@ -68,8 +68,10 @@ test.describe('Card Activity feed', () => {
 		await expect(feed).toContainText('commented')
 		await expect(feed).toContainText('created this card')
 
-		// Newest-first: the most recent row is the priority "updated this card".
-		await expect(rows.first()).toContainText('updated this card')
+		// Newest-first: the most recent row is the priority change (verb 19).
+		// The granular activity log now renders it as "changed the priority to X"
+		// rather than the generic "updated this card".
+		await expect(rows.first()).toContainText('changed the priority')
 	})
 
 	// #3553 — the feed must update live while the Activity tab is open, both for a
@@ -107,13 +109,15 @@ test.describe('Card Activity feed', () => {
 		// it up through the board-cache → card-activity invalidation (push or poll).
 		await api('PATCH', `/cards/${card.id}`, { priority: 2 })
 
-		// The new "updated this card" row appears on its own — no tab switch.
+		// The new "changed the priority" row appears on its own — no tab switch.
 		// A single edit may append ≥1 change row, so assert growth (not an exact
 		// count) plus the new verb. Budget covers push and the 5s poll fallback.
+		// The granular activity log now renders priority changes as "changed the priority"
+		// rather than the generic "updated this card".
 		await expect
 			.poll(async () => await rows.count(), { timeout: 15_000 })
 			.toBeGreaterThan(before)
-		await expect(rows.first()).toContainText('updated this card')
+		await expect(rows.first()).toContainText('changed the priority')
 
 		expect(activityErrors).toEqual([])
 	})
