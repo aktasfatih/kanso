@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3659
+#: src/components/CardDetail.vue:3666
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3657
+#: src/components/CardDetail.vue:3664
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3655
+#: src/components/CardDetail.vue:3662
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -659,6 +659,10 @@ msgstr ""
 msgid "Blocked by another card"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
+msgid "Blockquote"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Blocks"
 msgstr ""
@@ -723,6 +727,7 @@ msgstr ""
 msgid "Boards"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Bold"
 msgstr ""
@@ -745,6 +750,10 @@ msgstr ""
 
 #: src/components/BulkActionBar.vue
 msgid "Bulk card actions"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Bullet list"
 msgstr ""
 
 #: src/views/ProjectView.vue
@@ -1387,7 +1396,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3832
+#: src/components/CardDetail.vue:3839
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -1741,6 +1750,10 @@ msgstr ""
 msgid "edited"
 msgstr ""
 
+#: src/App.vue
+msgid "Editor"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
 msgstr ""
@@ -1779,6 +1792,10 @@ msgstr ""
 
 #: src/components/CardPreview.vue
 msgid "Enter to open · Esc to close"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Enter URL"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -2537,6 +2554,14 @@ msgstr ""
 msgid "Heading"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
+msgid "Heading 1"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Heading 2"
+msgstr ""
+
 #: src/App.vue
 msgid "Help"
 msgstr ""
@@ -2606,6 +2631,7 @@ msgstr ""
 msgid "Inbox"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Inline code"
 msgstr ""
@@ -2632,6 +2658,7 @@ msgstr ""
 msgid "Issue intake"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
 msgstr ""
@@ -2753,6 +2780,7 @@ msgid "Linear (1–5)"
 msgstr ""
 
 #: src/components/CardDetail.vue
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Link"
 msgstr ""
@@ -2883,7 +2911,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3834
+#: src/components/CardDetail.vue:3841
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3439,6 +3467,10 @@ msgstr ""
 #: src/components/CardDetail.vue
 #: src/components/StackColumn.vue
 msgid "Orange"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Ordered list"
 msgstr ""
 
 #: src/components/BoardTimelineView.vue
@@ -4115,6 +4147,10 @@ msgstr ""
 msgid "Show comments (read-only)"
 msgstr ""
 
+#: src/App.vue
+msgid "Show formatting toolbar"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Show this board in my calendar"
 msgstr ""
@@ -4224,6 +4260,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Stop watching this card"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Strikethrough"
 msgstr ""
 
 #: src/composables/useBoardFilters.js
@@ -4676,7 +4716,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3833
+#: src/components/CardDetail.vue:3840
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4756,7 +4796,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:3835
+#: src/components/CardDetail.vue:3842
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

@@ -1070,6 +1070,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:participants="participants.data.value ?? []"
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
+										:show-toolbar="!editorToolbarHidden"
 										@submit="saveDescription"
 										@escape="cancelDescriptionEdit"
 										@image-error="(msg) => { descPasteError = msg || t('kanso', 'Failed to upload image.') }" />
@@ -1991,6 +1992,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:participants="participants.data.value ?? []"
 												:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 												:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
+												:show-toolbar="!editorToolbarHidden"
 												@submit="submitReply(topComment.id)"
 												@escape="closeReplyBox"
 												@image-error="(msg) => { commentError = msg || t('kanso', 'Failed to upload image.') }" />
@@ -2030,6 +2032,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:participants="participants.data.value ?? []"
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
+										:show-toolbar="!editorToolbarHidden"
 										@submit="submitNewComment"
 										@image-error="(msg) => { commentError = msg || t('kanso', 'Failed to upload image.') }" />
 									<template #fallback>
@@ -2258,6 +2261,7 @@ import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
+import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -2314,6 +2318,9 @@ const emit = defineEmits(['close', 'update:title', 'board-context', 'navigate'])
 
 const router = useRouter()
 const route = useRoute()
+
+// Editor toolbar visibility — shared module-level pref seeded by App.vue from settings
+const { editorToolbarHidden } = useEditorPrefs()
 
 // Modal is open when this component is mounted - enabled is always true here
 const isOpen = ref(true)

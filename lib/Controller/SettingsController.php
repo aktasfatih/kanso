@@ -34,6 +34,9 @@ class SettingsController extends Controller {
 	// Hidden left-nav sections (#69): a JSON list of the top-level nav section
 	// keys the user has chosen to hide. A pure per-user view preference.
 	private const KEY_HIDDEN_NAV = 'hidden_nav_sections';
+	// Editor formatting toolbar visibility: '1' = hidden, '0' or '' = shown.
+	// A pure per-user view preference stored as a boolean-string.
+	private const KEY_EDITOR_TOOLBAR = 'editor_toolbar_hidden';
 	// Fixed allow-list of toggleable nav sections. `boards` is intentionally
 	// absent — Boards is always shown (hiding it would strand navigation). This
 	// allow-list is the security guard: the value can't be abused as arbitrary
@@ -68,6 +71,7 @@ class SettingsController extends Controller {
 				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
 				'dismissedHints' => $this->readDismissedHints($uid),
 				'hiddenNavSections' => $this->readHiddenNav($uid),
+				'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
 			]);
 		});
 	}
@@ -89,10 +93,11 @@ class SettingsController extends Controller {
 	 * @param ?int[] $collapsedBoardGroups
 	 * @param ?string[] $dismissedHints
 	 * @param ?string[] $hiddenNavSections
+	 * @param ?bool $editorToolbarHidden
 	 */
 	#[NoAdminRequired]
-	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?array $dismissedHints = null, ?array $hiddenNavSections = null): JSONResponse {
-		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups, $dismissedHints, $hiddenNavSections): JSONResponse {
+	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?array $dismissedHints = null, ?array $hiddenNavSections = null, ?bool $editorToolbarHidden = null): JSONResponse {
+		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups, $dismissedHints, $hiddenNavSections, $editorToolbarHidden): JSONResponse {
 			$uid = $this->currentUserId();
 			$value = ($defaultBoardId === null || $defaultBoardId <= 0) ? '' : (string)$defaultBoardId;
 			$this->config->setUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, $value);
@@ -109,11 +114,16 @@ class SettingsController extends Controller {
 				$this->writeHiddenNav($uid, $hiddenNavSections);
 			}
 
+			if ($editorToolbarHidden !== null) {
+				$this->writeEditorToolbarHidden($uid, $editorToolbarHidden);
+			}
+
 			return new JSONResponse([
 				'defaultBoardId' => $value === '' ? null : (int)$value,
 				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
 				'dismissedHints' => $this->readDismissedHints($uid),
 				'hiddenNavSections' => $this->readHiddenNav($uid),
+				'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
 			]);
 		});
 	}
@@ -240,6 +250,18 @@ class SettingsController extends Controller {
 			$out = array_slice($out, 0, self::MAX_HINTS);
 		}
 		return $out;
+	}
+
+	/**
+	 * Whether the user has hidden the editor formatting toolbar.
+	 * Stored as '1' (hidden) or '' (shown); defaults to false (shown).
+	 */
+	private function readEditorToolbarHidden(string $uid): bool {
+		return $this->config->getUserValue($uid, 'kanso', self::KEY_EDITOR_TOOLBAR, '') === '1';
+	}
+
+	private function writeEditorToolbarHidden(string $uid, bool $hidden): void {
+		$this->config->setUserValue($uid, 'kanso', self::KEY_EDITOR_TOOLBAR, $hidden ? '1' : '0');
 	}
 
 	/**

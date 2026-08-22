@@ -257,6 +257,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ section.label }}
 				</NcCheckboxRadioSwitch>
 			</NcAppSettingsSection>
+			<NcAppSettingsSection id="editor" :name="t('kanso', 'Editor')">
+				<NcCheckboxRadioSwitch
+					type="switch"
+					:model-value="!editorToolbarHidden"
+					@update:model-value="toggleEditorToolbar">
+					{{ t('kanso', 'Show formatting toolbar') }}
+				</NcCheckboxRadioSwitch>
+			</NcAppSettingsSection>
 		</NcAppSettingsDialog>
 	</NcContent>
 </template>
@@ -298,9 +306,13 @@ import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
 import { useViews } from './composables/useViews.js'
+import { useEditorPrefs } from './composables/useEditorPrefs.js'
 
 const route = useRoute()
 const router = useRouter()
+
+// Editor toolbar pref — shared with all MarkdownEditor instances reactively
+const { editorToolbarHidden, setEditorToolbarHidden } = useEditorPrefs()
 
 // Help-menu destinations (#3901). Static external URLs — deliberately NOT
 // translated (they're addresses, not copy). Rendered by the nav-footer help
@@ -380,8 +392,9 @@ async function loadCollapsed() {
 		const s = await getSettings()
 		collapsedIds.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
 		hiddenNav.value = new Set(s.hiddenNavSections ?? [])
+		setEditorToolbarHidden(s.editorToolbarHidden ?? false)
 	} catch {
-		// Non-fatal: folders just start expanded and all sections stay visible.
+		// Non-fatal: folders just start expanded, all sections stay visible, toolbar stays shown.
 	}
 }
 function setGroupOpen(groupId, open) {
@@ -413,6 +426,16 @@ const navSections = computed(() => [
 function isNavVisible(key) {
 	return !hiddenNav.value.has(key)
 }
+// Toggle the editor toolbar preference and persist it.
+function toggleEditorToolbar(shown) {
+	const hidden = !shown
+	setEditorToolbarHidden(hidden)
+	updateSettings({ editorToolbarHidden: hidden }).catch(() => {
+		// Revert on failure
+		setEditorToolbarHidden(!hidden)
+	})
+}
+
 // Optimistically flip a section's visibility and persist; revert the local Set
 // if the write fails so the UI stays consistent with the server.
 function toggleNavSection(key) {
