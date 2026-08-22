@@ -3542,6 +3542,14 @@ const ACTIVITY_VERBS = {
 	12: () => t('kanso', 'updated the checklist'),
 	13: () => t('kanso', 'linked a contact'),
 	14: () => t('kanso', 'unlinked a contact'),
+	15: () => t('kanso', 'renamed this card'),
+	16: () => t('kanso', 'updated the description'),
+	17: () => t('kanso', 'changed the due date'),
+	18: () => t('kanso', 'changed the start date'),
+	19: () => t('kanso', 'changed the priority'),
+	20: () => t('kanso', 'changed the status'),
+	21: () => t('kanso', 'changed the estimate'),
+	22: () => t('kanso', 'changed the card type'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]

@@ -717,6 +717,105 @@ class CardServiceTest extends TestCase {
 		self::assertGreaterThan(0, $updated->getLastModified());
 	}
 
+	// ---- granular activity verbs (#70) ------------------------------------
+	//
+	// The card-field update path stamps a field-specific verb when EXACTLY one
+	// tracked field changed; zero or more than one keep the generic VERB_UPDATED.
+	// Verb-only (no from/to values). We capture the 6th arg to recordChange()
+	// (the verb) via a callback, matching the boundary the change row is written at.
+
+	/**
+	 * Wires the card + board + mapper mocks and returns a reference whose value
+	 * becomes the verb passed to the single expected recordChange() call.
+	 *
+	 * @param-out int|null $captured
+	 */
+	private function captureUpdateVerb(Card $card, ?Board $board = null): \stdClass {
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($board ?? $this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$holder = new \stdClass();
+		$holder->verb = null;
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willReturnCallback(function (...$args) use ($holder): Change {
+				$holder->verb = $args[5] ?? null;
+				return new Change();
+			});
+		return $holder;
+	}
+
+	public function testUpdateTitleOnlyStampsRenamedVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, 'Renamed', null, null, null, null, 'alice');
+		self::assertSame(Change::VERB_RENAMED, $verb->verb);
+	}
+
+	public function testUpdateDescriptionOnlyStampsDescriptionVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, null, 'Fresh description', null, null, null, 'alice');
+		self::assertSame(Change::VERB_DESCRIPTION_UPDATED, $verb->verb);
+	}
+
+	public function testUpdateDueDateOnlyStampsDueVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, null, null, '2026-08-15T10:00:00+00:00', null, null, 'alice');
+		self::assertSame(Change::VERB_DUE_CHANGED, $verb->verb);
+	}
+
+	public function testUpdateStartDateOnlyStampsStartVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, null, null, null, null, null, 'alice', null, '2026-08-01T00:00:00+00:00');
+		self::assertSame(Change::VERB_START_CHANGED, $verb->verb);
+	}
+
+	public function testUpdatePriorityOnlyStampsPriorityVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, null, null, null, null, null, 'alice', Card::PRIORITY_URGENT);
+		self::assertSame(Change::VERB_PRIORITY_CHANGED, $verb->verb);
+	}
+
+	public function testUpdateEstimateOnlyStampsEstimateVerb(): void {
+		$board = $this->board();
+		$board->setEstimateScale('fibonacci');
+		$verb = $this->captureUpdateVerb($this->card(), $board);
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, null, '8');
+		self::assertSame(Change::VERB_ESTIMATE_CHANGED, $verb->verb);
+	}
+
+	public function testUpdateTypeOnlyStampsTypeVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		// positional: …, uid, priority, startDate, status, estimate, allDay,
+		// dueReminderDayBefore, coverColor, type
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, null, null, null, null, null, Card::TYPES[0]);
+		self::assertSame(Change::VERB_TYPE_CHANGED, $verb->verb);
+	}
+
+	public function testUpdateTimestampOnlyStatusStampsStatusVerb(): void {
+		// Current column has no workflow role and the board maps no target column,
+		// so the status applies timestamp-only (no move) → VERB_STATUS_CHANGED.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'in_progress');
+		self::assertSame(Change::VERB_STATUS_CHANGED, $verb->verb);
+	}
+
+	public function testUpdateMultipleFieldsFallsBackToGenericVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		// Title AND due date change together → generic VERB_UPDATED.
+		$this->service->update(9, 'Renamed', null, '2026-08-15T10:00:00+00:00', null, null, 'alice');
+		self::assertSame(Change::VERB_UPDATED, $verb->verb);
+	}
+
+	public function testUpdateNoOpTitleDoesNotMislabelAsRenamed(): void {
+		// Re-saving the SAME title is not a change → no tracked field moved →
+		// generic VERB_UPDATED, never VERB_RENAMED.
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, 'Existing card', null, null, null, null, 'alice');
+		self::assertSame(Change::VERB_UPDATED, $verb->verb);
+	}
+
 	public function testUpdateSucceedsForExternalMemberOnAVisibleCard(): void {
 		// The external-role happy path (#3744): an external member with EDIT
 		// mutates the cards the visibility scope shows them - the role cap
@@ -1865,9 +1964,11 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 1, Stack::ROLE_REVIEW));
 		$this->cardMapper->method('update')->willReturnArgument(0);
+		// Status is the only field that moved and it applies timestamp-only (no
+		// column move), so the change row is stamped VERB_STATUS_CHANGED (#70).
 		$this->changeNotifier->expects(self::once())
 			->method('recordChange')
-			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', Change::VERB_UPDATED)
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', Change::VERB_STATUS_CHANGED)
 			->willReturn(new Change());
 
 		$updated = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'in_progress');
@@ -1884,9 +1985,10 @@ class CardServiceTest extends TestCase {
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
 		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
 		$this->cardMapper->method('update')->willReturnArgument(0);
+		// Timestamp-only status change (no workflow column) → VERB_STATUS_CHANGED (#70).
 		$this->changeNotifier->expects(self::once())
 			->method('recordChange')
-			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', Change::VERB_UPDATED)
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', Change::VERB_STATUS_CHANGED)
 			->willReturn(new Change());
 
 		$moved = $this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');

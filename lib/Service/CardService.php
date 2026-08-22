@@ -925,6 +925,17 @@ class CardService {
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
+		// Snapshot the tracked fields BEFORE any setter runs, so the change row can
+		// be stamped with a field-specific verb (#70) when exactly one of them moves.
+		// Dates compare by unix instant (null stays null); status is timestamp-only.
+		$origTitle = $card->getTitle();
+		$origDescription = $card->getDescription();
+		$origDue = $card->getDuedate()?->getTimestamp();
+		$origStart = $card->getStartDate()?->getTimestamp();
+		$origPriority = $card->getPriority();
+		$origEstimate = $card->getEstimate();
+		$origType = $card->getType();
+
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
 		}
@@ -1008,10 +1019,12 @@ class CardService {
 		// status in lock-step. When no matching column exists (the board doesn't use
 		// that role) the status is applied timestamp-only, exactly as before.
 		$statusMoveTarget = null;
+		$statusAppliedTimestampOnly = false;
 		if ($status !== null) {
 			$statusMoveTarget = $this->resolveStatusMoveTarget($card, $status);
 			if ($statusMoveTarget === null) {
 				$this->applyStatus($card, $status);
+				$statusAppliedTimestampOnly = true;
 			}
 		}
 		if ($visibility !== null) {
@@ -1032,6 +1045,40 @@ class CardService {
 		$now = time();
 		$card->setLastModified($now);
 
+		// Field-specific activity verb (#70): collect the tracked fields that
+		// ACTUALLY changed (current value vs the pre-setter snapshot; a set of the
+		// same value counts as unchanged, so a no-op save is not mislabelled). When
+		// exactly ONE tracked field changed we stamp its specific verb; zero or more
+		// than one fall back to the generic VERB_UPDATED. No from/to values (verb
+		// only) - deferred, and no schema change. The status→workflow-column path is
+		// untouched: it becomes a move() (VERB_MOVED) below.
+		$changedVerbs = [];
+		if ($card->getTitle() !== $origTitle) {
+			$changedVerbs[] = Change::VERB_RENAMED;
+		}
+		if ($descriptionChanged || $card->getDescription() !== $origDescription) {
+			$changedVerbs[] = Change::VERB_DESCRIPTION_UPDATED;
+		}
+		if ($card->getDuedate()?->getTimestamp() !== $origDue) {
+			$changedVerbs[] = Change::VERB_DUE_CHANGED;
+		}
+		if ($card->getStartDate()?->getTimestamp() !== $origStart) {
+			$changedVerbs[] = Change::VERB_START_CHANGED;
+		}
+		if ($card->getPriority() !== $origPriority) {
+			$changedVerbs[] = Change::VERB_PRIORITY_CHANGED;
+		}
+		if ($card->getEstimate() !== $origEstimate) {
+			$changedVerbs[] = Change::VERB_ESTIMATE_CHANGED;
+		}
+		if ($card->getType() !== $origType) {
+			$changedVerbs[] = Change::VERB_TYPE_CHANGED;
+		}
+		if ($statusAppliedTimestampOnly) {
+			$changedVerbs[] = Change::VERB_STATUS_CHANGED;
+		}
+		$verb = count($changedVerbs) === 1 ? $changedVerbs[0] : Change::VERB_UPDATED;
+
 		// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
 		// row commit together (or roll back together); the realtime push fires only
 		// after commit. Side effects below (mentions, parent auto-complete) run
@@ -1041,7 +1088,7 @@ class CardService {
 			$id,
 			Change::ACTION_UPDATE,
 			$uid,
-			Change::VERB_UPDATED,
+			$verb,
 			fn (): Card => $this->cardMapper->update($card),
 		);
 

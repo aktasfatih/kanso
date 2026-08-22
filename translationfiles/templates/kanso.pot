@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3561
+#: src/components/CardDetail.vue:3569
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3559
+#: src/components/CardDetail.vue:3567
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3557
+#: src/components/CardDetail.vue:3565
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -936,6 +936,30 @@ msgstr ""
 msgid "Change status"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "changed the card type"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the estimate"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the priority"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the start date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the status"
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/composables/useSwimlanes.js
@@ -1359,7 +1383,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3734
+#: src/components/CardDetail.vue:3742
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2847,7 +2871,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3736
+#: src/components/CardDetail.vue:3744
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3774,6 +3798,10 @@ msgid "Rename view"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "renamed this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Repeat"
 msgstr ""
 
@@ -4511,6 +4539,10 @@ msgid "updated the checklist"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "updated the description"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "updated this card"
 msgstr ""
 
@@ -4620,7 +4652,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3735
+#: src/components/CardDetail.vue:3743
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4700,7 +4732,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:3737
+#: src/components/CardDetail.vue:3745
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

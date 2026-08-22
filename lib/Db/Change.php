@@ -62,6 +62,17 @@ class Change extends Entity {
 	public const VERB_CHECKLIST = 12;
 	public const VERB_CONTACT_LINKED = 13;
 	public const VERB_CONTACT_UNLINKED = 14;
+	// Field-specific card update verbs (#70). The card-field update path picks the
+	// matching verb when exactly one tracked field changed; multi-field or no-op
+	// saves keep the generic VERB_UPDATED. Verb-only (no from/to values, deferred).
+	public const VERB_RENAMED = 15;              // title changed
+	public const VERB_DESCRIPTION_UPDATED = 16;
+	public const VERB_DUE_CHANGED = 17;          // due date set/changed/cleared
+	public const VERB_START_CHANGED = 18;        // start date
+	public const VERB_PRIORITY_CHANGED = 19;
+	public const VERB_STATUS_CHANGED = 20;       // status applied timestamp-only (no workflow column)
+	public const VERB_ESTIMATE_CHANGED = 21;
+	public const VERB_TYPE_CHANGED = 22;
 
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of
