@@ -40,9 +40,12 @@ class ActivityService {
 	/**
 	 * A card's activity, newest-first. Requires READ on the card's board.
 	 *
-	 * Description-update items additionally carry `detail: {from, to}` (the
-	 * before/after text) so the client can render a diff; other verbs, and legacy
-	 * description edits recorded before this feature (no detail row), carry null.
+	 * Any item whose change has a `kanso_change_details` side-table row carries
+	 * `detail: {from, to}` (the before/after values) so the client can render the
+	 * specifics of the change: the description diff, the source/target column of a
+	 * move, the label title added/removed, the assignee name, the priority/status/
+	 * type/estimate/date values. Verbs with no detail row (and legacy edits recorded
+	 * before this feature) carry null.
 	 *
 	 * @return list<array{id: int, actor: ?string, actorName: ?string, verb: ?int, action: int, timestamp: int, detail: array{from: ?string, to: ?string}|null}>
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
@@ -80,19 +83,20 @@ class ActivityService {
 			];
 		}, $rows));
 
-		// Attach the before/after diff payload to description-update items only,
-		// batch-loaded from the side table in one query. Items whose change has no
-		// detail row (legacy edits recorded before this feature) keep detail null.
-		$descriptionChangeIds = [];
-		foreach ($items as $item) {
-			if ($item['verb'] === Change::VERB_DESCRIPTION_UPDATED) {
-				$descriptionChangeIds[] = $item['id'];
-			}
-		}
-		if ($descriptionChangeIds !== []) {
-			$details = $this->changeDetailMapper->findByChangeIds($descriptionChangeIds);
+		// Attach the before/after payload to ANY item whose change has a detail row,
+		// batch-loaded from the side table in one query. This covers the description
+		// diff plus the from/to values captured for moves, labels, assignees and the
+		// single-field card edits (priority/status/type/estimate/dates/rename). Items
+		// whose change has no detail row (verbs that store none, or legacy edits
+		// recorded before this feature) keep detail null.
+		$changeIds = array_values(array_filter(
+			array_map(static fn (array $item): ?int => $item['id'], $items),
+			static fn (?int $id): bool => $id !== null,
+		));
+		if ($changeIds !== []) {
+			$details = $this->changeDetailMapper->findByChangeIds($changeIds);
 			foreach ($items as $index => $item) {
-				if ($item['verb'] === Change::VERB_DESCRIPTION_UPDATED && isset($details[$item['id']])) {
+				if ($item['id'] !== null && isset($details[$item['id']])) {
 					$detail = $details[$item['id']];
 					$items[$index]['detail'] = [
 						'from' => $detail->getFromText(),

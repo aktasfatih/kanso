@@ -45,6 +45,34 @@ class CardService {
 	// unique collisions under concurrency before surfacing a retryable 409.
 	private const MAX_CREATE_ATTEMPTS = 5;
 
+	// Cap each stored Activity-detail string (multibyte-safe), consistent across
+	// the services that write to `kanso_change_details`.
+	private const MAX_DETAIL_LENGTH = 10000;
+
+	// Server-side labels for the from/to values the Activity feed shows. Kept in
+	// lock-step with the frontend maps (usePriority.js PRIORITY_LEVELS, the status
+	// keys in CardDetail.vue, useCardType.js CARD_TYPES) - the single source of
+	// truth for stored history text. English by design: the feed shows the label
+	// as it was recorded, like the Nextcloud Activity stream.
+	private const PRIORITY_LABELS = [
+		Card::PRIORITY_NONE => 'None',
+		1 => 'Low',
+		2 => 'Medium',
+		3 => 'High',
+		Card::PRIORITY_URGENT => 'Urgent',
+	];
+	private const TYPE_LABELS = [
+		'bug' => 'Bug',
+		'feature' => 'Feature',
+		'task' => 'Task',
+		'chore' => 'Chore',
+	];
+	private const STATUS_LABELS = [
+		'not_started' => 'Not started',
+		'in_progress' => 'In progress',
+		'done' => 'Done',
+	];
+
 	public function __construct(
 		private CardMapper $cardMapper,
 		private StackMapper $stackMapper,
@@ -937,6 +965,9 @@ class CardService {
 		$origPriority = $card->getPriority();
 		$origEstimate = $card->getEstimate();
 		$origType = $card->getType();
+		// Derived status (done/in_progress/not_started) BEFORE any timestamp setter,
+		// so a timestamp-only status change can record its from/to labels.
+		$origStatus = $this->deriveStatus($card);
 
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
@@ -1081,18 +1112,21 @@ class CardService {
 		}
 		$verb = count($changedVerbs) === 1 ? $changedVerbs[0] : Change::VERB_UPDATED;
 
-		// Description edits (and only those) carry a before/after payload so the
-		// Activity feed can render a from → to diff. Each side is capped at 10000
-		// chars so the side table can't be bloated by a pathologically long
-		// description; a multi-field save keeps the generic verb and NO detail.
-		$detail = null;
-		if ($verb === Change::VERB_DESCRIPTION_UPDATED) {
-			$newDescription = $card->getDescription();
-			$detail = [
-				'from' => $origDescription !== null ? mb_substr($origDescription, 0, 10000) : null,
-				'to' => $newDescription !== null ? mb_substr($newDescription, 0, 10000) : null,
-			];
-		}
+		// A single-field save carries a before/after payload so the Activity feed can
+		// show WHAT changed (the description diff, the renamed title, the new due /
+		// start date, the priority/status/estimate/type value). Each side is capped
+		// (multibyte-safe) so the side table can't be bloated by a pathologically long
+		// value; a multi-field save keeps the generic VERB_UPDATED and NO detail.
+		$detail = $this->buildUpdateDetail($verb, $card, [
+			'title' => $origTitle,
+			'description' => $origDescription,
+			'due' => $origDue,
+			'start' => $origStart,
+			'priority' => $origPriority,
+			'estimate' => $origEstimate,
+			'type' => $origType,
+			'status' => $origStatus,
+		]);
 
 		// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
 		// row commit together (or roll back together); the realtime push fires only
@@ -1278,7 +1312,7 @@ class CardService {
 			// truth), but DEFER the realtime push until after commit - otherwise a
 			// client could refetch pre-commit state, or get an event for a move
 			// that the unique-key retry then rolls back.
-			$this->changeNotifier->recordChange(
+			$change = $this->changeNotifier->recordChange(
 				$card->getBoardId(),
 				Change::ENTITY_CARD,
 				$card->getId(),
@@ -1286,6 +1320,17 @@ class CardService {
 				$uid,
 				Change::VERB_MOVED,
 			);
+			// Record the source/target column names so the Activity feed can say
+			// "moved from X to Y". A pure reorder WITHIN the same column (source ==
+			// target) is not a meaningful move-between-columns, so it stores no
+			// detail (the feed then falls back to the plain "moved this card").
+			if ($change->getId() !== null && $sourceStack->getId() !== $targetStack->getId()) {
+				$this->changeDetailMapper->insertDetail(
+					$change->getId(),
+					$this->capDetail((string)$sourceStack->getTitle()),
+					$this->capDetail((string)$targetStack->getTitle()),
+				);
+			}
 
 			$this->db->commit();
 		} catch (\Throwable $e) {
@@ -1638,7 +1683,9 @@ class CardService {
 				$uid,
 				$verb,
 			);
-			if ($detail !== null) {
+			// A persisted change always has an id; guard defensively so a detail row
+			// is never orphaned by a change that failed to yield one.
+			if ($detail !== null && $change->getId() !== null) {
 				$this->changeDetailMapper->insertDetail($change->getId(), $detail['from'], $detail['to']);
 			}
 			$this->db->commit();
@@ -1651,6 +1698,97 @@ class CardService {
 		$this->changeNotifier->pushBoardChanged($boardId);
 
 		return $card;
+	}
+
+	/**
+	 * Builds the before/after Activity detail for a single-field card update, or
+	 * null when the resolved verb carries no from/to values (a multi-field save
+	 * keeps the generic VERB_UPDATED, and VERB_CREATED/DELETED/etc. store none).
+	 * Reads the ALREADY-mutated card for the "to" side and the pre-setter
+	 * snapshot for the "from" side. Every value is capped {@see self::capDetail()}.
+	 *
+	 * @param array{title: ?string, description: ?string, due: ?int, start: ?int, priority: ?int, estimate: ?string, type: ?string, status: string} $orig
+	 * @return array{from: ?string, to: ?string}|null
+	 */
+	private function buildUpdateDetail(int $verb, Card $card, array $orig): ?array {
+		$newDescription = $card->getDescription();
+		$newEstimate = $card->getEstimate();
+		$newType = $card->getType();
+		return match ($verb) {
+			Change::VERB_DESCRIPTION_UPDATED => [
+				'from' => $orig['description'] !== null ? $this->capDetail($orig['description']) : null,
+				'to' => $newDescription !== null ? $this->capDetail($newDescription) : null,
+			],
+			Change::VERB_RENAMED => [
+				'from' => $orig['title'] !== null ? $this->capDetail($orig['title']) : null,
+				'to' => $this->capDetail((string)$card->getTitle()),
+			],
+			// Dates: a set value renders formatted; a cleared date is an empty 'to'
+			// (the frontend then reads it as "cleared the due/start date").
+			Change::VERB_DUE_CHANGED => [
+				'from' => $this->formatDetailDate($orig['due']),
+				'to' => $this->formatDetailDate($card->getDuedate()?->getTimestamp()),
+			],
+			Change::VERB_START_CHANGED => [
+				'from' => $this->formatDetailDate($orig['start']),
+				'to' => $this->formatDetailDate($card->getStartDate()?->getTimestamp()),
+			],
+			Change::VERB_PRIORITY_CHANGED => [
+				'from' => self::PRIORITY_LABELS[$orig['priority'] ?? Card::PRIORITY_NONE] ?? null,
+				'to' => self::PRIORITY_LABELS[$card->getPriority()] ?? null,
+			],
+			Change::VERB_ESTIMATE_CHANGED => [
+				'from' => $orig['estimate'] !== null ? $this->capDetail($orig['estimate']) : '',
+				'to' => $newEstimate !== null ? $this->capDetail($newEstimate) : '',
+			],
+			Change::VERB_TYPE_CHANGED => [
+				// '' (none) has no label - store empty so the feed can read "cleared".
+				'from' => ($orig['type'] !== null && $orig['type'] !== '') ? (self::TYPE_LABELS[$orig['type']] ?? '') : '',
+				'to' => ($newType !== null && $newType !== '') ? (self::TYPE_LABELS[$newType] ?? '') : '',
+			],
+			Change::VERB_STATUS_CHANGED => [
+				'from' => self::STATUS_LABELS[$orig['status']] ?? null,
+				'to' => self::STATUS_LABELS[$this->deriveStatus($card)] ?? null,
+			],
+			default => null,
+		};
+	}
+
+	/**
+	 * The card's derived status - the inverse of {@see self::applyStatus()}'s
+	 * timestamp bookkeeping. Mirrors the frontend's doneAt/startedAt derivation so
+	 * the recorded from/to status labels match what the UI shows.
+	 *
+	 * @return 'done'|'in_progress'|'not_started'
+	 */
+	private function deriveStatus(Card $card): string {
+		if (($card->getDoneAt() ?? 0) > 0) {
+			return 'done';
+		}
+		if (($card->getStartedAt() ?? 0) > 0) {
+			return 'in_progress';
+		}
+		return 'not_started';
+	}
+
+	/**
+	 * Formats a due/start-date unix timestamp for the Activity feed (e.g.
+	 * "25 Aug 2026"), or '' when the date was cleared/absent - the frontend reads
+	 * an empty 'to' as "cleared the date".
+	 */
+	private function formatDetailDate(?int $timestamp): string {
+		if ($timestamp === null) {
+			return '';
+		}
+		return (new \DateTime('@' . $timestamp))->format('j M Y');
+	}
+
+	/**
+	 * Caps a detail string to {@see self::MAX_DETAIL_LENGTH} chars (multibyte-safe),
+	 * so the side table can't be bloated by a pathologically long value.
+	 */
+	private function capDetail(string $value): string {
+		return mb_substr($value, 0, self::MAX_DETAIL_LENGTH);
 	}
 
 	/**

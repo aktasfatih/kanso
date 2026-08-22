@@ -1744,7 +1744,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:hide-status="true" />
 									<span class="card-modal__activity-text">
 										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
-										{{ activityVerbText(item) }}
+										<template v-for="(seg, si) in activitySegments(item)" :key="si"><strong v-if="seg.strong">{{ seg.text }}</strong><template v-else>{{ seg.text }}</template></template>
 										<button
 											v-if="hasDescriptionDiff(item)"
 											type="button"
@@ -3551,7 +3551,9 @@ const activityQuery = useQuery({
 })
 const activityItems = computed(() => (Array.isArray(activityQuery.data.value) ? activityQuery.data.value : []))
 
-// verb → human phrase. Falls back to a generic "updated this card".
+// verb → generic human phrase (the fallback when an item carries no detail, e.g.
+// legacy rows recorded before the values were captured). Falls back to a generic
+// "updated this card".
 const ACTIVITY_VERBS = {
 	1: () => t('kanso', 'created this card'),
 	2: () => t('kanso', 'updated this card'),
@@ -3579,6 +3581,103 @@ const ACTIVITY_VERBS = {
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
 	return fn ? fn() : t('kanso', 'updated this card')
+}
+
+// Render the activity phrase as an ordered list of { text, strong } segments so
+// the specific values (column names, label titles, assignee names, field values)
+// render as escaped, bold-highlighted USER CONTENT. Every value rides in a
+// segment and is bound via {{ }} in the template — never v-html — so it is
+// auto-escaped. When an item has no detail (legacy rows, or verbs that store
+// none) we fall back to the flat ACTIVITY_VERBS phrase as a single plain segment.
+function plain(text) {
+	return [{ text, strong: false }]
+}
+function activitySegments(item) {
+	const d = item.detail
+	// The 't' calls below use {value} placeholders so the phrase stays
+	// translatable; we split each around the placeholder(s) and slot the escaped
+	// value in as its own bold segment, rather than interpolating into markup.
+	const withOne = (phrase, value) => {
+		const parts = phrase.split('{value}')
+		return [
+			{ text: parts[0], strong: false },
+			{ text: value, strong: true },
+			{ text: parts[1] ?? '', strong: false },
+		]
+	}
+	const withFromTo = (phrase, from, to) => {
+		// phrase carries {from} then {to}; split on both, keep order.
+		const afterFrom = phrase.split('{from}')
+		const head = afterFrom[0]
+		const tail = (afterFrom[1] ?? '').split('{to}')
+		return [
+			{ text: head, strong: false },
+			{ text: from, strong: true },
+			{ text: tail[0] ?? '', strong: false },
+			{ text: to, strong: true },
+			{ text: tail[1] ?? '', strong: false },
+		]
+	}
+
+	switch (item.verb) {
+	case 3: // moved
+		if (d && d.from != null && d.to != null && d.from !== '' && d.to !== '') {
+			return withFromTo(t('kanso', 'moved this card from {from} to {to}'), d.from, d.to)
+		}
+		break
+	case 6: // labeled (added)
+		if (d && d.to) return withOne(t('kanso', 'added the label {value}'), d.to)
+		break
+	case 7: // unlabeled (removed)
+		if (d && d.from) return withOne(t('kanso', 'removed the label {value}'), d.from)
+		break
+	case 8: // assigned
+		if (d && d.to) return withOne(t('kanso', 'assigned {value}'), d.to)
+		break
+	case 9: // unassigned
+		if (d && d.from) return withOne(t('kanso', 'removed {value}'), d.from)
+		break
+	case 15: // renamed
+		if (d && d.to != null && d.to !== '') return withOne(t('kanso', 'renamed this card to {value}'), d.to)
+		break
+	case 17: // due date
+		if (d) {
+			return d.to ? withOne(t('kanso', 'changed the due date to {value}'), d.to) : plain(t('kanso', 'cleared the due date'))
+		}
+		break
+	case 18: // start date
+		if (d) {
+			return d.to ? withOne(t('kanso', 'changed the start date to {value}'), d.to) : plain(t('kanso', 'cleared the start date'))
+		}
+		break
+	case 19: // priority
+		if (d && d.to != null && d.to !== '') {
+			return (d.from != null && d.from !== '')
+				? withFromTo(t('kanso', 'changed the priority from {from} to {to}'), d.from, d.to)
+				: withOne(t('kanso', 'changed the priority to {value}'), d.to)
+		}
+		break
+	case 20: // status
+		if (d && d.to != null && d.to !== '') {
+			return (d.from != null && d.from !== '')
+				? withFromTo(t('kanso', 'changed the status from {from} to {to}'), d.from, d.to)
+				: withOne(t('kanso', 'changed the status to {value}'), d.to)
+		}
+		break
+	case 21: // estimate
+		if (d) {
+			return d.to ? withOne(t('kanso', 'changed the estimate to {value}'), d.to) : plain(t('kanso', 'cleared the estimate'))
+		}
+		break
+	case 22: // card type
+		if (d) {
+			return d.to ? withOne(t('kanso', 'changed the card type to {value}'), d.to) : plain(t('kanso', 'cleared the card type'))
+		}
+		break
+	}
+	// Description (16) keeps the collapsible diff below; every other case falls
+	// back to the flat verb phrase.
+	return plain(activityVerbText(item))
 }
 
 // ── Description diff (Activity feed) ──────────────────────────────────────────

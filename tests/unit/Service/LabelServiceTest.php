@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Service\CardVisibilityGuard;
@@ -35,6 +36,7 @@ class LabelServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private IDBConnection&MockObject $db;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private LabelService $service;
 
 	protected function setUp(): void {
@@ -48,6 +50,7 @@ class LabelServiceTest extends TestCase {
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
 		$this->service = new LabelService(
 			$this->labelMapper,
 			$this->cardLabelMapper,
@@ -57,6 +60,7 @@ class LabelServiceTest extends TestCase {
 			$this->permissionService,
 			$this->db,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
 		);
 	}
 
@@ -291,6 +295,8 @@ class LabelServiceTest extends TestCase {
 		$this->cardLabelMapper->expects(self::once())
 			->method('insertAssignment')
 			->with(9, 7);
+		$change = new Change();
+		$change->setId(41);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(
@@ -300,7 +306,11 @@ class LabelServiceTest extends TestCase {
 				Change::ACTION_UPDATE,
 				'alice'
 			)
-			->willReturn(new Change());
+			->willReturn($change);
+		// The label title is recorded as the detail's `to` side (added).
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(41, null, 'Existing label');
 
 		$this->service->assign(9, 7, 'alice');
 	}
@@ -361,10 +371,14 @@ class LabelServiceTest extends TestCase {
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_EDIT);
+		// The label title is resolved before the assignment is removed.
+		$this->labelMapper->method('find')->with(7)->willReturn($this->label());
 		$this->cardLabelMapper->expects(self::once())
 			->method('deleteAssignment')
 			->with(9, 7)
 			->willReturn(1);
+		$change = new Change();
+		$change->setId(42);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(
@@ -374,7 +388,11 @@ class LabelServiceTest extends TestCase {
 				Change::ACTION_UPDATE,
 				'alice'
 			)
-			->willReturn(new Change());
+			->willReturn($change);
+		// The removed label title is recorded as the detail's `from` side.
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(42, 'Existing label', null);
 
 		$this->service->unassign(9, 7, 'alice');
 	}
@@ -382,8 +400,27 @@ class LabelServiceTest extends TestCase {
 	public function testUnassignIsIdempotentAndWritesNoChangeRowWhenAbsent(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->labelMapper->method('find')->with(7)->willReturn($this->label());
 		$this->cardLabelMapper->method('deleteAssignment')->with(9, 7)->willReturn(0);
 		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->service->unassign(9, 7, 'alice');
+	}
+
+	public function testUnassignSkipsDetailWhenLabelAlreadyDeleted(): void {
+		// A stale assignment whose label row is gone: the change row still records
+		// the removal, but there is no title to store, so no detail is written.
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->labelMapper->method('find')->with(7)
+			->willThrowException(new DoesNotExistException('gone'));
+		$this->cardLabelMapper->method('deleteAssignment')->with(9, 7)->willReturn(1);
+		$change = new Change();
+		$change->setId(43);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn($change);
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
 
 		$this->service->unassign(9, 7, 'alice');
 	}

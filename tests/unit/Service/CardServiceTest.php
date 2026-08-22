@@ -92,6 +92,10 @@ class CardServiceTest extends TestCase {
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		// Default: any detail write returns a row (the typed return must not be null,
+		// or a move/update inside the transaction would TypeError and roll back).
+		// Tests asserting specific from/to values override this.
+		$this->changeDetailMapper->method('insertDetail')->willReturn(new ChangeDetail());
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -799,11 +803,65 @@ class CardServiceTest extends TestCase {
 		self::assertSame('New body', $captured->to);
 	}
 
-	public function testUpdateNonDescriptionWritesNoChangeDetail(): void {
-		$verb = $this->captureUpdateVerb($this->card());
-		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+	public function testUpdateRenameWritesTitleFromToDetail(): void {
+		// A rename now records the old/new title so the feed shows both.
+		$card = $this->card(); // title 'Existing card'
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(501);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(501, 'Existing card', 'Renamed')
+			->willReturn(new ChangeDetail());
+
 		$this->service->update(9, 'Renamed', null, null, null, null, 'alice');
-		self::assertSame(Change::VERB_RENAMED, $verb->verb);
+	}
+
+	public function testUpdatePriorityWritesPriorityLabelFromToDetail(): void {
+		// Priority verb records the from/to as human labels (Medium → Urgent).
+		$card = $this->card();
+		$card->setPriority(2); // Medium
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(502);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(502, 'Medium', 'Urgent')
+			->willReturn(new ChangeDetail());
+
+		$this->service->update(9, null, null, null, null, null, 'alice', Card::PRIORITY_URGENT);
+	}
+
+	public function testUpdateTimestampOnlyStatusWritesStatusLabelFromToDetail(): void {
+		// Timestamp-only status change records the from/to status labels.
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$card = $this->card(); // no doneAt/startedAt → 'not_started'
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(503);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(503, 'Not started', 'In progress')
+			->willReturn(new ChangeDetail());
+
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'in_progress');
+	}
+
+	public function testUpdateMultipleFieldsWritesNoChangeDetail(): void {
+		// A multi-field save keeps the generic verb and writes NO detail row.
+		$this->captureUpdateVerb($this->card());
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+		$this->service->update(9, 'Renamed', null, '2026-08-15T10:00:00+00:00', null, null, 'alice');
 	}
 
 	public function testUpdateDueDateOnlyStampsDueVerb(): void {
@@ -1341,6 +1399,50 @@ class CardServiceTest extends TestCase {
 		$moved = $this->service->move(9, 6, null, 'alice');
 		self::assertSame('I', $moved->getSortKey());
 		self::assertSame(6, $moved->getStackId());
+	}
+
+	public function testMoveAcrossStacksWritesSourceAndTargetColumnDetail(): void {
+		// A move between two different columns records the from/to column titles.
+		$source = $this->stack(5);
+		$source->setTitle('To Do');
+		$target = $this->stack(6);
+		$target->setTitle('In Progress');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1, 'K'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			5 => $source,
+			6 => $target,
+		});
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(601);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(601, 'To Do', 'In Progress')
+			->willReturn(new ChangeDetail());
+
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	public function testSameStackReorderWritesNoColumnDetail(): void {
+		// A pure reorder within the same column is not a move-between-columns, so
+		// no from/to detail is stored (source and target stacks are identical).
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $this->card(9, 5, 1, 'V'),
+			10 => $this->card(10, 5, 1, 'I'),
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5));
+		$this->cardMapper->method('findNextInStack')->with(5, 'I')->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(602);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->service->move(9, 5, 10, 'alice');
 	}
 
 	public function testMoveBetweenCardsUsesMidpointKeyInsideTransaction(): void {

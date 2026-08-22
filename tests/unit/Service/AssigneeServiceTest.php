@@ -15,6 +15,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
@@ -39,6 +40,8 @@ class AssigneeServiceTest extends TestCase {
 	private NotificationService&MockObject $notificationService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
+	private IUserManager&MockObject $userManager;
 	private AssigneeService $service;
 
 	protected function setUp(): void {
@@ -52,6 +55,8 @@ class AssigneeServiceTest extends TestCase {
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		$this->userManager = $this->createMock(IUserManager::class);
 		$this->service = new AssigneeService(
 			$this->cardAssigneeMapper,
 			$this->cardMapper,
@@ -61,6 +66,8 @@ class AssigneeServiceTest extends TestCase {
 			$this->notificationService,
 			$this->subscriptionService,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
+			$this->userManager,
 		);
 	}
 
@@ -99,6 +106,8 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper->expects(self::once())
 			->method('insertAssignment')
 			->with(9, 'bob');
+		$change = new Change();
+		$change->setId(77);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(
@@ -108,7 +117,14 @@ class AssigneeServiceTest extends TestCase {
 				Change::ACTION_UPDATE,
 				'alice'
 			)
-			->willReturn(new Change());
+			->willReturn($change);
+		// The assignee's display name is recorded as the detail's `to` side.
+		$bobUser = $this->createMock(IUser::class);
+		$bobUser->method('getDisplayName')->willReturn('Bob B.');
+		$this->userManager->method('get')->with('bob')->willReturn($bobUser);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(77, null, 'Bob B.');
 		$this->notificationService->expects(self::once())
 			->method('notifyCardAssigned')
 			->with(9, 'bob', 'alice');
@@ -213,6 +229,8 @@ class AssigneeServiceTest extends TestCase {
 			$this->notificationService,
 			$this->subscriptionService,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
+			$userManager,
 		);
 
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
@@ -221,9 +239,11 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper->expects(self::once())
 			->method('insertAssignment')
 			->with(9, 'carol');
+		$carolChange = new Change();
+		$carolChange->setId(99);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
-			->willReturn(new Change());
+			->willReturn($carolChange);
 
 		$service->assign(9, 'carol', 'alice');
 	}
@@ -251,6 +271,8 @@ class AssigneeServiceTest extends TestCase {
 			->method('deleteAssignment')
 			->with(9, 'bob')
 			->willReturn(1);
+		$change = new Change();
+		$change->setId(88);
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(
@@ -260,7 +282,14 @@ class AssigneeServiceTest extends TestCase {
 				Change::ACTION_UPDATE,
 				'alice'
 			)
-			->willReturn(new Change());
+			->willReturn($change);
+		// The removed assignee's display name is recorded as the detail's `from` side.
+		$bobUser = $this->createMock(IUser::class);
+		$bobUser->method('getDisplayName')->willReturn('Bob B.');
+		$this->userManager->method('get')->with('bob')->willReturn($bobUser);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(88, 'Bob B.', null);
 		$this->notificationService->expects(self::once())
 			->method('dismissCardAssigned')
 			->with(9, 'bob');

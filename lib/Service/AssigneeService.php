@@ -13,8 +13,10 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IUserManager;
 
 /**
  * Card assignee assignments. Mirrors the label assignment flow in
@@ -25,6 +27,9 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * the board payload can never resolve for them.
  */
 class AssigneeService {
+	// Cap each stored detail string, consistent with CardService's description cap.
+	private const MAX_DETAIL_LENGTH = 10000;
+
 	public function __construct(
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardMapper $cardMapper,
@@ -34,6 +39,8 @@ class AssigneeService {
 		private NotificationService $notificationService,
 		private SubscriptionService $subscriptionService,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
+		private IUserManager $userManager,
 	) {
 	}
 
@@ -72,7 +79,7 @@ class AssigneeService {
 			throw $e;
 		}
 
-		$this->changeNotifier->notify(
+		$change = $this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
@@ -80,6 +87,8 @@ class AssigneeService {
 			$actorUid,
 			verb: Change::VERB_ASSIGNED,
 		);
+		// Record the assignee's display name so the Activity feed can say WHO.
+		$this->changeDetailMapper->insertDetail($change->getId(), null, $this->capDetail($this->displayName($participantUid)));
 
 		// Targeted bell notification to the assignee (not the board fan-out).
 		$this->notificationService->notifyCardAssigned($cardId, $participantUid, $actorUid);
@@ -104,7 +113,7 @@ class AssigneeService {
 			return;
 		}
 
-		$this->changeNotifier->notify(
+		$change = $this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
@@ -112,9 +121,27 @@ class AssigneeService {
 			$actorUid,
 			verb: Change::VERB_UNASSIGNED,
 		);
+		// Record the removed assignee's display name so the Activity feed can say WHO.
+		$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($this->displayName($participantUid)), null);
 
 		// Clear any pending "assigned to you" bell notification for this card.
 		$this->notificationService->dismissCardAssigned($cardId, $participantUid);
+	}
+
+	/**
+	 * The participant's display name, falling back to the uid when the account is
+	 * unknown - same resolution the board participant list uses.
+	 */
+	private function displayName(string $uid): string {
+		return $this->userManager->get($uid)?->getDisplayName() ?? $uid;
+	}
+
+	/**
+	 * Caps a detail string to {@see self::MAX_DETAIL_LENGTH} chars (multibyte-safe),
+	 * consistent with the description cap in CardService.
+	 */
+	private function capDetail(string $value): string {
+		return mb_substr($value, 0, self::MAX_DETAIL_LENGTH);
 	}
 
 	/**

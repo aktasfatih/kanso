@@ -127,10 +127,10 @@ class ActivityServiceTest extends TestCase {
 		$detail->setFromText('Old body');
 		$detail->setToText('New body');
 		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
-		// Only the description change id is looked up; returns its from/to detail.
+		// ALL change ids are looked up in one batch; only id 55 has a detail row.
 		$this->changeDetailMapper->expects(self::once())
 			->method('findByChangeIds')
-			->with([55])
+			->with([55, 56])
 			->willReturn([55 => $detail]);
 		$this->service = new ActivityService(
 			$this->changeMapper,
@@ -150,6 +150,49 @@ class ActivityServiceTest extends TestCase {
 		// The rename item does not.
 		self::assertSame(Change::VERB_RENAMED, $result[1]['verb']);
 		self::assertNull($result[1]['detail']);
+	}
+
+	public function testAttachesDetailToNonDescriptionVerbs(): void {
+		// A move row (id 70) carries source/target column names, a priority row
+		// (id 71) carries the from/to labels - both get their detail attached,
+		// proving the generalized attachment covers any verb, not just description.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->changeMapper->method('findByEntity')->willReturn([
+			$this->change(Change::VERB_MOVED, Change::ACTION_MOVE, 'alice', 300, 70),
+			$this->change(Change::VERB_PRIORITY_CHANGED, Change::ACTION_UPDATE, 'alice', 200, 71),
+		]);
+		$this->userManager->method('get')->willReturn(null);
+
+		$move = new ChangeDetail();
+		$move->setChangeId(70);
+		$move->setFromText('To Do');
+		$move->setToText('In Progress');
+		$prio = new ChangeDetail();
+		$prio->setChangeId(71);
+		$prio->setFromText('Medium');
+		$prio->setToText('Urgent');
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		$this->changeDetailMapper->expects(self::once())
+			->method('findByChangeIds')
+			->with([70, 71])
+			->willReturn([70 => $move, 71 => $prio]);
+		$this->service = new ActivityService(
+			$this->changeMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->permissionService,
+			$this->userManager,
+			$this->visibilityGuard,
+			$this->changeDetailMapper,
+		);
+
+		$result = $this->service->getCardActivity(9, 'bob');
+
+		self::assertSame(Change::VERB_MOVED, $result[0]['verb']);
+		self::assertSame(['from' => 'To Do', 'to' => 'In Progress'], $result[0]['detail']);
+		self::assertSame(Change::VERB_PRIORITY_CHANGED, $result[1]['verb']);
+		self::assertSame(['from' => 'Medium', 'to' => 'Urgent'], $result[1]['detail']);
 	}
 
 	public function testDescriptionItemWithoutDetailRowCarriesNullDetail(): void {

@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3666
+#: src/components/CardDetail.vue:3765
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3664
+#: src/components/CardDetail.vue:3763
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3662
+#: src/components/CardDetail.vue:3761
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -405,6 +405,10 @@ msgstr ""
 msgid "added a label"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "added the label {value}"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Adding…"
@@ -531,6 +535,10 @@ msgstr ""
 
 #: src/components/BulkActionBar.vue
 msgid "Assign…"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "assigned {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -950,7 +958,15 @@ msgid "changed the card type"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "changed the card type to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "changed the due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the due date to {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -958,7 +974,19 @@ msgid "changed the estimate"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "changed the estimate to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "changed the priority"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the priority from {from} to {to}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the priority to {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -966,7 +994,19 @@ msgid "changed the start date"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "changed the start date to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "changed the status"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the status from {from} to {to}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the status to {value}"
 msgstr ""
 
 #: src/components/BoardFilterBar.vue
@@ -1038,6 +1078,22 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Clear step due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the card type"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the estimate"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the start date"
 msgstr ""
 
 #: src/views/ProjectView.vue
@@ -1396,7 +1452,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3839
+#: src/components/CardDetail.vue:3938
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2911,7 +2967,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3841
+#: src/components/CardDetail.vue:3940
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -2979,6 +3035,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "moved this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "moved this card from {from} to {to}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -3792,11 +3852,19 @@ msgid "Remove watcher"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "removed {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed a label"
 msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "removed an assignee"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the label {value}"
 msgstr ""
 
 #: src/App.vue
@@ -3843,6 +3911,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "renamed this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "renamed this card to {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4716,7 +4788,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3840
+#: src/components/CardDetail.vue:3939
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4796,7 +4868,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:3842
+#: src/components/CardDetail.vue:3941
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
