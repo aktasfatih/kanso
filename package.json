@@ -29,6 +29,7 @@
     "@nextcloud/vue": "^9.0.0",
     "@tanstack/vue-query": "^5.0.0",
     "@tanstack/vue-virtual": "^3.13.35",
+    "@tiptap/extension-image": "^3.30.2",
     "@tiptap/extension-mention": "^3.30.2",
     "@tiptap/extension-placeholder": "^3.30.2",
     "@tiptap/pm": "^3.30.2",

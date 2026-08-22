@@ -21,6 +21,7 @@ Props:
   participants  — Array<{uid: string, displayName: string}> for @-mention autocomplete
   uploadImage   — async (file: File) => {id: number, filename: string}  (image paste upload)
   inlineUrl     — (attachmentId: number) => string  (attachment inline URL builder)
+  showToolbar   — whether to show the formatting toolbar (default: true)
 
 Emits:
   update:modelValue  — on every change (markdown string)
@@ -32,6 +33,114 @@ Emits:
 		class="kanso-md-editor"
 		:class="{ 'kanso-md-editor--disabled': disabled, 'kanso-md-editor--focused': isFocused }"
 		:style="editorStyle">
+		<!-- Formatting toolbar -->
+		<div
+			v-if="showToolbar && editor"
+			class="kanso-md-editor__toolbar"
+			@mousedown.prevent>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('bold') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Bold')"
+				:aria-label="t('kanso', 'Bold')"
+				@click="editor.chain().focus().toggleBold().run()">
+				<FormatBoldIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('italic') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Italic')"
+				:aria-label="t('kanso', 'Italic')"
+				@click="editor.chain().focus().toggleItalic().run()">
+				<FormatItalicIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('strike') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Strikethrough')"
+				:aria-label="t('kanso', 'Strikethrough')"
+				@click="editor.chain().focus().toggleStrike().run()">
+				<FormatStrikethroughIcon :size="16" />
+			</button>
+			<span class="kanso-md-editor__tb-divider" />
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('heading', { level: 1 }) }"
+				:disabled="disabled"
+				:title="t('kanso', 'Heading 1')"
+				:aria-label="t('kanso', 'Heading 1')"
+				@click="editor.chain().focus().toggleHeading({ level: 1 }).run()">
+				<FormatHeader1Icon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('heading', { level: 2 }) }"
+				:disabled="disabled"
+				:title="t('kanso', 'Heading 2')"
+				:aria-label="t('kanso', 'Heading 2')"
+				@click="editor.chain().focus().toggleHeading({ level: 2 }).run()">
+				<FormatHeader2Icon :size="16" />
+			</button>
+			<span class="kanso-md-editor__tb-divider" />
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('bulletList') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Bullet list')"
+				:aria-label="t('kanso', 'Bullet list')"
+				@click="editor.chain().focus().toggleBulletList().run()">
+				<FormatListBulletedIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('orderedList') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Ordered list')"
+				:aria-label="t('kanso', 'Ordered list')"
+				@click="editor.chain().focus().toggleOrderedList().run()">
+				<FormatListNumberedIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('blockquote') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Blockquote')"
+				:aria-label="t('kanso', 'Blockquote')"
+				@click="editor.chain().focus().toggleBlockquote().run()">
+				<FormatQuoteOpenIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('code') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Inline code')"
+				:aria-label="t('kanso', 'Inline code')"
+				@click="editor.chain().focus().toggleCode().run()">
+				<CodeTagsIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('link') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Link')"
+				:aria-label="t('kanso', 'Link')"
+				@click="handleLinkToggle">
+				<LinkVariantIcon :size="16" />
+			</button>
+		</div>
 		<!-- @-mention suggestion dropdown — rendered as a floating list above the editor -->
 		<Teleport to="body">
 			<ul
@@ -69,6 +178,18 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import BaseMention from '@tiptap/extension-mention'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
+import { translate as t } from '@nextcloud/l10n'
+import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
+import FormatItalicIcon from 'vue-material-design-icons/FormatItalic.vue'
+import FormatStrikethroughIcon from 'vue-material-design-icons/FormatStrikethrough.vue'
+import FormatHeader1Icon from 'vue-material-design-icons/FormatHeader1.vue'
+import FormatHeader2Icon from 'vue-material-design-icons/FormatHeader2.vue'
+import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
+import FormatListNumberedIcon from 'vue-material-design-icons/FormatListNumbered.vue'
+import FormatQuoteOpenIcon from 'vue-material-design-icons/FormatQuoteOpen.vue'
+import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
+import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 
 // tiptap-markdown has no built-in serializer for the mention node. With
 // html:false its default (HTMLNode) fallback would emit the literal string
@@ -131,6 +252,11 @@ const props = defineProps({
 	inlineUrl: {
 		type: Function,
 		default: null,
+	},
+	/** Show/hide the formatting toolbar */
+	showToolbar: {
+		type: Boolean,
+		default: true,
 	},
 })
 
@@ -250,6 +376,22 @@ const mentionSuggestion = {
 	},
 }
 
+// ── Toolbar link handler ──────────────────────────────────────────────────────
+function handleLinkToggle() {
+	if (!editor.value) return
+	if (editor.value.isActive('link')) {
+		editor.value.chain().focus().unsetLink().run()
+		return
+	}
+	// eslint-disable-next-line no-alert
+	const url = window.prompt(t('kanso', 'Enter URL'))
+	if (!url) {
+		editor.value.commands.focus()
+		return
+	}
+	editor.value.chain().focus().setLink({ href: url }).run()
+}
+
 // ── Image-paste extension ─────────────────────────────────────────────────────
 const IMAGE_MIME_RE = /^image\//i
 
@@ -275,39 +417,17 @@ function buildImagePastePlugin() {
 				const label = file.name && file.name !== 'image.png'
 					? file.name
 					: `pasted-image-${Date.now()}.${(file.type.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '') || 'png'}`
-				const token = `uploading-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-				const placeholder = `![${label}](${token})`
 
-				// Insert placeholder as markdown text
-				view.dispatch(view.state.tr.insertText(placeholder))
-
-				// Upload and replace placeholder
+				// Upload and insert the image node at the current caret position
 				;(async () => {
 					try {
 						const attachment = await props.uploadImage(file)
 						const src = props.inlineUrl(attachment.id)
 						const finalLabel = attachment.filename || label
-						const finalMd = `![${finalLabel}](${src})`
-						// Find and replace placeholder in the current markdown
-						const currentMd = view.state.doc.textBetween(0, view.state.doc.content.size, '\n')
-						const idx = currentMd.indexOf(placeholder)
-						if (idx !== -1) {
-							// Replace via text command on the editor
-							const editor_ = view.state.doc
-							// We need the editor reference; use the plugin state approach
-							// Fall back: re-set the whole content with the replacement
-							const rawMd = editor.value?.storage?.markdown?.getMarkdown?.() ?? ''
-							const newMd = rawMd.replace(placeholder, finalMd)
-							if (newMd !== rawMd) {
-								// Use setContent so the update flows through the editor
-								editor.value?.commands?.setContent(newMd, true)
-							}
-						}
+						// Insert as a proper Tiptap image node at the caret; tiptap-markdown
+						// serialises this node as ![alt](src) so it round-trips cleanly.
+						editor.value?.chain().focus().setImage({ src, alt: finalLabel }).run()
 					} catch (e) {
-						// Remove placeholder
-						const rawMd = editor.value?.storage?.markdown?.getMarkdown?.() ?? ''
-						const newMd = rawMd.replace(placeholder, '')
-						editor.value?.commands?.setContent(newMd, true)
 						emit('imageError', e?.response?.data?.error || null)
 					}
 				})()
@@ -379,6 +499,10 @@ const editor = useEditor({
 			suggestion: mentionSuggestion,
 			deleteTriggerWithBackspace: false,
 		}),
+		// Image node enables pasted images to be inserted as proper Tiptap nodes
+		// that tiptap-markdown serialises as ![alt](src). base64 is blocked so
+		// the editor can only hold remote URLs (the inline-attachment path).
+		Image.configure({ inline: false, allowBase64: false }),
 		KansoKeymap,
 		Extension.create({
 			name: 'kansoPasteImage',
@@ -478,6 +602,59 @@ defineExpose({
 .kanso-md-editor--disabled {
 	opacity: 0.6;
 	cursor: not-allowed;
+}
+
+/* ── Formatting toolbar ────────────────────────────────────────────────────── */
+.kanso-md-editor__toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.kanso-md-editor__tb-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+	transition: background 0.1s ease;
+	flex-shrink: 0;
+}
+
+.kanso-md-editor__tb-btn:hover:not(:disabled) {
+	background: var(--color-background-hover);
+}
+
+.kanso-md-editor__tb-btn--active {
+	background: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
+	color: var(--color-primary-element);
+}
+
+.kanso-md-editor__tb-btn--active:hover:not(:disabled) {
+	background: var(--color-primary-element-light, rgba(0, 130, 201, 0.25));
+}
+
+.kanso-md-editor__tb-btn:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.kanso-md-editor__tb-divider {
+	display: inline-block;
+	width: 1px;
+	height: 18px;
+	background: var(--color-border);
+	margin: 0 4px;
+	flex-shrink: 0;
 }
 
 /* ── ProseMirror content area ──────────────────────────────────────────────── */
@@ -605,6 +782,15 @@ defineExpose({
 	& strong { font-weight: 700; }
 	& em { font-style: italic; }
 	& s { text-decoration: line-through; }
+
+	/* Images — constrain width and make responsive */
+	& img {
+		max-width: 100%;
+		height: auto;
+		border-radius: 4px;
+		display: block;
+		margin: 0.5em 0;
+	}
 
 	/* Mention chip */
 	& .kanso-md-mention {
