@@ -15,6 +15,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetail;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AutomationService;
@@ -51,6 +53,7 @@ class CardServiceTest extends TestCase {
 	private \OCA\Kanso\Db\SubscriptionMapper&MockObject $subscriptionMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	/** The role the BoardAccess mock resolves creators to (#3741 freeze). */
 	private string $resolvedRole = ViewerContext::ROLE_INTERNAL;
 	private CardService $service;
@@ -88,6 +91,7 @@ class CardServiceTest extends TestCase {
 		// override assertVisible per test.
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -108,7 +112,8 @@ class CardServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->subscriptionMapper,
 			$this->boardAccess,
-			$this->visibilityGuard
+			$this->visibilityGuard,
+			$this->changeDetailMapper
 		);
 	}
 
@@ -740,7 +745,11 @@ class CardServiceTest extends TestCase {
 			->method('recordChange')
 			->willReturnCallback(function (...$args) use ($holder): Change {
 				$holder->verb = $args[5] ?? null;
-				return new Change();
+				// A real change row always has an id; the description path reads it
+				// to link the detail row, so the returned stub must carry one.
+				$c = new Change();
+				$c->setId(1);
+				return $c;
 			});
 		return $holder;
 	}
@@ -755,6 +764,46 @@ class CardServiceTest extends TestCase {
 		$verb = $this->captureUpdateVerb($this->card());
 		$this->service->update(9, null, 'Fresh description', null, null, null, 'alice');
 		self::assertSame(Change::VERB_DESCRIPTION_UPDATED, $verb->verb);
+	}
+
+	public function testUpdateDescriptionOnlyWritesChangeDetailWithFromTo(): void {
+		$card = $this->card();
+		$card->setDescription('Old body');
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		// recordChange must return a Change with an id so the detail links to it.
+		$this->changeNotifier->method('recordChange')->willReturnCallback(static function (): Change {
+			$c = new Change();
+			$c->setId(777);
+			return $c;
+		});
+
+		$captured = new \stdClass();
+		$captured->changeId = null;
+		$captured->from = 'unset';
+		$captured->to = 'unset';
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use ($captured): ChangeDetail {
+				$captured->changeId = $changeId;
+				$captured->from = $from;
+				$captured->to = $to;
+				return new ChangeDetail();
+			});
+
+		$this->service->update(9, null, 'New body', null, null, null, 'alice');
+
+		self::assertSame(777, $captured->changeId);
+		self::assertSame('Old body', $captured->from);
+		self::assertSame('New body', $captured->to);
+	}
+
+	public function testUpdateNonDescriptionWritesNoChangeDetail(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+		$this->service->update(9, 'Renamed', null, null, null, null, 'alice');
+		self::assertSame(Change::VERB_RENAMED, $verb->verb);
 	}
 
 	public function testUpdateDueDateOnlyStampsDueVerb(): void {

@@ -1744,8 +1744,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<span class="card-modal__activity-text">
 										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
 										{{ activityVerbText(item) }}
+										<button
+											v-if="hasDescriptionDiff(item)"
+											type="button"
+											class="card-modal__activity-diff-toggle"
+											:aria-expanded="expandedDiffs.has(item.id)"
+											@click="toggleDiff(item.id)">
+											{{ expandedDiffs.has(item.id) ? t('kanso', 'Hide changes') : t('kanso', 'Show changes') }}
+										</button>
 									</span>
 									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}</span>
+									<div v-if="hasDescriptionDiff(item) && expandedDiffs.has(item.id)" class="card-modal__activity-diff">
+										<div
+											v-for="(line, i) in diffLines(item.detail.from, item.detail.to)"
+											:key="i"
+											class="card-modal__activity-diff-line"
+											:class="`card-modal__activity-diff-line--${line.kind}`">
+											<span class="card-modal__activity-diff-sign" aria-hidden="true">{{ line.sign }}</span>
+											<span class="card-modal__activity-diff-body">{{ line.text }}</span>
+										</div>
+									</div>
 								</li>
 							</ul>
 							<div v-else class="card-modal__discussion-empty">
@@ -3554,6 +3572,78 @@ const ACTIVITY_VERBS = {
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
 	return fn ? fn() : t('kanso', 'updated this card')
+}
+
+// ── Description diff (Activity feed) ──────────────────────────────────────────
+// A description-update item may carry item.detail = { from, to }. Under its
+// "updated the description" line we offer a collapsible, dependency-free
+// line-level diff. Which item ids are currently expanded (collapsed by default).
+const expandedDiffs = ref(new Set())
+function toggleDiff(id) {
+	// Reassign the Set so the reactive template re-renders on mutate.
+	const next = new Set(expandedDiffs.value)
+	if (next.has(id)) {
+		next.delete(id)
+	} else {
+		next.add(id)
+	}
+	expandedDiffs.value = next
+}
+
+// Only offer the toggle when there's a real before/after to show: both a detail
+// payload present AND the two texts actually differ (equal or both-empty → nothing).
+function hasDescriptionDiff(item) {
+	if (item.verb !== 16 || !item.detail) return false
+	const from = item.detail.from ?? ''
+	const to = item.detail.to ?? ''
+	return from !== to && (from !== '' || to !== '')
+}
+
+// A minimal LCS-based line diff. Splits both texts on \n, computes the longest
+// common subsequence of lines, then walks it to emit unchanged / removed / added
+// lines in order. Text is bound via {{ }} (auto-escaped) — it is NEVER v-html'd,
+// so user content renders as plain text, not markup.
+function diffLines(fromText, toText) {
+	const a = String(fromText ?? '').split('\n')
+	const b = String(toText ?? '').split('\n')
+	const n = a.length
+	const m = b.length
+
+	// LCS length table (rows n+1, cols m+1).
+	const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0))
+	for (let i = n - 1; i >= 0; i--) {
+		for (let j = m - 1; j >= 0; j--) {
+			lcs[i][j] = a[i] === b[j]
+				? lcs[i + 1][j + 1] + 1
+				: Math.max(lcs[i + 1][j], lcs[i][j + 1])
+		}
+	}
+
+	const out = []
+	let i = 0
+	let j = 0
+	while (i < n && j < m) {
+		if (a[i] === b[j]) {
+			out.push({ kind: 'same', sign: ' ', text: a[i] })
+			i++
+			j++
+		} else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+			out.push({ kind: 'removed', sign: '−', text: a[i] })
+			i++
+		} else {
+			out.push({ kind: 'added', sign: '+', text: b[j] })
+			j++
+		}
+	}
+	while (i < n) {
+		out.push({ kind: 'removed', sign: '−', text: a[i] })
+		i++
+	}
+	while (j < m) {
+		out.push({ kind: 'added', sign: '+', text: b[j] })
+		j++
+	}
+	return out
 }
 
 // Compact relative time (falls back to a localized date for older entries).
@@ -7088,8 +7178,67 @@ body.theme--dark .card-modal,
 .card-modal__activity-row {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 8px;
 	padding: 6px 4px;
+}
+/* The diff panel is a full-width child that drops onto its own line below the
+   avatar/text/time header (the row wraps). */
+.card-modal__activity-diff-toggle {
+	background: transparent;
+	border: none;
+	padding: 0 0 0 4px;
+	margin: 0;
+	font: inherit;
+	font-size: 0.75rem;
+	color: var(--color-primary-element);
+	cursor: pointer;
+	text-decoration: underline;
+}
+.card-modal__activity-diff-toggle:hover,
+.card-modal__activity-diff-toggle:focus-visible {
+	color: var(--color-primary-element-hover, var(--color-primary-element));
+}
+.card-modal__activity-diff {
+	flex: 1 0 100%;
+	margin: 2px 0 4px 32px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 6px);
+	overflow: hidden;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.75rem;
+	line-height: 1.5;
+}
+.card-modal__activity-diff-line {
+	display: flex;
+	gap: 6px;
+	padding: 0 6px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--color-main-text);
+}
+.card-modal__activity-diff-sign {
+	flex: 0 0 auto;
+	width: 1ch;
+	text-align: center;
+	color: var(--color-text-maxcontrast);
+	user-select: none;
+}
+.card-modal__activity-diff-body {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.card-modal__activity-diff-line--removed {
+	background: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+.card-modal__activity-diff-line--removed .card-modal__activity-diff-sign {
+	color: var(--color-error);
+}
+.card-modal__activity-diff-line--added {
+	background: color-mix(in srgb, var(--color-success) 15%, transparent);
+}
+.card-modal__activity-diff-line--added .card-modal__activity-diff-sign {
+	color: var(--color-success);
 }
 .card-modal__activity-text {
 	flex: 1;

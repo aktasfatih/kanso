@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3569
+#: src/components/CardDetail.vue:3659
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3567
+#: src/components/CardDetail.vue:3657
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3565
+#: src/components/CardDetail.vue:3655
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1387,7 +1387,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3742
+#: src/components/CardDetail.vue:3832
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2545,6 +2545,10 @@ msgstr ""
 msgid "Hidden card"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Hide changes"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Hide this board without deleting it. You can restore it later."
 msgstr ""
@@ -2879,7 +2883,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3744
+#: src/components/CardDetail.vue:3834
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4103,6 +4107,10 @@ msgstr ""
 msgid "Show / hide this shortcuts overlay"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Show changes"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Show comments (read-only)"
 msgstr ""
@@ -4668,7 +4676,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3743
+#: src/components/CardDetail.vue:3833
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4748,7 +4756,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:3745
+#: src/components/CardDetail.vue:3835
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

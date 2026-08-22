@@ -11,6 +11,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IUserManager;
@@ -32,13 +33,18 @@ class ActivityService {
 		private PermissionService $permissionService,
 		private IUserManager $userManager,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
 	/**
 	 * A card's activity, newest-first. Requires READ on the card's board.
 	 *
-	 * @return list<array{id: int, actor: ?string, actorName: ?string, verb: ?int, action: int, timestamp: int}>
+	 * Description-update items additionally carry `detail: {from, to}` (the
+	 * before/after text) so the client can render a diff; other verbs, and legacy
+	 * description edits recorded before this feature (no detail row), carry null.
+	 *
+	 * @return list<array{id: int, actor: ?string, actorName: ?string, verb: ?int, action: int, timestamp: int, detail: array{from: ?string, to: ?string}|null}>
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not read the board
 	 */
@@ -57,7 +63,7 @@ class ActivityService {
 		$rows = $this->changeMapper->findByEntity($card->getBoardId(), Change::ENTITY_CARD, $cardId, $limit);
 
 		$names = [];
-		return array_values(array_map(function (Change $change) use (&$names): array {
+		$items = array_values(array_map(function (Change $change) use (&$names): array {
 			$actor = $change->getActor();
 			if ($actor !== null && !array_key_exists($actor, $names)) {
 				$user = $this->userManager->get($actor);
@@ -70,8 +76,33 @@ class ActivityService {
 				'verb' => $change->getVerb(),
 				'action' => $change->getAction() ?? Change::ACTION_UPDATE,
 				'timestamp' => $change->getCreatedAt() ?? 0,
+				'detail' => null,
 			];
 		}, $rows));
+
+		// Attach the before/after diff payload to description-update items only,
+		// batch-loaded from the side table in one query. Items whose change has no
+		// detail row (legacy edits recorded before this feature) keep detail null.
+		$descriptionChangeIds = [];
+		foreach ($items as $item) {
+			if ($item['verb'] === Change::VERB_DESCRIPTION_UPDATED) {
+				$descriptionChangeIds[] = $item['id'];
+			}
+		}
+		if ($descriptionChangeIds !== []) {
+			$details = $this->changeDetailMapper->findByChangeIds($descriptionChangeIds);
+			foreach ($items as $index => $item) {
+				if ($item['verb'] === Change::VERB_DESCRIPTION_UPDATED && isset($details[$item['id']])) {
+					$detail = $details[$item['id']];
+					$items[$index]['detail'] = [
+						'from' => $detail->getFromText(),
+						'to' => $detail->getToText(),
+					];
+				}
+			}
+		}
+
+		return array_values($items);
 	}
 
 	/**
