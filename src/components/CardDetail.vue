@@ -1743,7 +1743,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:size="24"
 										:hide-status="true" />
 									<span class="card-modal__activity-text">
-										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
+										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>{{ ' ' }}
 										<template v-for="(seg, si) in activitySegments(item)" :key="si"><strong v-if="seg.strong">{{ seg.text }}</strong><template v-else>{{ seg.text }}</template></template>
 										<button
 											v-if="hasDescriptionDiff(item)"
