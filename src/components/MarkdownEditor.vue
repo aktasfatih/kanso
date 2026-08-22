@@ -32,7 +32,8 @@ Emits:
 	<div
 		class="kanso-md-editor"
 		:class="{ 'kanso-md-editor--disabled': disabled, 'kanso-md-editor--focused': isFocused }"
-		:style="editorStyle">
+		:style="editorStyle"
+		@keydown.escape.stop="() => {}"
 		<!-- Formatting toolbar -->
 		<div
 			v-if="showToolbar && editor"
@@ -438,7 +439,12 @@ function buildImagePastePlugin() {
 	})
 }
 
-// Custom extension to intercept Ctrl/Cmd+Enter and Escape
+// Custom extension to intercept Ctrl/Cmd+Enter and Escape.
+// `addKeyboardShortcuts` in Tiptap calls event.preventDefault() when the handler
+// returns true, but does NOT call event.stopPropagation(). We need stopPropagation
+// for Escape so the event doesn't bubble to the card modal's onRootEscape handler
+// and close the whole modal. We achieve this by adding an extra ProseMirror plugin
+// that stops propagation for the keys we own, running AFTER the shortcut handlers.
 const KansoKeymap = Extension.create({
 	name: 'kansoKeymap',
 	addKeyboardShortcuts() {
@@ -449,7 +455,10 @@ const KansoKeymap = Extension.create({
 			},
 			'Escape': () => {
 				if (mentionOpen.value) {
-					// already handled by mention's onKeyDown
+					// mention's onKeyDown already closed the dropdown via stopPropagation;
+					// the suggestion plugin runs before addKeyboardShortcuts, so by the
+					// time we get here the dropdown is already closed and mentionOpen is
+					// false. Return false to signal "not handled" so we don't emit escape.
 					return false
 				}
 				emit('escape')

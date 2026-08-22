@@ -4050,6 +4050,12 @@ async function scrollToTargetComment() {
 	}
 	if (!el) return
 	scrollHandled = true
+	// Defer one extra frame to let any async-loaded components (e.g. the Tiptap
+	// MarkdownEditor chunk that loads on first open) finish painting and settle the
+	// layout before we scroll. Without this wait the scroll runs before the editor
+	// expands, the layout shifts, and the element ends up off-screen.
+	await new Promise((r) => requestAnimationFrame(r))
+	await new Promise((r) => requestAnimationFrame(r))
 	el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 	highlightedCommentId.value = id
 	if (highlightTimer) clearTimeout(highlightTimer)
