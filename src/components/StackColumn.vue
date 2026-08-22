@@ -921,8 +921,14 @@ async function createFromTemplate(templateId) {
 	--kanso-success-legible: var(--color-success, #46ba61);
 
 	position: relative;
-	flex-shrink: 0;
-	width: 280px;
+	/* Fluid width (#68): grow to fill spare board width, but never narrower than
+	   280px (usability floor) or wider than 420px (readability ceiling on ultrawide).
+	   flex-grow:1 soaks up empty space; min-width ensures horizontal scroll kicks in
+	   instead of squishing when many columns overflow the viewport. The collapsed
+	   rail resets these below so it stays exactly 48px. */
+	flex: 1 1 280px;
+	min-width: 280px;
+	max-width: 420px;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
@@ -959,8 +965,11 @@ body.theme--dark .stack-column,
    but its contents are visually hidden behind the rail overlay. Width animates
    ≤150ms. */
 .stack-column--collapsed {
+	/* Override the fluid sizing: collapsed rails are always exactly 48px. */
+	flex: 0 0 48px;
 	width: 48px;
 	min-width: 48px;
+	max-width: 48px;
 	/* Fill the board height so every collapsed rail is the same length,
 	   regardless of how many cards its (hidden) list holds — otherwise a
 	   1-card column collapses to a stub while a full one stays tall. Matches
@@ -981,7 +990,7 @@ body.theme--dark .stack-column,
 }
 @media (prefers-reduced-motion: no-preference) {
 	.stack-column {
-		transition: width 0.15s ease, min-width 0.15s ease;
+		transition: width 0.15s ease, min-width 0.15s ease, max-width 0.15s ease, flex-basis 0.15s ease;
 	}
 }
 

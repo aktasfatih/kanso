@@ -174,9 +174,24 @@ const isEmpty = computed(() => laneCardCount.value === 0)
 
 /* Inside a lane a column must not claim the full viewport height (that is the
    flat-board default); cap it so multiple lanes fit and each column's internal
-   virtualized list scrolls within the lane instead. */
+   virtualized list scrolls within the lane instead.
+   Width: swimlane columns are pinned at 280px (not fluid) because each lane
+   has its own independent horizontal-scroll container — there is no shared flex
+   parent spanning all lanes, so flex-grow cannot align columns across rows. A
+   fixed width keeps every lane's column positions in sync visually. */
 .swimlane__stacks :deep(.stack-column) {
+	flex: 0 0 280px;
+	width: 280px;
+	min-width: 280px;
+	max-width: 280px;
 	max-height: 420px;
+}
+/* Collapsed rails inside a lane stay at their fixed 48px. */
+.swimlane__stacks :deep(.stack-column--collapsed) {
+	flex: 0 0 48px;
+	width: 48px;
+	min-width: 48px;
+	max-width: 48px;
 }
 
 /* Lanes with no cards (e.g. the trailing "No label" lane when everything is
