@@ -1001,6 +1001,10 @@ msgstr ""
 msgid "Choose a CSV file"
 msgstr ""
 
+#: src/App.vue
+msgid "Choose which sections appear in the left sidebar."
+msgstr ""
+
 #: src/composables/useCardType.js
 msgid "Chore"
 msgstr ""
@@ -2667,6 +2671,10 @@ msgstr ""
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."
 msgstr ""
 
+#: src/App.vue
+msgid "Kanso settings"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Keyboard shortcuts"
 msgstr ""
@@ -4067,6 +4075,10 @@ msgstr ""
 msgid "Setting up…"
 msgstr ""
 
+#: src/App.vue
+msgid "Settings"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Share"
 msgstr ""
@@ -4109,6 +4121,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Shown to everyone on this board as a \"Project chat\" button in the toolbar — typically a Nextcloud Talk room. Leave empty to remove the button."
+msgstr ""
+
+#: src/App.vue
+msgid "Sidebar"
 msgstr ""
 
 #: src/components/BoardTimelineView.vue
