@@ -18,6 +18,7 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\EstimateScale;
@@ -65,6 +66,7 @@ class CardService {
 		private SubscriptionMapper $subscriptionMapper,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
@@ -925,6 +927,17 @@ class CardService {
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
+		// Snapshot the tracked fields BEFORE any setter runs, so the change row can
+		// be stamped with a field-specific verb (#70) when exactly one of them moves.
+		// Dates compare by unix instant (null stays null); status is timestamp-only.
+		$origTitle = $card->getTitle();
+		$origDescription = $card->getDescription();
+		$origDue = $card->getDuedate()?->getTimestamp();
+		$origStart = $card->getStartDate()?->getTimestamp();
+		$origPriority = $card->getPriority();
+		$origEstimate = $card->getEstimate();
+		$origType = $card->getType();
+
 		if ($title !== null) {
 			$card->setTitle($this->validateTitle($title));
 		}
@@ -1008,10 +1021,12 @@ class CardService {
 		// status in lock-step. When no matching column exists (the board doesn't use
 		// that role) the status is applied timestamp-only, exactly as before.
 		$statusMoveTarget = null;
+		$statusAppliedTimestampOnly = false;
 		if ($status !== null) {
 			$statusMoveTarget = $this->resolveStatusMoveTarget($card, $status);
 			if ($statusMoveTarget === null) {
 				$this->applyStatus($card, $status);
+				$statusAppliedTimestampOnly = true;
 			}
 		}
 		if ($visibility !== null) {
@@ -1032,6 +1047,53 @@ class CardService {
 		$now = time();
 		$card->setLastModified($now);
 
+		// Field-specific activity verb (#70): collect the tracked fields that
+		// ACTUALLY changed (current value vs the pre-setter snapshot; a set of the
+		// same value counts as unchanged, so a no-op save is not mislabelled). When
+		// exactly ONE tracked field changed we stamp its specific verb; zero or more
+		// than one fall back to the generic VERB_UPDATED. No from/to values (verb
+		// only) - deferred, and no schema change. The status→workflow-column path is
+		// untouched: it becomes a move() (VERB_MOVED) below.
+		$changedVerbs = [];
+		if ($card->getTitle() !== $origTitle) {
+			$changedVerbs[] = Change::VERB_RENAMED;
+		}
+		if ($descriptionChanged || $card->getDescription() !== $origDescription) {
+			$changedVerbs[] = Change::VERB_DESCRIPTION_UPDATED;
+		}
+		if ($card->getDuedate()?->getTimestamp() !== $origDue) {
+			$changedVerbs[] = Change::VERB_DUE_CHANGED;
+		}
+		if ($card->getStartDate()?->getTimestamp() !== $origStart) {
+			$changedVerbs[] = Change::VERB_START_CHANGED;
+		}
+		if ($card->getPriority() !== $origPriority) {
+			$changedVerbs[] = Change::VERB_PRIORITY_CHANGED;
+		}
+		if ($card->getEstimate() !== $origEstimate) {
+			$changedVerbs[] = Change::VERB_ESTIMATE_CHANGED;
+		}
+		if ($card->getType() !== $origType) {
+			$changedVerbs[] = Change::VERB_TYPE_CHANGED;
+		}
+		if ($statusAppliedTimestampOnly) {
+			$changedVerbs[] = Change::VERB_STATUS_CHANGED;
+		}
+		$verb = count($changedVerbs) === 1 ? $changedVerbs[0] : Change::VERB_UPDATED;
+
+		// Description edits (and only those) carry a before/after payload so the
+		// Activity feed can render a from → to diff. Each side is capped at 10000
+		// chars so the side table can't be bloated by a pathologically long
+		// description; a multi-field save keeps the generic verb and NO detail.
+		$detail = null;
+		if ($verb === Change::VERB_DESCRIPTION_UPDATED) {
+			$newDescription = $card->getDescription();
+			$detail = [
+				'from' => $origDescription !== null ? mb_substr($origDescription, 0, 10000) : null,
+				'to' => $newDescription !== null ? mb_substr($newDescription, 0, 10000) : null,
+			];
+		}
+
 		// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
 		// row commit together (or roll back together); the realtime push fires only
 		// after commit. Side effects below (mentions, parent auto-complete) run
@@ -1041,8 +1103,9 @@ class CardService {
 			$id,
 			Change::ACTION_UPDATE,
 			$uid,
-			Change::VERB_UPDATED,
+			$verb,
 			fn (): Card => $this->cardMapper->update($card),
+			$detail,
 		);
 
 		// A new @mention in the description pings + auto-subscribes readable-board
@@ -1553,14 +1616,21 @@ class CardService {
 	 * rollback then discards). Mirrors {@see self::persistMove()}'s pattern for the
 	 * non-move single-entity mutators (create/update/delete/setParent/…).
 	 *
+	 * When $detail is given (shape ['from' => ?string, 'to' => ?string]) its
+	 * before/after text is written to the `kanso_change_details` side table for
+	 * the just-inserted change row, INSIDE the same transaction so the change and
+	 * its detail land (or roll back) atomically - the Activity feed never shows a
+	 * "detail available" change whose detail row is missing, or vice versa.
+	 *
 	 * @param callable():Card $write performs the entity write and returns the row
+	 * @param array{from: ?string, to: ?string}|null $detail before/after payload
 	 * @throws \Throwable rethrows whatever the write or the change-row insert throws
 	 */
-	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write): Card {
+	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write, ?array $detail = null): Card {
 		$this->db->beginTransaction();
 		try {
 			$card = $write();
-			$this->changeNotifier->recordChange(
+			$change = $this->changeNotifier->recordChange(
 				$boardId,
 				Change::ENTITY_CARD,
 				$entityId,
@@ -1568,6 +1638,9 @@ class CardService {
 				$uid,
 				$verb,
 			);
+			if ($detail !== null) {
+				$this->changeDetailMapper->insertDetail($change->getId(), $detail['from'], $detail['to']);
+			}
 			$this->db->commit();
 		} catch (\Throwable $e) {
 			$this->db->rollBack();

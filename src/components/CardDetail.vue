@@ -1060,60 +1060,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 
 							<template v-if="editingDescription">
-								<div class="card-modal__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="mdToolbar.bold()"><FormatBoldIcon :size="18" /></button>
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="mdToolbar.italic()"><FormatItalicIcon :size="18" /></button>
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Heading')" @mousedown.prevent @click="mdToolbar.heading()"><FormatHeaderPoundIcon :size="18" /></button>
-									<span class="card-modal__md-sep" />
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="mdToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Checklist')" @mousedown.prevent @click="mdToolbar.checklist()"><FormatListChecksIcon :size="18" /></button>
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="mdToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
-									<span class="card-modal__md-sep" />
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="mdToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
-									<button type="button" class="card-modal__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="mdToolbar.link()"><LinkVariantIcon :size="18" /></button>
-									<span class="card-modal__md-toolbar-spacer" />
-									<button
-										type="button"
-										class="card-modal__md-btn"
-										:class="{ 'card-modal__md-btn--active': showDescPreview }"
-										:aria-pressed="showDescPreview"
-										:title="t('kanso', 'Toggle preview')"
-										@mousedown.prevent
-										@click="showDescPreview = !showDescPreview"><EyeOutlineIcon :size="18" /></button>
-								</div>
-								<div class="card-modal__mention-wrap">
-									<textarea
-										ref="descTextareaRef"
+								<Suspense>
+									<MarkdownEditor
 										v-model="draftDescription"
-										class="card-modal__desc-textarea"
 										:placeholder="t('kanso', 'Add a description…')"
-										rows="8"
-										@keydown="onDescKeydown"
-										@paste="onDescPaste"
-										@input="mentionDesc.onInput()" />
-									<ul
-										v-if="mentionDesc.isOpen.value && mentionDesc.matches.value.length > 0"
-										class="card-modal__mention-dropdown">
-										<li
-											v-for="(p, idx) in mentionDesc.matches.value"
-											:key="p.uid"
-											class="card-modal__assign-option"
-											:class="{ 'card-modal__assign-option--highlighted': idx === mentionDesc.highlightedIndex.value }"
-											@mousedown.prevent="mentionDesc.select(p)">
-											<NcAvatar
-												:user="p.uid"
-												:display-name="p.displayName"
-												:size="24"
-												:hide-status="true"
-												:disable-tooltip="true" />
-											<span>{{ p.displayName }}</span>
-										</li>
-									</ul>
-								</div>
-								<div v-if="showDescPreview" class="card-modal__desc-preview">
-									<span class="card-modal__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
-									<div class="card-modal__desc-rendered" v-html="draftPreview" />
-								</div>
+										:disabled="isSaving"
+										:autofocus="true"
+										min-height="160px"
+										:participants="participants.data.value ?? []"
+										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
+										@submit="saveDescription"
+										@escape="cancelDescriptionEdit"
+										@image-error="(msg) => { descPasteError = msg || t('kanso', 'Failed to upload image.') }" />
+									<template #fallback>
+										<div class="card-modal__desc-textarea card-modal__editor-loading" />
+									</template>
+								</Suspense>
 								<div class="card-modal__desc-actions">
 									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
 										{{ t('kanso', 'Save') }}
@@ -1781,8 +1744,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<span class="card-modal__activity-text">
 										<strong>{{ item.actorName || item.actor || t('kanso', 'Someone') }}</strong>
 										{{ activityVerbText(item) }}
+										<button
+											v-if="hasDescriptionDiff(item)"
+											type="button"
+											class="card-modal__activity-diff-toggle"
+											:aria-expanded="expandedDiffs.has(item.id)"
+											@click="toggleDiff(item.id)">
+											{{ expandedDiffs.has(item.id) ? t('kanso', 'Hide changes') : t('kanso', 'Show changes') }}
+										</button>
 									</span>
 									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}</span>
+									<div v-if="hasDescriptionDiff(item) && expandedDiffs.has(item.id)" class="card-modal__activity-diff">
+										<div
+											v-for="(line, i) in diffLines(item.detail.from, item.detail.to)"
+											:key="i"
+											class="card-modal__activity-diff-line"
+											:class="`card-modal__activity-diff-line--${line.kind}`">
+											<span class="card-modal__activity-diff-sign" aria-hidden="true">{{ line.sign }}</span>
+											<span class="card-modal__activity-diff-body">{{ line.text }}</span>
+										</div>
+									</div>
 								</li>
 							</ul>
 							<div v-else class="card-modal__discussion-empty">
@@ -1836,7 +1817,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<button
 													v-if="canEdit && editingCommentId !== topComment.id"
 													class="card-modal__comment-link-btn"
-													@click="openReplyBox(topComment.id)">
+													@click="openReplyBox(topComment, topComment)">
 													{{ t('kanso', 'Reply') }}
 												</button>
 												<!-- Personal "remind me" about this comment (#3816). Any
@@ -1907,24 +1888,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										</div>
 									</div>
 
-									<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
-										<textarea
-											:ref="(el) => setReplyRef(topComment.id, el)"
-											v-model="replyBody"
-											class="card-modal__comment-edit-textarea"
-											:placeholder="t('kanso', 'Write a reply…')"
-											rows="2"
-											@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
-											@keydown.meta.enter.prevent="submitReply(topComment.id)"
-											@keydown.escape.stop="closeReplyBox" />
-										<div class="card-modal__comment-edit-actions">
-											<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">
-												{{ t('kanso', 'Post reply') }}
-											</NcButton>
-											<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
-										</div>
-									</div>
-
 									<div v-if="replies.length > 0" class="card-modal__replies">
 										<div
 											v-for="reply in replies"
@@ -1965,6 +1928,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
 												<div v-if="canEdit" class="card-modal__comment-controls">
+													<button
+														v-if="editingCommentId !== reply.id"
+														class="card-modal__comment-link-btn"
+														@click="openReplyBox(reply, topComment)">
+														{{ t('kanso', 'Reply') }}
+													</button>
 													<template v-if="currentUserId === reply.author">
 														<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
 															<PencilIcon :size="14" />
@@ -2010,6 +1979,32 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											</div>
 										</div>
 									</div>
+									<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
+										<Suspense>
+											<MarkdownEditor
+												:ref="(el) => setReplyRef(topComment.id, el)"
+												v-model="replyBody"
+												:placeholder="t('kanso', 'Write a reply…')"
+												:disabled="addComment.isPending.value"
+												:autofocus="true"
+												min-height="60px"
+												:participants="participants.data.value ?? []"
+												:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+												:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
+												@submit="submitReply(topComment.id)"
+												@escape="closeReplyBox"
+												@image-error="(msg) => { commentError = msg || t('kanso', 'Failed to upload image.') }" />
+											<template #fallback>
+												<div class="card-modal__comment-edit-textarea card-modal__editor-loading" />
+											</template>
+										</Suspense>
+										<div class="card-modal__comment-edit-actions">
+											<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">
+												{{ t('kanso', 'Post reply') }}
+											</NcButton>
+											<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
+										</div>
+									</div>
 								</div>
 							</div>
 
@@ -2026,36 +2021,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:hide-status="true"
 								class="card-modal__composer-avatar" />
 							<div class="card-modal__composer-main">
-								<div class="card-modal__mention-wrap">
-									<textarea
-										ref="newCommentTextareaRef"
+								<Suspense>
+									<MarkdownEditor
 										v-model="newCommentBody"
-										class="card-modal__composer-textarea"
 										:placeholder="t('kanso', 'Start a new thread…')"
-										rows="2"
 										:disabled="addComment.isPending.value"
-										@keydown="onCommentKeydown"
-										@paste="onCommentPaste"
-										@input="mentionComment.onInput()" />
-									<ul
-										v-if="mentionComment.isOpen.value && mentionComment.matches.value.length > 0"
-										class="card-modal__mention-dropdown">
-										<li
-											v-for="(p, idx) in mentionComment.matches.value"
-											:key="p.uid"
-											class="card-modal__assign-option"
-											:class="{ 'card-modal__assign-option--highlighted': idx === mentionComment.highlightedIndex.value }"
-											@mousedown.prevent="mentionComment.select(p)">
-											<NcAvatar
-												:user="p.uid"
-												:display-name="p.displayName"
-												:size="24"
-												:hide-status="true"
-												:disable-tooltip="true" />
-											<span>{{ p.displayName }}</span>
-										</li>
-									</ul>
-								</div>
+										min-height="60px"
+										:participants="participants.data.value ?? []"
+										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
+										@submit="submitNewComment"
+										@image-error="(msg) => { commentError = msg || t('kanso', 'Failed to upload image.') }" />
+									<template #fallback>
+										<div class="card-modal__composer-textarea card-modal__editor-loading" />
+									</template>
+								</Suspense>
 								<div class="card-modal__composer-actions">
 									<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
 										{{ t('kanso', 'Post') }}
@@ -2174,10 +2154,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
+import { generateUrl } from '@nextcloud/router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showUndo, showSuccess, showError } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
@@ -2239,15 +2220,9 @@ import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
-import { useMentionAutocomplete } from '../composables/useMentionAutocomplete.js'
-import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
-import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
-import FormatItalicIcon from 'vue-material-design-icons/FormatItalic.vue'
-import FormatHeaderPoundIcon from 'vue-material-design-icons/FormatHeaderPound.vue'
-import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
-import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
-import FormatQuoteCloseIcon from 'vue-material-design-icons/FormatQuoteClose.vue'
-import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
+// Lazy-load the WYSIWYG editor so the heavy Tiptap/ProseMirror bundle only loads
+// when a card modal is actually opened, not on the main board bundle.
+const MarkdownEditor = defineAsyncComponent(() => import('./MarkdownEditor.vue'))
 import { useCard } from '../composables/useCard.js'
 import { useProjects } from '../composables/useProjects.js'
 import { addCardToProject as apiAddCardToProject, removeCardFromProject as apiRemoveCardFromProject } from '../services/api.js'
@@ -2276,7 +2251,6 @@ import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
-import { useImagePaste } from '../composables/useImagePaste.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, moveCard as apiMoveCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
@@ -3275,7 +3249,6 @@ function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
 	editingDescription.value = true
 	saveError.value = ''
-	showDescPreview.value = false
 }
 
 function cancelDescriptionEdit() {
@@ -3587,10 +3560,90 @@ const ACTIVITY_VERBS = {
 	12: () => t('kanso', 'updated the checklist'),
 	13: () => t('kanso', 'linked a contact'),
 	14: () => t('kanso', 'unlinked a contact'),
+	15: () => t('kanso', 'renamed this card'),
+	16: () => t('kanso', 'updated the description'),
+	17: () => t('kanso', 'changed the due date'),
+	18: () => t('kanso', 'changed the start date'),
+	19: () => t('kanso', 'changed the priority'),
+	20: () => t('kanso', 'changed the status'),
+	21: () => t('kanso', 'changed the estimate'),
+	22: () => t('kanso', 'changed the card type'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
 	return fn ? fn() : t('kanso', 'updated this card')
+}
+
+// ── Description diff (Activity feed) ──────────────────────────────────────────
+// A description-update item may carry item.detail = { from, to }. Under its
+// "updated the description" line we offer a collapsible, dependency-free
+// line-level diff. Which item ids are currently expanded (collapsed by default).
+const expandedDiffs = ref(new Set())
+function toggleDiff(id) {
+	// Reassign the Set so the reactive template re-renders on mutate.
+	const next = new Set(expandedDiffs.value)
+	if (next.has(id)) {
+		next.delete(id)
+	} else {
+		next.add(id)
+	}
+	expandedDiffs.value = next
+}
+
+// Only offer the toggle when there's a real before/after to show: both a detail
+// payload present AND the two texts actually differ (equal or both-empty → nothing).
+function hasDescriptionDiff(item) {
+	if (item.verb !== 16 || !item.detail) return false
+	const from = item.detail.from ?? ''
+	const to = item.detail.to ?? ''
+	return from !== to && (from !== '' || to !== '')
+}
+
+// A minimal LCS-based line diff. Splits both texts on \n, computes the longest
+// common subsequence of lines, then walks it to emit unchanged / removed / added
+// lines in order. Text is bound via {{ }} (auto-escaped) — it is NEVER v-html'd,
+// so user content renders as plain text, not markup.
+function diffLines(fromText, toText) {
+	const a = String(fromText ?? '').split('\n')
+	const b = String(toText ?? '').split('\n')
+	const n = a.length
+	const m = b.length
+
+	// LCS length table (rows n+1, cols m+1).
+	const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0))
+	for (let i = n - 1; i >= 0; i--) {
+		for (let j = m - 1; j >= 0; j--) {
+			lcs[i][j] = a[i] === b[j]
+				? lcs[i + 1][j + 1] + 1
+				: Math.max(lcs[i + 1][j], lcs[i][j + 1])
+		}
+	}
+
+	const out = []
+	let i = 0
+	let j = 0
+	while (i < n && j < m) {
+		if (a[i] === b[j]) {
+			out.push({ kind: 'same', sign: ' ', text: a[i] })
+			i++
+			j++
+		} else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+			out.push({ kind: 'removed', sign: '−', text: a[i] })
+			i++
+		} else {
+			out.push({ kind: 'added', sign: '+', text: b[j] })
+			j++
+		}
+	}
+	while (i < n) {
+		out.push({ kind: 'removed', sign: '−', text: a[i] })
+		i++
+	}
+	while (j < m) {
+		out.push({ kind: 'added', sign: '+', text: b[j] })
+		j++
+	}
+	return out
 }
 
 // Compact relative time (falls back to a localized date for older entries).
@@ -3948,11 +4001,53 @@ function setReplyRef(id, el) {
 	else delete replyRefs[id]
 }
 
-async function openReplyBox(parentId) {
-	replyingToId.value = parentId
-	replyBody.value = ''
+/**
+ * Build a markdown blockquote of `comment` for pre-filling a reply. Used when
+ * replying to a comment that ISN'T the last one in the thread, so the reply
+ * carries the context of what it answers. The body is truncated to keep the
+ * quote compact. Display name is plain text (no @mention) to avoid an
+ * unintended re-notification of the quoted author.
+ * @param {object} comment the comment being quoted
+ * @returns {string} markdown ending in a blank line, ready to type after
+ */
+function buildQuote(comment) {
+	const author = comment.authorDisplayName || comment.author || t('kanso', 'Unknown')
+	const raw = String(comment.body || '').trim()
+	const MAX = 280
+	const excerpt = raw.length > MAX ? `${raw.slice(0, MAX).trimEnd()}…` : raw
+	const quotedBody = excerpt
+		? excerpt.split('\n').map((line) => `> ${line}`).join('\n')
+		: '>'
+	return `> **${author}** ${t('kanso', 'wrote')}:\n${quotedBody}\n\n`
+}
+
+/**
+ * Open the reply composer for a thread. The composer always lives at the END of
+ * the thread (keyed on the thread root), no matter which comment you clicked
+ * Reply on — and the reply is posted against the thread root so it lands last
+ * (the server model is one level deep: replies point at the top-level comment).
+ * Replying to a comment that isn't the last one pre-fills a quote of it.
+ * @param {object} target the comment the user clicked Reply on
+ * @param {object} root the thread's top-level comment
+ */
+async function openReplyBox(target, root) {
+	const rootId = root?.id ?? target.id
+	replyingToId.value = rootId
+	const thread = commentThread.value.find((th) => th.comment.id === rootId)
+	const last = thread && thread.replies.length ? thread.replies[thread.replies.length - 1] : thread?.comment
+	const quote = last && target.id !== last.id ? buildQuote(target) : ''
+	replyBody.value = quote
 	await nextTick()
-	replyRefs[parentId]?.focus()
+	// The reply ref is now a MarkdownEditor component (exposes focus/setContent).
+	// setContent pre-fills the editor with the blockquote and moves caret to end.
+	const editorRef = replyRefs[rootId]
+	if (editorRef) {
+		if (quote && typeof editorRef.setContent === 'function') {
+			editorRef.setContent(quote)
+		} else if (typeof editorRef.focus === 'function') {
+			editorRef.focus('end')
+		}
+	}
 }
 
 function closeReplyBox() {
@@ -4422,6 +4517,20 @@ function expandToPage() {
  * @param {MouseEvent} event the click event
  */
 function handleRefClick(event) {
+	// A clicked @mention chip opens that user's Nextcloud profile in a new tab
+	// (keeps the card modal / in-progress edit intact). The chip carries no
+	// href; the uid comes from data-kanso-mention (set + sanitized in markdown.js).
+	const mention = event.target?.closest?.('.kanso-mention[data-kanso-mention]')
+	if (mention) {
+		const uid = mention.getAttribute('data-kanso-mention')
+		if (uid) {
+			event.preventDefault()
+			event.stopPropagation()
+			window.open(generateUrl('/u/{uid}', { uid }), '_blank', 'noopener,noreferrer')
+		}
+		return
+	}
+
 	const anchor = event.target?.closest?.('a.kanso-cardref')
 	if (!anchor) return
 	const cardId = anchor.getAttribute('data-kanso-card-id')
@@ -5174,160 +5283,9 @@ const dueDateLabel = computed(() => {
 // Labels actually assigned to this card (for the attribute-bar chips)
 const assignedLabels = computed(() => boardLabels.value.filter((l) => cardLabelIds.value.has(l.id)))
 
-// ── @-mention autocomplete ────────────────────────────────────────────────────
-// Participant getter shared across composers — delegates to the already-loaded
-// participants query so no extra fetch is made.
-function getParticipants() {
-	return Array.isArray(participants.data.value) ? participants.data.value : []
-}
-
-// Description composer
-const descTextareaRef = ref(null)
-const mentionDesc = useMentionAutocomplete({
-	getText: () => draftDescription.value,
-	setText: (v) => { draftDescription.value = v },
-	textareaRef: descTextareaRef,
-	getParticipants,
-})
-
-// Markdown formatting toolbar over the description textarea (edits the markdown
-// string in place; live preview reuses the same renderMarkdown as the read view).
-const mdToolbar = useMarkdownToolbar({
-	getText: () => draftDescription.value,
-	setText: (v) => { draftDescription.value = v },
-	textareaRef: descTextareaRef,
-})
-
-// Paste-a-clipboard-image → upload as attachment → embed inline (#3525). Reuses
-// the attachment upload mutation + the inline-URL builder; the sanitiser only
-// renders <img> whose src is that same-origin inline path.
+// ── Description / comment editor state ───────────────────────────────────────
+// descPasteError is surfaced in the template when image upload fails
 const descPasteError = ref('')
-const descImagePaste = useImagePaste({
-	getText: () => draftDescription.value,
-	setText: (v) => { draftDescription.value = v },
-	textareaRef: descTextareaRef,
-	upload: (file) => uploadAttachment.mutateAsync(file),
-	inlineUrl: (attachmentId) => cardAttachmentInlineUrl(props.cardId, attachmentId),
-	onError: (msg) => { descPasteError.value = msg || t('kanso', 'Failed to upload image.') },
-})
-
-function onDescPaste(event) {
-	descPasteError.value = ''
-	descImagePaste.onPaste(event)
-}
-
-const showDescPreview = ref(false)
-// Debounced source for the live preview. renderMarkdown (markdown-it + DOMPurify)
-// is expensive, so we don't re-parse on every keystroke: instead we mirror
-// draftDescription into this ref on a short delay, and only while the preview
-// pane is actually open. This keeps typing snappy for large descriptions.
-const previewSource = ref('')
-const PREVIEW_DEBOUNCE_MS = 200
-let previewDebounceTimer = null
-
-function flushPreviewSource() {
-	if (previewDebounceTimer !== null) {
-		clearTimeout(previewDebounceTimer)
-		previewDebounceTimer = null
-	}
-	previewSource.value = draftDescription.value
-}
-
-// Debounce keystrokes into previewSource, but only when the preview is visible.
-watch(draftDescription, () => {
-	if (!showDescPreview.value) {
-		return
-	}
-	if (previewDebounceTimer !== null) {
-		clearTimeout(previewDebounceTimer)
-	}
-	previewDebounceTimer = setTimeout(() => {
-		previewDebounceTimer = null
-		previewSource.value = draftDescription.value
-	}, PREVIEW_DEBOUNCE_MS)
-})
-
-// When the preview is toggled on, sync immediately so it shows current text
-// (no stale render from a previous edit session). When toggled off, cancel any
-// pending debounce so it can't fire against closed/stale state.
-watch(showDescPreview, (visible) => {
-	if (visible) {
-		flushPreviewSource()
-	} else if (previewDebounceTimer !== null) {
-		clearTimeout(previewDebounceTimer)
-		previewDebounceTimer = null
-	}
-})
-
-onBeforeUnmount(() => {
-	if (previewDebounceTimer !== null) {
-		clearTimeout(previewDebounceTimer)
-		previewDebounceTimer = null
-	}
-})
-
-// Only render when the preview pane is open; feed it from the debounced source.
-const draftPreview = computed(() => (showDescPreview.value ? renderMarkdown(previewSource.value, { refs: cardRefMap.value }) : ''))
-
-// New-comment composer
-const newCommentTextareaRef = ref(null)
-const mentionComment = useMentionAutocomplete({
-	getText: () => newCommentBody.value,
-	setText: (v) => { newCommentBody.value = v },
-	textareaRef: newCommentTextareaRef,
-	getParticipants,
-})
-
-// Paste-a-clipboard-image into the comment composer → upload + embed inline
-// (#3525), same pipeline as the description composer above.
-const commentImagePaste = useImagePaste({
-	getText: () => newCommentBody.value,
-	setText: (v) => { newCommentBody.value = v },
-	textareaRef: newCommentTextareaRef,
-	upload: (file) => uploadAttachment.mutateAsync(file),
-	inlineUrl: (attachmentId) => cardAttachmentInlineUrl(props.cardId, attachmentId),
-	onError: (msg) => { commentError.value = msg || t('kanso', 'Failed to upload image.') },
-})
-
-function onCommentPaste(event) {
-	commentError.value = ''
-	commentImagePaste.onPaste(event)
-}
-
-/**
- * Unified keydown handler for the description textarea.
- * Mention autocomplete intercepts Arrow/Enter/Tab/Escape when the dropdown is
- * open; when it is closed the original key bindings are preserved exactly.
- */
-function onDescKeydown(event) {
-	// The mention composable handles the event once. When the dropdown is open
-	// it preventDefaults the keys it consumes; when closed it is a no-op (just
-	// schedules @-query detection), so the original bindings still fire.
-	mentionDesc.onKeydown(event)
-	if (event.defaultPrevented) return
-	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-		event.preventDefault()
-		saveDescription()
-		return
-	}
-	if (event.key === 'Escape') {
-		event.stopPropagation()
-		cancelDescriptionEdit()
-	}
-}
-
-/**
- * Unified keydown handler for the new-comment textarea.
- * Same pattern as onDescKeydown.
- */
-function onCommentKeydown(event) {
-	mentionComment.onKeydown(event)
-	if (event.defaultPrevented) return
-	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-		event.preventDefault()
-		submitNewComment()
-	}
-}
 
 // ── Projects membership ──────────────────────────────────────────────────────
 const { data: projectsData } = useProjects()
@@ -6601,6 +6559,19 @@ body.theme--dark .card-modal,
 	resize: vertical;
 }
 .card-modal__desc-textarea:focus { outline: none; }
+
+/* Loading placeholder shown while the async MarkdownEditor chunk loads */
+.card-modal__editor-loading {
+	min-height: 60px;
+	border-radius: 10px;
+	background: var(--color-background-hover);
+	animation: kanso-editor-pulse 1.4s ease-in-out infinite;
+}
+@keyframes kanso-editor-pulse {
+	0%, 100% { opacity: 0.6; }
+	50% { opacity: 1; }
+}
+
 .card-modal__desc-actions {
 	display: flex;
 	align-items: center;
@@ -7207,8 +7178,67 @@ body.theme--dark .card-modal,
 .card-modal__activity-row {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 8px;
 	padding: 6px 4px;
+}
+/* The diff panel is a full-width child that drops onto its own line below the
+   avatar/text/time header (the row wraps). */
+.card-modal__activity-diff-toggle {
+	background: transparent;
+	border: none;
+	padding: 0 0 0 4px;
+	margin: 0;
+	font: inherit;
+	font-size: 0.75rem;
+	color: var(--color-primary-element);
+	cursor: pointer;
+	text-decoration: underline;
+}
+.card-modal__activity-diff-toggle:hover,
+.card-modal__activity-diff-toggle:focus-visible {
+	color: var(--color-primary-element-hover, var(--color-primary-element));
+}
+.card-modal__activity-diff {
+	flex: 1 0 100%;
+	margin: 2px 0 4px 32px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 6px);
+	overflow: hidden;
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.75rem;
+	line-height: 1.5;
+}
+.card-modal__activity-diff-line {
+	display: flex;
+	gap: 6px;
+	padding: 0 6px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--color-main-text);
+}
+.card-modal__activity-diff-sign {
+	flex: 0 0 auto;
+	width: 1ch;
+	text-align: center;
+	color: var(--color-text-maxcontrast);
+	user-select: none;
+}
+.card-modal__activity-diff-body {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.card-modal__activity-diff-line--removed {
+	background: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+.card-modal__activity-diff-line--removed .card-modal__activity-diff-sign {
+	color: var(--color-error);
+}
+.card-modal__activity-diff-line--added {
+	background: color-mix(in srgb, var(--color-success) 15%, transparent);
+}
+.card-modal__activity-diff-line--added .card-modal__activity-diff-sign {
+	color: var(--color-success);
 }
 .card-modal__activity-text {
 	flex: 1;
@@ -7696,6 +7726,10 @@ body.theme--dark .card-modal,
 	color: var(--color-primary-element, #0082c9);
 	font-weight: 500;
 	white-space: nowrap;
+	cursor: pointer;
+}
+:deep(.kanso-mention:hover) {
+	text-decoration: underline;
 }
 
 /* Card cross-reference link (KAN-123 → the target card's title). Carries no

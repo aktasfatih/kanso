@@ -1617,18 +1617,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<!-- Rule description row -->
 							<div class="automation__rule-main">
 								<span class="automation__rule-desc">
-									<strong>{{ resolveCardTitle(rule.templateCardId) }}</strong>
-									<span class="automation__rule-scope">
-										→ {{ resolveStackName(rule.targetStackId) }}
-									</span>
-									·
-									<span class="automation__rule-mode">
-										{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}
-									</span>
-									<br>
-									<span class="automation__recur-summary">{{ humanRrule(rule.rrule) }}</span>
-									<span v-if="rule.nextOccurrenceAt" class="automation__rule-scope">
-										· {{ t('kanso', 'next: {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}
+									<strong class="automation__rule-title">{{ resolveCardTitle(rule.templateCardId) }}</strong>
+									<span class="automation__rule-meta">
+										<span class="automation__recur-summary">{{ humanRrule(rule.rrule) }}</span>
+										<span class="automation__rule-scope">→ {{ resolveStackName(rule.targetStackId) }}</span>
+										<span class="automation__rule-mode">{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}</span>
+										<span v-if="rule.nextOccurrenceAt" class="automation__rule-next">{{ t('kanso', 'next: {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}</span>
 									</span>
 								</span>
 
@@ -3656,13 +3650,18 @@ function resolveCardTitle(cardId) {
 	return card?.title ?? String(cardId)
 }
 
-/** Format a ISO date string to a locale date (YYYY-MM-DD). */
-function formatDate(iso) {
-	if (!iso) return ''
+/**
+ * Format a unix timestamp in SECONDS (the units the recur-rule API emits for
+ * nextOccurrenceAt / lastSpawnedAt) to a short locale date. Passing seconds to
+ * `new Date()` unmultiplied lands in Jan 1970, which is the bug this fixes.
+ */
+function formatDate(epochSeconds) {
+	const sec = Number(epochSeconds)
+	if (!sec) return ''
 	try {
-		return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+		return new Date(sec * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 	} catch {
-		return iso
+		return ''
 	}
 }
 
@@ -4838,9 +4837,37 @@ async function doDeleteAutoRule(rule) {
 
 .automation__rule-desc {
 	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 	font-size: 0.875rem;
 	color: var(--color-main-text);
 	min-width: 0;
+}
+
+.automation__rule-title {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+/* Second line: schedule · target · mode · next, muted and dot-separated. */
+.automation__rule-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 2px 8px;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.automation__rule-meta > *:not(:first-child)::before {
+	content: '·';
+	margin-right: 8px;
+	color: var(--color-text-maxcontrast);
+}
+
+.automation__rule-next {
+	color: var(--color-text-maxcontrast);
 }
 
 .automation__rule-scope {
@@ -4875,7 +4902,9 @@ async function doDeleteAutoRule(rule) {
 	width: 34px;
 	height: 18px;
 	border-radius: 9px;
-	background: var(--color-border);
+	/* OFF state: a mid-contrast fill so the switch is visible in BOTH light and
+	   dark themes (the old --color-border was near-invisible on the dark modal). */
+	background: var(--color-border-maxcontrast);
 	position: relative;
 	transition: background 0.2s ease;
 	flex-shrink: 0;
@@ -4894,7 +4923,7 @@ async function doDeleteAutoRule(rule) {
 }
 
 .automation__toggle-input:checked + .automation__toggle-track {
-	background: var(--color-primary);
+	background: var(--color-primary-element);
 }
 
 .automation__toggle-input:checked + .automation__toggle-track::after {
@@ -4921,9 +4950,11 @@ async function doDeleteAutoRule(rule) {
 	height: 28px;
 	padding: 0 12px;
 	border-radius: var(--border-radius);
-	border: 1px solid var(--color-primary);
+	/* Use the contrast-adjusted --color-primary-element (not the raw brand
+	   --color-primary, which can sit on top of the dark background and vanish). */
+	border: 1px solid var(--color-primary-element);
 	background: transparent;
-	color: var(--color-primary);
+	color: var(--color-primary-element);
 	font-size: 0.8rem;
 	font-weight: 600;
 	cursor: pointer;
@@ -4931,7 +4962,7 @@ async function doDeleteAutoRule(rule) {
 }
 
 .automation__archive-now-btn:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+	background: color-mix(in srgb, var(--color-primary-element) 10%, transparent);
 }
 
 .automation__archive-now-btn:disabled {

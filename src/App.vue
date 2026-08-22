@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<NcAppNavigation>
 			<template #list>
 				<NcAppNavigationItem
+					v-if="isNavVisible('my-tasks')"
 					:name="t('kanso', 'My Tasks')"
 					:to="{ name: 'my-cards' }"
 					:active="isMyTasksActive">
@@ -18,6 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
+					v-if="isNavVisible('my-reviews')"
 					:name="t('kanso', 'My Reviews')"
 					:to="{ name: 'my-reviews' }"
 					:active="isMyReviewsActive">
@@ -29,6 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
+					v-if="isNavVisible('inbox')"
 					:name="t('kanso', 'Inbox')"
 					:to="{ name: 'inbox' }"
 					:active="isInboxActive">
@@ -45,6 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     here — the "New view" entry at the bottom; otherwise it lists
 				     views like the boards list. -->
 				<NcAppNavigationItem
+					v-if="isNavVisible('views')"
 					:name="t('kanso', 'Views')"
 					:allow-collapse="true"
 					:open="viewsSectionOpen"
@@ -95,6 +99,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcAppNavigationItem>
 
 				<NcAppNavigationItem
+					v-if="isNavVisible('projects')"
 					:name="t('kanso', 'Projects')"
 					:to="{ name: 'projects' }"
 					:active="isProjectsActive">
@@ -190,6 +195,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			     a real <a> with target="_blank" and rel="…noreferrer noopener". -->
 			<template #footer>
 				<div class="app-nav__footer">
+					<!-- App-settings entry (#69): opens the Kanso settings dialog where
+					     the user chooses which left-nav sections are shown. -->
+					<NcButton
+						type="tertiary"
+						:aria-label="t('kanso', 'Kanso settings')"
+						data-test="open-settings"
+						@click="settingsOpen = true">
+						<template #icon>
+							<CogIcon :size="20" />
+						</template>
+						{{ t('kanso', 'Settings') }}
+					</NcButton>
 					<NcActions :force-menu="true" :aria-label="t('kanso', 'Help')">
 						<template #icon>
 							<HelpCircleOutlineIcon :size="20" />
@@ -219,6 +236,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<NcAppContent>
 			<router-view />
 		</NcAppContent>
+		<!-- Per-user app settings (#69). Minimal slice: choose which top-level
+		     sidebar sections are shown. Boards is intentionally not toggleable
+		     (always shown) so navigation can't be stranded. -->
+		<NcAppSettingsDialog
+			:open="settingsOpen"
+			:show-navigation="true"
+			:name="t('kanso', 'Kanso settings')"
+			@update:open="settingsOpen = $event">
+			<NcAppSettingsSection id="sidebar" :name="t('kanso', 'Sidebar')">
+				<p class="app-settings__intro">
+					{{ t('kanso', 'Choose which sections appear in the left sidebar.') }}
+				</p>
+				<NcCheckboxRadioSwitch
+					v-for="section in navSections"
+					:key="section.key"
+					type="switch"
+					:model-value="isNavVisible(section.key)"
+					@update:model-value="toggleNavSection(section.key)">
+					{{ section.label }}
+				</NcCheckboxRadioSwitch>
+			</NcAppSettingsSection>
+		</NcAppSettingsDialog>
 	</NcContent>
 </template>
 
@@ -230,9 +269,13 @@ import { getSettings, updateSettings } from './services/api.js'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
+import NcAppSettingsDialog from '@nextcloud/vue/components/NcAppSettingsDialog'
+import NcAppSettingsSection from '@nextcloud/vue/components/NcAppSettingsSection'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
@@ -250,6 +293,7 @@ import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import HelpCircleOutlineIcon from 'vue-material-design-icons/HelpCircleOutline.vue'
 import BugOutlineIcon from 'vue-material-design-icons/BugOutline.vue'
 import ConnectionIcon from 'vue-material-design-icons/Connection.vue'
+import CogIcon from 'vue-material-design-icons/Cog.vue'
 import { useBoards } from './composables/useBoards.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
@@ -335,8 +379,9 @@ async function loadCollapsed() {
 	try {
 		const s = await getSettings()
 		collapsedIds.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
+		hiddenNav.value = new Set(s.hiddenNavSections ?? [])
 	} catch {
-		// Non-fatal: folders just start expanded.
+		// Non-fatal: folders just start expanded and all sections stay visible.
 	}
 }
 function setGroupOpen(groupId, open) {
@@ -349,6 +394,39 @@ function setGroupOpen(groupId, open) {
 	collapsedIds.value = next
 	// Fire-and-forget persist; the local set already reflects the change.
 	updateSettings({ collapsedBoardGroups: [...next] }).catch(() => {})
+}
+
+// Per-user show/hide of top-level nav sections (#69). A Set of hidden section
+// keys, loaded from settings on mount (in loadCollapsed) and persisted on each
+// toggle. Boards is never in this set — it has no toggle and is always shown.
+const hiddenNav = ref(new Set())
+const settingsOpen = ref(false)
+// The toggleable sections, in nav order, with their display names. This is the
+// frontend mirror of the backend ALLOWED_NAV allow-list.
+const navSections = computed(() => [
+	{ key: 'my-tasks', label: t('kanso', 'My Tasks') },
+	{ key: 'my-reviews', label: t('kanso', 'My Reviews') },
+	{ key: 'inbox', label: t('kanso', 'Inbox') },
+	{ key: 'views', label: t('kanso', 'Views') },
+	{ key: 'projects', label: t('kanso', 'Projects') },
+])
+function isNavVisible(key) {
+	return !hiddenNav.value.has(key)
+}
+// Optimistically flip a section's visibility and persist; revert the local Set
+// if the write fails so the UI stays consistent with the server.
+function toggleNavSection(key) {
+	const previous = hiddenNav.value
+	const next = new Set(previous)
+	if (next.has(key)) {
+		next.delete(key)
+	} else {
+		next.add(key)
+	}
+	hiddenNav.value = next
+	updateSettings({ hiddenNavSections: [...next] }).catch(() => {
+		hiddenNav.value = previous
+	})
 }
 
 function isBoardActive(boardId) {
@@ -445,7 +523,14 @@ const { tasksCount, reviewsCount, inboxCount } = useMyWorkBadges()
 .app-nav__footer {
 	display: flex;
 	align-items: center;
+	gap: 4px;
 	padding: 4px;
+}
+
+/* Settings-dialog intro copy: quiet, legible in light and dark via NC vars. */
+.app-settings__intro {
+	margin: 0 0 12px;
+	color: var(--color-text-maxcontrast);
 }
 </style>
 
