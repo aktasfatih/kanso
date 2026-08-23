@@ -19,6 +19,7 @@ use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -64,6 +65,7 @@ class TrashService {
 		private ProjectCardMapper $projectCardMapper,
 		private CardAttachmentService $cardAttachmentService,
 		private CardTimeEntryService $cardTimeEntryService,
+		private CardRunningTimerMapper $cardRunningTimerMapper,
 		private CardFieldValueMapper $cardFieldValueMapper,
 		private ReminderMapper $reminderMapper,
 		private RecurRuleMapper $recurRuleMapper,
@@ -155,6 +157,9 @@ class TrashService {
 		// Manual time-tracking entries (#3536) are plain rows scoped by card_id;
 		// drop them too so a purged card strands no time entries.
 		$this->cardTimeEntryService->deleteAllForCard($cardId);
+		// A running timer (#73) is a single plain row scoped by card_id; drop it so
+		// a purged card strands no dangling running-timer state.
+		$this->cardRunningTimerMapper->deleteByCard($cardId);
 		// Custom-field values (#3537) are plain rows scoped by card_id; drop them
 		// so a purged card strands no field values.
 		$this->cardFieldValueMapper->deleteByCard($cardId);

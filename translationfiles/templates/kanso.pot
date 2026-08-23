@@ -168,6 +168,14 @@ msgstr ""
 msgid "{when} → request a review from {name}"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "{when} → start the timer"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "{when} → stop the timer"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "%1$s assigned you a step on %2$s"
 msgstr ""
@@ -4342,6 +4350,10 @@ msgstr ""
 msgid "Start date"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Start the timer"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Start with a template"
 msgstr ""
@@ -4361,6 +4373,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Step due date"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Stop the timer"
 msgstr ""
 
 #: src/components/CardDetail.vue

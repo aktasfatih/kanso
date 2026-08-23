@@ -2042,6 +2042,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="workflow__select automation__form-select">
 								<option value="request_review">{{ t('kanso', 'Request a review') }}</option>
 								<option value="add_label">{{ t('kanso', 'Add a label') }}</option>
+								<option value="start_timer">{{ t('kanso', 'Start the timer') }}</option>
+								<option value="stop_timer">{{ t('kanso', 'Stop the timer') }}</option>
 							</select>
 						</div>
 
@@ -4022,6 +4024,12 @@ function describeAutoRule(rule) {
 		const label = props.labels.find((l) => l.id === rule.params?.label)?.title ?? String(rule.params?.label)
 		return t('kanso', '{when} → add label "{label}"', { when, label })
 	}
+	if (rule.action === 'start_timer') {
+		return t('kanso', '{when} → start the timer', { when })
+	}
+	if (rule.action === 'stop_timer') {
+		return t('kanso', '{when} → stop the timer', { when })
+	}
 	return when
 }
 
@@ -4036,6 +4044,8 @@ const createAutoRuleError = ref('')
 const canSubmitAutoRule = computed(() => {
 	if (newAutoAction.value === 'request_review') return !!newAutoReviewer.value
 	if (newAutoAction.value === 'add_label') return newAutoLabel.value !== null
+	// start_timer / stop_timer are role-only - always submittable.
+	if (newAutoAction.value === 'start_timer' || newAutoAction.value === 'stop_timer') return true
 	return false
 })
 
@@ -4047,9 +4057,10 @@ async function submitCreateAutoRule() {
 		const params = { role: newAutoRole.value }
 		if (newAutoAction.value === 'request_review') {
 			params.reviewer = newAutoReviewer.value
-		} else {
+		} else if (newAutoAction.value === 'add_label') {
 			params.label = newAutoLabel.value
 		}
+		// start_timer / stop_timer carry no extra params beyond role.
 		await createAutoRule.mutateAsync({
 			trigger: 'card_entered_role',
 			action: newAutoAction.value,
