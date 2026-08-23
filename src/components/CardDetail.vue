@@ -1503,6 +1503,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<span v-if="timeSpentTotal > 0" class="card-modal__attachment-size">{{ formatDuration(timeSpentTotal) }}</span>
 							</div>
 
+							<!-- Live running timer row (#73): shown only while cardData.runningTimer
+							     is set. The elapsed counter ticks every second via the timerNow ref. -->
+							<div v-if="cardData?.runningTimer" class="card-modal__timer-running-row">
+								<TimerOutlineIcon :size="14" class="card-modal__timer-running-icon" />
+								<span class="card-modal__timer-running-label">{{ t('kanso', 'Timer running') }}</span>
+								<span class="card-modal__timer-running-elapsed">{{ formatDuration(timerElapsed) }}</span>
+							</div>
+
 							<form v-if="canEdit" class="card-modal__time-add" @submit.prevent="handleAddTimeEntry">
 								<input
 									v-model="timeDurationInput"
@@ -2251,6 +2259,7 @@ import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
@@ -4954,6 +4963,33 @@ const timeEntryError = ref('')
 // summaries); the entries list only backs the breakdown and the delete buttons.
 const timeSpentTotal = computed(() => Number(cardData.value?.timeSpent) || 0)
 
+// Live running-timer counter (#73): ticks every second while a running timer
+// is present on the card. The ref is created once and the interval is kept in
+// sync with the timer's presence (card changes without unmounting the detail).
+const timerNow = ref(Math.floor(Date.now() / 1000))
+const timerElapsed = computed(() => {
+	const startedAt = cardData.value?.runningTimer?.startedAt
+	if (!startedAt) return 0
+	return Math.max(0, timerNow.value - startedAt)
+})
+
+let timerInterval = null
+
+function syncTimerInterval() {
+	const hasTimer = !!(cardData.value?.runningTimer)
+	if (hasTimer && timerInterval === null) {
+		timerInterval = setInterval(() => {
+			timerNow.value = Math.floor(Date.now() / 1000)
+		}, 1000)
+	} else if (!hasTimer && timerInterval !== null) {
+		clearInterval(timerInterval)
+		timerInterval = null
+	}
+}
+
+// Start/stop the interval whenever the running timer appears or disappears.
+watch(() => cardData.value?.runningTimer, syncTimerInterval, { immediate: true })
+
 // Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
 function formatDuration(totalSeconds) {
 	const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
@@ -5402,6 +5438,11 @@ onBeforeUnmount(() => {
 		window.removeEventListener('pointercancel', onResizePointerUp)
 		document.body.style.userSelect = ''
 		document.body.style.cursor = ''
+	}
+	// Clear the running-timer tick interval so it doesn't leak after unmount.
+	if (timerInterval !== null) {
+		clearInterval(timerInterval)
+		timerInterval = null
 	}
 })
 
@@ -7156,6 +7197,39 @@ body.theme--dark .card-modal,
 	display: flex;
 	gap: 8px;
 	align-items: center;
+}
+/* Timer running indicator (#73): a prominent "Timer running · elapsed" row at
+ * the top of the Time tracking section. The icon pulses to draw the eye; the
+ * elapsed counter ticks every second via the timerNow ref. */
+.card-modal__timer-running-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	padding: 4px 8px;
+	border-radius: var(--border-radius);
+	background: rgba(var(--kanso-success-legible-rgb, 70, 186, 97), 0.08);
+	border: 1px solid rgba(var(--kanso-success-legible-rgb, 70, 186, 97), 0.25);
+	font-size: 0.8rem;
+}
+.card-modal__timer-running-icon {
+	color: var(--kanso-success-legible);
+	animation: kanso-detail-timer-pulse 2s ease-in-out infinite;
+	flex: 0 0 auto;
+}
+@keyframes kanso-detail-timer-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.45; }
+}
+.card-modal__timer-running-label {
+	color: var(--kanso-success-legible);
+	font-weight: 600;
+}
+.card-modal__timer-running-elapsed {
+	margin-inline-start: auto;
+	color: var(--kanso-success-legible);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
 }
 /* Time tracking (#3536) */
 .card-modal__time-add {

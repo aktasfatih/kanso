@@ -78,6 +78,10 @@ test.describe('Automation rules (#3400)', () => {
 		await api.send('POST', `/cards/${cardId}/move`, { targetStackId: state.progStackId, afterCardId: null })
 		expect(await api.send('GET', `/cards/${cardId}/time-entries`)).toHaveLength(0)
 
+		// The board summary must expose timerRunning:true while the timer ticks.
+		const boardWhileRunning = await api.send('GET', `/boards/${state.boardId}`)
+		expect(boardWhileRunning.cards.find((c) => c.id === cardId).timerRunning).toBe(true)
+
 		// Let at least a whole second elapse so the stop records a non-zero span.
 		await new Promise((resolve) => setTimeout(resolve, 1500))
 
@@ -88,6 +92,10 @@ test.describe('Automation rules (#3400)', () => {
 		expect(entries).toHaveLength(1)
 		expect(entries[0].seconds).toBeGreaterThanOrEqual(1)
 		expect(entries[0].note).toBe('Tracked automatically')
+
+		// After stopping, timerRunning must be false on the board summary.
+		const boardAfterStop = await api.send('GET', `/boards/${state.boardId}`)
+		expect(boardAfterStop.cards.find((c) => c.id === cardId).timerRunning).toBe(false)
 	})
 
 	test('re-entering the start column does not start a second timer (idempotent) (#73)', async () => {

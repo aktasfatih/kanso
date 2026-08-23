@@ -40,6 +40,29 @@ class CardRunningTimerMapper extends QBMapper {
 	}
 
 	/**
+	 * Card ids on the board that currently have a running timer - powers the
+	 * tile "timer running" badge in one board-scoped query (no N+1). Mirrors
+	 * {@see RecurRuleMapper::findTemplateCardIdsByBoard()} in structure.
+	 *
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function findCardIdsByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('card_id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$ids = [];
+		while (($row = $result->fetch()) !== false) {
+			$ids[] = (int)$row['card_id'];
+		}
+		$result->closeCursor();
+		return $ids;
+	}
+
+	/**
 	 * Removes the running timer of a card - the cascade when a card is purged and
 	 * the normal drop when a timer is stopped. Safe when no timer is running.
 	 *

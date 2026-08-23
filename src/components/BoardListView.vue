@@ -238,6 +238,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:size="15"
 								class="board-list-row__review board-list-row__review--changes" />
 
+							<!-- Timer running (#73) -->
+							<TimerOutlineIcon
+								v-if="rows[vRow.index].card.timerRunning"
+								:size="15"
+								class="board-list-row__timer-running"
+								:title="t('kanso', 'Timer running')" />
+
 							<!-- Assignees -->
 							<span
 								v-if="(rows[vRow.index].card.assigneeIds || []).length"
@@ -327,6 +334,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:size="15"
 							class="board-list-row__review board-list-row__review--changes" />
 
+						<!-- Timer running (#73) -->
+						<TimerOutlineIcon
+							v-if="rows[vRow.index].card.timerRunning"
+							:size="15"
+							class="board-list-row__timer-running"
+							:title="t('kanso', 'Timer running')" />
+
 						<span
 							v-if="(rows[vRow.index].card.assigneeIds || []).length"
 							class="board-list-row__assignees">
@@ -368,6 +382,7 @@ import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedO
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
+import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
@@ -1406,6 +1421,17 @@ body.theme--dark .board-list-table,
 
 .board-list-row__review--approved { color: var(--kanso-success-legible); }
 .board-list-row__review--changes { color: var(--kanso-error-legible); }
+
+/* Timer running (#73) - pulsing green clock icon in the meta area. */
+.board-list-row__timer-running {
+	color: var(--kanso-success-legible);
+	animation: kanso-list-timer-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kanso-list-timer-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.45; }
+}
 
 .board-list-row__assignees {
 	display: inline-flex;

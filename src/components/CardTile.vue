@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.recurring || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.recurring || card.timerRunning || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -135,6 +135,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:title="t('kanso', 'Recurring source')">
 					<RepeatIcon :size="14" />
 				</span>
+				<!-- Timer running badge (#73): card's automatic timer is ticking.
+				     The boolean rides the board summary; pulses green to draw the
+				     eye without adding a text label that clutters compact tiles. -->
+				<span
+					v-if="card.timerRunning"
+					class="card-tile__timer-running"
+					:aria-label="t('kanso', 'Timer running')"
+					:title="t('kanso', 'Timer running')">
+					<TimerOutlineIcon :size="14" />
+				</span>
 				<!-- Checklist progress badge - only when the card has checklist items -->
 				<span
 					v-if="card.checklist && card.checklist.total > 0"
@@ -197,6 +207,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
+import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ProgressClockIcon from 'vue-material-design-icons/ProgressClock.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
@@ -837,6 +848,21 @@ body.theme--dark .card-tile,
 	color: var(--color-text-maxcontrast);
 }
 
+/* Timer running badge (#73) - a pulsing green clock icon signals that the
+ * card's automatic timer is currently ticking. The pulse is subtle (opacity
+ * only, no layout shift) so it catches the eye without distracting. */
+.card-tile__timer-running {
+	display: inline-flex;
+	align-items: center;
+	color: var(--kanso-success-legible);
+	animation: kanso-timer-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kanso-timer-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.45; }
+}
+
 /* Estimate chip */
 .card-tile__estimate {
 	display: inline-flex;
@@ -948,6 +974,12 @@ body.theme--dark .card-tile,
 
 /* Compact: shrink the icon-only recurring badge to match the denser meta row. */
 .card-tile--compact .card-tile__recurring :deep(svg) {
+	width: 12px;
+	height: 12px;
+}
+
+/* Compact: match the timer-running icon size to the recurring badge. */
+.card-tile--compact .card-tile__timer-running :deep(svg) {
 	width: 12px;
 	height: 12px;
 }

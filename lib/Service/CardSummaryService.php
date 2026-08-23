@@ -15,6 +15,7 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\RecurRuleMapper;
@@ -48,6 +49,7 @@ class CardSummaryService {
 		private CardReviewMapper $cardReviewMapper,
 		private CardRelationMapper $cardRelationMapper,
 		private RecurRuleMapper $recurRuleMapper,
+		private CardRunningTimerMapper $runningTimerMapper,
 	) {
 	}
 
@@ -72,6 +74,9 @@ class CardSummaryService {
 		// tile "recurring" badge. Only the boolean presence ships to the summary;
 		// the rrule/rule object stays out of the board payload.
 		$recurringIds = array_flip($this->recurRuleMapper->findTemplateCardIdsByBoard($boardId));
+		// Card ids with an active running timer (#73) - drives the tile
+		// "timer running" badge. One boolean per card; the timer row stays out.
+		$runningTimerIds = array_flip($this->runningTimerMapper->findCardIdsByBoard($boardId));
 
 		// array_values so the result is a genuine list (Card[] may be keyed by the
 		// mapper); the consumer serializes it as a JSON array.
@@ -87,7 +92,8 @@ class CardSummaryService {
 				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
 				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
 				+ ['blocked' => isset($blockedIds[$card->getId()])]
-				+ ['recurring' => isset($recurringIds[$card->getId()])],
+				+ ['recurring' => isset($recurringIds[$card->getId()])]
+				+ ['timerRunning' => isset($runningTimerIds[$card->getId()])],
 			$cards
 		));
 	}
