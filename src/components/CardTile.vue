@@ -131,8 +131,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<span
 					v-if="card.recurring"
 					class="card-tile__recurring"
-					:aria-label="t('kanso', 'Recurring')"
-					:title="t('kanso', 'Recurring')">
+					:aria-label="t('kanso', 'Recurring source')"
+					:title="t('kanso', 'Recurring source')">
 					<RepeatIcon :size="14" />
 				</span>
 				<!-- Checklist progress badge - only when the card has checklist items -->

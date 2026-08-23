@@ -425,7 +425,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</template>
 								{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
 							</NcActionButton>
-							<NcActionButton :close-after-click="true" @click="handleDelete">
+							<NcActionButton :close-after-click="true" @click="confirmDeleteCard">
 								<template #icon>
 									<TrashCanIcon :size="20" />
 								</template>
@@ -435,6 +435,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</header>
 				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">{{ actionError }}</span>
+				<div v-if="cardIsRecurring" class="card-modal__recurring-banner">
+					<RepeatIcon :size="14" />
+					<span>{{ t('kanso', 'Recurring source') }}</span>
+				</div>
+				<!-- Recurring-source delete guard: shown when a manager tries to delete a card that is a recurrence template -->
+				<div v-if="deleteWithRuleConfirm" class="card-modal__delete-guard">
+					<p class="card-modal__delete-guard-msg">
+						{{ t('kanso', 'This card powers a recurring series. What would you like to do?') }}
+					</p>
+					<div class="card-modal__delete-guard-actions">
+						<button class="card-modal__delete-guard-btn card-modal__delete-guard-btn--danger" @click="handleDeleteCardAndRule">
+							{{ t('kanso', 'Delete card and stop recurrence') }}
+						</button>
+						<button class="card-modal__delete-guard-btn card-modal__delete-guard-btn--danger" @click="handleDeleteCardOnly">
+							{{ t('kanso', 'Delete card only') }}
+						</button>
+						<button class="card-modal__delete-guard-btn" @click="deleteWithRuleConfirm = false">
+							{{ t('kanso', 'Cancel') }}
+						</button>
+					</div>
+				</div>
 				<span v-if="subscriptionError" class="card-modal__save-error">{{ subscriptionError }}</span>
 				<span v-if="reminderError" class="card-modal__save-error">{{ reminderError }}</span>
 
@@ -617,6 +638,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:disabled="recurBusy"
 											@change="onRecurIntervalChange($event.target.value)">
 										<span class="card-modal__recur-unit">{{ recurUnitLabel }}</span>
+									</div>
+									<div v-if="recurFreq !== 'OFF'" class="card-modal__field-row card-modal__recur-mode">
+										<label class="card-modal__recur-mode-opt" :class="{ 'card-modal__recur-mode-opt--active': recurMode === 1 }">
+											<input type="radio" :value="1" v-model="recurMode" :disabled="recurBusy" @change="applyRecurrence" />
+											{{ t('kanso', 'Bring this card back') }}
+										</label>
+										<label class="card-modal__recur-mode-opt" :class="{ 'card-modal__recur-mode-opt--active': recurMode === 0 }">
+											<input type="radio" :value="0" v-model="recurMode" :disabled="recurBusy" @change="applyRecurrence" />
+											{{ t('kanso', 'Create a new card each time') }}
+										</label>
 									</div>
 								</template>
 								<span v-if="recurError" class="card-modal__save-error">{{ recurError }}</span>
@@ -2444,6 +2475,7 @@ async function handleFieldChange(field, value) {
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
 const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
 const actionError = ref('')
+const deleteWithRuleConfirm = ref(false)  // true = show the recurring-source delete guard
 
 async function handleArchiveToggle() {
 	actionError.value = ''
@@ -2500,6 +2532,37 @@ async function handleDelete() {
 		closeModal()
 		// Note: restore does NOT re-attach sub-cards that were detached on delete -
 		// this is documented self-healing behaviour acceptable for this MVP.
+		showUndo(t('kanso', 'Card deleted'), () => {
+			restoreCard.mutate()
+		})
+	} catch (err) {
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
+	}
+}
+
+// Recurring-source delete guard: if the card has a recur rule, ask first.
+async function confirmDeleteCard() {
+	if (cardRecurRule.value) {
+		deleteWithRuleConfirm.value = true
+	} else {
+		await handleDelete()
+	}
+}
+
+async function handleDeleteCardOnly() {
+	deleteWithRuleConfirm.value = false
+	await handleDelete()
+}
+
+async function handleDeleteCardAndRule() {
+	deleteWithRuleConfirm.value = false
+	actionError.value = ''
+	try {
+		if (cardRecurRule.value) {
+			await deleteRecurRule.mutateAsync(cardRecurRule.value.id)
+		}
+		await deleteCard.mutateAsync()
+		closeModal()
 		showUndo(t('kanso', 'Card deleted'), () => {
 			restoreCard.mutate()
 		})
@@ -3900,20 +3963,21 @@ function parseSimpleRrule(rrule) {
 
 const RECUR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']
 
-// A card rule the presets can't round-trip (extra RRULE parts, reset mode, or a
-// non-default due-date policy) is surfaced read-only, pointing at Automation.
+// A card rule the presets can't round-trip (extra RRULE parts or a non-default
+// due-date policy) is surfaced read-only, pointing at Automation. Mode is now
+// supported directly in the simple control so it no longer triggers custom.
 const recurIsCustom = computed(() => {
 	const rule = cardRecurRule.value
 	if (!rule) return false
 	const parsed = parseSimpleRrule(rule.rrule)
 	return parsed.extra
 		|| !RECUR_FREQS.includes(parsed.freq)
-		|| Number(rule.mode) !== 0
 		|| Number(rule.duedatePolicy) !== 0
 })
 
 const recurFreq = ref('OFF')
 const recurInterval = ref(1)
+const recurMode = ref(1)
 const recurError = ref('')
 
 // Mirror the card's current rule into the control (and reset when it goes away).
@@ -3922,9 +3986,11 @@ watch(cardRecurRule, (rule) => {
 		const parsed = parseSimpleRrule(rule.rrule)
 		recurFreq.value = parsed.freq
 		recurInterval.value = parsed.interval
+		recurMode.value = Number(rule.mode) === 1 ? 1 : 0
 	} else if (!rule) {
 		recurFreq.value = 'OFF'
 		recurInterval.value = 1
+		recurMode.value = 1
 	}
 }, { immediate: true })
 
@@ -3962,17 +4028,25 @@ async function applyRecurrence() {
 		}
 		const rrule = buildCardRrule(recurFreq.value, recurInterval.value)
 		if (rule) {
-			await updateRecurRule.mutateAsync({ id: rule.id, data: { rrule } })
+			const updates = { rrule }
+			if (Number(rule.mode) !== recurMode.value) updates.mode = recurMode.value
+			await updateRecurRule.mutateAsync({ id: rule.id, data: updates })
 		} else {
-			const stackId = Number(cardData.value?.stackId)
-			if (!stackId) {
+			// For RESET mode (1): target is the card's own column — it resets in place.
+			// For CLONE mode (0): target is the first board column (traditional clone landing).
+			const cardStack = Number(cardData.value?.stackId)
+			const firstStack = boardColumns.value[0]
+			const targetStackId = recurMode.value === 1
+				? cardStack
+				: (firstStack?.id ?? cardStack)
+			if (!targetStackId) {
 				recurError.value = t('kanso', 'This card needs a column before it can repeat.')
 				return
 			}
 			await createRecurRule.mutateAsync({
 				templateCardId: Number(props.cardId),
-				targetStackId: stackId,
-				mode: 0,
+				targetStackId,
+				mode: recurMode.value,
 				rrule,
 				duedatePolicy: 0,
 			})

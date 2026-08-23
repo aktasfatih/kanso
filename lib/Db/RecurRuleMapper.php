@@ -46,11 +46,13 @@ class RecurRuleMapper extends QBMapper {
 	 */
 	public function findByBoard(int $boardId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')
-			->from($this->getTableName())
-			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
-			->orderBy('created_at', 'DESC')
-			->addOrderBy('id', 'DESC');
+		$qb->select('r.*')
+			->from($this->getTableName(), 'r')
+			->innerJoin('r', 'kanso_cards', 'c', $qb->expr()->eq('r.template_card_id', 'c.id'))
+			->where($qb->expr()->eq('r.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('r.created_at', 'DESC')
+			->addOrderBy('r.id', 'DESC');
 
 		return $this->findEntities($qb);
 	}

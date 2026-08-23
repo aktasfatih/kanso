@@ -1664,6 +1664,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ t('kanso', 'Created') }}
 								</span>
 
+								<!-- Edit button -->
+								<button
+									class="automation__archive-now-btn"
+									:title="t('kanso', 'Edit rule')"
+									@click="startEditRecurRule(rule)">
+									<PencilIcon :size="14" />
+									{{ t('kanso', 'Edit') }}
+								</button>
+
 								<!-- Delete button -->
 								<button
 									class="label-settings__action-btn label-settings__action-btn--danger"
@@ -1701,7 +1710,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Add recur rule form (MANAGE only) -->
 					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateRecurRule">
-						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+						<h4 class="label-settings__create-heading">{{ isEditingRecurRule ? t('kanso', 'Edit rule') : t('kanso', 'Add rule') }}</h4>
 
 						<!-- Template card -->
 						<div class="automation__form-row">
@@ -1709,6 +1718,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Template card') }}
 							</label>
 							<select
+								v-if="!isEditingRecurRule"
 								:id="`recur-card-${boardId}`"
 								v-model="newRecurTemplateCardId"
 								class="workflow__select automation__form-select">
@@ -1720,6 +1730,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ card.title }}
 								</option>
 							</select>
+							<span v-else class="automation__form-value">{{ resolveCardTitle(newRecurTemplateCardId) }}</span>
 						</div>
 
 						<!-- Target stack -->
@@ -1888,7 +1899,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="label-settings__create-btn automation__create-btn"
 							type="submit"
 							:disabled="isCreatingRecurRule || !newRecurTemplateCardId || !newRecurTargetStackId">
-							{{ isCreatingRecurRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+							{{ isCreatingRecurRule ? (isEditingRecurRule ? t('kanso', 'Saving…') : t('kanso', 'Adding…')) : (isEditingRecurRule ? t('kanso', 'Save rule') : t('kanso', 'Add rule')) }}
+						</button>
+						<button
+							v-if="isEditingRecurRule"
+							class="label-settings__action-btn"
+							type="button"
+							@click="cancelEditRecurRule">
+							{{ t('kanso', 'Cancel') }}
 						</button>
 
 						<span v-if="createRecurRuleError" class="label-settings__error">{{ createRecurRuleError }}</span>
@@ -3822,6 +3840,59 @@ const newRecurDuedateOffsetDays = ref(1)
 const newRecurSkipWhileOpen = ref(false)
 const isCreatingRecurRule = ref(false)
 const createRecurRuleError = ref('')
+const editingRecurRuleId = ref(null)  // null = create mode, number = edit mode
+const isEditingRecurRule = computed(() => editingRecurRuleId.value !== null)
+
+function startEditRecurRule(rule) {
+	editingRecurRuleId.value = rule.id
+	createRecurRuleError.value = ''
+	newRecurTemplateCardId.value = rule.templateCardId
+	newRecurTargetStackId.value = rule.targetStackId
+	newRecurMode.value = rule.mode
+	newRecurSkipWhileOpen.value = rule.skipWhileOpen ?? false
+	newRecurDuedatePolicy.value = rule.duedatePolicy ?? 0
+	newRecurDuedateOffsetDays.value = rule.duedateOffsetSeconds ? Math.round(rule.duedateOffsetSeconds / 86400) : 1
+	// Parse rrule back into form fields
+	const parts = {}
+	for (const seg of (rule.rrule || '').split(';')) {
+		const eq = seg.indexOf('=')
+		if (eq !== -1) parts[seg.slice(0, eq).toUpperCase()] = seg.slice(eq + 1)
+	}
+	newRecurFreq.value = parts['FREQ'] || 'WEEKLY'
+	newRecurInterval.value = parseInt(parts['INTERVAL'] || '1', 10)
+	if (parts['BYDAY']) {
+		newRecurWeekdays.value = parts['BYDAY'].split(',')
+	} else {
+		newRecurWeekdays.value = []
+	}
+	if (parts['COUNT']) {
+		newRecurEndType.value = 'count'
+		newRecurCount.value = parseInt(parts['COUNT'], 10)
+	} else if (parts['UNTIL']) {
+		newRecurEndType.value = 'until'
+		const u = parts['UNTIL'].replace(/T.*/, '')
+		newRecurUntil.value = u.length === 8 ? `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}` : ''
+	} else {
+		newRecurEndType.value = 'forever'
+	}
+}
+
+function cancelEditRecurRule() {
+	editingRecurRuleId.value = null
+	newRecurTemplateCardId.value = null
+	newRecurTargetStackId.value = null
+	newRecurMode.value = 0
+	newRecurFreq.value = 'WEEKLY'
+	newRecurInterval.value = 1
+	newRecurWeekdays.value = []
+	newRecurEndType.value = 'forever'
+	newRecurCount.value = 10
+	newRecurUntil.value = ''
+	newRecurDuedatePolicy.value = 0
+	newRecurDuedateOffsetDays.value = 1
+	newRecurSkipWhileOpen.value = false
+	createRecurRuleError.value = ''
+}
 
 /** Build the RFC5545 RRULE string from the builder controls. */
 function buildRrule() {
@@ -3851,12 +3922,10 @@ async function submitCreateRecurRule() {
 	createRecurRuleError.value = ''
 	try {
 		const data = {
-			templateCardId: newRecurTemplateCardId.value,
 			targetStackId: newRecurTargetStackId.value,
 			mode: newRecurMode.value,
 			rrule: buildRrule(),
 			duedatePolicy: newRecurDuedatePolicy.value,
-			enabled: true,
 		}
 		if (newRecurDuedatePolicy.value === 1) {
 			data.duedateOffsetSeconds = newRecurDuedateOffsetDays.value * 86400
@@ -3864,7 +3933,14 @@ async function submitCreateRecurRule() {
 		if (newRecurMode.value === 0) {
 			data.skipWhileOpen = newRecurSkipWhileOpen.value
 		}
-		await createRecurRule.mutateAsync(data)
+		if (isEditingRecurRule.value) {
+			await updateRecurRule.mutateAsync({ id: editingRecurRuleId.value, data })
+			editingRecurRuleId.value = null
+		} else {
+			data.templateCardId = newRecurTemplateCardId.value
+			data.enabled = true
+			await createRecurRule.mutateAsync(data)
+		}
 		// Reset form
 		newRecurTemplateCardId.value = null
 		newRecurTargetStackId.value = null
@@ -3879,7 +3955,7 @@ async function submitCreateRecurRule() {
 		newRecurDuedateOffsetDays.value = 1
 		newRecurSkipWhileOpen.value = false
 	} catch (err) {
-		createRecurRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+		createRecurRuleError.value = err?.response?.data?.error || t('kanso', isEditingRecurRule.value ? 'Failed to update rule.' : 'Failed to create rule.')
 	} finally {
 		isCreatingRecurRule.value = false
 	}
