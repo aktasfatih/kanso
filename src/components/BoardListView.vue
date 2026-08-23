@@ -74,7 +74,34 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<button
 					v-else
 					class="board-list-row"
+					:class="{ 'board-list-row--child': rows[vRow.index].isChild }"
 					@click="openCard(rows[vRow.index].card)">
+
+					<!-- Expand/collapse caret for parent cards with children; spacer for all others -->
+					<span
+						v-if="rows[vRow.index].hasChildren"
+						class="board-list-row__caret"
+						role="button"
+						:aria-label="isCardExpanded(rows[vRow.index].card.id) ? t('kanso', 'Collapse subtasks') : t('kanso', 'Expand subtasks')"
+						:aria-expanded="isCardExpanded(rows[vRow.index].card.id)"
+						tabindex="0"
+						@click.stop="toggleCard(rows[vRow.index].card.id)"
+						@keydown.enter.stop="toggleCard(rows[vRow.index].card.id)"
+						@keydown.space.stop.prevent="toggleCard(rows[vRow.index].card.id)">
+						<ChevronDownIcon
+							v-if="isCardExpanded(rows[vRow.index].card.id)"
+							:size="14"
+							class="board-list-row__caret-icon" />
+						<ChevronRightIcon
+							v-else
+							:size="14"
+							class="board-list-row__caret-icon" />
+					</span>
+					<!-- Spacer keeps status dot aligned when there is no caret -->
+					<span
+						v-else-if="!rows[vRow.index].isChild"
+						class="board-list-row__caret-spacer" />
+
 					<span
 						class="board-list-row__status"
 						:class="`board-list-row__status--${statusOf(rows[vRow.index].card)}`"
@@ -254,6 +281,27 @@ function toggleGroup(groupKey) {
 	} catch (e) { /* localStorage unavailable - collapse is in-memory only */ }
 }
 
+// Per-card subtask expand/collapse. The key is `card:<id>`.
+// Absence from `collapsed` means expanded (subtasks visible by default).
+function cardCollapseKey(cardId) {
+	return `card:${cardId}`
+}
+
+function isCardExpanded(cardId) {
+	return !collapsed.value.has(cardCollapseKey(cardId))
+}
+
+function toggleCard(cardId) {
+	const key = cardCollapseKey(cardId)
+	const next = new Set(collapsed.value)
+	if (next.has(key)) next.delete(key)
+	else next.add(key)
+	collapsed.value = next
+	try {
+		localStorage.setItem(collapsedKey.value, JSON.stringify([...next]))
+	} catch (e) { /* localStorage unavailable - collapse is in-memory only */ }
+}
+
 // Aggregate done/total across a group's cards. A card counts toward "done" when
 // it's marked done; the total is the whole group. Returns null for empty groups.
 function groupProgress(cards) {
@@ -300,11 +348,37 @@ const normalizedGroups = computed(() => {
 })
 
 // A flat row model: one header per group, then its cards (unless collapsed).
-// Collapsed groups drop their card rows entirely so virtualization stays exact.
+// Within each group, cards are arranged as a one-level parent/child tree (#4178):
+//   - A card is a "child" if its parentCardId matches another card in the same group.
+//   - Child rows are emitted immediately after their parent, only when expanded.
+//   - A child whose parent is NOT in the same group is treated as top-level
+//     (never hidden just because the parent is filtered out / in another column).
+// Collapsed groups drop all their card rows; collapsed parents drop their children.
+// Fixed row heights (HEADER_H / ROW_H) are preserved — children share ROW_H.
 const rows = computed(() => {
 	const out = []
 	for (const group of normalizedGroups.value) {
 		const cards = group.cards
+
+		// Build a set of card ids present in this group so we can resolve
+		// parent/child relationships within the group boundary.
+		const cardIdSet = new Set(cards.map((c) => c.id))
+
+		// Partition into top-level cards and children. A card is a child only
+		// when its parentCardId is non-empty AND that parent exists in this group.
+		const topLevel = []
+		const childrenByParent = new Map() // parentId → child[]
+		for (const card of cards) {
+			const pid = card.parentCardId
+			if (pid && cardIdSet.has(pid)) {
+				// This card is a child of another card in the same group.
+				if (!childrenByParent.has(pid)) childrenByParent.set(pid, [])
+				childrenByParent.get(pid).push(card)
+			} else {
+				topLevel.push(card)
+			}
+		}
+
 		out.push({
 			type: 'header',
 			id: `h${group.key}`,
@@ -316,9 +390,20 @@ const rows = computed(() => {
 			progress: groupProgress(cards),
 			hints: groupHints(cards),
 		})
+
 		if (isCollapsed(group.key)) continue
-		for (const card of cards) {
-			out.push({ type: 'card', id: `c${card.id}`, card })
+
+		for (const card of topLevel) {
+			const children = childrenByParent.get(card.id) ?? []
+			const hasChildren = children.length > 0
+			out.push({ type: 'card', id: `c${card.id}`, card, hasChildren, isChild: false })
+
+			// Emit children only when the parent is expanded (absent from collapsed = expanded).
+			if (hasChildren && isCardExpanded(card.id)) {
+				for (const child of children) {
+					out.push({ type: 'card', id: `c${child.id}`, card: child, hasChildren: false, isChild: true })
+				}
+			}
 		}
 	}
 	return out
@@ -578,6 +663,49 @@ body.theme--dark .board-list-table,
 
 .board-list-row:hover {
 	background: var(--color-background-hover);
+}
+
+/* Child rows are indented to visually nest under their parent. */
+.board-list-row--child {
+	padding-inline-start: 32px;
+}
+
+/* Expand/collapse caret for parent cards that have children in the same group. */
+.board-list-row__caret {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 4px;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	/* Reset inherited button styles that might leak from the parent <button>. */
+	background: none;
+	border: none;
+	padding: 0;
+}
+
+.board-list-row__caret:hover {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+}
+
+.board-list-row__caret:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+
+.board-list-row__caret-icon {
+	display: flex;
+}
+
+/* Invisible spacer so the status dot aligns with parent rows on cards
+   that have no children (and are not children themselves). */
+.board-list-row__caret-spacer {
+	flex: 0 0 20px;
+	height: 20px;
 }
 
 .board-list-row__status {

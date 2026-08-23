@@ -1145,6 +1145,10 @@ msgstr ""
 msgid "Collapse column"
 msgstr ""
 
+#: src/components/BoardListView.vue
+msgid "Collapse subtasks"
+msgstr ""
+
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 msgid "Color"
@@ -1969,6 +1973,10 @@ msgstr ""
 
 #: src/components/StackColumn.vue
 msgid "Expand column {name}"
+msgstr ""
+
+#: src/components/BoardListView.vue
+msgid "Expand subtasks"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

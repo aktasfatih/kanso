@@ -81,3 +81,127 @@ test.describe('Board List view (#3444)', () => {
 		await expect(row).toBeVisible({ timeout: 8_000 })
 	})
 })
+
+test.describe('List view — subtask tree (#4178)', () => {
+	// Fixture: one board, one stack, one parent card with two child cards.
+	// The parent and its children are all in the same stack so the nesting applies.
+	const state = {
+		boardId: 0,
+		parentId: 0,
+		child1Id: 0,
+		child2Id: 0,
+		boardTitle: 'List Subtask ' + Math.floor(Date.now() / 1000),
+	}
+
+	test.beforeAll(async () => {
+		const board = await api('POST', '/boards', { title: state.boardTitle })
+		state.boardId = board.id
+		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Tasks' })
+
+		const parent = await api('POST', '/cards', { stackId: stack.id, title: 'Parent task' })
+		state.parentId = parent.id
+
+		// Create child cards by setting their parentCardId on creation (or patch
+		// immediately after). Use PATCH since the cards endpoint may not accept
+		// parentCardId at creation time.
+		const child1 = await api('POST', '/cards', { stackId: stack.id, title: 'Sub-task Alpha' })
+		state.child1Id = child1.id
+		await api('PATCH', `/cards/${child1.id}`, { parentCardId: parent.id })
+
+		const child2 = await api('POST', '/cards', { stackId: stack.id, title: 'Sub-task Beta' })
+		state.child2Id = child2.id
+		await api('PATCH', `/cards/${child2.id}`, { parentCardId: parent.id })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+	})
+
+	/** Navigate to the board and switch to List view. */
+	async function openListView(page) {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+		await page.keyboard.press('Escape')
+		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+	}
+
+	test('children are rendered indented under their parent (default expanded)', async ({ page }) => {
+		await openListView(page)
+
+		const parentRow = page.locator('.board-list-row', { hasText: 'Parent task' })
+		const child1Row = page.locator('.board-list-row', { hasText: 'Sub-task Alpha' })
+		const child2Row = page.locator('.board-list-row', { hasText: 'Sub-task Beta' })
+
+		// All three rows should be visible by default (subtasks expanded).
+		await expect(parentRow).toBeVisible({ timeout: 8_000 })
+		await expect(child1Row).toBeVisible({ timeout: 8_000 })
+		await expect(child2Row).toBeVisible({ timeout: 8_000 })
+
+		// Child rows must carry the --child modifier class for indentation.
+		await expect(child1Row).toHaveClass(/board-list-row--child/)
+		await expect(child2Row).toHaveClass(/board-list-row--child/)
+
+		// Parent row must NOT carry the --child class.
+		await expect(parentRow).not.toHaveClass(/board-list-row--child/)
+	})
+
+	test('parent row has a caret; clicking it collapses and expands its children', async ({ page }) => {
+		await openListView(page)
+
+		const parentRow = page.locator('.board-list-row', { hasText: 'Parent task' })
+		const caret = parentRow.locator('.board-list-row__caret')
+		const child1Row = page.locator('.board-list-row', { hasText: 'Sub-task Alpha' })
+		const child2Row = page.locator('.board-list-row', { hasText: 'Sub-task Beta' })
+
+		// Caret must be present and have an aria-label.
+		await expect(caret).toBeVisible({ timeout: 8_000 })
+		const label = await caret.getAttribute('aria-label')
+		expect(['Expand subtasks', 'Collapse subtasks']).toContain(label)
+
+		// Children visible → clicking caret collapses.
+		await expect(child1Row).toBeVisible()
+		await caret.dispatchEvent('click')
+		await expect(child1Row).toBeHidden({ timeout: 8_000 })
+		await expect(child2Row).toBeHidden({ timeout: 8_000 })
+
+		// Parent row stays visible when its children are collapsed.
+		await expect(parentRow).toBeVisible()
+
+		// Clicking caret again expands.
+		await caret.dispatchEvent('click')
+		await expect(child1Row).toBeVisible({ timeout: 8_000 })
+		await expect(child2Row).toBeVisible({ timeout: 8_000 })
+	})
+
+	test('clicking the caret does not open the parent card modal', async ({ page }) => {
+		await openListView(page)
+
+		const parentRow = page.locator('.board-list-row', { hasText: 'Parent task' })
+		const caret = parentRow.locator('.board-list-row__caret')
+
+		await expect(caret).toBeVisible({ timeout: 8_000 })
+		await caret.dispatchEvent('click')
+
+		// The URL must NOT gain a /card/ segment (i.e. no navigation occurred).
+		await page.waitForTimeout(500)
+		expect(page.url()).not.toMatch(/\/card\//)
+		await expect(page.locator('.card-modal')).toHaveCount(0)
+	})
+
+	test('clicking a child row opens the child card modal', async ({ page }) => {
+		await openListView(page)
+
+		const child1Row = page.locator('.board-list-row', { hasText: 'Sub-task Alpha' })
+		await expect(child1Row).toBeVisible({ timeout: 8_000 })
+		await child1Row.dispatchEvent('click')
+
+		await expect(page).toHaveURL(
+			new RegExp(`/board/${state.boardId}/card/${state.child1Id}`),
+			{ timeout: 8_000 },
+		)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+	})
+})
