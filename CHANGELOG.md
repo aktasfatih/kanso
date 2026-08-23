@@ -11,6 +11,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.14.0](https://github.com/aktasfatih/kanso/compare/v0.13.0...v0.14.0) (2026-08-23)
+
+
+### Bug Fixes
+
+* add the missing space between the actor name and the change text in the card activity feed ([b530d38](https://github.com/aktasfatih/kanso/commit/b530d38cc069fa3f801b8d12114aeb72011e8560))
+* clicking an [@mention](https://github.com/mention) in a card now opens that user's profile ([4860c0d](https://github.com/aktasfatih/kanso/commit/4860c0d1dad4cf38f2b1a996df8d82d1198d100e))
+* markdown editor fills its width and the [@mention](https://github.com/mention) list follows the caret ([b524e02](https://github.com/aktasfatih/kanso/commit/b524e021c1d25bbf2d10cb1933e9469ee319d5b5))
+* prevent Escape from closing the modal mid-description-edit and fix scroll-to-comment timing ([7d27c99](https://github.com/aktasfatih/kanso/commit/7d27c99f53864b30e0bf8f633244d2f9479f4e5d))
+* recurring-card rule settings are legible in dark mode and show the correct next-run date ([807b899](https://github.com/aktasfatih/kanso/commit/807b8991f6407d8973697b2feb2660d36fc94329))
+* reply to any comment in a card thread, not just the first ([7809ae1](https://github.com/aktasfatih/kanso/commit/7809ae1ad3a334bd4a723e129558d59f7e1237a9))
+* restore image paste by registering the Image node in the Tiptap editor ([34142fc](https://github.com/aktasfatih/kanso/commit/34142fcb99060c524f77ae4486e2dbde1fee1f8a))
+
+
+### Features
+
+* add a toggleable formatting toolbar to the editor ([7e091b6](https://github.com/aktasfatih/kanso/commit/7e091b661ed8b2a5fa0c2936cde6468428d17ef6))
+* app settings — show/hide sidebar sections (GH [#69](https://github.com/aktasfatih/kanso/issues/69), minimal slice) ([1c3195c](https://github.com/aktasfatih/kanso/commit/1c3195cec8edbba4bb07a11f09fc0a7c8311bfcf))
+* fluid board column widths that fill wide screens (GH [#68](https://github.com/aktasfatih/kanso/issues/68)) ([9f8d047](https://github.com/aktasfatih/kanso/commit/9f8d047412ad656265123dba1936aa0705f3b4c3))
+* granular card activity log — field-specific entries instead of "updated this card" (GH [#70](https://github.com/aktasfatih/kanso/issues/70)) ([56b3963](https://github.com/aktasfatih/kanso/commit/56b39639559d9f157910d1e7026d28038b85c81c))
+* inline markdown (WYSIWYG) editor for card descriptions and comments ([ffdf400](https://github.com/aktasfatih/kanso/commit/ffdf40010db39c71fc2d75fc4fd42cd86fdc38eb))
+* show the before/after diff for description edits in the card activity feed ([34e0c55](https://github.com/aktasfatih/kanso/commit/34e0c5592962fab24abdd7d9a892bd7225d06bd0))
+* show what changed in the card activity feed (moves, labels, assignees, field values) ([f4348f5](https://github.com/aktasfatih/kanso/commit/f4348f521706a4bb95c3c5d9b2468aeb2a38ea1f))
+
 # [0.13.0](https://github.com/aktasfatih/kanso/compare/v0.12.0...v0.13.0) (2026-08-21)
 
 
