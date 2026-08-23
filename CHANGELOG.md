@@ -11,6 +11,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.15.0](https://github.com/aktasfatih/kanso/compare/v0.14.0...v0.15.0) (2026-08-23)
+
+
+### Bug Fixes
+
+* clean up the recurring-card banner and delete prompt on the card view ([3e3ece6](https://github.com/aktasfatih/kanso/commit/3e3ece6c66b69b0e03ae7d1bb79f20b3ed1f3648))
+* make list-view subtasks clearly indented with a nesting guide ([1c61d6e](https://github.com/aktasfatih/kanso/commit/1c61d6ead48893b4306e2d6b8b0d469cef88fada))
+* reflect the timer-start automation in real time ([9868f69](https://github.com/aktasfatih/kanso/commit/9868f69f670a93a2fb05ae6763e9a86112e687cc))
+* tidy the recurring-cards list in board settings ([faa0f89](https://github.com/aktasfatih/kanso/commit/faa0f89a34a4089890754e2456081181f64a070e))
+
+
+### Features
+
+* add a quick-add card composer to each column in the list view ([9f94d03](https://github.com/aktasfatih/kanso/commit/9f94d033a238e499ffbe1f8da8a559e19a6580a2))
+* drag and drop cards to reorder and move them in the list view ([bffc664](https://github.com/aktasfatih/kanso/commit/bffc6645dc63e3df23a53add16bf2357b1667a00))
+* open a recurring card straight from its rule in board settings ([ff35732](https://github.com/aktasfatih/kanso/commit/ff3573215dc4870c97fae19023e9d948bda05689))
+* recurring-cards UX — reset/clone choice, source marker, rule editing, delete guard ([67bbdb7](https://github.com/aktasfatih/kanso/commit/67bbdb7da86dee6bc56d5e85c0f2851a12b27d5e))
+* show a running-timer indicator on cards while the timer is active ([c959582](https://github.com/aktasfatih/kanso/commit/c959582eca6b2d1670ebfbf86313f0a8e1ab90b9))
+* show subtasks as an indented, collapsible tree in the list view ([1566c0b](https://github.com/aktasfatih/kanso/commit/1566c0bc392217988127efe4eeb48e4875fe2f02))
+* start and stop the card timer automatically when a card enters a column ([4aa41d2](https://github.com/aktasfatih/kanso/commit/4aa41d2783ac3ad964ab433c1f6fa2475dc836ee))
+
 # [0.14.0](https://github.com/aktasfatih/kanso/compare/v0.13.0...v0.14.0) (2026-08-23)
 
 
