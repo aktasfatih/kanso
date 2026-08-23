@@ -82,6 +82,91 @@ test.describe('Board List view (#3444)', () => {
 	})
 })
 
+test.describe('List view — quick-add composer', () => {
+	const state = { boardId: 0, stackId: 0, title: 'List Composer ' + Math.floor(Date.now() / 1000) }
+
+	test.beforeAll(async () => {
+		const board = await api('POST', '/boards', { title: state.title })
+		state.boardId = board.id
+		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Backlog' })
+		state.stackId = stack.id
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+	})
+
+	/** Navigate to the board and switch to List view. */
+	async function openListView(page) {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+		await page.keyboard.press('Escape')
+		// Wait for the group header to appear (even when there are no cards yet).
+		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+	}
+
+	test('composer renders above the group cards and creates a card on Enter', async ({ page }) => {
+		await openListView(page)
+
+		// The "Add card…" input should be visible in the group's add row.
+		const input = page.locator('.card-composer__input').first()
+		await expect(input).toBeVisible({ timeout: 8_000 })
+
+		// Type a title and press Enter.
+		const newTitle = 'Quick add card ' + Date.now()
+		await input.click()
+		await input.fill(newTitle)
+		await input.press('Enter')
+
+		// The new card row should appear in the list view.
+		const newRow = page.locator('.board-list-row', { hasText: newTitle })
+		await expect(newRow).toBeVisible({ timeout: 10_000 })
+
+		// The input should be cleared and refocused after creation.
+		await expect(input).toHaveValue('')
+	})
+
+	test('composer is at the top of the group, above existing cards', async ({ page }) => {
+		await openListView(page)
+
+		// There should be at least one card in the stack from the previous test.
+		// The composer row (add type) should appear before card rows in the DOM.
+		const composerWrap = page.locator('.card-composer-wrap').first()
+		const firstCardRow = page.locator('.board-list-row').first()
+
+		await expect(composerWrap).toBeVisible({ timeout: 8_000 })
+
+		// Verify the composer appears before the first card row in the DOM order
+		// by checking their bounding boxes (composer Y < card Y).
+		const composerBox = await composerWrap.boundingBox()
+		const cardBox = await firstCardRow.boundingBox()
+		expect(composerBox).not.toBeNull()
+		expect(cardBox).not.toBeNull()
+		expect(composerBox.y).toBeLessThanOrEqual(cardBox.y)
+	})
+
+	test('composer is hidden when the group is collapsed', async ({ page }) => {
+		await openListView(page)
+
+		const input = page.locator('.card-composer__input').first()
+		await expect(input).toBeVisible({ timeout: 8_000 })
+
+		// Collapse the group.
+		const group = page.locator('.board-list-group', { hasText: 'Backlog' })
+		await group.dispatchEvent('click')
+
+		// The composer should no longer be visible (collapsed group drops all rows).
+		await expect(input).toBeHidden({ timeout: 8_000 })
+
+		// Expand again → composer reappears.
+		await group.dispatchEvent('click')
+		await expect(input).toBeVisible({ timeout: 8_000 })
+	})
+})
+
 test.describe('List view — subtask tree (#4178)', () => {
 	// Fixture: one board, one stack, one parent card with two child cards.
 	// The parent and its children are all in the same stack so the nesting applies.

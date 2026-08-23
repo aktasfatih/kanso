@@ -345,6 +345,7 @@ msgstr ""
 msgid "Add card"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Add card…"
 msgstr ""
@@ -2044,10 +2045,12 @@ msgstr ""
 msgid "Failed to create board."
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Failed to create card from template."
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/StackColumn.vue
 msgid "Failed to create card."
@@ -2199,6 +2202,7 @@ msgstr ""
 msgid "Failed to load tasks. Please try again."
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/components/StackColumn.vue
 msgid "Failed to load templates."
@@ -2594,6 +2598,7 @@ msgstr ""
 msgid "Fri"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "From template"
 msgstr ""
@@ -3145,6 +3150,7 @@ msgstr ""
 msgid "New board name…"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "New card from template"
 msgstr ""
@@ -3428,6 +3434,7 @@ msgstr ""
 msgid "No templates yet"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "No templates yet. Open any card and choose \"Mark as template\" from its actions menu."
 msgstr ""

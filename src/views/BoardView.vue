@@ -421,7 +421,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:cards-by-stack="cardsByStack"
 			:labels-by-id="labelsById"
 			:board-prefix="boardData?.board?.prefix ?? ''"
-			:board-id="props.id" />
+			:board-id="props.id"
+			:new-cards-on-top="boardData.board.newCardsOnTop === true"
+			:on-create-card="handleCreateCard"
+			:on-fetch-templates="handleFetchTemplates"
+			:on-create-from-template="handleCreateFromTemplate" />
 
 		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->
 		<BoardTimelineView

@@ -70,6 +70,62 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 				</button>
 
+				<!-- Quick-add composer row -->
+				<div
+					v-else-if="rows[vRow.index].type === 'add'"
+					class="card-composer-wrap">
+					<form
+						class="card-composer"
+						@submit.prevent="submitCard(rows[vRow.index].stackId)">
+						<input
+							:ref="(el) => setComposerRef(rows[vRow.index].stackId, el)"
+							:value="draftByStack[rows[vRow.index].stackId] ?? ''"
+							class="card-composer__input"
+							type="text"
+							:placeholder="t('kanso', 'Add card…')"
+							:disabled="isPendingByStack[rows[vRow.index].stackId] ?? false"
+							:data-stack-id="rows[vRow.index].stackId"
+							@input="(e) => { draftByStack[rows[vRow.index].stackId] = e.target.value }"
+							@paste="(e) => onComposerPaste(e, rows[vRow.index].stackId)"
+							@keydown.enter.prevent="submitCard(rows[vRow.index].stackId)" />
+					</form>
+
+					<!-- "+ from template" picker: hidden when callbacks absent -->
+					<NcActions
+						v-if="props.onFetchTemplates && props.onCreateFromTemplate"
+						class="card-composer__templates"
+						:force-menu="true"
+						:aria-label="t('kanso', 'New card from template')"
+						@open="loadTemplates(rows[vRow.index].stackId)">
+						<template #icon>
+							<FileDocumentOutlineIcon :size="18" />
+						</template>
+						<NcActionCaption :name="t('kanso', 'From template')" />
+						<NcActionButton
+							v-for="tpl in templatesByStack[rows[vRow.index].stackId] ?? []"
+							:key="tpl.id"
+							:close-after-click="true"
+							:disabled="isPendingByStack[rows[vRow.index].stackId] ?? false"
+							@click="createFromTemplate(rows[vRow.index].stackId, tpl.id)">
+							<template #icon>
+								<FileDocumentOutlineIcon :size="20" />
+							</template>
+							{{ tpl.title }}
+						</NcActionButton>
+						<NcActionText
+							v-if="(templatesLoadedByStack[rows[vRow.index].stackId] ?? false) && (templatesByStack[rows[vRow.index].stackId] ?? []).length === 0">
+							{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
+						</NcActionText>
+					</NcActions>
+
+					<!-- Inline error, scoped per stack -->
+					<p
+						v-if="errorByStack[rows[vRow.index].stackId]"
+						class="card-composer__error">
+						{{ errorByStack[rows[vRow.index].stackId] }}
+					</p>
+				</div>
+
 				<!-- Card row (id first, meta pushed right) -->
 				<button
 					v-else
@@ -193,11 +249,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionText from '@nextcloud/vue/components/NcActionText'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
@@ -205,10 +265,12 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { formatCardDate } from '../utils/dateDisplay.js'
+import { parseDueToken } from '../utils/dueTokens.js'
 
 const props = defineProps({
 	/** Non-archived stacks in display order (already filtered by BoardView). */
@@ -234,6 +296,26 @@ const props = defineProps({
 	 * is used (see openCard).
 	 */
 	boardId: { type: [String, Number], default: null },
+	/**
+	 * Async fn (stackId, title, duedate?, allDay?) → Promise - creates a card.
+	 * When provided (and props.groups is absent) the quick-add composer appears
+	 * at the top of each group (matching the kanban column composer).
+	 */
+	onCreateCard: { type: Function, default: null },
+	/**
+	 * Async fn () → Promise<Card[]> - lazily fetches board card templates when
+	 * the "from template" picker menu opens. When absent the template button is hidden.
+	 */
+	onFetchTemplates: { type: Function, default: null },
+	/**
+	 * Async fn (stackId, templateId) → Promise - creates a card from a template.
+	 */
+	onCreateFromTemplate: { type: Function, default: null },
+	/**
+	 * Board's "new cards on top" preference. When true, multi-line pastes are
+	 * submitted in reverse order so the first pasted line appears topmost.
+	 */
+	newCardsOnTop: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['open'])
@@ -330,12 +412,12 @@ function groupHints(cards) {
 }
 
 // Normalize the two grouping sources into one shape: { key, title, color,
-// wipLimit, cards }. Classic path = one group per stack (carrying its color +
-// WIP limit); generalized path (#3815) = the caller-supplied groups (no
-// stack/WIP concept). Everything below renders off this uniform list.
+// wipLimit, stackId, cards }. Classic path = one group per stack (carrying its
+// color + WIP limit + real stackId); generalized path (#3815) = the
+// caller-supplied groups (no stack/WIP concept, stackId null → no quick-add).
 const normalizedGroups = computed(() => {
 	if (props.groups) {
-		return props.groups.map((g) => ({ key: g.key, title: g.title, color: null, wipLimit: null, cards: g.cards ?? [] }))
+		return props.groups.map((g) => ({ key: g.key, title: g.title, color: null, wipLimit: null, stackId: null, cards: g.cards ?? [] }))
 	}
 	const byStack = props.cardsByStack
 	return props.stacks.map((stack) => ({
@@ -343,18 +425,23 @@ const normalizedGroups = computed(() => {
 		title: stack.title,
 		color: stack.color ?? null,
 		wipLimit: (typeof stack.wipLimit === 'number' && stack.wipLimit > 0) ? stack.wipLimit : null,
+		stackId: stack.id,
 		cards: (byStack && byStack.get(stack.id)) ?? [],
 	}))
 })
 
-// A flat row model: one header per group, then its cards (unless collapsed).
+// Quick-add is enabled only when we have the callback AND this is the classic
+// per-stack path (not the generalized cross-board groups path).
+const quickAddEnabled = computed(() => !props.groups && typeof props.onCreateCard === 'function')
+
+// A flat row model: one header per group, then (when not collapsed + quick-add
+// enabled) an 'add' row at the TOP, then its cards.
 // Within each group, cards are arranged as a one-level parent/child tree (#4178):
 //   - A card is a "child" if its parentCardId matches another card in the same group.
 //   - Child rows are emitted immediately after their parent, only when expanded.
 //   - A child whose parent is NOT in the same group is treated as top-level
 //     (never hidden just because the parent is filtered out / in another column).
-// Collapsed groups drop all their card rows; collapsed parents drop their children.
-// Fixed row heights (HEADER_H / ROW_H) are preserved — children share ROW_H.
+// Collapsed groups drop both the 'add' row and all card rows.
 const rows = computed(() => {
 	const out = []
 	for (const group of normalizedGroups.value) {
@@ -393,6 +480,18 @@ const rows = computed(() => {
 
 		if (isCollapsed(group.key)) continue
 
+		// Quick-add composer sits at the TOP of the group (above cards), matching
+		// the kanban column composer position. Only when quick-add is enabled and
+		// the group has a real stackId (i.e. not the cross-board groups path).
+		if (quickAddEnabled.value && group.stackId != null) {
+			out.push({
+				type: 'add',
+				id: `add${group.key}`,
+				stackId: group.stackId,
+				groupKey: group.key,
+			})
+		}
+
 		for (const card of topLevel) {
 			const children = childrenByParent.get(card.id) ?? []
 			const hasChildren = children.length > 0
@@ -409,14 +508,21 @@ const rows = computed(() => {
 	return out
 })
 
-// Fixed row heights (a table is uniform) - no per-row measureElement, so the
+// Fixed row heights (a table is uniform) — no per-row measureElement, so the
 // virtualizer's positions never thrash on a data refresh.
 const HEADER_H = 40
 const ROW_H = 36
+const ADD_H = 40
 const virtualizer = useVirtualizer(computed(() => ({
 	count: rows.value.length,
 	getScrollElement: () => scrollRef.value,
-	estimateSize: (i) => (rows.value[i]?.type === 'header' ? HEADER_H : ROW_H),
+	estimateSize: (i) => {
+		const r = rows.value[i]
+		if (!r) return ROW_H
+		if (r.type === 'header') return HEADER_H
+		if (r.type === 'add') return ADD_H
+		return ROW_H
+	},
 	overscan: 10,
 	getItemKey: (i) => rows.value[i]?.id ?? i,
 })))
@@ -485,6 +591,103 @@ function isOverdue(card) {
 	if (!card.duedate || isDone(card)) return false
 	const d = new Date(card.duedate)
 	return !Number.isNaN(d.getTime()) && d.getTime() < now.value
+}
+
+// ── Quick-add composer (per-stack state) ────────────────────────────────────
+
+/**
+ * Per-stack reactive state for the composer. Keyed by stackId.
+ * Using plain reactive objects lets us add keys without replacing the whole
+ * object, which would lose reactivity on already-bound template expressions.
+ */
+const draftByStack = reactive({})        // stackId → string draft
+const isPendingByStack = reactive({})    // stackId → boolean
+const errorByStack = reactive({})        // stackId → string|''
+const templatesByStack = reactive({})    // stackId → template[]
+const templatesLoadedByStack = reactive({}) // stackId → boolean
+
+// Composer input refs, keyed by stackId. Using a plain object (not reactive) so
+// we can set DOM element refs without triggering unnecessary re-renders.
+const composerRefs = {}
+
+function setComposerRef(stackId, el) {
+	if (el) {
+		composerRefs[stackId] = el
+	} else {
+		delete composerRefs[stackId]
+	}
+}
+
+/** Split submitted text into trimmed, non-blank card titles, in order. */
+function splitTitles(text) {
+	return text.split(/\r\n|\r|\n/).map((l) => l.trim()).filter((l) => l !== '')
+}
+
+/**
+ * Multi-line paste → quick multi-add (mirrors StackColumn.onComposerPaste).
+ * A single-line paste falls through to the default behaviour.
+ */
+function onComposerPaste(event, stackId) {
+	const text = event.clipboardData?.getData('text') ?? ''
+	if (splitTitles(text).length < 2) return
+	event.preventDefault()
+	createCardsFromText(stackId, text)
+}
+
+/**
+ * Create one card per non-blank line for the given stack. When newCardsOnTop
+ * is set, reverse the order so the first pasted line ends up topmost.
+ */
+async function createCardsFromText(stackId, text) {
+	const titles = splitTitles(text)
+	if (titles.length === 0) return
+	errorByStack[stackId] = ''
+	isPendingByStack[stackId] = true
+	const ordered = props.newCardsOnTop ? [...titles].reverse() : titles
+	try {
+		for (const title of ordered) {
+			const { title: parsedTitle, duedate, allDay } = parseDueToken(title)
+			await props.onCreateCard(stackId, parsedTitle, duedate, allDay)
+		}
+		draftByStack[stackId] = ''
+		// Re-focus for rapid entry
+		composerRefs[stackId]?.focus()
+	} catch (err) {
+		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to create card.')
+	} finally {
+		isPendingByStack[stackId] = false
+	}
+}
+
+async function submitCard(stackId) {
+	const text = draftByStack[stackId] ?? ''
+	await createCardsFromText(stackId, text)
+}
+
+/** Lazily load templates when the picker opens for a given stack. */
+async function loadTemplates(stackId) {
+	if (!props.onFetchTemplates) return
+	try {
+		templatesByStack[stackId] = await props.onFetchTemplates()
+	} catch (err) {
+		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to load templates.')
+	} finally {
+		templatesLoadedByStack[stackId] = true
+	}
+}
+
+/** Create a card from a template in the given stack. */
+async function createFromTemplate(stackId, templateId) {
+	if (!props.onCreateFromTemplate) return
+	errorByStack[stackId] = ''
+	isPendingByStack[stackId] = true
+	try {
+		await props.onCreateFromTemplate(stackId, templateId)
+	} catch (err) {
+		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to create card from template.')
+	} finally {
+		isPendingByStack[stackId] = false
+	}
 }
 </script>
 
@@ -643,6 +846,64 @@ body.theme--dark .board-list-table,
 	color: var(--color-text-maxcontrast);
 	flex: 0 0 auto;
 }
+
+/* ── Quick-add composer ─────────────────────────────────────────────────────── */
+
+/* The composer row aligns with card rows: same left padding as a top-level
+   card row (8px) so the input left-edge lines up with the card title. */
+.card-composer-wrap {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	padding: 0 8px;
+	gap: 4px;
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+}
+
+.card-composer {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+}
+
+.card-composer__input {
+	flex: 1;
+	min-width: 0;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius, 3px);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+}
+
+.card-composer__input:focus {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
+	border-color: transparent;
+}
+
+.card-composer__input::placeholder {
+	color: var(--color-text-maxcontrast);
+}
+
+.card-composer__templates {
+	flex: 0 0 auto;
+}
+
+.card-composer__error {
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+	color: var(--kanso-error-legible);
+	margin: 0;
+	white-space: nowrap;
+}
+
+/* ── Card rows ──────────────────────────────────────────────────────────────── */
 
 .board-list-row {
 	display: flex;
