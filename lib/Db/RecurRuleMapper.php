@@ -39,20 +39,23 @@ class RecurRuleMapper extends QBMapper {
 	}
 
 	/**
-	 * All rules on a board, newest first.
+	 * All rules on a board, newest first. Returns every rule regardless of its
+	 * template card's state — hiding rules whose template is in the trash (#67)
+	 * happens in {@see \OCA\Kanso\Service\RecurrenceService::listForBoard()}, so
+	 * the card-visibility model stays in one place (card reads happen in the
+	 * service layer, never via a raw `kanso_cards` join here — architecture rule
+	 * #3741). Export deliberately wants ALL rules, so it consumes this unfiltered.
 	 *
 	 * @return RecurRule[]
 	 * @throws Exception
 	 */
 	public function findByBoard(int $boardId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('r.*')
-			->from($this->getTableName(), 'r')
-			->innerJoin('r', 'kanso_cards', 'c', $qb->expr()->eq('r.template_card_id', 'c.id'))
-			->where($qb->expr()->eq('r.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->orderBy('r.created_at', 'DESC')
-			->addOrderBy('r.id', 'DESC');
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('created_at', 'DESC')
+			->addOrderBy('id', 'DESC');
 
 		return $this->findEntities($qb);
 	}

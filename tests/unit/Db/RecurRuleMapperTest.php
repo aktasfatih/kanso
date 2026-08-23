@@ -18,8 +18,9 @@ use PHPUnit\Framework\TestCase;
 /**
  * Mapper-level tests for RecurRuleMapper::findByBoard(). The DB is mocked so
  * these verify the pure-PHP contract: the method correctly hydrates returned
- * rows and emits both the `board_id` and `deleted_at` filters that exclude
- * trashed template cards from the rule list.
+ * rows and scopes the query to `board_id`. Trashed-template filtering lives in
+ * RecurrenceService::listForBoard() (#67), not here — the mapper returns every
+ * rule for the board (export relies on that).
  */
 class RecurRuleMapperTest extends TestCase {
 	private IDBConnection&MockObject $db;
@@ -47,9 +48,8 @@ class RecurRuleMapperTest extends TestCase {
 	/**
 	 * A spying expression builder that records the column name (first string
 	 * argument) of every comparison into a shared collector. Lets a test assert
-	 * that findByBoard() emits both a `board_id` and a `deleted_at` filter — the
-	 * regression guard for the trashed-template exclusion: remove either filter
-	 * and the matching assertion goes red.
+	 * that findByBoard() scopes the query to `board_id` — remove that filter and
+	 * the matching assertion goes red.
 	 *
 	 * @param array<int, string> $collector
 	 */
@@ -123,8 +123,7 @@ class RecurRuleMapperTest extends TestCase {
 	// ---- row hydration ---------------------------------------------------------
 
 	public function testFindByBoardHydratesReturnedRules(): void {
-		// Two rules come back from the DB (template cards with deleted_at = 0 are
-		// already filtered by the JOIN in SQL; the mock feeds the live rows directly).
+		// Two rules come back from the DB for the board (the mock feeds the rows).
 		$this->db->method('getQueryBuilder')->willReturn($this->buildQb([
 			self::ruleRow(1, 7),
 			self::ruleRow(2, 7),
@@ -149,16 +148,14 @@ class RecurRuleMapperTest extends TestCase {
 
 	// ---- filter assertions -----------------------------------------------------
 
-	public function testFindByBoardFiltersOnBoardIdAndDeletedAt(): void {
+	public function testFindByBoardFiltersOnBoardId(): void {
 		// The spy records every column name passed to eq()/gt()/etc. so we can
-		// assert both the board_id scoping AND the deleted_at trashed-card guard
-		// are present — dropping either from the query makes this go red.
+		// assert the board_id scoping is present — dropping it makes this go red.
 		$columns = [];
 		$this->db->method('getQueryBuilder')->willReturn($this->buildQb([], $columns));
 
 		$this->mapper->findByBoard(7);
 
-		self::assertContains('r.board_id', $columns, 'findByBoard must filter on r.board_id');
-		self::assertContains('c.deleted_at', $columns, 'findByBoard must exclude trashed template cards via c.deleted_at');
+		self::assertContains('board_id', $columns, 'findByBoard must filter on board_id');
 	}
 }
