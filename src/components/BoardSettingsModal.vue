@@ -1669,6 +1669,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ t('kanso', 'Created') }}
 								</span>
 
+								<!-- Open the template card (to edit its title / description / etc.) -->
+								<button
+									class="automation__archive-now-btn"
+									:title="t('kanso', 'Open the recurring card')"
+									@click="openRecurTemplateCard(rule)">
+									<OpenInNewIcon :size="14" />
+									{{ t('kanso', 'Open card') }}
+								</button>
+
 								<!-- Edit button -->
 								<button
 									class="automation__archive-now-btn"
@@ -2119,6 +2128,7 @@ import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
@@ -3849,6 +3859,12 @@ const isCreatingRecurRule = ref(false)
 const createRecurRuleError = ref('')
 const editingRecurRuleId = ref(null)  // null = create mode, number = edit mode
 const isEditingRecurRule = computed(() => editingRecurRuleId.value !== null)
+
+/** Close the settings modal and open the rule's template card (to edit it). */
+function openRecurTemplateCard(rule) {
+	emit('close')
+	router.push({ name: 'card-modal', params: { id: props.boardId, cardId: rule.templateCardId } })
+}
 
 function startEditRecurRule(rule) {
 	editingRecurRuleId.value = rule.id

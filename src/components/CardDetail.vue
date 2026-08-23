@@ -435,10 +435,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</header>
 				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">{{ actionError }}</span>
-				<div v-if="cardIsRecurring" class="card-modal__recurring-banner">
-					<RepeatIcon :size="14" />
-					<span>{{ t('kanso', 'Recurring source') }}</span>
-				</div>
 				<!-- Recurring-source delete guard: shown when a manager tries to delete a card that is a recurrence template -->
 				<NcDialog
 					:open="deleteWithRuleConfirm"
@@ -6496,25 +6492,6 @@ body.theme--dark .card-modal,
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
-/* "Recurring source" marker: a compact pill under the title, not a full-width
-   strip. Without this the unstyled block let the icon float to the centre. */
-.card-modal__recurring-banner {
-	display: inline-flex;
-	width: fit-content;
-	max-width: 100%;
-	align-self: flex-start;
-	align-items: center;
-	gap: 5px;
-	margin: 8px 0 2px;
-	padding: 2px 10px;
-	border-radius: 999px;
-	background: var(--color-background-hover);
-	color: var(--color-text-maxcontrast);
-	font-size: 0.78rem;
-	font-weight: 500;
-	line-height: 1.6;
-}
-
 .card-modal__recur-label {
 	display: block;
 	margin-top: 10px;

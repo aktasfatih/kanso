@@ -237,19 +237,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3840
+#: src/components/CardDetail.vue:3836
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3838
+#: src/components/CardDetail.vue:3834
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3836
+#: src/components/CardDetail.vue:3832
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1477,7 +1477,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4016
+#: src/components/CardDetail.vue:4012
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3020,7 +3020,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4018
+#: src/components/CardDetail.vue:4014
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3531,6 +3531,7 @@ msgstr ""
 msgid "Open as full page"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
 msgid "Open card"
 msgstr ""
@@ -3553,6 +3554,10 @@ msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Open project chat in a new tab"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Open the recurring card"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3789,7 +3794,6 @@ msgstr ""
 msgid "Recurring cards"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/components/CardTile.vue
 msgid "Recurring source"
 msgstr ""
@@ -4870,7 +4874,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4017
+#: src/components/CardDetail.vue:4013
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4950,7 +4954,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4019
+#: src/components/CardDetail.vue:4015
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
