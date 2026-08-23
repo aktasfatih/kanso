@@ -237,19 +237,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3837
+#: src/components/CardDetail.vue:3840
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3835
+#: src/components/CardDetail.vue:3838
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3833
+#: src/components/CardDetail.vue:3836
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1477,7 +1477,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4013
+#: src/components/CardDetail.vue:4016
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -1522,14 +1522,14 @@ msgstr ""
 msgid "Delete \"{title}\"?"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Delete and stop recurrence"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue
 #: src/views/BoardList.vue
 msgid "Delete board"
-msgstr ""
-
-#: src/components/CardDetail.vue
-msgid "Delete card and stop recurrence"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -1567,6 +1567,10 @@ msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Delete project"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Delete recurring card"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3016,7 +3020,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4015
+#: src/components/CardDetail.vue:4018
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4521,7 +4525,7 @@ msgid "This card no longer exists — it may have been deleted."
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "This card powers a recurring series. What would you like to do?"
+msgid "This card powers a recurring series. Delete just this card, or also stop the recurrence?"
 msgstr ""
 
 #: src/views/PublicBoard.vue
@@ -4866,7 +4870,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4014
+#: src/components/CardDetail.vue:4017
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4946,7 +4950,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4016
+#: src/components/CardDetail.vue:4019
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

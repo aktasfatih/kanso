@@ -440,22 +440,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span>{{ t('kanso', 'Recurring source') }}</span>
 				</div>
 				<!-- Recurring-source delete guard: shown when a manager tries to delete a card that is a recurrence template -->
-				<div v-if="deleteWithRuleConfirm" class="card-modal__delete-guard">
+				<NcDialog
+					:open="deleteWithRuleConfirm"
+					:name="t('kanso', 'Delete recurring card')"
+					size="normal"
+					:buttons="deleteGuardButtons"
+					@update:open="(v) => { if (!v) deleteWithRuleConfirm = false }">
 					<p class="card-modal__delete-guard-msg">
-						{{ t('kanso', 'This card powers a recurring series. What would you like to do?') }}
+						{{ t('kanso', 'This card powers a recurring series. Delete just this card, or also stop the recurrence?') }}
 					</p>
-					<div class="card-modal__delete-guard-actions">
-						<button class="card-modal__delete-guard-btn card-modal__delete-guard-btn--danger" @click="handleDeleteCardAndRule">
-							{{ t('kanso', 'Delete card and stop recurrence') }}
-						</button>
-						<button class="card-modal__delete-guard-btn card-modal__delete-guard-btn--danger" @click="handleDeleteCardOnly">
-							{{ t('kanso', 'Delete card only') }}
-						</button>
-						<button class="card-modal__delete-guard-btn" @click="deleteWithRuleConfirm = false">
-							{{ t('kanso', 'Cancel') }}
-						</button>
-					</div>
-				</div>
+				</NcDialog>
 				<span v-if="subscriptionError" class="card-modal__save-error">{{ subscriptionError }}</span>
 				<span v-if="reminderError" class="card-modal__save-error">{{ reminderError }}</span>
 
@@ -2204,6 +2198,7 @@ import { generateUrl } from '@nextcloud/router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showUndo, showSuccess, showError } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -2485,6 +2480,14 @@ async function handleFieldChange(field, value) {
 const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
 const actionError = ref('')
 const deleteWithRuleConfirm = ref(false)  // true = show the recurring-source delete guard
+
+// Buttons for the recurring-source delete guard dialog (NcDialog renders them
+// right-aligned in array order; the two destructive choices carry the error type).
+const deleteGuardButtons = [
+	{ label: t('kanso', 'Cancel'), callback: () => { deleteWithRuleConfirm.value = false } },
+	{ label: t('kanso', 'Delete card only'), type: 'error', callback: () => { handleDeleteCardOnly() } },
+	{ label: t('kanso', 'Delete and stop recurrence'), type: 'error', callback: () => { handleDeleteCardAndRule() } },
+]
 
 async function handleArchiveToggle() {
 	actionError.value = ''
@@ -6493,6 +6496,25 @@ body.theme--dark .card-modal,
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
+/* "Recurring source" marker: a compact pill under the title, not a full-width
+   strip. Without this the unstyled block let the icon float to the centre. */
+.card-modal__recurring-banner {
+	display: inline-flex;
+	width: fit-content;
+	max-width: 100%;
+	align-self: flex-start;
+	align-items: center;
+	gap: 5px;
+	margin: 8px 0 2px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--color-background-hover);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.78rem;
+	font-weight: 500;
+	line-height: 1.6;
+}
+
 .card-modal__recur-label {
 	display: block;
 	margin-top: 10px;
