@@ -35,8 +35,15 @@ md.inline.ruler.push('kanso_mention', (state, silent) => {
 	return true
 })
 
-md.renderer.rules.kanso_mention = (tokens, idx) =>
-	`<span class="kanso-mention">@${md.utils.escapeHtml(tokens[idx].content)}</span>`
+// The chip carries the raw uid in `data-kanso-mention` so a delegated click
+// listener can open that user's profile (see handleRefClick in CardDetail.vue).
+// Like the card-ref anchor, it deliberately carries NO href — navigation is
+// owned by the container listener, so there is no javascript:/external-URL
+// surface here. The uid charset is already constrained by MENTION_RE above.
+md.renderer.rules.kanso_mention = (tokens, idx) => {
+	const uid = md.utils.escapeHtml(tokens[idx].content)
+	return `<span class="kanso-mention" data-kanso-mention="${uid}">@${uid}</span>`
+}
 
 // `PREFIX-123` card cross-references → a link showing the target card's TITLE
 // (like GitHub #123 / Jira PROJ-123). This mirrors the mention rule: the token
@@ -161,7 +168,7 @@ function isInlineAttachmentSrc(src) {
 // hook, which then strips it from everything except the mention chip and card-ref
 // anchor (below). `data-kanso-card-id` carries the numeric target of an internal
 // card cross-reference; the hook drops it from anything that is not the ref anchor.
-const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class', 'data-kanso-card-id', 'src', 'alt']
+const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class', 'data-kanso-card-id', 'data-kanso-mention', 'src', 'alt']
 
 const FORBID_TAGS = ['style', 'script']
 
@@ -180,6 +187,11 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 		&& node.getAttribute?.('class') === 'kanso-cardref'
 		&& node.hasAttribute?.('data-kanso-card-id')
 
+	// The mention chip: <span class="kanso-mention" data-kanso-mention="uid">.
+	const isMention = node.tagName === 'SPAN'
+		&& node.getAttribute?.('class') === 'kanso-mention'
+		&& node.hasAttribute?.('data-kanso-mention')
+
 	// Defence-in-depth: `class` is only ever legitimate on the mention chip and
 	// the card-ref anchor. Strip it from every other element so the app-wide
 	// allowlist entry can't be (mis)used to carry class-based styling/selectors
@@ -195,6 +207,12 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 	// arbitrary elements.
 	if (node.hasAttribute?.('data-kanso-card-id') && !isCardRef) {
 		node.removeAttribute('data-kanso-card-id')
+	}
+
+	// `data-kanso-mention` is only legitimate on the mention chip; drop it
+	// anywhere else (same reasoning as data-kanso-card-id).
+	if (node.hasAttribute?.('data-kanso-mention') && !isMention) {
+		node.removeAttribute('data-kanso-mention')
 	}
 
 	// `src`/`alt` are only legitimate on an <img>. Strip them from anything else

@@ -12,6 +12,8 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetail;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\ActivityService;
 use OCA\Kanso\Service\CardVisibilityGuard;
@@ -29,6 +31,7 @@ class ActivityServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private IUserManager&MockObject $userManager;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private ActivityService $service;
 
 	protected function setUp(): void {
@@ -40,6 +43,9 @@ class ActivityServiceTest extends TestCase {
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		// Default: no detail rows. Tests exercising the diff override this.
+		$this->changeDetailMapper->method('findByChangeIds')->willReturn([]);
 		$this->service = new ActivityService(
 			$this->changeMapper,
 			$this->cardMapper,
@@ -47,6 +53,7 @@ class ActivityServiceTest extends TestCase {
 			$this->permissionService,
 			$this->userManager,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
 		);
 	}
 
@@ -65,8 +72,11 @@ class ActivityServiceTest extends TestCase {
 		return $board;
 	}
 
-	private function change(int $verb, int $action, string $actor, int $ts): Change {
+	private function change(int $verb, int $action, string $actor, int $ts, ?int $id = null): Change {
 		$c = new Change();
+		if ($id !== null) {
+			$c->setId($id);
+		}
 		$c->setEntityType(Change::ENTITY_CARD);
 		$c->setEntityId(9);
 		$c->setAction($action);
@@ -100,6 +110,104 @@ class ActivityServiceTest extends TestCase {
 		self::assertSame('alice', $result[0]['actor']);
 		self::assertSame(200, $result[0]['timestamp']);
 		self::assertSame(Change::VERB_CREATED, $result[1]['verb']);
+	}
+
+	public function testAttachesDescriptionDiffDetailOnlyToDescriptionItems(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// A description-update row (id 55) plus an unrelated rename row (id 56).
+		$this->changeMapper->method('findByEntity')->willReturn([
+			$this->change(Change::VERB_DESCRIPTION_UPDATED, Change::ACTION_UPDATE, 'alice', 200, 55),
+			$this->change(Change::VERB_RENAMED, Change::ACTION_UPDATE, 'alice', 100, 56),
+		]);
+		$this->userManager->method('get')->willReturn(null);
+
+		$detail = new ChangeDetail();
+		$detail->setChangeId(55);
+		$detail->setFromText('Old body');
+		$detail->setToText('New body');
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		// ALL change ids are looked up in one batch; only id 55 has a detail row.
+		$this->changeDetailMapper->expects(self::once())
+			->method('findByChangeIds')
+			->with([55, 56])
+			->willReturn([55 => $detail]);
+		$this->service = new ActivityService(
+			$this->changeMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->permissionService,
+			$this->userManager,
+			$this->visibilityGuard,
+			$this->changeDetailMapper,
+		);
+
+		$result = $this->service->getCardActivity(9, 'bob');
+
+		// The description item carries the before/after diff payload.
+		self::assertSame(Change::VERB_DESCRIPTION_UPDATED, $result[0]['verb']);
+		self::assertSame(['from' => 'Old body', 'to' => 'New body'], $result[0]['detail']);
+		// The rename item does not.
+		self::assertSame(Change::VERB_RENAMED, $result[1]['verb']);
+		self::assertNull($result[1]['detail']);
+	}
+
+	public function testAttachesDetailToNonDescriptionVerbs(): void {
+		// A move row (id 70) carries source/target column names, a priority row
+		// (id 71) carries the from/to labels - both get their detail attached,
+		// proving the generalized attachment covers any verb, not just description.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->changeMapper->method('findByEntity')->willReturn([
+			$this->change(Change::VERB_MOVED, Change::ACTION_MOVE, 'alice', 300, 70),
+			$this->change(Change::VERB_PRIORITY_CHANGED, Change::ACTION_UPDATE, 'alice', 200, 71),
+		]);
+		$this->userManager->method('get')->willReturn(null);
+
+		$move = new ChangeDetail();
+		$move->setChangeId(70);
+		$move->setFromText('To Do');
+		$move->setToText('In Progress');
+		$prio = new ChangeDetail();
+		$prio->setChangeId(71);
+		$prio->setFromText('Medium');
+		$prio->setToText('Urgent');
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		$this->changeDetailMapper->expects(self::once())
+			->method('findByChangeIds')
+			->with([70, 71])
+			->willReturn([70 => $move, 71 => $prio]);
+		$this->service = new ActivityService(
+			$this->changeMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->permissionService,
+			$this->userManager,
+			$this->visibilityGuard,
+			$this->changeDetailMapper,
+		);
+
+		$result = $this->service->getCardActivity(9, 'bob');
+
+		self::assertSame(Change::VERB_MOVED, $result[0]['verb']);
+		self::assertSame(['from' => 'To Do', 'to' => 'In Progress'], $result[0]['detail']);
+		self::assertSame(Change::VERB_PRIORITY_CHANGED, $result[1]['verb']);
+		self::assertSame(['from' => 'Medium', 'to' => 'Urgent'], $result[1]['detail']);
+	}
+
+	public function testDescriptionItemWithoutDetailRowCarriesNullDetail(): void {
+		// Legacy description edit recorded before this feature: no side-table row.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->changeMapper->method('findByEntity')->willReturn([
+			$this->change(Change::VERB_DESCRIPTION_UPDATED, Change::ACTION_UPDATE, 'alice', 200, 55),
+		]);
+		$this->userManager->method('get')->willReturn(null);
+		// Default findByChangeIds stub returns [] → no detail attached.
+
+		$result = $this->service->getCardActivity(9, 'bob');
+		self::assertSame(Change::VERB_DESCRIPTION_UPDATED, $result[0]['verb']);
+		self::assertNull($result[0]['detail']);
 	}
 
 	public function testAssertsReadPermission(): void {

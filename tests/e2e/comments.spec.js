@@ -52,6 +52,17 @@ async function ncLogin(page) {
 	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
+// Helper: locate the Tiptap ProseMirror editor inside the new-comment composer.
+// The composer now uses MarkdownEditor.vue (Tiptap) instead of a raw <textarea>.
+function composerProse(page) {
+	return page.locator('.card-modal__composer .kanso-md-editor .ProseMirror').first()
+}
+
+// Helper: locate the ProseMirror inside the reply compose box.
+function replyProse(page) {
+	return page.locator('.card-modal__reply-compose .kanso-md-editor .ProseMirror').first()
+}
+
 test.describe('Comments / Discussion', () => {
 	const state = { boardId: 0, cardId: 0, boardUrl: '', cardUrl: '' }
 
@@ -89,9 +100,20 @@ test.describe('Comments / Discussion', () => {
 		const discussionSection = page.locator('.card-modal__discussion')
 		await expect(discussionSection).toBeVisible({ timeout: 5000 })
 
-		// Post a comment with markdown (bold text)
-		const composeTa = page.locator('.card-modal__composer-textarea').first()
-		await composeTa.fill('Hello **world** from test')
+		// The composer now uses a Tiptap WYSIWYG editor (MarkdownEditor.vue).
+		// Type into the ProseMirror contenteditable.
+		const prose = composerProse(page)
+		await expect(prose).toBeVisible({ timeout: 6000 })
+		await prose.click()
+		// Type bold markdown via the keyboard — Tiptap stores and serialises markdown.
+		await prose.fill('Hello ')
+		// Use Ctrl+B to bold the word "world" typed next
+		await page.keyboard.press('Control+B')
+		await page.keyboard.type('world')
+		await page.keyboard.press('Control+B')
+		await page.keyboard.type(' from test')
+
+		// Submit via the Post button
 		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
 
 		// The comment body should appear and markdown should be rendered
@@ -118,13 +140,19 @@ test.describe('Comments / Discussion', () => {
 		await expect(replyBtn).toBeVisible({ timeout: 5000 })
 		await replyBtn.click()
 
-		// Reply compose box should appear
-		const replyTa = page.locator('.card-modal__reply-compose .card-modal__comment-edit-textarea').first()
-		await expect(replyTa).toBeVisible({ timeout: 4000 })
-		await replyTa.fill('This is a **reply**')
+		// Reply compose box should appear — it also uses the Tiptap editor.
+		const prose = replyProse(page)
+		await expect(prose).toBeVisible({ timeout: 6000 })
+
+		// Type bold reply text
+		await prose.click()
+		await prose.fill('This is a ')
+		await page.keyboard.press('Control+B')
+		await page.keyboard.type('reply')
+		await page.keyboard.press('Control+B')
 
 		// Submit via Ctrl+Enter
-		await replyTa.press('Control+Enter')
+		await prose.press('Control+Enter')
 
 		// The reply should appear nested under the top-level comment
 		const replies = page.locator('.card-modal__replies .card-modal__comment--reply')
@@ -164,7 +192,7 @@ test.describe('Comments / Discussion', () => {
 		await expect(editBtn).toBeVisible({ timeout: 5000 })
 		await editBtn.click()
 
-		// The inline edit textarea should appear
+		// The inline edit textarea should appear (comment editing still uses a plain textarea)
 		const editTa = topComment.locator('.card-modal__comment-edit-textarea')
 		await expect(editTa).toBeVisible({ timeout: 4000 })
 
@@ -218,10 +246,15 @@ test.describe('Comments / Discussion', () => {
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
-		// Post a comment containing an XSS payload
+		// Post a comment containing an XSS payload.
+		// The Tiptap editor (html:false) stores and serialises plain markdown;
+		// the read view uses renderMarkdown+DOMPurify, so raw HTML tags are
+		// escaped to inert text, never parsed as markup.
 		const xssPayload = 'Safe text <img src=x onerror=alert(1)> end'
-		const composeTa = page.locator('.card-modal__composer-textarea').first()
-		await composeTa.fill(xssPayload)
+		const prose = composerProse(page)
+		await expect(prose).toBeVisible({ timeout: 6000 })
+		await prose.click()
+		await prose.fill(xssPayload)
 		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
 
 		// Wait for the comment to appear
@@ -257,12 +290,16 @@ test.describe('Comments / Discussion', () => {
 			return route.continue()
 		})
 
-		const ta = page.locator('.card-modal__composer-textarea').first()
-		await ta.fill('this text must survive a failed post')
+		const prose = composerProse(page)
+		await expect(prose).toBeVisible({ timeout: 6000 })
+		await prose.click()
+		await prose.fill('this text must survive a failed post')
 		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
 
-		// The composer keeps the text so the user can retry (before the fix it was
-		// cleared before the await and lost).
-		await expect(ta).toHaveValue('this text must survive a failed post', { timeout: 5000 })
+		// The Tiptap editor keeps the text so the user can retry (the v-model
+		// newCommentBody is only cleared on success — never before the await).
+		// With ProseMirror, check the contenteditable text content rather than
+		// toHaveValue() (which only works on <textarea>/<input>).
+		await expect(prose).toContainText('this text must survive a failed post', { timeout: 5000 })
 	})
 })

@@ -43,7 +43,9 @@ test.describe('Nav-footer help links', () => {
 		await expect(nav).toBeVisible({ timeout: 10_000 })
 
 		// The footer Help trigger is present regardless of which board/view is open.
-		const helpTrigger = page.locator('.app-nav__footer button').first()
+		// The footer now contains both a Settings button and the Help actions menu;
+		// target the Help trigger by its aria-label to avoid selecting the Settings gear.
+		const helpTrigger = page.locator('.app-nav__footer button[aria-label="Help"]')
 		await expect(helpTrigger).toBeVisible({ timeout: 10_000 })
 		await helpTrigger.click()
 

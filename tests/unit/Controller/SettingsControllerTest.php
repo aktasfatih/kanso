@@ -46,7 +46,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue(['default_board' => '42']);
 
 		self::assertSame(
-			['defaultBoardId' => 42, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
+			['defaultBoardId' => 42, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
 			$this->controller->index()->getData()
 		);
 	}
@@ -55,7 +55,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue([]);
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
 			$this->controller->index()->getData()
 		);
 	}
@@ -68,7 +68,7 @@ class SettingsControllerTest extends TestCase {
 
 		// Deduped and int-cast.
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7], 'dismissedHints' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
 			$this->controller->index()->getData()
 		);
 	}
@@ -80,7 +80,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '7');
 
 		self::assertSame(
-			['defaultBoardId' => 7, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
+			['defaultBoardId' => 7, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
 			$this->controller->update(7)->getData()
 		);
 	}
@@ -92,7 +92,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
 			$this->controller->update(null)->getData()
 		);
 	}
@@ -104,7 +104,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => []],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
 			$this->controller->update(0)->getData()
 		);
 	}
@@ -163,5 +163,70 @@ class SettingsControllerTest extends TestCase {
 
 		$result = $this->controller->update(3)->getData();
 		self::assertSame(['shortcuts'], $result['dismissedHints']);
+	}
+
+	public function testUpdatePersistsHiddenNavSectionsFilteredToAllowList(): void {
+		$stored = [];
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
+				return $stored[$key] ?? $default;
+			});
+		$this->config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
+				$stored[$key] = $value;
+			});
+
+		// 'boards' (always-shown) and 'bogus' (unknown) are dropped by the
+		// allow-list guard; only the valid 'my-tasks' key survives the round-trip.
+		$result = $this->controller->update(null, null, null, ['boards', 'bogus', 'my-tasks'])->getData();
+		self::assertSame(['my-tasks'], $result['hiddenNavSections']);
+		self::assertSame('["my-tasks"]', $stored['hidden_nav_sections']);
+	}
+
+	public function testUpdateLeavesHiddenNavSectionsUntouchedWhenOmitted(): void {
+		$this->stubGetUserValue(['hidden_nav_sections' => '["inbox","views"]']);
+		// Only the default_board key is written; hidden nav sections are not touched.
+		$this->config->expects(self::once())
+			->method('setUserValue')
+			->with('alice', 'kanso', 'default_board', '3');
+
+		$result = $this->controller->update(3)->getData();
+		self::assertSame(['inbox', 'views'], $result['hiddenNavSections']);
+	}
+
+	public function testEditorToolbarHiddenRoundTrip(): void {
+		$stored = [];
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
+				return $stored[$key] ?? $default;
+			});
+		$this->config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
+				$stored[$key] = $value;
+			});
+
+		// Default: shown (false).
+		self::assertFalse($this->controller->index()->getData()['editorToolbarHidden']);
+
+		// Hide toolbar.
+		$result = $this->controller->update(null, null, null, null, true)->getData();
+		self::assertTrue($result['editorToolbarHidden']);
+		self::assertSame('1', $stored['editor_toolbar_hidden']);
+
+		// Show toolbar again.
+		$result = $this->controller->update(null, null, null, null, false)->getData();
+		self::assertFalse($result['editorToolbarHidden']);
+		self::assertSame('0', $stored['editor_toolbar_hidden']);
+	}
+
+	public function testEditorToolbarHiddenUntouchedWhenOmitted(): void {
+		$this->stubGetUserValue(['editor_toolbar_hidden' => '1']);
+		// Only the default_board key is written; editor toolbar pref is not touched.
+		$this->config->expects(self::once())
+			->method('setUserValue')
+			->with('alice', 'kanso', 'default_board', '5');
+
+		$result = $this->controller->update(5)->getData();
+		self::assertTrue($result['editorToolbarHidden']);
 	}
 }

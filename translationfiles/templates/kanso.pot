@@ -229,19 +229,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3606
+#: src/components/CardDetail.vue:3765
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3604
+#: src/components/CardDetail.vue:3763
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3602
+#: src/components/CardDetail.vue:3761
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -405,6 +405,10 @@ msgstr ""
 msgid "added a label"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "added the label {value}"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Adding…"
@@ -534,6 +538,10 @@ msgid "Assign…"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "assigned {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "assigned a member"
 msgstr ""
 
@@ -659,6 +667,10 @@ msgstr ""
 msgid "Blocked by another card"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
+msgid "Blockquote"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Blocks"
 msgstr ""
@@ -723,7 +735,7 @@ msgstr ""
 msgid "Boards"
 msgstr ""
 
-#: src/components/CardDetail.vue
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Bold"
 msgstr ""
@@ -748,7 +760,10 @@ msgstr ""
 msgid "Bulk card actions"
 msgstr ""
 
-#: src/components/CardDetail.vue
+#: src/components/MarkdownEditor.vue
+msgid "Bullet list"
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "Bulleted list"
 msgstr ""
@@ -938,6 +953,62 @@ msgstr ""
 msgid "Change status"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "changed the card type"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the card type to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the due date to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the estimate"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the estimate to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the priority"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the priority from {from} to {to}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the priority to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the start date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the start date to {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the status"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the status from {from} to {to}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed the status to {value}"
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/composables/useSwimlanes.js
@@ -979,6 +1050,10 @@ msgstr ""
 msgid "Choose a CSV file"
 msgstr ""
 
+#: src/App.vue
+msgid "Choose which sections appear in the left sidebar."
+msgstr ""
+
 #: src/composables/useCardType.js
 msgid "Chore"
 msgstr ""
@@ -1003,6 +1078,22 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Clear step due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the card type"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the due date"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the estimate"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "cleared the start date"
 msgstr ""
 
 #: src/views/ProjectView.vue
@@ -1361,7 +1452,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3779
+#: src/components/CardDetail.vue:3938
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -1715,6 +1806,10 @@ msgstr ""
 msgid "edited"
 msgstr ""
 
+#: src/App.vue
+msgid "Editor"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
 msgstr ""
@@ -1753,6 +1848,10 @@ msgstr ""
 
 #: src/components/CardPreview.vue
 msgid "Enter to open · Esc to close"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Enter URL"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -2439,7 +2538,6 @@ msgstr ""
 msgid "Forever"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Formatting"
 msgstr ""
@@ -2508,9 +2606,16 @@ msgstr ""
 msgid "Has comments"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Heading"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Heading 1"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Heading 2"
 msgstr ""
 
 #: src/App.vue
@@ -2519,6 +2624,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Hidden card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Hide changes"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2578,7 +2687,7 @@ msgstr ""
 msgid "Inbox"
 msgstr ""
 
-#: src/components/CardDetail.vue
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Inline code"
 msgstr ""
@@ -2605,7 +2714,7 @@ msgstr ""
 msgid "Issue intake"
 msgstr ""
 
-#: src/components/CardDetail.vue
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
 msgstr ""
@@ -2647,6 +2756,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."
+msgstr ""
+
+#: src/App.vue
+msgid "Kanso settings"
 msgstr ""
 
 #: src/views/BoardView.vue
@@ -2723,6 +2836,7 @@ msgid "Linear (1–5)"
 msgstr ""
 
 #: src/components/CardDetail.vue
+#: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Link"
 msgstr ""
@@ -2853,7 +2967,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3781
+#: src/components/CardDetail.vue:3940
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -2921,6 +3035,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "moved this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "moved this card from {from} to {to}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -3411,6 +3529,10 @@ msgstr ""
 msgid "Orange"
 msgstr ""
 
+#: src/components/MarkdownEditor.vue
+msgid "Ordered list"
+msgstr ""
+
 #: src/components/BoardTimelineView.vue
 #: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
@@ -3523,7 +3645,6 @@ msgstr ""
 msgid "Press \"n\" in a column to add a card"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Preview"
 msgstr ""
@@ -3601,7 +3722,6 @@ msgstr ""
 msgid "Quick preview of the hovered / focused card"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Quote"
 msgstr ""
@@ -3732,11 +3852,19 @@ msgid "Remove watcher"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "removed {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed a label"
 msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "removed an assignee"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the label {value}"
 msgstr ""
 
 #: src/App.vue
@@ -3779,6 +3907,14 @@ msgstr ""
 #: src/App.vue
 #: src/views/ViewPage.vue
 msgid "Rename view"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "renamed this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "renamed this card to {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4047,6 +4183,10 @@ msgstr ""
 msgid "Setting up…"
 msgstr ""
 
+#: src/App.vue
+msgid "Settings"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Share"
 msgstr ""
@@ -4071,8 +4211,16 @@ msgstr ""
 msgid "Show / hide this shortcuts overlay"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Show changes"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Show comments (read-only)"
+msgstr ""
+
+#: src/App.vue
+msgid "Show formatting toolbar"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4089,6 +4237,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Shown to everyone on this board as a \"Project chat\" button in the toolbar — typically a Nextcloud Talk room. Leave empty to remove the button."
+msgstr ""
+
+#: src/App.vue
+msgid "Sidebar"
 msgstr ""
 
 #: src/components/BoardTimelineView.vue
@@ -4180,6 +4332,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Stop watching this card"
+msgstr ""
+
+#: src/components/MarkdownEditor.vue
+msgid "Strikethrough"
 msgstr ""
 
 #: src/composables/useBoardFilters.js
@@ -4382,7 +4538,6 @@ msgstr ""
 msgid "Toggle item done"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
 msgid "Toggle preview"
 msgstr ""
@@ -4459,6 +4614,10 @@ msgstr ""
 msgid "Ungrouped"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Unknown"
+msgstr ""
+
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
 msgid "Unknown stack"
@@ -4513,6 +4672,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "updated the checklist"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "updated the description"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4625,7 +4788,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3780
+#: src/components/CardDetail.vue:3939
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4701,7 +4864,11 @@ msgstr ""
 msgid "Write a reply…"
 msgstr ""
 
-#: src/components/CardDetail.vue:3782
+#: src/components/CardDetail.vue
+msgid "wrote"
+msgstr ""
+
+#: src/components/CardDetail.vue:3941
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

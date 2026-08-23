@@ -147,10 +147,20 @@ test.describe('Realtime card modal freshness', () => {
 
 			// Tester starts editing the description — the editor seeds a LOCAL
 			// draft from the current text; from here on it must be untouchable.
+			// The description editor is now a Tiptap WYSIWYG editor (MarkdownEditor.vue);
+			// clicking the .card-modal__desc-view activates edit mode.
 			await page.locator('.card-modal__desc-view').click()
-			const textarea = page.locator('.card-modal__desc-textarea')
-			await expect(textarea).toBeVisible()
-			await textarea.fill('my precious local draft')
+
+			// Wait for the Tiptap editor to appear inside the description section.
+			const editorSection = page.locator('.card-modal__section .kanso-md-editor')
+			await expect(editorSection).toBeVisible({ timeout: 8000 })
+			const prose = editorSection.locator('.ProseMirror')
+			await expect(prose).toBeVisible({ timeout: 4000 })
+
+			// Clear the seeded text and type the local draft.
+			await prose.click()
+			await page.keyboard.press('Control+A')
+			await page.keyboard.type('my precious local draft')
 
 			// Admin edits BOTH the title and the description remotely.
 			await apiPatch(`/cards/${state.cardId}`, { title: 'Modal card v3' })
@@ -160,9 +170,12 @@ test.describe('Realtime card modal freshness', () => {
 			// (card detail refetched) while the editor was dirty...
 			await expect(page.locator('.card-modal__title')).toHaveText('Modal card v3', { timeout: 15_000 })
 
-			// ...and the dirty draft survived it, byte for byte.
-			await expect(textarea).toBeVisible()
-			await expect(textarea).toHaveValue('my precious local draft')
+			// ...and the dirty draft survived it (the MarkdownEditor only accepts an
+			// external v-model update when the markdown differs from what the editor
+			// already holds, so a remote patch to draftDescription is ignored while
+			// editing is in progress).
+			await expect(editorSection).toBeVisible()
+			await expect(prose).toContainText('my precious local draft')
 
 			// The tester's save then wins (deliberate last-writer-wins, same as any
 			// two-user edit): the draft is what gets persisted and rendered.

@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -28,6 +29,9 @@ use OCP\IDBConnection;
 class LabelService {
 	private const MAX_TITLE_LENGTH = 100;
 
+	// Cap each stored detail string, consistent with CardService's description cap.
+	private const MAX_DETAIL_LENGTH = 10000;
+
 	public function __construct(
 		private LabelMapper $labelMapper,
 		private CardLabelMapper $cardLabelMapper,
@@ -37,6 +41,7 @@ class LabelService {
 		private PermissionService $permissionService,
 		private IDBConnection $db,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
@@ -159,7 +164,7 @@ class LabelService {
 
 		$this->cardLabelMapper->insertAssignment($cardId, $labelId);
 
-		$this->changeNotifier->notify(
+		$change = $this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
@@ -167,6 +172,8 @@ class LabelService {
 			$uid,
 			verb: Change::VERB_LABELED,
 		);
+		// Record the label title so the Activity feed can say WHICH label was added.
+		$this->changeDetailMapper->insertDetail($change->getId(), null, $this->capDetail($label->getTitle()));
 	}
 
 	/**
@@ -182,11 +189,21 @@ class LabelService {
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
+		// Resolve the label title BEFORE the assignment is gone, so the Activity feed
+		// can say WHICH label was removed. A label deleted out from under a stale
+		// assignment leaves no title - the detail is simply skipped then.
+		$labelTitle = null;
+		try {
+			$labelTitle = $this->labelMapper->find($labelId)->getTitle();
+		} catch (DoesNotExistException) {
+			// Label already gone; record the change without a from/to detail.
+		}
+
 		if ($this->cardLabelMapper->deleteAssignment($cardId, $labelId) === 0) {
 			return;
 		}
 
-		$this->changeNotifier->notify(
+		$change = $this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
@@ -194,6 +211,17 @@ class LabelService {
 			$uid,
 			verb: Change::VERB_UNLABELED,
 		);
+		if ($labelTitle !== null) {
+			$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($labelTitle), null);
+		}
+	}
+
+	/**
+	 * Caps a detail string to {@see self::MAX_DETAIL_LENGTH} chars (multibyte-safe),
+	 * consistent with the description cap in CardService.
+	 */
+	private function capDetail(string $value): string {
+		return mb_substr($value, 0, self::MAX_DETAIL_LENGTH);
 	}
 
 	/**

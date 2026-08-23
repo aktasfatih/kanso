@@ -134,9 +134,10 @@ test.describe('Card modal two-column layout', () => {
 		const contentLocator = page.locator('.card-modal__content')
 		await expect(contentLocator.locator('.card-modal__desc-view, .card-modal__desc-placeholder').first()).toBeVisible()
 
-		// The new-thread composer textarea lives in the right discussion pane
+		// The new-thread composer (now a Tiptap WYSIWYG editor) lives in the right discussion pane.
+		// The composer contains a .kanso-md-editor wrapping a .ProseMirror contenteditable.
 		const discussion = page.locator('.card-modal__discussion')
-		await expect(discussion.locator('.card-modal__composer-textarea').first()).toBeVisible()
+		await expect(discussion.locator('.card-modal__composer .kanso-md-editor').first()).toBeVisible()
 	})
 
 	test('due-date pill and priority pill live in the attribute bar', async ({ page }) => {
