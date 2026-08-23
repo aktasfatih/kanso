@@ -926,9 +926,22 @@ body.theme--dark .board-list-table,
 	background: var(--color-background-hover);
 }
 
-/* Child rows are indented to visually nest under their parent. */
+/* Child rows are indented to visually nest under their parent, with a faint
+   vertical guide in the gutter so the hierarchy reads clearly. */
 .board-list-row--child {
-	padding-inline-start: 32px;
+	padding-inline-start: 46px;
+	position: relative;
+}
+
+.board-list-row--child::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: 20px;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	background: var(--color-border);
+	border-radius: 1px;
 }
 
 /* Expand/collapse caret for parent cards that have children in the same group. */
