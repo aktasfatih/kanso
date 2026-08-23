@@ -255,15 +255,17 @@ jobs:
 
       # Run the suite in PARALLEL: each Playwright worker provisions its own
       # Nextcloud user (E2E_ISOLATE) so fixed board names and per-user aggregate
-      # views are namespaced per worker. Conservative worker count — the runner
-      # hosts the whole stack in-pod and is ~4-5x slower than a dev box, so
-      # over-subscribing php-fpm/postgres would trade wall-clock for timeout
-      # flakiness. Raise E2E_WORKERS once the runner has headroom.
+      # views are namespaced per worker. The runner hosts the whole stack in-pod;
+      # its `runner` container is capped at 4 CPU (node talos-worker-3 has 48
+      # cores, ~8% used). At workers=2 the run took ~30m using ~1.3 of 4 cores,
+      # so 4 workers fits the cap. If timeout flakiness appears, the bottleneck
+      # is the single php-fpm/postgres backend (tune pm.max_children /
+      # max_connections) or the 4-CPU cap — not the node.
       - name: Run e2e tests
         run: npm run test:e2e
         env:
           E2E_ISOLATE: '1'
-          E2E_WORKERS: '2'
+          E2E_WORKERS: '4'
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
