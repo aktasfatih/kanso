@@ -283,6 +283,10 @@ msgstr ""
 msgid "A card was created, moved or completed, or a board was shared with you"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "A fresh copy is created each time; this card stays as the source"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Active"
 msgstr ""
@@ -2731,6 +2735,10 @@ msgid "Internal members and external members each see only their own side's inte
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
+msgid "into {column}"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Issue intake"
 msgstr ""
 
@@ -3171,7 +3179,7 @@ msgid "Next"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "next: {date}"
+msgid "next {date}"
 msgstr ""
 
 #: templates/admin-backup.php
@@ -4495,6 +4503,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "This removes the board and all of its cards for everyone. This cannot be undone."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "This same card is brought back and reset each time"
 msgstr ""
 
 #: src/views/ViewPage.vue

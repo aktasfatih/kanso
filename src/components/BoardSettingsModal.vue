@@ -1620,9 +1620,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<strong class="automation__rule-title">{{ resolveCardTitle(rule.templateCardId) }}</strong>
 									<span class="automation__rule-meta">
 										<span class="automation__recur-summary">{{ humanRrule(rule.rrule) }}</span>
-										<span class="automation__rule-scope">→ {{ resolveStackName(rule.targetStackId) }}</span>
-										<span class="automation__rule-mode">{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}</span>
-										<span v-if="rule.nextOccurrenceAt" class="automation__rule-next">{{ t('kanso', 'next: {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}</span>
+										<span
+											class="automation__rule-mode"
+											:class="rule.mode === 0 ? 'automation__rule-mode--clone' : 'automation__rule-mode--reset'"
+											:title="rule.mode === 0 ? t('kanso', 'A fresh copy is created each time; this card stays as the source') : t('kanso', 'This same card is brought back and reset each time')">
+											{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}
+										</span>
+										<span class="automation__rule-scope">{{ t('kanso', 'into {column}', { column: resolveStackName(rule.targetStackId) }) }}</span>
+										<span v-if="rule.nextOccurrenceAt" class="automation__rule-next">{{ t('kanso', 'next {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}</span>
 									</span>
 								</span>
 
@@ -1675,7 +1680,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 								<!-- Delete button -->
 								<button
-									class="label-settings__action-btn label-settings__action-btn--danger"
+									class="label-settings__action-btn label-settings__action-btn--danger automation__rule-delete"
 									:title="t('kanso', 'Delete rule')"
 									:aria-label="t('kanso', 'Delete rule')"
 									:disabled="confirmDeleteRecurRuleId === rule.id && isDeletingRecurRule"
@@ -4906,9 +4911,9 @@ async function doDeleteAutoRule(rule) {
 
 .automation__rule-main {
 	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
 }
 
 .automation__rule-desc {
@@ -4926,19 +4931,15 @@ async function doDeleteAutoRule(rule) {
 	overflow-wrap: anywhere;
 }
 
-/* Second line: schedule · target · mode · next, muted and dot-separated. */
+/* Second line: schedule, a Clone/Reset badge, target column, next date.
+   Wraps gracefully with even gaps — no leading-dot separators that strand
+   at the start of a wrapped line. The badge is the visual anchor instead. */
 .automation__rule-meta {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 2px 8px;
+	align-items: center;
+	gap: 5px 8px;
 	font-size: 0.8rem;
-	color: var(--color-text-maxcontrast);
-}
-
-.automation__rule-meta > *:not(:first-child)::before {
-	content: '·';
-	margin-right: 8px;
 	color: var(--color-text-maxcontrast);
 }
 
@@ -5020,9 +5021,19 @@ async function doDeleteAutoRule(rule) {
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
+	margin-top: 2px;
+}
+
+/* Push the destructive delete away from the safe Edit / Create-now pair. */
+.automation__rule-delete {
+	margin-left: auto;
 }
 
 .automation__archive-now-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
 	height: 28px;
 	padding: 0 12px;
 	border-radius: var(--border-radius);
@@ -5099,11 +5110,25 @@ async function doDeleteAutoRule(rule) {
 }
 
 .automation__rule-mode {
-	font-size: 0.78rem;
-	background: var(--color-background-dark);
-	border-radius: var(--border-radius);
-	padding: 1px 5px;
-	color: var(--color-text-maxcontrast);
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1.5;
+	letter-spacing: 0.02em;
+	border-radius: 999px;
+	padding: 1px 9px;
+	border: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+/* Reset = the same card comes back (primary intent) → primary tint.
+   Clone = a new copy each time → neutral. */
+.automation__rule-mode--reset {
+	border-color: color-mix(in srgb, var(--color-primary-element) 40%, transparent);
+	background: color-mix(in srgb, var(--color-primary-element) 12%, transparent);
+	color: var(--color-primary-element);
 }
 
 .automation__recur-summary {
