@@ -23,6 +23,7 @@ use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\CardRelationService;
@@ -159,7 +160,8 @@ class CardControllerTest extends TestCase {
 			$this->boardMapper,
 			$this->boardAccess,
 			$this->visibilityGuard,
-			$this->recurRuleMapper
+			$this->recurRuleMapper,
+			$this->createMock(CardRunningTimerMapper::class),
 		);
 	}
 

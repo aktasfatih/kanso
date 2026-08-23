@@ -37,7 +37,9 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		await expect(freq).toBeVisible({ timeout: 6_000 })
 
 		// Choose "Weekly" → a rule is created with this card as its source and its
-		// own column as the target, cloning on a FREQ=WEEKLY schedule.
+		// own column as the target, on a FREQ=WEEKLY schedule. The quick Repeat
+		// control defaults to RESET mode (the card comes back each week rather than
+		// spawning a duplicate) — see the recurring-UX overhaul.
 		await freq.selectOption('WEEKLY')
 		await expect.poll(
 			async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? null,
@@ -46,7 +48,7 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		let rule = await cardRule(state.boardId, state.cardId)
 		expect(Number(rule.templateCardId)).toBe(Number(state.cardId))
 		expect(Number(rule.targetStackId)).toBe(Number(state.stackId))
-		expect(Number(rule.mode)).toBe(0) // clone
+		expect(Number(rule.mode)).toBe(1) // reset (the default for the quick Repeat control)
 
 		// Bump the interval to 2 → the same rule updates to every 2 weeks.
 		const interval = page.locator('input[data-recur="interval"]')
