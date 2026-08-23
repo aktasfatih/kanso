@@ -21,6 +21,7 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -122,6 +123,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->cardRelationMapper,
 			$this->recurRuleMapper,
+			$this->createMock(CardRunningTimerMapper::class),
 		);
 
 		$this->controller = new BoardController(

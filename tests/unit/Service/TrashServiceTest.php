@@ -20,6 +20,7 @@ use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\CardReviewMapper;
+use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -58,6 +59,7 @@ class TrashServiceTest extends TestCase {
 	private ProjectCardMapper&MockObject $projectCardMapper;
 	private CardAttachmentService&MockObject $cardAttachmentService;
 	private CardTimeEntryService&MockObject $cardTimeEntryService;
+	private CardRunningTimerMapper&MockObject $cardRunningTimerMapper;
 	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
 	private ReminderMapper&MockObject $reminderMapper;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
@@ -84,6 +86,7 @@ class TrashServiceTest extends TestCase {
 		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
 		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
 		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
+		$this->cardRunningTimerMapper = $this->createMock(CardRunningTimerMapper::class);
 		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
 		$this->reminderMapper = $this->createMock(ReminderMapper::class);
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
@@ -111,6 +114,7 @@ class TrashServiceTest extends TestCase {
 			$this->projectCardMapper,
 			$this->cardAttachmentService,
 			$this->cardTimeEntryService,
+			$this->cardRunningTimerMapper,
 			$this->cardFieldValueMapper,
 			$this->reminderMapper,
 			$this->recurRuleMapper,

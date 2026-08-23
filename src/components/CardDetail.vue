@@ -425,7 +425,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</template>
 								{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
 							</NcActionButton>
-							<NcActionButton :close-after-click="true" @click="handleDelete">
+							<NcActionButton :close-after-click="true" @click="confirmDeleteCard">
 								<template #icon>
 									<TrashCanIcon :size="20" />
 								</template>
@@ -435,6 +435,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</header>
 				<span v-if="actionError" class="card-modal__save-error card-modal__action-error">{{ actionError }}</span>
+				<!-- Recurring-source delete guard: shown when a manager tries to delete a card that is a recurrence template -->
+				<NcDialog
+					:open="deleteWithRuleConfirm"
+					:name="t('kanso', 'Delete recurring card')"
+					size="normal"
+					:buttons="deleteGuardButtons"
+					@update:open="(v) => { if (!v) deleteWithRuleConfirm = false }">
+					<p class="card-modal__delete-guard-msg">
+						{{ t('kanso', 'This card powers a recurring series. Delete just this card, or also stop the recurrence?') }}
+					</p>
+				</NcDialog>
 				<span v-if="subscriptionError" class="card-modal__save-error">{{ subscriptionError }}</span>
 				<span v-if="reminderError" class="card-modal__save-error">{{ reminderError }}</span>
 
@@ -617,6 +628,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:disabled="recurBusy"
 											@change="onRecurIntervalChange($event.target.value)">
 										<span class="card-modal__recur-unit">{{ recurUnitLabel }}</span>
+									</div>
+									<div v-if="recurFreq !== 'OFF'" class="card-modal__field-row card-modal__recur-mode">
+										<label class="card-modal__recur-mode-opt" :class="{ 'card-modal__recur-mode-opt--active': recurMode === 1 }">
+											<input type="radio" :value="1" v-model="recurMode" :disabled="recurBusy" @change="applyRecurrence" />
+											{{ t('kanso', 'Bring this card back') }}
+										</label>
+										<label class="card-modal__recur-mode-opt" :class="{ 'card-modal__recur-mode-opt--active': recurMode === 0 }">
+											<input type="radio" :value="0" v-model="recurMode" :disabled="recurBusy" @change="applyRecurrence" />
+											{{ t('kanso', 'Create a new card each time') }}
+										</label>
 									</div>
 								</template>
 								<span v-if="recurError" class="card-modal__save-error">{{ recurError }}</span>
@@ -1472,6 +1493,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<span v-if="timeSpentTotal > 0" class="card-modal__attachment-size">{{ formatDuration(timeSpentTotal) }}</span>
 							</div>
 
+							<!-- Live running timer row (#73): shown only while cardData.runningTimer
+							     is set. The elapsed counter ticks every second via the timerNow ref. -->
+							<div v-if="cardData?.runningTimer" class="card-modal__timer-running-row">
+								<TimerOutlineIcon :size="14" class="card-modal__timer-running-icon" />
+								<span class="card-modal__timer-running-label">{{ t('kanso', 'Timer running') }}</span>
+								<span class="card-modal__timer-running-elapsed">{{ formatDuration(timerElapsed) }}</span>
+							</div>
+
 							<form v-if="canEdit" class="card-modal__time-add" @submit.prevent="handleAddTimeEntry">
 								<input
 									v-model="timeDurationInput"
@@ -2165,6 +2194,7 @@ import { generateUrl } from '@nextcloud/router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showUndo, showSuccess, showError } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -2220,6 +2250,7 @@ import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
@@ -2444,6 +2475,15 @@ async function handleFieldChange(field, value) {
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
 const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
 const actionError = ref('')
+const deleteWithRuleConfirm = ref(false)  // true = show the recurring-source delete guard
+
+// Buttons for the recurring-source delete guard dialog (NcDialog renders them
+// right-aligned in array order; the two destructive choices carry the error type).
+const deleteGuardButtons = [
+	{ label: t('kanso', 'Cancel'), callback: () => { deleteWithRuleConfirm.value = false } },
+	{ label: t('kanso', 'Delete card only'), type: 'error', callback: () => { handleDeleteCardOnly() } },
+	{ label: t('kanso', 'Delete and stop recurrence'), type: 'error', callback: () => { handleDeleteCardAndRule() } },
+]
 
 async function handleArchiveToggle() {
 	actionError.value = ''
@@ -2500,6 +2540,37 @@ async function handleDelete() {
 		closeModal()
 		// Note: restore does NOT re-attach sub-cards that were detached on delete -
 		// this is documented self-healing behaviour acceptable for this MVP.
+		showUndo(t('kanso', 'Card deleted'), () => {
+			restoreCard.mutate()
+		})
+	} catch (err) {
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
+	}
+}
+
+// Recurring-source delete guard: if the card has a recur rule, ask first.
+async function confirmDeleteCard() {
+	if (cardRecurRule.value) {
+		deleteWithRuleConfirm.value = true
+	} else {
+		await handleDelete()
+	}
+}
+
+async function handleDeleteCardOnly() {
+	deleteWithRuleConfirm.value = false
+	await handleDelete()
+}
+
+async function handleDeleteCardAndRule() {
+	deleteWithRuleConfirm.value = false
+	actionError.value = ''
+	try {
+		if (cardRecurRule.value) {
+			await deleteRecurRule.mutateAsync(cardRecurRule.value.id)
+		}
+		await deleteCard.mutateAsync()
+		closeModal()
 		showUndo(t('kanso', 'Card deleted'), () => {
 			restoreCard.mutate()
 		})
@@ -3900,20 +3971,21 @@ function parseSimpleRrule(rrule) {
 
 const RECUR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']
 
-// A card rule the presets can't round-trip (extra RRULE parts, reset mode, or a
-// non-default due-date policy) is surfaced read-only, pointing at Automation.
+// A card rule the presets can't round-trip (extra RRULE parts or a non-default
+// due-date policy) is surfaced read-only, pointing at Automation. Mode is now
+// supported directly in the simple control so it no longer triggers custom.
 const recurIsCustom = computed(() => {
 	const rule = cardRecurRule.value
 	if (!rule) return false
 	const parsed = parseSimpleRrule(rule.rrule)
 	return parsed.extra
 		|| !RECUR_FREQS.includes(parsed.freq)
-		|| Number(rule.mode) !== 0
 		|| Number(rule.duedatePolicy) !== 0
 })
 
 const recurFreq = ref('OFF')
 const recurInterval = ref(1)
+const recurMode = ref(1)
 const recurError = ref('')
 
 // Mirror the card's current rule into the control (and reset when it goes away).
@@ -3922,9 +3994,11 @@ watch(cardRecurRule, (rule) => {
 		const parsed = parseSimpleRrule(rule.rrule)
 		recurFreq.value = parsed.freq
 		recurInterval.value = parsed.interval
+		recurMode.value = Number(rule.mode) === 1 ? 1 : 0
 	} else if (!rule) {
 		recurFreq.value = 'OFF'
 		recurInterval.value = 1
+		recurMode.value = 1
 	}
 }, { immediate: true })
 
@@ -3962,17 +4036,25 @@ async function applyRecurrence() {
 		}
 		const rrule = buildCardRrule(recurFreq.value, recurInterval.value)
 		if (rule) {
-			await updateRecurRule.mutateAsync({ id: rule.id, data: { rrule } })
+			const updates = { rrule }
+			if (Number(rule.mode) !== recurMode.value) updates.mode = recurMode.value
+			await updateRecurRule.mutateAsync({ id: rule.id, data: updates })
 		} else {
-			const stackId = Number(cardData.value?.stackId)
-			if (!stackId) {
+			// For RESET mode (1): target is the card's own column — it resets in place.
+			// For CLONE mode (0): target is the first board column (traditional clone landing).
+			const cardStack = Number(cardData.value?.stackId)
+			const firstStack = boardColumns.value[0]
+			const targetStackId = recurMode.value === 1
+				? cardStack
+				: (firstStack?.id ?? cardStack)
+			if (!targetStackId) {
 				recurError.value = t('kanso', 'This card needs a column before it can repeat.')
 				return
 			}
 			await createRecurRule.mutateAsync({
 				templateCardId: Number(props.cardId),
-				targetStackId: stackId,
-				mode: 0,
+				targetStackId,
+				mode: recurMode.value,
 				rrule,
 				duedatePolicy: 0,
 			})
@@ -4880,6 +4962,33 @@ const timeEntryError = ref('')
 // summaries); the entries list only backs the breakdown and the delete buttons.
 const timeSpentTotal = computed(() => Number(cardData.value?.timeSpent) || 0)
 
+// Live running-timer counter (#73): ticks every second while a running timer
+// is present on the card. The ref is created once and the interval is kept in
+// sync with the timer's presence (card changes without unmounting the detail).
+const timerNow = ref(Math.floor(Date.now() / 1000))
+const timerElapsed = computed(() => {
+	const startedAt = cardData.value?.runningTimer?.startedAt
+	if (!startedAt) return 0
+	return Math.max(0, timerNow.value - startedAt)
+})
+
+let timerInterval = null
+
+function syncTimerInterval() {
+	const hasTimer = !!(cardData.value?.runningTimer)
+	if (hasTimer && timerInterval === null) {
+		timerInterval = setInterval(() => {
+			timerNow.value = Math.floor(Date.now() / 1000)
+		}, 1000)
+	} else if (!hasTimer && timerInterval !== null) {
+		clearInterval(timerInterval)
+		timerInterval = null
+	}
+}
+
+// Start/stop the interval whenever the running timer appears or disappears.
+watch(() => cardData.value?.runningTimer, syncTimerInterval, { immediate: true })
+
 // Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
 function formatDuration(totalSeconds) {
 	const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
@@ -5328,6 +5437,11 @@ onBeforeUnmount(() => {
 		window.removeEventListener('pointercancel', onResizePointerUp)
 		document.body.style.userSelect = ''
 		document.body.style.cursor = ''
+	}
+	// Clear the running-timer tick interval so it doesn't leak after unmount.
+	if (timerInterval !== null) {
+		clearInterval(timerInterval)
+		timerInterval = null
 	}
 })
 
@@ -7082,6 +7196,39 @@ body.theme--dark .card-modal,
 	display: flex;
 	gap: 8px;
 	align-items: center;
+}
+/* Timer running indicator (#73): a prominent "Timer running · elapsed" row at
+ * the top of the Time tracking section. The icon pulses to draw the eye; the
+ * elapsed counter ticks every second via the timerNow ref. */
+.card-modal__timer-running-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	padding: 4px 8px;
+	border-radius: var(--border-radius);
+	background: rgba(var(--kanso-success-legible-rgb, 70, 186, 97), 0.08);
+	border: 1px solid rgba(var(--kanso-success-legible-rgb, 70, 186, 97), 0.25);
+	font-size: 0.8rem;
+}
+.card-modal__timer-running-icon {
+	color: var(--kanso-success-legible);
+	animation: kanso-detail-timer-pulse 2s ease-in-out infinite;
+	flex: 0 0 auto;
+}
+@keyframes kanso-detail-timer-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.45; }
+}
+.card-modal__timer-running-label {
+	color: var(--kanso-success-legible);
+	font-weight: 600;
+}
+.card-modal__timer-running-elapsed {
+	margin-inline-start: auto;
+	color: var(--kanso-success-legible);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
 }
 /* Time tracking (#3536) */
 .card-modal__time-add {

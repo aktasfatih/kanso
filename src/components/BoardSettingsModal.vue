@@ -1620,9 +1620,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<strong class="automation__rule-title">{{ resolveCardTitle(rule.templateCardId) }}</strong>
 									<span class="automation__rule-meta">
 										<span class="automation__recur-summary">{{ humanRrule(rule.rrule) }}</span>
-										<span class="automation__rule-scope">→ {{ resolveStackName(rule.targetStackId) }}</span>
-										<span class="automation__rule-mode">{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}</span>
-										<span v-if="rule.nextOccurrenceAt" class="automation__rule-next">{{ t('kanso', 'next: {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}</span>
+										<span
+											class="automation__rule-mode"
+											:class="rule.mode === 0 ? 'automation__rule-mode--clone' : 'automation__rule-mode--reset'"
+											:title="rule.mode === 0 ? t('kanso', 'A fresh copy is created each time; this card stays as the source') : t('kanso', 'This same card is brought back and reset each time')">
+											{{ rule.mode === 0 ? t('kanso', 'Clone') : t('kanso', 'Reset') }}
+										</span>
+										<span class="automation__rule-scope">{{ t('kanso', 'into {column}', { column: resolveStackName(rule.targetStackId) }) }}</span>
+										<span v-if="rule.nextOccurrenceAt" class="automation__rule-next">{{ t('kanso', 'next {date}', { date: formatDate(rule.nextOccurrenceAt) }) }}</span>
 									</span>
 								</span>
 
@@ -1664,9 +1669,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ t('kanso', 'Created') }}
 								</span>
 
+								<!-- Open the template card (to edit its title / description / etc.) -->
+								<button
+									class="automation__archive-now-btn"
+									:title="t('kanso', 'Open the recurring card')"
+									@click="openRecurTemplateCard(rule)">
+									<OpenInNewIcon :size="14" />
+									{{ t('kanso', 'Open card') }}
+								</button>
+
+								<!-- Edit button -->
+								<button
+									class="automation__archive-now-btn"
+									:title="t('kanso', 'Edit rule')"
+									@click="startEditRecurRule(rule)">
+									<PencilIcon :size="14" />
+									{{ t('kanso', 'Edit') }}
+								</button>
+
 								<!-- Delete button -->
 								<button
-									class="label-settings__action-btn label-settings__action-btn--danger"
+									class="label-settings__action-btn label-settings__action-btn--danger automation__rule-delete"
 									:title="t('kanso', 'Delete rule')"
 									:aria-label="t('kanso', 'Delete rule')"
 									:disabled="confirmDeleteRecurRuleId === rule.id && isDeletingRecurRule"
@@ -1701,7 +1724,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Add recur rule form (MANAGE only) -->
 					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateRecurRule">
-						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+						<h4 class="label-settings__create-heading">{{ isEditingRecurRule ? t('kanso', 'Edit rule') : t('kanso', 'Add rule') }}</h4>
 
 						<!-- Template card -->
 						<div class="automation__form-row">
@@ -1709,6 +1732,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Template card') }}
 							</label>
 							<select
+								v-if="!isEditingRecurRule"
 								:id="`recur-card-${boardId}`"
 								v-model="newRecurTemplateCardId"
 								class="workflow__select automation__form-select">
@@ -1720,6 +1744,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ card.title }}
 								</option>
 							</select>
+							<span v-else class="automation__form-value">{{ resolveCardTitle(newRecurTemplateCardId) }}</span>
 						</div>
 
 						<!-- Target stack -->
@@ -1888,7 +1913,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="label-settings__create-btn automation__create-btn"
 							type="submit"
 							:disabled="isCreatingRecurRule || !newRecurTemplateCardId || !newRecurTargetStackId">
-							{{ isCreatingRecurRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+							{{ isCreatingRecurRule ? (isEditingRecurRule ? t('kanso', 'Saving…') : t('kanso', 'Adding…')) : (isEditingRecurRule ? t('kanso', 'Save rule') : t('kanso', 'Add rule')) }}
+						</button>
+						<button
+							v-if="isEditingRecurRule"
+							class="label-settings__action-btn"
+							type="button"
+							@click="cancelEditRecurRule">
+							{{ t('kanso', 'Cancel') }}
 						</button>
 
 						<span v-if="createRecurRuleError" class="label-settings__error">{{ createRecurRuleError }}</span>
@@ -2019,6 +2051,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="workflow__select automation__form-select">
 								<option value="request_review">{{ t('kanso', 'Request a review') }}</option>
 								<option value="add_label">{{ t('kanso', 'Add a label') }}</option>
+								<option value="start_timer">{{ t('kanso', 'Start the timer') }}</option>
+								<option value="stop_timer">{{ t('kanso', 'Stop the timer') }}</option>
 							</select>
 						</div>
 
@@ -2094,6 +2128,7 @@ import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
@@ -3822,6 +3857,65 @@ const newRecurDuedateOffsetDays = ref(1)
 const newRecurSkipWhileOpen = ref(false)
 const isCreatingRecurRule = ref(false)
 const createRecurRuleError = ref('')
+const editingRecurRuleId = ref(null)  // null = create mode, number = edit mode
+const isEditingRecurRule = computed(() => editingRecurRuleId.value !== null)
+
+/** Close the settings modal and open the rule's template card (to edit it). */
+function openRecurTemplateCard(rule) {
+	emit('close')
+	router.push({ name: 'card-modal', params: { id: props.boardId, cardId: rule.templateCardId } })
+}
+
+function startEditRecurRule(rule) {
+	editingRecurRuleId.value = rule.id
+	createRecurRuleError.value = ''
+	newRecurTemplateCardId.value = rule.templateCardId
+	newRecurTargetStackId.value = rule.targetStackId
+	newRecurMode.value = rule.mode
+	newRecurSkipWhileOpen.value = rule.skipWhileOpen ?? false
+	newRecurDuedatePolicy.value = rule.duedatePolicy ?? 0
+	newRecurDuedateOffsetDays.value = rule.duedateOffsetSeconds ? Math.round(rule.duedateOffsetSeconds / 86400) : 1
+	// Parse rrule back into form fields
+	const parts = {}
+	for (const seg of (rule.rrule || '').split(';')) {
+		const eq = seg.indexOf('=')
+		if (eq !== -1) parts[seg.slice(0, eq).toUpperCase()] = seg.slice(eq + 1)
+	}
+	newRecurFreq.value = parts['FREQ'] || 'WEEKLY'
+	newRecurInterval.value = parseInt(parts['INTERVAL'] || '1', 10)
+	if (parts['BYDAY']) {
+		newRecurWeekdays.value = parts['BYDAY'].split(',')
+	} else {
+		newRecurWeekdays.value = []
+	}
+	if (parts['COUNT']) {
+		newRecurEndType.value = 'count'
+		newRecurCount.value = parseInt(parts['COUNT'], 10)
+	} else if (parts['UNTIL']) {
+		newRecurEndType.value = 'until'
+		const u = parts['UNTIL'].replace(/T.*/, '')
+		newRecurUntil.value = u.length === 8 ? `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}` : ''
+	} else {
+		newRecurEndType.value = 'forever'
+	}
+}
+
+function cancelEditRecurRule() {
+	editingRecurRuleId.value = null
+	newRecurTemplateCardId.value = null
+	newRecurTargetStackId.value = null
+	newRecurMode.value = 0
+	newRecurFreq.value = 'WEEKLY'
+	newRecurInterval.value = 1
+	newRecurWeekdays.value = []
+	newRecurEndType.value = 'forever'
+	newRecurCount.value = 10
+	newRecurUntil.value = ''
+	newRecurDuedatePolicy.value = 0
+	newRecurDuedateOffsetDays.value = 1
+	newRecurSkipWhileOpen.value = false
+	createRecurRuleError.value = ''
+}
 
 /** Build the RFC5545 RRULE string from the builder controls. */
 function buildRrule() {
@@ -3851,12 +3945,10 @@ async function submitCreateRecurRule() {
 	createRecurRuleError.value = ''
 	try {
 		const data = {
-			templateCardId: newRecurTemplateCardId.value,
 			targetStackId: newRecurTargetStackId.value,
 			mode: newRecurMode.value,
 			rrule: buildRrule(),
 			duedatePolicy: newRecurDuedatePolicy.value,
-			enabled: true,
 		}
 		if (newRecurDuedatePolicy.value === 1) {
 			data.duedateOffsetSeconds = newRecurDuedateOffsetDays.value * 86400
@@ -3864,7 +3956,14 @@ async function submitCreateRecurRule() {
 		if (newRecurMode.value === 0) {
 			data.skipWhileOpen = newRecurSkipWhileOpen.value
 		}
-		await createRecurRule.mutateAsync(data)
+		if (isEditingRecurRule.value) {
+			await updateRecurRule.mutateAsync({ id: editingRecurRuleId.value, data })
+			editingRecurRuleId.value = null
+		} else {
+			data.templateCardId = newRecurTemplateCardId.value
+			data.enabled = true
+			await createRecurRule.mutateAsync(data)
+		}
 		// Reset form
 		newRecurTemplateCardId.value = null
 		newRecurTargetStackId.value = null
@@ -3879,7 +3978,7 @@ async function submitCreateRecurRule() {
 		newRecurDuedateOffsetDays.value = 1
 		newRecurSkipWhileOpen.value = false
 	} catch (err) {
-		createRecurRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+		createRecurRuleError.value = err?.response?.data?.error || t('kanso', isEditingRecurRule.value ? 'Failed to update rule.' : 'Failed to create rule.')
 	} finally {
 		isCreatingRecurRule.value = false
 	}
@@ -3941,6 +4040,12 @@ function describeAutoRule(rule) {
 		const label = props.labels.find((l) => l.id === rule.params?.label)?.title ?? String(rule.params?.label)
 		return t('kanso', '{when} → add label "{label}"', { when, label })
 	}
+	if (rule.action === 'start_timer') {
+		return t('kanso', '{when} → start the timer', { when })
+	}
+	if (rule.action === 'stop_timer') {
+		return t('kanso', '{when} → stop the timer', { when })
+	}
 	return when
 }
 
@@ -3955,6 +4060,8 @@ const createAutoRuleError = ref('')
 const canSubmitAutoRule = computed(() => {
 	if (newAutoAction.value === 'request_review') return !!newAutoReviewer.value
 	if (newAutoAction.value === 'add_label') return newAutoLabel.value !== null
+	// start_timer / stop_timer are role-only - always submittable.
+	if (newAutoAction.value === 'start_timer' || newAutoAction.value === 'stop_timer') return true
 	return false
 })
 
@@ -3966,9 +4073,10 @@ async function submitCreateAutoRule() {
 		const params = { role: newAutoRole.value }
 		if (newAutoAction.value === 'request_review') {
 			params.reviewer = newAutoReviewer.value
-		} else {
+		} else if (newAutoAction.value === 'add_label') {
 			params.label = newAutoLabel.value
 		}
+		// start_timer / stop_timer carry no extra params beyond role.
 		await createAutoRule.mutateAsync({
 			trigger: 'card_entered_role',
 			action: newAutoAction.value,
@@ -4830,9 +4938,9 @@ async function doDeleteAutoRule(rule) {
 
 .automation__rule-main {
 	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
 }
 
 .automation__rule-desc {
@@ -4850,19 +4958,15 @@ async function doDeleteAutoRule(rule) {
 	overflow-wrap: anywhere;
 }
 
-/* Second line: schedule · target · mode · next, muted and dot-separated. */
+/* Second line: schedule, a Clone/Reset badge, target column, next date.
+   Wraps gracefully with even gaps — no leading-dot separators that strand
+   at the start of a wrapped line. The badge is the visual anchor instead. */
 .automation__rule-meta {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 2px 8px;
+	align-items: center;
+	gap: 5px 8px;
 	font-size: 0.8rem;
-	color: var(--color-text-maxcontrast);
-}
-
-.automation__rule-meta > *:not(:first-child)::before {
-	content: '·';
-	margin-right: 8px;
 	color: var(--color-text-maxcontrast);
 }
 
@@ -4944,9 +5048,19 @@ async function doDeleteAutoRule(rule) {
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
+	margin-top: 2px;
+}
+
+/* Push the destructive delete away from the safe Edit / Create-now pair. */
+.automation__rule-delete {
+	margin-left: auto;
 }
 
 .automation__archive-now-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
 	height: 28px;
 	padding: 0 12px;
 	border-radius: var(--border-radius);
@@ -5023,11 +5137,25 @@ async function doDeleteAutoRule(rule) {
 }
 
 .automation__rule-mode {
-	font-size: 0.78rem;
-	background: var(--color-background-dark);
-	border-radius: var(--border-radius);
-	padding: 1px 5px;
-	color: var(--color-text-maxcontrast);
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1.5;
+	letter-spacing: 0.02em;
+	border-radius: 999px;
+	padding: 1px 9px;
+	border: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+/* Reset = the same card comes back (primary intent) → primary tint.
+   Clone = a new copy each time → neutral. */
+.automation__rule-mode--reset {
+	border-color: color-mix(in srgb, var(--color-primary-element) 40%, transparent);
+	background: color-mix(in srgb, var(--color-primary-element) 12%, transparent);
+	color: var(--color-primary-element);
 }
 
 .automation__recur-summary {

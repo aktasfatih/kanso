@@ -329,8 +329,42 @@ class RecurrenceServiceTest extends TestCase {
 			->method('assertPermission')
 			->with($board, 'alice', PermissionService::PERMISSION_READ);
 		$this->ruleMapper->expects(self::once())->method('findByBoard')->with(1)->willReturn([$this->rule()]);
+		// The rule's template card (id 10) is live, so the rule is listed.
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard(10));
 
 		self::assertCount(1, $this->service->listForBoard(1, 'alice'));
+	}
+
+	public function testListForBoardHidesRulesWhoseTemplateIsTrashed(): void {
+		// #67: a rule whose template card is soft-deleted is paused and kept for
+		// restore, but must NOT show in the automation list (looks like an orphan).
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$live = $this->rule(3);
+		$live->setTemplateCardId(10);
+		$trashed = $this->rule(4);
+		$trashed->setTemplateCardId(11);
+		$this->ruleMapper->method('findByBoard')->with(1)->willReturn([$live, $trashed]);
+
+		$trashedCard = $this->templateCard(11);
+		$trashedCard->setDeletedAt(self::NOW); // in the trash
+		$this->cardMapper->method('find')->willReturnMap([
+			[10, $this->templateCard(10)],
+			[11, $trashedCard],
+		]);
+
+		$rules = $this->service->listForBoard(1, 'alice');
+		self::assertCount(1, $rules);
+		self::assertSame(3, $rules[0]->getId(), 'only the live-template rule survives');
+	}
+
+	public function testListForBoardHidesRulesWhoseTemplateWasPurged(): void {
+		// Template hard-deleted (find throws) → stale orphan rule; hide it too.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->ruleMapper->method('findByBoard')->with(1)->willReturn([$this->rule()]);
+		$this->cardMapper->method('find')->with(10)
+			->willThrowException(new DoesNotExistException('purged'));
+
+		self::assertSame([], $this->service->listForBoard(1, 'alice'));
 	}
 
 	public function testListForBoardWithoutReadThrows403(): void {

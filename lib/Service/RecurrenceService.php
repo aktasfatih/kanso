@@ -175,7 +175,12 @@ class RecurrenceService {
 	// ---- rule CRUD --------------------------------------------------------
 
 	/**
-	 * Rules on a board.
+	 * Rules on a board, excluding any whose template card is in the trash (#67):
+	 * a soft-deleted template pauses its rule (it can't spawn) and resurrects on
+	 * restore, so the rule row is kept — but showing it in the automation list
+	 * makes it look like a live orphan. Filter those out here rather than in the
+	 * mapper so card reads stay behind CardMapper (architecture rule #3741). Card
+	 * counts per board are small, so the per-rule template read is not a concern.
 	 *
 	 * @return RecurRule[]
 	 * @throws DoesNotExistException if the board does not exist or is deleted
@@ -184,7 +189,17 @@ class RecurrenceService {
 	public function listForBoard(int $boardId, string $uid): array {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
-		return $this->ruleMapper->findByBoard($boardId);
+		$rules = $this->ruleMapper->findByBoard($boardId);
+
+		return array_values(array_filter($rules, function (RecurRule $rule): bool {
+			try {
+				return $this->cardMapper->find($rule->getTemplateCardId())->getDeletedAt() === 0;
+			} catch (DoesNotExistException $e) {
+				// Template hard-deleted (purged) — the rule is an orphan that the
+				// purge cascade should already have removed; hide it regardless.
+				return false;
+			}
+		}));
 	}
 
 	/**

@@ -13,6 +13,10 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\CardRunningTimer;
+use OCA\Kanso\Db\CardRunningTimerMapper;
+use OCA\Kanso\Db\CardTimeEntry;
+use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
@@ -24,6 +28,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\ReviewService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -40,6 +45,9 @@ class AutomationServiceTest extends TestCase {
 	private CardLabelMapper&MockObject $cardLabelMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private IDBConnection&MockObject $db;
+	private CardRunningTimerMapper&MockObject $runningTimerMapper;
+	private CardTimeEntryMapper&MockObject $timeEntryMapper;
+	private ITimeFactory&MockObject $timeFactory;
 	private AutomationService $service;
 
 	protected function setUp(): void {
@@ -52,6 +60,9 @@ class AutomationServiceTest extends TestCase {
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->runningTimerMapper = $this->createMock(CardRunningTimerMapper::class);
+		$this->timeEntryMapper = $this->createMock(CardTimeEntryMapper::class);
+		$this->timeFactory = $this->createMock(ITimeFactory::class);
 		$this->service = new AutomationService(
 			$this->ruleMapper,
 			$this->boardMapper,
@@ -61,6 +72,9 @@ class AutomationServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->changeNotifier,
 			$this->db,
+			$this->runningTimerMapper,
+			$this->timeEntryMapper,
+			$this->timeFactory,
 		);
 	}
 
@@ -234,5 +248,127 @@ class AutomationServiceTest extends TestCase {
 		// A broken rule must not propagate out of the move.
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_REVIEW, self::ACTOR);
 		$this->addToAssertionCount(1);
+	}
+
+	public function testCreateStartTimerRuleIsRoleOnly(): void {
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->ruleMapper->expects($this->once())->method('insert')->willReturnArgument(0);
+
+		$rule = $this->service->createRule(
+			self::BOARD_ID,
+			AutomationRule::TRIGGER_CARD_ENTERED_ROLE,
+			AutomationRule::ACTION_START_TIMER,
+			['role' => Stack::ROLE_IN_PROGRESS, 'label' => 5, 'reviewer' => 'x'],
+			self::ACTOR,
+		);
+
+		// Only the role is persisted - no reviewer/label params for timer actions.
+		$this->assertSame(['role' => Stack::ROLE_IN_PROGRESS], $rule->paramsArray());
+	}
+
+	public function testStartTimerCreatesRunningTimerWhenNoneRunning(): void {
+		$rule = $this->rule(AutomationRule::ACTION_START_TIMER, ['role' => Stack::ROLE_IN_PROGRESS]);
+		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
+		// No running timer yet.
+		$this->runningTimerMapper->method('findByCard')->with(99)
+			->willThrowException(new DoesNotExistException('none'));
+		$this->timeFactory->method('getTime')->willReturn(1000);
+
+		$this->runningTimerMapper->expects($this->once())
+			->method('insert')
+			->with($this->callback(function (CardRunningTimer $t): bool {
+				return $t->getCardId() === 99
+					&& $t->getBoardId() === self::BOARD_ID
+					&& $t->getStartedBy() === self::ACTOR
+					&& $t->getStartedAt() === 1000;
+			}))
+			->willReturnArgument(0);
+
+		// The insert + change row commit atomically, and a board push fires so the
+		// running indicator shows up in real time (symmetric with stopTimer).
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('commit');
+		$this->changeNotifier->expects($this->once())->method('recordChange');
+		$this->changeNotifier->expects($this->once())->method('pushBoardChanged')->with(self::BOARD_ID);
+
+		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_IN_PROGRESS, self::ACTOR);
+	}
+
+	public function testStartTimerIsNoOpWhenAlreadyRunning(): void {
+		$rule = $this->rule(AutomationRule::ACTION_START_TIMER, ['role' => Stack::ROLE_IN_PROGRESS]);
+		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
+		// A timer is already running.
+		$this->runningTimerMapper->method('findByCard')->with(99)->willReturn(new CardRunningTimer());
+		$this->runningTimerMapper->expects($this->never())->method('insert');
+
+		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_IN_PROGRESS, self::ACTOR);
+	}
+
+	public function testStopTimerPersistsElapsedEntryAndDropsRunningRow(): void {
+		$rule = $this->rule(AutomationRule::ACTION_STOP_TIMER, ['role' => Stack::ROLE_DONE]);
+		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
+
+		$timer = new CardRunningTimer();
+		$timer->setId(3);
+		$timer->setCardId(99);
+		$timer->setBoardId(self::BOARD_ID);
+		$timer->setStartedAt(1000);
+		$this->runningTimerMapper->method('findByCard')->with(99)->willReturn($timer);
+		// 1000 -> 1090 = 90 elapsed seconds.
+		$this->timeFactory->method('getTime')->willReturn(1090);
+
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('commit');
+		$this->timeEntryMapper->expects($this->once())
+			->method('insert')
+			->with($this->callback(function (CardTimeEntry $e): bool {
+				return $e->getCardId() === 99
+					&& $e->getBoardId() === self::BOARD_ID
+					&& $e->getSeconds() === 90
+					&& $e->getNote() === 'Tracked automatically'
+					&& $e->getCreatedBy() === self::ACTOR;
+			}))
+			->willReturnArgument(0);
+		$this->runningTimerMapper->expects($this->once())->method('delete')->with($timer);
+		$this->changeNotifier->expects($this->once())
+			->method('recordChange')
+			->with(self::BOARD_ID, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, self::ACTOR);
+		$this->changeNotifier->expects($this->once())->method('pushBoardChanged')->with(self::BOARD_ID);
+
+		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_DONE, self::ACTOR);
+	}
+
+	public function testStopTimerIsNoOpWhenNoneRunning(): void {
+		$rule = $this->rule(AutomationRule::ACTION_STOP_TIMER, ['role' => Stack::ROLE_DONE]);
+		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
+		$this->runningTimerMapper->method('findByCard')->with(99)
+			->willThrowException(new DoesNotExistException('none'));
+
+		$this->timeEntryMapper->expects($this->never())->method('insert');
+		$this->runningTimerMapper->expects($this->never())->method('delete');
+		$this->changeNotifier->expects($this->never())->method('recordChange');
+
+		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_DONE, self::ACTOR);
+	}
+
+	public function testStopTimerWithZeroElapsedPersistsNoEntry(): void {
+		$rule = $this->rule(AutomationRule::ACTION_STOP_TIMER, ['role' => Stack::ROLE_DONE]);
+		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
+
+		$timer = new CardRunningTimer();
+		$timer->setId(3);
+		$timer->setCardId(99);
+		$timer->setBoardId(self::BOARD_ID);
+		$timer->setStartedAt(1000);
+		$this->runningTimerMapper->method('findByCard')->with(99)->willReturn($timer);
+		// Same instant -> 0 elapsed seconds.
+		$this->timeFactory->method('getTime')->willReturn(1000);
+
+		// No finished entry, no change row - but the running row is still dropped.
+		$this->timeEntryMapper->expects($this->never())->method('insert');
+		$this->changeNotifier->expects($this->never())->method('recordChange');
+		$this->runningTimerMapper->expects($this->once())->method('delete')->with($timer);
+
+		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_DONE, self::ACTOR);
 	}
 }

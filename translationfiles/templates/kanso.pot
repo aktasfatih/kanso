@@ -168,6 +168,14 @@ msgstr ""
 msgid "{when} → request a review from {name}"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "{when} → start the timer"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "{when} → stop the timer"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "%1$s assigned you a step on %2$s"
 msgstr ""
@@ -229,19 +237,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3765
+#: src/components/CardDetail.vue:3836
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3763
+#: src/components/CardDetail.vue:3834
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3761
+#: src/components/CardDetail.vue:3832
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -281,6 +289,10 @@ msgstr ""
 
 #: lib/Activity/Setting.php
 msgid "A card was created, moved or completed, or a board was shared with you"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "A fresh copy is created each time; this card stays as the source"
 msgstr ""
 
 #: src/views/BoardList.vue
@@ -333,6 +345,7 @@ msgstr ""
 msgid "Add card"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Add card…"
 msgstr ""
@@ -748,6 +761,10 @@ msgstr ""
 msgid "Branch"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Bring this card back"
+msgstr ""
+
 #: src/composables/useCardType.js
 msgid "Bug"
 msgstr ""
@@ -1129,6 +1146,10 @@ msgstr ""
 msgid "Collapse column"
 msgstr ""
 
+#: src/components/BoardListView.vue
+msgid "Collapse subtasks"
+msgstr ""
+
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 msgid "Color"
@@ -1369,6 +1390,10 @@ msgstr ""
 msgid "Create a new board that you own from this one."
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Create a new card each time"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Create board"
 msgstr ""
@@ -1452,7 +1477,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:3938
+#: src/components/CardDetail.vue:4012
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -1497,10 +1522,18 @@ msgstr ""
 msgid "Delete \"{title}\"?"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Delete and stop recurrence"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue
 #: src/views/BoardList.vue
 msgid "Delete board"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Delete card only"
 msgstr ""
 
 #: src/components/StackColumn.vue
@@ -1534,6 +1567,10 @@ msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Delete project"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Delete recurring card"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -1793,6 +1830,10 @@ msgstr ""
 msgid "Edit project"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Edit rule"
+msgstr ""
+
 #: src/components/ManageTemplatesModal.vue
 msgid "Edit template"
 msgstr ""
@@ -1939,6 +1980,10 @@ msgstr ""
 msgid "Expand column {name}"
 msgstr ""
 
+#: src/components/BoardListView.vue
+msgid "Expand subtasks"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Export"
 msgstr ""
@@ -2004,10 +2049,12 @@ msgstr ""
 msgid "Failed to create board."
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Failed to create card from template."
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/StackColumn.vue
 msgid "Failed to create card."
@@ -2159,6 +2206,7 @@ msgstr ""
 msgid "Failed to load tasks. Please try again."
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/components/StackColumn.vue
 msgid "Failed to load templates."
@@ -2554,6 +2602,7 @@ msgstr ""
 msgid "Fri"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "From template"
 msgstr ""
@@ -2708,6 +2757,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Internal members and external members each see only their own side's internal cards"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "into {column}"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2967,7 +3020,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:3940
+#: src/components/CardDetail.vue:4014
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3101,6 +3154,7 @@ msgstr ""
 msgid "New board name…"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "New card from template"
 msgstr ""
@@ -3151,7 +3205,7 @@ msgid "Next"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "next: {date}"
+msgid "next {date}"
 msgstr ""
 
 #: templates/admin-backup.php
@@ -3384,6 +3438,7 @@ msgstr ""
 msgid "No templates yet"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "No templates yet. Open any card and choose \"Mark as template\" from its actions menu."
 msgstr ""
@@ -3476,6 +3531,7 @@ msgstr ""
 msgid "Open as full page"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
 msgid "Open card"
 msgstr ""
@@ -3498,6 +3554,10 @@ msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Open project chat in a new tab"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Open the recurring card"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3730,12 +3790,12 @@ msgstr ""
 msgid "Read-only"
 msgstr ""
 
-#: src/components/CardTile.vue
-msgid "Recurring"
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
+msgstr ""
+
+#: src/components/CardTile.vue
+msgid "Recurring source"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4057,6 +4117,10 @@ msgstr ""
 msgid "Save options"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Save rule"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
 msgstr ""
@@ -4309,6 +4373,10 @@ msgstr ""
 msgid "Start date"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Start the timer"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Start with a template"
 msgstr ""
@@ -4328,6 +4396,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Step due date"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Stop the timer"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4456,6 +4528,10 @@ msgstr ""
 msgid "This card no longer exists — it may have been deleted."
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "This card powers a recurring series. Delete just this card, or also stop the recurrence?"
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
 msgstr ""
@@ -4466,6 +4542,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "This removes the board and all of its cards for everyone. This cannot be undone."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "This same card is brought back and reset each time"
 msgstr ""
 
 #: src/views/ViewPage.vue
@@ -4501,6 +4581,12 @@ msgstr ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Timeline zoom"
+msgstr ""
+
+#: src/components/BoardListView.vue
+#: src/components/CardDetail.vue
+#: src/components/CardTile.vue
+msgid "Timer running"
 msgstr ""
 
 #: src/views/BoardView.vue
@@ -4788,7 +4874,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:3939
+#: src/components/CardDetail.vue:4013
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4868,7 +4954,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:3941
+#: src/components/CardDetail.vue:4015
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

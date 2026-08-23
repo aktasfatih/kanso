@@ -32,6 +32,8 @@ class AutomationRule extends Entity implements \JsonSerializable {
 
 	public const ACTION_REQUEST_REVIEW = 'request_review';
 	public const ACTION_ADD_LABEL = 'add_label';
+	public const ACTION_START_TIMER = 'start_timer';
+	public const ACTION_STOP_TIMER = 'stop_timer';
 
 	protected ?int $boardId = null;
 	protected ?string $trigger = null;

@@ -13,10 +13,15 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\CardRunningTimer;
+use OCA\Kanso\Db\CardRunningTimerMapper;
+use OCA\Kanso\Db\CardTimeEntry;
+use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IDBConnection;
 
 /**
@@ -25,14 +30,20 @@ use OCP\IDBConnection;
  * user and evaluated server-side at the card-move choke point.
  *
  * v1 trigger: `card_entered_role` - a card moved into a stack carrying role R.
- * v1 actions: `request_review` (from a reviewer) and `add_label`. Neither action
- * moves the card or changes its role/done state, so an automated action can
- * never re-trigger a rule - no loop is possible in v1 (a guard becomes necessary
- * only when a card-moving action like move-to-role is added).
+ * v1 actions: `request_review` (from a reviewer), `add_label`, `start_timer`
+ * and `stop_timer` (running-timer control, #73). None of these moves the card or
+ * changes its role/done state, so an automated action can never re-trigger a
+ * rule - no loop is possible in v1 (a guard becomes necessary only when a
+ * card-moving action like move-to-role is added).
  */
 class AutomationService {
 	private const TRIGGERS = [AutomationRule::TRIGGER_CARD_ENTERED_ROLE];
-	private const ACTIONS = [AutomationRule::ACTION_REQUEST_REVIEW, AutomationRule::ACTION_ADD_LABEL];
+	private const ACTIONS = [
+		AutomationRule::ACTION_REQUEST_REVIEW,
+		AutomationRule::ACTION_ADD_LABEL,
+		AutomationRule::ACTION_START_TIMER,
+		AutomationRule::ACTION_STOP_TIMER,
+	];
 
 	public function __construct(
 		private AutomationRuleMapper $ruleMapper,
@@ -43,6 +54,9 @@ class AutomationService {
 		private CardLabelMapper $cardLabelMapper,
 		private ChangeNotifier $changeNotifier,
 		private IDBConnection $db,
+		private CardRunningTimerMapper $runningTimerMapper,
+		private CardTimeEntryMapper $timeEntryMapper,
+		private ITimeFactory $timeFactory,
 	) {
 	}
 
@@ -174,6 +188,109 @@ class AutomationService {
 				}
 				$this->changeNotifier->pushBoardChanged($card->getBoardId());
 			}
+			return;
+		}
+		if ($action === AutomationRule::ACTION_START_TIMER) {
+			$this->startTimer($card, $actorUid);
+			return;
+		}
+		if ($action === AutomationRule::ACTION_STOP_TIMER) {
+			$this->stopTimer($card, $actorUid);
+		}
+	}
+
+	/**
+	 * Starts a running timer on the card if none is running (idempotent - a
+	 * second start while a timer is already running is a no-op). #73.
+	 */
+	private function startTimer(Card $card, string $actorUid): void {
+		if ($this->hasRunningTimer($card->getId())) {
+			return;
+		}
+		// Insert the running-timer row and record a card change atomically, then
+		// push — so the running indicator appears in real time (delta + notify_push)
+		// on every open client, symmetric with stopTimer. Without the change row the
+		// timer would only surface after a full board refetch.
+		$this->db->beginTransaction();
+		try {
+			$timer = new CardRunningTimer();
+			$timer->setCardId($card->getId());
+			$timer->setBoardId($card->getBoardId());
+			$timer->setStartedBy($actorUid);
+			$timer->setStartedAt($this->timeFactory->getTime());
+			$this->runningTimerMapper->insert($timer);
+
+			$this->changeNotifier->recordChange(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$card->getId(),
+				Change::ACTION_UPDATE,
+				$actorUid,
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
+	}
+
+	/**
+	 * Stops the card's running timer: writes the elapsed seconds as a finished
+	 * time-entry and drops the running row. A no-op if no timer is running; a
+	 * zero-second run persists no entry (only the running row is dropped). The
+	 * entry insert + change row commit atomically, mirroring add_label. #73.
+	 */
+	private function stopTimer(Card $card, string $actorUid): void {
+		try {
+			$timer = $this->runningTimerMapper->findByCard($card->getId());
+		} catch (DoesNotExistException) {
+			return;
+		}
+
+		$seconds = max(0, $this->timeFactory->getTime() - $timer->getStartedAt());
+		if ($seconds === 0) {
+			$this->runningTimerMapper->delete($timer);
+			return;
+		}
+
+		$this->db->beginTransaction();
+		try {
+			$entry = new CardTimeEntry();
+			$entry->setCardId($card->getId());
+			$entry->setBoardId($card->getBoardId());
+			$entry->setSeconds($seconds);
+			$entry->setNote('Tracked automatically');
+			$entry->setCreatedBy($actorUid);
+			$entry->setCreatedAt($this->timeFactory->getTime());
+			$this->timeEntryMapper->insert($entry);
+
+			$this->runningTimerMapper->delete($timer);
+
+			$this->changeNotifier->recordChange(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$card->getId(),
+				Change::ACTION_UPDATE,
+				$actorUid,
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
+	}
+
+	/**
+	 * Whether the card currently has a running timer.
+	 */
+	private function hasRunningTimer(int $cardId): bool {
+		try {
+			$this->runningTimerMapper->findByCard($cardId);
+			return true;
+		} catch (DoesNotExistException) {
+			return false;
 		}
 	}
 
@@ -196,6 +313,11 @@ class AutomationService {
 				throw new InvalidInputException('request_review needs a reviewer');
 			}
 			return ['role' => $role, 'reviewer' => $reviewer];
+		}
+
+		// start_timer / stop_timer - role-only, no extra params (#73).
+		if ($action === AutomationRule::ACTION_START_TIMER || $action === AutomationRule::ACTION_STOP_TIMER) {
+			return ['role' => $role];
 		}
 
 		// add_label - the label must belong to this board.

@@ -17,6 +17,7 @@ use OCA\Kanso\Db\CardFieldValue;
 use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -73,6 +74,7 @@ class CardController extends Controller {
 		private BoardAccess $boardAccess,
 		private \OCA\Kanso\Service\CardVisibilityGuard $visibilityGuard,
 		private RecurRuleMapper $recurRuleMapper,
+		private CardRunningTimerMapper $runningTimerMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -187,7 +189,18 @@ class CardController extends Controller {
 			// so the open card can swap the Due Date pill's calendar icon for a
 			// repeat icon for ALL viewers - matching the board tile. The rrule/rule
 			// object stays out; it loads via the manager-only rules fetch.
-			+ ['recurring' => $this->recurRuleMapper->hasEnabledRuleForCard($id)];
+			+ ['recurring' => $this->recurRuleMapper->hasEnabledRuleForCard($id)]
+			// Running timer (#73): null when none is active, or {startedAt, startedBy}
+			// when the card's timer is ticking - powers the live elapsed counter in the
+			// card detail and the board-tile badge via the board summary timerRunning bool.
+			+ ['runningTimer' => (function () use ($id): ?array {
+				try {
+					$t = $this->runningTimerMapper->findByCard($id);
+					return ['startedAt' => (int)$t->getStartedAt(), 'startedBy' => (string)$t->getStartedBy()];
+				} catch (DoesNotExistException) {
+					return null;
+				}
+			})()];
 	}
 
 	/**
