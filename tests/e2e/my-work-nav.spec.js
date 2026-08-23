@@ -6,9 +6,7 @@
 // badge counting pending review requests. Closing a card opened from a
 // standalone view returns to that view (#3597 close-to-origin intact).
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 function navItem(page, name) {
 	return page.locator('.app-navigation .app-navigation-entry-link', { hasText: name })
@@ -29,10 +27,10 @@ test.describe('My Work split into three nav items with badges', () => {
 		state.stackId = stack.id
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Nav Split Target Card' })
 		state.cardId = card.id
-		// Assign to admin → surfaces in My Tasks. Request review from admin →
-		// surfaces a pending review (drives the My Reviews badge).
-		await api.put(`/cards/${card.id}/assignees/${USER}`)
-		await api.put(`/cards/${card.id}/reviews/${USER}`)
+		// Assign to the current user → surfaces in My Tasks. Request review from
+		// the current user → surfaces a pending review (drives the My Reviews badge).
+		await api.put(`/cards/${card.id}/assignees/${me}`)
+		await api.put(`/cards/${card.id}/reviews/${me}`)
 	})
 
 	test.afterAll(async () => {

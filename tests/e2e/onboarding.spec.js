@@ -9,33 +9,32 @@
 // persisted PER USER via the shared `dismissed_hints` settings key, so it stays
 // hidden after a reload.
 
-import { test, expect, ncLogin } from './helpers.js'
+import { test, expect, ncLogin, adminAuth } from './helpers.js'
 
 const BASE = 'http://localhost:8891'
-const ADMIN = 'admin'
-const ADMIN_PASS = 'admin'
-const ADMIN_AUTH = 'Basic ' + Buffer.from(ADMIN + ':' + ADMIN_PASS).toString('base64')
 
-// A hermetic, throwaway user so the board list is genuinely empty.
-const UID = 'kanso-onboard-' + Math.floor(Date.now() / 1000)
+// A hermetic, throwaway user so the board list is genuinely empty. The name is
+// made per-worker-unique in beforeAll (worker index) so parallel workers never
+// provision/delete the same account.
+let UID = ''
 const PASS = 'onboard-pass-123'
 
 const OCS = BASE + '/ocs/v2.php/cloud'
 const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 async function provisionUser(uid, password) {
-	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: ADMIN_AUTH } }).catch(() => {})
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: adminAuth } }).catch(() => {})
 	const body = new URLSearchParams({ userid: uid, password })
 	const r = await fetch(`${OCS}/users`, {
 		method: 'POST',
-		headers: { ...OCS_HEADERS, Authorization: ADMIN_AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+		headers: { ...OCS_HEADERS, Authorization: adminAuth, 'Content-Type': 'application/x-www-form-urlencoded' },
 		body,
 	})
 	if (!r.ok) throw new Error(`provision ${uid} → ${r.status}: ${await r.text()}`)
 }
 
 async function deleteUser(uid) {
-	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: ADMIN_AUTH } }).catch(() => {})
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: adminAuth } }).catch(() => {})
 }
 
 test.describe('First-run onboarding (#3413)', () => {
@@ -44,7 +43,8 @@ test.describe('First-run onboarding (#3413)', () => {
 	// storageState — otherwise the page starts as admin and loginAs no-ops.
 	test.use({ storageState: { cookies: [], origins: [] } })
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({}, workerInfo) => {
+		UID = `kanso-onboard-${Math.floor(Date.now() / 1000)}-w${workerInfo.workerIndex}`
 		await provisionUser(UID, PASS)
 	})
 

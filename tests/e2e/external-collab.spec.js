@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, ncLogin, makeApi, authFor, adminAuth, BASE } from './helpers.js'
-
-const ADMIN = adminAuth
-const TESTER = authFor('tester', 'kanso-dev-tester!1')
+import { test, expect, ncLogin, makeApi, currentAuth, me, BASE } from './helpers.js'
 
 // Per-auth clients: send() throws on non-2xx (parsed JSON / null for DELETE);
 // raw() returns the Response without throwing, for status-code assertions.
+// Auth strings are read at CALL time (currentAuth / peer.auth), so the client
+// keyed by that string matches the worker's identity under isolation.
 const clients = new Map()
 function clientFor(auth) {
 	if (!clients.has(auth)) clients.set(auth, makeApi(auth))
@@ -36,40 +35,40 @@ test.describe.serial('External collaboration + deep links (#3744)', () => {
 	const token = 'xc' + Math.floor(Date.now() / 1000)
 	const state = { boardId: 0, stackId: 0, clientCardId: 0, internalCardId: 0 }
 
-	test.beforeAll(async () => {
-		const board = await api(ADMIN, 'POST', '/boards', { title: 'ClientCollab ' + token })
+	test.beforeAll(async ({ peer }) => {
+		const board = await api(currentAuth, 'POST', '/boards', { title: 'ClientCollab ' + token })
 		state.boardId = board.id
-		const stack = await api(ADMIN, 'POST', '/stacks', { boardId: board.id, title: 'Lane' })
+		const stack = await api(currentAuth, 'POST', '/stacks', { boardId: board.id, title: 'Lane' })
 		state.stackId = stack.id
 
-		await api(ADMIN, 'POST', `/boards/${board.id}/acl`, {
-			participant: 'tester',
+		await api(currentAuth, 'POST', `/boards/${board.id}/acl`, {
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3, // READ | EDIT
 			role: 'external',
 		})
 
 		// A public card the external member can see…
-		const pub = await api(ADMIN, 'POST', '/cards', { stackId: stack.id, title: 'Client card ' + token })
+		const pub = await api(currentAuth, 'POST', '/cards', { stackId: stack.id, title: 'Client card ' + token })
 		state.clientCardId = pub.id
 		// …and a provider-internal card hidden from them.
-		const internal = await api(ADMIN, 'POST', '/cards', { stackId: stack.id, title: 'Provider secret ' + token })
-		await api(ADMIN, 'PATCH', `/cards/${internal.id}`, { visibility: 'internal' })
+		const internal = await api(currentAuth, 'POST', '/cards', { stackId: stack.id, title: 'Provider secret ' + token })
+		await api(currentAuth, 'PATCH', `/cards/${internal.id}`, { visibility: 'internal' })
 		state.internalCardId = internal.id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api(ADMIN, 'DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api(currentAuth, 'DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('deep link survives the login round-trip and opens the right card', async ({ page }) => {
+	test('deep link survives the login round-trip and opens the right card', async ({ page, peer }) => {
 		// Cold hit as a logged-out user: the server route must bounce through
 		// the NC login and come BACK to the card - the exact flow hash links
 		// break (their fragment is dropped by the login redirect).
 		await page.goto(`${BASE}/index.php/apps/kanso/card/${state.clientCardId}`)
 		await page.waitForSelector('#user', { timeout: 15_000 })
-		await page.fill('#user', 'tester')
-		await page.fill('#password', 'kanso-dev-tester!1')
+		await page.fill('#user', peer.user)
+		await page.fill('#password', peer.pass)
 		await page.click('button[type=submit]')
 
 		// Post-login we land on the server route, and the SPA opens the modal.
@@ -78,53 +77,53 @@ test.describe.serial('External collaboration + deep links (#3744)', () => {
 		await expect(page.locator('.card-modal')).toContainText('Client card ' + token, { timeout: 15_000 })
 	})
 
-	test('deep link to a hidden card is an existence-safe 404', async ({ page }) => {
-		await loginAs(page, 'tester', 'kanso-dev-tester!1')
+	test('deep link to a hidden card is an existence-safe 404', async ({ page, peer }) => {
+		await loginAs(page, peer.user, peer.pass)
 		const response = await page.goto(`${BASE}/index.php/apps/kanso/card/${state.internalCardId}`)
 		expect(response.status()).toBe(404)
 		await expect(page.locator('body')).toContainText('Card not found')
 	})
 
-	test('external member edits and comments a visible card (happy path)', async () => {
-		const updated = await api(TESTER, 'PATCH', `/cards/${state.clientCardId}`, {
+	test('external member edits and comments a visible card (happy path)', async ({ peer }) => {
+		const updated = await api(peer.auth, 'PATCH', `/cards/${state.clientCardId}`, {
 			title: 'Client card (edited) ' + token,
 		})
 		expect(updated.title).toBe('Client card (edited) ' + token)
 
-		await api(TESTER, 'POST', `/cards/${state.clientCardId}/comments`, {
+		await api(peer.auth, 'POST', `/cards/${state.clientCardId}/comments`, {
 			body: 'Looks good from the client side ' + token,
 		})
-		const comments = await api(TESTER, 'GET', `/cards/${state.clientCardId}/comments`)
+		const comments = await api(peer.auth, 'GET', `/cards/${state.clientCardId}/comments`)
 		expect(JSON.stringify(comments)).toContain('client side ' + token)
 	})
 
-	test('export and duplicate are 403 for the external member (and 200 for internal)', async () => {
-		expect((await call(TESTER, 'GET', `/boards/${state.boardId}/export`)).status).toBe(403)
-		expect((await call(TESTER, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: true })).status).toBe(403)
+	test('export and duplicate are 403 for the external member (and 200 for internal)', async ({ peer }) => {
+		expect((await call(peer.auth, 'GET', `/boards/${state.boardId}/export`)).status).toBe(403)
+		expect((await call(peer.auth, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: true })).status).toBe(403)
 
 		// The internal side keeps its (viewer-scoped, #3743) export.
-		const adminExport = await call(ADMIN, 'GET', `/boards/${state.boardId}/export`)
+		const adminExport = await call(currentAuth, 'GET', `/boards/${state.boardId}/export`)
 		expect(adminExport.status).toBe(200)
-		const cleanup = await call(ADMIN, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: false })
+		const cleanup = await call(currentAuth, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: false })
 		expect(cleanup.status).toBe(200)
 		const dup = await cleanup.json()
-		await api(ADMIN, 'DELETE', `/boards/${dup.boardId}`).catch(() => {})
+		await api(currentAuth, 'DELETE', `/boards/${dup.boardId}`).catch(() => {})
 	})
 
-	test('board structure is internal-only: stack create/move 403 for the external member', async () => {
-		expect((await call(TESTER, 'POST', '/stacks', { boardId: state.boardId, title: 'Client lane' })).status).toBe(403)
-		expect((await call(TESTER, 'POST', `/stacks/${state.stackId}/move`, { afterStackId: null })).status).toBe(403)
+	test('board structure is internal-only: stack create/move 403 for the external member', async ({ peer }) => {
+		expect((await call(peer.auth, 'POST', '/stacks', { boardId: state.boardId, title: 'Client lane' })).status).toBe(403)
+		expect((await call(peer.auth, 'POST', `/stacks/${state.stackId}/move`, { afterStackId: null })).status).toBe(403)
 		// MANAGE surfaces reject the external too (ACL edit, board settings).
-		expect((await call(TESTER, 'POST', `/boards/${state.boardId}/acl`, {
-			participant: 'admin',
+		expect((await call(peer.auth, 'POST', `/boards/${state.boardId}/acl`, {
+			participant: me,
 			participantType: 'user',
 			permission: 3,
 		})).status).toBe(403)
-		expect((await call(TESTER, 'PATCH', `/boards/${state.boardId}`, { title: 'Renamed by client' })).status).toBe(403)
+		expect((await call(peer.auth, 'PATCH', `/boards/${state.boardId}`, { title: 'Renamed by client' })).status).toBe(403)
 	})
 
-	test('export/duplicate tile-menu entries are hidden for the external member', async ({ page }) => {
-		await loginAs(page, 'tester', 'kanso-dev-tester!1')
+	test('export/duplicate tile-menu entries are hidden for the external member', async ({ page, peer }) => {
+		await loginAs(page, peer.user, peer.pass)
 		await page.goto(`${BASE}/index.php/apps/kanso`)
 		await page.waitForSelector(`[data-test="board-options-menu-${state.boardId}"]`, { timeout: 15_000 })
 		await page.locator(`[data-test="board-options-menu-${state.boardId}"] button`).first().click()

@@ -9,14 +9,7 @@
 // If the two-user share setup is unavailable the test falls back to asserting
 // the page at least renders without crashing (either a feed item or empty state).
 
-import { test, expect, api, makeApi, authFor, ncLogin, BASE } from './helpers.js'
-
-const ADMIN = 'admin'
-const TESTER = 'tester'
-const TESTER_PASS = 'kanso-dev-tester!1'
-
-const TESTER_AUTH = authFor(TESTER, TESTER_PASS)
-const testerApi = makeApi(TESTER_AUTH)
+import { test, expect, api, me, ncLogin, BASE } from './helpers.js'
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -32,7 +25,7 @@ test.describe('Inbox feed', () => {
 		setupOk: false,
 	}
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
 		// Clean up any leftover board from a prior run
 		const boards = await api.get('/boards')
 		for (const b of boards) {
@@ -56,7 +49,7 @@ test.describe('Inbox feed', () => {
 		let shareOk = false
 		try {
 			await api.post(`/boards/${board.id}/acl`, {
-				participant: TESTER,
+				participant: peer.user,
 				participantType: 'user',
 				permission: 3,
 			})
@@ -76,7 +69,7 @@ test.describe('Inbox feed', () => {
 		if (shareOk) {
 			try {
 				state.commentBody = 'Hello from tester - inbox smoke test'
-				await testerApi.post(`/cards/${card.id}/comments`, { body: state.commentBody })
+				await peer.api.post(`/cards/${card.id}/comments`, { body: state.commentBody })
 				state.setupOk = true
 			} catch {
 				// tester auth failed - still run fallback assertion
@@ -86,7 +79,7 @@ test.describe('Inbox feed', () => {
 			// on a card admin follows, by an actor other than admin, so it should
 			// surface in admin's inbox feed alongside the comment.
 			try {
-				const r = await testerApi.raw('PUT', `/cards/${card.id}/reviews/${ADMIN}`)
+				const r = await peer.api.raw('PUT', `/cards/${card.id}/reviews/${me}`)
 				state.reviewEventOk = r.ok
 			} catch {
 				// review request unavailable - the status-change test skips

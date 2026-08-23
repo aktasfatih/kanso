@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 // #3597 — closing a card opened from My Work must return to My Work, not the
 // board; while a card opened from the board (or a pasted deep link) must still
@@ -32,8 +30,8 @@ test.describe('Card close returns to its origin', () => {
 		})
 		state.cardId = card.id
 
-		// Assign to admin so the card surfaces in the "My tasks" feed.
-		await api.put(`/cards/${card.id}/assignees/${USER}`)
+		// Assign to the current user so the card surfaces in the "My tasks" feed.
+		await api.put(`/cards/${card.id}/assignees/${me}`)
 	})
 
 	test.afterAll(async () => {

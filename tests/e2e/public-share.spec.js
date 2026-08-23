@@ -1,18 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from './helpers.js'
+import { test, expect, currentAuth, me } from './helpers.js'
 
 const BASE = 'http://localhost:8891'
 const API = BASE + '/index.php/apps/kanso/api'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
 
-// Authenticated API call (as admin, who owns/manages the board).
+// Authenticated API call as the CURRENT user (the board owner/MANAGE user).
+// Reads `currentAuth` at call time so it follows the worker's identity under
+// isolation, not a module-load snapshot.
 async function api(method, path, body) {
 	const r = await fetch(API + path, {
 		method,
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: body === undefined ? undefined : JSON.stringify(body),
 	})
 	const text = await r.text()
@@ -47,7 +48,7 @@ test.describe('Public read-only board share', () => {
 		todoStackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
 		cardId = (await api('POST', '/cards', { stackId: todoStackId, title: 'Public visible card' })).body.id
 		// Add people/comments that MUST NOT surface on the public view.
-		await api('PUT', `/cards/${cardId}/assignees/admin`)
+		await api('PUT', `/cards/${cardId}/assignees/${me}`)
 		await api('POST', `/cards/${cardId}/comments`, { message: 'internal comment SHOULD NOT LEAK' })
 	})
 
@@ -85,7 +86,7 @@ test.describe('Public read-only board share', () => {
 
 		// No people, no comments, no internal metadata anywhere in the payload.
 		const json = JSON.stringify(res.body)
-		expect(json).not.toContain('admin') // no assignee / owner uid
+		expect(json).not.toContain(me) // no assignee / owner uid
 		expect(json).not.toContain('SHOULD NOT LEAK') // no comments
 		expect(card.assignees).toBeUndefined()
 		expect(card.assigneeIds).toBeUndefined()

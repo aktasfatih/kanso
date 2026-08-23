@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE, API, adminAuth } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, API, currentAuth, me } from './helpers.js'
 
-const DAV = BASE + '/remote.php/dav/addressbooks/users/admin/contacts'
+// Current user's default address book. Computed at call time (not a module-level
+// const) so it follows the per-worker `me` rebind rather than snapshotting 'admin'.
+const davBase = () => BASE + `/remote.php/dav/addressbooks/users/${me}/contacts`
 const HEADERS = {
 	'OCS-APIREQUEST': 'true',
 	'Content-Type': 'application/json',
@@ -18,7 +20,7 @@ const CONTACT_FN = 'Casey Contact E2E'
 async function apiDelete(path) {
 	const r = await fetch(API + path, {
 		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: adminAuth },
+		headers: { ...HEADERS, Authorization: currentAuth },
 	})
 	if (!r.ok && r.status !== 404) throw new Error(`DELETE ${path} → ${r.status}`)
 }
@@ -32,18 +34,18 @@ async function putVCard() {
 		'EMAIL:casey.e2e@example.com',
 		'END:VCARD',
 	].join('\r\n')
-	const r = await fetch(`${DAV}/${CONTACT_UID}.vcf`, {
+	const r = await fetch(`${davBase()}/${CONTACT_UID}.vcf`, {
 		method: 'PUT',
-		headers: { Authorization: adminAuth, 'Content-Type': 'text/vcard' },
+		headers: { Authorization: currentAuth, 'Content-Type': 'text/vcard' },
 		body: vcard,
 	})
 	if (!r.ok) throw new Error(`PUT vcard → ${r.status}`)
 }
 
 async function deleteVCard() {
-	await fetch(`${DAV}/${CONTACT_UID}.vcf`, {
+	await fetch(`${davBase()}/${CONTACT_UID}.vcf`, {
 		method: 'DELETE',
-		headers: { Authorization: adminAuth },
+		headers: { Authorization: currentAuth },
 	}).catch(() => {})
 }
 

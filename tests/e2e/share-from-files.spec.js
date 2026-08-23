@@ -1,20 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, currentAuth, me, ncLogin, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
 const API = BASE + '/index.php/apps/kanso/api'
-const DAV = BASE + '/remote.php/dav/files/' + USER
+// DAV path for the CURRENT user's own Files. Built at call time so it reads the
+// live `me` binding (a module-level snapshot would capture 'admin' before the
+// worker rebind).
+const davUrl = () => BASE + '/remote.php/dav/files/' + me
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
 
 async function api(method, path, body) {
 	const r = await fetch(API + path, {
 		method,
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: body === undefined ? undefined : JSON.stringify(body),
 	})
 	const text = await r.text()
@@ -24,9 +23,9 @@ async function api(method, path, body) {
 // Uploads bytes to the user's Files over WebDAV and returns the numeric fileId
 // (the OC-FileId header, of the form "<id>oc..." - the leading integer is the id).
 async function putFile(name, content) {
-	const put = await fetch(`${DAV}/${name}`, {
+	const put = await fetch(`${davUrl()}/${name}`, {
 		method: 'PUT',
-		headers: { Authorization: AUTH },
+		headers: { Authorization: currentAuth },
 		body: content,
 	})
 	if (!put.ok && put.status !== 204 && put.status !== 201) {
@@ -65,9 +64,9 @@ test.describe('Share from Files', () => {
 
 	test.afterAll(async () => {
 		if (boardId) await api('DELETE', `/boards/${boardId}`)
-		await fetch(`${DAV}/kanso-share-from-files.txt`, {
+		await fetch(`${davUrl()}/kanso-share-from-files.txt`, {
 			method: 'DELETE',
-			headers: { Authorization: AUTH },
+			headers: { Authorization: currentAuth },
 		}).catch(() => {})
 	})
 
@@ -92,7 +91,7 @@ test.describe('Share from Files', () => {
 		const attId = res.body[0].id
 
 		const dl = await fetch(`${API}/cards/${cardId}/attachments/${attId}`, {
-			headers: { Authorization: AUTH, 'OCS-APIREQUEST': 'true' },
+			headers: { Authorization: currentAuth, 'OCS-APIREQUEST': 'true' },
 		})
 		expect(dl.ok).toBe(true)
 		expect(await dl.text()).toBe('from the files app')
@@ -106,16 +105,10 @@ test.describe('Share from Files', () => {
 	})
 
 	test('the Files-integration script registers the action', async ({ page }) => {
-		// Log in, open the Files app (which fires loadAdditionalScripts →
+		// Log in as the current user (detects the worker's live session under
+		// isolation), open the Files app (which fires loadAdditionalScripts →
 		// Kanso's files entry), then assert the action is in the shared registry.
-		await page.goto(BASE + '/index.php/login')
-		const userInput = page.locator('#user')
-		if (await userInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-			await page.fill('#user', USER)
-			await page.fill('#password', PASS)
-			await page.click('button[type=submit]')
-			await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-		}
+		await ncLogin(page)
 		await page.goto(BASE + '/index.php/apps/files')
 		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 

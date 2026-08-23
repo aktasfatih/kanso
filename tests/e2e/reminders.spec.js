@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, adminAuth, BASE, API } from './helpers.js'
+import { test, expect, api, ncLogin, currentAuth, BASE, API } from './helpers.js'
 import { execSync } from 'node:child_process'
 
 const NOTIF = BASE + '/ocs/v2.php/apps/notifications/api/v2/notifications'
@@ -10,10 +10,9 @@ const HEADERS = {
 	'Content-Type': 'application/json',
 }
 const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
-const AUTH = adminAuth
 
 async function kansoNotifications() {
-	const r = await fetch(NOTIF, { headers: { ...OCS_HEADERS, Authorization: AUTH } })
+	const r = await fetch(NOTIF, { headers: { ...OCS_HEADERS, Authorization: currentAuth } })
 	if (!r.ok) return []
 	const body = await r.json()
 	const data = body?.ocs?.data ?? []
@@ -85,7 +84,7 @@ test.describe('Personal reminders (remind me)', () => {
 	test('a past reminder time is rejected (400)', async () => {
 		const r = await fetch(`${API}/cards/${state.cardId}/reminders`, {
 			method: 'POST',
-			headers: { ...HEADERS, Authorization: AUTH },
+			headers: { ...HEADERS, Authorization: currentAuth },
 			body: JSON.stringify({ remindAt: Math.floor(Date.now() / 1000) - 60 }),
 		})
 		expect(r.status).toBe(400)

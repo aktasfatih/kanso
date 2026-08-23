@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, makeApi } from './helpers.js'
+import { test, expect, makeApi, me, currentAuth } from './helpers.js'
 
 // This spec's DELETE endpoints return a JSON body (subscription state) that the
 // test asserts on, so it needs a client that parses DELETE responses rather than
 // the shared `api` whose `.delete` always resolves null. Keep the local content
-// handling (`204 → null`, else parse JSON) and just reuse the shared transport.
-const rawApi = makeApi()
+// handling (`204 → null`, else parse JSON); build the client from `currentAuth`
+// at call time so it acts as the worker's user under isolation (not admin).
 async function api(method, path, body) {
-	const r = await rawApi.raw(method, path, body)
+	const r = await makeApi(currentAuth).raw(method, path, body)
 	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
 	return method === 'DELETE' && r.status === 204 ? null : r.json()
 }
@@ -38,7 +38,7 @@ test.describe('Board subscriptions', () => {
 		sub = await api('PUT', `/boards/${boardId}/subscription`)
 		expect(sub.subscribed).toBe(true)
 		expect(sub.count).toBe(1)
-		expect(sub.subscribers).toContain('admin')
+		expect(sub.subscribers).toContain(me)
 
 		// Idempotent: watching again stays count 1.
 		sub = await api('PUT', `/boards/${boardId}/subscription`)

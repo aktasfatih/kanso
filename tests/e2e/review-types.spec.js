@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('Review types', () => {
 	const state = {
@@ -132,7 +130,7 @@ test.describe('Review types', () => {
 
 		// Pre-create a typed review via API so we can verify the chip without
 		// needing to interact with the popover (avoids participant-picker complexity).
-		await api.raw('PUT', `/cards/${state.cardId}/reviews/${USER}`, { reviewTypeId: state.reviewTypeId })
+		await api.raw('PUT', `/cards/${state.cardId}/reviews/${me}`, { reviewTypeId: state.reviewTypeId })
 
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })

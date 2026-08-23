@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 // Wait for a checklist-item toggle PATCH to complete so badge/progress
 // assertions aren't racing the optimistic render on a slow CI runner.
@@ -263,7 +263,7 @@ test.describe('Checklist steps', () => {
 		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Send contract' })
 		await expect(item).toBeVisible({ timeout: 10_000 })
 
-		// Assign it to admin via the row's assign picker.
+		// Assign it to the current user via the row's assign picker.
 		await item.hover()
 		const assignRes = page.waitForResponse(
 			(res) => /\/api\/checklist\/\d+\/assign/.test(res.url())
@@ -271,7 +271,7 @@ test.describe('Checklist steps', () => {
 			{ timeout: 20_000 },
 		)
 		await item.locator('.card-modal__step-btn[title="Assign step"]').click()
-		await item.locator('.card-modal__assign-option').filter({ hasText: 'admin' }).first().click()
+		await item.locator('.card-modal__assign-option').filter({ hasText: me }).first().click()
 		await assignRes
 
 		// The assignee avatar renders on the row.
@@ -304,7 +304,7 @@ test.describe('Checklist steps', () => {
 		const items = await api.get(`/cards/${state.cardId}/checklist`)
 		const step = items.find((i) => i.title === 'Send contract')
 		if (!step) throw new Error('step missing from checklist payload')
-		if (step.assignedUser !== 'admin') throw new Error(`assignedUser not persisted: ${step.assignedUser}`)
+		if (step.assignedUser !== me) throw new Error(`assignedUser not persisted: ${step.assignedUser}`)
 		if (!step.assignedRole) throw new Error('assignedRole was not frozen at assign time')
 		if (!step.assignedAt) throw new Error('assignedAt was not stamped')
 		if (!step.dueDate || !step.dueDate.startsWith('2020-01-01')) throw new Error(`dueDate not persisted: ${step.dueDate}`)
@@ -323,6 +323,6 @@ test.describe('Checklist steps', () => {
 		await patch
 		const reopened = (await api.get(`/cards/${state.cardId}/checklist`)).find((i) => i.title === 'Send contract')
 		if (reopened.doneAt !== null) throw new Error('un-done did not clear done_at')
-		if (reopened.assignedUser !== 'admin') throw new Error('un-done must not touch the assignee')
+		if (reopened.assignedUser !== me) throw new Error('un-done must not touch the assignee')
 	})
 })

@@ -1,10 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, makeApi, authFor, adminAuth, API, BASE } from './helpers.js'
+import { test, expect, makeApi, currentAuth, API, BASE } from './helpers.js'
 
-const ADMIN = adminAuth
-const TESTER = authFor('tester', 'kanso-dev-tester!1')
+// Sentinels for the two viewers. They are NOT auth strings themselves — the
+// client dispatch below resolves them at CALL time: ADMIN → the current user
+// (board owner, `currentAuth`), TESTER → the worker-scoped `peer` (captured in
+// beforeAll). This keeps every `api(ADMIN|TESTER, …)` call site byte-for-byte
+// identical while staying parallel-safe under E2E_ISOLATE.
+const ADMIN = Symbol('owner')
+const TESTER = Symbol('peer')
+
+// The worker-scoped peer, captured once in beforeAll so the module-level client
+// dispatch and the `peer.user` participant/assignee literals can reach it.
+let peerRef = null
 
 // #3743 — the endpoint-level leak matrix: two viewers (admin = internal board
 // owner, tester = EXTERNAL member) plus the anonymous token surfaces, asserted
@@ -23,10 +32,18 @@ const TESTER = authFor('tester', 'kanso-dev-tester!1')
 //   tester → PUB, CLI      (never PROV, never PRIV)
 //   anon   → PUB              (public share + ICS feed)
 
-// Per-auth API clients (admin + external tester), cached so the (auth, method,
-// path, body) call sites below stay byte-for-byte identical.
+// Per-viewer API clients (owner + external peer), cached so the (auth, method,
+// path, body) call sites below stay byte-for-byte identical. The ADMIN/TESTER
+// sentinels resolve lazily (after the worker-isolation rebind + peer capture).
 const clients = new Map()
 function clientFor(auth) {
+	if (auth === ADMIN) {
+		// Read the live `currentAuth` binding at call time (a module-level snapshot
+		// would capture the pre-rebind admin auth under E2E_ISOLATE).
+		if (!clients.has(currentAuth)) clients.set(currentAuth, makeApi(currentAuth))
+		return clients.get(currentAuth)
+	}
+	if (auth === TESTER) return peerRef.api
 	if (!clients.has(auth)) clients.set(auth, makeApi(auth))
 	return clients.get(auth)
 }
@@ -51,15 +68,16 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 
 	const title = (name) => `${name} ${token}`
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
+		peerRef = peer
 		const board = await api(ADMIN, 'POST', '/boards', { title: 'Leak Matrix ' + token })
 		state.boardId = board.id
 		const stack = await api(ADMIN, 'POST', '/stacks', { boardId: board.id, title: 'Lane' })
 		state.stackId = stack.id
 
-		// Share with tester as an EXTERNAL member holding READ | EDIT.
+		// Share with the peer as an EXTERNAL member holding READ | EDIT.
 		await api(ADMIN, 'POST', `/boards/${board.id}/acl`, {
-			participant: 'tester',
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3,
 			role: 'external',
@@ -136,8 +154,8 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 	})
 
 	test('my-cards: assignment grants no visibility', async () => {
-		await api(ADMIN, 'PUT', `/cards/${state.cards.PUB.id}/assignees/tester`)
-		await api(ADMIN, 'PUT', `/cards/${state.cards.PROV.id}/assignees/tester`)
+		await api(ADMIN, 'PUT', `/cards/${state.cards.PUB.id}/assignees/${peerRef.user}`)
+		await api(ADMIN, 'PUT', `/cards/${state.cards.PROV.id}/assignees/${peerRef.user}`)
 
 		const mine = await api(TESTER, 'GET', '/my-cards')
 		const titles = mine.map((c) => c.title).filter((t) => t.includes(token))
@@ -146,10 +164,10 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 
 	test('reviews: a hidden card is not reviewable across the fence', async () => {
 		// Requesting a review FROM tester on a card tester cannot see → 400.
-		const blocked = await call(ADMIN, 'PUT', `/cards/${state.cards.PROV.id}/reviews/tester`)
+		const blocked = await call(ADMIN, 'PUT', `/cards/${state.cards.PROV.id}/reviews/${peerRef.user}`)
 		expect(blocked.status).toBe(400)
 
-		await api(ADMIN, 'PUT', `/cards/${state.cards.PUB.id}/reviews/tester`)
+		await api(ADMIN, 'PUT', `/cards/${state.cards.PUB.id}/reviews/${peerRef.user}`)
 		const mine = await api(TESTER, 'GET', '/reviews/mine')
 		const titles = mine.map((r) => r.cardTitle).filter((t) => t.includes(token))
 		expect(titles).toEqual([title('PUB')])
@@ -164,7 +182,7 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		const testerByStack = testerStats.byStack.reduce((n, r) => n + r.count, 0)
 		expect(testerByStack).toBe(2)
 		// Assignee distribution must not count the hidden assignment either.
-		const testerAssignee = (testerStats.byAssignee.find((r) => r.uid === 'tester') || { count: 0 }).count
+		const testerAssignee = (testerStats.byAssignee.find((r) => r.uid === peerRef.user) || { count: 0 }).count
 		expect(testerAssignee).toBe(1) // PUB only — PROV is hidden from this viewer
 
 		const boards = await api(TESTER, 'GET', '/boards')
@@ -201,7 +219,7 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 			['GET', `/cards/${hidden}/checklist`],
 			['POST', `/cards/${hidden}/move`, { targetStackId: state.stackId }],
 			['PUT', `/cards/${hidden}/labels/1`],
-			['PUT', `/cards/${hidden}/assignees/tester`],
+			['PUT', `/cards/${hidden}/assignees/${peerRef.user}`],
 		]
 		for (const [method, path, body] of probes) {
 			const r = await call(TESTER, method, path, body)
@@ -274,7 +292,7 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		// card keeps the earlier set/count assertions untouched.
 		const card = await api(ADMIN, 'POST', '/cards', { stackId: state.stackId, title: `STEPHOST ${token}` })
 		const item = await api(ADMIN, 'POST', `/cards/${card.id}/checklist`, { title: `step ${token}` })
-		await api(ADMIN, 'POST', `/checklist/${item.id}/assign`, { participant: 'tester' })
+		await api(ADMIN, 'POST', `/checklist/${item.id}/assign`, { participant: peerRef.user })
 
 		// Visible card → the step is in tester's feed.
 		const before = await api(TESTER, 'GET', '/my-steps')
