@@ -425,7 +425,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:new-cards-on-top="boardData.board.newCardsOnTop === true"
 			:on-create-card="handleCreateCard"
 			:on-fetch-templates="handleFetchTemplates"
-			:on-create-from-template="handleCreateFromTemplate" />
+			:on-create-from-template="handleCreateFromTemplate"
+			:sort-mode="sortMode" />
 
 		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->
 		<BoardTimelineView

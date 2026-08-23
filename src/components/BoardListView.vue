@@ -126,51 +126,153 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</p>
 				</div>
 
-				<!-- Card row (id first, meta pushed right) -->
-				<button
-					v-else
-					class="board-list-row"
-					:class="{ 'board-list-row--child': rows[vRow.index].isChild }"
-					@click="openCard(rows[vRow.index].card)">
+				<!-- Card row (top-level only gets DnD; children and composer are inert) -->
+				<div
+					v-else-if="rows[vRow.index].type === 'card' && !rows[vRow.index].isChild"
+					v-card-dnd="{ card: rows[vRow.index].card, sortMode: props.sortMode }"
+					class="board-list-row-wrap"
+					:class="{
+						'board-list-row-wrap--dragging': isDraggingCard === rows[vRow.index].card.id,
+						'board-list-row-wrap--drag-over-top': dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'top',
+						'board-list-row-wrap--drag-over-bottom': dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'bottom',
+					}">
+					<button
+						class="board-list-row"
+						:class="{ 'board-list-row--draggable': props.sortMode === 'manual' }"
+						@click="openCard(rows[vRow.index].card)">
 
-					<!-- Expand/collapse caret for parent cards with children; spacer for all others -->
-					<span
-						v-if="rows[vRow.index].hasChildren"
-						class="board-list-row__caret"
-						role="button"
-						:aria-label="isCardExpanded(rows[vRow.index].card.id) ? t('kanso', 'Collapse subtasks') : t('kanso', 'Expand subtasks')"
-						:aria-expanded="isCardExpanded(rows[vRow.index].card.id)"
-						tabindex="0"
-						@click.stop="toggleCard(rows[vRow.index].card.id)"
-						@keydown.enter.stop="toggleCard(rows[vRow.index].card.id)"
-						@keydown.space.stop.prevent="toggleCard(rows[vRow.index].card.id)">
-						<ChevronDownIcon
-							v-if="isCardExpanded(rows[vRow.index].card.id)"
-							:size="14"
-							class="board-list-row__caret-icon" />
-						<ChevronRightIcon
+						<!-- Expand/collapse caret for parent cards with children; spacer for all others -->
+						<span
+							v-if="rows[vRow.index].hasChildren"
+							class="board-list-row__caret"
+							role="button"
+							:aria-label="isCardExpanded(rows[vRow.index].card.id) ? t('kanso', 'Collapse subtasks') : t('kanso', 'Expand subtasks')"
+							:aria-expanded="isCardExpanded(rows[vRow.index].card.id)"
+							tabindex="0"
+							@click.stop="toggleCard(rows[vRow.index].card.id)"
+							@keydown.enter.stop="toggleCard(rows[vRow.index].card.id)"
+							@keydown.space.stop.prevent="toggleCard(rows[vRow.index].card.id)">
+							<ChevronDownIcon
+								v-if="isCardExpanded(rows[vRow.index].card.id)"
+								:size="14"
+								class="board-list-row__caret-icon" />
+							<ChevronRightIcon
+								v-else
+								:size="14"
+								class="board-list-row__caret-icon" />
+						</span>
+						<!-- Spacer keeps status dot aligned when there is no caret -->
+						<span
 							v-else
-							:size="14"
-							class="board-list-row__caret-icon" />
-					</span>
-					<!-- Spacer keeps status dot aligned when there is no caret -->
-					<span
-						v-else-if="!rows[vRow.index].isChild"
-						class="board-list-row__caret-spacer" />
+							class="board-list-row__caret-spacer" />
+
+						<span
+							class="board-list-row__status"
+							:class="`board-list-row__status--${statusOf(rows[vRow.index].card)}`"
+							:title="statusLabel(rows[vRow.index].card)" />
+
+						<!-- Human reference id (KAN-123) -->
+						<span
+							v-if="cardHumanId(rows[vRow.index].card)"
+							class="board-list-row__id">
+							{{ cardHumanId(rows[vRow.index].card) }}
+						</span>
+
+						<!-- Labels (colour dots) -->
+						<span
+							v-if="(rows[vRow.index].card.labelIds || []).length"
+							class="board-list-row__labels">
+							<span
+								v-for="labelId in (rows[vRow.index].card.labelIds || []).slice(0, 4)"
+								:key="labelId"
+								class="board-list-row__label-dot"
+								:title="labelTitle(labelId)"
+								:style="{ background: labelColor(labelId) }" />
+						</span>
+
+						<span
+							class="board-list-row__title"
+							:class="{ 'board-list-row__title--done': isDone(rows[vRow.index].card) }">
+							{{ rows[vRow.index].card.title }}
+						</span>
+
+						<span class="board-list-row__meta">
+							<!-- Priority -->
+							<span
+								v-if="rows[vRow.index].card.priority > 0"
+								class="board-list-row__priority"
+								:class="`board-list-row__priority--${rows[vRow.index].card.priority}`">
+								{{ priorityLabel(rows[vRow.index].card.priority) }}
+							</span>
+
+							<!-- Progress (checklist, else child cards) -->
+							<span
+								v-if="cardProgress(rows[vRow.index].card)"
+								class="board-list-row__count">
+								<CheckboxMarkedOutlineIcon :size="14" />
+								{{ cardProgress(rows[vRow.index].card).done }}/{{ cardProgress(rows[vRow.index].card).total }}
+							</span>
+
+							<!-- Due date -->
+							<span
+								v-if="rows[vRow.index].card.duedate"
+								class="board-list-row__due"
+								:class="{ 'board-list-row__due--overdue': isOverdue(rows[vRow.index].card) }">
+								<CalendarIcon :size="14" />
+								{{ formatDue(rows[vRow.index].card) }}
+							</span>
+
+							<!-- Comments -->
+							<span v-if="rows[vRow.index].card.commentCount > 0" class="board-list-row__count">
+								<CommentOutlineIcon :size="14" />
+								{{ rows[vRow.index].card.commentCount }}
+							</span>
+
+							<!-- Review state -->
+							<CheckDecagramIcon
+								v-if="rows[vRow.index].card.reviewState === 'approved'"
+								:size="15"
+								class="board-list-row__review board-list-row__review--approved" />
+							<AlertDecagramIcon
+								v-else-if="rows[vRow.index].card.reviewState === 'changes_requested'"
+								:size="15"
+								class="board-list-row__review board-list-row__review--changes" />
+
+							<!-- Assignees -->
+							<span
+								v-if="(rows[vRow.index].card.assigneeIds || []).length"
+								class="board-list-row__assignees">
+								<NcAvatar
+									v-for="uid in (rows[vRow.index].card.assigneeIds || []).slice(0, 3)"
+									:key="uid"
+									:user="uid"
+									:size="24"
+									:hide-status="true" />
+							</span>
+						</span>
+					</button>
+					<!-- Drop indicator lines (top / bottom edge) -->
+					<div v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'top'" class="board-list-drop-indicator board-list-drop-indicator--top" />
+					<div v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'bottom'" class="board-list-drop-indicator board-list-drop-indicator--bottom" />
+				</div>
+
+				<!-- Child card row (inert for DnD — never draggable/droppable) -->
+				<button
+					v-else-if="rows[vRow.index].type === 'card' && rows[vRow.index].isChild"
+					class="board-list-row board-list-row--child"
+					@click="openCard(rows[vRow.index].card)">
 
 					<span
 						class="board-list-row__status"
 						:class="`board-list-row__status--${statusOf(rows[vRow.index].card)}`"
 						:title="statusLabel(rows[vRow.index].card)" />
 
-					<!-- Human reference id (KAN-123) -->
 					<span
 						v-if="cardHumanId(rows[vRow.index].card)"
 						class="board-list-row__id">
 						{{ cardHumanId(rows[vRow.index].card) }}
 					</span>
 
-					<!-- Labels (colour dots) -->
 					<span
 						v-if="(rows[vRow.index].card.labelIds || []).length"
 						class="board-list-row__labels">
@@ -189,7 +291,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 
 					<span class="board-list-row__meta">
-						<!-- Priority -->
 						<span
 							v-if="rows[vRow.index].card.priority > 0"
 							class="board-list-row__priority"
@@ -197,7 +298,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ priorityLabel(rows[vRow.index].card.priority) }}
 						</span>
 
-						<!-- Progress (checklist, else child cards) -->
 						<span
 							v-if="cardProgress(rows[vRow.index].card)"
 							class="board-list-row__count">
@@ -205,7 +305,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ cardProgress(rows[vRow.index].card).done }}/{{ cardProgress(rows[vRow.index].card).total }}
 						</span>
 
-						<!-- Due date -->
 						<span
 							v-if="rows[vRow.index].card.duedate"
 							class="board-list-row__due"
@@ -214,13 +313,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ formatDue(rows[vRow.index].card) }}
 						</span>
 
-						<!-- Comments -->
 						<span v-if="rows[vRow.index].card.commentCount > 0" class="board-list-row__count">
 							<CommentOutlineIcon :size="14" />
 							{{ rows[vRow.index].card.commentCount }}
 						</span>
 
-						<!-- Review state -->
 						<CheckDecagramIcon
 							v-if="rows[vRow.index].card.reviewState === 'approved'"
 							:size="15"
@@ -230,7 +327,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:size="15"
 							class="board-list-row__review board-list-row__review--changes" />
 
-						<!-- Assignees -->
 						<span
 							v-if="(rows[vRow.index].card.assigneeIds || []).length"
 							class="board-list-row__assignees">
@@ -243,6 +339,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</span>
 					</span>
 				</button>
+
+				<!-- Group-level column drop target for empty groups (appends to end).
+				     Rendered as the last slot inside each header vrow so it occupies the
+				     header's full area; the monitor's columnTarget branch handles it. -->
+				<div
+					v-if="rows[vRow.index].type === 'header' && rows[vRow.index].stackId"
+					:ref="(el) => setGroupDropRef(rows[vRow.index].stackId, el)"
+					class="board-list-group-drop"
+					:data-stack-id="rows[vRow.index].stackId" />
 			</div>
 		</div>
 	</div>
@@ -266,6 +371,10 @@ import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
+import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
+import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
@@ -316,6 +425,14 @@ const props = defineProps({
 	 * submitted in reverse order so the first pasted line appears topmost.
 	 */
 	newCardsOnTop: { type: Boolean, default: false },
+	/**
+	 * Display sort mode from BoardView. DnD reordering is only wired when this
+	 * is 'manual' (fractional order) — other sort modes are view-only projections
+	 * and must not overwrite sort keys on drop. The BoardView card monitor also
+	 * guards this; we gate draggable registration here as an additional safety net
+	 * and to show the correct grab cursor only when dragging is meaningful.
+	 */
+	sortMode: { type: String, default: 'manual' },
 })
 
 const emit = defineEmits(['open'])
@@ -331,6 +448,164 @@ const hasOpenHandler = !!getCurrentInstance()?.vnode?.props?.onOpen
 
 const router = useRouter()
 const scrollRef = ref(null)
+
+// ── Drop state (shared across the directive instances via component refs) ──────
+// These are set/cleared by the vCardDnd directive's dropTarget callbacks and
+// consumed by the template to render the drop-indicator lines.
+const isDraggingCard = ref(null)    // cardId currently being dragged (for opacity)
+const dropTargetCardId = ref(null)  // cardId the pointer is hovering over
+const dropEdge = ref(null)          // 'top' | 'bottom' | null
+
+// ── Group-level drop targets (column drop zone) ────────────────────────────────
+// One dropTargetForElements per group header element, keyed by stackId. These
+// carry { type:'column', stackId, laneKey:'' } — exactly the shape the BoardView
+// card monitor's `columnTarget` branch reads. They provide a drop target for an
+// empty group (no card target exists there) and for drops below the last card in
+// a group (the drop lands on the column element, not a card element, in that case).
+const groupDropCleanups = new Map() // stackId → cleanup fn
+
+function setGroupDropRef(stackId, el) {
+	// Always tear down a previous registration for this stackId (element recycled
+	// by the virtualizer or ref changed).
+	if (groupDropCleanups.has(stackId)) {
+		groupDropCleanups.get(stackId)()
+		groupDropCleanups.delete(stackId)
+	}
+	if (!el || !stackId) return
+	// Only wire the column drop target on the classic per-stack path (stackId is
+	// real). The cross-board groups path yields stackId:null → skipped above.
+	const cleanup = dropTargetForElements({
+		element: el,
+		canDrop: ({ source }) => source.data.type === 'card',
+		// Match StackColumn's column drop-target data shape exactly so the BoardView
+		// card monitor's `columnTarget` branch resolves it correctly.
+		getData: () => ({ type: 'column', stackId, laneKey: '' }),
+	})
+	groupDropCleanups.set(stackId, cleanup)
+}
+
+// ── vCardDnd custom directive ──────────────────────────────────────────────────
+// Attaches draggable + dropTarget (identical data contract as CardTile) to each
+// top-level card row wrapper. The directive lives on the outermost <div
+// class="board-list-row-wrap"> so the full row area is the drag handle and
+// drop target. Because virtualizer recycles DOM nodes, we use mounted/updated/
+// unmounted to always re-sync the registration with the current card binding.
+//
+// Data contract (matches CardTile byte-for-byte):
+//   draggable getInitialData: { type:'card', cardId, stackId, sortKey, laneKey:null }
+//   dropTarget getData:       attachClosestEdge({ same fields }, allowedEdges:['top','bottom'] )
+//   dropTarget canDrop:       source.data.type === 'card' && source.data.cardId !== cardId
+//
+// laneKey is null (not '') because the list view is always the flat/no-swimlane
+// path; the BoardView monitor's swimlane guard checks `laneKey ?? ''` so null
+// collapses to '' and cross-lane drops are correctly rejected.
+//
+// Note: A drop NEVER changes parentCardId — it only changes stackId + sortKey,
+// matching kanban board semantics. Child rows are inert (never receive this
+// directive).
+
+function makeCardDndBinding(el, { card, sortMode: mode }) {
+	// Only wire DnD when we are in the classic per-stack path (card has a real
+	// stackId) and the display sort is manual.
+	if (!card?.id || !card?.stackId || mode !== 'manual') return () => {}
+
+	const cardId = card.id
+	const stackId = card.stackId
+	const sortKey = card.sortKey
+
+	return combine(
+		draggable({
+			element: el,
+			getInitialData: () => ({
+				type: 'card',
+				cardId,
+				stackId,
+				sortKey,
+				laneKey: null,
+			}),
+			onDragStart: () => { isDraggingCard.value = cardId },
+			onDrop: () => { isDraggingCard.value = null },
+		}),
+		dropTargetForElements({
+			element: el,
+			canDrop: ({ source }) => source.data.type === 'card' && source.data.cardId !== cardId,
+			getData: ({ input, element: el2 }) => attachClosestEdge(
+				{ type: 'card', cardId, stackId, sortKey, laneKey: null },
+				{ input, element: el2, allowedEdges: ['top', 'bottom'] },
+			),
+			onDrag: ({ self }) => {
+				if (dropTargetCardId.value !== cardId) dropTargetCardId.value = cardId
+				const edge = extractClosestEdge(self.data)
+				if (dropEdge.value !== edge) dropEdge.value = edge
+			},
+			onDragLeave: () => {
+				if (dropTargetCardId.value === cardId) {
+					dropTargetCardId.value = null
+					dropEdge.value = null
+				}
+			},
+			onDrop: () => {
+				dropTargetCardId.value = null
+				dropEdge.value = null
+			},
+		}),
+	)
+}
+
+// Element → cleanup map. We key by the DOM element (not by cardId) because the
+// virtualizer reuses elements — the same element may render different cards across
+// scrolls. We always tear down the previous cleanup before installing the new one.
+const cardDndCleanups = new WeakMap()
+
+const vCardDnd = {
+	mounted(el, binding) {
+		const cleanup = makeCardDndBinding(el, binding.value)
+		cardDndCleanups.set(el, cleanup)
+	},
+	updated(el, binding) {
+		// Re-run when the bound card or sortMode changes (virtualizer recycle path).
+		const prev = binding.oldValue
+		const next = binding.value
+		const sameCard = prev?.card?.id === next?.card?.id
+			&& prev?.card?.stackId === next?.card?.stackId
+			&& prev?.card?.sortKey === next?.card?.sortKey
+			&& prev?.sortMode === next?.sortMode
+		if (sameCard) return
+		// Tear down old registration before installing new one.
+		const oldCleanup = cardDndCleanups.get(el)
+		if (oldCleanup) oldCleanup()
+		const cleanup = makeCardDndBinding(el, next)
+		cardDndCleanups.set(el, cleanup)
+	},
+	unmounted(el) {
+		const cleanup = cardDndCleanups.get(el)
+		if (cleanup) {
+			cleanup()
+			cardDndCleanups.delete(el)
+		}
+	},
+}
+
+// ── Autoscroll ────────────────────────────────────────────────────────────────
+// Register autoScrollForElements on the virtualizer scroll container so dragging
+// near the top/bottom edge scrolls the list, revealing off-screen groups.
+let autoscrollCleanup = null
+
+onMounted(() => {
+	if (scrollRef.value) {
+		autoscrollCleanup = autoScrollForElements({ element: scrollRef.value })
+	}
+})
+
+onBeforeUnmount(() => {
+	if (autoscrollCleanup) {
+		autoscrollCleanup()
+		autoscrollCleanup = null
+	}
+	// Tear down all group drop targets
+	for (const cleanup of groupDropCleanups.values()) cleanup()
+	groupDropCleanups.clear()
+})
 
 // Persisted collapse scope: per board for the classic path, or a fixed 'views'
 // scope for the generalized group-by path (#3815) where there is no board id.
@@ -476,6 +751,9 @@ const rows = computed(() => {
 			wip: group.wipLimit !== null ? { count: cards.length, limit: group.wipLimit, over: cards.length > group.wipLimit } : null,
 			progress: groupProgress(cards),
 			hints: groupHints(cards),
+			// stackId needed by the template to wire the column-level drop target
+			// on the header element (only present in the classic per-stack path).
+			stackId: group.stackId ?? null,
 		})
 
 		if (isCollapsed(group.key)) continue
@@ -847,6 +1125,16 @@ body.theme--dark .board-list-table,
 	flex: 0 0 auto;
 }
 
+/* Hidden drop target overlaid on the group header so drops onto the header
+   area (empty group / below-last-card space) route to the column target branch
+   in the BoardView monitor. It sits behind pointer events for the button itself
+   but the DnD library reads the drop tree, not pointer events. */
+.board-list-group-drop {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
 /* ── Quick-add composer ─────────────────────────────────────────────────────── */
 
 /* The composer row aligns with card rows: same left padding as a top-level
@@ -903,6 +1191,44 @@ body.theme--dark .board-list-table,
 	white-space: nowrap;
 }
 
+/* ── Card row wrapper (DnD host) ────────────────────────────────────────────── */
+
+/* The wrapper is a block that fills the vrow slot and positions the drop
+   indicator lines (absolute) relative to itself. */
+.board-list-row-wrap {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+
+/* While dragging THIS card, dim it slightly so the ghost is distinguishable. */
+.board-list-row-wrap--dragging > .board-list-row {
+	opacity: 0.45;
+}
+
+/* ── Drop indicator lines ───────────────────────────────────────────────────── */
+
+/* A 2px coloured line that appears at the top or bottom edge of the hovered row,
+   matching the kanban card tile's closest-edge indicator style. */
+.board-list-drop-indicator {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: var(--color-primary-element);
+	border-radius: 1px;
+	pointer-events: none;
+	z-index: 10;
+}
+
+.board-list-drop-indicator--top {
+	top: 0;
+}
+
+.board-list-drop-indicator--bottom {
+	bottom: 0;
+}
+
 /* ── Card rows ──────────────────────────────────────────────────────────────── */
 
 .board-list-row {
@@ -924,6 +1250,17 @@ body.theme--dark .board-list-table,
 
 .board-list-row:hover {
 	background: var(--color-background-hover);
+}
+
+/* Show a grab cursor on draggable rows (manual sort only) to signal that the
+   row can be picked up. The cursor changes to 'grabbing' automatically during
+   the drag via Pragmatic's drag-preview behaviour. */
+.board-list-row--draggable {
+	cursor: grab;
+}
+
+.board-list-row--draggable:active {
+	cursor: grabbing;
 }
 
 /* Child rows are indented to visually nest under their parent, with a faint

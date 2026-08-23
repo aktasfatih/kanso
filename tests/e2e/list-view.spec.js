@@ -3,6 +3,35 @@
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
+// ── Drag helper (mirrors dnd.spec.js): Pragmatic DnD needs incremental pointer moves ──
+async function dragWithMouse(page, sourceLocator, targetLocator, targetPosition = 'top') {
+	const srcBox = await sourceLocator.boundingBox()
+	const tgtBox = await targetLocator.boundingBox()
+	if (!srcBox || !tgtBox) throw new Error('Could not get bounding boxes for drag')
+
+	const srcX = srcBox.x + srcBox.width / 2
+	const srcY = srcBox.y + srcBox.height / 2
+	const tgtX = tgtBox.x + tgtBox.width / 2
+	const tgtY = targetPosition === 'top'
+		? tgtBox.y + tgtBox.height * 0.2
+		: tgtBox.y + tgtBox.height * 0.8
+
+	await page.mouse.move(srcX, srcY)
+	await page.mouse.down()
+	const steps = 15
+	for (let i = 1; i <= steps; i++) {
+		await page.mouse.move(
+			srcX + (tgtX - srcX) * (i / steps),
+			srcY + (tgtY - srcY) * (i / steps),
+			{ steps: 1 },
+		)
+		await page.waitForTimeout(20)
+	}
+	await page.waitForTimeout(150)
+	await page.mouse.up()
+	await page.waitForTimeout(500)
+}
+
 test.describe('Board List view (#3444)', () => {
 	const state = { boardId: 0, title: 'List View ' + Math.floor(Date.now() / 1000), cardTitle: 'List row card' }
 
@@ -86,14 +115,14 @@ test.describe('List view — quick-add composer', () => {
 	const state = { boardId: 0, stackId: 0, title: 'List Composer ' + Math.floor(Date.now() / 1000) }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: state.title })
+		const board = await api.post('/boards', { title: state.title })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Backlog' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Backlog' })
 		state.stackId = stack.id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	/** Navigate to the board and switch to List view. */
@@ -179,27 +208,27 @@ test.describe('List view — subtask tree (#4178)', () => {
 	}
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: state.boardTitle })
+		const board = await api.post('/boards', { title: state.boardTitle })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Tasks' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Tasks' })
 
-		const parent = await api('POST', '/cards', { stackId: stack.id, title: 'Parent task' })
+		const parent = await api.post('/cards', { stackId: stack.id, title: 'Parent task' })
 		state.parentId = parent.id
 
 		// Create child cards by setting their parentCardId on creation (or patch
 		// immediately after). Use PATCH since the cards endpoint may not accept
 		// parentCardId at creation time.
-		const child1 = await api('POST', '/cards', { stackId: stack.id, title: 'Sub-task Alpha' })
+		const child1 = await api.post('/cards', { stackId: stack.id, title: 'Sub-task Alpha' })
 		state.child1Id = child1.id
-		await api('PATCH', `/cards/${child1.id}`, { parentCardId: parent.id })
+		await api.patch(`/cards/${child1.id}`, { parentCardId: parent.id })
 
-		const child2 = await api('POST', '/cards', { stackId: stack.id, title: 'Sub-task Beta' })
+		const child2 = await api.post('/cards', { stackId: stack.id, title: 'Sub-task Beta' })
 		state.child2Id = child2.id
-		await api('PATCH', `/cards/${child2.id}`, { parentCardId: parent.id })
+		await api.patch(`/cards/${child2.id}`, { parentCardId: parent.id })
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	/** Navigate to the board and switch to List view. */
@@ -288,5 +317,143 @@ test.describe('List view — subtask tree (#4178)', () => {
 			{ timeout: 8_000 },
 		)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+	})
+})
+
+// ── List view — drag-and-drop card reordering ────────────────────────────────
+// Verifies that top-level card rows are draggable in List view (manual sort) and
+// that the BoardView card monitor moves the card + persists the new order.
+//
+// Scope:
+//   - Only top-level card rows participate in DnD; child rows are inert.
+//   - Only the per-board stacks path (classic mode, not cross-board groups).
+//   - Only when sortMode === 'manual' (the default; other sorts are view-only).
+//   - A drop never changes parentCardId — only stackId + sortKey.
+test.describe('List view — drag-and-drop reorder', () => {
+	// Fixture: one board with one stack, three cards L1 (top) → L2 → L3 (bottom).
+	const state = {
+		boardId: 0,
+		stackId: 0,
+		card1Id: 0,
+		card2Id: 0,
+		card3Id: 0,
+		boardTitle: 'List DnD ' + Math.floor(Date.now() / 1000),
+	}
+
+	test.beforeAll(async () => {
+		// Clean up any lingering fixture from a previous run.
+		const boards = await api.get('/boards')
+		for (const b of boards) {
+			if (b.title.startsWith('List DnD')) {
+				await api.delete(`/boards/${b.id}`).catch(() => {})
+			}
+		}
+
+		const board = await api.post('/boards', { title: state.boardTitle })
+		state.boardId = board.id
+
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Column' })
+		state.stackId = stack.id
+
+		// Create in order so initial top-to-bottom render is L1, L2, L3.
+		const c1 = await api.post('/cards', { stackId: stack.id, title: 'L1' })
+		const c2 = await api.post('/cards', { stackId: stack.id, title: 'L2' })
+		const c3 = await api.post('/cards', { stackId: stack.id, title: 'L3' })
+		state.card1Id = c1.id
+		state.card2Id = c2.id
+		state.card3Id = c3.id
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	/** Navigate to the board and switch to List view. */
+	async function openListView(page) {
+		const boardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}`
+		await ncLogin(page)
+		await page.goto(boardUrl)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		// Switch to List view via the display-mode menu.
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+		await page.keyboard.press('Escape')
+		// Wait until card rows are visible.
+		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+	}
+
+	test('drag L3 above L1 in List view — order changes and persists after reload', async ({ page }) => {
+		await openListView(page)
+
+		// Initial order: L1 (top), L2, L3 (bottom).
+		const allRows = page.locator('.board-list-row-wrap')
+		await expect(allRows).toHaveCount(3, { timeout: 8_000 })
+
+		const rowL1 = page.locator('.board-list-row-wrap', { hasText: 'L1' })
+		const rowL3 = page.locator('.board-list-row-wrap', { hasText: 'L3' })
+
+		await expect(rowL1).toBeVisible({ timeout: 5_000 })
+		await expect(rowL3).toBeVisible({ timeout: 5_000 })
+
+		// Drag L3 above L1 (drop on top edge of L1 row).
+		await dragWithMouse(page, rowL3, rowL1, 'top')
+
+		// New order should be L3, L1, L2.
+		// The virtualizer renders rows in DOM order matching the data model, so
+		// asserting by nth() position reflects the actual rendered sequence.
+		await expect(allRows.nth(0)).toContainText('L3', { timeout: 8_000 })
+		await expect(allRows.nth(1)).toContainText('L1')
+		await expect(allRows.nth(2)).toContainText('L2')
+
+		// Reload and verify the server persisted the fractional sort key change.
+		await page.reload()
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		// Re-enter List view after reload (view mode is persisted via localStorage,
+		// but wait for the rows to be present either way).
+		const afterRows = page.locator('.board-list-row-wrap')
+		// If the view reverted to Board, switch back.
+		const isList = await page.locator('.board-list-row-wrap').first().isVisible({ timeout: 3_000 }).catch(() => false)
+		if (!isList) {
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+			await page.keyboard.press('Escape')
+			await page.waitForSelector('.board-list-row-wrap', { timeout: 10_000 })
+		}
+		await expect(afterRows).toHaveCount(3, { timeout: 8_000 })
+		await expect(afterRows.nth(0)).toContainText('L3', { timeout: 8_000 })
+		await expect(afterRows.nth(1)).toContainText('L1')
+		await expect(afterRows.nth(2)).toContainText('L2')
+	})
+
+	test('child rows are inert — dragging a child row does not move it', async ({ page }) => {
+		// Regression guard: child rows must not participate in DnD. We verify that
+		// a child row element does not carry the vCardDnd directive by checking that
+		// it does NOT have the board-list-row-wrap container (that wrapper is only
+		// rendered for top-level cards). Children render as bare board-list-row--child
+		// buttons, not inside board-list-row-wrap.
+		const board2 = await api.post('/boards', { title: 'List DnD Child Guard ' + Date.now() })
+		const stack2 = await api.post('/stacks', { boardId: board2.id, title: 'Tasks' })
+		const parent = await api.post('/cards', { stackId: stack2.id, title: 'Parent' })
+		const child = await api.post('/cards', { stackId: stack2.id, title: 'Child' })
+		await api.patch(`/cards/${child.id}`, { parentCardId: parent.id })
+
+		const boardUrl = `${BASE}/index.php/apps/kanso#/board/${board2.id}`
+		await page.goto(boardUrl)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+		await page.keyboard.press('Escape')
+		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+
+		// The child row should be a .board-list-row--child element and must NOT be
+		// wrapped inside a .board-list-row-wrap (which is the DnD host element).
+		const childRow = page.locator('.board-list-row--child', { hasText: 'Child' })
+		await expect(childRow).toBeVisible({ timeout: 8_000 })
+
+		const wrapCount = await page.locator('.board-list-row-wrap', { hasText: 'Child' }).count()
+		expect(wrapCount).toBe(0)
+
+		// Cleanup
+		await api.delete(`/boards/${board2.id}`).catch(() => {})
 	})
 })
