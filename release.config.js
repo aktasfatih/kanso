@@ -51,6 +51,21 @@ export default {
 					{ path: 'build/kanso.tar.gz', label: 'kanso.tar.gz' },
 					{ path: 'build/kanso.tar.gz.sig.base64', label: 'kanso.tar.gz.sig.base64' },
 				],
+				// Comment posted on each released issue/PR. Kept close to the
+				// plugin default, plus one soft sponsor nudge — this fires at
+				// the moment a reporter learns their fix shipped, the highest-
+				// goodwill point we get with a user.
+				// NOTE: single-quoted so ${...} reaches the plugin as a Lodash
+				// template (evaluated at release time), not interpolated by this
+				// JS module at load time — a backtick literal would crash here.
+				successComment:
+					':tada: This ${issue.pull_request ? "pull request is included" : "issue is fixed"} ' +
+					'in version ${nextRelease.version} :tada:\n\n' +
+					'The release notes are on [GitHub](${releases.filter(release => !!release.name)[0].url}).\n\n' +
+					'If Kanso saves you time, consider [sponsoring its development]' +
+					'(https://github.com/sponsors/aktasfatih) — it’s an AGPL solo project ' +
+					'and sponsorships keep it maintained. 💜\n\n' +
+					'Your semantic-release bot :package::rocket:',
 			},
 		],
 		[
