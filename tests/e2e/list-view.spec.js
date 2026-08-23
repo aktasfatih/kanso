@@ -141,7 +141,7 @@ test.describe('List view — quick-add composer', () => {
 		await openListView(page)
 
 		// The "Add card…" input should be visible in the group's add row.
-		const input = page.locator('.card-composer__input').first()
+		const input = page.locator('.board-list-table .card-composer__input').first()
 		await expect(input).toBeVisible({ timeout: 8_000 })
 
 		// Type a title and press Enter.
@@ -163,7 +163,7 @@ test.describe('List view — quick-add composer', () => {
 
 		// There should be at least one card in the stack from the previous test.
 		// The composer row (add type) should appear before card rows in the DOM.
-		const composerWrap = page.locator('.card-composer-wrap').first()
+		const composerWrap = page.locator('.board-list-table .card-composer-wrap').first()
 		const firstCardRow = page.locator('.board-list-row').first()
 
 		await expect(composerWrap).toBeVisible({ timeout: 8_000 })
@@ -180,7 +180,7 @@ test.describe('List view — quick-add composer', () => {
 	test('composer is hidden when the group is collapsed', async ({ page }) => {
 		await openListView(page)
 
-		const input = page.locator('.card-composer__input').first()
+		const input = page.locator('.board-list-table .card-composer__input').first()
 		await expect(input).toBeVisible({ timeout: 8_000 })
 
 		// Collapse the group.
@@ -220,11 +220,11 @@ test.describe('List view — subtask tree (#4178)', () => {
 		// parentCardId at creation time.
 		const child1 = await api.post('/cards', { stackId: stack.id, title: 'Sub-task Alpha' })
 		state.child1Id = child1.id
-		await api.patch(`/cards/${child1.id}`, { parentCardId: parent.id })
+		await api.put(`/cards/${child1.id}/parent`, { parentCardId: parent.id })
 
 		const child2 = await api.post('/cards', { stackId: stack.id, title: 'Sub-task Beta' })
 		state.child2Id = child2.id
-		await api.patch(`/cards/${child2.id}`, { parentCardId: parent.id })
+		await api.put(`/cards/${child2.id}/parent`, { parentCardId: parent.id })
 	})
 
 	test.afterAll(async () => {
@@ -435,7 +435,7 @@ test.describe('List view — drag-and-drop reorder', () => {
 		const stack2 = await api.post('/stacks', { boardId: board2.id, title: 'Tasks' })
 		const parent = await api.post('/cards', { stackId: stack2.id, title: 'Parent' })
 		const child = await api.post('/cards', { stackId: stack2.id, title: 'Child' })
-		await api.patch(`/cards/${child.id}`, { parentCardId: parent.id })
+		await api.put(`/cards/${child.id}/parent`, { parentCardId: parent.id })
 
 		const boardUrl = `${BASE}/index.php/apps/kanso#/board/${board2.id}`
 		await page.goto(boardUrl)
