@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('Review-type stage gating', () => {
 	const state = {
@@ -46,9 +44,9 @@ test.describe('Review-type stage gating', () => {
 	})
 
 	test('QA renders gated while Code is pending, then un-gates once Code is approved', async ({ page }) => {
-		// Request both reviews from admin (one per type is allowed on the same card).
-		await api.put(`/cards/${state.cardId}/reviews/${USER}`, { reviewTypeId: state.codeTypeId })
-		await api.put(`/cards/${state.cardId}/reviews/${USER}`, { reviewTypeId: state.qaTypeId })
+		// Request both reviews from the current user (one per type is allowed on the same card).
+		await api.put(`/cards/${state.cardId}/reviews/${me}`, { reviewTypeId: state.codeTypeId })
+		await api.put(`/cards/${state.cardId}/reviews/${me}`, { reviewTypeId: state.qaTypeId })
 
 		// The server should mark the QA (stage 1) review gated, blocked by the Code
 		// (stage 0) review, and QA's notification should be deferred (notifiedAt null).

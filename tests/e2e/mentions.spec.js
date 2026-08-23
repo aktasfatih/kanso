@@ -28,13 +28,18 @@ async function shareBoardWith(boardId, uid, permission) {
 }
 
 test.describe('@mentions in comments', () => {
-	const BOB = 'kanso_mention_bob'
+	// Locally-provisioned extra users — per-worker-unique names so parallel
+	// workers never collide over the same account (set in beforeAll from the
+	// worker index). BOB is shared on the board; STRANGER deliberately is not.
+	let BOB = ''
 	const BOB_PASS = 'Mention#Bob2026'
-	const STRANGER = 'kanso_mention_stranger'
+	let STRANGER = ''
 	const STRANGER_PASS = 'Mention#Stranger2026'
 	const state = { boardId: 0, stackId: 0, cardId: 0, cardUrl: '' }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({}, workerInfo) => {
+		BOB = `kanso_mention_bob_w${workerInfo.workerIndex}`
+		STRANGER = `kanso_mention_stranger_w${workerInfo.workerIndex}`
 		await provisionUser(BOB, BOB_PASS)
 		await provisionUser(STRANGER, STRANGER_PASS)
 

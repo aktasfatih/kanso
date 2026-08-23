@@ -1,11 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, ncLogin, BASE, adminAuth } from './helpers.js'
+import { test, expect, ncLogin, BASE, currentAuth } from './helpers.js'
 
 const API = BASE + '/index.php/apps/kanso/api'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = adminAuth
 
 // Kept local: this client returns { ok, status, body } (never throws) so the
 // tests can assert on non-2xx statuses; the shared api throws. uploadFile /
@@ -13,7 +12,7 @@ const AUTH = adminAuth
 async function api(method, path, body) {
 	const r = await fetch(API + path, {
 		method,
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: body === undefined ? undefined : JSON.stringify(body),
 	})
 	const text = await r.text()
@@ -26,7 +25,7 @@ async function uploadFile(cardId, filename, content, contentType = 'text/plain')
 	form.append('file', new Blob([content], { type: contentType }), filename)
 	const r = await fetch(API + `/cards/${cardId}/attachments`, {
 		method: 'POST',
-		headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		body: form,
 	})
 	const text = await r.text()
@@ -49,7 +48,7 @@ async function uploadBytes(cardId, filename, bytes, contentType) {
 	form.append('file', new Blob([bytes], { type: contentType }), filename)
 	const r = await fetch(API + `/cards/${cardId}/attachments`, {
 		method: 'POST',
-		headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+		headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		body: form,
 	})
 	const text = await r.text()
@@ -104,7 +103,7 @@ test.describe('Card file attachments', () => {
 
 		// Download returns the bytes with an attachment disposition.
 		const dl = await fetch(API + `/cards/${cardId}/attachments/${attId}`, {
-			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		})
 		expect(dl.ok).toBe(true)
 		expect(dl.headers.get('content-disposition') || '').toContain('attachment')
@@ -133,7 +132,7 @@ test.describe('Card file attachments', () => {
 
 		// Reaching it through the OTHER card's URL must fail (not a leak).
 		const dl = await fetch(API + `/cards/${otherCardId}/attachments/${attId}`, {
-			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		})
 		expect(dl.status).toBe(404)
 
@@ -156,7 +155,7 @@ test.describe('Card file attachments', () => {
 
 		// The png serves INLINE with the exact allow-listed type + nosniff.
 		const inline = await fetch(API + `/cards/${cardId}/attachments/${pngId}/inline`, {
-			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		})
 		expect(inline.ok).toBe(true)
 		expect(inline.headers.get('content-type')).toContain('image/png')
@@ -168,7 +167,7 @@ test.describe('Card file attachments', () => {
 		// A .txt attachment is NOT inline-serveable → 404 (download-only).
 		const txt = await uploadFile(cardId, 'notes.txt', 'plain', 'text/plain')
 		const txtInline = await fetch(API + `/cards/${cardId}/attachments/${txt.body.id}/inline`, {
-			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		})
 		expect(txtInline.status).toBe(404)
 
@@ -176,13 +175,13 @@ test.describe('Card file attachments', () => {
 		// inline-serveable → 404.
 		const svg = await uploadFile(cardId, 'x.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'image/svg+xml')
 		const svgInline = await fetch(API + `/cards/${cardId}/attachments/${svg.body.id}/inline`, {
-			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		})
 		expect(svgInline.status).toBe(404)
 
 		// IDOR: the png cannot be inlined through the OTHER card's URL.
 		const idor = await fetch(API + `/cards/${otherCardId}/attachments/${pngId}/inline`, {
-			headers: { 'OCS-APIREQUEST': 'true', Authorization: AUTH },
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
 		})
 		expect(idor.status).toBe(404)
 
@@ -317,7 +316,7 @@ test.describe('Card file attachments', () => {
 async function apiPatch(path, body) {
 	const r = await fetch(API + path, {
 		method: 'PATCH',
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: JSON.stringify(body),
 	})
 	return { ok: r.ok, status: r.status }

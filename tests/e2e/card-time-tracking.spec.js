@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, ncLogin, BASE, API, adminAuth } from './helpers.js'
+import { test, expect, ncLogin, BASE, API, currentAuth, me } from './helpers.js'
 
-const USER = 'admin'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 
 // Bespoke client: returns { ok, status, body } (does NOT throw) because these
@@ -12,7 +11,7 @@ const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 async function api(method, path, body) {
 	const r = await fetch(API + path, {
 		method,
-		headers: { ...HEADERS, Authorization: adminAuth },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: body === undefined ? undefined : JSON.stringify(body),
 	})
 	const text = await r.text()
@@ -53,7 +52,7 @@ test.describe('Card time tracking', () => {
 		expect(a.ok).toBe(true)
 		expect(a.body.seconds).toBe(5400)
 		expect(a.body.note).toBe('Pairing')
-		expect(a.body.createdBy).toBe(USER)
+		expect(a.body.createdBy).toBe(me)
 
 		// Add another 30m, no note.
 		const b = await api('POST', `/cards/${cardId}/time-entries`, { seconds: 1800 })

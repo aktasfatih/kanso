@@ -253,8 +253,17 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
+      # Run the suite in PARALLEL: each Playwright worker provisions its own
+      # Nextcloud user (E2E_ISOLATE) so fixed board names and per-user aggregate
+      # views are namespaced per worker. Conservative worker count — the runner
+      # hosts the whole stack in-pod and is ~4-5x slower than a dev box, so
+      # over-subscribing php-fpm/postgres would trade wall-clock for timeout
+      # flakiness. Raise E2E_WORKERS once the runner has headroom.
       - name: Run e2e tests
         run: npm run test:e2e
+        env:
+          E2E_ISOLATE: '1'
+          E2E_WORKERS: '2'
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

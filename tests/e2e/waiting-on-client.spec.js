@@ -12,7 +12,7 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 test.describe.serial('Waiting on client (#3746)', () => {
 	const state = { boardId: 0, waitCardId: 0, plainCardId: 0, itemId: 0, boardUrl: '' }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
 		// Hermetic setup: tear down any prior run's board.
 		const boards = await api.get('/boards')
 		for (const b of boards) {
@@ -25,9 +25,9 @@ test.describe.serial('Waiting on client (#3746)', () => {
 		state.boardId = board.id
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'Doing' })
 
-		// tester joins the CLIENT side (external) with READ | EDIT.
+		// The peer joins the CLIENT side (external) with READ | EDIT.
 		await api.post(`/boards/${board.id}/acl`, {
-			participant: 'tester',
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3,
 			role: 'external',
@@ -42,7 +42,7 @@ test.describe.serial('Waiting on client (#3746)', () => {
 
 		const item = await api.post(`/cards/${waitCard.id}/checklist`, { title: 'Client signs contract' })
 		state.itemId = item.id
-		await api.post(`/checklist/${item.id}/assign`, { participant: 'tester' })
+		await api.post(`/checklist/${item.id}/assign`, { participant: peer.user })
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})

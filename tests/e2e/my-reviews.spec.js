@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('My Reviews page', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, reviewsUrl: '' }
@@ -24,9 +22,9 @@ test.describe('My Reviews page', () => {
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Review Me Please' })
 		state.cardId = card.id
 
-		// The board owner (admin) requests a review from themselves - produces a
+		// The board owner requests a review from themselves - produces a
 		// pending review row that appears on the My Reviews page.
-		await api.put(`/cards/${card.id}/reviews/${USER}`)
+		await api.put(`/cards/${card.id}/reviews/${me}`)
 
 		state.reviewsUrl = `${BASE}/index.php/apps/kanso#/reviews`
 	})

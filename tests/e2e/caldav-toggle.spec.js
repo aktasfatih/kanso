@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE, adminAuth } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, currentAuth, me } from './helpers.js'
 
 // Does the user's CalDAV calendar-home currently list this board's calendar?
 async function calendarPresent(boardId) {
-	const r = await fetch(`${BASE}/remote.php/dav/calendars/admin/`, {
+	const r = await fetch(`${BASE}/remote.php/dav/calendars/${me}/`, {
 		method: 'PROPFIND',
-		headers: { Authorization: adminAuth, Depth: '1' },
+		headers: { Authorization: currentAuth, Depth: '1' },
 	})
 	return (await r.text()).includes(`app-generated--kanso--board-${boardId}`)
 }

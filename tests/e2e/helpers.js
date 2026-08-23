@@ -19,6 +19,7 @@
  * fixtures resolve to `admin` and behaviour is byte-for-byte unchanged.
  */
 import { test as base, expect } from '@playwright/test'
+import { mkdirSync } from 'node:fs'
 
 export { expect }
 
@@ -36,7 +37,16 @@ export function authFor(user, pass) {
 }
 
 export const ADMIN = { user: 'admin', pass: 'admin' }
+
+/** Fixed superuser auth — use ONLY for genuine admin-only operations
+ * (OCS user provisioning, instance config). NOT for "act as the current user". */
 export const adminAuth = authFor(ADMIN.user, ADMIN.pass)
+
+/** The current acting user's Basic-auth string. `adminAuth` by default; rebound
+ * per worker under E2E_ISOLATE. Bespoke per-spec fetch clients that mean "act as
+ * me" (not "act as the superuser") should read THIS at call time, not adminAuth,
+ * so their requests match the worker's browser session. */
+export let currentAuth = adminAuth
 
 /**
  * Build a Kanso API client bound to a Basic-auth string.
@@ -71,8 +81,22 @@ export function makeApi(auth = adminAuth) {
 	}
 }
 
-/** Admin-bound API client — the drop-in for the old apiGet/apiPost/apiDelete. */
-export const api = makeApi(adminAuth)
+/** Admin-bound API client — the drop-in for the old apiGet/apiPost/apiDelete.
+ * `let` (not `const`) so the worker isolation fixture can rebind this live
+ * binding to the worker's own user; every spec's `import { api }` then follows. */
+export let api = makeApi(adminAuth)
+
+/** The current acting user's id. `admin` by default; rebound per worker under
+ * E2E_ISOLATE. Use this instead of the literal 'admin' wherever a spec means
+ * "myself" (assignee/reviewer/self-mention). Read it at call time (a `const x =
+ * me` snapshot taken at import would capture 'admin' before the rebind). */
+export let me = ADMIN.user
+
+/** Default second identity for multi-user specs (board sharing / ACL / peer
+ * login). The dev stack's shared `tester`; rebound to a per-worker peer under
+ * isolation. This is a plain object, not a fixture, so it can't rebind itself —
+ * multi-user specs consume the worker-scoped `peer` fixture below instead. */
+export const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
 
 /**
  * Drive (or detect) the Nextcloud login. If a live session already exists
@@ -139,30 +163,78 @@ export async function deleteUser(user) {
 }
 
 /**
- * Worker-scoped identity. With E2E_ISOLATE unset (default) this is admin and
- * costs nothing. With E2E_ISOLATE=1 each worker gets a dedicated, provisioned
- * user `kansoe2e_w<index>` so parallel workers never share board lists or
- * per-user aggregate views.
+ * Parallel isolation.
+ *
+ * With E2E_ISOLATE unset (the default) everything below is admin and the suite
+ * is byte-for-byte its old serial self. With E2E_ISOLATE=1 each Playwright
+ * worker gets a dedicated, provisioned user `kansoe2e_w<index>` and its browser
+ * pages start logged in AS that user, so fixed board names and per-user
+ * aggregate views (my-work / inbox / search / pinned) are namespaced per worker
+ * and `E2E_WORKERS` can be raised safely. Specs need no changes: the exported
+ * `api` live binding is rebound to the worker's client, and `storageState` is
+ * overridden per worker — `ncLogin(page)` then just detects the live session.
  */
 const ISOLATE = process.env.E2E_ISOLATE === '1'
 const WORKER_PASS = 'Kanso-e2e-worker!1'
+const ADMIN_STATE = 'tests/e2e/.auth/admin.json'
 
-export const test = base.extend({
-	// eslint-disable-next-line no-empty-pattern
+let testImpl = base.extend({
+	// Worker identity, provisioned once per worker. `auto` so it runs at worker
+	// setup even for specs that don't destructure it — that's what lets it rebind
+	// the module-level `api` binding before any beforeAll/test in the worker.
 	user: [async ({}, use, workerInfo) => {
 		if (!ISOLATE) {
-			await use({ ...ADMIN, auth: adminAuth, api })
+			await use({ ...ADMIN, auth: adminAuth, api: makeApi(adminAuth) })
 			return
 		}
 		const username = `kansoe2e_w${workerInfo.workerIndex}`
 		const provisioned = await provisionUser(username, WORKER_PASS, { displayName: username })
+		api = provisioned.api // rebind the exported live binding → specs' `import { api }` follow
+		me = username // …and the "current user" id for self-referential specs
+		currentAuth = provisioned.auth // …and the auth for bespoke per-spec clients
 		await use(provisioned)
-		// Left in place between runs on purpose: re-provision is idempotent and
-		// tearing down would race sibling specs still mid-flight in CI retries.
-	}, { scope: 'worker' }],
+	}, { scope: 'worker', auto: true }],
 
-	// Per-test API client bound to the worker identity. Drop-in for module `api`.
-	api: async ({ user }, use) => {
-		await use(user.api)
-	},
+	// Second identity for multi-user specs (board sharing, ACL, peer login).
+	// Not auto — only the specs that need it destructure `{ peer }`. Off-isolate
+	// it's the shared dev `tester`; on-isolate a per-worker peer so two workers
+	// never contend over one secondary account.
+	peer: [async ({}, use, workerInfo) => {
+		if (!ISOLATE) {
+			const auth = authFor(TESTER.user, TESTER.pass)
+			await use({ ...TESTER, auth, api: makeApi(auth) })
+			return
+		}
+		const username = `kansoe2e_w${workerInfo.workerIndex}_peer`
+		await use(await provisionUser(username, WORKER_PASS, { displayName: username }))
+	}, { scope: 'worker' }],
 })
+
+if (ISOLATE) {
+	testImpl = testImpl.extend({
+		// One logged-in browser session per worker, captured once. Depends on
+		// `user` so the account exists first; uses a throwaway clean context to
+		// drive the real login form, then persists that session to a file.
+		workerStorageState: [async ({ user, browser }, use, workerInfo) => {
+			mkdirSync('tests/e2e/.auth', { recursive: true })
+			const file = `tests/e2e/.auth/worker-${workerInfo.workerIndex}.json`
+			const ctx = await browser.newContext()
+			try {
+				const page = await ctx.newPage()
+				await ncLogin(page, { user: user.user, pass: user.pass })
+				await ctx.storageState({ path: file })
+			} finally {
+				await ctx.close()
+			}
+			await use(file)
+		}, { scope: 'worker' }],
+
+		// Override the storageState option so every page in this worker starts as
+		// the worker user instead of the shared admin session from the config.
+		storageState: async ({ workerStorageState }, use) => {
+			await use(workerStorageState)
+		},
+	})
+}
+
+export const test = testImpl

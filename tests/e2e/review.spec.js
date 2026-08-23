@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('Card review flow', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, cardUrl: '', boardUrl: '' }
@@ -27,7 +25,7 @@ test.describe('Card review flow', () => {
 
 		// The board owner requests a review from themselves - a valid single-user
 		// path (owner holds READ). Gives the card one pending review to drive the UI.
-		await api.put(`/cards/${card.id}/reviews/${USER}`)
+		await api.put(`/cards/${card.id}/reviews/${me}`)
 	})
 
 	test.afterAll(async () => {

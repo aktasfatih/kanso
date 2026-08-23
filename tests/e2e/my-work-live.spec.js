@@ -21,8 +21,6 @@
 
 import { test, expect, api, BASE } from './helpers.js'
 
-const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
-
 // Local ncLogin takes POSITIONAL (page, user, pass) and always drives the form
 // for an explicit non-admin identity — kept as-is (the shared ncLogin uses an
 // object arg and short-circuits on an existing session), per the migration
@@ -50,16 +48,16 @@ test.describe('My Work live updates (#3768)', () => {
 	const TASK_TITLE = `Live Assign ${ts}`
 	const state = { boardId: 0, reviewCardId: 0, taskCardId: 0 }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
 		const board = await api.post('/boards', { title: `MyWork Live E2E ${ts}` })
 		state.boardId = board.id
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
 		state.reviewCardId = (await api.post('/cards', { stackId: stack.id, title: REVIEW_TITLE })).id
 		state.taskCardId = (await api.post('/cards', { stackId: stack.id, title: TASK_TITLE })).id
-		// Share with tester (READ|EDIT = 3) so the admin's review request /
-		// assignment lands in the tester's cross-board feeds.
+		// Share with the peer (READ|EDIT = 3) so the current user's review request /
+		// assignment lands in the peer's cross-board feeds.
 		await api.post(`/boards/${board.id}/acl`, {
-			participant: TESTER.user,
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3,
 		})
@@ -69,13 +67,13 @@ test.describe('My Work live updates (#3768)', () => {
 		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('a review requested by another user appears in the open My Reviews view by itself', async ({ browser }) => {
+	test('a review requested by another user appears in the open My Reviews view by itself', async ({ browser, peer }) => {
 		// Polling budget (60s interval + slow-CI headroom) on top of the default.
 		test.setTimeout(180_000)
 		const ctx = await browser.newContext()
 		try {
 			const page = await ctx.newPage()
-			await ncLogin(page, TESTER.user, TESTER.pass)
+			await ncLogin(page, peer.user, peer.pass)
 
 			// Tester parks on My Reviews — from here on: no navigation, no focus
 			// change, no reload. The marker survives only if that holds.
@@ -85,8 +83,8 @@ test.describe('My Work live updates (#3768)', () => {
 			await expect(row).toBeHidden()
 			await page.evaluate(() => { window.__kansoNoReload = true })
 
-			// The admin — another user, no browser — requests a review FROM the tester.
-			await api.put(`/cards/${state.reviewCardId}/reviews/${TESTER.user}`)
+			// The current user — another user, no browser — requests a review FROM the peer.
+			await api.put(`/cards/${state.reviewCardId}/reviews/${peer.user}`)
 
 			// Push: near-instant. Poll-only (CI): within the 60s interval.
 			await expect(row).toBeVisible({ timeout: 90_000 })
@@ -97,12 +95,12 @@ test.describe('My Work live updates (#3768)', () => {
 		}
 	})
 
-	test('a card assigned by another user appears in the open My Tasks view by itself', async ({ browser }) => {
+	test('a card assigned by another user appears in the open My Tasks view by itself', async ({ browser, peer }) => {
 		test.setTimeout(180_000)
 		const ctx = await browser.newContext()
 		try {
 			const page = await ctx.newPage()
-			await ncLogin(page, TESTER.user, TESTER.pass)
+			await ncLogin(page, peer.user, peer.pass)
 
 			await page.goto(`${BASE}/index.php/apps/kanso#/my-tasks`)
 			await expect(page.locator('.my-cards-view')).toBeVisible({ timeout: 15_000 })
@@ -110,8 +108,8 @@ test.describe('My Work live updates (#3768)', () => {
 			await expect(row).toBeHidden()
 			await page.evaluate(() => { window.__kansoNoReload = true })
 
-			// The admin assigns the tester to the card.
-			await api.put(`/cards/${state.taskCardId}/assignees/${TESTER.user}`)
+			// The current user assigns the peer to the card.
+			await api.put(`/cards/${state.taskCardId}/assignees/${peer.user}`)
 
 			await expect(row).toBeVisible({ timeout: 90_000 })
 			expect(await page.evaluate(() => window.__kansoNoReload)).toBe(true)

@@ -15,7 +15,6 @@ const HEADERS = {
 	'OCS-APIREQUEST': 'true',
 	'Content-Type': 'application/json',
 }
-const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
 
 // notify_push is disabled for this suite so B takes the deterministic 5s delta
 // poll (the push path also delta-syncs, but the poll is what we can reliably
@@ -39,7 +38,7 @@ test.describe('Board delta sync (#3675)', () => {
 
 	const state = { boardId: 0, stackId: 0, cardId: 0, boardUrl: '' }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
 		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Delta Sync Board') {
@@ -53,7 +52,7 @@ test.describe('Board delta sync (#3675)', () => {
 		const card = await api.post('/cards', { stackId: stack.id, title: 'delta-original' })
 		state.cardId = card.id
 		await api.post(`/boards/${board.id}/acl`, {
-			participant: TESTER.user,
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3,
 		})
@@ -65,7 +64,7 @@ test.describe('Board delta sync (#3675)', () => {
 		if (state.boardId) await api.send('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
-	test('B reflects an edit via /changes, not a full board refetch', async ({ browser }) => {
+	test('B reflects an edit via /changes, not a full board refetch', async ({ browser, peer }) => {
 		// Force the poll path: disable notify_push and wait for the capability to
 		// stop being advertised (a fixed sleep was a flake source in realtime.spec).
 		occSafe('app:disable notify_push')
@@ -81,7 +80,7 @@ test.describe('Board delta sync (#3675)', () => {
 		const testerCtx = await browser.newContext()
 		try {
 			const testerPage = await testerCtx.newPage()
-			await ncLogin(testerPage, { user: TESTER.user, pass: TESTER.pass })
+			await ncLogin(testerPage, { user: peer.user, pass: peer.pass })
 
 			// Track B's board API calls. The initial full load hits /boards/{id};
 			// after that, reflecting A's edit must go through /boards/{id}/changes.

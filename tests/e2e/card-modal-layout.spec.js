@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, BASE, api, ncLogin } from './helpers.js'
+import { test, expect, BASE, api, ncLogin, me } from './helpers.js'
 
 test.describe('Card modal two-column layout', () => {
 	// Unique board title to avoid collision with parallel test runs
@@ -253,7 +253,7 @@ test.describe('Card modal two-column layout', () => {
 			//    ("Your review is requested" → Approve / Request changes) appears. It sits
 			//    at the top of the Card tab as normal block flow, but guard it anyway so a
 			//    future overflow ancestor can't clip it off-screen.
-			await api.put(`/cards/${card.id}/reviews/admin`, {})
+			await api.put(`/cards/${card.id}/reviews/${me}`, {})
 			await page.goto(cardUrl)
 			const verdict = page.locator('.card-modal__verdict').first()
 			await expect(verdict).toBeVisible({ timeout: 15_000 })

@@ -7,16 +7,13 @@
 // The fallback test toggles the notify_push app off through occ in the dev
 // container, so this suite assumes the dev/ docker stack.
 
-import { test, expect, api, ncLogin, adminAuth, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, currentAuth, BASE } from './helpers.js'
 import { execSync } from 'node:child_process'
 
 const HEADERS = {
 	'OCS-APIREQUEST': 'true',
 	'Content-Type': 'application/json',
 }
-const ADMIN_AUTH = adminAuth
-
-const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
 
 // The CI runner sets KANSO_SKIP_NOTIFY_PUSH=1: notify_push is never installed
 // there, so the enable/disable dance is both unnecessary and a hard-failure
@@ -49,7 +46,7 @@ test.describe('Realtime sync', () => {
 
 	const state = { boardId: 0, boardUrl: '' }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
 		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Realtime Test Board') {
@@ -59,9 +56,9 @@ test.describe('Realtime sync', () => {
 		const board = await api.post('/boards', { title: 'Realtime Test Board' })
 		state.boardId = board.id
 		await api.post('/stacks', { boardId: board.id, title: 'S1' })
-		// Share with tester (READ|EDIT = 3)
+		// Share with the peer (READ|EDIT = 3)
 		await api.post(`/boards/${board.id}/acl`, {
-			participant: TESTER.user,
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3,
 		})
@@ -74,7 +71,7 @@ test.describe('Realtime sync', () => {
 		occSafe('app:enable notify_push')
 	})
 
-	test('push: tester sees a new card near-instantly without interaction', async ({ browser }) => {
+	test('push: tester sees a new card near-instantly without interaction', async ({ browser, user, peer }) => {
 		// This test genuinely requires notify_push; the CI runner without it
 		// (KANSO_SKIP_NOTIFY_PUSH=1) can only exercise the poll fallback below.
 		test.skip(SKIP_NOTIFY_PUSH, 'notify_push not available on this runner')
@@ -83,8 +80,8 @@ test.describe('Realtime sync', () => {
 		try {
 			const adminPage = await adminCtx.newPage()
 			const testerPage = await testerCtx.newPage()
-			await ncLogin(adminPage, { user: 'admin', pass: 'admin' })
-			await ncLogin(testerPage, { user: TESTER.user, pass: TESTER.pass })
+			await ncLogin(adminPage, { user: user.user, pass: user.pass })
+			await ncLogin(testerPage, { user: peer.user, pass: peer.pass })
 
 			await adminPage.goto(state.boardUrl)
 			await testerPage.goto(state.boardUrl)
@@ -103,7 +100,7 @@ test.describe('Realtime sync', () => {
 		}
 	})
 
-	test('fallback: tester sees a new card via the 5s poll when push is off', async ({ browser }) => {
+	test('fallback: tester sees a new card via the 5s poll when push is off', async ({ browser, peer }) => {
 		// Best-effort disable: on KANSO_SKIP_NOTIFY_PUSH runners push is already
 		// off (app never installed), so this is a no-op there and must never
 		// hard-fail the poll-fallback test it guards.
@@ -113,7 +110,7 @@ test.describe('Realtime sync', () => {
 		// could still load with push enabled and take the 60s path).
 		for (let i = 0; i < 20; i++) {
 			const r = await fetch(BASE + '/ocs/v2.php/cloud/capabilities?format=json', {
-				headers: { ...HEADERS, Authorization: ADMIN_AUTH },
+				headers: { ...HEADERS, Authorization: currentAuth },
 			})
 			const caps = (await r.json())?.ocs?.data?.capabilities ?? {}
 			if (!('notify_push' in caps)) break
@@ -122,7 +119,7 @@ test.describe('Realtime sync', () => {
 		const testerCtx = await browser.newContext()
 		try {
 			const testerPage = await testerCtx.newPage()
-			await ncLogin(testerPage, { user: TESTER.user, pass: TESTER.pass })
+			await ncLogin(testerPage, { user: peer.user, pass: peer.pass })
 
 			// Fresh load AFTER disabling: no notify_push capability → the
 			// client falls back to the 5s delta poll.

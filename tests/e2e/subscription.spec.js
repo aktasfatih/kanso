@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, authFor, adminAuth, API, OCS, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, authFor, currentAuth, adminAuth, API, OCS, BASE } from './helpers.js'
 
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = adminAuth
 
 async function apiPut(path) {
+	// Owner op — act as the current user (reads the live binding at call time).
 	const r = await fetch(API + path, {
 		method: 'PUT',
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: currentAuth },
 	})
 	return r
 }
@@ -18,28 +18,31 @@ async function apiPut(path) {
 const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 async function provisionUser(uid, password) {
-	// Hermetic: remove any prior user, then recreate with a known password.
-	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
+	// Genuine admin op: OCS user provisioning. Hermetic: remove any prior user,
+	// then recreate with a known password.
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: adminAuth } }).catch(() => {})
 	const body = new URLSearchParams({ userid: uid, password })
 	const r = await fetch(`${OCS}/users`, {
 		method: 'POST',
-		headers: { ...OCS_HEADERS, Authorization: AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+		headers: { ...OCS_HEADERS, Authorization: adminAuth, 'Content-Type': 'application/x-www-form-urlencoded' },
 		body,
 	})
 	if (!r.ok) throw new Error(`provision ${uid} → ${r.status}: ${await r.text()}`)
 }
 
 async function deleteUser(uid) {
-	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
+	// Genuine admin op: OCS user deletion.
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: adminAuth } }).catch(() => {})
 }
 
 const authHeader = authFor
 
 // Share a board with a user at the given permission mask (READ=1, EDIT=2, SHARE=4).
 async function shareBoardWith(boardId, uid, permission) {
+	// Owner op — act as the current user (board owner).
 	const r = await fetch(`${API}/boards/${boardId}/acl`, {
 		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: JSON.stringify({ participant: uid, participantType: 'user', permission }),
 	})
 	if (!r.ok) throw new Error(`share ${boardId}→${uid} → ${r.status}: ${await r.text()}`)
@@ -193,11 +196,13 @@ test.describe('Card Subscriptions / Watchers', () => {
 test.describe('Watchers dropdown UI (caret panel)', () => {
 	// #3654: watchers are managed from a dropdown under the top-right Watch button
 	// (no standalone body section). Drive the panel through the UI.
-	const BOB = 'kanso_watch_ui_bob'
+	// Worker-scoped uid so parallel workers never contend over one shared account.
+	let BOB = 'kanso_watch_ui_bob'
 	const BOB_PASS = 'SubUiWatcher#2026'
 	const state = { boardId: 0, stackId: 0, cardId: 0, cardUrl: '' }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({}, workerInfo) => {
+		BOB = `kanso_watch_ui_bob_w${workerInfo.workerIndex}`
 		await provisionUser(BOB, BOB_PASS)
 		for (const b of await api.get('/boards')) {
 			if (b.title === 'Watchers UI E2E Board') await api.delete(`/boards/${b.id}`)
@@ -279,13 +284,16 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 })
 
 test.describe('Watcher management — add / remove OTHER users', () => {
-	const BOB = 'kanso_watch_bob'
+	// Worker-scoped uids so parallel workers never contend over shared accounts.
+	let BOB = 'kanso_watch_bob'
 	const BOB_PASS = 'Sub2Watcher#2026'
-	const STRANGER = 'kanso_watch_stranger'
+	let STRANGER = 'kanso_watch_stranger'
 	const STRANGER_PASS = 'Sub2Stranger#2026'
 	const state = { boardId: 0, stackId: 0, cardId: 0 }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({}, workerInfo) => {
+		BOB = `kanso_watch_bob_w${workerInfo.workerIndex}`
+		STRANGER = `kanso_watch_stranger_w${workerInfo.workerIndex}`
 		// Second board participant (READ+EDIT) and a non-member.
 		await provisionUser(BOB, BOB_PASS)
 		await provisionUser(STRANGER, STRANGER_PASS)
@@ -330,7 +338,7 @@ test.describe('Watcher management — add / remove OTHER users', () => {
 		await apiPut(`/cards/${state.cardId}/subscription/${BOB}`) // ensure present
 		const del = await fetch(`${API}/cards/${state.cardId}/subscription/${BOB}`, {
 			method: 'DELETE',
-			headers: { ...HEADERS, Authorization: AUTH },
+			headers: { ...HEADERS, Authorization: currentAuth },
 		})
 		expect(del.ok).toBeTruthy()
 		const block = await del.json()

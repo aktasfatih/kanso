@@ -14,9 +14,7 @@
 //     there; unassign → it disappears again.
 //  2. request a review → client-side navigate to My Reviews → request is there.
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 /**
  * Same-document (hash-only) navigation — vue-router handles it client-side,
@@ -71,7 +69,7 @@ test.describe('My Work freshness (#3766)', () => {
 			{ timeout: 10_000 },
 		)
 		await page.locator('.card-modal__popover .card-modal__assign-option').first().click()
-		await expect(page.locator('.card-modal__assignee-pill', { hasText: USER })).toBeVisible({ timeout: 8000 })
+		await expect(page.locator('.card-modal__assignee-pill', { hasText: me })).toBeVisible({ timeout: 8000 })
 		await feedRefetch
 
 		// Client-side navigation to My Tasks — the new assignment is there.
@@ -87,7 +85,7 @@ test.describe('My Work freshness (#3766)', () => {
 			(r) => r.url().includes(`/api/cards/${state.taskCardId}/assignees/`) && r.request().method() === 'DELETE',
 			{ timeout: 10_000 },
 		)
-		await page.locator('.card-modal__assignee-pill', { hasText: USER })
+		await page.locator('.card-modal__assignee-pill', { hasText: me })
 			.locator('.card-modal__pill-x').first().click()
 		await unassignDone
 

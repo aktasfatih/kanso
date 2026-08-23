@@ -12,9 +12,7 @@
 // user_status requests is bounded (ideally zero) — not proportional to the
 // card × assignee count.
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 // Several assigned cards so a per-avatar storm (O(cards × assignees)) would be
 // visibly larger than the O(unique actors) bound we assert.
@@ -29,8 +27,8 @@ test.describe('Avatar user-status storm on board load (#3663)', () => {
 		state.stackId = (await api.send('POST', '/stacks', { boardId: board.id, title: 'To do' })).id
 		for (let i = 0; i < CARD_COUNT; i++) {
 			const card = await api.send('POST', '/cards', { stackId: state.stackId, title: `Assigned ${i}` })
-			// Assign admin (the only actor available in the dev stack) to each card.
-			await api.send('PUT', `/cards/${card.id}/assignees/${USER}`)
+			// Assign the current user (the only actor available in the dev stack) to each card.
+			await api.send('PUT', `/cards/${card.id}/assignees/${me}`)
 		}
 	})
 

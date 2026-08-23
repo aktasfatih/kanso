@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 const ROLE_REVIEW = 4
 const ROLE_IN_PROGRESS = 3
@@ -30,7 +28,7 @@ test.describe('Automation rules (#3400)', () => {
 		await api.send('POST', `/boards/${state.boardId}/automation-rules`, {
 			trigger: 'card_entered_role',
 			action: 'request_review',
-			params: { role: ROLE_REVIEW, reviewer: USER },
+			params: { role: ROLE_REVIEW, reviewer: me },
 		})
 		const cardId = (await api.send('POST', '/cards', { stackId: state.todoStackId, title: 'Needs review' })).id
 
@@ -40,7 +38,7 @@ test.describe('Automation rules (#3400)', () => {
 		await api.send('POST', `/cards/${cardId}/move`, { targetStackId: state.reviewStackId, afterCardId: null })
 
 		card = await api.send('GET', `/cards/${cardId}`)
-		expect(card.reviews.some((rv) => rv.reviewer === USER)).toBe(true)
+		expect(card.reviews.some((rv) => rv.reviewer === me)).toBe(true)
 	})
 
 	test('entering an in-progress-role column fires the add_label rule', async () => {

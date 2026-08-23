@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('CardTile compact layout', () => {
 	const suffix = Math.random().toString(36).slice(2, 8)
@@ -36,8 +34,8 @@ test.describe('CardTile compact layout', () => {
 		state.labelId = label.id
 		await api.put(`/cards/${card.id}/labels/${label.id}`)
 
-		// Assign admin user to the card
-		await api.put(`/cards/${card.id}/assignees/${USER}`)
+		// Assign the current user to the card
+		await api.put(`/cards/${card.id}/assignees/${me}`)
 
 		// Add two checklist items via the checklist API
 		await api.post(`/cards/${card.id}/checklist`, { title: 'Item one' })

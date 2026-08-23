@@ -1,17 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, authFor, adminAuth, BASE } from './helpers.js'
+import { test, expect, api, currentAuth, me, BASE } from './helpers.js'
 
-const DAV = BASE + '/remote.php/dav/calendars/admin'
-const AUTH = adminAuth
+// The current user's own CalDAV calendar-home. Built at CALL time (me is a live
+// binding rebound per worker under isolation), so the principal path segment
+// matches the acting user.
+const davHome = () => `${BASE}/remote.php/dav/calendars/${me}`
 
 // Kept local: a raw DAV client (PROPFIND/GET/PROPPATCH against the CalDAV
 // endpoint) — not the Kanso API, so the shared api client does not apply.
 async function dav(method, path, extraHeaders = {}) {
-	const r = await fetch(DAV + path, {
+	const r = await fetch(davHome() + path, {
 		method,
-		headers: { Authorization: AUTH, ...extraHeaders },
+		headers: { Authorization: currentAuth, ...extraHeaders },
 	})
 	return { status: r.status, body: await r.text() }
 }
@@ -79,9 +81,9 @@ test.describe('CalDAV board calendar (read-only VTODOs)', () => {
 	})
 
 	test('the calendar is read-only: a PUT of a new object is rejected', async () => {
-		const r = await fetch(DAV + `/${calUri}/injected.ics`, {
+		const r = await fetch(davHome() + `/${calUri}/injected.ics`, {
 			method: 'PUT',
-			headers: { Authorization: AUTH, 'Content-Type': 'text/calendar' },
+			headers: { Authorization: currentAuth, 'Content-Type': 'text/calendar' },
 			body: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:x\r\nEND:VTODO\r\nEND:VCALENDAR\r\n',
 		})
 		// Sabre maps the Forbidden the calendar throws to 403 (never 201/204).
@@ -111,9 +113,9 @@ test.describe('CalDAV board calendar (read-only VTODOs)', () => {
 			+ '<d:propertyupdate xmlns:d="DAV:" xmlns:x="http://owncloud.org/ns">'
 			+ '<d:set><d:prop><x:calendar-enabled>0</x:calendar-enabled></d:prop></d:set>'
 			+ '</d:propertyupdate>'
-		const r = await fetch(DAV + `/${calUri}/`, {
+		const r = await fetch(davHome() + `/${calUri}/`, {
 			method: 'PROPPATCH',
-			headers: { Authorization: AUTH, 'Content-Type': 'application/xml' },
+			headers: { Authorization: currentAuth, 'Content-Type': 'application/xml' },
 			body,
 		})
 		expect(r.status).toBe(207)
@@ -134,14 +136,15 @@ test.describe.serial('CalDAV board calendar access control', () => {
 	// session (see the e2e storageState guard).
 	test.use({ storageState: { cookies: [], origins: [] } })
 
-	const TESTER = authFor('tester', 'kanso-dev-tester!1')
-	const TESTER_DAV = BASE + '/remote.php/dav/calendars/tester'
 	let boardId = 0
 	let cardId = 0
 	let calUri = ''
 
-	async function testerDav(method, path) {
-		const r = await fetch(TESTER_DAV + path, { method, headers: { Authorization: TESTER, Depth: '1' } })
+	// The outsider is the worker-scoped peer; its DAV principal path segment and
+	// auth are read from the fixture at call time.
+	async function peerDav(peer, method, path) {
+		const dav = `${BASE}/remote.php/dav/calendars/${peer.user}`
+		const r = await fetch(dav + path, { method, headers: { Authorization: peer.auth, Depth: '1' } })
 		return { status: r.status, body: await r.text() }
 	}
 
@@ -159,23 +162,23 @@ test.describe.serial('CalDAV board calendar access control', () => {
 		if (boardId) await api.send('DELETE', `/boards/${boardId}`).catch(() => {})
 	})
 
-	test('a non-member never sees the board calendar and cannot fetch its cards', async () => {
-		const home = await testerDav('PROPFIND', '/')
+	test('a non-member never sees the board calendar and cannot fetch its cards', async ({ peer }) => {
+		const home = await peerDav(peer, 'PROPFIND', '/')
 		expect(home.status).toBe(207)
 		expect(home.body).not.toContain(calUri)
 		// The card object is existence-safe: not found (never 200) for a non-member.
-		const obj = await testerDav('GET', `/${calUri}/kanso-card-${cardId}.ics`)
+		const obj = await peerDav(peer, 'GET', `/${calUri}/kanso-card-${cardId}.ics`)
 		expect(obj.status).toBe(404)
 	})
 
-	test('sharing the board grants the member the calendar', async () => {
+	test('sharing the board grants the member the calendar', async ({ peer }) => {
 		await api.send('POST', `/boards/${boardId}/acl`, {
-			participant: 'tester', participantType: 'user', permission: 1, role: 'internal',
+			participant: peer.user, participantType: 'user', permission: 1, role: 'internal',
 		})
-		const home = await testerDav('PROPFIND', '/')
+		const home = await peerDav(peer, 'PROPFIND', '/')
 		expect(home.status).toBe(207)
 		expect(home.body).toContain(calUri)
-		const obj = await testerDav('GET', `/${calUri}/kanso-card-${cardId}.ics`)
+		const obj = await peerDav(peer, 'GET', `/${calUri}/kanso-card-${cardId}.ics`)
 		expect(obj.status).toBe(200)
 		expect(obj.body).toContain('SUMMARY:members only')
 	})

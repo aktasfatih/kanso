@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, ncLogin, BASE, API, adminAuth } from './helpers.js'
+import { test, expect, ncLogin, BASE, API, currentAuth } from './helpers.js'
 import crypto from 'node:crypto'
 
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
@@ -12,7 +12,7 @@ const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 async function api(method, path, body) {
 	const r = await fetch(API + path, {
 		method,
-		headers: { ...HEADERS, Authorization: adminAuth },
+		headers: { ...HEADERS, Authorization: currentAuth },
 		body: body === undefined ? undefined : JSON.stringify(body),
 	})
 	const text = await r.text()

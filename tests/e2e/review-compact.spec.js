@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
-
-const USER = 'admin'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 // #3493 — with 3+ reviews the attribute-bar chips must stay compact (one row).
 test.describe('Compact multi-review attribute bar', () => {
@@ -14,11 +12,11 @@ test.describe('Compact multi-review attribute bar', () => {
 		state.boardId = board.id
 		const stackId = (await api.post('/stacks', { boardId: board.id, title: 'Do' })).id
 		const cardId = (await api.post('/cards', { stackId, title: 'Review-heavy card' })).id
-		// Three distinct reviews from admin (one per type) — same reviewer, three
-		// types is a valid multi-review shape and avoids provisioning extra users.
+		// Three distinct reviews from the current user (one per type) — same reviewer,
+		// three types is a valid multi-review shape and avoids provisioning extra users.
 		for (const name of ['QA', 'Security', 'Design']) {
 			const typeId = (await api.post('/review-types', { boardId: board.id, title: name, color: '31CC7C' })).id
-			await api.put(`/cards/${cardId}/reviews/${USER}`, { reviewTypeId: typeId })
+			await api.put(`/cards/${cardId}/reviews/${me}`, { reviewTypeId: typeId })
 		}
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${cardId}`
 	})

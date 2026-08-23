@@ -15,8 +15,6 @@
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
-const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
-
 test.describe('Realtime card modal freshness', () => {
 	// Drives two distinct users (admin + tester) and logs each in explicitly — so
 	// it must NOT inherit the shared authenticated storageState, or every context
@@ -25,7 +23,7 @@ test.describe('Realtime card modal freshness', () => {
 
 	const state = { boardId: 0, cardId: 0, cardUrl: '' }
 
-	test.beforeAll(async () => {
+	test.beforeAll(async ({ peer }) => {
 		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Realtime Modal Board') {
@@ -37,9 +35,9 @@ test.describe('Realtime card modal freshness', () => {
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'S1' })
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Modal card v1' })
 		state.cardId = card.id
-		// Share with tester (READ|EDIT = 3)
+		// Share with the peer (READ|EDIT = 3)
 		await api.post(`/boards/${board.id}/acl`, {
-			participant: TESTER.user,
+			participant: peer.user,
 			participantType: 'user',
 			permission: 3,
 		})
@@ -52,11 +50,11 @@ test.describe('Realtime card modal freshness', () => {
 		}
 	})
 
-	test('open modal picks up remote title, description and comment without reload', async ({ browser }) => {
+	test('open modal picks up remote title, description and comment without reload', async ({ browser, peer }) => {
 		const testerCtx = await browser.newContext()
 		try {
 			const page = await testerCtx.newPage()
-			await ncLogin(page, { user: TESTER.user, pass: TESTER.pass })
+			await ncLogin(page, { user: peer.user, pass: peer.pass })
 
 			// Tester opens the card modal and keeps it open — no further navigation.
 			await page.goto(state.cardUrl)
@@ -79,11 +77,11 @@ test.describe('Realtime card modal freshness', () => {
 		}
 	})
 
-	test('a remote change never clobbers a dirty description draft', async ({ browser }) => {
+	test('a remote change never clobbers a dirty description draft', async ({ browser, peer }) => {
 		const testerCtx = await browser.newContext()
 		try {
 			const page = await testerCtx.newPage()
-			await ncLogin(page, { user: TESTER.user, pass: TESTER.pass })
+			await ncLogin(page, { user: peer.user, pass: peer.pass })
 
 			await page.goto(state.cardUrl)
 			await expect(page.locator('.card-modal__desc-rendered')).toContainText('remote description v1', { timeout: 15_000 })
