@@ -207,12 +207,32 @@ class AutomationService {
 		if ($this->hasRunningTimer($card->getId())) {
 			return;
 		}
-		$timer = new CardRunningTimer();
-		$timer->setCardId($card->getId());
-		$timer->setBoardId($card->getBoardId());
-		$timer->setStartedBy($actorUid);
-		$timer->setStartedAt($this->timeFactory->getTime());
-		$this->runningTimerMapper->insert($timer);
+		// Insert the running-timer row and record a card change atomically, then
+		// push — so the running indicator appears in real time (delta + notify_push)
+		// on every open client, symmetric with stopTimer. Without the change row the
+		// timer would only surface after a full board refetch.
+		$this->db->beginTransaction();
+		try {
+			$timer = new CardRunningTimer();
+			$timer->setCardId($card->getId());
+			$timer->setBoardId($card->getBoardId());
+			$timer->setStartedBy($actorUid);
+			$timer->setStartedAt($this->timeFactory->getTime());
+			$this->runningTimerMapper->insert($timer);
+
+			$this->changeNotifier->recordChange(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$card->getId(),
+				Change::ACTION_UPDATE,
+				$actorUid,
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
 	}
 
 	/**

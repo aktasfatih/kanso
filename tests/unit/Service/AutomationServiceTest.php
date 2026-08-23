@@ -284,6 +284,13 @@ class AutomationServiceTest extends TestCase {
 			}))
 			->willReturnArgument(0);
 
+		// The insert + change row commit atomically, and a board push fires so the
+		// running indicator shows up in real time (symmetric with stopTimer).
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('commit');
+		$this->changeNotifier->expects($this->once())->method('recordChange');
+		$this->changeNotifier->expects($this->once())->method('pushBoardChanged')->with(self::BOARD_ID);
+
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_IN_PROGRESS, self::ACTOR);
 	}
 
