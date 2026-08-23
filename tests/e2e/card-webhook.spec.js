@@ -1,18 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, ncLogin, BASE, API, adminAuth } from './helpers.js'
 import crypto from 'node:crypto'
 
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
 
+// Bespoke client: returns { ok, status, body } (does NOT throw) because these
+// specs assert on status codes (200/400/401) directly. Kept local per the
+// migration contract rather than forced onto the throwing shared client.
 async function api(method, path, body) {
 	const r = await fetch(API + path, {
 		method,
-		headers: { ...HEADERS, Authorization: AUTH },
+		headers: { ...HEADERS, Authorization: adminAuth },
 		body: body === undefined ? undefined : JSON.stringify(body),
 	})
 	const text = await r.text()
@@ -261,17 +261,6 @@ test.describe('GitHub webhook issue intake', () => {
 		await api('DELETE', `/boards/${otherBoardId}`)
 	})
 })
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', 'admin')
-	await page.fill('#password', 'admin')
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
 
 // Settings UI smoke (#3752): the intake stack picker + label filter live in the
 // board settings' GitHub webhook section and persist through the intake endpoint.

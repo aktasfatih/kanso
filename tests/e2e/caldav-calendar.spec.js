@@ -1,25 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, authFor, adminAuth, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const KAN = BASE + '/index.php/apps/kanso/api'
 const DAV = BASE + '/remote.php/dav/calendars/admin'
-const HEADERS = { 'OCS-APIRequest': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
+const AUTH = adminAuth
 
-async function kanso(method, path, body) {
-	const r = await fetch(KAN + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	const text = await r.text()
-	return text ? JSON.parse(text) : null
-}
-
+// Kept local: a raw DAV client (PROPFIND/GET/PROPPATCH against the CalDAV
+// endpoint) — not the Kanso API, so the shared api client does not apply.
 async function dav(method, path, extraHeaders = {}) {
 	const r = await fetch(DAV + path, {
 		method,
@@ -46,29 +34,29 @@ test.describe('CalDAV board calendar (read-only VTODOs)', () => {
 	let objUri = ''
 
 	test.beforeAll(async () => {
-		const board = await kanso('POST', '/boards', { title, color: '0082c9' })
+		const board = await api.send('POST', '/boards', { title, color: '0082c9' })
 		boardId = board.id
-		const stack = await kanso('POST', '/stacks', { boardId, title: 'To do' })
-		const card = await kanso('POST', '/cards', { stackId: stack.id, title: cardTitle })
+		const stack = await api.send('POST', '/stacks', { boardId, title: 'To do' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: cardTitle })
 		cardId = card.id
-		await kanso('PATCH', `/cards/${cardId}`, { duedate: '2026-08-15T09:30:00+00:00' })
+		await api.send('PATCH', `/cards/${cardId}`, { duedate: '2026-08-15T09:30:00+00:00' })
 
 		// An all-day due card → the VTODO must carry a DATE-valued DUE (no time).
-		const allDay = await kanso('POST', '/cards', { stackId: stack.id, title: 'All day' })
+		const allDay = await api.send('POST', '/cards', { stackId: stack.id, title: 'All day' })
 		allDayCardId = allDay.id
-		await kanso('PATCH', `/cards/${allDayCardId}`, { duedate: '2026-08-20T00:00:00+00:00', allDay: true })
+		await api.send('PATCH', `/cards/${allDayCardId}`, { duedate: '2026-08-20T00:00:00+00:00', allDay: true })
 
 		// A completed card → the VTODO must be STATUS:COMPLETED.
-		const done = await kanso('POST', '/cards', { stackId: stack.id, title: 'Finished' })
+		const done = await api.send('POST', '/cards', { stackId: stack.id, title: 'Finished' })
 		doneCardId = done.id
-		await kanso('PATCH', `/cards/${doneCardId}`, { duedate: '2026-08-10T09:00:00+00:00', done: true })
+		await api.send('PATCH', `/cards/${doneCardId}`, { duedate: '2026-08-10T09:00:00+00:00', done: true })
 
 		calUri = `app-generated--kanso--board-${boardId}`
 		objUri = `/${calUri}/kanso-card-${cardId}.ics`
 	})
 
 	test.afterAll(async () => {
-		if (boardId) await kanso('DELETE', `/boards/${boardId}`).catch(() => {})
+		if (boardId) await api.send('DELETE', `/boards/${boardId}`).catch(() => {})
 	})
 
 	test('the board calendar is discoverable in the CalDAV calendar-home', async () => {
@@ -146,7 +134,7 @@ test.describe.serial('CalDAV board calendar access control', () => {
 	// session (see the e2e storageState guard).
 	test.use({ storageState: { cookies: [], origins: [] } })
 
-	const TESTER = 'Basic ' + Buffer.from('tester:kanso-dev-tester!1').toString('base64')
+	const TESTER = authFor('tester', 'kanso-dev-tester!1')
 	const TESTER_DAV = BASE + '/remote.php/dav/calendars/tester'
 	let boardId = 0
 	let cardId = 0
@@ -158,17 +146,17 @@ test.describe.serial('CalDAV board calendar access control', () => {
 	}
 
 	test.beforeAll(async () => {
-		const board = await kanso('POST', '/boards', { title: 'E2E CalDAV ACL ' + Math.floor(Date.now() / 1000) })
+		const board = await api.send('POST', '/boards', { title: 'E2E CalDAV ACL ' + Math.floor(Date.now() / 1000) })
 		boardId = board.id
-		const stack = await kanso('POST', '/stacks', { boardId, title: 'To do' })
-		const card = await kanso('POST', '/cards', { stackId: stack.id, title: 'members only' })
+		const stack = await api.send('POST', '/stacks', { boardId, title: 'To do' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'members only' })
 		cardId = card.id
-		await kanso('PATCH', `/cards/${cardId}`, { duedate: '2026-08-15T09:30:00+00:00' })
+		await api.send('PATCH', `/cards/${cardId}`, { duedate: '2026-08-15T09:30:00+00:00' })
 		calUri = `app-generated--kanso--board-${boardId}`
 	})
 
 	test.afterAll(async () => {
-		if (boardId) await kanso('DELETE', `/boards/${boardId}`).catch(() => {})
+		if (boardId) await api.send('DELETE', `/boards/${boardId}`).catch(() => {})
 	})
 
 	test('a non-member never sees the board calendar and cannot fetch its cards', async () => {
@@ -181,7 +169,7 @@ test.describe.serial('CalDAV board calendar access control', () => {
 	})
 
 	test('sharing the board grants the member the calendar', async () => {
-		await kanso('POST', `/boards/${boardId}/acl`, {
+		await api.send('POST', `/boards/${boardId}/acl`, {
 			participant: 'tester', participantType: 'user', permission: 1, role: 'internal',
 		})
 		const home = await testerDav('PROPFIND', '/')

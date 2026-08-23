@@ -6,62 +6,34 @@
 // show both cards grouped under their board headers. Also exercises the Projects
 // list page and a UI remove.
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(`${USER}:${PASS}`).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Projects — cross-board card collections', () => {
 	const state = { boardA: 0, boardB: 0, projectId: 0, cardA: 0, cardB: 0 }
 
 	test.beforeAll(async () => {
 		const ts = Date.now()
-		const boardA = await api('POST', '/boards', { title: `Proj Board A ${ts}` })
-		const boardB = await api('POST', '/boards', { title: `Proj Board B ${ts}` })
+		const boardA = await api.post('/boards', { title: `Proj Board A ${ts}` })
+		const boardB = await api.post('/boards', { title: `Proj Board B ${ts}` })
 		state.boardA = boardA.id
 		state.boardB = boardB.id
-		const stackA = await api('POST', '/stacks', { boardId: boardA.id, title: 'To Do' })
-		const stackB = await api('POST', '/stacks', { boardId: boardB.id, title: 'Doing' })
-		const cardA = await api('POST', '/cards', { stackId: stackA.id, title: 'Alpha cross-board task' })
-		const cardB = await api('POST', '/cards', { stackId: stackB.id, title: 'Beta cross-board task' })
+		const stackA = await api.post('/stacks', { boardId: boardA.id, title: 'To Do' })
+		const stackB = await api.post('/stacks', { boardId: boardB.id, title: 'Doing' })
+		const cardA = await api.post('/cards', { stackId: stackA.id, title: 'Alpha cross-board task' })
+		const cardB = await api.post('/cards', { stackId: stackB.id, title: 'Beta cross-board task' })
 		state.cardA = cardA.id
 		state.cardB = cardB.id
 
-		const project = await api('POST', '/projects', { title: `Q3 Initiative ${ts}` })
+		const project = await api.post('/projects', { title: `Q3 Initiative ${ts}` })
 		state.projectId = project.id
-		await api('PUT', `/projects/${project.id}/cards/${cardA.id}`)
-		await api('PUT', `/projects/${project.id}/cards/${cardB.id}`)
+		await api.put(`/projects/${project.id}/cards/${cardA.id}`)
+		await api.put(`/projects/${project.id}/cards/${cardB.id}`)
 	})
 
 	test.afterAll(async () => {
-		if (state.projectId) await api('DELETE', `/projects/${state.projectId}`).catch(() => {})
-		if (state.boardA) await api('DELETE', `/boards/${state.boardA}`).catch(() => {})
-		if (state.boardB) await api('DELETE', `/boards/${state.boardB}`).catch(() => {})
+		if (state.projectId) await api.delete(`/projects/${state.projectId}`).catch(() => {})
+		if (state.boardA) await api.delete(`/boards/${state.boardA}`).catch(() => {})
+		if (state.boardB) await api.delete(`/boards/${state.boardB}`).catch(() => {})
 	})
 
 	test('the project page groups member cards from two boards by board', async ({ page }) => {
@@ -118,7 +90,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await expect(page.locator('.project-view__row')).toHaveCount(1, { timeout: 8_000 })
 
 		// Server agrees the membership is gone.
-		const remaining = await api('GET', `/projects/${state.projectId}/cards`)
+		const remaining = await api.get(`/projects/${state.projectId}/cards`)
 		expect(remaining.length).toBe(1)
 	})
 
@@ -158,7 +130,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await expect(headerDesc).not.toContainText('**bold text**')
 
 		// Round-trip: server persisted the raw markdown (client renders it).
-		const projects = await api('GET', '/projects')
+		const projects = await api.get('/projects')
 		const saved = projects.find((p) => p.id === state.projectId)
 		expect(saved.description).toBe(md)
 
@@ -169,7 +141,7 @@ test.describe('Projects — cross-board card collections', () => {
 
 	test('edits the description in place under the title and persists across reload', async ({ page }) => {
 		// Reset to a known starting description so this test is order-independent.
-		await api('PATCH', `/projects/${state.projectId}`, { description: 'Starting note' })
+		await api.patch(`/projects/${state.projectId}`, { description: 'Starting note' })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
@@ -201,7 +173,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await expect(rendered).not.toContainText('**detailed**')
 
 		// Server persisted the raw markdown.
-		const projects = await api('GET', '/projects')
+		const projects = await api.get('/projects')
 		expect(projects.find((p) => p.id === state.projectId).description).toBe(md)
 
 		// Persists across a full reload (database-first, not just optimistic UI).
@@ -219,12 +191,12 @@ test.describe('Projects — cross-board card collections', () => {
 		await ta2.press('Escape')
 		await expect(page.locator('.project-view__desc-textarea')).toBeHidden({ timeout: 5_000 })
 		await expect(page.locator('.project-view__desc-view')).toContainText('Overview')
-		const afterCancel = await api('GET', '/projects')
+		const afterCancel = await api.get('/projects')
 		expect(afterCancel.find((p) => p.id === state.projectId).description).toBe(md)
 	})
 
 	test('shows an add-a-description affordance when empty and saves inline', async ({ page }) => {
-		await api('PATCH', `/projects/${state.projectId}`, { description: '' })
+		await api.patch(`/projects/${state.projectId}`, { description: '' })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
@@ -241,16 +213,16 @@ test.describe('Projects — cross-board card collections', () => {
 		await page.getByRole('button', { name: /^Save$/ }).click()
 
 		await expect(page.locator('.project-view__desc-view')).toContainText('First description added inline', { timeout: 8_000 })
-		const projects = await api('GET', '/projects')
+		const projects = await api.get('/projects')
 		expect(projects.find((p) => p.id === state.projectId).description).toBe('First description added inline')
 	})
 
 	test('adds a card via the cross-board search picker', async ({ page }) => {
 		// A fresh, distinctively-named card on board A to find through the picker.
 		const ts = Date.now()
-		const stack = await api('POST', '/stacks', { boardId: state.boardA, title: 'Picker' })
+		const stack = await api.post('/stacks', { boardId: state.boardA, title: 'Picker' })
 		const uniqueTitle = `Zeta pickable ${ts}`
-		await api('POST', '/cards', { stackId: stack.id, title: uniqueTitle })
+		await api.post('/cards', { stackId: stack.id, title: uniqueTitle })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
@@ -267,7 +239,7 @@ test.describe('Projects — cross-board card collections', () => {
 		// The picked card now shows in the project feed…
 		await expect(page.locator('.project-view__row', { hasText: uniqueTitle })).toBeVisible({ timeout: 8_000 })
 		// …and the server recorded the membership.
-		const cards = await api('GET', `/projects/${state.projectId}/cards`)
+		const cards = await api.get(`/projects/${state.projectId}/cards`)
 		expect(cards.some((c) => c.title === uniqueTitle)).toBe(true)
 	})
 })

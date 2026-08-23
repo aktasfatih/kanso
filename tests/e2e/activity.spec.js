@@ -1,53 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // #3494 — per-card Activity tab.
 test.describe('Card Activity feed', () => {
 	const state = { boardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Activity E2E' })
+		const board = await api.send('POST', '/boards', { title: 'Activity E2E' })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'To Do' })
-		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Tracked card' })
+		const stack = await api.send('POST', '/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Tracked card' })
 		// Generate a few distinct activity rows.
-		await api('POST', `/cards/${card.id}/comments`, { body: 'first note' })
-		await api('PATCH', `/cards/${card.id}`, { priority: 3 })
+		await api.send('POST', `/cards/${card.id}/comments`, { body: 'first note' })
+		await api.send('PATCH', `/cards/${card.id}`, { priority: 3 })
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.send('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('the Activity tab lists what happened to the card, newest-first', async ({ page }) => {
@@ -80,8 +52,8 @@ test.describe('Card Activity feed', () => {
 	// kanso_board_changed) and assert the feed grows with NO manual tab switch.
 	test('an external change refreshes the open Activity feed without a tab switch', async ({ page }) => {
 		// A fresh card so this test's row counts are independent of the first test.
-		const stack = await api('POST', '/stacks', { boardId: state.boardId, title: 'Live' })
-		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Live card' })
+		const stack = await api.send('POST', '/stacks', { boardId: state.boardId, title: 'Live' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Live card' })
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
 
 		await ncLogin(page)
@@ -107,7 +79,7 @@ test.describe('Card Activity feed', () => {
 		// Mutate the card via the API WITHOUT touching the tab. This appends to
 		// kanso_changes and broadcasts kanso_board_changed; the open feed must pick
 		// it up through the board-cache → card-activity invalidation (push or poll).
-		await api('PATCH', `/cards/${card.id}`, { priority: 2 })
+		await api.send('PATCH', `/cards/${card.id}`, { priority: 2 })
 
 		// The new "changed the priority" row appears on its own — no tab switch.
 		// A single edit may append ≥1 change row, so assert growth (not an exact
@@ -130,11 +102,11 @@ test.describe('Card Activity feed', () => {
 	// how many entries share an actor.
 	test('a multi-entry feed with a repeated actor stays O(actors), not O(entries)', async ({ page }) => {
 		// One card with MANY activity rows, all authored by the same actor (admin).
-		const stack = await api('POST', '/stacks', { boardId: state.boardId, title: 'Storm' })
-		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Storm card' })
+		const stack = await api.send('POST', '/stacks', { boardId: state.boardId, title: 'Storm' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Storm card' })
 		for (let i = 0; i < 15; i++) {
-			await api('POST', `/cards/${card.id}/comments`, { body: `note ${i}` })
-			await api('PATCH', `/cards/${card.id}`, { priority: i % 3 })
+			await api.send('POST', `/cards/${card.id}/comments`, { body: `note ${i}` })
+			await api.send('PATCH', `/cards/${card.id}`, { priority: i % 3 })
 		}
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
 

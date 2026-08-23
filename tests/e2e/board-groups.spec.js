@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiSend(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Board grouping / folders (#3529)', () => {
 	const state = {
@@ -40,16 +12,16 @@ test.describe('Board grouping / folders (#3529)', () => {
 	}
 
 	test.beforeAll(async () => {
-		const board = await apiSend('POST', '/boards', { title: state.title, color: '2ecc71' })
+		const board = await api.post('/boards', { title: state.title, color: '2ecc71' })
 		state.boardId = board.id
 	})
 
 	test.afterAll(async () => {
 		for (const id of state.createdGroupIds) {
-			await apiSend('DELETE', `/board-groups/${id}`).catch(() => {})
+			await api.delete(`/board-groups/${id}`).catch(() => {})
 		}
 		if (state.boardId) {
-			await apiSend('DELETE', `/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -86,7 +58,7 @@ test.describe('Board grouping / folders (#3529)', () => {
 		).toBeVisible({ timeout: 10_000 })
 
 		// Capture the created folder id for cleanup, then reload and re-assert.
-		const groups = await apiSend('GET', '/board-groups')
+		const groups = await api.get('/board-groups')
 		const created = groups.find((g) => g.name === state.folderName)
 		expect(created).toBeTruthy()
 		expect(created.boardIds.map(Number)).toContain(Number(state.boardId))

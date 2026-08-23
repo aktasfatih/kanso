@@ -1,38 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, BASE, api, ncLogin } from './helpers.js'
 
 async function stackOrder(boardId, stackId) {
-	const board = await api('GET', `/boards/${boardId}`)
+	const board = await api.get(`/boards/${boardId}`)
 	return board.cards
 		.filter((c) => c.stackId === stackId && !c.archived)
 		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
@@ -40,7 +12,7 @@ async function stackOrder(boardId, stackId) {
 }
 
 async function cardStackId(boardId, cardId) {
-	const board = await api('GET', `/boards/${boardId}`)
+	const board = await api.get(`/boards/${boardId}`)
 	return board.cards.find((c) => c.id === cardId)?.stackId
 }
 
@@ -51,19 +23,19 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 	const state = { boardId: 0, todoId: 0, doingId: 0, aId: 0, bId: 0, cId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Move-Picker E2E' })
+		const board = await api.post('/boards', { title: 'Move-Picker E2E' })
 		state.boardId = board.id
-		state.todoId = (await api('POST', '/stacks', { boardId: board.id, title: 'To Do' })).id
-		state.doingId = (await api('POST', '/stacks', { boardId: board.id, title: 'Doing' })).id
+		state.todoId = (await api.post('/stacks', { boardId: board.id, title: 'To Do' })).id
+		state.doingId = (await api.post('/stacks', { boardId: board.id, title: 'Doing' })).id
 		// To Do: A (top), B (middle), C (bottom).
-		state.aId = (await api('POST', '/cards', { stackId: state.todoId, title: 'Card A' })).id
-		state.bId = (await api('POST', '/cards', { stackId: state.todoId, title: 'Card B' })).id
-		state.cId = (await api('POST', '/cards', { stackId: state.todoId, title: 'Card C' })).id
+		state.aId = (await api.post('/cards', { stackId: state.todoId, title: 'Card A' })).id
+		state.bId = (await api.post('/cards', { stackId: state.todoId, title: 'Card B' })).id
+		state.cId = (await api.post('/cards', { stackId: state.todoId, title: 'Card C' })).id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${state.bId}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('moves the card to another column at a chosen position, and to an empty column', async ({ page }) => {

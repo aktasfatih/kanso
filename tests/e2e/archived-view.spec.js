@@ -5,51 +5,23 @@
 // disappears from the board and shows on /board/:id/archived; unarchiving it from
 // the page removes it from the list and returns it to the board.
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(`${USER}:${PASS}`).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Archived cards page', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: `Archived E2E ${Date.now()}` })
+		const board = await api.send('POST', '/boards', { title: `Archived E2E ${Date.now()}` })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Backlog' })
+		const stack = await api.send('POST', '/stacks', { boardId: board.id, title: 'Backlog' })
 		state.stackId = stack.id
-		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Archivable Card' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Archivable Card' })
 		state.cardId = card.id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.send('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('archived card appears on the routed page and unarchive returns it to the board', async ({ page }) => {
@@ -58,7 +30,7 @@ test.describe('Archived cards page', () => {
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Archive the card via the API, then reload so the board reflects it.
-		await api('PATCH', `/cards/${state.cardId}`, { archived: true })
+		await api.send('PATCH', `/cards/${state.cardId}`, { archived: true })
 		await page.reload()
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
@@ -102,7 +74,7 @@ test.describe('Archived cards page', () => {
 
 	test('the Archived page is deep-linkable and shows an empty state when nothing is archived', async ({ page }) => {
 		// Ensure the card is not archived (previous test unarchived it).
-		await api('PATCH', `/cards/${state.cardId}`, { archived: false }).catch(() => {})
+		await api.send('PATCH', `/cards/${state.cardId}`, { archived: false }).catch(() => {})
 
 		await ncLogin(page)
 		await page.goto(`${state.boardUrl}/archived`)

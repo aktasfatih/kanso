@@ -1,41 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, ncLogin, authFor, adminAuth, API, OCS, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
+const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
+const AUTH = adminAuth
 
 async function apiPut(path) {
 	const r = await fetch(API + path, {
@@ -46,7 +15,6 @@ async function apiPut(path) {
 }
 
 // ---- OCS provisioning + as-other-user helpers (multi-user watcher tests) ----
-const OCS = BASE + '/ocs/v2.php/cloud'
 const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
 
 async function provisionUser(uid, password) {
@@ -65,9 +33,7 @@ async function deleteUser(uid) {
 	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
 }
 
-function authHeader(user, pass) {
-	return 'Basic ' + Buffer.from(user + ':' + pass).toString('base64')
-}
+const authHeader = authFor
 
 // Share a board with a user at the given permission mask (READ=1, EDIT=2, SHARE=4).
 async function shareBoardWith(boardId, uid, permission) {
@@ -80,46 +46,31 @@ async function shareBoardWith(boardId, uid, permission) {
 	return r.json()
 }
 
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
-
 test.describe('Card Subscriptions / Watchers', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
 		// Tear down any prior board with the same name to ensure hermetic setup
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Subscription E2E Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Create fresh board + stack + card
-		const board = await apiPost('/boards', { title: 'Subscription E2E Board' })
+		const board = await api.post('/boards', { title: 'Subscription E2E Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card With Watchers' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card With Watchers' })
 		state.cardId = card.id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
 	test.afterAll(async () => {
 		if (state.boardId) {
-			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -214,11 +165,11 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('auto-subscribe: commenting via API makes admin a watcher', async ({ page }) => {
 		// Use a FRESH card: the earlier unwatch test wrote an opt-out tombstone on
 		// state.cardId, which correctly suppresses auto-subscribe there.
-		const freshCard = await apiPost('/cards', { stackId: state.stackId, title: 'Fresh Watch Card' })
+		const freshCard = await api.post('/cards', { stackId: state.stackId, title: 'Fresh Watch Card' })
 		const freshUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${freshCard.id}`
 
 		// Post a comment as admin via the API - server should auto-subscribe admin
-		await apiPost(`/cards/${freshCard.id}/comments`, { body: 'API comment auto-subscribes me' })
+		await api.post(`/cards/${freshCard.id}/comments`, { body: 'API comment auto-subscribes me' })
 
 		await ncLogin(page)
 		await page.goto(freshUrl)
@@ -248,21 +199,21 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 
 	test.beforeAll(async () => {
 		await provisionUser(BOB, BOB_PASS)
-		for (const b of await apiGet('/boards')) {
-			if (b.title === 'Watchers UI E2E Board') await apiDelete(`/boards/${b.id}`)
+		for (const b of await api.get('/boards')) {
+			if (b.title === 'Watchers UI E2E Board') await api.delete(`/boards/${b.id}`)
 		}
-		const board = await apiPost('/boards', { title: 'Watchers UI E2E Board' })
+		const board = await api.post('/boards', { title: 'Watchers UI E2E Board' })
 		state.boardId = board.id
 		await shareBoardWith(board.id, BOB, 3) // READ | EDIT — becomes a board participant
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Dropdown Watchers' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Dropdown Watchers' })
 		state.cardId = card.id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		await deleteUser(BOB)
 	})
 
@@ -339,22 +290,22 @@ test.describe('Watcher management — add / remove OTHER users', () => {
 		await provisionUser(BOB, BOB_PASS)
 		await provisionUser(STRANGER, STRANGER_PASS)
 
-		for (const b of await apiGet('/boards')) {
+		for (const b of await api.get('/boards')) {
 			if (b.title === 'Watcher Mgmt E2E Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
-		const board = await apiPost('/boards', { title: 'Watcher Mgmt E2E Board' })
+		const board = await api.post('/boards', { title: 'Watcher Mgmt E2E Board' })
 		state.boardId = board.id
 		await shareBoardWith(board.id, BOB, 3) // READ | EDIT
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Managed Watchers' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Managed Watchers' })
 		state.cardId = card.id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		await deleteUser(BOB)
 		await deleteUser(STRANGER)
 	})

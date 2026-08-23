@@ -1,39 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, BASE, api, ncLogin } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function rawPost(path, body) {
-	return fetch(API + path, { method: 'POST', headers: { ...HEADERS, Authorization: AUTH }, body: JSON.stringify(body) })
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+// The raw Response form (does NOT throw) so the reject tests can assert on r.ok.
+const rawPost = (path, body) => api.raw('POST', path, body)
 
 const boardCard = (board, id) => board.cards.find((c) => c.id === id)
 
@@ -42,36 +13,36 @@ test.describe('Card relations (#3404)', () => {
 
 	test.beforeAll(async () => {
 		state.cTitle = 'Rel-B ' + Math.floor(Date.now() / 1000)
-		const board = await api('POST', '/boards', { title: 'Relations ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Relations ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'To do' })).id
-		state.a = (await api('POST', '/cards', { stackId: state.stackId, title: 'Rel-A ' + Math.floor(Date.now() / 1000) })).id
-		state.b = (await api('POST', '/cards', { stackId: state.stackId, title: state.cTitle })).id
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'To do' })).id
+		state.a = (await api.post('/cards', { stackId: state.stackId, title: 'Rel-A ' + Math.floor(Date.now() / 1000) })).id
+		state.b = (await api.post('/cards', { stackId: state.stackId, title: state.cTitle })).id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('a blocks relation is directional and drives the blocked badge', async () => {
-		await api('POST', `/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'blocks' })
+		await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'blocks' })
 
 		// A blocks B; B is blocked by A.
-		const a = await api('GET', `/cards/${state.a}`)
-		const b = await api('GET', `/cards/${state.b}`)
+		const a = await api.get(`/cards/${state.a}`)
+		const b = await api.get(`/cards/${state.b}`)
 		expect(a.relations.blocks.map((r) => r.cardId)).toContain(state.b)
 		expect(b.relations.blockedBy.map((r) => r.cardId)).toContain(state.a)
 
 		// The board payload flags B blocked (its blocker A isn't done), A not.
-		let board = await api('GET', `/boards/${state.boardId}`)
+		let board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.b).blocked).toBe(true)
 		expect(boardCard(board, state.a).blocked).toBe(false)
 
 		// Completing the blocker clears the badge.
-		await api('PATCH', `/cards/${state.a}`, { done: true })
-		board = await api('GET', `/boards/${state.boardId}`)
+		await api.patch(`/cards/${state.a}`, { done: true })
+		board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.b).blocked).toBe(false)
-		await api('PATCH', `/cards/${state.a}`, { done: false })
+		await api.patch(`/cards/${state.a}`, { done: false })
 	})
 
 	test('a reverse blocks relation that would cycle is rejected', async () => {
@@ -86,20 +57,20 @@ test.describe('Card relations (#3404)', () => {
 	})
 
 	test('a symmetric relation shows on both cards and can be removed', async () => {
-		const rel = await api('POST', `/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'duplicates' })
+		const rel = await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'duplicates' })
 
-		expect((await api('GET', `/cards/${state.a}`)).relations.duplicates.map((r) => r.cardId)).toContain(state.b)
-		expect((await api('GET', `/cards/${state.b}`)).relations.duplicates.map((r) => r.cardId)).toContain(state.a)
+		expect((await api.get(`/cards/${state.a}`)).relations.duplicates.map((r) => r.cardId)).toContain(state.b)
+		expect((await api.get(`/cards/${state.b}`)).relations.duplicates.map((r) => r.cardId)).toContain(state.a)
 
-		await api('DELETE', `/cards/${state.a}/relations/${rel.id}`)
-		expect((await api('GET', `/cards/${state.a}`)).relations.duplicates).toHaveLength(0)
+		await api.delete(`/cards/${state.a}/relations/${rel.id}`)
+		expect((await api.get(`/cards/${state.a}`)).relations.duplicates).toHaveLength(0)
 	})
 
 	test('add and remove a relation from the card modal', async ({ page }) => {
 		// Start clean: drop the blocks relation from the API tests.
-		const a = await api('GET', `/cards/${state.a}`)
+		const a = await api.get(`/cards/${state.a}`)
 		for (const rel of a.relations.blocks) {
-			await api('DELETE', `/cards/${state.a}/relations/${rel.id}`)
+			await api.delete(`/cards/${state.a}/relations/${rel.id}`)
 		}
 
 		await ncLogin(page)
@@ -126,9 +97,9 @@ test.describe('Card relations (#3404)', () => {
 
 	test('clicking a relation row opens the related card', async ({ page }) => {
 		// Ensure A relates to B (symmetric, so it shows on A's modal).
-		const a = await api('GET', `/cards/${state.a}`)
+		const a = await api.get(`/cards/${state.a}`)
 		if (!a.relations.relates.map((r) => r.cardId).includes(state.b)) {
-			await api('POST', `/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'relates' })
+			await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'relates' })
 		}
 
 		await ncLogin(page)

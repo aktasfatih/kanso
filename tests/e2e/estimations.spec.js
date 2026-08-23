@@ -1,61 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function rawPatch(path, body) {
-	return fetch(API + path, { method: 'PATCH', headers: { ...HEADERS, Authorization: AUTH }, body: JSON.stringify(body) })
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+const rawPatch = (path, body) => api.raw('PATCH', path, body)
 
 test.describe('Card estimations (#3443)', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, title: '' }
 
 	test.beforeAll(async () => {
 		state.title = 'Estimate me ' + Math.floor(Date.now() / 1000)
-		const board = await api('POST', '/boards', { title: 'Estimates ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Estimates ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'To do' })).id
-		state.cardId = (await api('POST', '/cards', { stackId: state.stackId, title: state.title })).id
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'To do' })).id
+		state.cardId = (await api.post('/cards', { stackId: state.stackId, title: state.title })).id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('a board defaults to the none scale and can switch scales', async () => {
-		let board = await api('GET', `/boards/${state.boardId}`)
+		let board = await api.get(`/boards/${state.boardId}`)
 		expect(board.board.estimateScale).toBe('none')
 
-		await api('PATCH', `/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
-		board = await api('GET', `/boards/${state.boardId}`)
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
+		board = await api.get(`/boards/${state.boardId}`)
 		expect(board.board.estimateScale).toBe('fibonacci')
 	})
 
@@ -66,20 +36,20 @@ test.describe('Card estimations (#3443)', () => {
 
 	test('a card estimate must belong to the board scale', async () => {
 		// Board is fibonacci from the earlier test. A valid token sticks…
-		await api('PATCH', `/cards/${state.cardId}`, { estimate: '8' })
-		expect((await api('GET', `/cards/${state.cardId}`)).estimate).toBe('8')
+		await api.patch(`/cards/${state.cardId}`, { estimate: '8' })
+		expect((await api.get(`/cards/${state.cardId}`)).estimate).toBe('8')
 
 		// …an off-scale token is rejected…
 		expect((await rawPatch(`/cards/${state.cardId}`, { estimate: '4' })).ok).toBe(false)
 
 		// …and '' clears it.
-		await api('PATCH', `/cards/${state.cardId}`, { estimate: '' })
-		expect((await api('GET', `/cards/${state.cardId}`)).estimate).toBeNull()
+		await api.patch(`/cards/${state.cardId}`, { estimate: '' })
+		expect((await api.get(`/cards/${state.cardId}`)).estimate).toBeNull()
 	})
 
 	test('set an estimate from the card modal → chip shows on the tile', async ({ page }) => {
-		await api('PATCH', `/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
-		await api('PATCH', `/cards/${state.cardId}`, { estimate: '' })
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
+		await api.patch(`/cards/${state.cardId}`, { estimate: '' })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cardId}`)
@@ -107,8 +77,8 @@ test.describe('Card estimations (#3443)', () => {
 
 	test('switching scale warns and clears estimates that no longer fit', async ({ page }) => {
 		// Deterministic start: fibonacci board with an off-scale-for-tshirt token.
-		await api('PATCH', `/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
-		await api('PATCH', `/cards/${state.cardId}`, { estimate: '8' })
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
+		await api.patch(`/cards/${state.cardId}`, { estimate: '8' })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
@@ -126,17 +96,17 @@ test.describe('Card estimations (#3443)', () => {
 			.toBeVisible({ timeout: 8_000 })
 		await page.getByRole('button', { name: 'Change and clear' }).click()
 
-		await expect.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.estimateScale, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.estimateScale, { timeout: 8_000 })
 			.toBe('tshirt')
 		// The off-scale '8' was cleared server-side by the scale change.
-		await expect.poll(async () => (await api('GET', `/cards/${state.cardId}`)).estimate, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).estimate, { timeout: 8_000 })
 			.toBeNull()
 	})
 
 	test('cancelling the scale-change confirmation keeps scale and estimates', async ({ page }) => {
 		// Board is tshirt from the previous test; give the card a valid tshirt token.
-		await api('PATCH', `/boards/${state.boardId}`, { estimateScale: 'tshirt' })
-		await api('PATCH', `/cards/${state.cardId}`, { estimate: 'M' })
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'tshirt' })
+		await api.patch(`/cards/${state.cardId}`, { estimate: 'M' })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
@@ -154,8 +124,8 @@ test.describe('Card estimations (#3443)', () => {
 
 		// Nothing changed: scale still tshirt, estimate still 'M', select reverted.
 		await expect(select).toHaveValue('tshirt', { timeout: 8_000 })
-		expect((await api('GET', `/boards/${state.boardId}`)).board.estimateScale).toBe('tshirt')
-		expect((await api('GET', `/cards/${state.cardId}`)).estimate).toBe('M')
+		expect((await api.get(`/boards/${state.boardId}`)).board.estimateScale).toBe('tshirt')
+		expect((await api.get(`/cards/${state.cardId}`)).estimate).toBe('M')
 	})
 })
 
@@ -164,23 +134,23 @@ test.describe('Estimate sorting & filtering', () => {
 
 	test.beforeAll(async () => {
 		const stamp = Math.floor(Date.now() / 1000)
-		const board = await api('POST', '/boards', { title: 'EstSortFilter ' + stamp })
+		const board = await api.post('/boards', { title: 'EstSortFilter ' + stamp })
 		state.boardId = board.id
-		await api('PATCH', `/boards/${board.id}`, { estimateScale: 'fibonacci' })
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'To do' })).id
+		await api.patch(`/boards/${board.id}`, { estimateScale: 'fibonacci' })
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'To do' })).id
 
 		// Create in an order that is NOT the estimate order, so a passing sort
 		// assertion can only come from the estimate ranking (not creation order):
 		// manual order is None → Small(2) → Big(13); estimate-desc is Big → Small → None.
-		state.none = (await api('POST', '/cards', { stackId: state.stackId, title: 'EstNone' })).id
-		state.small = (await api('POST', '/cards', { stackId: state.stackId, title: 'EstSmall' })).id
-		await api('PATCH', `/cards/${state.small}`, { estimate: '2' })
-		state.big = (await api('POST', '/cards', { stackId: state.stackId, title: 'EstBig' })).id
-		await api('PATCH', `/cards/${state.big}`, { estimate: '13' })
+		state.none = (await api.post('/cards', { stackId: state.stackId, title: 'EstNone' })).id
+		state.small = (await api.post('/cards', { stackId: state.stackId, title: 'EstSmall' })).id
+		await api.patch(`/cards/${state.small}`, { estimate: '2' })
+		state.big = (await api.post('/cards', { stackId: state.stackId, title: 'EstBig' })).id
+		await api.patch(`/cards/${state.big}`, { estimate: '13' })
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('sort by estimate orders cards high→low with unestimated last', async ({ page }) => {

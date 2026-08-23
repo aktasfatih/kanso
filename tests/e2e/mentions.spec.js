@@ -1,73 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, adminAuth, ncLogin, BASE, OCS } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const OCS = BASE + '/ocs/v2.php/cloud'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
 
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	await fetch(API + path, { method: 'DELETE', headers: { ...HEADERS, Authorization: AUTH } }).catch(() => {})
-}
-
+// Local provisionUser DELETES-then-creates and THROWS on failure (unlike the
+// shared idempotent one) — this suite relies on a clean, freshly-created user,
+// so it is kept intact per the migration contract (rule 6).
 async function provisionUser(uid, password) {
-	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: adminAuth } }).catch(() => {})
 	const body = new URLSearchParams({ userid: uid, password })
 	const r = await fetch(`${OCS}/users`, {
 		method: 'POST',
-		headers: { ...OCS_HEADERS, Authorization: AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+		headers: { ...OCS_HEADERS, Authorization: adminAuth, 'Content-Type': 'application/x-www-form-urlencoded' },
 		body,
 	})
 	if (!r.ok) throw new Error(`provision ${uid} → ${r.status}: ${await r.text()}`)
 }
 
 async function deleteUser(uid) {
-	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: AUTH } }).catch(() => {})
+	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: adminAuth } }).catch(() => {})
 }
 
 async function shareBoardWith(boardId, uid, permission) {
-	const r = await fetch(`${API}/boards/${boardId}/acl`, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify({ participant: uid, participantType: 'user', permission }),
-	})
-	if (!r.ok) throw new Error(`share ${boardId}→${uid} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+	return api.post(`/boards/${boardId}/acl`, { participant: uid, participantType: 'user', permission })
 }
 
 test.describe('@mentions in comments', () => {
@@ -81,37 +38,37 @@ test.describe('@mentions in comments', () => {
 		await provisionUser(BOB, BOB_PASS)
 		await provisionUser(STRANGER, STRANGER_PASS)
 
-		for (const b of await apiGet('/boards')) {
-			if (b.title === 'Mentions E2E Board') await apiDelete(`/boards/${b.id}`)
+		for (const b of await api.get('/boards')) {
+			if (b.title === 'Mentions E2E Board') await api.delete(`/boards/${b.id}`).catch(() => {})
 		}
-		const board = await apiPost('/boards', { title: 'Mentions E2E Board' })
+		const board = await api.post('/boards', { title: 'Mentions E2E Board' })
 		state.boardId = board.id
 		await shareBoardWith(board.id, BOB, 3) // READ | EDIT — a real participant
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Mention Target Card' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Mention Target Card' })
 		state.cardId = card.id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await apiDelete(`/boards/${state.boardId}`)
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		await deleteUser(BOB)
 		await deleteUser(STRANGER)
 	})
 
 	test('mentioning a board participant auto-subscribes them (server-side)', async () => {
-		await apiPost(`/cards/${state.cardId}/comments`, { body: `Heads up @${BOB} — take a look` })
+		await api.post(`/cards/${state.cardId}/comments`, { body: `Heads up @${BOB} — take a look` })
 
-		const sub = await apiGet(`/cards/${state.cardId}/subscription`)
+		const sub = await api.get(`/cards/${state.cardId}/subscription`)
 		expect(sub.subscribers).toContain(BOB)
 	})
 
 	test('mentioning a non-member is inert (no subscribe, no leak)', async () => {
 		// STRANGER is provisioned but NOT shared on this board.
-		await apiPost(`/cards/${state.cardId}/comments`, { body: `cc @${STRANGER} should be inert` })
+		await api.post(`/cards/${state.cardId}/comments`, { body: `cc @${STRANGER} should be inert` })
 
-		const sub = await apiGet(`/cards/${state.cardId}/subscription`)
+		const sub = await api.get(`/cards/${state.cardId}/subscription`)
 		expect(sub.subscribers).not.toContain(STRANGER)
 	})
 

@@ -4,7 +4,14 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
 	testDir: './tests/e2e',
-	workers: 1,
+	// Serial by default: every spec runs as the same `admin` user against one
+	// shared DB (fixed board names, delete-then-recreate, per-user aggregate
+	// views like my-work/inbox/search), so concurrent specs would corrupt each
+	// other. The suite is parallel-READY: set E2E_ISOLATE=1 and each worker
+	// provisions its own Nextcloud user (see tests/e2e/helpers.js), which
+	// namespaces all of that per worker — then E2E_WORKERS can be raised safely.
+	//   E2E_ISOLATE=1 E2E_WORKERS=4 npx playwright test
+	workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : 1,
 	// 120s per test: the self-hosted CI runner is ~4-5x slower than a dev box,
 	// so a test that takes ~10s locally can approach the old 60s cap there and
 	// flake. Locally tests still finish in a few seconds, so this only adds

@@ -6,22 +6,7 @@
 // tabs swaps the embedded sub-view; each is shown WITHOUT its own header (the
 // hub supplies the single "My Work" title). A board filter is present.
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, ncLogin, BASE } from './helpers.js'
 
 test.describe('My Work hub', () => {
 	test('one nav entry, three tabs, each swapping the embedded sub-view', async ({ page }) => {

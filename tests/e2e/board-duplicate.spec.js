@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // Duplicate board (#3543): a READ-authorized board is cloned server-side into a
 // FRESH board the caller owns (export→import in-process). "Copy cards too"
@@ -40,18 +12,18 @@ test.describe('Duplicate board (#3543)', () => {
 	const title = 'Duplicate E2E ' + Math.floor(Date.now() / 1000)
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title })
+		const board = await api.send('POST', '/boards', { title })
 		state.boardId = board.id
-		const todo = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
-		await api('POST', '/stacks', { boardId: board.id, title: 'Done' })
-		await api('POST', '/labels', { boardId: board.id, title: 'Priority', color: 'e11d48' })
-		await api('POST', '/cards', { stackId: todo.id, title: 'Alpha' })
-		await api('POST', '/cards', { stackId: todo.id, title: 'Beta' })
+		const todo = await api.send('POST', '/stacks', { boardId: board.id, title: 'To do' })
+		await api.send('POST', '/stacks', { boardId: board.id, title: 'Done' })
+		await api.send('POST', '/labels', { boardId: board.id, title: 'Priority', color: 'e11d48' })
+		await api.send('POST', '/cards', { stackId: todo.id, title: 'Alpha' })
+		await api.send('POST', '/cards', { stackId: todo.id, title: 'Beta' })
 	})
 
 	test.afterAll(async () => {
-		if (state.copyBoardId) await api('DELETE', `/boards/${state.copyBoardId}`).catch(() => {})
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.copyBoardId) await api.send('DELETE', `/boards/${state.copyBoardId}`).catch(() => {})
+		if (state.boardId) await api.send('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('duplicates a populated board with cards and opens the copy', async ({ page }) => {
@@ -90,7 +62,7 @@ test.describe('Duplicate board (#3543)', () => {
 
 		// The copy carries the source stacks + cards (verified through the API,
 		// which is the source of truth the board view renders from).
-		const copy = await api('GET', `/boards/${state.copyBoardId}/export`)
+		const copy = await api.send('GET', `/boards/${state.copyBoardId}/export`)
 		expect(copy.board.title).toBe(`${title} (copy)`)
 		expect(copy.board.stacks.map((s) => s.title).sort()).toEqual(['Done', 'To do'])
 		expect(copy.board.labels.map((l) => l.title)).toEqual(['Priority'])
@@ -101,7 +73,7 @@ test.describe('Duplicate board (#3543)', () => {
 	})
 
 	test('structural-only clone (no cards) via the API', async () => {
-		const res = await api('POST', `/boards/${state.boardId}/duplicate`, { withCards: false })
+		const res = await api.send('POST', `/boards/${state.boardId}/duplicate`, { withCards: false })
 		try {
 			expect(res.boardId).not.toBe(state.boardId)
 			expect(res.title).toBe(`${title} (copy)`)
@@ -109,11 +81,11 @@ test.describe('Duplicate board (#3543)', () => {
 			expect(res.labels).toBe(1)
 			expect(res.cards).toBe(0)
 
-			const doc = await api('GET', `/boards/${res.boardId}/export`)
+			const doc = await api.send('GET', `/boards/${res.boardId}/export`)
 			expect(doc.board.cards).toHaveLength(0)
 			expect(doc.board.stacks).toHaveLength(2)
 		} finally {
-			await api('DELETE', `/boards/${res.boardId}`).catch(() => {})
+			await api.send('DELETE', `/boards/${res.boardId}`).catch(() => {})
 		}
 	})
 })

@@ -6,62 +6,34 @@
 // cross-board CSS-bar stats page, which shows the priority distribution and the
 // at-a-glance / flow panels — WITHOUT the board-specific "Cards by stack" panel.
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(`${USER}:${PASS}`).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Project analytics — cross-board', () => {
 	const state = { boardA: 0, boardB: 0, projectId: 0 }
 
 	test.beforeAll(async () => {
 		const ts = Date.now()
-		const boardA = await api('POST', '/boards', { title: `PStats Board A ${ts}` })
-		const boardB = await api('POST', '/boards', { title: `PStats Board B ${ts}` })
+		const boardA = await api.post('/boards', { title: `PStats Board A ${ts}` })
+		const boardB = await api.post('/boards', { title: `PStats Board B ${ts}` })
 		state.boardA = boardA.id
 		state.boardB = boardB.id
-		const stackA = await api('POST', '/stacks', { boardId: boardA.id, title: 'To Do' })
-		const stackB = await api('POST', '/stacks', { boardId: boardB.id, title: 'Doing' })
-		const cardA = await api('POST', '/cards', { stackId: stackA.id, title: 'Alpha stats task' })
-		const cardB = await api('POST', '/cards', { stackId: stackB.id, title: 'Beta stats task' })
+		const stackA = await api.post('/stacks', { boardId: boardA.id, title: 'To Do' })
+		const stackB = await api.post('/stacks', { boardId: boardB.id, title: 'Doing' })
+		const cardA = await api.post('/cards', { stackId: stackA.id, title: 'Alpha stats task' })
+		const cardB = await api.post('/cards', { stackId: stackB.id, title: 'Beta stats task' })
 		// Give one card a critical priority so the "Cards by priority" bar renders.
-		await api('PATCH', `/cards/${cardA.id}`, { priority: 4 })
+		await api.patch(`/cards/${cardA.id}`, { priority: 4 })
 
-		const project = await api('POST', '/projects', { title: `Stats Initiative ${ts}` })
+		const project = await api.post('/projects', { title: `Stats Initiative ${ts}` })
 		state.projectId = project.id
-		await api('PUT', `/projects/${project.id}/cards/${cardA.id}`)
-		await api('PUT', `/projects/${project.id}/cards/${cardB.id}`)
+		await api.put(`/projects/${project.id}/cards/${cardA.id}`)
+		await api.put(`/projects/${project.id}/cards/${cardB.id}`)
 	})
 
 	test.afterAll(async () => {
-		if (state.projectId) await api('DELETE', `/projects/${state.projectId}`).catch(() => {})
-		if (state.boardA) await api('DELETE', `/boards/${state.boardA}`).catch(() => {})
-		if (state.boardB) await api('DELETE', `/boards/${state.boardB}`).catch(() => {})
+		if (state.projectId) await api.delete(`/projects/${state.projectId}`).catch(() => {})
+		if (state.boardA) await api.delete(`/boards/${state.boardA}`).catch(() => {})
+		if (state.boardB) await api.delete(`/boards/${state.boardB}`).catch(() => {})
 	})
 
 	test('the project analytics button opens the cross-board stats view', async ({ page }) => {
@@ -93,7 +65,7 @@ test.describe('Project analytics — cross-board', () => {
 	})
 
 	test('the stats API aggregates over the project card set and omits board-only panels', async () => {
-		const stats = await api('GET', `/projects/${state.projectId}/stats`)
+		const stats = await api.get(`/projects/${state.projectId}/stats`)
 		// Two member cards across two boards.
 		expect(stats.cardCount).toBe(2)
 		const total = stats.byPriority.reduce((n, r) => n + r.count, 0)

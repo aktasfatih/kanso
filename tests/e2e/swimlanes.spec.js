@@ -1,56 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Swimlanes (#3406)', () => {
 	const state = { boardId: 0, labelId: 0 }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Swimlanes ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Swimlanes ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
 
 		// A colored board label to group by.
-		const label = await api('POST', '/labels', { boardId: board.id, title: 'Frontend', color: '3498db' })
+		const label = await api.post('/labels', { boardId: board.id, title: 'Frontend', color: '3498db' })
 		state.labelId = label.id
 
 		// One card WITH the label, one WITHOUT (→ the "No label" lane).
-		const labelled = await api('POST', '/cards', { stackId: stack.id, title: 'Labelled Card' })
-		await api('PUT', `/cards/${labelled.id}/labels/${state.labelId}`)
-		await api('POST', '/cards', { stackId: stack.id, title: 'Plain Card' })
+		const labelled = await api.post('/cards', { stackId: stack.id, title: 'Labelled Card' })
+		await api.put(`/cards/${labelled.id}/labels/${state.labelId}`)
+		await api.post('/cards', { stackId: stack.id, title: 'Plain Card' })
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('Group by label creates a lane per label + a No-label lane; toggling back restores the flat board', async ({ page }) => {

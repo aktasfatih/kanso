@@ -1,29 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
+import { test, expect, ncLogin, BASE } from './helpers.js'
 
 const ISSUES_URL = 'https://github.com/aktasfatih/kanso/issues'
 const MCP_SETUP_URL = 'https://github.com/aktasfatih/kanso/tree/main/mcp'
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
 
 async function gotoKanso(page) {
 	await page.goto(BASE + '/index.php/apps/kanso')

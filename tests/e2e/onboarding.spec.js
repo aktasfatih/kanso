@@ -9,7 +9,7 @@
 // persisted PER USER via the shared `dismissed_hints` settings key, so it stays
 // hidden after a reload.
 
-import { test, expect } from '@playwright/test'
+import { test, expect, ncLogin } from './helpers.js'
 
 const BASE = 'http://localhost:8891'
 const ADMIN = 'admin'
@@ -38,17 +38,6 @@ async function deleteUser(uid) {
 	await fetch(`${OCS}/users/${uid}`, { method: 'DELETE', headers: { ...OCS_HEADERS, Authorization: ADMIN_AUTH } }).catch(() => {})
 }
 
-async function loginAs(page, user, pass) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', user)
-	await page.fill('#password', pass)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
-
 test.describe('First-run onboarding (#3413)', () => {
 	// Logs in as a freshly provisioned (non-admin) user on the default page to
 	// exercise the first-run flow, so it must NOT inherit the shared authenticated
@@ -64,7 +53,7 @@ test.describe('First-run onboarding (#3413)', () => {
 	})
 
 	test('empty state seeds a starter board and the shortcut hint stays dismissed', async ({ page }) => {
-		await loginAs(page, UID, PASS)
+		await ncLogin(page, { user: UID, pass: PASS })
 		await page.goto(`${BASE}/index.php/apps/kanso#/`)
 		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
 

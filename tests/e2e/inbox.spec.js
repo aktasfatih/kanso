@@ -9,66 +9,14 @@
 // If the two-user share setup is unavailable the test falls back to asserting
 // the page at least renders without crashing (either a feed item or empty state).
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, makeApi, authFor, ncLogin, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
 const ADMIN = 'admin'
-const ADMIN_PASS = 'admin'
 const TESTER = 'tester'
 const TESTER_PASS = 'kanso-dev-tester!1'
 
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const ADMIN_AUTH = 'Basic ' + Buffer.from(`${ADMIN}:${ADMIN_PASS}`).toString('base64')
-const TESTER_AUTH = 'Basic ' + Buffer.from(`${TESTER}:${TESTER_PASS}`).toString('base64')
-
-// ---------------------------------------------------------------------------
-// HTTP helpers
-// ---------------------------------------------------------------------------
-
-async function apiRequest(path, { method = 'GET', auth = ADMIN_AUTH, body } = {}) {
-	const opts = { method, headers: { ...HEADERS, Authorization: auth } }
-	if (body !== undefined) opts.body = JSON.stringify(body)
-	const r = await fetch(API + path, opts)
-	return r
-}
-
-async function apiGet(path, auth = ADMIN_AUTH) {
-	const r = await apiRequest(path, { auth })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body, auth = ADMIN_AUTH) {
-	const r = await apiRequest(path, { method: 'POST', auth, body })
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiPut(path, auth = ADMIN_AUTH) {
-	const r = await apiRequest(path, { method: 'PUT', auth })
-	if (!r.ok) throw new Error(`PUT ${path} → ${r.status}`)
-}
-
-async function apiDelete(path, auth = ADMIN_AUTH) {
-	await apiRequest(path, { method: 'DELETE', auth })
-}
-
-// ---------------------------------------------------------------------------
-// Login helper
-// ---------------------------------------------------------------------------
-
-async function ncLogin(page, user = ADMIN, pass = ADMIN_PASS) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	const isLoginPage = await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return
-	await page.fill('#user', user)
-	await page.fill('#password', pass)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+const TESTER_AUTH = authFor(TESTER, TESTER_PASS)
+const testerApi = makeApi(TESTER_AUTH)
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -86,28 +34,28 @@ test.describe('Inbox feed', () => {
 
 	test.beforeAll(async () => {
 		// Clean up any leftover board from a prior run
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Inbox E2E Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`).catch(() => {})
 			}
 		}
 
 		// Create board + stack + card as admin
-		const board = await apiPost('/boards', { title: 'Inbox E2E Board' })
+		const board = await api.post('/boards', { title: 'Inbox E2E Board' })
 		state.boardId = board.id
 
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
 
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Inbox Test Card' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Inbox Test Card' })
 		state.cardId = card.id
 
 		// Share board with tester (READ|EDIT = permission 3)
 		// If tester user doesn't exist this will fail gracefully - we fall back
 		let shareOk = false
 		try {
-			await apiPost(`/boards/${board.id}/acl`, {
+			await api.post(`/boards/${board.id}/acl`, {
 				participant: TESTER,
 				participantType: 'user',
 				permission: 3,
@@ -119,7 +67,7 @@ test.describe('Inbox feed', () => {
 
 		// Admin subscribes to the card
 		try {
-			await apiPut(`/cards/${card.id}/subscription`)
+			await api.put(`/cards/${card.id}/subscription`)
 		} catch {
 			// subscription endpoint may not be available outside dev stack
 		}
@@ -128,7 +76,7 @@ test.describe('Inbox feed', () => {
 		if (shareOk) {
 			try {
 				state.commentBody = 'Hello from tester - inbox smoke test'
-				await apiPost(`/cards/${card.id}/comments`, { body: state.commentBody }, TESTER_AUTH)
+				await testerApi.post(`/cards/${card.id}/comments`, { body: state.commentBody })
 				state.setupOk = true
 			} catch {
 				// tester auth failed - still run fallback assertion
@@ -138,7 +86,7 @@ test.describe('Inbox feed', () => {
 			// on a card admin follows, by an actor other than admin, so it should
 			// surface in admin's inbox feed alongside the comment.
 			try {
-				const r = await apiRequest(`/cards/${card.id}/reviews/${ADMIN}`, { method: 'PUT', auth: TESTER_AUTH })
+				const r = await testerApi.raw('PUT', `/cards/${card.id}/reviews/${ADMIN}`)
 				state.reviewEventOk = r.ok
 			} catch {
 				// review request unavailable - the status-change test skips
@@ -148,7 +96,7 @@ test.describe('Inbox feed', () => {
 
 	test.afterAll(async () => {
 		if (state.boardId) {
-			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 

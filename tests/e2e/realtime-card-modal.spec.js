@@ -13,66 +13,9 @@
 // Draft safety is asserted too: the modal's editors copy into local draft refs
 // on edit-start, so a remote refresh must never clobber a dirty editor.
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const ADMIN_AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: ADMIN_AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: ADMIN_AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiPatch(path, body) {
-	const r = await fetch(API + path, {
-		method: 'PATCH',
-		headers: { ...HEADERS, Authorization: ADMIN_AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`PATCH ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: ADMIN_AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
-
-async function ncLogin(page, user, pass) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', user)
-	await page.fill('#password', pass)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
 
 test.describe('Realtime card modal freshness', () => {
 	// Drives two distinct users (admin + tester) and logs each in explicitly — so
@@ -83,19 +26,19 @@ test.describe('Realtime card modal freshness', () => {
 	const state = { boardId: 0, cardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Realtime Modal Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
-		const board = await apiPost('/boards', { title: 'Realtime Modal Board' })
+		const board = await api.post('/boards', { title: 'Realtime Modal Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'S1' })
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Modal card v1' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'S1' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Modal card v1' })
 		state.cardId = card.id
 		// Share with tester (READ|EDIT = 3)
-		await apiPost(`/boards/${board.id}/acl`, {
+		await api.post(`/boards/${board.id}/acl`, {
 			participant: TESTER.user,
 			participantType: 'user',
 			permission: 3,
@@ -105,7 +48,7 @@ test.describe('Realtime card modal freshness', () => {
 
 	test.afterAll(async () => {
 		if (state.boardId) {
-			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -113,16 +56,16 @@ test.describe('Realtime card modal freshness', () => {
 		const testerCtx = await browser.newContext()
 		try {
 			const page = await testerCtx.newPage()
-			await ncLogin(page, TESTER.user, TESTER.pass)
+			await ncLogin(page, { user: TESTER.user, pass: TESTER.pass })
 
 			// Tester opens the card modal and keeps it open — no further navigation.
 			await page.goto(state.cardUrl)
 			await expect(page.locator('.card-modal__title')).toHaveText('Modal card v1', { timeout: 15_000 })
 
 			// Admin (other "tab") edits title + description and adds a comment.
-			await apiPatch(`/cards/${state.cardId}`, { title: 'Modal card v2' })
-			await apiPatch(`/cards/${state.cardId}`, { description: 'remote description v1' })
-			await apiPost(`/cards/${state.cardId}/comments`, { body: 'remote comment v1' })
+			await api.patch(`/cards/${state.cardId}`, { title: 'Modal card v2' })
+			await api.patch(`/cards/${state.cardId}`, { description: 'remote description v1' })
+			await api.post(`/cards/${state.cardId}/comments`, { body: 'remote comment v1' })
 
 			// All three must land in the OPEN modal: push is near-instant, the
 			// delta-poll fallback fires every 5s — 15s is generous for either.
@@ -140,7 +83,7 @@ test.describe('Realtime card modal freshness', () => {
 		const testerCtx = await browser.newContext()
 		try {
 			const page = await testerCtx.newPage()
-			await ncLogin(page, TESTER.user, TESTER.pass)
+			await ncLogin(page, { user: TESTER.user, pass: TESTER.pass })
 
 			await page.goto(state.cardUrl)
 			await expect(page.locator('.card-modal__desc-rendered')).toContainText('remote description v1', { timeout: 15_000 })
@@ -163,8 +106,8 @@ test.describe('Realtime card modal freshness', () => {
 			await page.keyboard.type('my precious local draft')
 
 			// Admin edits BOTH the title and the description remotely.
-			await apiPatch(`/cards/${state.cardId}`, { title: 'Modal card v3' })
-			await apiPatch(`/cards/${state.cardId}`, { description: 'remote description v2' })
+			await api.patch(`/cards/${state.cardId}`, { title: 'Modal card v3' })
+			await api.patch(`/cards/${state.cardId}`, { description: 'remote description v2' })
 
 			// The title updating proves the remote change reached the open modal
 			// (card detail refetched) while the editor was dirty...

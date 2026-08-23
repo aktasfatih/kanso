@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // #3632 — per-user board pinning drives BOTH the boards-page Pinned section and
 // the left-sidebar nav (curated nav). Zero-pins fallback shows all boards.
@@ -37,7 +9,7 @@ test.describe('Board pinning (#3632)', () => {
 	const state = { boardId: 0, title: 'Pin Board ' + Math.floor(Date.now() / 1000) }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: state.title, color: 'e67e22' })
+		const board = await api.post('/boards', { title: state.title, color: 'e67e22' })
 		state.boardId = board.id
 	})
 
@@ -45,8 +17,8 @@ test.describe('Board pinning (#3632)', () => {
 		// Drop the pin first (own row), then the board, so no pin lingers for
 		// other specs (the nav zero-pins fallback depends on admin having no pins).
 		if (state.boardId) {
-			await api('DELETE', `/boards/${state.boardId}/pin`).catch(() => {})
-			await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}/pin`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -101,9 +73,9 @@ test.describe('Board pinning (#3632)', () => {
 	// stay in its folder AND also appear under Pinned (the folder must NOT empty).
 	test('pinning a foldered board keeps it in its folder and also surfaces it under Pinned', async ({ page }) => {
 		const stamp = Math.floor(Date.now() / 1000)
-		const folder = await api('POST', '/board-groups', { name: 'Pin Folder ' + stamp })
-		const board = await api('POST', '/boards', { title: 'Foldered Pin ' + stamp, color: '3498db' })
-		await api('PUT', `/board-groups/${folder.id}/boards/${board.id}`)
+		const folder = await api.post('/board-groups', { name: 'Pin Folder ' + stamp })
+		const board = await api.post('/boards', { title: 'Foldered Pin ' + stamp, color: '3498db' })
+		await api.put(`/board-groups/${folder.id}/boards/${board.id}`)
 		try {
 			await ncLogin(page)
 			await page.goto(`${BASE}/index.php/apps/kanso#/`)
@@ -128,9 +100,9 @@ test.describe('Board pinning (#3632)', () => {
 				.toBeVisible()
 			await expect(folderSection.locator('.board-section__empty')).toHaveCount(0)
 		} finally {
-			await api('DELETE', `/boards/${board.id}/pin`).catch(() => {})
-			await api('DELETE', `/boards/${board.id}`).catch(() => {})
-			await api('DELETE', `/board-groups/${folder.id}`).catch(() => {})
+			await api.delete(`/boards/${board.id}/pin`).catch(() => {})
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+			await api.delete(`/board-groups/${folder.id}`).catch(() => {})
 		}
 	})
 })

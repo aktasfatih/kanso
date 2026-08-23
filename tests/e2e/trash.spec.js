@@ -1,63 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-	// Some endpoints return [] on success; handle empty body gracefully.
-	const text = await r.text()
-	try {
-		return JSON.parse(text)
-	} catch {
-		return null
-	}
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // ── Helpers for opening the routed Trash page ────────────────────────────────
 
@@ -91,19 +35,19 @@ test.describe('Trash', () => {
 
 	test.beforeAll(async () => {
 		// Tear down any prior board with the same title to keep tests hermetic.
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Trash E2E Test Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Create fresh board + stack + card.
-		const board = await apiPost('/boards', { title: 'Trash E2E Test Board' })
+		const board = await api.post('/boards', { title: 'Trash E2E Test Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'Backlog' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Backlog' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Trashable Card' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Trashable Card' })
 		state.cardId = card.id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
@@ -113,7 +57,7 @@ test.describe('Trash', () => {
 		// leave the teardown in a broken state for the next run.
 		try {
 			if (state.boardId) {
-				await apiDelete(`/boards/${state.boardId}`)
+				await api.delete(`/boards/${state.boardId}`)
 			}
 		} catch {}
 	})
@@ -124,7 +68,7 @@ test.describe('Trash', () => {
 		await page.waitForSelector('.card-tile', { timeout: 10_000 })
 
 		// Soft-delete the card via the API (existing DELETE endpoint).
-		await apiDelete(`/cards/${state.cardId}`)
+		await api.delete(`/cards/${state.cardId}`)
 
 		// Reload so the board query reflects the deletion.
 		await page.reload()
@@ -184,7 +128,7 @@ test.describe('Trash', () => {
 
 	test('permanently deleting a card removes it from Trash and it is not recoverable via API', async ({ page }) => {
 		// Re-soft-delete the card so it is in the trash again.
-		await apiDelete(`/cards/${state.cardId}`)
+		await api.delete(`/cards/${state.cardId}`)
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
@@ -216,7 +160,7 @@ test.describe('Trash', () => {
 		await expect(trashItem).not.toBeVisible({ timeout: 8000 })
 
 		// Verify via API: GET /boards/{id}/trash must not include this card.
-		const trash = await apiGet(`/boards/${state.boardId}/trash`)
+		const trash = await api.get(`/boards/${state.boardId}/trash`)
 		const stillInTrash = Array.isArray(trash) && trash.some((c) => c.id === state.cardId)
 		expect(stillInTrash).toBe(false)
 

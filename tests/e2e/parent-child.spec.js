@@ -1,76 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiPut(path, body) {
-	const r = await fetch(API + path, {
-		method: 'PUT',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`PUT ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiPatch(path, body) {
-	const r = await fetch(API + path, {
-		method: 'PATCH',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`PATCH ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Parent / Child cards', () => {
 	// Unique board title to avoid collisions with parallel test runs
@@ -84,26 +15,26 @@ test.describe('Parent / Child cards', () => {
 
 	test.beforeAll(async () => {
 		// Tear down any prior board with the same title prefix for safety
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title.startsWith('Parent Child Test Board')) {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Create fresh board + stack + parent card
-		const board = await apiPost('/boards', { title: BOARD_TITLE })
+		const board = await api.post('/boards', { title: BOARD_TITLE })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const parentCard = await apiPost('/cards', { stackId: stack.id, title: 'Parent Card' })
+		const parentCard = await api.post('/cards', { stackId: stack.id, title: 'Parent Card' })
 		state.parentCardId = parentCard.id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
 
 	test.afterAll(async () => {
 		if (state.boardId) {
-			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -150,13 +81,13 @@ test.describe('Parent / Child cards', () => {
 		await ncLogin(page)
 
 		// Fetch the parent card detail to find child ids
-		const parentDetail = await apiGet(`/cards/${state.parentCardId}`)
+		const parentDetail = await api.get(`/cards/${state.parentCardId}`)
 		const children = parentDetail.children ?? []
 		expect(children.length).toBe(2)
 
 		// Mark the first child done via the API (set done: true)
 		const firstChild = children[0]
-		await apiPatch(`/cards/${firstChild.id}`, { done: true })
+		await api.patch(`/cards/${firstChild.id}`, { done: true })
 
 		// Open the board and the parent card modal
 		await page.goto(state.boardUrl)
@@ -242,7 +173,7 @@ test.describe('Parent / Child cards', () => {
 		await ncLogin(page)
 
 		// Fetch fresh parent detail to find the undone child
-		const parentDetail = await apiGet(`/cards/${state.parentCardId}`)
+		const parentDetail = await api.get(`/cards/${state.parentCardId}`)
 		const children = parentDetail.children ?? []
 		// Find the child that is NOT done
 		const undoneChild = children.find((c) => Number(c.doneAt) === 0)

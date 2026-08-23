@@ -6,41 +6,9 @@
 // badge counting pending review requests. Closing a card opened from a
 // standalone view returns to that view (#3597 close-to-origin intact).
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
 const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiSend(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' || method === 'PUT' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
 
 function navItem(page, name) {
 	return page.locator('.app-navigation .app-navigation-entry-link', { hasText: name })
@@ -51,24 +19,24 @@ test.describe('My Work split into three nav items with badges', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0 }
 
 	test.beforeAll(async () => {
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
-			if (b.title === BOARD_TITLE) await apiSend('DELETE', `/boards/${b.id}`)
+			if (b.title === BOARD_TITLE) await api.delete(`/boards/${b.id}`)
 		}
-		const board = await apiSend('POST', '/boards', { title: BOARD_TITLE })
+		const board = await api.post('/boards', { title: BOARD_TITLE })
 		state.boardId = board.id
-		const stack = await apiSend('POST', '/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const card = await apiSend('POST', '/cards', { stackId: stack.id, title: 'Nav Split Target Card' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Nav Split Target Card' })
 		state.cardId = card.id
 		// Assign to admin → surfaces in My Tasks. Request review from admin →
 		// surfaces a pending review (drives the My Reviews badge).
-		await apiSend('PUT', `/cards/${card.id}/assignees/${USER}`)
-		await apiSend('PUT', `/cards/${card.id}/reviews/${USER}`)
+		await api.put(`/cards/${card.id}/assignees/${USER}`)
+		await api.put(`/cards/${card.id}/reviews/${USER}`)
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await apiSend('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('three separate nav items render and navigate to their views', async ({ page }) => {

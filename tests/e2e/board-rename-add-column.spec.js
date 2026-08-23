@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Board rename + Add column', () => {
 	// A roomy header so the (ellipsised) board title isn't squeezed to zero width
@@ -40,13 +12,13 @@ test.describe('Board rename + Add column', () => {
 
 	test.beforeAll(async () => {
 		const stamp = Math.floor(Date.now() / 1000)
-		const board = await api('POST', '/boards', { title: 'Rename me ' + stamp })
+		const board = await api.post('/boards', { title: 'Rename me ' + stamp })
 		state.boardId = board.id
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'To do' })).id
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'To do' })).id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('rename the board from Board settings → General', async ({ page }) => {
@@ -67,7 +39,7 @@ test.describe('Board rename + Add column', () => {
 		await nameInput.press('Enter')
 
 		// Server reflects the rename…
-		await expect.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
 			.toBe(newTitle)
 		// …and so does the header once the modal is dismissed.
 		await page.keyboard.press('Escape')
@@ -96,7 +68,7 @@ test.describe('Board rename + Add column', () => {
 		await expect(page.locator('.stack-column__title', { hasText: 'In review' }))
 			.toBeVisible({ timeout: 8_000 })
 		await expect.poll(async () => {
-			const { stacks } = await api('GET', `/boards/${state.boardId}`)
+			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			return (stacks ?? []).some((s) => s.title === 'In review')
 		}, { timeout: 8_000 }).toBe(true)
 	})
@@ -104,8 +76,8 @@ test.describe('Board rename + Add column', () => {
 	test('renaming a board updates the app-navigation sidebar live', async ({ page }) => {
 		// Pin the board so it is guaranteed to appear in the sidebar regardless of
 		// the account's other pins (the nav shows pinned boards, or all when none).
-		await api('PUT', `/boards/${state.boardId}/pin`).catch(() => {})
-		const before = (await api('GET', `/boards/${state.boardId}`)).board.title
+		await api.put(`/boards/${state.boardId}/pin`).catch(() => {})
+		const before = (await api.get(`/boards/${state.boardId}`)).board.title
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
@@ -123,7 +95,7 @@ test.describe('Board rename + Add column', () => {
 		await expect(nameInput).toBeVisible({ timeout: 8_000 })
 		await nameInput.fill(after)
 		await nameInput.press('Enter')
-		await expect.poll(async () => (await api('GET', `/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
 			.toBe(after)
 
 		// The sidebar reflects the new name and drops the old one — no manual reload.
@@ -138,12 +110,12 @@ test.describe('Empty board onboarding composer', () => {
 	const state = { boardId: 0 }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Empty ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Empty ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id // no stacks on purpose
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('a board with no columns shows the inline first-column composer', async ({ page }) => {

@@ -1,39 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, BASE, api, ncLogin } from './helpers.js'
 
 // Live (non-template, non-archived) cards in a stack, top-to-bottom.
 async function stackTitles(boardId, stackId) {
-	const board = await api('GET', `/boards/${boardId}`)
+	const board = await api.get(`/boards/${boardId}`)
 	return board.cards
 		.filter((c) => c.stackId === stackId && !c.archived)
 		.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
@@ -46,46 +18,46 @@ test.describe('Card templates (per-board)', () => {
 	const state = { boardId: 0, todoId: 0, labelId: 0, tplId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Card-Templates E2E' })
+		const board = await api.post('/boards', { title: 'Card-Templates E2E' })
 		state.boardId = board.id
-		state.todoId = (await api('POST', '/stacks', { boardId: board.id, title: 'To Do' })).id
+		state.todoId = (await api.post('/stacks', { boardId: board.id, title: 'To Do' })).id
 
-		const label = await api('POST', '/labels', { boardId: board.id, title: 'Blueprint', color: '2ecc71' })
+		const label = await api.post('/labels', { boardId: board.id, title: 'Blueprint', color: '2ecc71' })
 		state.labelId = label.id
 
 		// A card to turn into a template, enriched with content.
-		const tpl = await api('POST', '/cards', { stackId: state.todoId, title: 'Bug report' })
+		const tpl = await api.post('/cards', { stackId: state.todoId, title: 'Bug report' })
 		state.tplId = tpl.id
-		await api('PATCH', `/cards/${tpl.id}`, { description: '## Steps to reproduce', priority: 3 })
-		await api('PUT', `/cards/${tpl.id}/labels/${label.id}`)
-		await api('POST', `/cards/${tpl.id}/checklist`, { title: 'Attach logs' })
+		await api.patch(`/cards/${tpl.id}`, { description: '## Steps to reproduce', priority: 3 })
+		await api.put(`/cards/${tpl.id}/labels/${label.id}`)
+		await api.post(`/cards/${tpl.id}/checklist`, { title: 'Attach logs' })
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso/#/board/${board.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('marking a card as a template hides it from the live board and lists it in the picker', async () => {
 		// Before: the card is a live card in its column.
 		expect(await stackTitles(state.boardId, state.todoId)).toEqual(['Bug report'])
-		expect(await api('GET', `/boards/${state.boardId}/cards/templates`)).toEqual([])
+		expect(await api.get(`/boards/${state.boardId}/cards/templates`)).toEqual([])
 
 		// Mark it as a template (EDIT-gated).
-		await api('PUT', `/cards/${state.tplId}/template`, { isTemplate: true })
+		await api.put(`/cards/${state.tplId}/template`, { isTemplate: true })
 
 		// It disappears from the live board render...
 		expect(await stackTitles(state.boardId, state.todoId)).toEqual([])
 		// ...and appears in the per-board template picker.
-		const templates = await api('GET', `/boards/${state.boardId}/cards/templates`)
+		const templates = await api.get(`/boards/${state.boardId}/cards/templates`)
 		expect(templates.map((c) => c.title)).toEqual(['Bug report'])
 		expect(templates[0].id).toBe(state.tplId)
 		expect(templates[0].isTemplate).toBe(true)
 	})
 
 	test('create-from-template clones title/description/labels/checklist into a fresh live card', async () => {
-		const created = await api('POST', `/cards/${state.tplId}/create-from-template`, { targetStackId: state.todoId })
+		const created = await api.post(`/cards/${state.tplId}/create-from-template`, { targetStackId: state.todoId })
 
 		// The new card is a distinct, live (non-template) card.
 		expect(created.id).not.toBe(state.tplId)
@@ -101,7 +73,7 @@ test.describe('Card templates (per-board)', () => {
 
 		// The fresh card shows on the live board; the template still does not.
 		expect(await stackTitles(state.boardId, state.todoId)).toEqual(['Bug report'])
-		expect((await api('GET', `/boards/${state.boardId}/cards/templates`)).map((c) => c.id)).toEqual([state.tplId])
+		expect((await api.get(`/boards/${state.boardId}/cards/templates`)).map((c) => c.id)).toEqual([state.tplId])
 	})
 
 	test('the composer "from template" picker creates a card from the template in the UI', async ({ page }) => {
@@ -123,7 +95,7 @@ test.describe('Card templates (per-board)', () => {
 		const titles = await stackTitles(state.boardId, state.todoId)
 		expect(titles.every((t) => t === 'Bug report')).toBe(true)
 		// The template card is never rendered as a live card.
-		const board = await api('GET', `/boards/${state.boardId}`)
+		const board = await api.get(`/boards/${state.boardId}`)
 		expect(board.cards.some((c) => c.id === state.tplId)).toBe(false)
 	})
 })
