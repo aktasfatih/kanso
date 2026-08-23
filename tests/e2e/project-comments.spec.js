@@ -6,46 +6,18 @@
 // assert it renders as HTML and persists across a full reload; then edit and
 // delete through the UI.
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(`${USER}:${PASS}`).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Project discussion log (owner-only comments)', () => {
 	const state = { projectId: 0 }
 
 	test.beforeAll(async () => {
-		const project = await api('POST', '/projects', { title: `Discussion Project ${Date.now()}` })
+		const project = await api.post('/projects', { title: `Discussion Project ${Date.now()}` })
 		state.projectId = project.id
 	})
 
 	test.afterAll(async () => {
-		if (state.projectId) await api('DELETE', `/projects/${state.projectId}`).catch(() => {})
+		if (state.projectId) await api.delete(`/projects/${state.projectId}`).catch(() => {})
 	})
 
 	test('post a comment with markdown, assert it renders and persists across reload', async ({ page }) => {
@@ -70,7 +42,7 @@ test.describe('Project discussion log (owner-only comments)', () => {
 		await expect(body).not.toContainText('**note**')
 
 		// Server persisted the raw markdown.
-		const comments = await api('GET', `/projects/${state.projectId}/comments`)
+		const comments = await api.get(`/projects/${state.projectId}/comments`)
 		expect(comments.length).toBe(1)
 		expect(comments[0].body).toBe('First **note** in the log')
 
@@ -122,12 +94,12 @@ test.describe('Project discussion log (owner-only comments)', () => {
 	test('delete the top-level comment removes it and its reply', async ({ page }) => {
 		// Self-contained: don't depend on the prior tests' thread (order/sharding
 		// safe). Reset to exactly one top-level comment + one reply via the API.
-		const existing = await api('GET', `/projects/${state.projectId}/comments`)
+		const existing = await api.get(`/projects/${state.projectId}/comments`)
 		for (const c of existing.filter((c) => c.parentCommentId == null)) {
-			await api('DELETE', `/project-comments/${c.id}`).catch(() => {})
+			await api.delete(`/project-comments/${c.id}`).catch(() => {})
 		}
-		const top = await api('POST', `/projects/${state.projectId}/comments`, { body: 'Top **note** to delete' })
-		await api('POST', `/projects/${state.projectId}/comments`, { body: 'A **reply** note', parentCommentId: top.id })
+		const top = await api.post(`/projects/${state.projectId}/comments`, { body: 'Top **note** to delete' })
+		await api.post(`/projects/${state.projectId}/comments`, { body: 'A **reply** note', parentCommentId: top.id })
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
@@ -141,7 +113,7 @@ test.describe('Project discussion log (owner-only comments)', () => {
 		await expect(page.locator('.project-view__comment--reply')).toHaveCount(0, { timeout: 4_000 })
 
 		// Server agrees the whole thread is gone.
-		const comments = await api('GET', `/projects/${state.projectId}/comments`)
+		const comments = await api.get(`/projects/${state.projectId}/comments`)
 		expect(comments.length).toBe(0)
 	})
 

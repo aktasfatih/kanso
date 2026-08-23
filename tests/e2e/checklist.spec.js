@@ -1,41 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // Wait for a checklist-item toggle PATCH to complete so badge/progress
 // assertions aren't racing the optimistic render on a slow CI runner.
@@ -92,38 +58,23 @@ async function toggleChecklistItem(page, itemText) {
 	await expect(checkbox).toBeChecked({ timeout: 15_000 })
 }
 
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
-
 test.describe('Checklist', () => {
 	const state = { boardId: 0, cardId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
 		// Tear down any prior board with the same name to ensure hermetic setup
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Checklist Test Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Create fresh board + stack + card
-		const board = await apiPost('/boards', { title: 'Checklist Test Board' })
+		const board = await api.post('/boards', { title: 'Checklist Test Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card With Checklist' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card With Checklist' })
 		state.cardId = card.id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
@@ -281,17 +232,17 @@ test.describe('Checklist steps', () => {
 	const state = { boardId: 0, cardId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Checklist Steps Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
-		const board = await apiPost('/boards', { title: 'Checklist Steps Board' })
+		const board = await api.post('/boards', { title: 'Checklist Steps Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card With Steps' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card With Steps' })
 		state.cardId = card.id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
@@ -327,7 +278,7 @@ test.describe('Checklist steps', () => {
 		await expect(item.locator('.card-modal__step-assignee')).toBeVisible({ timeout: 10_000 })
 
 		// The step now surfaces in the cross-board my-steps feed (open + assigned).
-		const openSteps = await apiGet('/my-steps')
+		const openSteps = await api.get('/my-steps')
 		const mine = openSteps.find((s) => s.title === 'Send contract')
 		if (!mine) throw new Error('assigned open step missing from /api/my-steps')
 		if (mine.cardTitle !== 'Card With Steps') throw new Error('my-steps row lost its card context')
@@ -350,7 +301,7 @@ test.describe('Checklist steps', () => {
 		await toggleChecklistItem(page, 'Send contract')
 		await expect(item.locator('.card-modal__step-due--overdue')).toHaveCount(0, { timeout: 10_000 })
 
-		const items = await apiGet(`/cards/${state.cardId}/checklist`)
+		const items = await api.get(`/cards/${state.cardId}/checklist`)
 		const step = items.find((i) => i.title === 'Send contract')
 		if (!step) throw new Error('step missing from checklist payload')
 		if (step.assignedUser !== 'admin') throw new Error(`assignedUser not persisted: ${step.assignedUser}`)
@@ -360,7 +311,7 @@ test.describe('Checklist steps', () => {
 		if (!step.doneAt || step.doneAt <= 0) throw new Error('done toggle did not stamp done_at')
 
 		// A DONE step leaves the my-steps feed (it lists OPEN steps only).
-		const stepsAfterDone = await apiGet('/my-steps')
+		const stepsAfterDone = await api.get('/my-steps')
 		if (stepsAfterDone.some((s) => s.title === 'Send contract')) {
 			throw new Error('completed step still listed in /api/my-steps')
 		}
@@ -370,7 +321,7 @@ test.describe('Checklist steps', () => {
 		const patch = waitForChecklistPatch(page)
 		await checkbox.click()
 		await patch
-		const reopened = (await apiGet(`/cards/${state.cardId}/checklist`)).find((i) => i.title === 'Send contract')
+		const reopened = (await api.get(`/cards/${state.cardId}/checklist`)).find((i) => i.title === 'Send contract')
 		if (reopened.doneAt !== null) throw new Error('un-done did not clear done_at')
 		if (reopened.assignedUser !== 'admin') throw new Error('un-done must not touch the assignee')
 	})

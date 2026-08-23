@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // Derived "waiting on client" status (#3746): a card with ≥1 open step whose
 // FROZEN assigned_role is 'external' is waiting on the client - surfaced as an
@@ -42,19 +14,19 @@ test.describe.serial('Waiting on client (#3746)', () => {
 
 	test.beforeAll(async () => {
 		// Hermetic setup: tear down any prior run's board.
-		const boards = await api('GET', '/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Waiting On Client Board') {
-				await api('DELETE', `/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
-		const board = await api('POST', '/boards', { title: 'Waiting On Client Board' })
+		const board = await api.post('/boards', { title: 'Waiting On Client Board' })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Doing' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Doing' })
 
 		// tester joins the CLIENT side (external) with READ | EDIT.
-		await api('POST', `/boards/${board.id}/acl`, {
+		await api.post(`/boards/${board.id}/acl`, {
 			participant: 'tester',
 			participantType: 'user',
 			permission: 3,
@@ -63,24 +35,24 @@ test.describe.serial('Waiting on client (#3746)', () => {
 
 		// Card A gets an open step assigned to the external member; card B has
 		// no steps at all (the "not waiting" control).
-		const waitCard = await api('POST', '/cards', { stackId: stack.id, title: 'Ball With Client' })
+		const waitCard = await api.post('/cards', { stackId: stack.id, title: 'Ball With Client' })
 		state.waitCardId = waitCard.id
-		const plainCard = await api('POST', '/cards', { stackId: stack.id, title: 'Ball With Us' })
+		const plainCard = await api.post('/cards', { stackId: stack.id, title: 'Ball With Us' })
 		state.plainCardId = plainCard.id
 
-		const item = await api('POST', `/cards/${waitCard.id}/checklist`, { title: 'Client signs contract' })
+		const item = await api.post(`/cards/${waitCard.id}/checklist`, { title: 'Client signs contract' })
 		state.itemId = item.id
-		await api('POST', `/checklist/${item.id}/assign`, { participant: 'tester' })
+		await api.post(`/checklist/${item.id}/assign`, { participant: 'tester' })
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('board summary derives waitingOnExternal + waitingSince from step state (real SQL)', async () => {
-		const payload = await api('GET', `/boards/${state.boardId}`)
+		const payload = await api.get(`/boards/${state.boardId}`)
 		const byId = Object.fromEntries(payload.cards.map((c) => [c.id, c]))
 
 		const waiting = byId[state.waitCardId]
@@ -137,18 +109,18 @@ test.describe.serial('Waiting on client (#3746)', () => {
 		// ── Complete the step server-side → the chip clears with NO write to the
 		// card: the toggle's change row rides the delta-sync poll and the
 		// re-serialized summary drops the derived flag. ──────────────────────────
-		await api('PATCH', `/checklist/${state.itemId}`, { done: true })
+		await api.patch(`/checklist/${state.itemId}`, { done: true })
 		await expect(waitTile.locator('.card-tile__waiting')).toHaveCount(0, { timeout: 20_000 })
 
 		// Server truth: the derived state is gone from the board payload too.
-		const payload = await api('GET', `/boards/${state.boardId}`)
+		const payload = await api.get(`/boards/${state.boardId}`)
 		const card = payload.cards.find((c) => c.id === state.waitCardId)
 		expect(card.waitingOnExternal).toBe(false)
 		expect(card.waitingSince).toBeNull()
 
 		// Re-opening the step brings the wait state (and chip) straight back -
 		// appears/clears purely from step state.
-		await api('PATCH', `/checklist/${state.itemId}`, { done: false })
+		await api.patch(`/checklist/${state.itemId}`, { done: false })
 		await expect(waitTile.locator('.card-tile__waiting')).toBeVisible({ timeout: 20_000 })
 	})
 })

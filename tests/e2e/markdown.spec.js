@@ -1,66 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiPatch(path, body) {
-	const r = await fetch(API + path, {
-		method: 'PATCH',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`PATCH ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Markdown card descriptions - render and XSS safety', () => {
 	const state = {
@@ -75,25 +16,25 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 	test.beforeAll(async () => {
 		// Clean up any leftover test board
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Markdown Test Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Seed board + stack + card
-		const board = await apiPost('/boards', { title: 'Markdown Test Board' })
+		const board = await api.post('/boards', { title: 'Markdown Test Board' })
 		state.boardId = board.id
 
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'Test Stack' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Test Stack' })
 		state.stackId = stack.id
 
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'MD Card' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'MD Card' })
 		state.cardId = card.id
 
 		// PATCH the card description with markdown + XSS payload
-		await apiPatch(`/cards/${card.id}`, { description: DESCRIPTION })
+		await api.patch(`/cards/${card.id}`, { description: DESCRIPTION })
 
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
@@ -102,7 +43,7 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 	test.afterAll(async () => {
 		if (state.boardId) {
-			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -171,7 +112,7 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 			'![js](javascript:alert(1))',
 			'<img src=x onerror=alert(1)>',
 		].join('\n\n')
-		await apiPatch(`/cards/${state.cardId}`, { description: md })
+		await api.patch(`/cards/${state.cardId}`, { description: md })
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
@@ -204,7 +145,7 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		expect(alertFired).toBe(false)
 
 		// Restore the original description for the reload test below.
-		await apiPatch(`/cards/${state.cardId}`, { description: DESCRIPTION })
+		await api.patch(`/cards/${state.cardId}`, { description: DESCRIPTION })
 	})
 
 	test('markdown is still safe after page reload', async ({ page }) => {

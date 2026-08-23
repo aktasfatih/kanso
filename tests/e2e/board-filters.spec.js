@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 /** yyyy-mm-dd offset by `days` from now, as an ATOM datetime the API accepts. */
 function isoOffset(days) {
@@ -48,42 +20,42 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 	}
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Filters ' + Math.floor(Date.now() / 1000) })
+		const board = await api.send('POST', '/boards', { title: 'Filters ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
+		const stack = await api.send('POST', '/stacks', { boardId: board.id, title: 'To do' })
 
 		// Give the board an estimate scale so the "Estimate" filter dimension is
 		// offered (it is hidden on a 'none'-scale board) — needed by the
 		// clear-removes-URL-param test below.
-		await api('PATCH', `/boards/${board.id}`, { estimateScale: 'fibonacci' })
+		await api.send('PATCH', `/boards/${board.id}`, { estimateScale: 'fibonacci' })
 
-		const label = await api('POST', '/labels', { boardId: board.id, title: 'Backend', color: 'e74c3c' })
+		const label = await api.send('POST', '/labels', { boardId: board.id, title: 'Backend', color: 'e74c3c' })
 		state.labelId = label.id
 
 		// matchId: label + overdue (due yesterday)
-		const c1 = await api('POST', '/cards', { stackId: stack.id, title: 'Match Card' })
-		await api('PUT', `/cards/${c1.id}/labels/${state.labelId}`)
-		await api('PATCH', `/cards/${c1.id}`, { duedate: isoOffset(-1) })
+		const c1 = await api.send('POST', '/cards', { stackId: stack.id, title: 'Match Card' })
+		await api.send('PUT', `/cards/${c1.id}/labels/${state.labelId}`)
+		await api.send('PATCH', `/cards/${c1.id}`, { duedate: isoOffset(-1) })
 		state.matchId = c1.id
 
 		// labelOnly: label, due in the far future (not overdue)
-		const c2 = await api('POST', '/cards', { stackId: stack.id, title: 'Label Only Card' })
-		await api('PUT', `/cards/${c2.id}/labels/${state.labelId}`)
-		await api('PATCH', `/cards/${c2.id}`, { duedate: isoOffset(30) })
+		const c2 = await api.send('POST', '/cards', { stackId: stack.id, title: 'Label Only Card' })
+		await api.send('PUT', `/cards/${c2.id}/labels/${state.labelId}`)
+		await api.send('PATCH', `/cards/${c2.id}`, { duedate: isoOffset(30) })
 		state.labelOnlyId = c2.id
 
 		// overdueOnly: overdue, no label
-		const c3 = await api('POST', '/cards', { stackId: stack.id, title: 'Overdue Only Card' })
-		await api('PATCH', `/cards/${c3.id}`, { duedate: isoOffset(-1) })
+		const c3 = await api.send('POST', '/cards', { stackId: stack.id, title: 'Overdue Only Card' })
+		await api.send('PATCH', `/cards/${c3.id}`, { duedate: isoOffset(-1) })
 		state.overdueOnlyId = c3.id
 
 		// plain: no label, no due
-		const c4 = await api('POST', '/cards', { stackId: stack.id, title: 'Plain Card' })
+		const c4 = await api.send('POST', '/cards', { stackId: stack.id, title: 'Plain Card' })
 		state.plainId = c4.id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.send('DELETE', `/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('label AND overdue filter shows only matching cards; save + reload + re-apply; shared URL applies on load', async ({ page }) => {

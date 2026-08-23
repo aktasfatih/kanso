@@ -1,39 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, BASE, api, ncLogin } from './helpers.js'
 
 // The card's own recurrence rule (its templateCardId points back at itself), if any.
 async function cardRule(boardId, cardId) {
-	const rules = await api('GET', `/boards/${boardId}/recur-rules`)
+	const rules = await api.get(`/boards/${boardId}/recur-rules`)
 	return rules.find((r) => Number(r.templateCardId) === Number(cardId)) ?? null
 }
 
@@ -41,14 +13,14 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0 }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Repeat ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Repeat ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Tasks' })).id
-		state.cardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'Water the plants' })).id
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'Tasks' })).id
+		state.cardId = (await api.post('/cards', { stackId: state.stackId, title: 'Water the plants' })).id
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('setting Repeat creates, updates, then clears a recurring rule for the card', async ({ page }) => {
@@ -98,15 +70,15 @@ test.describe('Recurring indicator on the board tile (#61)', () => {
 	const state = { boardId: 0, stackId: 0, recurCardId: 0, plainCardId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Recur Tile ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Recur Tile ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Chores' })).id
-		state.recurCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'Recurring chore' })).id
-		state.plainCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'One-off chore' })).id
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'Chores' })).id
+		state.recurCardId = (await api.post('/cards', { stackId: state.stackId, title: 'Recurring chore' })).id
+		state.plainCardId = (await api.post('/cards', { stackId: state.stackId, title: 'One-off chore' })).id
 
 		// Give the first card a live weekly rule (its own column is the target,
 		// clone mode) - exactly what the due-date Repeat control creates.
-		await api('POST', `/boards/${state.boardId}/recur-rules`, {
+		await api.post(`/boards/${state.boardId}/recur-rules`, {
 			templateCardId: state.recurCardId,
 			targetStackId: state.stackId,
 			mode: 0,
@@ -117,11 +89,11 @@ test.describe('Recurring indicator on the board tile (#61)', () => {
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('board summary carries the recurring boolean derived from the rule', async () => {
-		const payload = await api('GET', `/boards/${state.boardId}`)
+		const payload = await api.get(`/boards/${state.boardId}`)
 		const byId = Object.fromEntries(payload.cards.map((c) => [c.id, c]))
 		expect(byId[state.recurCardId].recurring).toBe(true)
 		expect(byId[state.plainCardId].recurring).toBe(false)
@@ -144,15 +116,15 @@ test.describe('Recurring indicator on the open card Due Date pill (#61 follow-up
 	const state = { boardId: 0, stackId: 0, recurCardId: 0, plainCardId: 0 }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Recur Pill ' + Math.floor(Date.now() / 1000) })
+		const board = await api.post('/boards', { title: 'Recur Pill ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		state.stackId = (await api('POST', '/stacks', { boardId: board.id, title: 'Chores' })).id
-		state.recurCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'Recurring pill card' })).id
-		state.plainCardId = (await api('POST', '/cards', { stackId: state.stackId, title: 'One-off pill card' })).id
+		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'Chores' })).id
+		state.recurCardId = (await api.post('/cards', { stackId: state.stackId, title: 'Recurring pill card' })).id
+		state.plainCardId = (await api.post('/cards', { stackId: state.stackId, title: 'One-off pill card' })).id
 
 		// Live weekly rule on the first card (its own column is the target, clone
 		// mode) - exactly what the due-date Repeat control creates.
-		await api('POST', `/boards/${state.boardId}/recur-rules`, {
+		await api.post(`/boards/${state.boardId}/recur-rules`, {
 			templateCardId: state.recurCardId,
 			targetStackId: state.stackId,
 			mode: 0,
@@ -161,12 +133,12 @@ test.describe('Recurring indicator on the open card Due Date pill (#61 follow-up
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('card show() payload carries the recurring boolean derived from the rule', async () => {
-		const recur = await api('GET', `/cards/${state.recurCardId}`)
-		const plain = await api('GET', `/cards/${state.plainCardId}`)
+		const recur = await api.get(`/cards/${state.recurCardId}`)
+		const plain = await api.get(`/cards/${state.plainCardId}`)
 		expect(recur.recurring).toBe(true)
 		expect(plain.recurring).toBe(false)
 	})

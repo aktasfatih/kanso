@@ -52,9 +52,8 @@
 //   throughput much as the dev DB serializes the writes.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { test, expect } from '@playwright/test'
+import { test, expect, ncLogin, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
 const USER = 'admin'
 const PASS = 'admin'
 const API = BASE + '/index.php/apps/kanso/api'
@@ -89,21 +88,6 @@ async function responseBytes(res) {
 	if (cl != null) return Number(cl)
 	const buf = await res.arrayBuffer()
 	return buf.byteLength
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
 test.describe('@perf large-board performance', () => {

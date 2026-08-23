@@ -1,22 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, makeApi, authFor, adminAuth, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const ADMIN = 'Basic ' + Buffer.from('admin:admin').toString('base64')
-const TESTER = 'Basic ' + Buffer.from('tester:kanso-dev-tester!1').toString('base64')
+const ADMIN = adminAuth
+const TESTER = authFor('tester', 'kanso-dev-tester!1')
 
-async function api(auth, method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: auth },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
+const adminApi = makeApi(ADMIN)
+const testerApi = makeApi(TESTER)
+
+// Route (auth, method, path, body) → the matching client's throwing send().
+function api(auth, method, path, body) {
+	return (auth === TESTER ? testerApi : adminApi).send(method, path, body)
 }
 
 // GET a card's VTODO from a principal's own board calendar.
@@ -89,11 +84,7 @@ test.describe.serial('CalDAV visibility + endpoint permissions', () => {
 	})
 
 	test('a non-member cannot toggle calendar-sync for a board they cannot see', async () => {
-		const r = await fetch(`${API}/boards/${state.otherBoardId}/calendar-sync`, {
-			method: 'PUT',
-			headers: { ...HEADERS, Authorization: TESTER },
-			body: JSON.stringify({ enabled: false }),
-		})
+		const r = await testerApi.raw('PUT', `/boards/${state.otherBoardId}/calendar-sync`, { enabled: false })
 		// NotAMemberException → NotPermittedException → 403 (never silently applied).
 		expect(r.status).toBe(403)
 	})

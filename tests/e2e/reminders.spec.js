@@ -1,45 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, ncLogin, adminAuth, BASE, API } from './helpers.js'
 import { execSync } from 'node:child_process'
 
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
 const NOTIF = BASE + '/ocs/v2.php/apps/notifications/api/v2/notifications'
 const HEADERS = {
 	'OCS-APIREQUEST': 'true',
 	'Content-Type': 'application/json',
 }
 const OCS_HEADERS = { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-	return r
-}
+const AUTH = adminAuth
 
 async function kansoNotifications() {
 	const r = await fetch(NOTIF, { headers: { ...OCS_HEADERS, Authorization: AUTH } })
@@ -72,55 +43,43 @@ function firePersonalReminders() {
 	)
 }
 
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	const userInput = page.locator('#user')
-	if (!(await userInput.isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
-
 test.describe('Personal reminders (remind me)', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, commentId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
-		for (const b of await apiGet('/boards')) {
-			if (b.title === 'Reminder E2E Board') await apiDelete(`/boards/${b.id}`)
+		for (const b of await api.get('/boards')) {
+			if (b.title === 'Reminder E2E Board') await api.delete(`/boards/${b.id}`)
 		}
-		const board = await apiPost('/boards', { title: 'Reminder E2E Board' })
+		const board = await api.post('/boards', { title: 'Reminder E2E Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card To Be Reminded Of' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card To Be Reminded Of' })
 		state.cardId = card.id
-		const comment = await apiPost(`/cards/${card.id}/comments`, { body: 'A comment to remind about' })
+		const comment = await api.post(`/cards/${card.id}/comments`, { body: 'A comment to remind about' })
 		state.commentId = comment.id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('schedule + list a card-level reminder via API', async () => {
 		const at = Math.floor(Date.now() / 1000) + 3600
-		const created = await apiPost(`/cards/${state.cardId}/reminders`, { remindAt: at })
+		const created = await api.post(`/cards/${state.cardId}/reminders`, { remindAt: at })
 		expect(created.id).toBeGreaterThan(0)
 		expect(created.remindAt).toBe(at)
 		expect(created.commentId).toBeNull()
 		expect(created.firedAt).toBeNull()
 
-		const list = await apiGet(`/cards/${state.cardId}/reminders`)
+		const list = await api.get(`/cards/${state.cardId}/reminders`)
 		expect(list.some((r) => r.id === created.id)).toBeTruthy()
 
 		// Clean up: leave no lingering pending reminder on the shared card, or the
 		// later UI test (which asserts the card has exactly zero chips after its own
 		// add/cancel) sees this leftover and fails.
-		await apiDelete(`/cards/${state.cardId}/reminders/${created.id}`)
+		await api.delete(`/cards/${state.cardId}/reminders/${created.id}`)
 	})
 
 	test('a past reminder time is rejected (400)', async () => {
@@ -134,16 +93,16 @@ test.describe('Personal reminders (remind me)', () => {
 
 	test('schedule + cancel a comment-scoped reminder; cancel is idempotent', async () => {
 		const at = Math.floor(Date.now() / 1000) + 7200
-		const created = await apiPost(`/cards/${state.cardId}/reminders`, { remindAt: at, commentId: state.commentId })
+		const created = await api.post(`/cards/${state.cardId}/reminders`, { remindAt: at, commentId: state.commentId })
 		expect(created.commentId).toBe(state.commentId)
 
-		await apiDelete(`/cards/${state.cardId}/reminders/${created.id}`)
-		let list = await apiGet(`/cards/${state.cardId}/reminders`)
+		await api.delete(`/cards/${state.cardId}/reminders/${created.id}`)
+		let list = await api.get(`/cards/${state.cardId}/reminders`)
 		expect(list.some((r) => r.id === created.id)).toBeFalsy()
 
 		// Cancelling again is a no-op (still succeeds) - idempotent.
-		await apiDelete(`/cards/${state.cardId}/reminders/${created.id}`)
-		list = await apiGet(`/cards/${state.cardId}/reminders`)
+		await api.delete(`/cards/${state.cardId}/reminders/${created.id}`)
+		list = await api.get(`/cards/${state.cardId}/reminders`)
 		expect(list.some((r) => r.id === created.id)).toBeFalsy()
 	})
 
@@ -153,7 +112,7 @@ test.describe('Personal reminders (remind me)', () => {
 		// on slow CI: the server saw the time as already past and 400'd) — then let it
 		// lapse so the sweep treats it as overdue-owed.
 		const at = Math.floor(Date.now() / 1000) + 5
-		const created = await apiPost(`/cards/${state.cardId}/reminders`, { remindAt: at })
+		const created = await api.post(`/cards/${state.cardId}/reminders`, { remindAt: at })
 		await new Promise((res) => setTimeout(res, 6500))
 
 		const before = (await kansoNotifications()).length
@@ -168,7 +127,7 @@ test.describe('Personal reminders (remind me)', () => {
 		expect(String(mine.link)).toContain(`/card/${state.cardId}`)
 
 		// The reminder is stamped fired - it drops out of the pending list.
-		const pending = await apiGet(`/cards/${state.cardId}/reminders`)
+		const pending = await api.get(`/cards/${state.cardId}/reminders`)
 		expect(pending.some((r) => r.id === created.id)).toBeFalsy()
 
 		// Firing again does not re-deliver (idempotent: fired_at consumed it).

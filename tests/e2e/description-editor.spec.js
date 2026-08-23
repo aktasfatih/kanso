@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // #3470 — WYSIWYG markdown formatting toolbar over the description.
 // The description editor is now an inline Tiptap (ProseMirror) WYSIWYG editor
@@ -39,15 +11,15 @@ test.describe('Description formatting toolbar', () => {
 	const state = { boardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: 'Desc-Editor E2E' })
+		const board = await api.post('/boards', { title: 'Desc-Editor E2E' })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'Do' })
-		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Editable card' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Editable card' })
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('toolbar Bold wraps the selection and the WYSIWYG editor shows <strong>', async ({ page }) => {
@@ -94,8 +66,8 @@ test.describe('Description formatting toolbar', () => {
 
 	test('Escape closes only the @mention dropdown, not the whole modal (keeps the edit)', async ({ page }) => {
 		// Dedicated card so this test is independent of the others' saved state.
-		const stack = await api('POST', '/stacks', { boardId: state.boardId, title: 'Esc' })
-		const card = await api('POST', '/cards', { stackId: stack.id, title: 'Escape card' })
+		const stack = await api.post('/stacks', { boardId: state.boardId, title: 'Esc' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Escape card' })
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
 
 		await ncLogin(page)

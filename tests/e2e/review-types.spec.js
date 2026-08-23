@@ -1,56 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
 const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
 
 test.describe('Review types', () => {
 	const state = {
@@ -65,23 +18,23 @@ test.describe('Review types', () => {
 
 	test.beforeAll(async () => {
 		// Clean up any stale board from a previous run
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Review Types E2E Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Create board + stack + card via API
-		const board = await apiPost('/boards', { title: 'Review Types E2E Board' })
+		const board = await api.post('/boards', { title: 'Review Types E2E Board' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'Backlog' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Backlog' })
 		state.stackId = stack.id
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card for Type Review' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card for Type Review' })
 		state.cardId = card.id
 
 		// Create a review type via the backend API
-		const rt = await apiPost('/review-types', {
+		const rt = await api.post('/review-types', {
 			boardId: board.id,
 			title: 'QA',
 			color: '3498db', // bare hex - no leading #
@@ -94,7 +47,7 @@ test.describe('Review types', () => {
 
 	test.afterAll(async () => {
 		if (state.boardId) {
-			await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		}
 	})
 
@@ -148,7 +101,7 @@ test.describe('Review types', () => {
 		await expect(page.locator('.label-settings__error')).toHaveCount(0)
 
 		// Verify the server stored bare hex (no leading #)
-		const boardPayload = await apiGet(`/boards/${state.boardId}`)
+		const boardPayload = await api.get(`/boards/${state.boardId}`)
 		const savedType = boardPayload.reviewTypes.find((rt) => rt.title === 'Legal')
 		expect(savedType?.color).toBe('e67e22')
 	})
@@ -179,11 +132,7 @@ test.describe('Review types', () => {
 
 		// Pre-create a typed review via API so we can verify the chip without
 		// needing to interact with the popover (avoids participant-picker complexity).
-		await fetch(API + `/cards/${state.cardId}/reviews/${USER}`, {
-			method: 'PUT',
-			headers: { ...HEADERS, Authorization: AUTH },
-			body: JSON.stringify({ reviewTypeId: state.reviewTypeId }),
-		})
+		await api.raw('PUT', `/cards/${state.cardId}/reviews/${USER}`, { reviewTypeId: state.reviewTypeId })
 
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 12_000 })

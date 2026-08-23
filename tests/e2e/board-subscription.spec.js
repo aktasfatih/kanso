@@ -1,19 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, makeApi } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
-
+// This spec's DELETE endpoints return a JSON body (subscription state) that the
+// test asserts on, so it needs a client that parses DELETE responses rather than
+// the shared `api` whose `.delete` always resolves null. Keep the local content
+// handling (`204 → null`, else parse JSON) and just reuse the shared transport.
+const rawApi = makeApi()
 async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
+	const r = await rawApi.raw(method, path, body)
 	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
 	return method === 'DELETE' && r.status === 204 ? null : r.json()
 }

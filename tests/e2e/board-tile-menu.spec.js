@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 async function openBoardsPage(page) {
 	await page.goto(`${BASE}/index.php/apps/kanso#/`)
@@ -51,16 +23,16 @@ test.describe('Boards page — tile options menu board actions', () => {
 
 	test.afterAll(async () => {
 		for (const id of state.extraBoards) {
-			await api('DELETE', `/boards/${id}`).catch(() => {})
+			await api.delete(`/boards/${id}`).catch(() => {})
 		}
 	})
 
 	test('duplicates a board (with cards) from the tile menu and stays on the boards page', async ({ page }) => {
 		const title = 'TileMenu Dup ' + stamp
-		const board = await api('POST', '/boards', { title })
+		const board = await api.post('/boards', { title })
 		state.extraBoards.push(board.id)
-		const todo = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
-		await api('POST', '/cards', { stackId: todo.id, title: 'Clone me' })
+		const todo = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+		await api.post('/cards', { stackId: todo.id, title: 'Clone me' })
 
 		await ncLogin(page)
 		await openBoardsPage(page)
@@ -75,17 +47,17 @@ test.describe('Boards page — tile options menu board actions', () => {
 		await expect(page.locator('.board-list-view')).toBeVisible()
 
 		// The copy carries the cards (withCards=true), verified via the API.
-		const boards = await api('GET', '/boards')
+		const boards = await api.get('/boards')
 		const copy = boards.find((b) => b.title === `${title} (copy)`)
 		expect(copy).toBeTruthy()
 		state.extraBoards.push(copy.id)
-		const doc = await api('GET', `/boards/${copy.id}/export`)
+		const doc = await api.get(`/boards/${copy.id}/export`)
 		expect(doc.board.cards.map((c) => c.title)).toEqual(['Clone me'])
 	})
 
 	test('deletes a board from the tile menu after an explicit confirm', async ({ page }) => {
 		const title = 'TileMenu Del ' + stamp
-		const board = await api('POST', '/boards', { title })
+		const board = await api.post('/boards', { title })
 		state.extraBoards.push(board.id)
 
 		await ncLogin(page)
@@ -109,13 +81,13 @@ test.describe('Boards page — tile options menu board actions', () => {
 		await expect(page.locator('.board-tile', { hasText: title })).toHaveCount(0, { timeout: 15_000 })
 
 		// Server truth: the board is gone from the boards list.
-		const boards = await api('GET', '/boards')
+		const boards = await api.get('/boards')
 		expect(boards.find((b) => b.id === board.id)).toBeFalsy()
 	})
 
 	test('archives from the tile menu, then unarchives from the archived tile menu', async ({ page }) => {
 		const title = 'TileMenu Arch ' + stamp
-		const board = await api('POST', '/boards', { title })
+		const board = await api.post('/boards', { title })
 		state.extraBoards.push(board.id)
 
 		await ncLogin(page)

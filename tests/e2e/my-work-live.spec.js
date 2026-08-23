@@ -19,25 +19,14 @@
 // the 90s expectation budget covers either, and a no-reload marker plus a
 // hash check prove no reload/navigation "helped".
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const ADMIN_AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
+import { test, expect, api, BASE } from './helpers.js'
 
 const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
 
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: ADMIN_AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
+// Local ncLogin takes POSITIONAL (page, user, pass) and always drives the form
+// for an explicit non-admin identity — kept as-is (the shared ncLogin uses an
+// object arg and short-circuits on an existing session), per the migration
+// contract (rule 6/8). This spec opts out of the shared admin storageState.
 async function ncLogin(page, user, pass) {
 	await page.goto(BASE + '/index.php/login')
 	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
@@ -62,14 +51,14 @@ test.describe('My Work live updates (#3768)', () => {
 	const state = { boardId: 0, reviewCardId: 0, taskCardId: 0 }
 
 	test.beforeAll(async () => {
-		const board = await api('POST', '/boards', { title: `MyWork Live E2E ${ts}` })
+		const board = await api.post('/boards', { title: `MyWork Live E2E ${ts}` })
 		state.boardId = board.id
-		const stack = await api('POST', '/stacks', { boardId: board.id, title: 'To do' })
-		state.reviewCardId = (await api('POST', '/cards', { stackId: stack.id, title: REVIEW_TITLE })).id
-		state.taskCardId = (await api('POST', '/cards', { stackId: stack.id, title: TASK_TITLE })).id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+		state.reviewCardId = (await api.post('/cards', { stackId: stack.id, title: REVIEW_TITLE })).id
+		state.taskCardId = (await api.post('/cards', { stackId: stack.id, title: TASK_TITLE })).id
 		// Share with tester (READ|EDIT = 3) so the admin's review request /
 		// assignment lands in the tester's cross-board feeds.
-		await api('POST', `/boards/${board.id}/acl`, {
+		await api.post(`/boards/${board.id}/acl`, {
 			participant: TESTER.user,
 			participantType: 'user',
 			permission: 3,
@@ -77,7 +66,7 @@ test.describe('My Work live updates (#3768)', () => {
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('a review requested by another user appears in the open My Reviews view by itself', async ({ browser }) => {
@@ -97,7 +86,7 @@ test.describe('My Work live updates (#3768)', () => {
 			await page.evaluate(() => { window.__kansoNoReload = true })
 
 			// The admin — another user, no browser — requests a review FROM the tester.
-			await api('PUT', `/cards/${state.reviewCardId}/reviews/${TESTER.user}`)
+			await api.put(`/cards/${state.reviewCardId}/reviews/${TESTER.user}`)
 
 			// Push: near-instant. Poll-only (CI): within the 60s interval.
 			await expect(row).toBeVisible({ timeout: 90_000 })
@@ -122,7 +111,7 @@ test.describe('My Work live updates (#3768)', () => {
 			await page.evaluate(() => { window.__kansoNoReload = true })
 
 			// The admin assigns the tester to the card.
-			await api('PUT', `/cards/${state.taskCardId}/assignees/${TESTER.user}`)
+			await api.put(`/cards/${state.taskCardId}/assignees/${TESTER.user}`)
 
 			await expect(row).toBeVisible({ timeout: 90_000 })
 			expect(await page.evaluate(() => window.__kansoNoReload)).toBe(true)

@@ -1,35 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function api(method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Cross-board Views (#3815)', () => {
 	const state = { boardA: 0, boardB: 0, cardA: '', cardB: '', cardAId: 0, cardBId: 0, labelA: 0, labelB: 0, viewId: '' }
@@ -43,32 +15,32 @@ test.describe('Cross-board Views (#3815)', () => {
 		// View filters to those two labels so it narrows to EXACTLY these two cards
 		// regardless of how much other data lives in the dev DB - the list stays
 		// small and deterministic (no virtualization off-screen flake).
-		const a = await api('POST', '/boards', { title: 'ViewsBoardA ' + stamp })
+		const a = await api.post('/boards', { title: 'ViewsBoardA ' + stamp })
 		state.boardA = a.id
-		state.labelA = (await api('POST', '/labels', { boardId: a.id, title: 'vlabelA ' + stamp, color: 'ff0000' })).id
-		const stackA = (await api('POST', '/stacks', { boardId: a.id, title: 'To do' })).id
-		state.cardAId = (await api('POST', '/cards', { stackId: stackA, title: state.cardA })).id
-		await api('PUT', `/cards/${state.cardAId}/labels/${state.labelA}`)
+		state.labelA = (await api.post('/labels', { boardId: a.id, title: 'vlabelA ' + stamp, color: 'ff0000' })).id
+		const stackA = (await api.post('/stacks', { boardId: a.id, title: 'To do' })).id
+		state.cardAId = (await api.post('/cards', { stackId: stackA, title: state.cardA })).id
+		await api.put(`/cards/${state.cardAId}/labels/${state.labelA}`)
 
-		const b = await api('POST', '/boards', { title: 'ViewsBoardB ' + stamp })
+		const b = await api.post('/boards', { title: 'ViewsBoardB ' + stamp })
 		state.boardB = b.id
-		state.labelB = (await api('POST', '/labels', { boardId: b.id, title: 'vlabelB ' + stamp, color: '00ff00' })).id
-		const stackB = (await api('POST', '/stacks', { boardId: b.id, title: 'To do' })).id
-		state.cardBId = (await api('POST', '/cards', { stackId: stackB, title: state.cardB })).id
-		await api('PUT', `/cards/${state.cardBId}/labels/${state.labelB}`)
+		state.labelB = (await api.post('/labels', { boardId: b.id, title: 'vlabelB ' + stamp, color: '00ff00' })).id
+		const stackB = (await api.post('/stacks', { boardId: b.id, title: 'To do' })).id
+		state.cardBId = (await api.post('/cards', { stackId: stackB, title: state.cardB })).id
+		await api.put(`/cards/${state.cardBId}/labels/${state.labelB}`)
 	})
 
 	test.afterAll(async () => {
-		if (state.viewId) await api('DELETE', `/views/${state.viewId}`).catch(() => {})
-		if (state.boardA) await api('DELETE', `/boards/${state.boardA}`).catch(() => {})
-		if (state.boardB) await api('DELETE', `/boards/${state.boardB}`).catch(() => {})
+		if (state.viewId) await api.delete(`/views/${state.viewId}`).catch(() => {})
+		if (state.boardA) await api.delete(`/boards/${state.boardA}`).catch(() => {})
+		if (state.boardB) await api.delete(`/boards/${state.boardB}`).catch(() => {})
 	})
 
 	test('the cross-board feed returns a capped envelope of cards from every readable board', async () => {
 		// The feed is a bounded envelope { cards, capped, total, limit } (#3892) -
 		// not a bare array - so a huge readable set can never ship one unbounded
 		// payload. With only a handful of test cards it is well under the cap.
-		const feed = await api('GET', '/views/cards')
+		const feed = await api.get('/views/cards')
 		expect(Array.isArray(feed.cards)).toBe(true)
 		expect(typeof feed.capped).toBe('boolean')
 		expect(feed.limit).toBeGreaterThan(0)
@@ -88,7 +60,7 @@ test.describe('Cross-board Views (#3815)', () => {
 		// Persist a View spanning both boards, filtered to the two per-board labels
 		// so it resolves to EXACTLY the two test cards, grouped by board so each
 		// board's row shows as its own List group.
-		const created = await api('PUT', '/views', {
+		const created = await api.put('/views', {
 			name: 'Views spec ' + Math.floor(Date.now() / 1000),
 			filter: { labels: [state.labelA, state.labelB] },
 			groupBy: 'board',
@@ -119,7 +91,7 @@ test.describe('Cross-board Views (#3815)', () => {
 	test('List display: clicking a card opens it as an overlay IN the View and closing stays in the View (#3950)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 
-		const created = await api('PUT', '/views', {
+		const created = await api.put('/views', {
 			name: 'Views list-open ' + Math.floor(Date.now() / 1000),
 			filter: { labels: [state.labelA, state.labelB] },
 			groupBy: 'board',
@@ -150,7 +122,7 @@ test.describe('Cross-board Views (#3815)', () => {
 			expect(page.url()).not.toMatch(/\/board\//)
 			await expect(rowA).toBeVisible()
 		} finally {
-			await api('DELETE', `/views/${listViewId}`).catch(() => {})
+			await api.delete(`/views/${listViewId}`).catch(() => {})
 		}
 	})
 
@@ -160,7 +132,7 @@ test.describe('Cross-board Views (#3815)', () => {
 		// A View spanning both boards, filtered to the two per-board labels so it
 		// resolves to EXACTLY the two test cards, grouped by BOARD and saved with
 		// the new Kanban display so it re-seeds Kanban on reload.
-		const created = await api('PUT', '/views', {
+		const created = await api.put('/views', {
 			name: 'Views kanban ' + Math.floor(Date.now() / 1000),
 			filter: { labels: [state.labelA, state.labelB] },
 			groupBy: 'board',
@@ -234,7 +206,7 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(kanbanBtn).toHaveClass(/view-page__display-btn--active/, { timeout: 15_000 })
 			await expect(page.locator('.view-kanban-col').first()).toBeVisible({ timeout: 10_000 })
 		} finally {
-			await api('DELETE', `/views/${kanbanViewId}`).catch(() => {})
+			await api.delete(`/views/${kanbanViewId}`).catch(() => {})
 		}
 	})
 
@@ -247,13 +219,13 @@ test.describe('Cross-board Views (#3815)', () => {
 		//   - card B: type=feature + no comment
 		// Both are owned by the same admin user (creator), so owner grouping/filter
 		// keeps both, while type/comments narrow to exactly one.
-		await api('PATCH', `/cards/${state.cardAId}`, { type: 'bug' })
-		await api('PATCH', `/cards/${state.cardBId}`, { type: 'feature' })
-		await api('POST', `/cards/${state.cardAId}/comments`, { body: 'a comment for filtering' })
+		await api.patch(`/cards/${state.cardAId}`, { type: 'bug' })
+		await api.patch(`/cards/${state.cardBId}`, { type: 'feature' })
+		await api.post(`/cards/${state.cardAId}/comments`, { body: 'a comment for filtering' })
 
 		// A View spanning both boards, filtered to the two per-board labels so it
 		// resolves to EXACTLY the two test cards, grouped by TYPE (a new group-by).
-		const created = await api('PUT', '/views', {
+		const created = await api.put('/views', {
 			name: 'Views filters ' + Math.floor(Date.now() / 1000),
 			filter: { labels: [state.labelA, state.labelB] },
 			groupBy: 'type',
@@ -310,7 +282,7 @@ test.describe('Cross-board Views (#3815)', () => {
 			await page.locator('.vs__dropdown-option', { hasText: /^Review$/ }).click()
 			await expect(page.locator('.board-list-group__title', { hasText: /No review/ })).toBeVisible({ timeout: 10_000 })
 		} finally {
-			await api('DELETE', `/views/${filterViewId}`).catch(() => {})
+			await api.delete(`/views/${filterViewId}`).catch(() => {})
 		}
 	})
 
@@ -343,6 +315,6 @@ test.describe('Cross-board Views (#3815)', () => {
 		).toBeVisible({ timeout: 10_000 })
 
 		// Cleanup the UI-created view.
-		await api('DELETE', `/views/${uiViewId}`).catch(() => {})
+		await api.delete(`/views/${uiViewId}`).catch(() => {})
 	})
 })

@@ -12,77 +12,32 @@
  * the targeted comment is scrolled into view and carries the highlight class.
  */
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Scroll-to-comment deep links (#3870)', () => {
 	const state = { boardId: 0, cardId: 0, comments: [], replyId: 0 }
 
 	test.beforeAll(async () => {
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'Comment Deeplink E2E') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
-		const board = await apiPost('/boards', { title: 'Comment Deeplink E2E' })
+		const board = await api.post('/boards', { title: 'Comment Deeplink E2E' })
 		state.boardId = board.id
-		const stack = await apiPost('/stacks', { boardId: board.id, title: 'To Do' })
-		const card = await apiPost('/cards', { stackId: stack.id, title: 'Card With Many Comments' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card With Many Comments' })
 		state.cardId = card.id
 
 		// Enough top-level comments that the target is well below the fold, so a
 		// scroll genuinely has to happen (not already in view).
 		for (let i = 1; i <= 8; i++) {
-			const c = await apiPost(`/cards/${card.id}/comments`, { body: `Comment number ${i} body text here` })
+			const c = await api.post(`/cards/${card.id}/comments`, { body: `Comment number ${i} body text here` })
 			state.comments.push(c.id)
 		}
 		// A reply under the first comment - replies are deep-linkable too.
-		const reply = await apiPost(`/cards/${card.id}/comments`, {
+		const reply = await api.post(`/cards/${card.id}/comments`, {
 			body: 'A nested reply to comment one',
 			parentCommentId: state.comments[0],
 		})
@@ -90,7 +45,7 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 	})
 
 	test.afterAll(async () => {
-		if (state.boardId) await apiDelete(`/boards/${state.boardId}`).catch(() => {})
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
 	test('full-page card route with ?comment=<id> scrolls to + highlights the target', async ({ page }) => {

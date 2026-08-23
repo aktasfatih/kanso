@@ -1,38 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, ncLogin, makeApi, authFor, adminAuth, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const ADMIN = 'Basic ' + Buffer.from('admin:admin').toString('base64')
-const TESTER = 'Basic ' + Buffer.from('tester:kanso-dev-tester!1').toString('base64')
+const ADMIN = adminAuth
+const TESTER = authFor('tester', 'kanso-dev-tester!1')
 
-async function call(auth, method, path, body) {
-	return fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: auth },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
+// Per-auth clients: send() throws on non-2xx (parsed JSON / null for DELETE);
+// raw() returns the Response without throwing, for status-code assertions.
+const clients = new Map()
+function clientFor(auth) {
+	if (!clients.has(auth)) clients.set(auth, makeApi(auth))
+	return clients.get(auth)
 }
+const call = (auth, method, path, body) => clientFor(auth).raw(method, path, body)
+const api = (auth, method, path, body) => clientFor(auth).send(method, path, body)
 
-async function api(auth, method, path, body) {
-	const r = await call(auth, method, path, body)
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
-}
-
-async function loginAs(page, user, pass) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	if (!(await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false))) return
-	await page.fill('#user', user)
-	await page.fill('#password', pass)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+const loginAs = (page, user, pass) => ncLogin(page, { user, pass })
 
 // #3744 — external/guest collaboration + fragment-free deep links.
 // tester is shared onto the board as an EXTERNAL member with READ|EDIT:

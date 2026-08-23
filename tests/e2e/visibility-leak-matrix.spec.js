@@ -1,14 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
+import { test, expect, makeApi, authFor, adminAuth, API, BASE } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-
-const ADMIN = 'Basic ' + Buffer.from('admin:admin').toString('base64')
-const TESTER = 'Basic ' + Buffer.from('tester:kanso-dev-tester!1').toString('base64')
+const ADMIN = adminAuth
+const TESTER = authFor('tester', 'kanso-dev-tester!1')
 
 // #3743 — the endpoint-level leak matrix: two viewers (admin = internal board
 // owner, tester = EXTERNAL member) plus the anonymous token surfaces, asserted
@@ -27,19 +23,20 @@ const TESTER = 'Basic ' + Buffer.from('tester:kanso-dev-tester!1').toString('bas
 //   tester → PUB, CLI      (never PROV, never PRIV)
 //   anon   → PUB              (public share + ICS feed)
 
-async function call(auth, method, path, body) {
-	const r = await fetch(API + path, {
-		method,
-		headers: { ...HEADERS, Authorization: auth },
-		body: body === undefined ? undefined : JSON.stringify(body),
-	})
-	return r
+// Per-auth API clients (admin + external tester), cached so the (auth, method,
+// path, body) call sites below stay byte-for-byte identical.
+const clients = new Map()
+function clientFor(auth) {
+	if (!clients.has(auth)) clients.set(auth, makeApi(auth))
+	return clients.get(auth)
 }
 
-async function api(auth, method, path, body) {
-	const r = await call(auth, method, path, body)
-	if (!r.ok) throw new Error(`${method} ${path} → ${r.status}: ${await r.text()}`)
-	return method === 'DELETE' ? null : r.json()
+function call(auth, method, path, body) {
+	return clientFor(auth).raw(method, path, body)
+}
+
+function api(auth, method, path, body) {
+	return clientFor(auth).send(method, path, body)
 }
 
 test.describe.serial('Card visibility leak matrix (#3743)', () => {

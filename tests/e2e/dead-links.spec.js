@@ -9,49 +9,7 @@
 //   2. Opening a board route for a deleted board shows "This board no longer
 //      exists" + a "Go to boards" link (not the generic error box).
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const ADMIN = 'admin'
-const ADMIN_PASS = 'admin'
-
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
-const ADMIN_AUTH = 'Basic ' + Buffer.from(`${ADMIN}:${ADMIN_PASS}`).toString('base64')
-
-async function apiRequest(path, { method = 'GET', body } = {}) {
-	const opts = { method, headers: { ...HEADERS, Authorization: ADMIN_AUTH } }
-	if (body !== undefined) opts.body = JSON.stringify(body)
-	return fetch(API + path, opts)
-}
-
-async function apiGet(path) {
-	const r = await apiRequest(path)
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await apiRequest(path, { method: 'POST', body })
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	await apiRequest(path, { method: 'DELETE' })
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-	const isLoginPage = await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return
-	await page.fill('#user', ADMIN)
-	await page.fill('#password', ADMIN_PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Dead card/board links (#3662)', () => {
 	const state = { liveBoardId: 0, deadBoardId: 0 }
@@ -59,24 +17,24 @@ test.describe('Dead card/board links (#3662)', () => {
 
 	test.beforeAll(async () => {
 		// Clean any leftovers from a prior run.
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
-			if (b.title === TITLE) await apiDelete(`/boards/${b.id}`)
+			if (b.title === TITLE) await api.delete(`/boards/${b.id}`).catch(() => {})
 		}
 
 		// A live board to host a bogus card deep-link.
-		const live = await apiPost('/boards', { title: TITLE })
+		const live = await api.post('/boards', { title: TITLE })
 		state.liveBoardId = live.id
-		await apiPost('/stacks', { boardId: live.id, title: 'To Do' })
+		await api.post('/stacks', { boardId: live.id, title: 'To Do' })
 
 		// A second board we delete, to exercise the gone-board path.
-		const dead = await apiPost('/boards', { title: TITLE })
+		const dead = await api.post('/boards', { title: TITLE })
 		state.deadBoardId = dead.id
-		await apiDelete(`/boards/${dead.id}`)
+		await api.delete(`/boards/${dead.id}`).catch(() => {})
 	})
 
 	test.afterAll(async () => {
-		if (state.liveBoardId) await apiDelete(`/boards/${state.liveBoardId}`)
+		if (state.liveBoardId) await api.delete(`/boards/${state.liveBoardId}`).catch(() => {})
 	})
 
 	test.beforeEach(async ({ page }) => {

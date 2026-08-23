@@ -1,56 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from '@playwright/test'
-
-const BASE = 'http://localhost:8891'
-const USER = 'admin'
-const PASS = 'admin'
-const API = BASE + '/index.php/apps/kanso/api'
-const HEADERS = {
-	'OCS-APIREQUEST': 'true',
-	'Content-Type': 'application/json',
-}
-const AUTH = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64')
-
-async function apiGet(path) {
-	const r = await fetch(API + path, { headers: { ...HEADERS, Authorization: AUTH } })
-	if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
-	return r.json()
-}
-
-async function apiPost(path, body) {
-	const r = await fetch(API + path, {
-		method: 'POST',
-		headers: { ...HEADERS, Authorization: AUTH },
-		body: JSON.stringify(body),
-	})
-	if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`)
-	return r.json()
-}
-
-async function apiDelete(path) {
-	const r = await fetch(API + path, {
-		method: 'DELETE',
-		headers: { ...HEADERS, Authorization: AUTH },
-	})
-	if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`)
-}
-
-async function ncLogin(page) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
-
-	const userInput = page.locator('#user')
-	const isLoginPage = await userInput.isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // Already logged in
-
-	await page.fill('#user', USER)
-	await page.fill('#password', PASS)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-}
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 async function dragWithMouse(page, sourceLocator, targetLocator, targetPosition = 'top') {
 	const srcBox = await sourceLocator.boundingBox()
@@ -98,26 +49,26 @@ test.describe('Card drag and drop', () => {
 
 	test.beforeAll(async () => {
 		// Delete any existing DnD Test Board to start clean
-		const boards = await apiGet('/boards')
+		const boards = await api.get('/boards')
 		for (const b of boards) {
 			if (b.title === 'DnD Test Board') {
-				await apiDelete(`/boards/${b.id}`)
+				await api.delete(`/boards/${b.id}`)
 			}
 		}
 
 		// Create fresh board
-		const board = await apiPost('/boards', { title: 'DnD Test Board' })
+		const board = await api.post('/boards', { title: 'DnD Test Board' })
 		state.boardId = board.id
 
 		// Create stacks S1 and S2
-		const s1 = await apiPost('/stacks', { boardId: board.id, title: 'S1' })
-		const s2 = await apiPost('/stacks', { boardId: board.id, title: 'S2' })
+		const s1 = await api.post('/stacks', { boardId: board.id, title: 'S1' })
+		const s2 = await api.post('/stacks', { boardId: board.id, title: 'S2' })
 		state.stackS1Id = s1.id
 		state.stackS2Id = s2.id
 
 		// Create card A in S1, card B in S2
-		const cardA = await apiPost('/cards', { stackId: s1.id, title: 'A' })
-		const cardB = await apiPost('/cards', { stackId: s2.id, title: 'B' })
+		const cardA = await api.post('/cards', { stackId: s1.id, title: 'A' })
+		const cardB = await api.post('/cards', { stackId: s2.id, title: 'B' })
 		state.cardAId = cardA.id
 		state.cardBId = cardB.id
 
@@ -127,16 +78,16 @@ test.describe('Card drag and drop', () => {
 		// Reorder fixture: a separate board with one column holding R1, R2, R3
 		// (created in order, so their initial top-to-bottom order is R1, R2, R3).
 		for (const b of boards) {
-			if (b.title === 'DnD Reorder Board') await apiDelete(`/boards/${b.id}`)
+			if (b.title === 'DnD Reorder Board') await api.delete(`/boards/${b.id}`)
 		}
-		const rBoard = await apiPost('/boards', { title: 'DnD Reorder Board' })
+		const rBoard = await api.post('/boards', { title: 'DnD Reorder Board' })
 		reorder.boardId = rBoard.id
-		const rStack = await apiPost('/stacks', { boardId: rBoard.id, title: 'R' })
+		const rStack = await api.post('/stacks', { boardId: rBoard.id, title: 'R' })
 		reorder.stackId = rStack.id
 		// Create in order so the board renders R1 (top), R2, R3 (bottom).
-		await apiPost('/cards', { stackId: rStack.id, title: 'R1' })
-		await apiPost('/cards', { stackId: rStack.id, title: 'R2' })
-		await apiPost('/cards', { stackId: rStack.id, title: 'R3' })
+		await api.post('/cards', { stackId: rStack.id, title: 'R1' })
+		await api.post('/cards', { stackId: rStack.id, title: 'R2' })
+		await api.post('/cards', { stackId: rStack.id, title: 'R3' })
 		reorder.boardUrl = `${BASE}/index.php/apps/kanso#/board/${rBoard.id}`
 	})
 
