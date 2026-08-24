@@ -222,7 +222,9 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 	// the rendered track. The timeline renders only a fixed window around today and
 	// clips outliers, flagging them with an edge affordance — so the scroll width
 	// stays bounded instead of scaling with the raw (multi-year) date domain.
-	test('a huge date range renders a bounded track with clipped-edge affordances (#4129)', async ({ page }) => {
+	// Fit button: clicking it (or the edge chevrons) reveals the full date range
+	// within a bounded viewport-sized track.
+	test('a huge date range renders a bounded track with clipped-edge affordances, Fit reveals full range (#4129)', async ({ page }) => {
 		// A dedicated board so the multi-year outlier can't distort the shared-board
 		// specs' geometry assertions.
 		const board = await api.post('/boards', { title: 'Timeline wide ' + Math.floor(Date.now() / 1000) })
@@ -247,13 +249,56 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			// Bounded width: with a ~12-year raw domain the OLD code produced a track
 			// of ~52000px+ (4380 days × 12px/day at week zoom). The windowed render
 			// keeps it well under 30000px regardless of the outlier span.
-			const scrollWidth = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
-			expect(scrollWidth).toBeLessThan(30_000)
+			const scrollWidthDefault = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
+			expect(scrollWidthDefault).toBeLessThan(30_000)
 
 			// The card reaches before the window start (2018 ≪ today−6mo) and after the
 			// window end (2030 ≫ today+12mo), so BOTH clipped-edge markers are shown.
 			await expect(page.locator('.timeline__edge--start')).toBeVisible()
 			await expect(page.locator('.timeline__edge--end')).toBeVisible()
+
+			// The card is fully off the default window: it renders as an off-window
+			// marker, NOT a normal bar (which would be a misleading 1-day sliver).
+			await expect(page.locator('.timeline__bar-offwindow')).toBeVisible()
+			await expect(page.locator('.timeline__bar', { hasText: 'Epic across years' })).toHaveCount(0)
+
+			// ── Fit mode ─────────────────────────────────────────────────────────────
+			// Click the Fit button: the full date range (2018→2030) becomes visible.
+			const fitBtn = page.getByRole('button', { name: 'Fit' })
+			await expect(fitBtn).toBeVisible()
+			await fitBtn.click()
+
+			// Edge chevrons disappear in Fit mode (the window IS the full extent).
+			await expect(page.locator('.timeline__edge--start')).toHaveCount(0)
+			await expect(page.locator('.timeline__edge--end')).toHaveCount(0)
+
+			// The off-window markers are also gone; the card now renders as a normal bar.
+			await expect(page.locator('.timeline__bar-offwindow')).toHaveCount(0)
+
+			// The axis now spans the outlier years: a month label containing "2018" and
+			// one containing "2030" should be visible in the axis.
+			const monthLabels = page.locator('.timeline__axis-month')
+			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible({ timeout: 5_000 })
+			await expect(monthLabels.filter({ hasText: '2030' }).first()).toBeVisible({ timeout: 5_000 })
+
+			// Fit mode keeps the track width bounded (fits the viewport — no huge scroll).
+			const scrollWidthFit = await page.locator('.timeline__scroll').evaluate((el) => ({
+				scrollWidth: el.scrollWidth,
+				clientWidth: el.clientWidth,
+			}))
+			// Fit collapses the span into the viewport: scrollWidth should be close to
+			// clientWidth (within a generous 2× factor to tolerate rounding/padding).
+			expect(scrollWidthFit.scrollWidth).toBeLessThan(30_000)
+			expect(scrollWidthFit.scrollWidth).toBeLessThanOrEqual(scrollWidthFit.clientWidth * 2)
+
+			// ── Clicking an edge chevron also triggers Fit ────────────────────────────
+			// Reset to default window by clicking Day zoom (which turns off Fit).
+			await page.getByRole('button', { name: 'Day' }).click()
+			await expect(page.locator('.timeline__edge--start')).toBeVisible({ timeout: 5_000 })
+			// Click the earlier-chevron edge affordance — it should activate Fit.
+			await page.locator('.timeline__edge--start').click()
+			await expect(page.locator('.timeline__edge--start')).toHaveCount(0, { timeout: 5_000 })
+			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible({ timeout: 5_000 })
 		} finally {
 			await api.delete(`/boards/${board.id}`).catch(() => {})
 		}

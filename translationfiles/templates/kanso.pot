@@ -267,7 +267,7 @@ msgid_plural "%n overdue"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardTimelineView.vue:220
+#: src/components/BoardTimelineView.vue:251
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] ""
@@ -2569,6 +2569,10 @@ msgstr ""
 msgid "Filter trash…"
 msgstr ""
 
+#: src/components/BoardTimelineView.vue
+msgid "Fit"
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Flat vs previous period"
@@ -3594,6 +3598,10 @@ msgid "Ordered list"
 msgstr ""
 
 #: src/components/BoardTimelineView.vue
+msgid "Outside the visible range — click Fit to show"
+msgstr ""
+
+#: src/components/BoardTimelineView.vue
 #: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
 #: src/views/BoardStats.vue
@@ -4285,6 +4293,10 @@ msgstr ""
 
 #: src/App.vue
 msgid "Show formatting toolbar"
+msgstr ""
+
+#: src/components/BoardTimelineView.vue
+msgid "Show the full date range"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
