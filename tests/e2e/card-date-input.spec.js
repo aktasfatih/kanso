@@ -73,7 +73,7 @@ test.describe('Typing a date by keyboard', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await expect(dueInput).toHaveAttribute('type', 'datetime-local')
 
 		// Seat the caret on the first (month) segment, then type the whole date one
@@ -106,7 +106,7 @@ test.describe('Typing a date by keyboard', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await dueInput.click()
 		for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft')
 		await dueInput.pressSequentially('09102027', { delay: 120 })
@@ -129,8 +129,8 @@ test.describe('Typing a date by keyboard', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		// Second date input in the popover is the start date (always datetime-local).
-		const startInput = page.locator('.card-modal__popover .card-modal__date-input').nth(1)
+		// The start date input (always datetime-local in the timed view).
+		const startInput = page.locator('.card-modal__popover [data-date="start"]')
 		await expect(startInput).toHaveAttribute('type', 'datetime-local')
 
 		await startInput.click()
@@ -156,7 +156,7 @@ test.describe('Typing a date by keyboard', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await dueInput.click()
 		await blur(page)
 		await page.waitForTimeout(600)
