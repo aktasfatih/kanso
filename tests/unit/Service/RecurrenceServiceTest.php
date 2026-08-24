@@ -296,6 +296,29 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->create(1, 10, 5, RecurRule::MODE_RESET, 'FREQ=YEARLY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 	}
 
+	public function testCreateAnchorsOnTheCardStartDateAndFiresOnAFutureStart(): void {
+		// The schedule is anchored at the card's Start date, so a Start set 30 days
+		// out makes the FIRST occurrence land on that date (not now, not skipped) -
+		// "starts <future date>, repeats yearly" fires on the start date.
+		$futureStart = self::NOW + 30 * 86400;
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $futureStart));
+
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r) use ($futureStart): RecurRule {
+				self::assertSame($futureStart, $r->getNextOccurrenceAt());
+				$r->setId(7);
+				return $r;
+			});
+
+		$this->service->create(1, 10, 5, RecurRule::MODE_RESET, 'FREQ=YEARLY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
+	}
+
 	public function testCreateWithoutManageThrows403(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
@@ -433,9 +456,11 @@ class RecurrenceServiceTest extends TestCase {
 			->method('update')
 			->willReturnCallback(static function (Card $c): Card {
 				self::assertSame('- [ ] living room', $c->getDescription());
-				self::assertNotNull($c->getDuedate());
-				// POLICY_AT_OCCURRENCE → due at the occurrence timestamp.
-				self::assertSame(self::NOW, $c->getDuedate()->getTimestamp());
+				// The template has no dates, so a repeat invents none: the clone
+				// carries no Start/End date (the window model, replacing the old
+				// "stamp a due date at the occurrence" behaviour).
+				self::assertNull($c->getStartDate());
+				self::assertNull($c->getDuedate());
 				return $c;
 			});
 
@@ -462,9 +487,15 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(99, $rule->getLastSpawnedAt());
 	}
 
-	public function testSpawnCloneOffsetPolicyAddsOffsetToDuedate(): void {
-		$rule = $this->rule(policy: RecurRule::POLICY_OFFSET_AFTER, offset: 3600, nextOccurrenceAt: self::NOW);
-		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+	public function testSpawnCloneSlidesStartEndWindowToOccurrence(): void {
+		// The template has a 2-day Start→End window anchored in the past. A clone's
+		// window slides forward to the occurrence, keeping its 2-day length (the
+		// calendar-event model): Start = occurrence, End = occurrence + 2 days.
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . (self::NOW - 10 * 86400)));
+		$template->setDuedate(new \DateTime('@' . (self::NOW - 10 * 86400 + 2 * 86400)));
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
 		$this->cardService->method('create')->willReturn($this->spawnedCard());
 		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
@@ -473,7 +504,8 @@ class RecurrenceServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static function (Card $c): Card {
-				self::assertSame(self::NOW + 3600, $c->getDuedate()->getTimestamp());
+				self::assertSame(self::NOW, $c->getStartDate()->getTimestamp());
+				self::assertSame(self::NOW + 2 * 86400, $c->getDuedate()->getTimestamp());
 				return $c;
 			});
 
@@ -605,8 +637,8 @@ class RecurrenceServiceTest extends TestCase {
 
 	// ---- spawn RESET ------------------------------------------------------
 
-	public function testSpawnResetMovesTemplateBackClearsDoneRearmsDuedate(): void {
-		$rule = $this->rule(mode: RecurRule::MODE_RESET, policy: RecurRule::POLICY_AT_OCCURRENCE, nextOccurrenceAt: self::NOW);
+	public function testSpawnResetMovesTemplateBackClearsDoneSlidesWindow(): void {
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, nextOccurrenceAt: self::NOW);
 
 		// Target stack empty → move to top (afterCardId null).
 		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
@@ -614,6 +646,10 @@ class RecurrenceServiceTest extends TestCase {
 		$moved = $this->templateCard();
 		$moved->setStackId(5);
 		$moved->setDoneAt(self::NOW); // was done before the reset
+		// The card carries a 1-hour Start→End window anchored a week back; the reset
+		// slides that whole window forward to the occurrence, keeping its length.
+		$moved->setStartDate(new \DateTime('@' . (self::NOW - 7 * 86400)));
+		$moved->setDuedate(new \DateTime('@' . (self::NOW - 7 * 86400 + 3600)));
 		$this->cardService->expects(self::once())
 			->method('move')
 			->with(10, 5, null, 'alice')
@@ -624,7 +660,9 @@ class RecurrenceServiceTest extends TestCase {
 			->willReturnCallback(static function (Card $c): Card {
 				self::assertSame(0, $c->getDoneAt());
 				self::assertFalse($c->getArchived());
-				self::assertSame(self::NOW, $c->getDuedate()->getTimestamp());
+				// Window slid forward to the occurrence, 1-hour length preserved.
+				self::assertSame(self::NOW, $c->getStartDate()->getTimestamp());
+				self::assertSame(self::NOW + 3600, $c->getDuedate()->getTimestamp());
 				return $c;
 			});
 
@@ -921,37 +959,39 @@ class RecurrenceServiceTest extends TestCase {
 		// are due (t-3d, t-2d, t-1d); the t=now one is also due (<= now) = 4.
 		$firstMissed = self::NOW - 3 * 86400;
 		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: $firstMissed);
-		// createdAt anchors the DAILY series; set it to the first missed point so
-		// the occurrences land exactly on 24h steps from there.
-		$rule->setCreatedAt($firstMissed);
+		// The template's Start date anchors the DAILY series (anchorFor); set it to
+		// the first missed point so occurrences land on exact 24h steps from there,
+		// and each spawned card's Start date slides to its own occurrence.
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $firstMissed));
 
 		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
-		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
 		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
 		$this->ruleMapper->method('update')->willReturnArgument(0);
 
-		// A fresh card per occurrence, and capture the per-occurrence due dates.
-		$dueDates = [];
+		// A fresh card per occurrence, and capture the per-occurrence Start dates.
+		$starts = [];
 		$id = 100;
 		$this->cardService->method('create')->willReturnCallback(function () use (&$id): Card {
 			return $this->spawnedCard($id++);
 		});
-		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$dueDates): Card {
-			$dueDates[] = $c->getDuedate()?->getTimestamp();
+		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$starts): Card {
+			$starts[] = $c->getStartDate()?->getTimestamp();
 			return $c;
 		});
 
 		$spawned = $this->service->runDueRules();
 
-		// t-3d, t-2d, t-1d, t=now → 4 cards, each with its own occurrence due date.
+		// t-3d, t-2d, t-1d, t=now → 4 cards, each sliding its Start date to its own occurrence.
 		self::assertSame(4, $spawned);
 		self::assertSame([
 			self::NOW - 3 * 86400,
 			self::NOW - 2 * 86400,
 			self::NOW - 1 * 86400,
 			self::NOW,
-		], $dueDates);
+		], $starts);
 		// Cursor advanced past now to tomorrow; rule is no longer due.
 		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
 	}

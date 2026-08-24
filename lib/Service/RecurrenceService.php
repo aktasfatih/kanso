@@ -230,7 +230,8 @@ class RecurrenceService {
 		// creator can SEE - a hidden template reads as "does not exist" (404,
 		// same as a bogus id - no existence oracle). Spawns re-check against the
 		// rule OWNER, so a later visibility narrowing cannot keep leaking copies.
-		$this->visibilityGuard->assertVisible($board, $this->loadCard($templateCardId), $uid);
+		$template = $this->loadCard($templateCardId);
+		$this->visibilityGuard->assertVisible($board, $template, $uid);
 
 		$now = $this->time->getTime();
 		$rule = new RecurRule();
@@ -253,18 +254,16 @@ class RecurrenceService {
 		$rule->setTimezone($this->defaultTimezoneFor($uid));
 		// Work out when this rule should fire for the FIRST time.
 		//
-		// The repeat schedule counts from the moment the rule is created (now). So
-		// the very first date it produces is "now" itself. We must NOT fire on that
-		// one: the card the user just set up already exists, and firing means
-		// spawn/reset it - which would immediately overwrite the date they just
-		// picked. That was the bug in #80: a card set to repeat "Yearly" got reset
-		// to today within one cron run.
-		//
-		// So we skip the "now" date and pick the NEXT one after it (tomorrow for a
-		// daily rule, next year for a yearly rule, and so on). Passing $now here
-		// (instead of $now - 1) is what says "strictly after now, not including now".
-		// If someone really wants a card right away, the "Create now" button does that.
-		$rule->setNextOccurrenceAt($this->computeNextOccurrence($rrule, $now, $now, $rule->getTimezone()));
+		// The schedule is anchored at the card's Start date (its End date, then the
+		// creation time, as fallbacks - see anchorFor()). We pick the first
+		// occurrence at or after that anchor, but NEVER the occurrence that coincides
+		// with "now": the card the user just set up already exists, and firing on it
+		// would immediately reset/clone the card and overwrite the date they just
+		// picked (that was bug #80 - a "Yearly" repeat re-stamped to today). A Start
+		// date set for the future fires on that date; otherwise the first fire is the
+		// next occurrence after now. See firstFireFor(). "Create now" is the way to
+		// spawn one right away on purpose.
+		$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
 
 		return $this->ruleMapper->insert($rule);
 	}
@@ -305,7 +304,8 @@ class RecurrenceService {
 		$newOffset = $duedateOffsetSeconds ?? $rule->getDuedateOffsetSeconds();
 		$this->validate($rule->getBoardId(), $newTemplate, $newStack, $newMode, $newRrule, $newPolicy, $newOffset);
 		// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
-		$this->visibilityGuard->assertVisible($board, $this->loadCard($newTemplate), $uid);
+		$template = $this->loadCard($newTemplate);
+		$this->visibilityGuard->assertVisible($board, $template, $uid);
 
 		// Capture the pre-edit schedule + enabled state BEFORE applying the setters
 		// so we can tell an actual schedule change from a no-op edit (#65). The
@@ -350,8 +350,7 @@ class RecurrenceService {
 		$scheduleChanged = $newRrule !== $originalRrule;
 		$reEnabled = $rule->getEnabled() && !$wasEnabled;
 		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
-			$now = $this->time->getTime();
-			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $now, $rule->getCreatedAt(), $rule->getTimezone()));
+			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
 		}
 
 		return $this->ruleMapper->update($rule);
@@ -451,6 +450,9 @@ class RecurrenceService {
 		// null here and falls through to the mode branch, which throws its usual
 		// DoesNotExistException that the cron logs and retries).
 		$template = $this->findTemplateOrNull($rule);
+		// The cadence is anchored at the card's Start date (see anchorFor()); read it
+		// once here so every advanceSchedule() below walks the same anchor.
+		$anchorTs = $this->anchorFor($template, $rule);
 
 		// Pause on a SOFT-trashed template (#4124): create/update guard the template
 		// via loadCard() (throws on deleted_at > 0), but the spawn hot path read it
@@ -467,7 +469,7 @@ class RecurrenceService {
 					'kanso: recurring rule ' . $rule->getId()
 					. ' paused, template card is in the trash'
 				);
-				$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
+				$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
 				$this->ruleMapper->update($rule);
 				$this->db->commit();
 			} catch (\Throwable $e) {
@@ -490,7 +492,7 @@ class RecurrenceService {
 					// A skip is not an occurrence: leave the counters be, but still
 					// advance the schedule past this occurrence so the rule does not
 					// re-fire it (the next due occurrence is still handled next loop).
-					$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
+					$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
 					$this->ruleMapper->update($rule);
 					$this->db->commit();
 					return null;
@@ -500,7 +502,7 @@ class RecurrenceService {
 
 			$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
 			$rule->setLastSpawnedAt($card->getId());
-			$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual));
+			$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
 			$this->ruleMapper->update($rule);
 
 			$this->db->commit();
@@ -563,7 +565,13 @@ class RecurrenceService {
 		);
 
 		$card->setDescription($template->getDescription());
-		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));
+		// Slide the template's Start→End window forward to this occurrence (see
+		// windowFor): the occurrence becomes the new Start, the End keeps the same
+		// gap. The clone inherits the template's dates shifted, not a stamped-on due
+		// date.
+		[$newStart, $newEnd] = $this->windowFor($template, $occurrenceTs);
+		$card->setStartDate($newStart);
+		$card->setDuedate($newEnd);
 		// Carry the template's all-day flag (#4125): without it the clone defaults
 		// to all_day=false and shows a spurious 00:00 time on an all-day template.
 		$card->setAllDay($template->getAllDay() ?? false);
@@ -627,8 +635,13 @@ class RecurrenceService {
 
 		$card->setDoneAt(0);
 		$card->setArchived(false);
-		$card->setDuedate($this->duedateFor($rule, $occurrenceTs));
-		// Re-arm the due-date reminders (#3545) for the reset card's new due date.
+		// Slide this card's OWN Start→End window forward to the occurrence (the reset
+		// card is its own template). $card still carries its pre-reset dates here, so
+		// windowFor reads the old window and returns the shifted one.
+		[$newStart, $newEnd] = $this->windowFor($card, $occurrenceTs);
+		$card->setStartDate($newStart);
+		$card->setDuedate($newEnd);
+		// Re-arm the due-date reminders (#3545) for the reset card's new End date.
 		$card->setDueReminderSent(0);
 		$card->setDayBeforeReminderSent(0);
 		$card->setLastModified($this->time->getTime());
@@ -648,16 +661,69 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Due date for a card spawned at $occurrenceTs, per the rule's policy:
-	 * at-occurrence → the occurrence time; offset-after → occurrence + offset;
-	 * none → null.
+	 * The timestamp the repeat schedule is anchored at - its RFC 5545 DTSTART.
+	 * The template card's Start date, else its End (due) date, else the rule's
+	 * creation time. Anchoring at the card's own dates is what makes "starts
+	 * Jan 5, repeats weekly" land on Jan 5, 12, 19 rather than on whatever day
+	 * Repeat happened to be switched on. A card with no dates falls back to the
+	 * rule's creation time (the pre-window behaviour).
 	 */
-	private function duedateFor(RecurRule $rule, int $occurrenceTs): ?\DateTime {
-		return match ($rule->getDuedatePolicy()) {
-			RecurRule::POLICY_OFFSET_AFTER => new \DateTime('@' . ($occurrenceTs + $rule->getDuedateOffsetSeconds())),
-			RecurRule::POLICY_NONE => null,
-			default => new \DateTime('@' . $occurrenceTs),
-		};
+	private function anchorFor(?Card $template, RecurRule $rule): int {
+		if ($template !== null) {
+			$start = $template->getStartDate()?->getTimestamp();
+			if ($start !== null) {
+				return $start;
+			}
+			$end = $template->getDuedate()?->getTimestamp();
+			if ($end !== null) {
+				return $end;
+			}
+		}
+		return $rule->getCreatedAt();
+	}
+
+	/**
+	 * The first fire for a freshly created or re-armed rule: the next occurrence
+	 * at or after the anchor, but never the occurrence that coincides with "now"
+	 * itself - firing that one would immediately reset/clone the card the user
+	 * just set up and overwrite the date they picked (#80). A Start date set for
+	 * the FUTURE fires on that date; a past/now anchor fires on the next
+	 * occurrence strictly after now.
+	 */
+	private function firstFireFor(RecurRule $rule, int $anchorTs): int {
+		$now = $this->time->getTime();
+		$after = max($anchorTs - 1, $now);
+		return $this->computeNextOccurrence($rule->getRrule(), $after, $anchorTs, $rule->getTimezone());
+	}
+
+	/**
+	 * The [start, end] dates a card spawned/reset at $occurrenceTs should carry.
+	 * The template's Start→End window slides forward to the occurrence, keeping
+	 * its length (the calendar-event model): the occurrence becomes the new Start
+	 * and the End keeps the same distance after it. A template with only one of
+	 * the two dates slides just that one; a template with neither stays date-less
+	 * (a repeat never invents a date the user did not set).
+	 *
+	 * @return array{0: ?\DateTime, 1: ?\DateTime} [start, end]
+	 */
+	private function windowFor(Card $template, int $occurrenceTs): array {
+		$start = $template->getStartDate()?->getTimestamp();
+		$end = $template->getDuedate()?->getTimestamp();
+
+		if ($start !== null && $end !== null) {
+			$duration = max(0, $end - $start);
+			return [
+				new \DateTime('@' . $occurrenceTs),
+				new \DateTime('@' . ($occurrenceTs + $duration)),
+			];
+		}
+		if ($start !== null) {
+			return [new \DateTime('@' . $occurrenceTs), null];
+		}
+		if ($end !== null) {
+			return [null, new \DateTime('@' . $occurrenceTs)];
+		}
+		return [null, null];
 	}
 
 	/**
@@ -684,9 +750,9 @@ class RecurrenceService {
 		return $manual ? $this->time->getTime() - 1 : $occurrenceTs;
 	}
 
-	private function advanceSchedule(RecurRule $rule, int $firedOccurrenceTs): void {
+	private function advanceSchedule(RecurRule $rule, int $firedOccurrenceTs, int $anchorTs): void {
 		try {
-			$next = $this->computeNextOccurrence($rule->getRrule(), $firedOccurrenceTs, $rule->getCreatedAt(), $rule->getTimezone());
+			$next = $this->computeNextOccurrence($rule->getRrule(), $firedOccurrenceTs, $anchorTs, $rule->getTimezone());
 		} catch (InvalidInputException $e) {
 			$this->logger->error(
 				'kanso: recurring rule ' . $rule->getId() . ' has an invalid RRULE, disabling',
