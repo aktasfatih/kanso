@@ -552,6 +552,59 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->spawn($rule);
 	}
 
+	public function testSpawnCloneAllDayCarriesFlagAndSlidesTheSingleDate(): void {
+		// An all-day card is a single day (just an End date, at UTC midnight). Its
+		// clone keeps the all-day flag and slides that one date to the occurrence -
+		// no start date is invented, so the clone stays a clean single all-day day.
+		$dayTs = (new \DateTimeImmutable('2027-01-15T00:00:00Z'))->getTimestamp();
+		$template = $this->templateCard();
+		$template->setAllDay(true);
+		$template->setDuedate(new \DateTime('@' . $dayTs));
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, rrule: 'FREQ=DAILY', nextOccurrenceAt: $dayTs + 86400);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c) use ($dayTs): Card {
+				self::assertTrue($c->getAllDay());
+				self::assertNull($c->getStartDate());
+				self::assertSame($dayTs + 86400, $c->getDuedate()->getTimestamp());
+				return $c;
+			});
+
+		$this->service->spawn($rule);
+	}
+
+	public function testSpawnResetAllDayKeepsFlagAndSlidesTheSingleDate(): void {
+		// RESET on an all-day card slides its single day forward and leaves the
+		// all-day flag on (the reset card is its own template).
+		$dayTs = (new \DateTimeImmutable('2027-01-15T00:00:00Z'))->getTimestamp();
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY', nextOccurrenceAt: $dayTs + 86400);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+
+		$moved = $this->templateCard();
+		$moved->setStackId(5);
+		$moved->setAllDay(true);
+		$moved->setDuedate(new \DateTime('@' . $dayTs));
+		$this->cardService->expects(self::once())->method('move')->willReturn($moved);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c) use ($dayTs): Card {
+				self::assertTrue($c->getAllDay());
+				self::assertNull($c->getStartDate());
+				self::assertSame($dayTs + 86400, $c->getDuedate()->getTimestamp());
+				return $c;
+			});
+
+		$this->service->spawn($rule);
+	}
+
 	public function testSpawnCloneDefaultsAllDayFalseForNonAllDayTemplate(): void {
 		// A template with no all-day flag (null) spawns a timed clone (all_day=false),
 		// never null - the flag is always set explicitly on the clone.

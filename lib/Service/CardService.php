@@ -1040,6 +1040,16 @@ class CardService {
 			// Same wire format + parsing as duedate; '' clears it.
 			$card->setStartDate($this->parseDuedate($startDate));
 		}
+		// An inverted window is invalid: the End date must not fall before the Start
+		// date. Only enforced when this update actually sets a date, so editing an
+		// unrelated field on a card that already carries legacy/imported inverted
+		// dates is never blocked. Equal instants (a zero-length window) are allowed.
+		if (($startDate !== null || $duedate !== null)
+			&& $card->getStartDate() !== null
+			&& $card->getDuedate() !== null
+			&& $card->getDuedate()->getTimestamp() < $card->getStartDate()->getTimestamp()) {
+			throw new InvalidInputException('The end date cannot be before the start date');
+		}
 		if ($done !== null) {
 			if ($done) {
 				if ($card->getDoneAt() === 0) {

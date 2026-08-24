@@ -255,4 +255,27 @@ test.describe('Recurring schedule edge cases (regression guards)', () => {
 		const gapSeconds = (Date.parse(clone.duedate) - Date.parse(clone.startDate)) / 1000
 		expect(gapSeconds).toBe(3600)
 	})
+
+	// An all-day card is a single day (End date at UTC midnight); its repeat must
+	// anchor on that day. A future all-day date fires first on that exact day.
+	test('an all-day repeat anchors on the all-day date (UTC midnight)', async () => {
+		const cardId = await makeCard('All-day repeat ' + Date.now())
+		// A future all-day day at UTC midnight, ~60 days out.
+		const base = new Date((nowSec() + 60 * 86400) * 1000)
+		const dayTs = Math.floor(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()) / 1000)
+		await api.patch(`/cards/${cardId}`, { duedate: new Date(dayTs * 1000).toISOString(), allDay: true })
+		const rule = await addRule(cardId, 'FREQ=DAILY')
+		// Anchored on the all-day day and it's in the future, so the first fire is
+		// that exact day (UTC midnight), not shifted off it.
+		expect(rule.nextOccurrenceAt).toBe(dayTs)
+	})
+
+	// The end-before-start guard: an inverted window is refused with a 400.
+	test('setting an end date before the start date is rejected', async () => {
+		const cardId = await makeCard('Inverted window ' + Date.now())
+		await api.patch(`/cards/${cardId}`, { startDate: iso(nowSec() + 10 * 86400) })
+		// End 5 days out is before the start 10 days out → rejected.
+		const r = await api.raw('PATCH', `/cards/${cardId}`, { duedate: iso(nowSec() + 5 * 86400) })
+		expect(r.status).toBe(400)
+	})
 })

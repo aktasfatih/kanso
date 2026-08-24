@@ -881,6 +881,25 @@ class CardServiceTest extends TestCase {
 		self::assertSame(Change::VERB_START_CHANGED, $verb->verb);
 	}
 
+	public function testUpdateRejectsEndDateBeforeStartDate(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// The inverted window must be refused before anything is persisted.
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(\OCA\Kanso\Service\InvalidInputException::class);
+		// End (Aug 1) is before Start (Aug 10) → rejected.
+		$this->service->update(9, null, null, '2026-08-01T00:00:00+00:00', null, null, 'alice', null, '2026-08-10T00:00:00+00:00');
+	}
+
+	public function testUpdateAllowsEndDateOnOrAfterStartDate(): void {
+		$this->captureUpdateVerb($this->card());
+		// Start Aug 1, End Aug 10 → a valid window, so the update goes through.
+		$updated = $this->service->update(9, null, null, '2026-08-10T00:00:00+00:00', null, null, 'alice', null, '2026-08-01T00:00:00+00:00');
+		self::assertSame('2026-08-01', $updated->getStartDate()->format('Y-m-d'));
+		self::assertSame('2026-08-10', $updated->getDuedate()->format('Y-m-d'));
+	}
+
 	public function testUpdatePriorityOnlyStampsPriorityVerb(): void {
 		$verb = $this->captureUpdateVerb($this->card());
 		$this->service->update(9, null, null, null, null, null, 'alice', Card::PRIORITY_URGENT);
