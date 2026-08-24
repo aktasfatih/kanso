@@ -563,7 +563,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<CalendarIcon v-else :size="14" />
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'End date') }}
 						</button>
-						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad">
+						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
 							<label class="card-modal__field-label">{{ t('kanso', 'End date') }}<span class="card-modal__field-hint" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
 							<div class="card-modal__field-row">
 								<input
@@ -6262,6 +6262,15 @@ body.theme--dark .card-modal,
 	padding: 10px 12px;
 	gap: 6px;
 }
+/* The date popover packs End date + Start date + the whole Repeat control, so
+   the shared 200px min-width left it cramped and the 320px cap made it scroll.
+   Give it room to lay the fields out comfortably (the mobile inset-sheet rule
+   below still wins on small screens via its higher specificity). */
+.card-modal__popover--date {
+	width: 300px;
+	max-width: calc(100vw - 32px);
+	max-height: min(70vh, 540px);
+}
 .card-modal__popover-tokens {
 	display: flex;
 	flex-wrap: wrap;
@@ -6533,6 +6542,31 @@ body.theme--dark .card-modal,
 	margin-top: 6px;
 	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
+}
+/* The two "what happens when it repeats" options carry long labels, so stack
+   them as full-width cards instead of cramming them side by side in a row. */
+.card-modal__recur-mode {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+	margin-top: 8px;
+}
+.card-modal__recur-mode-opt {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 10px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	font-size: 0.85rem;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+.card-modal__recur-mode-opt--active {
+	border-color: var(--color-primary-element);
+	background: var(--color-primary-light);
+	color: var(--color-primary-element);
+	font-weight: 600;
 }
 .card-modal__field-clear {
 	display: inline-flex;
