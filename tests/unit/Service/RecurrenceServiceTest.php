@@ -262,14 +262,38 @@ class RecurrenceServiceTest extends TestCase {
 				self::assertSame('alice', $r->getOwner());
 				self::assertTrue($r->getEnabled());
 				self::assertSame(0, $r->getOccurrencesSpawned());
-				// next_occurrence_at is the first daily fire at/after now.
-				self::assertSame(self::NOW, $r->getNextOccurrenceAt());
+				// A daily rule created "now" first fires tomorrow, not now. We skip
+				// the date that lands on the creation moment so a brand-new rule is
+				// never ready to fire immediately (#80).
+				self::assertSame(self::NOW + 86400, $r->getNextOccurrenceAt());
 				$r->setId(7);
 				return $r;
 			});
 
 		$rule = $this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 		self::assertSame(7, $rule->getId());
+	}
+
+	public function testCreateIsNotImmediatelyDue(): void {
+		// Regression for #80. A card set to repeat "Yearly" should sit quietly for a
+		// year. The bug was that a brand-new rule was ready to fire straight away, so
+		// the next cron run (within ~15 min) reset the card and overwrote the date
+		// the user had just picked. Its first fire must be in the future, not now.
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r): RecurRule {
+				// In the future, so the cron (which only picks up rules whose next
+				// fire is at or before now) leaves it alone until next year.
+				self::assertGreaterThan(self::NOW, $r->getNextOccurrenceAt());
+				$r->setId(7);
+				return $r;
+			});
+
+		$this->service->create(1, 10, 5, RecurRule::MODE_RESET, 'FREQ=YEARLY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 	}
 
 	public function testCreateWithoutManageThrows403(): void {
@@ -1226,40 +1250,52 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	/**
-	 * Even on a genuine schedule change the cursor is never rewound BEFORE where it
-	 * already sits: a rule whose cursor has walked well past now (a catch-up in
-	 * progress, or a future-anchored rule) keeps advancing forward, never back onto
-	 * an occurrence at/behind the current cursor that may already have fired (#65).
+	 * Speeding a rule up takes effect right away. If the user changes a rule from
+	 * Weekly to Daily, it should start firing daily now - not wait for the old
+	 * weekly date. The old code kept the far-off date, so "Daily" did nothing for
+	 * up to a week (#80 follow-up).
 	 */
-	public function testUpdateWithChangedRruleNeverRewindsBehindCurrentCursor(): void {
-		// Cursor sits two days in the FUTURE (already advanced past today's fire).
-		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 2 * 86400);
+	public function testUpdateToMoreFrequentCadenceTakesEffectFromNextOccurrence(): void {
+		// A weekly rule whose next fire is two days away.
+		$rule = $this->rule(rrule: 'FREQ=WEEKLY', nextOccurrenceAt: self::NOW + 2 * 86400);
 		$this->wireUpdate($rule);
 
-		// Re-writing to hourly would, from now-1, land the cursor at now+1h - BEHIND
-		// the current cursor. The max(now-1, cursor-1) floor forbids that: the new
-		// cursor may not move backward. now+2d is an exact hourly multiple from the
-		// NOW anchor, so the re-armed cursor stays at now+2d, never earlier.
+		// Switch it to hourly. The next hourly slot after now is one hour from now,
+		// so it starts almost immediately instead of waiting two more days.
 		$this->service->update(3, null, null, null, 'FREQ=HOURLY', null, null, null, null, 'alice');
 
-		self::assertGreaterThanOrEqual(self::NOW + 2 * 86400, $rule->getNextOccurrenceAt());
+		self::assertSame(self::NOW + 3600, $rule->getNextOccurrenceAt());
 	}
 
 	/**
-	 * Re-enabling a disabled rule (disabled → enabled) DOES re-arm from now, so a
-	 * rule that was off for a while picks up its next future occurrence rather than
-	 * staying stuck on a stale cursor.
+	 * Changing a rule's schedule never leaves it ready to fire the instant the next
+	 * cron runs - the new fire time is always in the future. This keeps schedule
+	 * edits from behaving like the "reset to today" bug (#80 family).
 	 */
-	public function testUpdateReEnablingDisabledRuleReArmsFromNow(): void {
-		// A disabled rule whose cached cursor is stale (in the past).
+	public function testUpdateWithChangedRruleIsNotImmediatelyDue(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, 'FREQ=WEEKLY', null, null, null, null, 'alice');
+
+		self::assertGreaterThan(self::NOW, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Turning a rule back on resumes it on its next future date - not stuck in the
+	 * past, and not firing the instant the cron runs.
+	 */
+	public function testUpdateReEnablingDisabledRuleReArmsToNextFutureOccurrence(): void {
+		// A switched-off rule whose stored next fire is stale (10 days ago).
 		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 10 * 86400);
 		$rule->setEnabled(false);
 		$this->wireUpdate($rule);
 
 		$this->service->update(3, null, null, null, null, null, null, null, true, 'alice');
 
-		// Re-armed to the next daily occurrence at/after now, not left in the past.
-		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
+		// Back on, and pointed at tomorrow's daily slot - not the old past date and
+		// not right now.
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
 		self::assertTrue($rule->getEnabled());
 	}
 }

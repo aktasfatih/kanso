@@ -251,9 +251,20 @@ class RecurrenceService {
 		// default fallback); the schedule is expanded as floating wall-clock time
 		// in this zone.
 		$rule->setTimezone($this->defaultTimezoneFor($uid));
-		// Anchor the schedule at creation; the first fire is the next occurrence
-		// at or after now.
-		$rule->setNextOccurrenceAt($this->computeNextOccurrence($rrule, $now - 1, $now, $rule->getTimezone()));
+		// Work out when this rule should fire for the FIRST time.
+		//
+		// The repeat schedule counts from the moment the rule is created (now). So
+		// the very first date it produces is "now" itself. We must NOT fire on that
+		// one: the card the user just set up already exists, and firing means
+		// spawn/reset it - which would immediately overwrite the date they just
+		// picked. That was the bug in #80: a card set to repeat "Yearly" got reset
+		// to today within one cron run.
+		//
+		// So we skip the "now" date and pick the NEXT one after it (tomorrow for a
+		// daily rule, next year for a yearly rule, and so on). Passing $now here
+		// (instead of $now - 1) is what says "strictly after now, not including now".
+		// If someone really wants a card right away, the "Create now" button does that.
+		$rule->setNextOccurrenceAt($this->computeNextOccurrence($rrule, $now, $now, $rule->getTimezone()));
 
 		return $this->ruleMapper->insert($rule);
 	}
@@ -316,22 +327,31 @@ class RecurrenceService {
 			$rule->setEnabled($enabled);
 		}
 
-		// Re-arm the cached next fire time ONLY when the schedule genuinely changed
-		// (the RRULE differs) or the rule was just re-enabled (disabled → enabled).
-		// A no-op edit (e.g. an {enabled} toggle that stays on, or re-writing the
-		// same RRULE from the card's Repeat control) must NOT recompute the cursor:
-		// recomputing from now-1 can REWIND next_occurrence_at back onto TODAY - an
-		// occurrence the cron already fired - so the next cron run spawns a duplicate
-		// clone dated today (#65). When we DO re-arm, never let the cursor move
-		// backward past where it already sits: anchor the "after" point at
-		// max(now-1, currentCursor-1) so an edit can only move it forward, never onto
-		// an already-spawned occurrence.
+		// Do we need to recalculate when this rule fires next?
+		//
+		// Only in two cases: the user changed the actual schedule (a different
+		// repeat rule), or they switched the rule back on after it was off. If they
+		// changed nothing about the schedule - e.g. just re-saved the card's Repeat
+		// control, or toggled "enabled" while it was already on - we must leave the
+		// next fire time exactly as it is. Recalculating a no-op edit could pull the
+		// fire time back onto a date the system already acted on, and re-firing it
+		// makes a duplicate card dated today (that was bug #65). The two flags below
+		// make sure a no-op edit skips this block entirely.
+		//
+		// When we DO recalculate, we pick the next date STRICTLY AFTER now (that is
+		// what passing $now does). Two reasons:
+		//   1. It fixes the "yearly reset to today" family of bugs (#80) - the rule
+		//      is never left ready to fire the instant the next cron runs.
+		//   2. If the user speeds up a rule (say Weekly -> Daily), it starts on the
+		//      new schedule right away. The old code kept the far-off weekly date, so
+		//      "Daily" did nothing for up to a week. It's also safe: a date after now
+		//      is always in the future, so it can never be one we already fired -
+		//      meaning no duplicate card (still safe for #65).
 		$scheduleChanged = $newRrule !== $originalRrule;
 		$reEnabled = $rule->getEnabled() && !$wasEnabled;
 		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
 			$now = $this->time->getTime();
-			$after = max($now - 1, $rule->getNextOccurrenceAt() - 1);
-			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $after, $rule->getCreatedAt(), $rule->getTimezone()));
+			$rule->setNextOccurrenceAt($this->computeNextOccurrence($rule->getRrule(), $now, $rule->getCreatedAt(), $rule->getTimezone()));
 		}
 
 		return $this->ruleMapper->update($rule);
