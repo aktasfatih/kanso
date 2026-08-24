@@ -218,6 +218,62 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		).first()).toBeVisible({ timeout: 8_000 })
 	})
 
+	// #4129: a single card with a huge date range (e.g. 2018→2030) must NOT blow up
+	// the rendered track. The timeline renders only a fixed window around today and
+	// clips outliers, flagging them with an edge affordance — so the scroll width
+	// stays bounded instead of scaling with the raw (multi-year) date domain.
+	test('a huge date range renders a bounded track with clipped-edge affordances (#4129)', async ({ page }) => {
+		// A dedicated board so the multi-year outlier can't distort the shared-board
+		// specs' geometry assertions.
+		const board = await api.post('/boards', { title: 'Timeline wide ' + Math.floor(Date.now() / 1000) })
+		try {
+			const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+			// One card spanning ~12 years — the pathological case from the bug report.
+			const wide = await api.post('/cards', { stackId: stack.id, title: 'Epic across years' })
+			await api.patch(`/cards/${wide.id}`, {
+				startDate: '2018-01-01T00:00:00+00:00',
+				duedate: '2030-12-31T00:00:00+00:00',
+			})
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}`)
+			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByText('Timeline', { exact: true }).click()
+
+			// The track mounts (there's a scheduled card).
+			await expect(page.locator('.timeline__inner')).toBeVisible({ timeout: 8_000 })
+
+			// Bounded width: with a ~12-year raw domain the OLD code produced a track
+			// of ~52000px+ (4380 days × 12px/day at week zoom). The windowed render
+			// keeps it well under 30000px regardless of the outlier span.
+			const scrollWidth = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
+			expect(scrollWidth).toBeLessThan(30_000)
+
+			// The card reaches before the window start (2018 ≪ today−6mo) and after the
+			// window end (2030 ≫ today+12mo), so BOTH clipped-edge markers are shown.
+			await expect(page.locator('.timeline__edge--start')).toBeVisible()
+			await expect(page.locator('.timeline__edge--end')).toBeVisible()
+		} finally {
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+
+	// A normal (short-range) board must NOT show the clipped-edge affordances — its
+	// data fits inside the rendered window, so nothing extends beyond it (#4129).
+	test('a normal board shows no clipped-edge affordances (#4129)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+
+		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
+		// The shared board's dates are all near today, well inside the window.
+		await expect(page.locator('.timeline__edge--start')).toHaveCount(0)
+		await expect(page.locator('.timeline__edge--end')).toHaveCount(0)
+	})
+
 	test('a lane is keyboard-openable: focus + Enter opens the card (#3512)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)

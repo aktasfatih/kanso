@@ -110,6 +110,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Scrollable track -->
 			<div ref="scrollRef" class="timeline__scroll">
+				<!-- Clipped-edge affordances (#4129): when a card's real date range
+				     reaches beyond the rendered window, flag it at the track edge so
+				     the outlier is indicated, not silently dropped. Sticky so they
+				     stay pinned to the viewport edges as the track scrolls. -->
+				<div
+					v-if="extendsEarlier"
+					class="timeline__edge timeline__edge--start"
+					:title="t('kanso', 'Some cards extend earlier than shown')"
+					:aria-label="t('kanso', 'Some cards extend earlier than shown')">
+					<ChevronLeftIcon :size="16" />
+				</div>
+				<div
+					v-if="extendsLater"
+					class="timeline__edge timeline__edge--end"
+					:title="t('kanso', 'Some cards extend later than shown')"
+					:aria-label="t('kanso', 'Some cards extend later than shown')">
+					<ChevronRightIcon :size="16" />
+				</div>
 				<div ref="trackRef" class="timeline__inner" :class="{ 'timeline__inner--drop-active': dropActive }" :style="{ width: `${trackWidth}px` }">
 					<!-- Drop affordance: a vertical guide at the day under the cursor
 					     while an unscheduled card is dragged over the track. -->
@@ -224,6 +242,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
 import CalendarTodayIcon from 'vue-material-design-icons/CalendarToday.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { updateCard as apiUpdateCard } from '../services/api.js'
@@ -359,6 +378,18 @@ const LEFT_PAD = 8
 // Below this bar width the in-bar title clips to nothing, so it renders beside the bar.
 const LABEL_MIN_WIDTH = 60
 
+// Rendered-window bounds (#4129). A single card spanning many years (e.g.
+// 2018→2030) would otherwise blow up totalDays → an enormous trackWidth and huge
+// per-day grid/tick/weekend node counts, janking the whole view. We therefore
+// RENDER only a fixed window around today (a few months back, a year forward)
+// while still anchoring bar positions to the real data extent — outlier bars land
+// off-track and are clipped by the scroll container's overflow, and a small
+// edge marker signals that cards extend beyond the visible window. This is a
+// display limit, not a data cut: no card is dropped, and normal boards whose
+// data already fits inside the window render byte-identical (the fallback below).
+const WINDOW_BACK_MONTHS = 6
+const WINDOW_FORWARD_MONTHS = 12
+
 /** Midnight (local) of a date value, in ms, or null. */
 function dayFloor(value) {
 	if (!value) return null
@@ -444,29 +475,56 @@ const dataEnd = computed(() => {
 	return items.reduce((max, r) => Math.max(max, r.endMs), -Infinity)
 })
 
-// Rendered axis origin. When today falls before the earliest scheduled card we
-// extend the origin backwards (leading pad) so the today marker stays on-screen;
-// otherwise the axis starts at the real earliest date. Bars are always positioned
-// via xForMs() off this origin, so real positions are never distorted.
-const axisStart = computed(() => {
+// Day-floored ms of `today` shifted by a whole number of calendar months. Used
+// to derive the rendered window edges from today.
+function monthShiftedDay(months) {
+	const d = new Date(now.value)
+	d.setMonth(d.getMonth() + months)
+	d.setHours(0, 0, 0, 0)
+	return d.getTime()
+}
+
+// Rendered window (#4129): the slice of time actually painted (axis, grid, ticks,
+// weekends, track width). Defaults to today − BACK … today + FORWARD months, but
+// CLAMPS to the real data extent so we never render empty track beyond where any
+// card reaches. Crucially, when the whole data extent already fits inside the
+// default window we fall through to the raw bounds unchanged — so small/normal
+// boards render exactly as before (no behaviour change for the common case).
+const windowStart = computed(() => {
 	if (dataStart.value === null) return null
+	const back = monthShiftedDay(-WINDOW_BACK_MONTHS)
+	// Don't extend earlier than the data actually starts (unless today itself is
+	// earlier — then keep today visible), and don't start later than that clamp.
 	const today = dayFloor(now.value)
-	return Math.min(dataStart.value, today)
+	const earliest = Math.min(dataStart.value, today)
+	return Math.max(earliest, back)
+})
+const windowEnd = computed(() => {
+	if (dataEnd.value === null) return null
+	const forward = monthShiftedDay(WINDOW_FORWARD_MONTHS)
+	const today = dayFloor(now.value)
+	const latest = Math.max(dataEnd.value, today)
+	return Math.min(latest, forward)
 })
 
-// The date range must cover the viewport even when the data is short: we pad
-// trailing empty days (and include today) so the track never looks truncated.
+// Rendered axis origin. Anchored to the window start (bars are positioned via
+// xForMs() off this origin); outlier cards that start before the window get a
+// negative x and are clipped by the scroll container's overflow, rather than
+// stretching the track across their full raw span.
+const axisStart = computed(() => windowStart.value)
+
+// The date range must cover the viewport even when the window is short: we pad
+// trailing empty days so the track never looks truncated. Bounded by the rendered
+// window, NOT the raw data domain, so an outlier date can't inflate the node count.
 const totalDays = computed(() => {
 	if (axisStart.value === null) return 0
-	const today = dayFloor(now.value)
-	// Extend the real end to at least today, so a short board near today still
-	// paints a continuous track up to the marker.
-	const dataDays = Math.round((Math.max(dataEnd.value, today) - axisStart.value) / DAY) + 1
+	// Span of the rendered window (already clamped to today on both edges above).
+	const windowDays = Math.round((windowEnd.value - axisStart.value) / DAY) + 1
 	// Days that fit in the current viewport, minus the two side pads.
 	const fitDays = viewportWidth.value > 0
 		? Math.ceil((viewportWidth.value - LEFT_PAD * 2) / pxPerDay.value)
 		: 0
-	return Math.max(dataDays, fitDays)
+	return Math.max(windowDays, fitDays)
 })
 
 const trackWidth = computed(() => {
@@ -505,11 +563,21 @@ const groups = computed(() => {
 	if (axisStart.value === null) return []
 	return grouped.value.groups.map((g) => {
 		const isColl = isCollapsed(g.stack.id)
+		const winStart = axisStart.value
+		const winEnd = axisEnd.value
 		const rows = isColl ? [] : g.rows.map((r) => {
-			const left = xForMs(r.startMs)
 			const isMilestone = r.startMs === r.endMs
-			const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
 			const overdue = !r.done && r.endMs < now.value
+			// Clip the rendered bar geometry to the visible window (#4129). A card
+			// whose real range reaches outside the window would otherwise produce a
+			// giant absolutely-positioned node that re-inflates the scroll width —
+			// so we render only the on-window slice. done/overdue/milestone are still
+			// derived from the RAW range, so the bar's meaning is unchanged; only its
+			// painted extent is capped, and the edge markers signal the overflow.
+			const visStart = Math.max(r.startMs, winStart)
+			const visEnd = Math.min(r.endMs, winEnd)
+			const left = xForMs(visStart)
+			const width = isMilestone ? 0 : Math.max((Math.round((visEnd - visStart) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
 			const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
 			return { ...r, left, width, isMilestone, overdue, labelInside }
 		})
@@ -578,6 +646,16 @@ const todayX = computed(() => {
 	if (t0 < axisStart.value || t0 > axisEnd.value) return null
 	return xForMs(t0)
 })
+
+// Clipped-edge affordances (#4129): true when a card's real extent reaches beyond
+// the rendered window, so we can flag "cards extend earlier/later" at the track
+// edge instead of silently hiding those outliers.
+const extendsEarlier = computed(() =>
+	dataStart.value !== null && windowStart.value !== null && dataStart.value < windowStart.value,
+)
+const extendsLater = computed(() =>
+	dataEnd.value !== null && windowEnd.value !== null && dataEnd.value > windowEnd.value,
+)
 
 function labelForMs(ms) {
 	const d = new Date(ms)
@@ -1026,6 +1104,7 @@ onBeforeUnmount(() => {
 
 /* ── Scrollable track ── */
 .timeline__scroll {
+	position: relative;
 	flex: 1;
 	min-width: 0;
 	overflow-x: auto;
@@ -1035,6 +1114,38 @@ onBeforeUnmount(() => {
 .timeline__inner {
 	position: relative;
 	min-height: 100%;
+}
+
+/* Clipped-edge affordance (#4129): a small chevron pinned to the viewport edge of
+ * the scroll container, shown when cards extend beyond the rendered window. Sticky
+ * keeps it fixed at the edge as the track scrolls sideways; margin-bottom: -28px
+ * collapses its vertical footprint so it overlays the track rather than pushing
+ * the (full-width) .timeline__inner sibling down. */
+.timeline__edge {
+	position: sticky;
+	top: 60px;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 28px;
+	margin-bottom: -28px;
+	border-radius: var(--border-radius);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	opacity: 0.9;
+	cursor: default;
+}
+
+.timeline__edge--start {
+	left: 4px;
+	float: left;
+}
+
+.timeline__edge--end {
+	right: 4px;
+	float: right;
 }
 
 .timeline__weekend {
