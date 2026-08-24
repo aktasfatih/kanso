@@ -49,25 +49,39 @@ function readOpenCardState() {
 	}
 }
 
-// Offline (PWA): restore the persisted query cache BEFORE mounting so the first
-// paint renders last-known board data with no network, then keep persisting it
-// and wire reconnect handling. restoreQueryCache is best-effort and never
-// throws, and .finally guarantees the app mounts even if IndexedDB is
-// unavailable — so this can only add offline data, never block startup.
-restoreQueryCache(queryClient).finally(() => {
+// The PWA layer (service worker + offline query-cache persistence) is disabled
+// under automated browsers. It intercepts and caches every request and persists
+// the cache on every change; across the parallel e2e suite's concurrent browser
+// contexts that both slows the CPU-bound CI runner and races specs that assert
+// fresh server state. Real users always get it; an e2e spec that specifically
+// covers the PWA can force it on with `window.__KANSO_FORCE_PWA__ = true`
+// (set via addInitScript before load — see mobile-pwa.spec.js).
+const pwaEnabled = !(typeof navigator !== 'undefined' && navigator.webdriver)
+	|| (typeof window !== 'undefined' && window.__KANSO_FORCE_PWA__ === true)
+
+function boot() {
 	createApp(App)
 		.use(router)
 		.use(VueQueryPlugin, { queryClient })
 		.mount(document.getElementById('kanso'))
 
-	// Make Kanso an installable PWA: register the service worker that serves the
-	// app shell + immutable bundles offline. No-op where service workers are
-	// unavailable (see registerServiceWorker).
-	registerServiceWorker()
+	if (pwaEnabled) {
+		// Make Kanso an installable PWA: register the service worker that serves
+		// the app shell + immutable bundles offline (no-op where unsupported), and
+		// persist the query cache + wire reconnect resync / paused-write resume.
+		registerServiceWorker()
+		initOfflineCache(queryClient)
+	}
+}
 
-	// Persist the cache on change + resume paused writes / resync on reconnect.
-	initOfflineCache(queryClient)
-})
+// When enabled, restore the persisted query cache BEFORE mounting so the first
+// paint renders last-known board data with no network. restoreQueryCache is
+// best-effort and never throws; .finally guarantees the app still mounts.
+if (pwaEnabled) {
+	restoreQueryCache(queryClient).finally(boot)
+} else {
+	boot()
+}
 
 // The replace must wait for the router's INITIAL navigation (started by the
 // mount above): a replace issued before it is clobbered when the initial

@@ -81,6 +81,11 @@ test('serves the service worker with app scope and registers it', async ({ page 
 	expect(res.headers()['content-type']).toContain('javascript')
 	expect(res.headers()['service-worker-allowed']).toBe('/apps/kanso/')
 
+	// The PWA layer is off under automation by default (it destabilises the
+	// parallel suite); force it on for THIS test so we still cover real
+	// registration. Must be set before the app script runs.
+	await page.addInitScript(() => { window.__KANSO_FORCE_PWA__ = true })
+
 	// The app registers the worker on load — wait for it to become active.
 	await gotoBoard(page, state.boardId)
 	const registered = await page.waitForFunction(async () => {
