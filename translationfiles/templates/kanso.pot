@@ -237,19 +237,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3844
+#: src/components/CardDetail.vue:3865
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3842
+#: src/components/CardDetail.vue:3863
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3840
+#: src/components/CardDetail.vue:3861
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1079,6 +1079,10 @@ msgstr ""
 msgid "Chore"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Clear date"
+msgstr ""
+
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Clear end date"
@@ -1478,10 +1482,11 @@ msgid "Danger zone"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardDetail.vue
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4020
+#: src/components/CardDetail.vue:4041
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3024,7 +3029,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4022
+#: src/components/CardDetail.vue:4043
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4886,7 +4891,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4021
+#: src/components/CardDetail.vue:4042
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4966,7 +4971,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4023
+#: src/components/CardDetail.vue:4044
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

@@ -564,18 +564,51 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'End date') }}
 						</button>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
-							<label class="card-modal__field-label">{{ t('kanso', 'End date') }}<span class="card-modal__field-hint" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
-							<div class="card-modal__field-row">
-								<input
-									class="card-modal__date-input"
-									:type="isAllDay ? 'date' : 'datetime-local'"
-									:value="dueDateInputValue"
-									@blur="handleDueDateChange"
-									@keyup.enter="handleDueDateChange">
-								<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear end date')" @click="clearDueDate">
-									<CloseIcon :size="14" />
-								</button>
-							</div>
+							<!-- A timed card is a Start → End window; an all-day card is a
+							     single day, so it collapses to one date field (no time). -->
+							<template v-if="!isAllDay">
+								<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<div class="card-modal__field-row">
+									<input
+										class="card-modal__date-input"
+										data-date="start"
+										type="datetime-local"
+										:value="startDateInputValue"
+										@blur="handleStartDateChange"
+										@keyup.enter="handleStartDateChange">
+									<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
+										<CloseIcon :size="14" />
+									</button>
+								</div>
+								<label class="card-modal__field-label">{{ t('kanso', 'End date') }}<span class="card-modal__field-hint" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<div class="card-modal__field-row">
+									<input
+										class="card-modal__date-input"
+										data-date="end"
+										type="datetime-local"
+										:value="dueDateInputValue"
+										@blur="handleDueDateChange"
+										@keyup.enter="handleDueDateChange">
+									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear end date')" @click="clearDueDate">
+										<CloseIcon :size="14" />
+									</button>
+								</div>
+							</template>
+							<template v-else>
+								<label class="card-modal__field-label">{{ t('kanso', 'Date') }}<span class="card-modal__field-hint" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<div class="card-modal__field-row">
+									<input
+										class="card-modal__date-input"
+										data-date="end"
+										type="date"
+										:value="dueDateInputValue"
+										@blur="handleDueDateChange"
+										@keyup.enter="handleDueDateChange">
+									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear date')" @click="clearDueDate">
+										<CloseIcon :size="14" />
+									</button>
+								</div>
+							</template>
 							<label class="card-modal__allday">
 								<input
 									type="checkbox"
@@ -583,18 +616,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									@change="toggleAllDay($event.target.checked)">
 								{{ t('kanso', 'All day (no time)') }}
 							</label>
-							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
-							<div class="card-modal__field-row">
-								<input
-									class="card-modal__date-input"
-									type="datetime-local"
-									:value="startDateInputValue"
-									@blur="handleStartDateChange"
-									@keyup.enter="handleStartDateChange">
-								<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
-									<CloseIcon :size="14" />
-								</button>
-							</div>
 							<!-- Repeat / recurrence (#55) - managers only; reuses the
 							     recurring-card engine with this card as the source. -->
 							<template v-if="canManage">
