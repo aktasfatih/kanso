@@ -468,7 +468,7 @@ msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "Anyone with the link can subscribe to this board's due dates."
+msgid "Anyone with the link can subscribe to this board's end dates."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -766,7 +766,7 @@ msgid "Bring this card back"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "Brings this card back on a schedule. Its start and due dates slide forward to each new date, keeping the gap between them. Reset reuses the same card; Clone makes a fresh copy."
+msgid "Brings the card back on a schedule. Its start and end dates slide forward together each time."
 msgstr ""
 
 #: src/composables/useCardType.js
@@ -939,7 +939,7 @@ msgid "Cards measured"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
+msgid "Cards with an end date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
 msgstr ""
 
 #: src/views/ArchivedView.vue
@@ -983,11 +983,11 @@ msgid "changed the card type to {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "changed the due date"
+msgid "changed the end date"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "changed the due date to {value}"
+msgid "changed the end date to {value}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -1081,7 +1081,7 @@ msgstr ""
 
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
-msgid "Clear due date"
+msgid "Clear end date"
 msgstr ""
 
 #: src/components/BoardFilterBar.vue
@@ -1106,7 +1106,7 @@ msgid "cleared the card type"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "cleared the due date"
+msgid "cleared the end date"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -1754,20 +1754,6 @@ msgstr ""
 msgid "Due"
 msgstr ""
 
-#: src/components/BoardFilterBar.vue
-#: src/components/BoardSettingsModal.vue
-#: src/components/BulkActionBar.vue
-#: src/components/CardDetail.vue
-#: src/components/CsvImportModal.vue
-#: src/views/BoardView.vue
-#: src/views/ViewPage.vue
-msgid "Due date"
-msgstr ""
-
-#: src/composables/useBoardFilters.js
-msgid "Due this week"
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "Duplicate"
 msgstr ""
@@ -1879,8 +1865,22 @@ msgstr ""
 msgid "Enabled"
 msgstr ""
 
+#: src/components/BoardFilterBar.vue
+#: src/components/BoardSettingsModal.vue
+#: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
+#: src/components/CsvImportModal.vue
+#: src/views/BoardView.vue
+#: src/views/ViewPage.vue
+msgid "End date"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Ends"
+msgstr ""
+
+#: src/composables/useBoardFilters.js
+msgid "Ends this week"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -2034,7 +2034,7 @@ msgid "Failed to cancel reminder."
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "Failed to clear due date."
+msgid "Failed to clear end date."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -2398,7 +2398,7 @@ msgid "Failed to update description."
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "Failed to update due date."
+msgid "Failed to update end date."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -3282,7 +3282,7 @@ msgid "No cards found."
 msgstr ""
 
 #: src/components/BoardTimelineView.vue
-msgid "No cards have a start or due date yet. Add dates on a card to place it on the timeline."
+msgid "No cards have a start or end date yet. Add dates on a card to place it on the timeline."
 msgstr ""
 
 #: src/views/ProjectView.vue
@@ -3354,7 +3354,7 @@ msgstr ""
 #: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
 #: src/views/MyCardsView.vue
-msgid "No due date"
+msgid "No end date"
 msgstr ""
 
 #: src/components/BoardTileMenu.vue
@@ -3581,11 +3581,11 @@ msgid "Optional description — markdown supported"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "Optional. When this is due — you get a reminder then (and the day before, if you enable it). If the card repeats, its start and due dates move forward together."
+msgid "Optional. When work can begin. It moves with the card when it repeats."
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "Optional. When work on this can begin. If the card repeats, its start and due dates move forward together to each new date."
+msgid "Optional. When work should finish. It moves with the card when it repeats, and sends a reminder."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4228,11 +4228,11 @@ msgid "Select multiple cards"
 msgstr ""
 
 #: src/components/BulkActionBar.vue
-msgid "Set due date"
+msgid "Set end date"
 msgstr ""
 
 #: src/components/BulkActionBar.vue
-msgid "Set due date…"
+msgid "Set end date…"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4440,7 +4440,7 @@ msgid "Submit"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card."
+msgid "Subscribe to this board's card end dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, end dates and a link back to each card."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

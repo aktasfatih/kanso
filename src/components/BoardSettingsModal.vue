@@ -120,7 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Show this board in my calendar') }}
 						</NcCheckboxRadioSwitch>
 						<p class="board-settings__general-hint">
-							{{ t('kanso', 'Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you.') }}
+							{{ t('kanso', 'Cards with an end date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you.') }}
 						</p>
 						<NcCheckboxRadioSwitch
 							v-if="canManage"
@@ -1350,7 +1350,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</p>
 						<template v-else>
 							<p class="github-webhook__hint">
-								{{ t('kanso', 'Subscribe to this board\'s card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.') }}
+								{{ t('kanso', 'Subscribe to this board\'s card end dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, end dates and a link back to each card.') }}
 							</p>
 
 							<div class="github-webhook__actions">
@@ -1375,7 +1375,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<NcButton :disabled="calendarFeedBusy" @click="handleRotateCalendarFeed">
 										{{ t('kanso', 'Rotate feed URL') }}
 									</NcButton>
-									<span class="bs-share__hint">{{ t('kanso', 'Anyone with the link can subscribe to this board\'s due dates.') }}</span>
+									<span class="bs-share__hint">{{ t('kanso', 'Anyone with the link can subscribe to this board\'s end dates.') }}</span>
 								</div>
 							</template>
 							<span v-if="calendarFeedError" class="label-settings__error">{{ calendarFeedError }}</span>
@@ -1868,7 +1868,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Due-date policy -->
 						<div class="automation__form-row">
 							<label class="automation__form-label" :for="`recur-due-${boardId}`">
-								{{ t('kanso', 'Due date') }}
+								{{ t('kanso', 'End date') }}
 							</label>
 							<select
 								:id="`recur-due-${boardId}`"

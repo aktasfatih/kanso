@@ -53,8 +53,8 @@ export const FILTERABLE_TYPES = ['bug', 'feature', 'task', 'chore']
 /** Due-date filter options (value + i18n label key). */
 export const DUE_OPTIONS = [
 	{ value: 'overdue', label: t('kanso', 'Overdue') },
-	{ value: 'week', label: t('kanso', 'Due this week') },
-	{ value: 'none', label: t('kanso', 'No due date') },
+	{ value: 'week', label: t('kanso', 'Ends this week') },
+	{ value: 'none', label: t('kanso', 'No end date') },
 ]
 
 /** Done-state filter options (tri-state: null = both). */

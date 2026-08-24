@@ -489,7 +489,7 @@ const dimensions = computed(() => {
 		},
 		{
 			key: 'due',
-			label: t('kanso', 'Due date'),
+			label: t('kanso', 'End date'),
 			show: true,
 			options: DUE_OPTIONS,
 			count: s.due ? 1 : 0,
