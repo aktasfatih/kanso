@@ -158,4 +158,21 @@ class RecurRuleMapperTest extends TestCase {
 
 		self::assertContains('board_id', $columns, 'findByBoard must filter on board_id');
 	}
+
+	/**
+	 * The cron gate: findDueEnabled() only returns rules that are enabled, not
+	 * exhausted (next_occurrence_at > 0) and actually due (next_occurrence_at <=
+	 * now). Dropping any of those filters is how a not-yet-due rule would fire too
+	 * early (the #80 family) or a disabled/exhausted rule would resurrect, so this
+	 * pins that the query is built against both columns.
+	 */
+	public function testFindDueEnabledFiltersOnEnabledAndNextOccurrence(): void {
+		$columns = [];
+		$this->db->method('getQueryBuilder')->willReturn($this->buildQb([], $columns));
+
+		$this->mapper->findDueEnabled(1_800_000_000);
+
+		self::assertContains('enabled', $columns, 'findDueEnabled must filter on enabled');
+		self::assertContains('next_occurrence_at', $columns, 'findDueEnabled must filter on next_occurrence_at (the due-time gate)');
+	}
 }

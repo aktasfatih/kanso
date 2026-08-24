@@ -946,6 +946,36 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(1, $this->service->runDueRules());
 	}
 
+	/**
+	 * The "before" case: a rule whose next fire is still in the FUTURE spawns
+	 * nothing. runDueRules re-checks next_occurrence_at <= now in its own loop
+	 * (not only in the query), so a fresh #80-safe rule that somehow reaches the
+	 * loop is still left untouched - no card, no schedule advance.
+	 */
+	public function testRunDueRulesSkipsRuleNotYetDue(): void {
+		$rule = $this->rule(nextOccurrenceAt: self::NOW + 86400); // fires tomorrow
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardService->expects(self::never())->method('move');
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		self::assertSame(0, $this->service->runDueRules());
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * An exhausted rule (next_occurrence_at == 0, e.g. a COUNT/UNTIL series that
+	 * has run out) spawns nothing even if it reaches the loop - the > 0 guard
+	 * holds independently of the query.
+	 */
+	public function testRunDueRulesSkipsExhaustedRule(): void {
+		$rule = $this->rule(nextOccurrenceAt: 0);
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardService->expects(self::never())->method('create');
+
+		self::assertSame(0, $this->service->runDueRules());
+	}
+
 	// ---- catch-up on missed occurrences (#3587) ---------------------------
 
 	/**
