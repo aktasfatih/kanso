@@ -3259,12 +3259,11 @@ async function clearStartDate() {
 }
 
 // Plain-language tips shown behind the ⓘ next to each date/repeat field, so
-// people don't have to guess what they do (#80 follow-up). Wording describes
-// the current behaviour: repeat moves the DUE date forward and leaves the start
-// date alone.
-const dueDateHint = t('kanso', 'Optional. When the card should be done. You get a reminder when it is due (and the day before, if you enable it). When a card repeats, its due date moves to the next date.')
-const startDateHint = t('kanso', 'Optional. A note for when you plan to begin. It does not send reminders and is not changed by Repeat.')
-const repeatHint = t('kanso', 'Brings this card back on a schedule and updates its due date to each new date. Reset reuses the same card; Clone makes a fresh copy.')
+// people don't have to guess what they do (#80 follow-up). Wording matches the
+// window model: a repeat slides the start and due dates forward together.
+const startDateHint = t('kanso', 'Optional. When work on this can begin. If the card repeats, its start and due dates move forward together to each new date.')
+const dueDateHint = t('kanso', 'Optional. When this is due — you get a reminder then (and the day before, if you enable it). If the card repeats, its start and due dates move forward together.')
+const repeatHint = t('kanso', 'Brings this card back on a schedule. Its start and due dates slide forward to each new date, keeping the gap between them. Reset reuses the same card; Clone makes a fresh copy.')
 
 // ── Due date color class (respects done state) ───────────────────────────────
 const dueDateClass = computed(() => {
