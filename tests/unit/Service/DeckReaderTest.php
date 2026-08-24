@@ -13,6 +13,17 @@ use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 
 class DeckReaderTest extends TestCase {
+	/** @param array<int, list<mixed>> $out */
+	private function dedupePerCard(array $out): array {
+		$reader = new DeckReader(
+			$this->createMock(IDBConnection::class),
+			$this->createMock(IAppManager::class),
+		);
+		$m = new \ReflectionMethod($reader, 'dedupePerCard');
+		$m->setAccessible(true);
+		return $m->invoke($reader, $out);
+	}
+
 	private function bareColor(mixed $in): ?string {
 		$reader = new DeckReader(
 			$this->createMock(IDBConnection::class),
@@ -50,5 +61,37 @@ class DeckReaderTest extends TestCase {
 		$db->expects(self::never())->method('getQueryBuilder');
 		$reader = new DeckReader($db, $this->createMock(IAppManager::class));
 		self::assertSame([], $reader->readFileReferenceAttachments([]));
+	}
+
+	/**
+	 * Deck's `deck_assigned_labels` / `deck_assigned_users` tables have no unique
+	 * constraint on (card_id, value), so a board can store the same label or
+	 * assignee against a card more than once. Kanso's `kanso_card_labels_uniq` /
+	 * `kanso_card_assign_uniq` do NOT allow the duplicate, so the reader must
+	 * dedupe per card - otherwise the second insert throws a unique-constraint
+	 * violation that rolls back the whole (single-transaction) import and fails
+	 * it entirely (a real Deck board with twice-assigned labels hit exactly this).
+	 * Values keep their first-seen order and each card's list is independent.
+	 */
+	public function testDedupesRepeatedValuesPerCardPreservingOrder(): void {
+		self::assertSame([
+			70 => [30, 31],
+			74 => [32],
+		], $this->dedupePerCard([
+			70 => [30, 30, 31, 30], // duplicate label ids collapse
+			74 => [32],
+		]));
+
+		// Same guarantee for string assignee uids.
+		self::assertSame([
+			70 => ['bob', 'carol'],
+			74 => ['dave'],
+		], $this->dedupePerCard([
+			70 => ['bob', 'bob', 'carol'],
+			74 => ['dave'],
+		]));
+
+		// An empty map stays empty.
+		self::assertSame([], $this->dedupePerCard([]));
 	}
 }
