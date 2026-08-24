@@ -9,6 +9,14 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
+		// PWA service worker. Served by PHP (not a Vite bundle under js/) so it
+		// lives at /apps/kanso/sw.js — default scope = the whole app — and can
+		// carry the Service-Worker-Allowed header. #[PublicPage] (a worker script
+		// has no session) and carries no user data. The web app manifest + PWA meta
+		// tags are already provided by Nextcloud's theming app, so Kanso ships only
+		// the worker.
+		['name' => 'page#serviceWorker', 'url' => '/sw.js', 'verb' => 'GET'],
+
 		// Fragment-free card deep link (#3744). A SERVER route (not `#/…`), so
 		// the target survives the login round-trip - email/bell/ICS links point
 		// here. Auth required (no PublicPage); any unauthorized/unknown id is a

@@ -3,6 +3,7 @@
 
 import '@nextcloud/dialogs/style.css'
 import './styles/kanso-page-header.css'
+import './styles/mobile.css'
 import { createApp } from 'vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'
@@ -11,6 +12,8 @@ import { initRealtime } from './services/realtime.js'
 import { isBoardMovePending } from './composables/useCardMove.js'
 import { syncBoardDelta, onBoardChangesApplied } from './composables/useBoardDelta.js'
 import { invalidateMyWork } from './composables/queryKeys.js'
+import { registerServiceWorker } from './services/pwa.js'
+import { restoreQueryCache, initOfflineCache } from './services/offlineCache.js'
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -46,10 +49,25 @@ function readOpenCardState() {
 	}
 }
 
-createApp(App)
-	.use(router)
-	.use(VueQueryPlugin, { queryClient })
-	.mount(document.getElementById('kanso'))
+// Offline (PWA): restore the persisted query cache BEFORE mounting so the first
+// paint renders last-known board data with no network, then keep persisting it
+// and wire reconnect handling. restoreQueryCache is best-effort and never
+// throws, and .finally guarantees the app mounts even if IndexedDB is
+// unavailable — so this can only add offline data, never block startup.
+restoreQueryCache(queryClient).finally(() => {
+	createApp(App)
+		.use(router)
+		.use(VueQueryPlugin, { queryClient })
+		.mount(document.getElementById('kanso'))
+
+	// Make Kanso an installable PWA: register the service worker that serves the
+	// app shell + immutable bundles offline. No-op where service workers are
+	// unavailable (see registerServiceWorker).
+	registerServiceWorker()
+
+	// Persist the cache on change + resume paused writes / resync on reconnect.
+	initOfflineCache(queryClient)
+})
 
 // The replace must wait for the router's INITIAL navigation (started by the
 // mount above): a replace issued before it is clobbered when the initial

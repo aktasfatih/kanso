@@ -1,0 +1,86 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Mobile / PWA layout adjustments (phone viewports, ≤680px — matches
+ * useIsMobile's PHONE_MAX_PX and CardDetail's existing sheet breakpoint).
+ *
+ * Global (non-scoped) on purpose: it tunes the board canvas, tap targets and
+ * safe-area insets for touch without editing every component. @nextcloud/vue
+ * already handles the big pieces on narrow viewports — NcAppNavigation collapses
+ * to a drawer, NcModal (the card) goes full-screen — so this only covers what
+ * Kanso's own board layout adds. A few overrides use !important to win over the
+ * components' scoped rules (same selector specificity, non-deterministic inject
+ * order); new properties (scroll-snap, safe-area padding) need no override.
+ */
+
+@media (max-width: 680px) {
+	/* The kanban canvas: show ONE column at a time with a peek of the next, and
+	   snap to columns so a swipe lands cleanly instead of stopping mid-column.
+	   Momentum scrolling + snap is the expected phone kanban feel. */
+	.board-view__stacks-wrap {
+		gap: 12px !important;
+		padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+		scroll-snap-type: x mandatory;
+		scroll-padding-left: 12px;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	/* One column ≈ a phone width, with ~12% of the next peeking so it's obvious
+	   the board scrolls sideways. min-width:0 lets it actually shrink from the
+	   desktop 280px floor. */
+	.stack-column {
+		flex: 0 0 88vw !important;
+		min-width: 0 !important;
+		max-width: 88vw !important;
+		scroll-snap-align: start;
+	}
+
+	/* Swimlane variant: let each lane's row snap the same way. */
+	.board-view__swimlanes-wrap .swimlane__stacks {
+		scroll-snap-type: x mandatory;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	/* Comfortable touch targets: cards and their tap area. A card is the primary
+	   touch object on the board, so give it real height and spacing. */
+	.card-tile {
+		min-height: 48px;
+		padding: 12px !important;
+	}
+
+	.card-tile-wrap {
+		margin-bottom: 10px;
+	}
+
+	/* Icon buttons in the board header/menus: hit the 44px minimum touch target
+	   Apple/Google recommend without changing the desktop sizing. */
+	.board-view__header .button-vue--icon-only,
+	.stack-column .button-vue--icon-only {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	/* The board header can crowd on a phone; let it wrap rather than clip its
+	   controls (BoardView's own isNarrow logic already collapses secondary
+	   actions into a More menu at 860px — this is the final safety net). */
+	.board-view__header {
+		flex-wrap: wrap;
+		row-gap: 8px;
+		padding-top: calc(env(safe-area-inset-top, 0px));
+	}
+
+	/* Boards list / My Work rows: bigger rows are easier to tap. */
+	.board-list__item,
+	.aggregate-card {
+		min-height: 48px;
+	}
+}
+
+/* Standalone (installed) PWA: respect the notch/home-indicator on all views, not
+   just phones — a tablet PWA in landscape has insets too. */
+@media (display-mode: standalone) {
+	.board-view__stacks-wrap {
+		padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+	}
+}
