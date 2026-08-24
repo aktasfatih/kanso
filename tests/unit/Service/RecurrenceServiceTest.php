@@ -1338,4 +1338,45 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
 		self::assertTrue($rule->getEnabled());
 	}
+
+	// ---- re-arm on a card date edit ---------------------------------------
+
+	/**
+	 * Editing a repeating card's Start date re-points the series so it follows the
+	 * new date - what a user naturally expects when they reschedule it. A Start
+	 * moved to five days out makes the next fire land on that date.
+	 */
+	public function testRearmForTemplateCardRepointsScheduleToNewStartDate(): void {
+		$newStart = self::NOW + 5 * 86400;
+		$card = $this->templateCard(); // id 10, matches the rule's templateCardId
+		$card->setStartDate(new \DateTime('@' . $newStart));
+
+		// The stored cursor is stale (3 days ago) until the edit re-arms it.
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 3 * 86400);
+		$this->ruleMapper->method('findByTemplateCard')->with(10)->willReturn([$rule]);
+		$this->ruleMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (RecurRule $r) use ($newStart): RecurRule {
+				self::assertSame($newStart, $r->getNextOccurrenceAt());
+				return $r;
+			});
+
+		$this->service->rearmForTemplateCard($card);
+	}
+
+	/**
+	 * A disabled rule is left alone by a date edit - re-pointing a paused schedule
+	 * would silently resurrect it.
+	 */
+	public function testRearmForTemplateCardSkipsDisabledRule(): void {
+		$card = $this->templateCard();
+		$card->setStartDate(new \DateTime('@' . (self::NOW + 5 * 86400)));
+
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 3 * 86400);
+		$rule->setEnabled(false);
+		$this->ruleMapper->method('findByTemplateCard')->with(10)->willReturn([$rule]);
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->service->rearmForTemplateCard($card);
+	}
 }

@@ -395,6 +395,38 @@ class RecurrenceService {
 		return $this->spawn($rule, true);
 	}
 
+	/**
+	 * Re-point every repeat anchored on this card after its Start/End date was
+	 * edited, so the series follows the new dates - what a user naturally expects
+	 * when they reschedule a repeating card ("move it to the 15th" should make it
+	 * repeat from the 15th). Called by {@see CardService::update} whenever a card's
+	 * start or due date changes; a card with no rules is a cheap no-op.
+	 *
+	 * The next fire is recomputed from the card's new anchor exactly like create()
+	 * (first occurrence at/after the anchor, never one that coincides with "now"),
+	 * so a Start pushed into the future fires then and a Start moved earlier picks
+	 * up the next occurrence after now - never a back-dated spawn. A disabled or
+	 * exhausted rule is left alone; a rule whose stored RRULE cannot be parsed is
+	 * logged and skipped so a bad rule can never break the card edit.
+	 */
+	public function rearmForTemplateCard(Card $card): void {
+		foreach ($this->ruleMapper->findByTemplateCard($card->getId()) as $rule) {
+			if (!$rule->getEnabled()) {
+				continue;
+			}
+			try {
+				$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($card, $rule)));
+			} catch (InvalidInputException $e) {
+				$this->logger->warning(
+					'kanso: could not re-arm recurring rule ' . $rule->getId() . ' after a date edit',
+					['exception' => $e]
+				);
+				continue;
+			}
+			$this->ruleMapper->update($rule);
+		}
+	}
+
 	// ---- spawning ---------------------------------------------------------
 
 	/**

@@ -96,6 +96,10 @@ class CardServiceTest extends TestCase {
 		// or a move/update inside the transaction would TypeError and roll back).
 		// Tests asserting specific from/to values override this.
 		$this->changeDetailMapper->method('insertDetail')->willReturn(new ChangeDetail());
+		// Lazy container → RecurrenceService for the repeat re-arm on a date edit;
+		// a no-op mock (no template card carries a rule in these tests).
+		$container = $this->createMock(\Psr\Container\ContainerInterface::class);
+		$container->method('get')->willReturn($this->createMock(\OCA\Kanso\Service\RecurrenceService::class));
 		$this->service = new CardService(
 			$this->cardMapper,
 			$this->stackMapper,
@@ -117,7 +121,8 @@ class CardServiceTest extends TestCase {
 			$this->subscriptionMapper,
 			$this->boardAccess,
 			$this->visibilityGuard,
-			$this->changeDetailMapper
+			$this->changeDetailMapper,
+			$container
 		);
 	}
 
