@@ -564,7 +564,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</button>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad">
-							<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}</label>
+							<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 							<div class="card-modal__field-row">
 								<input
 									class="card-modal__date-input"
@@ -583,7 +583,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									@change="toggleAllDay($event.target.checked)">
 								{{ t('kanso', 'All day (no time)') }}
 							</label>
-							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}</label>
+							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
 							<div class="card-modal__field-row">
 								<input
 									class="card-modal__date-input"
@@ -598,7 +598,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<!-- Repeat / recurrence (#55) - managers only; reuses the
 							     recurring-card engine with this card as the source. -->
 							<template v-if="canManage">
-								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}</label>
+								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}<span class="card-modal__field-hint" :title="repeatHint" :aria-label="repeatHint"><InformationOutlineIcon :size="13" /></span></label>
 								<p v-if="recurIsCustom" class="card-modal__recur-note">
 									{{ t('kanso', 'Custom schedule — edit it in Board settings → Automation.') }}
 								</p>
@@ -2204,6 +2204,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import EmoticonHappyOutlineIcon from 'vue-material-design-icons/EmoticonHappyOutline.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -3256,6 +3257,14 @@ async function clearStartDate() {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear start date.')
 	}
 }
+
+// Plain-language tips shown behind the ⓘ next to each date/repeat field, so
+// people don't have to guess what they do (#80 follow-up). Wording describes
+// the current behaviour: repeat moves the DUE date forward and leaves the start
+// date alone.
+const dueDateHint = t('kanso', 'Optional. When the card should be done. You get a reminder when it is due (and the day before, if you enable it). When a card repeats, its due date moves to the next date.')
+const startDateHint = t('kanso', 'Optional. A note for when you plan to begin. It does not send reminders and is not changed by Repeat.')
+const repeatHint = t('kanso', 'Brings this card back on a schedule and updates its due date to each new date. Reset reuses the same card; Clone makes a fresh copy.')
 
 // ── Due date color class (respects done state) ───────────────────────────────
 const dueDateClass = computed(() => {
@@ -6467,6 +6476,17 @@ body.theme--dark .card-modal,
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	color: var(--color-text-maxcontrast);
+}
+/* The ⓘ hint that sits next to a field label (start/due/repeat tips). */
+.card-modal__field-hint {
+	display: inline-flex;
+	vertical-align: middle;
+	margin-inline-start: 4px;
+	opacity: 0.55;
+	cursor: help;
+}
+.card-modal__field-hint:hover {
+	opacity: 0.9;
 }
 .card-modal__field-row {
 	display: flex;

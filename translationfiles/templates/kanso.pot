@@ -237,19 +237,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3836
+#: src/components/CardDetail.vue:3845
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3834
+#: src/components/CardDetail.vue:3843
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3832
+#: src/components/CardDetail.vue:3841
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -763,6 +763,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Bring this card back"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Brings this card back on a schedule and updates its due date to each new date. Reset reuses the same card; Clone makes a fresh copy."
 msgstr ""
 
 #: src/composables/useCardType.js
@@ -1477,7 +1481,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4012
+#: src/components/CardDetail.vue:4021
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3020,7 +3024,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4014
+#: src/components/CardDetail.vue:4023
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3574,6 +3578,14 @@ msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Optional description — markdown supported"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Optional. A note for when you plan to begin. It does not send reminders and is not changed by Repeat."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Optional. When the card should be done. You get a reminder when it is due (and the day before, if you enable it). When a card repeats, its due date moves to the next date."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4874,7 +4886,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4013
+#: src/components/CardDetail.vue:4022
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4954,7 +4966,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4015
+#: src/components/CardDetail.vue:4024
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
