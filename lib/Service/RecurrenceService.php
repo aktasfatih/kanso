@@ -254,7 +254,7 @@ class RecurrenceService {
 		$rule->setTimezone($this->defaultTimezoneFor($uid));
 		// Work out when this rule should fire for the FIRST time.
 		//
-		// The schedule is anchored at the card's Start date (its End date, then the
+		// The schedule is anchored at the card's Start date (its due date, then the
 		// creation time, as fallbacks - see anchorFor()). We pick the first
 		// occurrence at or after that anchor, but NEVER the occurrence that coincides
 		// with "now": the card the user just set up already exists, and firing on it
@@ -396,7 +396,7 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Re-point every repeat anchored on this card after its Start/End date was
+	 * Re-point every repeat anchored on this card after its Start/due date was
 	 * edited, so the series follows the new dates - what a user naturally expects
 	 * when they reschedule a repeating card ("move it to the 15th" should make it
 	 * repeat from the 15th). Called by {@see CardService::update} whenever a card's
@@ -689,7 +689,7 @@ class RecurrenceService {
 		[$newStart, $newEnd] = $this->windowFor($card, $occurrenceTs);
 		$card->setStartDate($newStart);
 		$card->setDuedate($newEnd);
-		// Re-arm the due-date reminders (#3545) for the reset card's new End date.
+		// Re-arm the due-date reminders (#3545) for the reset card's new due date.
 		$card->setDueReminderSent(0);
 		$card->setDayBeforeReminderSent(0);
 		$card->setLastModified($this->time->getTime());

@@ -280,7 +280,7 @@ export function groupCardsByField(field, cards, opts = {}) {
 		if (overdue.length > 0) groups.push({ key: 'due:overdue', title: t('kanso', 'Overdue'), cards: overdue })
 		if (week.length > 0) groups.push({ key: 'due:week', title: t('kanso', 'This week'), cards: week })
 		if (later.length > 0) groups.push({ key: 'due:later', title: t('kanso', 'Later'), cards: later })
-		if (none.length > 0) groups.push({ key: 'due:none', title: t('kanso', 'No end date'), cards: none })
+		if (none.length > 0) groups.push({ key: 'due:none', title: t('kanso', 'No due date'), cards: none })
 		return groups
 	}
 

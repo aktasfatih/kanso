@@ -109,7 +109,7 @@ class RecurRuleMapper extends QBMapper {
 
 	/**
 	 * Every recurrence rule anchored on a template card. Used to re-point a card's
-	 * repeat schedule when its Start/End date is edited, so the series follows the
+	 * repeat schedule when its Start/due date is edited, so the series follows the
 	 * new dates (what a user naturally expects when rescheduling a repeating card).
 	 * A card carries at most a handful of rules, so no ordering is needed.
 	 *

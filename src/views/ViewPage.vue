@@ -216,7 +216,7 @@ const GROUP_LABELS = {
 	board: t('kanso', 'Board'),
 	type: t('kanso', 'Type'),
 	review: t('kanso', 'Review'),
-	due: t('kanso', 'End date'),
+	due: t('kanso', 'Due date'),
 	owner: t('kanso', 'Owner'),
 }
 const groupByOptions = VIEW_GROUP_BY.map((id) => ({ id, label: GROUP_LABELS[id] }))

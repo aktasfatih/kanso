@@ -561,7 +561,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     all viewers. Same footprint, so no layout shift. -->
 							<RepeatIcon v-if="cardIsRecurring" :size="14" :title="t('kanso', 'Repeats')" />
 							<CalendarIcon v-else :size="14" />
-							{{ cardData.duedate ? dueDateLabel : t('kanso', 'End date') }}
+							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</button>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
 							<!-- A timed card is a Start → End window; an all-day card is a
@@ -580,7 +580,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										<CloseIcon :size="14" />
 									</button>
 								</div>
-								<label class="card-modal__field-label">{{ t('kanso', 'End date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
 										class="card-modal__date-input"
@@ -589,13 +589,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:value="dueDateInputValue"
 										@blur="handleDueDateChange"
 										@keyup.enter="handleDueDateChange">
-									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear end date')" @click="clearDueDate">
+									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 										<CloseIcon :size="14" />
 									</button>
 								</div>
 							</template>
 							<template v-else>
-								<label class="card-modal__field-label">{{ t('kanso', 'Date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
 										class="card-modal__date-input"
@@ -604,7 +604,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:value="dueDateInputValue"
 										@blur="handleDueDateChange"
 										@keyup.enter="handleDueDateChange">
-									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear date')" @click="clearDueDate">
+									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 										<CloseIcon :size="14" />
 									</button>
 								</div>
@@ -3231,12 +3231,12 @@ async function handleDueDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { duedate: iso } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update end date.')
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
 	}
 }
 
 async function toggleAllDay(checked) {
-	// An all-day card is a single day (End date only) — the Start field is hidden.
+	// An all-day card is a single day (a due date only) — the Start field is hidden.
 	// Clear any start date when switching to all-day so it can't linger invisibly,
 	// which would otherwise trip the end-before-start guard or silently anchor a
 	// repeat on a day the user can no longer see.
@@ -3244,7 +3244,7 @@ async function toggleAllDay(checked) {
 	try {
 		await updateCard.mutateAsync({ data })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update end date.')
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
 	}
 }
 
@@ -3252,7 +3252,7 @@ async function clearDueDate() {
 	try {
 		await updateCard.mutateAsync({ data: { duedate: '' } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear end date.')
+		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear due date.')
 	}
 }
 
@@ -3289,10 +3289,10 @@ async function clearStartDate() {
 
 // Short plain-language tips shown behind the ⓘ next to each date/repeat field,
 // so people don't have to guess. Wording matches the window model: a repeat
-// slides the start and end dates forward together.
+// slides the start and due dates forward together.
 const startDateHint = t('kanso', 'Optional. When work can begin. It moves with the card when it repeats.')
-const endDateHint = t('kanso', 'Optional. When work should finish. It moves with the card when it repeats, and sends a reminder.')
-const repeatHint = t('kanso', 'Brings the card back on a schedule. Its start and end dates slide forward together each time.')
+const dueDateHint = t('kanso', 'Optional. When the card is due. It moves with the card when it repeats, and sends a reminder.')
+const repeatHint = t('kanso', 'Brings the card back on a schedule. Its start and due dates slide forward together each time.')
 
 // ── Due date color class (respects done state) ───────────────────────────────
 const dueDateClass = computed(() => {
@@ -3679,7 +3679,7 @@ const ACTIVITY_VERBS = {
 	14: () => t('kanso', 'unlinked a contact'),
 	15: () => t('kanso', 'renamed this card'),
 	16: () => t('kanso', 'updated the description'),
-	17: () => t('kanso', 'changed the end date'),
+	17: () => t('kanso', 'changed the due date'),
 	18: () => t('kanso', 'changed the start date'),
 	19: () => t('kanso', 'changed the priority'),
 	20: () => t('kanso', 'changed the status'),
@@ -3750,7 +3750,7 @@ function activitySegments(item) {
 		break
 	case 17: // due date
 		if (d) {
-			return d.to ? withOne(t('kanso', 'changed the end date to {value}'), d.to) : plain(t('kanso', 'cleared the end date'))
+			return d.to ? withOne(t('kanso', 'changed the due date to {value}'), d.to) : plain(t('kanso', 'cleared the due date'))
 		}
 		break
 	case 18: // start date
@@ -6291,7 +6291,7 @@ body.theme--dark .card-modal,
 	padding: 10px 12px;
 	gap: 6px;
 }
-/* The date popover packs End date + Start date + the whole Repeat control, so
+/* The date popover packs the Due date + Start date + the whole Repeat control, so
    the shared 200px min-width left it cramped and the 320px cap made it scroll.
    Give it room to lay the fields out comfortably (the mobile inset-sheet rule
    below still wins on small screens via its higher specificity). */

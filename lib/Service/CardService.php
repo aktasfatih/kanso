@@ -97,7 +97,7 @@ class CardService {
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
 		// Lazily resolved (RecurrenceService depends on CardService) to re-point a
-		// card's repeat when its Start/End date is edited - same pattern as
+		// card's repeat when its Start/due date is edited - same pattern as
 		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
 		private ContainerInterface $container,
 	) {
@@ -1040,7 +1040,7 @@ class CardService {
 			// Same wire format + parsing as duedate; '' clears it.
 			$card->setStartDate($this->parseDuedate($startDate));
 		}
-		// An inverted window is invalid: the End date must not fall before the Start
+		// An inverted window is invalid: the due date must not fall before the Start
 		// date. Only enforced when this update actually sets a date, so editing an
 		// unrelated field on a card that already carries legacy/imported inverted
 		// dates is never blocked. Equal instants (a zero-length window) are allowed.
@@ -1050,7 +1050,7 @@ class CardService {
 			&& $windowStart !== null
 			&& $windowEnd !== null
 			&& $windowEnd->getTimestamp() < $windowStart->getTimestamp()) {
-			throw new InvalidInputException('The end date cannot be before the start date');
+			throw new InvalidInputException('The due date cannot be before the start date');
 		}
 		if ($done !== null) {
 			if ($done) {
@@ -1159,7 +1159,7 @@ class CardService {
 			$detail,
 		);
 
-		// If this card drives a repeat and its schedule anchor (Start/End date) just
+		// If this card drives a repeat and its schedule anchor (Start/due date) just
 		// moved, re-point the series so future occurrences follow the new dates -
 		// what a user naturally expects when they reschedule a repeating card. A
 		// non-template card has no rules, so this is a cheap no-op. Resolved lazily

@@ -126,7 +126,7 @@ const filteredGroups = computed(() => {
 		{ key: 'overdue', label: t('kanso', 'Overdue'), cards: overdue },
 		{ key: 'today', label: t('kanso', 'Today'), cards: today },
 		{ key: 'upcoming', label: t('kanso', 'Upcoming'), cards: upcoming },
-		{ key: 'none', label: t('kanso', 'No end date'), cards: none },
+		{ key: 'none', label: t('kanso', 'No due date'), cards: none },
 	]
 })
 

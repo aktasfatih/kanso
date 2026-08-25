@@ -82,22 +82,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcActionButton>
 		</NcActions>
 
-		<!-- Set end date -->
+		<!-- Set due date -->
 		<NcActions
 			:disabled="applying || count === 0"
-			:aria-label="t('kanso', 'Set end date…')">
+			:aria-label="t('kanso', 'Set due date…')">
 			<template #icon>
 				<CalendarClockIcon :size="20" />
 			</template>
 			<NcActionInput
 				type="date"
-				:label="t('kanso', 'End date')"
+				:label="t('kanso', 'Due date')"
 				:label-outside="false"
 				@submit="onDueDateSubmit">
 				<template #icon>
 					<CalendarClockIcon :size="20" />
 				</template>
-				{{ t('kanso', 'Set end date') }}
+				{{ t('kanso', 'Set due date') }}
 			</NcActionInput>
 			<NcActionButton
 				:close-after-click="true"
@@ -105,7 +105,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<template #icon>
 					<CalendarRemoveIcon :size="20" />
 				</template>
-				{{ t('kanso', 'Clear end date') }}
+				{{ t('kanso', 'Clear due date') }}
 			</NcActionButton>
 		</NcActions>
 

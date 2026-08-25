@@ -134,7 +134,7 @@ const mapping = ref({
 const fields = [
 	{ key: 'title', label: t('kanso', 'Title'), required: true },
 	{ key: 'description', label: t('kanso', 'Description'), required: false },
-	{ key: 'duedate', label: t('kanso', 'End date'), required: false },
+	{ key: 'duedate', label: t('kanso', 'Due date'), required: false },
 	{ key: 'labels', label: t('kanso', 'Labels (comma-separated)'), required: false },
 	{ key: 'assignees', label: t('kanso', 'Assignees (uids, comma-separated)'), required: false },
 ]

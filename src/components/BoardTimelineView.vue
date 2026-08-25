@@ -51,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<div v-if="scheduledRows.length === 0" class="timeline__empty">
 			<CalendarBlankOutlineIcon :size="40" />
-			<p>{{ t('kanso', 'No cards have a start or end date yet. Add dates on a card to place it on the timeline.') }}</p>
+			<p>{{ t('kanso', 'No cards have a start or due date yet. Add dates on a card to place it on the timeline.') }}</p>
 		</div>
 
 		<!-- Timeline body: a frozen left pane (id/title/assignee) beside a

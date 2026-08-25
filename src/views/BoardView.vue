@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Priority') }}
 				</NcActionRadio>
 				<NcActionRadio :model-value="sortMode" value="due" name="kanso-sort" @update:model-value="setSortMode">
-					{{ t('kanso', 'End date') }}
+					{{ t('kanso', 'Due date') }}
 				</NcActionRadio>
 				<NcActionRadio :model-value="sortMode" value="title" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Title') }}
@@ -700,7 +700,7 @@ function setSortDir(dir) {
 const sortModeLabel = computed(() => ({
 	manual: t('kanso', 'Manual'),
 	priority: t('kanso', 'Priority'),
-	due: t('kanso', 'End date'),
+	due: t('kanso', 'Due date'),
 	title: t('kanso', 'Title'),
 	estimate: t('kanso', 'Estimate'),
 }[sortMode.value] ?? t('kanso', 'Manual')))
