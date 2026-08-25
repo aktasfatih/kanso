@@ -11,6 +11,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.16.0](https://github.com/aktasfatih/kanso/compare/v0.15.0...v0.16.0) (2026-08-25)
+
+
+### Bug Fixes
+
+* add Fit mode to timeline so cards outside the default window are always reachable ([0f47093](https://github.com/aktasfatih/kanso/commit/0f470937554882e9b5e6c1d28ca0a26321ba84c5))
+* give the card date popover room so its fields and repeat options fit ([6324eb9](https://github.com/aktasfatih/kanso/commit/6324eb90eed6ccc78708fae70991a20f30241f5d))
+* harden the recurrence re-arm and the all-day date popover (review follow-up) ([9a8ff12](https://github.com/aktasfatih/kanso/commit/9a8ff123ad54bad16ed5ee474ff7b2fe9248ef98))
+* import Deck boards that assign a label or member to a card twice ([0bd3d94](https://github.com/aktasfatih/kanso/commit/0bd3d9429ea39c6b22924bf006c8c7f374f534c3))
+* keep the Timeline fast when a card spans a huge date range ([e15c6a0](https://github.com/aktasfatih/kanso/commit/e15c6a009c5e607fc9ec000596195d003f0cf47b))
+* order card dates start-before-end and simplify all-day to a single date ([5156326](https://github.com/aktasfatih/kanso/commit/51563260acae8c4db337f281fbe2e82c3abe3ee6))
+* prevent new or edited recurring cards from resetting their date immediately ([c7f5cce](https://github.com/aktasfatih/kanso/commit/c7f5ccefd2f5426180898250aa54c2319bff8f26)), closes [#80](https://github.com/aktasfatih/kanso/issues/80) [#65](https://github.com/aktasfatih/kanso/issues/65)
+* update the card date/repeat tips to describe the window behaviour ([72578ac](https://github.com/aktasfatih/kanso/commit/72578acc8307f71f56c0fab1451daf63bf95ef57))
+
+
+### Features
+
+* editing a repeating card's start or end date re-points its schedule ([284d8da](https://github.com/aktasfatih/kanso/commit/284d8da7b9cd9a9a141f2a551b2d6310260fb635))
+* explain the start date, due date and repeat fields with inline tips ([9b0e439](https://github.com/aktasfatih/kanso/commit/9b0e439979491a0f1e320323dd0eeb3bdd6c56ad))
+* recurring cards slide their whole start–end date window forward ([4586c1f](https://github.com/aktasfatih/kanso/commit/4586c1faa5c6c5d72ba8ba35a008f67e0de4ca6b))
+* reject an end date earlier than the start date ([1e2598c](https://github.com/aktasfatih/kanso/commit/1e2598c695fea31614c5922403e1a0fa4ff81a3d))
+* rename the card's "Due date" to "End date" across the app ([f01950c](https://github.com/aktasfatih/kanso/commit/f01950c4e89fa4f4ab8b3b44d84f009976f7207d))
+
+
+### Reverts
+
+* rename the card's "Due date" to "End date" ([35e000b](https://github.com/aktasfatih/kanso/commit/35e000b343bf40dfc85e48385c646497d6f3c3db))
+
 # [0.15.0](https://github.com/aktasfatih/kanso/compare/v0.14.0...v0.15.0) (2026-08-23)
 
 
