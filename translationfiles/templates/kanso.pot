@@ -237,19 +237,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3836
+#: src/components/CardDetail.vue:3873
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3834
+#: src/components/CardDetail.vue:3871
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3832
+#: src/components/CardDetail.vue:3869
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -763,6 +763,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Bring this card back"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Brings the card back on a schedule. Its start and due dates slide forward together each time."
 msgstr ""
 
 #: src/composables/useCardType.js
@@ -1477,7 +1481,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4012
+#: src/components/CardDetail.vue:4049
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3020,7 +3024,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4014
+#: src/components/CardDetail.vue:4051
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -3574,6 +3578,14 @@ msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Optional description — markdown supported"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Optional. When the card is due. It moves with the card when it repeats, and sends a reminder."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Optional. When work can begin. It moves with the card when it repeats."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4874,7 +4886,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4013
+#: src/components/CardDetail.vue:4050
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -4954,7 +4966,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4015
+#: src/components/CardDetail.vue:4052
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

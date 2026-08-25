@@ -563,19 +563,52 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<CalendarIcon v-else :size="14" />
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</button>
-						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad">
-							<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}</label>
-							<div class="card-modal__field-row">
-								<input
-									class="card-modal__date-input"
-									:type="isAllDay ? 'date' : 'datetime-local'"
-									:value="dueDateInputValue"
-									@blur="handleDueDateChange"
-									@keyup.enter="handleDueDateChange">
-								<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
-									<CloseIcon :size="14" />
-								</button>
-							</div>
+						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
+							<!-- A timed card is a Start → End window; an all-day card is a
+							     single day, so it collapses to one date field (no time). -->
+							<template v-if="!isAllDay">
+								<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<div class="card-modal__field-row">
+									<input
+										class="card-modal__date-input"
+										data-date="start"
+										type="datetime-local"
+										:value="startDateInputValue"
+										@blur="handleStartDateChange"
+										@keyup.enter="handleStartDateChange">
+									<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
+										<CloseIcon :size="14" />
+									</button>
+								</div>
+								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<div class="card-modal__field-row">
+									<input
+										class="card-modal__date-input"
+										data-date="end"
+										type="datetime-local"
+										:value="dueDateInputValue"
+										@blur="handleDueDateChange"
+										@keyup.enter="handleDueDateChange">
+									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
+										<CloseIcon :size="14" />
+									</button>
+								</div>
+							</template>
+							<template v-else>
+								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<div class="card-modal__field-row">
+									<input
+										class="card-modal__date-input"
+										data-date="end"
+										type="date"
+										:value="dueDateInputValue"
+										@blur="handleDueDateChange"
+										@keyup.enter="handleDueDateChange">
+									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
+										<CloseIcon :size="14" />
+									</button>
+								</div>
+							</template>
 							<label class="card-modal__allday">
 								<input
 									type="checkbox"
@@ -583,22 +616,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									@change="toggleAllDay($event.target.checked)">
 								{{ t('kanso', 'All day (no time)') }}
 							</label>
-							<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}</label>
-							<div class="card-modal__field-row">
-								<input
-									class="card-modal__date-input"
-									type="datetime-local"
-									:value="startDateInputValue"
-									@blur="handleStartDateChange"
-									@keyup.enter="handleStartDateChange">
-								<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
-									<CloseIcon :size="14" />
-								</button>
-							</div>
+							<!-- Surface date-save failures here (e.g. the end-before-start
+							     guard's 400) - otherwise a rejected date edit is silent. -->
+							<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
 							<!-- Repeat / recurrence (#55) - managers only; reuses the
 							     recurring-card engine with this card as the source. -->
 							<template v-if="canManage">
-								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}</label>
+								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="repeatHint" :aria-label="repeatHint"><InformationOutlineIcon :size="13" /></span></label>
 								<p v-if="recurIsCustom" class="card-modal__recur-note">
 									{{ t('kanso', 'Custom schedule — edit it in Board settings → Automation.') }}
 								</p>
@@ -2204,6 +2228,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import EmoticonHappyOutlineIcon from 'vue-material-design-icons/EmoticonHappyOutline.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -3211,8 +3236,13 @@ async function handleDueDateChange(event) {
 }
 
 async function toggleAllDay(checked) {
+	// An all-day card is a single day (a due date only) — the Start field is hidden.
+	// Clear any start date when switching to all-day so it can't linger invisibly,
+	// which would otherwise trip the end-before-start guard or silently anchor a
+	// repeat on a day the user can no longer see.
+	const data = checked ? { allDay: true, startDate: '' } : { allDay: false }
 	try {
-		await updateCard.mutateAsync({ data: { allDay: checked } })
+		await updateCard.mutateAsync({ data })
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
 	}
@@ -3256,6 +3286,13 @@ async function clearStartDate() {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear start date.')
 	}
 }
+
+// Short plain-language tips shown behind the ⓘ next to each date/repeat field,
+// so people don't have to guess. Wording matches the window model: a repeat
+// slides the start and due dates forward together.
+const startDateHint = t('kanso', 'Optional. When work can begin. It moves with the card when it repeats.')
+const dueDateHint = t('kanso', 'Optional. When the card is due. It moves with the card when it repeats, and sends a reminder.')
+const repeatHint = t('kanso', 'Brings the card back on a schedule. Its start and due dates slide forward together each time.')
 
 // ── Due date color class (respects done state) ───────────────────────────────
 const dueDateClass = computed(() => {
@@ -6254,6 +6291,15 @@ body.theme--dark .card-modal,
 	padding: 10px 12px;
 	gap: 6px;
 }
+/* The date popover packs the Due date + Start date + the whole Repeat control, so
+   the shared 200px min-width left it cramped and the 320px cap made it scroll.
+   Give it room to lay the fields out comfortably (the mobile inset-sheet rule
+   below still wins on small screens via its higher specificity). */
+.card-modal__popover--date {
+	width: 300px;
+	max-width: calc(100vw - 32px);
+	max-height: min(70vh, 540px);
+}
 .card-modal__popover-tokens {
 	display: flex;
 	flex-wrap: wrap;
@@ -6468,6 +6514,17 @@ body.theme--dark .card-modal,
 	text-transform: uppercase;
 	color: var(--color-text-maxcontrast);
 }
+/* The ⓘ hint that sits next to a field label (start/due/repeat tips). */
+.card-modal__field-hint {
+	display: inline-flex;
+	vertical-align: middle;
+	margin-inline-start: 4px;
+	opacity: 0.55;
+	cursor: help;
+}
+.card-modal__field-hint:hover {
+	opacity: 0.9;
+}
 .card-modal__field-row {
 	display: flex;
 	align-items: center;
@@ -6514,6 +6571,31 @@ body.theme--dark .card-modal,
 	margin-top: 6px;
 	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
+}
+/* The two "what happens when it repeats" options carry long labels, so stack
+   them as full-width cards instead of cramming them side by side in a row. */
+.card-modal__recur-mode {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+	margin-top: 8px;
+}
+.card-modal__recur-mode-opt {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 10px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	font-size: 0.85rem;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+.card-modal__recur-mode-opt--active {
+	border-color: var(--color-primary-element);
+	background: var(--color-primary-light);
+	color: var(--color-primary-element);
+	font-weight: 600;
 }
 .card-modal__field-clear {
 	display: inline-flex;

@@ -63,7 +63,7 @@ test.describe('All-day dates in a non-UTC timezone', () => {
 		// Open the popover: the date input must be the plain date picker holding the
 		// exact stored day.
 		await duePill.click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await expect(dueInput).toHaveAttribute('type', 'date')
 		await expect(dueInput).toHaveValue('2026-07-22')
 
@@ -73,7 +73,9 @@ test.describe('All-day dates in a non-UTC timezone', () => {
 		expect(new Date(d.duedate).toISOString()).toBe('2026-07-22T00:00:00.000Z')
 	})
 
-	test('an all-day start date shows the picked day (not the previous one) after reload', async ({ page }) => {
+	test('an all-day card shows a single date field (the day), no separate start input', async ({ page }) => {
+		// Even with a start date in storage, an all-day card collapses to ONE date
+		// field (the day), so there is no separate start input to mis-render.
 		await api.send('PATCH', `/cards/${state.cardId}`, {
 			duedate: '2026-07-22T00:00:00.000Z',
 			startDate: '2026-07-20T00:00:00.000Z',
@@ -87,10 +89,11 @@ test.describe('All-day dates in a non-UTC timezone', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		// Second date input in the popover is the start date.
-		const startInput = page.locator('.card-modal__popover .card-modal__date-input').nth(1)
-		// An all-day card reads its start back in UTC → the 20th, not the 19th.
-		await expect(startInput).toHaveValue(/^2026-07-20T/)
+		// One date field, the day, read back in UTC (the 22nd) — and no start input.
+		const dateInput = page.locator('.card-modal__popover [data-date="end"]')
+		await expect(dateInput).toHaveAttribute('type', 'date')
+		await expect(dateInput).toHaveValue('2026-07-22')
+		await expect(page.locator('.card-modal__popover [data-date="start"]')).toHaveCount(0)
 	})
 
 	test('a TIMED due date still round-trips in local time (no regression)', async ({ page }) => {
@@ -110,7 +113,7 @@ test.describe('All-day dates in a non-UTC timezone', () => {
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await expect(dueInput).toHaveAttribute('type', 'datetime-local')
 		// 22:00 local on the 21st — local time-of-day preserved for timed dates.
 		await expect(dueInput).toHaveValue('2026-07-21T22:00')

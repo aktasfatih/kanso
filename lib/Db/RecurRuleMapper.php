@@ -108,6 +108,24 @@ class RecurRuleMapper extends QBMapper {
 	}
 
 	/**
+	 * Every recurrence rule anchored on a template card. Used to re-point a card's
+	 * repeat schedule when its Start/due date is edited, so the series follows the
+	 * new dates (what a user naturally expects when rescheduling a repeating card).
+	 * A card carries at most a handful of rules, so no ordering is needed.
+	 *
+	 * @return RecurRule[]
+	 * @throws Exception
+	 */
+	public function findByTemplateCard(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('template_card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Removes every recurrence rule anchored on a template card - the cascade for
 	 * a card purge. A rule whose template is hard-deleted can never spawn again
 	 * (its template read throws), so purging the card must drop its rules too;

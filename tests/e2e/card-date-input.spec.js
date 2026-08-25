@@ -32,6 +32,13 @@ test.describe('Typing a date by keyboard', () => {
 	// own segments, so it does not blur the field.)
 	const blur = (page) => page.locator('.card-modal__allday input[type=checkbox]').focus()
 
+	// NC serves the app JS with immutable caching; force a fresh fetch so the test
+	// exercises the just-built bundle, not a cached copy.
+	async function clearJsCache(page) {
+		const client = await page.context().newCDPSession(page)
+		await client.send('Network.clearBrowserCache').catch(() => {})
+	}
+
 	// PATCH requests to this card, tagged so we can assert none fire mid-edit and
 	// exactly one fires on commit.
 	function trackPatches(page) {
@@ -68,12 +75,13 @@ test.describe('Typing a date by keyboard', () => {
 	test('typing a due date fires no PATCH mid-edit and one PATCH on blur with the typed date', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await expect(dueInput).toHaveAttribute('type', 'datetime-local')
 
 		// Seat the caret on the first (month) segment, then type the whole date one
@@ -101,12 +109,13 @@ test.describe('Typing a date by keyboard', () => {
 	test('pressing Enter commits the typed due date', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await dueInput.click()
 		for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft')
 		await dueInput.pressSequentially('09102027', { delay: 120 })
@@ -123,14 +132,22 @@ test.describe('Typing a date by keyboard', () => {
 
 	test('typing a start date fires no PATCH mid-edit and one PATCH on blur with the typed date', async ({ page }) => {
 		const patches = trackPatches(page)
+		// Reset to a valid window with the End date AFTER the start we'll type, so
+		// this test is independent of the due-date tests' order — otherwise the
+		// end-before-start guard (#end<start) would reject start > the current end.
+		await api.send('PATCH', `/cards/${state.cardId}`, {
+			startDate: '2026-01-02T09:30:00+00:00',
+			duedate: '2028-01-01T09:30:00+00:00',
+		})
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		// Second date input in the popover is the start date (always datetime-local).
-		const startInput = page.locator('.card-modal__popover .card-modal__date-input').nth(1)
+		// The start date input (always datetime-local in the timed view).
+		const startInput = page.locator('.card-modal__popover [data-date="start"]')
 		await expect(startInput).toHaveAttribute('type', 'datetime-local')
 
 		await startInput.click()
@@ -151,12 +168,13 @@ test.describe('Typing a date by keyboard', () => {
 	test('leaving a date field unedited fires no redundant PATCH', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		const dueInput = page.locator('.card-modal__popover .card-modal__date-input').first()
+		const dueInput = page.locator('.card-modal__popover [data-date="end"]')
 		await dueInput.click()
 		await blur(page)
 		await page.waitForTimeout(600)

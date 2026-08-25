@@ -30,6 +30,7 @@ use OCA\Kanso\Db\Subscription;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IDBConnection;
+use Psr\Container\ContainerInterface;
 
 /**
  * Card CRUD and moves. Every mutation appends a row to the `kanso_changes`
@@ -95,6 +96,10 @@ class CardService {
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
+		// Lazily resolved (RecurrenceService depends on CardService) to re-point a
+		// card's repeat when its Start/due date is edited - same pattern as
+		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
+		private ContainerInterface $container,
 	) {
 	}
 
@@ -1035,6 +1040,18 @@ class CardService {
 			// Same wire format + parsing as duedate; '' clears it.
 			$card->setStartDate($this->parseDuedate($startDate));
 		}
+		// An inverted window is invalid: the due date must not fall before the Start
+		// date. Only enforced when this update actually sets a date, so editing an
+		// unrelated field on a card that already carries legacy/imported inverted
+		// dates is never blocked. Equal instants (a zero-length window) are allowed.
+		$windowStart = $card->getStartDate();
+		$windowEnd = $card->getDuedate();
+		if (($startDate !== null || $duedate !== null)
+			&& $windowStart !== null
+			&& $windowEnd !== null
+			&& $windowEnd->getTimestamp() < $windowStart->getTimestamp()) {
+			throw new InvalidInputException('The due date cannot be before the start date');
+		}
 		if ($done !== null) {
 			if ($done) {
 				if ($card->getDoneAt() === 0) {
@@ -1141,6 +1158,16 @@ class CardService {
 			fn (): Card => $this->cardMapper->update($card),
 			$detail,
 		);
+
+		// If this card drives a repeat and its schedule anchor (Start/due date) just
+		// moved, re-point the series so future occurrences follow the new dates -
+		// what a user naturally expects when they reschedule a repeating card. A
+		// non-template card has no rules, so this is a cheap no-op. Resolved lazily
+		// to avoid the RecurrenceService↔CardService constructor cycle.
+		if ($card->getStartDate()?->getTimestamp() !== $origStart
+			|| $card->getDuedate()?->getTimestamp() !== $origDue) {
+			$this->container->get(RecurrenceService::class)->rearmForTemplateCard($card);
+		}
 
 		// A new @mention in the description pings + auto-subscribes readable-board
 		// participants (only when the description actually changed).

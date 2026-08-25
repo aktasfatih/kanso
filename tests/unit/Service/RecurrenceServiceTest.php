@@ -262,14 +262,61 @@ class RecurrenceServiceTest extends TestCase {
 				self::assertSame('alice', $r->getOwner());
 				self::assertTrue($r->getEnabled());
 				self::assertSame(0, $r->getOccurrencesSpawned());
-				// next_occurrence_at is the first daily fire at/after now.
-				self::assertSame(self::NOW, $r->getNextOccurrenceAt());
+				// A daily rule created "now" first fires tomorrow, not now. We skip
+				// the date that lands on the creation moment so a brand-new rule is
+				// never ready to fire immediately (#80).
+				self::assertSame(self::NOW + 86400, $r->getNextOccurrenceAt());
 				$r->setId(7);
 				return $r;
 			});
 
 		$rule = $this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 		self::assertSame(7, $rule->getId());
+	}
+
+	public function testCreateIsNotImmediatelyDue(): void {
+		// Regression for #80. A card set to repeat "Yearly" should sit quietly for a
+		// year. The bug was that a brand-new rule was ready to fire straight away, so
+		// the next cron run (within ~15 min) reset the card and overwrote the date
+		// the user had just picked. Its first fire must be in the future, not now.
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r): RecurRule {
+				// In the future, so the cron (which only picks up rules whose next
+				// fire is at or before now) leaves it alone until next year.
+				self::assertGreaterThan(self::NOW, $r->getNextOccurrenceAt());
+				$r->setId(7);
+				return $r;
+			});
+
+		$this->service->create(1, 10, 5, RecurRule::MODE_RESET, 'FREQ=YEARLY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
+	}
+
+	public function testCreateAnchorsOnTheCardStartDateAndFiresOnAFutureStart(): void {
+		// The schedule is anchored at the card's Start date, so a Start set 30 days
+		// out makes the FIRST occurrence land on that date (not now, not skipped) -
+		// "starts <future date>, repeats yearly" fires on the start date.
+		$futureStart = self::NOW + 30 * 86400;
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $futureStart));
+
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r) use ($futureStart): RecurRule {
+				self::assertSame($futureStart, $r->getNextOccurrenceAt());
+				$r->setId(7);
+				return $r;
+			});
+
+		$this->service->create(1, 10, 5, RecurRule::MODE_RESET, 'FREQ=YEARLY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 	}
 
 	public function testCreateWithoutManageThrows403(): void {
@@ -409,9 +456,11 @@ class RecurrenceServiceTest extends TestCase {
 			->method('update')
 			->willReturnCallback(static function (Card $c): Card {
 				self::assertSame('- [ ] living room', $c->getDescription());
-				self::assertNotNull($c->getDuedate());
-				// POLICY_AT_OCCURRENCE → due at the occurrence timestamp.
-				self::assertSame(self::NOW, $c->getDuedate()->getTimestamp());
+				// The template has no dates, so a repeat invents none: the clone
+				// carries no Start/End date (the window model, replacing the old
+				// "stamp a due date at the occurrence" behaviour).
+				self::assertNull($c->getStartDate());
+				self::assertNull($c->getDuedate());
 				return $c;
 			});
 
@@ -438,9 +487,15 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(99, $rule->getLastSpawnedAt());
 	}
 
-	public function testSpawnCloneOffsetPolicyAddsOffsetToDuedate(): void {
-		$rule = $this->rule(policy: RecurRule::POLICY_OFFSET_AFTER, offset: 3600, nextOccurrenceAt: self::NOW);
-		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+	public function testSpawnCloneSlidesStartEndWindowToOccurrence(): void {
+		// The template has a 2-day Start→End window anchored in the past. A clone's
+		// window slides forward to the occurrence, keeping its 2-day length (the
+		// calendar-event model): Start = occurrence, End = occurrence + 2 days.
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . (self::NOW - 10 * 86400)));
+		$template->setDuedate(new \DateTime('@' . (self::NOW - 10 * 86400 + 2 * 86400)));
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
 		$this->cardService->method('create')->willReturn($this->spawnedCard());
 		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
@@ -449,7 +504,8 @@ class RecurrenceServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static function (Card $c): Card {
-				self::assertSame(self::NOW + 3600, $c->getDuedate()->getTimestamp());
+				self::assertSame(self::NOW, $c->getStartDate()->getTimestamp());
+				self::assertSame(self::NOW + 2 * 86400, $c->getDuedate()->getTimestamp());
 				return $c;
 			});
 
@@ -490,6 +546,59 @@ class RecurrenceServiceTest extends TestCase {
 			->method('update')
 			->willReturnCallback(static function (Card $c): Card {
 				self::assertTrue($c->getAllDay());
+				return $c;
+			});
+
+		$this->service->spawn($rule);
+	}
+
+	public function testSpawnCloneAllDayCarriesFlagAndSlidesTheSingleDate(): void {
+		// An all-day card is a single day (just an End date, at UTC midnight). Its
+		// clone keeps the all-day flag and slides that one date to the occurrence -
+		// no start date is invented, so the clone stays a clean single all-day day.
+		$dayTs = (new \DateTimeImmutable('2027-01-15T00:00:00Z'))->getTimestamp();
+		$template = $this->templateCard();
+		$template->setAllDay(true);
+		$template->setDuedate(new \DateTime('@' . $dayTs));
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, rrule: 'FREQ=DAILY', nextOccurrenceAt: $dayTs + 86400);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c) use ($dayTs): Card {
+				self::assertTrue($c->getAllDay());
+				self::assertNull($c->getStartDate());
+				self::assertSame($dayTs + 86400, $c->getDuedate()->getTimestamp());
+				return $c;
+			});
+
+		$this->service->spawn($rule);
+	}
+
+	public function testSpawnResetAllDayKeepsFlagAndSlidesTheSingleDate(): void {
+		// RESET on an all-day card slides its single day forward and leaves the
+		// all-day flag on (the reset card is its own template).
+		$dayTs = (new \DateTimeImmutable('2027-01-15T00:00:00Z'))->getTimestamp();
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY', nextOccurrenceAt: $dayTs + 86400);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+
+		$moved = $this->templateCard();
+		$moved->setStackId(5);
+		$moved->setAllDay(true);
+		$moved->setDuedate(new \DateTime('@' . $dayTs));
+		$this->cardService->expects(self::once())->method('move')->willReturn($moved);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c) use ($dayTs): Card {
+				self::assertTrue($c->getAllDay());
+				self::assertNull($c->getStartDate());
+				self::assertSame($dayTs + 86400, $c->getDuedate()->getTimestamp());
 				return $c;
 			});
 
@@ -581,8 +690,8 @@ class RecurrenceServiceTest extends TestCase {
 
 	// ---- spawn RESET ------------------------------------------------------
 
-	public function testSpawnResetMovesTemplateBackClearsDoneRearmsDuedate(): void {
-		$rule = $this->rule(mode: RecurRule::MODE_RESET, policy: RecurRule::POLICY_AT_OCCURRENCE, nextOccurrenceAt: self::NOW);
+	public function testSpawnResetMovesTemplateBackClearsDoneSlidesWindow(): void {
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, nextOccurrenceAt: self::NOW);
 
 		// Target stack empty → move to top (afterCardId null).
 		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
@@ -590,6 +699,10 @@ class RecurrenceServiceTest extends TestCase {
 		$moved = $this->templateCard();
 		$moved->setStackId(5);
 		$moved->setDoneAt(self::NOW); // was done before the reset
+		// The card carries a 1-hour Start→End window anchored a week back; the reset
+		// slides that whole window forward to the occurrence, keeping its length.
+		$moved->setStartDate(new \DateTime('@' . (self::NOW - 7 * 86400)));
+		$moved->setDuedate(new \DateTime('@' . (self::NOW - 7 * 86400 + 3600)));
 		$this->cardService->expects(self::once())
 			->method('move')
 			->with(10, 5, null, 'alice')
@@ -600,7 +713,9 @@ class RecurrenceServiceTest extends TestCase {
 			->willReturnCallback(static function (Card $c): Card {
 				self::assertSame(0, $c->getDoneAt());
 				self::assertFalse($c->getArchived());
-				self::assertSame(self::NOW, $c->getDuedate()->getTimestamp());
+				// Window slid forward to the occurrence, 1-hour length preserved.
+				self::assertSame(self::NOW, $c->getStartDate()->getTimestamp());
+				self::assertSame(self::NOW + 3600, $c->getDuedate()->getTimestamp());
 				return $c;
 			});
 
@@ -884,6 +999,36 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(1, $this->service->runDueRules());
 	}
 
+	/**
+	 * The "before" case: a rule whose next fire is still in the FUTURE spawns
+	 * nothing. runDueRules re-checks next_occurrence_at <= now in its own loop
+	 * (not only in the query), so a fresh #80-safe rule that somehow reaches the
+	 * loop is still left untouched - no card, no schedule advance.
+	 */
+	public function testRunDueRulesSkipsRuleNotYetDue(): void {
+		$rule = $this->rule(nextOccurrenceAt: self::NOW + 86400); // fires tomorrow
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardService->expects(self::never())->method('move');
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		self::assertSame(0, $this->service->runDueRules());
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * An exhausted rule (next_occurrence_at == 0, e.g. a COUNT/UNTIL series that
+	 * has run out) spawns nothing even if it reaches the loop - the > 0 guard
+	 * holds independently of the query.
+	 */
+	public function testRunDueRulesSkipsExhaustedRule(): void {
+		$rule = $this->rule(nextOccurrenceAt: 0);
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardService->expects(self::never())->method('create');
+
+		self::assertSame(0, $this->service->runDueRules());
+	}
+
 	// ---- catch-up on missed occurrences (#3587) ---------------------------
 
 	/**
@@ -897,37 +1042,39 @@ class RecurrenceServiceTest extends TestCase {
 		// are due (t-3d, t-2d, t-1d); the t=now one is also due (<= now) = 4.
 		$firstMissed = self::NOW - 3 * 86400;
 		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: $firstMissed);
-		// createdAt anchors the DAILY series; set it to the first missed point so
-		// the occurrences land exactly on 24h steps from there.
-		$rule->setCreatedAt($firstMissed);
+		// The template's Start date anchors the DAILY series (anchorFor); set it to
+		// the first missed point so occurrences land on exact 24h steps from there,
+		// and each spawned card's Start date slides to its own occurrence.
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $firstMissed));
 
 		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
-		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
 		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
 		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
 		$this->ruleMapper->method('update')->willReturnArgument(0);
 
-		// A fresh card per occurrence, and capture the per-occurrence due dates.
-		$dueDates = [];
+		// A fresh card per occurrence, and capture the per-occurrence Start dates.
+		$starts = [];
 		$id = 100;
 		$this->cardService->method('create')->willReturnCallback(function () use (&$id): Card {
 			return $this->spawnedCard($id++);
 		});
-		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$dueDates): Card {
-			$dueDates[] = $c->getDuedate()?->getTimestamp();
+		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$starts): Card {
+			$starts[] = $c->getStartDate()?->getTimestamp();
 			return $c;
 		});
 
 		$spawned = $this->service->runDueRules();
 
-		// t-3d, t-2d, t-1d, t=now → 4 cards, each with its own occurrence due date.
+		// t-3d, t-2d, t-1d, t=now → 4 cards, each sliding its Start date to its own occurrence.
 		self::assertSame(4, $spawned);
 		self::assertSame([
 			self::NOW - 3 * 86400,
 			self::NOW - 2 * 86400,
 			self::NOW - 1 * 86400,
 			self::NOW,
-		], $dueDates);
+		], $starts);
 		// Cursor advanced past now to tomorrow; rule is no longer due.
 		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
 	}
@@ -1226,40 +1373,111 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	/**
-	 * Even on a genuine schedule change the cursor is never rewound BEFORE where it
-	 * already sits: a rule whose cursor has walked well past now (a catch-up in
-	 * progress, or a future-anchored rule) keeps advancing forward, never back onto
-	 * an occurrence at/behind the current cursor that may already have fired (#65).
+	 * Speeding a rule up takes effect right away. If the user changes a rule from
+	 * Weekly to Daily, it should start firing daily now - not wait for the old
+	 * weekly date. The old code kept the far-off date, so "Daily" did nothing for
+	 * up to a week (#80 follow-up).
 	 */
-	public function testUpdateWithChangedRruleNeverRewindsBehindCurrentCursor(): void {
-		// Cursor sits two days in the FUTURE (already advanced past today's fire).
-		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 2 * 86400);
+	public function testUpdateToMoreFrequentCadenceTakesEffectFromNextOccurrence(): void {
+		// A weekly rule whose next fire is two days away.
+		$rule = $this->rule(rrule: 'FREQ=WEEKLY', nextOccurrenceAt: self::NOW + 2 * 86400);
 		$this->wireUpdate($rule);
 
-		// Re-writing to hourly would, from now-1, land the cursor at now+1h - BEHIND
-		// the current cursor. The max(now-1, cursor-1) floor forbids that: the new
-		// cursor may not move backward. now+2d is an exact hourly multiple from the
-		// NOW anchor, so the re-armed cursor stays at now+2d, never earlier.
+		// Switch it to hourly. The next hourly slot after now is one hour from now,
+		// so it starts almost immediately instead of waiting two more days.
 		$this->service->update(3, null, null, null, 'FREQ=HOURLY', null, null, null, null, 'alice');
 
-		self::assertGreaterThanOrEqual(self::NOW + 2 * 86400, $rule->getNextOccurrenceAt());
+		self::assertSame(self::NOW + 3600, $rule->getNextOccurrenceAt());
 	}
 
 	/**
-	 * Re-enabling a disabled rule (disabled → enabled) DOES re-arm from now, so a
-	 * rule that was off for a while picks up its next future occurrence rather than
-	 * staying stuck on a stale cursor.
+	 * Changing a rule's schedule never leaves it ready to fire the instant the next
+	 * cron runs - the new fire time is always in the future. This keeps schedule
+	 * edits from behaving like the "reset to today" bug (#80 family).
 	 */
-	public function testUpdateReEnablingDisabledRuleReArmsFromNow(): void {
-		// A disabled rule whose cached cursor is stale (in the past).
+	public function testUpdateWithChangedRruleIsNotImmediatelyDue(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, 'FREQ=WEEKLY', null, null, null, null, 'alice');
+
+		self::assertGreaterThan(self::NOW, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Turning a rule back on resumes it on its next future date - not stuck in the
+	 * past, and not firing the instant the cron runs.
+	 */
+	public function testUpdateReEnablingDisabledRuleReArmsToNextFutureOccurrence(): void {
+		// A switched-off rule whose stored next fire is stale (10 days ago).
 		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 10 * 86400);
 		$rule->setEnabled(false);
 		$this->wireUpdate($rule);
 
 		$this->service->update(3, null, null, null, null, null, null, null, true, 'alice');
 
-		// Re-armed to the next daily occurrence at/after now, not left in the past.
-		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
+		// Back on, and pointed at tomorrow's daily slot - not the old past date and
+		// not right now.
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
 		self::assertTrue($rule->getEnabled());
+	}
+
+	// ---- re-arm on a card date edit ---------------------------------------
+
+	/**
+	 * Editing a repeating card's Start date re-points the series so it follows the
+	 * new date - what a user naturally expects when they reschedule it. A Start
+	 * moved to five days out makes the next fire land on that date.
+	 */
+	public function testRearmForTemplateCardRepointsScheduleToNewStartDate(): void {
+		$newStart = self::NOW + 5 * 86400;
+		$card = $this->templateCard(); // id 10, matches the rule's templateCardId
+		$card->setStartDate(new \DateTime('@' . $newStart));
+
+		// The stored cursor is stale (3 days ago) until the edit re-arms it.
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 3 * 86400);
+		$this->ruleMapper->method('findByTemplateCard')->with(10)->willReturn([$rule]);
+		$this->ruleMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (RecurRule $r) use ($newStart): RecurRule {
+				self::assertSame($newStart, $r->getNextOccurrenceAt());
+				return $r;
+			});
+
+		$this->service->rearmForTemplateCard($card);
+	}
+
+	/**
+	 * A disabled rule is left alone by a date edit - re-pointing a paused schedule
+	 * would silently resurrect it.
+	 */
+	public function testRearmForTemplateCardSkipsDisabledRule(): void {
+		$card = $this->templateCard();
+		$card->setStartDate(new \DateTime('@' . (self::NOW + 5 * 86400)));
+
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 3 * 86400);
+		$rule->setEnabled(false);
+		$this->ruleMapper->method('findByTemplateCard')->with(10)->willReturn([$rule]);
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->service->rearmForTemplateCard($card);
+	}
+
+	/**
+	 * The re-arm runs AFTER the card edit has committed, so a failing rule write
+	 * must never bubble out - otherwise it would 500 an edit that already
+	 * succeeded. The failure is logged and swallowed.
+	 */
+	public function testRearmForTemplateCardSwallowsAFailingRuleUpdate(): void {
+		$card = $this->templateCard();
+		$card->setStartDate(new \DateTime('@' . (self::NOW + 5 * 86400)));
+
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 3 * 86400);
+		$this->ruleMapper->method('findByTemplateCard')->with(10)->willReturn([$rule]);
+		$this->ruleMapper->method('update')->willThrowException(new \RuntimeException('db down'));
+		$this->logger->expects(self::atLeastOnce())->method('warning');
+
+		// Must not throw despite the rule write failing.
+		$this->service->rearmForTemplateCard($card);
 	}
 }
