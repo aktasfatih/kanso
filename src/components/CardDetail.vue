@@ -567,7 +567,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<!-- A timed card is a Start → End window; an all-day card is a
 							     single day, so it collapses to one date field (no time). -->
 							<template v-if="!isAllDay">
-								<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
 										class="card-modal__date-input"
@@ -580,7 +580,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										<CloseIcon :size="14" />
 									</button>
 								</div>
-								<label class="card-modal__field-label">{{ t('kanso', 'End date') }}<span class="card-modal__field-hint" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<label class="card-modal__field-label">{{ t('kanso', 'End date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
 										class="card-modal__date-input"
@@ -595,7 +595,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</div>
 							</template>
 							<template v-else>
-								<label class="card-modal__field-label">{{ t('kanso', 'Date') }}<span class="card-modal__field-hint" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
+								<label class="card-modal__field-label">{{ t('kanso', 'Date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="endDateHint" :aria-label="endDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
 										class="card-modal__date-input"
@@ -616,10 +616,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									@change="toggleAllDay($event.target.checked)">
 								{{ t('kanso', 'All day (no time)') }}
 							</label>
+							<!-- Surface date-save failures here (e.g. the end-before-start
+							     guard's 400) - otherwise a rejected date edit is silent. -->
+							<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
 							<!-- Repeat / recurrence (#55) - managers only; reuses the
 							     recurring-card engine with this card as the source. -->
 							<template v-if="canManage">
-								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}<span class="card-modal__field-hint" :title="repeatHint" :aria-label="repeatHint"><InformationOutlineIcon :size="13" /></span></label>
+								<label class="card-modal__field-label card-modal__recur-label">{{ t('kanso', 'Repeat') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="repeatHint" :aria-label="repeatHint"><InformationOutlineIcon :size="13" /></span></label>
 								<p v-if="recurIsCustom" class="card-modal__recur-note">
 									{{ t('kanso', 'Custom schedule — edit it in Board settings → Automation.') }}
 								</p>
@@ -3233,8 +3236,13 @@ async function handleDueDateChange(event) {
 }
 
 async function toggleAllDay(checked) {
+	// An all-day card is a single day (End date only) — the Start field is hidden.
+	// Clear any start date when switching to all-day so it can't linger invisibly,
+	// which would otherwise trip the end-before-start guard or silently anchor a
+	// repeat on a day the user can no longer see.
+	const data = checked ? { allDay: true, startDate: '' } : { allDay: false }
 	try {
-		await updateCard.mutateAsync({ data: { allDay: checked } })
+		await updateCard.mutateAsync({ data })
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update end date.')
 	}

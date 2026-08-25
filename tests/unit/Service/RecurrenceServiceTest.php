@@ -1462,4 +1462,22 @@ class RecurrenceServiceTest extends TestCase {
 
 		$this->service->rearmForTemplateCard($card);
 	}
+
+	/**
+	 * The re-arm runs AFTER the card edit has committed, so a failing rule write
+	 * must never bubble out - otherwise it would 500 an edit that already
+	 * succeeded. The failure is logged and swallowed.
+	 */
+	public function testRearmForTemplateCardSwallowsAFailingRuleUpdate(): void {
+		$card = $this->templateCard();
+		$card->setStartDate(new \DateTime('@' . (self::NOW + 5 * 86400)));
+
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW - 3 * 86400);
+		$this->ruleMapper->method('findByTemplateCard')->with(10)->willReturn([$rule]);
+		$this->ruleMapper->method('update')->willThrowException(new \RuntimeException('db down'));
+		$this->logger->expects(self::atLeastOnce())->method('warning');
+
+		// Must not throw despite the rule write failing.
+		$this->service->rearmForTemplateCard($card);
+	}
 }

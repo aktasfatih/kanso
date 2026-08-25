@@ -406,24 +406,40 @@ class RecurrenceService {
 	 * (first occurrence at/after the anchor, never one that coincides with "now"),
 	 * so a Start pushed into the future fires then and a Start moved earlier picks
 	 * up the next occurrence after now - never a back-dated spawn. A disabled or
-	 * exhausted rule is left alone; a rule whose stored RRULE cannot be parsed is
-	 * logged and skipped so a bad rule can never break the card edit.
+	 * exhausted rule is left alone.
+	 *
+	 * This is a best-effort convenience that runs AFTER the card edit has already
+	 * committed (CardService::update), so it must NEVER throw out of that flow: a
+	 * failure here (a rule row deleted concurrently, a DB hiccup, an unparseable
+	 * legacy RRULE) would surface as a 500 for an edit that actually succeeded and
+	 * leave the user's change apparently lost. Every failure - the rule lookup and
+	 * each per-rule recompute/update - is caught and logged; a stale cursor
+	 * self-heals on the next legitimate schedule edit or is a no-op if the rule is
+	 * gone.
 	 */
 	public function rearmForTemplateCard(Card $card): void {
-		foreach ($this->ruleMapper->findByTemplateCard($card->getId()) as $rule) {
+		try {
+			$rules = $this->ruleMapper->findByTemplateCard($card->getId());
+		} catch (\Throwable $e) {
+			$this->logger->warning(
+				'kanso: could not load recurring rules to re-arm after a date edit on card ' . $card->getId(),
+				['exception' => $e]
+			);
+			return;
+		}
+		foreach ($rules as $rule) {
 			if (!$rule->getEnabled()) {
 				continue;
 			}
 			try {
 				$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($card, $rule)));
-			} catch (InvalidInputException $e) {
+				$this->ruleMapper->update($rule);
+			} catch (\Throwable $e) {
 				$this->logger->warning(
 					'kanso: could not re-arm recurring rule ' . $rule->getId() . ' after a date edit',
 					['exception' => $e]
 				);
-				continue;
 			}
-			$this->ruleMapper->update($rule);
 		}
 	}
 

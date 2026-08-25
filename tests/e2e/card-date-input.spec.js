@@ -32,6 +32,13 @@ test.describe('Typing a date by keyboard', () => {
 	// own segments, so it does not blur the field.)
 	const blur = (page) => page.locator('.card-modal__allday input[type=checkbox]').focus()
 
+	// NC serves the app JS with immutable caching; force a fresh fetch so the test
+	// exercises the just-built bundle, not a cached copy.
+	async function clearJsCache(page) {
+		const client = await page.context().newCDPSession(page)
+		await client.send('Network.clearBrowserCache').catch(() => {})
+	}
+
 	// PATCH requests to this card, tagged so we can assert none fire mid-edit and
 	// exactly one fires on commit.
 	function trackPatches(page) {
@@ -68,6 +75,7 @@ test.describe('Typing a date by keyboard', () => {
 	test('typing a due date fires no PATCH mid-edit and one PATCH on blur with the typed date', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
@@ -101,6 +109,7 @@ test.describe('Typing a date by keyboard', () => {
 	test('pressing Enter commits the typed due date', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
@@ -124,6 +133,7 @@ test.describe('Typing a date by keyboard', () => {
 	test('typing a start date fires no PATCH mid-edit and one PATCH on blur with the typed date', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
@@ -151,6 +161,7 @@ test.describe('Typing a date by keyboard', () => {
 	test('leaving a date field unedited fires no redundant PATCH', async ({ page }) => {
 		const patches = trackPatches(page)
 		await ncLogin(page)
+		await clearJsCache(page)
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
