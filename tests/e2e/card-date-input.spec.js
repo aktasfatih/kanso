@@ -132,6 +132,13 @@ test.describe('Typing a date by keyboard', () => {
 
 	test('typing a start date fires no PATCH mid-edit and one PATCH on blur with the typed date', async ({ page }) => {
 		const patches = trackPatches(page)
+		// Reset to a valid window with the End date AFTER the start we'll type, so
+		// this test is independent of the due-date tests' order — otherwise the
+		// end-before-start guard (#end<start) would reject start > the current end.
+		await api.send('PATCH', `/cards/${state.cardId}`, {
+			startDate: '2026-01-02T09:30:00+00:00',
+			duedate: '2028-01-01T09:30:00+00:00',
+		})
 		await ncLogin(page)
 		await clearJsCache(page)
 		await page.goto(state.cardUrl)
