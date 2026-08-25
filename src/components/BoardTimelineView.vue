@@ -12,9 +12,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-for="z in ZOOMS"
 					:key="z.key"
 					class="timeline__zoom-btn"
-					:class="{ 'timeline__zoom-btn--active': zoom === z.key }"
-					@click="zoom = z.key">
+					:class="{ 'timeline__zoom-btn--active': zoom === z.key && !fitAll }"
+					@click="zoom = z.key; fitAll = false">
 					{{ z.label }}
+				</button>
+				<button
+					class="timeline__zoom-btn timeline__zoom-btn--fit"
+					:class="{ 'timeline__zoom-btn--active': fitAll }"
+					:aria-pressed="fitAll"
+					@click="fitAll = !fitAll">
+					{{ t('kanso', 'Fit') }}
 				</button>
 			</div>
 			<button
@@ -110,6 +117,35 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<!-- Scrollable track -->
 			<div ref="scrollRef" class="timeline__scroll">
+				<!-- Clipped-edge affordances (#4129): when a card's real date range
+				     reaches beyond the rendered window, flag it at the track edge so
+				     the outlier is indicated, not silently dropped. Sticky so they
+				     stay pinned to the viewport edges as the track scrolls. In Fit
+				     mode the window == full extent so these are never shown. -->
+				<div
+					v-if="extendsEarlier"
+					class="timeline__edge timeline__edge--start"
+					:title="t('kanso', 'Show the full date range')"
+					:aria-label="t('kanso', 'Some cards extend earlier than shown')"
+					role="button"
+					tabindex="0"
+					@click="fitAll = true"
+					@keydown.enter.prevent="fitAll = true"
+					@keydown.space.prevent="fitAll = true">
+					<ChevronLeftIcon :size="16" />
+				</div>
+				<div
+					v-if="extendsLater"
+					class="timeline__edge timeline__edge--end"
+					:title="t('kanso', 'Show the full date range')"
+					:aria-label="t('kanso', 'Some cards extend later than shown')"
+					role="button"
+					tabindex="0"
+					@click="fitAll = true"
+					@keydown.enter.prevent="fitAll = true"
+					@keydown.space.prevent="fitAll = true">
+					<ChevronRightIcon :size="16" />
+				</div>
 				<div ref="trackRef" class="timeline__inner" :class="{ 'timeline__inner--drop-active': dropActive }" :style="{ width: `${trackWidth}px` }">
 					<!-- Drop affordance: a vertical guide at the day under the cursor
 					     while an unscheduled card is dragged over the track. -->
@@ -171,24 +207,37 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="openCard(row.card.id)"
 							@keydown.enter.prevent="openCard(row.card.id)"
 							@keydown.space.prevent="openCard(row.card.id)">
-							<div
-								v-if="row.isMilestone"
-								class="timeline__milestone"
-								:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
-								:style="{ left: `${row.left}px` }">
-								<span class="timeline__label timeline__label--after">{{ row.card.title }}</span>
-							</div>
+							<!-- Off-window rows: render an edge marker instead of a (misleading) clipped bar -->
+							<template v-if="row.offBefore || row.offAfter">
+								<div
+									class="timeline__bar-offwindow"
+									:class="row.offBefore ? 'timeline__bar-offwindow--start' : 'timeline__bar-offwindow--end'"
+									:title="t('kanso', 'Outside the visible range — click Fit to show')"
+									@click.stop="fitAll = true">
+									<ChevronLeftIcon v-if="row.offBefore" :size="12" />
+									<ChevronRightIcon v-else :size="12" />
+								</div>
+							</template>
 							<template v-else>
 								<div
-									class="timeline__bar"
+									v-if="row.isMilestone"
+									class="timeline__milestone"
 									:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
-									:style="{ left: `${row.left}px`, width: `${row.width}px` }">
-									<span v-if="row.labelInside" class="timeline__label">{{ row.card.title }}</span>
+									:style="{ left: `${row.left}px` }">
+									<span class="timeline__label timeline__label--after">{{ row.card.title }}</span>
 								</div>
-								<span
-									v-if="!row.labelInside"
-									class="timeline__bar-outside-label"
-									:style="{ left: `${row.left + row.width + 6}px` }">{{ row.card.title }}</span>
+								<template v-else>
+									<div
+										class="timeline__bar"
+										:class="{ 'timeline__bar--done': row.done, 'timeline__bar--started': row.started, 'timeline__bar--overdue': row.overdue }"
+										:style="{ left: `${row.left}px`, width: `${row.width}px` }">
+										<span v-if="row.labelInside" class="timeline__label">{{ row.card.title }}</span>
+									</div>
+									<span
+										v-if="!row.labelInside"
+										class="timeline__bar-outside-label"
+										:style="{ left: `${row.left + row.width + 6}px` }">{{ row.card.title }}</span>
+								</template>
 							</template>
 						</div>
 					</template>
@@ -224,6 +273,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
 import CalendarTodayIcon from 'vue-material-design-icons/CalendarToday.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { updateCard as apiUpdateCard } from '../services/api.js'
@@ -318,6 +368,12 @@ const ZOOMS = [
 ]
 const zoom = ref('week')
 
+// Fit mode: shows the full data extent in one viewport-sized view on demand.
+// When true, windowStart/windowEnd span the entire data domain; pxPerDay is
+// auto-calculated to fit that span in the viewport; ticks/labels coarsen to
+// the 'month' density to stay readable at very small px/day.
+const fitAll = ref(false)
+
 // Reactive clock so the "today" marker and overdue flags recompute over time
 // (e.g. a board left open across midnight). A plain Date.now() inside a computed
 // has no reactive dependency and would stay frozen until `cards` changed.
@@ -353,11 +409,32 @@ onBeforeUnmount(() => {
 	}
 })
 const zoomCfg = computed(() => ZOOMS.find((z) => z.key === zoom.value) ?? ZOOMS[1])
-const pxPerDay = computed(() => zoomCfg.value.pxPerDay)
+
+// Effective zoom for DISPLAY purposes (ticks, labels, weekends). In Fit mode we
+// coarsen everything to 'month' density regardless of which zoom button is active,
+// so we never blow up with hundreds of tick/weekend nodes when px/day is tiny.
+const effZoom = computed(() => fitAll.value ? 'month' : zoom.value)
+const effZoomCfg = computed(() => ZOOMS.find((z) => z.key === effZoom.value) ?? ZOOMS[2])
 
 const LEFT_PAD = 8
 // Below this bar width the in-bar title clips to nothing, so it renders beside the bar.
 const LABEL_MIN_WIDTH = 60
+
+// Rendered-window bounds (#4129). A single card spanning many years (e.g.
+// 2018→2030) would otherwise blow up totalDays → an enormous trackWidth and huge
+// per-day grid/tick/weekend node counts, janking the whole view. We therefore
+// RENDER only a fixed window around today (a few months back, a year forward)
+// while still anchoring bar positions to the real data extent — outlier bars land
+// off-track and are clipped by the scroll container's overflow, and a small
+// edge marker signals that cards extend beyond the visible window. This is a
+// display limit, not a data cut: no card is dropped, and normal boards whose
+// data already fits inside the window render byte-identical (the fallback below).
+//
+// In Fit mode (fitAll=true) the window expands to the full data extent, letting
+// the user see all bars at once. pxPerDay is auto-scaled so the whole span fits
+// the viewport — keeping node counts bounded even for multi-year spans.
+const WINDOW_BACK_MONTHS = 6
+const WINDOW_FORWARD_MONTHS = 12
 
 /** Midnight (local) of a date value, in ms, or null. */
 function dayFloor(value) {
@@ -444,29 +521,72 @@ const dataEnd = computed(() => {
 	return items.reduce((max, r) => Math.max(max, r.endMs), -Infinity)
 })
 
-// Rendered axis origin. When today falls before the earliest scheduled card we
-// extend the origin backwards (leading pad) so the today marker stays on-screen;
-// otherwise the axis starts at the real earliest date. Bars are always positioned
-// via xForMs() off this origin, so real positions are never distorted.
-const axisStart = computed(() => {
+// Day-floored ms of `today` shifted by a whole number of calendar months. Used
+// to derive the rendered window edges from today.
+function monthShiftedDay(months) {
+	const d = new Date(now.value)
+	d.setMonth(d.getMonth() + months)
+	d.setHours(0, 0, 0, 0)
+	return d.getTime()
+}
+
+// Rendered window (#4129): the slice of time actually painted (axis, grid, ticks,
+// weekends, track width). Defaults to today − BACK … today + FORWARD months, but
+// CLAMPS to the real data extent so we never render empty track beyond where any
+// card reaches. Crucially, when the whole data extent already fits inside the
+// default window we fall through to the raw bounds unchanged — so small/normal
+// boards render exactly as before (no behaviour change for the common case).
+//
+// In Fit mode: window == full data extent so all bars are always on-screen.
+const windowStart = computed(() => {
 	if (dataStart.value === null) return null
+	if (fitAll.value) return dataStart.value
+	const back = monthShiftedDay(-WINDOW_BACK_MONTHS)
+	// Don't extend earlier than the data actually starts (unless today itself is
+	// earlier — then keep today visible), and don't start later than that clamp.
 	const today = dayFloor(now.value)
-	return Math.min(dataStart.value, today)
+	const earliest = Math.min(dataStart.value, today)
+	return Math.max(earliest, back)
+})
+const windowEnd = computed(() => {
+	if (dataEnd.value === null) return null
+	if (fitAll.value) return dataEnd.value
+	const forward = monthShiftedDay(WINDOW_FORWARD_MONTHS)
+	const today = dayFloor(now.value)
+	const latest = Math.max(dataEnd.value, today)
+	return Math.min(latest, forward)
 })
 
-// The date range must cover the viewport even when the data is short: we pad
-// trailing empty days (and include today) so the track never looks truncated.
+// Rendered axis origin. Anchored to the window start (bars are positioned via
+// xForMs() off this origin); outlier cards that start before the window get a
+// negative x and are clipped by the scroll container's overflow, rather than
+// stretching the track across their full raw span.
+const axisStart = computed(() => windowStart.value)
+
+// In Fit mode, pxPerDay is auto-calculated so the whole span fits within the
+// viewport (bounded to be non-trivially small but never exceeds the active zoom's
+// natural pxPerDay). In normal mode, uses the active zoom's pxPerDay unchanged.
+const pxPerDay = computed(() => {
+	if (fitAll.value && windowStart.value !== null && windowEnd.value !== null && viewportWidth.value > 0) {
+		const days = Math.round((windowEnd.value - windowStart.value) / DAY) + 1
+		const fit = (viewportWidth.value - LEFT_PAD * 2) / days
+		return Math.min(Math.max(fit, 0.25), zoomCfg.value.pxPerDay)
+	}
+	return zoomCfg.value.pxPerDay
+})
+
+// The date range must cover the viewport even when the window is short: we pad
+// trailing empty days so the track never looks truncated. Bounded by the rendered
+// window, NOT the raw data domain, so an outlier date can't inflate the node count.
 const totalDays = computed(() => {
 	if (axisStart.value === null) return 0
-	const today = dayFloor(now.value)
-	// Extend the real end to at least today, so a short board near today still
-	// paints a continuous track up to the marker.
-	const dataDays = Math.round((Math.max(dataEnd.value, today) - axisStart.value) / DAY) + 1
+	// Span of the rendered window (already clamped to today on both edges above).
+	const windowDays = Math.round((windowEnd.value - axisStart.value) / DAY) + 1
 	// Days that fit in the current viewport, minus the two side pads.
 	const fitDays = viewportWidth.value > 0
 		? Math.ceil((viewportWidth.value - LEFT_PAD * 2) / pxPerDay.value)
 		: 0
-	return Math.max(dataDays, fitDays)
+	return Math.max(windowDays, fitDays)
 })
 
 const trackWidth = computed(() => {
@@ -501,26 +621,61 @@ function msForTrackX(xInTrack) {
 // A collapsed group keeps its header (with the true card count) but drops its card
 // rows entirely — the SAME reduced `rows` array feeds both the frozen pane and the
 // track, so their row sequences stay identical and pane↔track alignment is exact.
+//
+// In non-Fit mode: rows entirely outside the visible window get offBefore/offAfter
+// flags instead of bar geometry, so they render as edge markers (not misleading
+// slivers). In Fit mode window==full extent so offBefore/offAfter are always false.
 const groups = computed(() => {
 	if (axisStart.value === null) return []
 	return grouped.value.groups.map((g) => {
 		const isColl = isCollapsed(g.stack.id)
+		const winStart = axisStart.value
+		const winEnd = axisEnd.value
 		const rows = isColl ? [] : g.rows.map((r) => {
-			const left = xForMs(r.startMs)
 			const isMilestone = r.startMs === r.endMs
-			const width = isMilestone ? 0 : Math.max((Math.round((r.endMs - r.startMs) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
 			const overdue = !r.done && r.endMs < now.value
+
+			// Detect rows fully outside the rendered window (#4129 fix): these must
+			// not render a clipped bar (which would look like a 1-day sliver at the
+			// edge), but instead show a small clickable arrow marker.
+			const offBefore = r.endMs < winStart
+			const offAfter = r.startMs > winEnd
+			if (offBefore || offAfter) {
+				return { ...r, offBefore, offAfter, isMilestone, overdue, left: 0, width: 0, labelInside: false }
+			}
+
+			// Clip the rendered bar geometry to the visible window (#4129). A card
+			// whose real range reaches outside the window would otherwise produce a
+			// giant absolutely-positioned node that re-inflates the scroll width —
+			// so we render only the on-window slice. done/overdue/milestone are still
+			// derived from the RAW range, so the bar's meaning is unchanged; only its
+			// painted extent is capped, and the edge markers signal the overflow.
+			const visStart = Math.max(r.startMs, winStart)
+			const visEnd = Math.min(r.endMs, winEnd)
+			const left = xForMs(visStart)
+			const width = isMilestone ? 0 : Math.max((Math.round((visEnd - visStart) / DAY) + 1) * pxPerDay.value, pxPerDay.value)
 			const labelInside = !isMilestone && width >= LABEL_MIN_WIDTH
-			return { ...r, left, width, isMilestone, overdue, labelInside }
+			return { ...r, offBefore: false, offAfter: false, left, width, isMilestone, overdue, labelInside }
 		})
 		return { stack: g.stack, rows, count: g.rows.length }
 	})
 })
 
+// Dynamic tick step in Fit mode: ensure labels stay readable when px/day is tiny.
+// At very small px/day values a step of 1 or 7 would produce hundreds of ticks;
+// we coarsen to at least ~80px apart. Outside Fit, use the zoom's natural stepDays.
+const tickStepDays = computed(() => {
+	const base = effZoomCfg.value.stepDays
+	if (fitAll.value && pxPerDay.value > 0) {
+		return Math.max(base, Math.ceil(80 / pxPerDay.value))
+	}
+	return base
+})
+
 const ticks = computed(() => {
 	if (axisStart.value === null) return []
 	const out = []
-	const step = zoomCfg.value.stepDays
+	const step = tickStepDays.value
 	for (let day = 0; day < totalDays.value; day += step) {
 		const ms = axisStart.value + day * DAY
 		out.push({ ms, x: LEFT_PAD + day * pxPerDay.value, label: labelForMs(ms) })
@@ -558,9 +713,11 @@ const monthTicks = computed(() => {
 })
 
 // Weekend day columns (Sat/Sun) shaded in the track background. Day zoom paints
-// each weekend day; coarser zooms would produce hairlines, so it's day-zoom only.
+// each weekend day; coarser zooms (or Fit mode) would produce hairlines, so it's
+// day-zoom only when NOT in Fit mode. effZoom coarsens to 'month' in Fit so
+// weekends are automatically disabled there.
 const weekendBands = computed(() => {
-	if (axisStart.value === null || zoom.value !== 'day') return []
+	if (axisStart.value === null || effZoom.value !== 'day') return []
 	const out = []
 	for (let day = 0; day < totalDays.value; day++) {
 		const d = new Date(axisStart.value + day * DAY)
@@ -579,9 +736,20 @@ const todayX = computed(() => {
 	return xForMs(t0)
 })
 
+// Clipped-edge affordances (#4129): true when a card's real extent reaches beyond
+// the rendered window, so we can flag "cards extend earlier/later" at the track
+// edge instead of silently hiding those outliers. Always false in Fit mode (the
+// window is the full extent so nothing is ever outside).
+const extendsEarlier = computed(() =>
+	!fitAll.value && dataStart.value !== null && windowStart.value !== null && dataStart.value < windowStart.value,
+)
+const extendsLater = computed(() =>
+	!fitAll.value && dataEnd.value !== null && windowEnd.value !== null && dataEnd.value > windowEnd.value,
+)
+
 function labelForMs(ms) {
 	const d = new Date(ms)
-	if (zoom.value === 'month') return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+	if (effZoom.value === 'month') return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
 	return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
@@ -780,6 +948,10 @@ onBeforeUnmount(() => {
 	padding: 4px 12px;
 	cursor: pointer;
 	color: var(--color-main-text);
+}
+
+.timeline__zoom-btn--fit {
+	border-left: 1px solid var(--color-border);
 }
 
 .timeline__zoom-btn--active {
@@ -1026,6 +1198,7 @@ onBeforeUnmount(() => {
 
 /* ── Scrollable track ── */
 .timeline__scroll {
+	position: relative;
 	flex: 1;
 	min-width: 0;
 	overflow-x: auto;
@@ -1035,6 +1208,42 @@ onBeforeUnmount(() => {
 .timeline__inner {
 	position: relative;
 	min-height: 100%;
+}
+
+/* Clipped-edge affordance (#4129): a small chevron pinned to the viewport edge of
+ * the scroll container, shown when cards extend beyond the rendered window. Sticky
+ * keeps it fixed at the edge as the track scrolls sideways; margin-bottom: -28px
+ * collapses its vertical footprint so it overlays the track rather than pushing
+ * the (full-width) .timeline__inner sibling down. Clickable to activate Fit mode. */
+.timeline__edge {
+	position: sticky;
+	top: 60px;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 28px;
+	margin-bottom: -28px;
+	border-radius: var(--border-radius);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	opacity: 0.9;
+	cursor: pointer;
+}
+
+.timeline__edge:hover {
+	opacity: 1;
+}
+
+.timeline__edge--start {
+	left: 4px;
+	float: left;
+}
+
+.timeline__edge--end {
+	right: 4px;
+	float: right;
 }
 
 .timeline__weekend {
@@ -1226,6 +1435,37 @@ onBeforeUnmount(() => {
 	transform: translateY(-50%) rotate(-45deg);
 	transform-origin: left center;
 	color: var(--color-main-text);
+}
+
+/* Off-window row marker: shown instead of a clipped bar when a card falls
+ * entirely before (start edge) or after (end edge) the rendered window.
+ * Clickable to turn on Fit mode and reveal the full date range. */
+.timeline__bar-offwindow {
+	position: absolute;
+	top: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: var(--border-radius);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	opacity: 0.7;
+	cursor: pointer;
+	z-index: 2;
+}
+
+.timeline__bar-offwindow:hover {
+	opacity: 1;
+}
+
+.timeline__bar-offwindow--start {
+	left: 2px;
+}
+
+.timeline__bar-offwindow--end {
+	right: 2px;
 }
 
 .timeline__unscheduled {

@@ -218,6 +218,118 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		).first()).toBeVisible({ timeout: 8_000 })
 	})
 
+	// #4129: a single card with a huge date range (e.g. 2018→2030) must NOT blow up
+	// the rendered track. The timeline renders only a fixed window around today and
+	// clips outliers, flagging them with an edge affordance — so the scroll width
+	// stays bounded instead of scaling with the raw (multi-year) date domain.
+	// Fit button: clicking it (or the edge chevrons) reveals the full date range
+	// within a bounded viewport-sized track.
+	test('a huge date range renders a bounded track with clipped-edge affordances, Fit reveals full range (#4129)', async ({ page }) => {
+		// A dedicated board so the multi-year outlier can't distort the shared-board
+		// specs' geometry assertions.
+		const board = await api.post('/boards', { title: 'Timeline wide ' + Math.floor(Date.now() / 1000) })
+		try {
+			const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+			// One card spanning ~12 years — the pathological case from the bug report.
+			const wide = await api.post('/cards', { stackId: stack.id, title: 'Epic across years' })
+			await api.patch(`/cards/${wide.id}`, {
+				startDate: '2018-01-01T00:00:00+00:00',
+				duedate: '2030-12-31T00:00:00+00:00',
+			})
+			// A second card lying ENTIRELY before the default window (all of 2019, far
+			// earlier than today−6mo). Unlike the spanning card, it has nothing inside
+			// the window, so it must render as an off-window edge marker — never a
+			// misleading 1-day sliver pinned at the window start.
+			const past = await api.post('/cards', { stackId: stack.id, title: 'Ancient history' })
+			await api.patch(`/cards/${past.id}`, {
+				startDate: '2019-01-01T00:00:00+00:00',
+				duedate: '2019-03-01T00:00:00+00:00',
+			})
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}`)
+			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByText('Timeline', { exact: true }).click()
+
+			// The track mounts (there's a scheduled card).
+			await expect(page.locator('.timeline__inner')).toBeVisible({ timeout: 8_000 })
+
+			// Bounded width: with a ~12-year raw domain the OLD code produced a track
+			// of ~52000px+ (4380 days × 12px/day at week zoom). The windowed render
+			// keeps it well under 30000px regardless of the outlier span.
+			const scrollWidthDefault = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
+			expect(scrollWidthDefault).toBeLessThan(30_000)
+
+			// The card reaches before the window start (2018 ≪ today−6mo) and after the
+			// window end (2030 ≫ today+12mo), so BOTH clipped-edge markers are shown.
+			await expect(page.locator('.timeline__edge--start')).toBeVisible()
+			await expect(page.locator('.timeline__edge--end')).toBeVisible()
+
+			// The SPANNING card straddles the window (starts before, ends after), so it
+			// renders as a normal bar CLIPPED to the window — reachable, not dropped.
+			await expect(page.locator('.timeline__bar', { hasText: 'Epic across years' }).first()).toBeVisible()
+
+			// The ENTIRELY-off-window card (all of 2019) instead renders as an off-window
+			// edge marker, NOT a normal bar (which would be a misleading 1-day sliver).
+			await expect(page.locator('.timeline__bar-offwindow').first()).toBeVisible()
+			await expect(page.locator('.timeline__bar', { hasText: 'Ancient history' })).toHaveCount(0)
+
+			// ── Fit mode ─────────────────────────────────────────────────────────────
+			// Click the Fit button: the full date range (2018→2030) becomes visible.
+			const fitBtn = page.getByRole('button', { name: 'Fit' })
+			await expect(fitBtn).toBeVisible()
+			await fitBtn.click()
+
+			// Edge chevrons disappear in Fit mode (the window IS the full extent).
+			await expect(page.locator('.timeline__edge--start')).toHaveCount(0)
+			await expect(page.locator('.timeline__edge--end')).toHaveCount(0)
+
+			// The off-window markers are also gone; the card now renders as a normal bar.
+			await expect(page.locator('.timeline__bar-offwindow')).toHaveCount(0)
+
+			// The axis now spans the outlier years: a month label containing "2018" and
+			// one containing "2030" should be visible in the axis.
+			const monthLabels = page.locator('.timeline__axis-month')
+			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible({ timeout: 5_000 })
+			await expect(monthLabels.filter({ hasText: '2030' }).first()).toBeVisible({ timeout: 5_000 })
+
+			// Fit mode keeps the track width bounded — no multi-thousand-px blowup. It
+			// auto-fits px/day toward the viewport but floors at a minimum so bars never
+			// become invisibly thin, so on a very wide span in a narrow viewport the
+			// track can be modestly wider than the viewport; the guarantee under test is
+			// that it stays bounded (vs the old ~52000px), not that it exactly fits.
+			const scrollWidthFit = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
+			expect(scrollWidthFit).toBeLessThan(30_000)
+
+			// ── Clicking an edge chevron also triggers Fit ────────────────────────────
+			// Reset to default window by clicking Day zoom (which turns off Fit).
+			await page.getByRole('button', { name: 'Day', exact: true }).click()
+			await expect(page.locator('.timeline__edge--start')).toBeVisible({ timeout: 5_000 })
+			// Click the earlier-chevron edge affordance — it should activate Fit.
+			await page.locator('.timeline__edge--start').click()
+			await expect(page.locator('.timeline__edge--start')).toHaveCount(0, { timeout: 5_000 })
+			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible({ timeout: 5_000 })
+		} finally {
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+
+	// A normal (short-range) board must NOT show the clipped-edge affordances — its
+	// data fits inside the rendered window, so nothing extends beyond it (#4129).
+	test('a normal board shows no clipped-edge affordances (#4129)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+
+		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
+		// The shared board's dates are all near today, well inside the window.
+		await expect(page.locator('.timeline__edge--start')).toHaveCount(0)
+		await expect(page.locator('.timeline__edge--end')).toHaveCount(0)
+	})
+
 	test('a lane is keyboard-openable: focus + Enter opens the card (#3512)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)

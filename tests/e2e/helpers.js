@@ -105,17 +105,37 @@ export const TESTER = { user: 'tester', pass: 'kanso-dev-tester!1' }
  * of the shared admin storageState via `test.use({ storageState: … })`.
  */
 export async function ncLogin(page, { user = ADMIN.user, pass = ADMIN.pass } = {}) {
-	await page.goto(BASE + '/index.php/login')
-	await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
+	// Retry the whole flow: under parallel load a single php-fpm/postgres backend
+	// can be slow to process the login POST, so one attempt isn't reliable. The
+	// dominant CI flake was `page.click` eating its full 30s "waiting for
+	// scheduled navigations to finish" on that slow POST and wedging the worker
+	// (every test on it then failing at helpers.js login).
+	const attempts = 3
+	for (let attempt = 1; attempt <= attempts; attempt++) {
+		await page.goto(BASE + '/index.php/login').catch(() => {})
+		await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {})
 
-	const isLoginPage = await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false)
-	if (!isLoginPage) return // already logged in
+		const isLoginPage = await page.locator('#user').isVisible({ timeout: 3000 }).catch(() => false)
+		if (!isLoginPage) return // already logged in
 
-	await page.fill('#user', user)
-	await page.fill('#password', pass)
-	await page.click('button[type=submit]')
-	await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
-	await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.fill('#user', user)
+		await page.fill('#password', pass)
+		// noWaitAfter: submit WITHOUT auto-waiting on the (possibly slow) post-login
+		// navigation — the redirect is driven explicitly below, so a slow backend
+		// can't burn the click's timeout budget and abort the whole worker.
+		await page.click('button[type=submit]', { noWaitAfter: true }).catch(() => {})
+
+		try {
+			await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
+			await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+			return
+		} catch (e) {
+			if (attempt === attempts) {
+				throw new Error(`ncLogin: still on the login page after ${attempts} attempts (${e.message})`)
+			}
+			await page.waitForTimeout(1500) // brief backoff, then retry the whole flow
+		}
+	}
 }
 
 /** Navigate to a board via the SPA hash route. */

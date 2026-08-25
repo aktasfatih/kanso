@@ -150,7 +150,12 @@ class DeckReader {
 	}
 
 	/**
-	 * label-id lists keyed by card id, for the given cards.
+	 * label-id lists keyed by card id, for the given cards. Deduped per card:
+	 * Deck's `deck_assigned_labels` has no unique constraint on
+	 * (card_id, label_id), so the same label can be stored against a card twice.
+	 * Kanso's `kanso_card_labels_uniq` does NOT allow that, so a duplicate row
+	 * would abort the whole (single-transaction) import - dedupe it here at the
+	 * source, order-preserving.
 	 *
 	 * @param int[] $cardIds
 	 * @return array<int, int[]>
@@ -166,11 +171,15 @@ class DeckReader {
 		foreach ($this->fetchAll($qb) as $r) {
 			$out[(int)$r['card_id']][] = (int)$r['label_id'];
 		}
-		return $out;
+		return $this->dedupePerCard($out);
 	}
 
 	/**
 	 * assigned user uids keyed by card id (type 0 = user assignments only).
+	 * Deduped per card for the same reason as {@see self::readAssignedLabels()}:
+	 * Deck permits a duplicate (card_id, participant) row, but Kanso's
+	 * `kanso_card_assign_uniq` (card_id, participant, type) does not, so an
+	 * un-deduped duplicate would abort the whole import.
 	 *
 	 * @param int[] $cardIds
 	 * @return array<int, string[]>
@@ -186,6 +195,26 @@ class DeckReader {
 		$out = [];
 		foreach ($this->fetchAll($qb) as $r) {
 			$out[(int)$r['card_id']][] = (string)$r['participant'];
+		}
+		return $this->dedupePerCard($out);
+	}
+
+	/**
+	 * Drops duplicate values within each card's list, order-preserving. Deck's
+	 * `deck_assigned_labels` / `deck_assigned_users` tables carry no unique
+	 * constraint on (card_id, value), so a board can store the same label or
+	 * assignee against a card more than once - but Kanso's `kanso_card_labels`
+	 * and `kanso_card_assignees` DO enforce uniqueness, so an un-deduped
+	 * duplicate would throw a constraint violation that rolls back the whole
+	 * single-transaction import and fails it entirely.
+	 *
+	 * @template T
+	 * @param array<int, list<T>> $out values keyed by card id
+	 * @return array<int, list<T>>
+	 */
+	private function dedupePerCard(array $out): array {
+		foreach ($out as $cardId => $values) {
+			$out[$cardId] = array_values(array_unique($values));
 		}
 		return $out;
 	}
