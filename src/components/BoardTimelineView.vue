@@ -31,6 +31,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<CalendarTodayIcon :size="16" />
 				{{ t('kanso', 'Jump to today') }}
 			</button>
+			<!-- Dependency arrows toggle (#5896): only offered when the board
+			     actually has blocks relations, so a board without dependencies
+			     keeps the toolbar unchanged. -->
+			<button
+				v-if="dependencies.length > 0 && scheduledRows.length > 0"
+				class="timeline__today-btn timeline__deps-btn"
+				:class="{ 'timeline__deps-btn--active': showDeps }"
+				:aria-pressed="showDeps"
+				@click="showDeps = !showDeps">
+				<ArrowRightBottomIcon :size="16" />
+				{{ t('kanso', 'Dependencies') }}
+			</button>
 
 			<div v-if="scheduledRows.length > 0" class="timeline__legend">
 				<span class="timeline__legend-item">
@@ -199,6 +211,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<div
 							v-for="row in grp.rows"
 							:key="`t${row.card.id}`"
+							:ref="(el) => registerLaneRef(row.card.id, el)"
 							class="timeline__lane"
 							role="button"
 							tabindex="0"
@@ -206,7 +219,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:aria-label="row.card.title"
 							@click="openCard(row.card.id)"
 							@keydown.enter.prevent="openCard(row.card.id)"
-							@keydown.space.prevent="openCard(row.card.id)">
+							@keydown.space.prevent="openCard(row.card.id)"
+							@mouseenter="hoverLane(row.card.id)"
+							@mouseleave="hoverLane(null)">
 							<!-- Off-window rows: render an edge marker instead of a (misleading) clipped bar -->
 							<template v-if="row.offBefore || row.offAfter">
 								<div
@@ -241,6 +256,35 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 						</div>
 					</template>
+
+					<!-- Dependency arrows (#5896). An SVG overlay that lives INSIDE the
+					     inner track, so it shares the track's coordinate space: it pans
+					     with horizontal scroll and scrolls with the body for free.
+					     Accessibility: aria-hidden and nothing here is focusable — the
+					     authoritative dependency list lives in the card's relations
+					     section, and the click below is a mouse-only shortcut for what
+					     the blocked card's own lane (a focusable button) already does
+					     with Enter, so no affordance is keyboard-only reachable here. -->
+					<svg
+						v-if="dependencyArrows.length > 0"
+						class="timeline__deps"
+						aria-hidden="true"
+						focusable="false">
+						<g
+							v-for="arrow in dependencyArrows"
+							:key="arrow.key"
+							class="timeline__dep"
+							:class="{
+								'timeline__dep--violated': arrow.violated,
+								'timeline__dep--active': hoveredCardId === arrow.from || hoveredCardId === arrow.to,
+							}"
+							@click.stop="openCard(arrow.to)">
+							<title>{{ arrow.title }}</title>
+							<path class="timeline__dep-hit" :d="arrow.hit" />
+							<path class="timeline__dep-line" :d="arrow.d" />
+							<path class="timeline__dep-head" :d="arrow.head" />
+						</g>
+					</svg>
 				</div>
 			</div>
 		</div>
@@ -275,6 +319,7 @@ import CalendarTodayIcon from 'vue-material-design-icons/CalendarToday.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import ArrowRightBottomIcon from 'vue-material-design-icons/ArrowRightBottom.vue'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { updateCard as apiUpdateCard } from '../services/api.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
@@ -307,6 +352,18 @@ const props = defineProps({
 	 * is disabled (canEdit=false), so no board-scoped mutation ever runs.
 	 */
 	boardId: { type: [String, Number], default: null },
+	/**
+	 * Board-scoped `blocks` dependency edges (#5896): `[{from, to}]` where card
+	 * `from` blocks card `to`. Rides the board payload (`blocksEdges`), already
+	 * visibility-masked server-side — an edge touching a card the viewer cannot
+	 * see never arrives here at all.
+	 *
+	 * Board-scoped ONLY, deliberately: a cross-board View (#3815) never passes
+	 * this. Relations are same-board, and that mode can surface ONE card in
+	 * several groups (group-by-assignee), which the by-card-id lane bookkeeping
+	 * below would collapse. Leave it empty there rather than draw a wrong arrow.
+	 */
+	dependencies: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['open'])
@@ -391,10 +448,17 @@ onMounted(() => {
 		if (typeof ResizeObserver !== 'undefined') {
 			resizeObserver = new ResizeObserver((entries) => {
 				for (const entry of entries) viewportWidth.value = entry.contentRect.width
+				// Row heights are fixed, but a resize can still reflow the track
+				// (and is the cheapest hook for a font/zoom change) - re-measure so
+				// the dependency arrows stay glued to their bars (#5896). Coalesced
+				// into one rAF so a resize DRAG doesn't read layout every frame, and
+				// a no-op measurement publishes nothing (see measureLanes).
+				scheduleMeasure()
 			})
 			resizeObserver.observe(scrollRef.value)
 		}
 	}
+	measureLanes()
 })
 onBeforeUnmount(() => {
 	if (clockTimer !== null) {
@@ -407,6 +471,11 @@ onBeforeUnmount(() => {
 		resizeObserver.disconnect()
 		resizeObserver = null
 	}
+	if (measureFrame !== 0) {
+		cancelAnimationFrame(measureFrame)
+		measureFrame = 0
+	}
+	laneEls.clear()
 })
 const zoomCfg = computed(() => ZOOMS.find((z) => z.key === zoom.value) ?? ZOOMS[1])
 
@@ -659,6 +728,217 @@ const groups = computed(() => {
 		})
 		return { stack: g.stack, rows, count: g.rows.length }
 	})
+})
+
+// ── Dependency arrows (#5896) ───────────────────────────────────────────────
+// A `blocks` relation is only a red chip on the card tile today; on the
+// timeline — where sequencing is the whole point — it was invisible. We draw
+// each edge as an orthogonal (elbow) connector leaving the RIGHT edge of the
+// blocker and entering the LEFT edge of the blocked card, arrowhead on the
+// blocked end.
+//
+// Coordinates are track-local: x comes straight from the same `left`/`width`
+// the bars are painted with (so horizontal scroll and Fit need no extra work —
+// the SVG lives inside .timeline__inner and moves with it), y is MEASURED off
+// each lane's offsetTop rather than derived from CSS constants, so the lines
+// stay glued to their bars even if row metrics change. The x side therefore
+// recomputes with `groups` (zoom, resize, collapse, and the minute clock tick
+// that refreshes `overdue`); the y side re-measures only when the ROW SET moves.
+
+/** Whether arrows are drawn at all (toolbar toggle; on by default). */
+const showDeps = ref(true)
+/** Card id of the lane under the pointer - highlights the arrows touching it. */
+const hoveredCardId = ref(null)
+
+// True only when arrows can actually be on screen. Every hook below short-circuits
+// on it, so a board with no `blocks` relations (the common case) pays NOTHING for
+// this feature: no layout reads, and - via hoverLane() - no hover-driven re-render
+// of the whole track either.
+const depsLive = computed(() => showDeps.value && props.dependencies.length > 0)
+
+// Lane hover feeds the arrow highlight only, so it must not touch reactive state
+// when there are no arrows - otherwise every row hover on every board would
+// re-render the entire (absolutely-positioned, node-heavy) track.
+function hoverLane(cardId) {
+	if (!depsLive.value) {
+		if (hoveredCardId.value !== null) hoveredCardId.value = null
+		return
+	}
+	hoveredCardId.value = cardId
+}
+
+// Horizontal stub off each bar before the connector turns - keeps the line from
+// growing straight out of the bar's edge pixel.
+const ARROW_STUB = 10
+// Horizontal reach of an arrow's hit region, measured LEFT from the arrowhead.
+const ARROW_HIT_REACH = 18
+// Half-width of a milestone diamond: a 16px square rotated 45deg spans
+// 16 * sqrt(2) / 2 across, and translateX(-8px) centres it on `left` - so its
+// visual tips sit at left ± 11.3, not left ± 8.
+const MILESTONE_HALF = 11.3
+// Density guard: a pathological board can't be allowed to paint unbounded SVG
+// nodes. Edges beyond this simply aren't drawn (the card chips still carry the
+// information, and the relations panel is authoritative).
+const MAX_ARROWS = 400
+
+// Live lane elements, keyed by card id, plus their measured box. Measuring is
+// cheap (one offsetTop read per rendered row) and only re-runs when the row SET
+// changes - not on scroll, and not on the every-minute clock tick.
+const laneEls = new Map()
+const laneBoxes = ref(new Map())
+
+function registerLaneRef(cardId, el) {
+	if (el) laneEls.set(cardId, el)
+	else laneEls.delete(cardId)
+}
+
+function measureLanes() {
+	// Layout reads are only worth taking when something will be drawn with them.
+	if (!depsLive.value) return
+	const next = new Map()
+	for (const [cardId, el] of [...laneEls]) {
+		if (!el || !el.isConnected) {
+			laneEls.delete(cardId)
+			continue
+		}
+		next.set(cardId, { top: el.offsetTop, height: el.offsetHeight })
+	}
+	// Only publish a NEW map when the geometry actually moved: assigning an
+	// identical map would invalidate dependencyArrows on every resize frame.
+	const current = laneBoxes.value
+	if (current.size === next.size) {
+		let same = true
+		for (const [cardId, box] of next) {
+			const was = current.get(cardId)
+			if (!was || was.top !== box.top || was.height !== box.height) { same = false; break }
+		}
+		if (same) return
+	}
+	laneBoxes.value = next
+}
+
+// rAF-coalesced measurement for the high-frequency hook (ResizeObserver), so a
+// resize drag reads layout once per frame at most.
+let measureFrame = 0
+function scheduleMeasure() {
+	if (!depsLive.value || measureFrame !== 0) return
+	measureFrame = requestAnimationFrame(() => {
+		measureFrame = 0
+		measureLanes()
+	})
+}
+
+// The rendered row set (collapsed groups contribute nothing), as a signature -
+// a change here is exactly when the y-geometry can have moved.
+const laneSignature = computed(() =>
+	groups.value.map((g) => `${g.stack.id}:${g.rows.map((r) => r.card.id).join(',')}`).join('|'),
+)
+// flush: 'post' measures INSIDE the same flush that re-rendered the rows, so the
+// arrows never paint one frame against the pre-collapse geometry. `depsLive` is
+// watched too: flipping the toggle on must (re)measure before anything is drawn.
+watch([laneSignature, depsLive], measureLanes, { flush: 'post' })
+
+// Rendered rows by card id - the lookup both arrow endpoints must resolve
+// through. A card that is unscheduled, filtered out, or inside a collapsed
+// group is simply absent, which is how those cases drop out below.
+const rowByCardId = computed(() => {
+	const map = new Map()
+	for (const g of groups.value) {
+		for (const row of g.rows) map.set(row.card.id, row)
+	}
+	return map
+})
+
+/**
+ * Elbow path from the blocker's right edge to the blocked card's left edge.
+ * With room between them it's the classic 3-segment stub → vertical → entry.
+ * When the target starts left of the source's end (the overlapping / violated
+ * case) there is no room, so it routes around through the row boundary between
+ * the two lanes instead of doubling back over the bars.
+ */
+function elbowPath(x1, y1, x2, y2, sourceHeight) {
+	if (x2 - ARROW_STUB >= x1 + ARROW_STUB) {
+		return `M${x1},${y1} L${x1 + ARROW_STUB},${y1} L${x1 + ARROW_STUB},${y2} L${x2},${y2}`
+	}
+	// Turn at the boundary between the two rows (half a row past the source,
+	// off the MEASURED row height), so the detour never crosses either bar.
+	const midY = y1 + (y2 >= y1 ? 1 : -1) * (sourceHeight / 2)
+	return `M${x1},${y1} L${x1 + ARROW_STUB},${y1} L${x1 + ARROW_STUB},${midY}`
+		+ ` L${x2 - ARROW_STUB},${midY} L${x2 - ARROW_STUB},${y2} L${x2},${y2}`
+}
+
+/** Solid arrowhead at the blocked end, always pointing right (into the bar). */
+function headPath(x, y) {
+	return `M${x},${y} L${x - 7},${y - 4.5} L${x - 7},${y + 4.5} Z`
+}
+
+/**
+ * The connector's pointer target: deliberately JUST the final entry segment, not
+ * the whole path. A fat hit-stroke along the full elbow would sit above every
+ * lane the vertical run crosses and steal those bars' clicks. This short stub
+ * lives inside the BLOCKED card's own lane, immediately left of its bar - a lane
+ * holds exactly one bar, so nothing clickable can hide under it, and the lane's
+ * own click resolves to the same card anyway.
+ */
+function hitPath(x, y) {
+	return `M${x - ARROW_HIT_REACH},${y} L${x},${y}`
+}
+
+const dependencyArrows = computed(() => {
+	if (!depsLive.value || axisStart.value === null) return []
+	const rows = rowByCardId.value
+	const boxes = laneBoxes.value
+	const out = []
+	for (const edge of props.dependencies) {
+		if (out.length >= MAX_ARROWS) break
+		const fromId = Number(edge?.from)
+		const toId = Number(edge?.to)
+		const from = rows.get(fromId)
+		const to = rows.get(toId)
+		// Either endpoint undated / filtered / in a collapsed group → no arrow.
+		// The blocked chip on the card tile remains the fallback signal.
+		if (!from || !to) continue
+		// Off-window endpoints render as a track-edge marker rather than a bar
+		// (#4129). We deliberately SUPPRESS the arrow instead of anchoring it to
+		// that marker: a line to a chevron pinned at the viewport edge points at
+		// a position that carries no date meaning. Fit mode brings both bars back
+		// on-window and the arrow returns.
+		if (from.offBefore || from.offAfter || to.offBefore || to.offAfter) continue
+		const fromBox = boxes.get(fromId)
+		const toBox = boxes.get(toId)
+		if (!fromBox || !toBox) continue
+
+		// Anchor to the RENDERED geometry (bars are clipped to the window), so a
+		// line never points into empty track.
+		const x1 = from.isMilestone ? from.left + MILESTONE_HALF : from.left + from.width
+		const x2 = to.isMilestone ? to.left - MILESTONE_HALF : to.left
+		const y1 = fromBox.top + fromBox.height / 2
+		const y2 = toBox.top + toBox.height / 2
+
+		// The payoff: the blocked card starts before its blocker finishes, so the
+		// plan contradicts the dependency. Judged on the RAW dates, never the
+		// clipped drawing.
+		const violated = to.startMs < from.endMs
+		out.push({
+			key: `${fromId}-${toId}`,
+			from: fromId,
+			to: toId,
+			d: elbowPath(x1, y1, x2, y2, fromBox.height),
+			head: headPath(x2, y2),
+			hit: hitPath(x2, y2),
+			violated,
+			title: violated
+				? t('kanso', '{blocker} blocks {blocked} — {blocked} starts before {blocker} finishes', {
+					blocker: from.card.title,
+					blocked: to.card.title,
+				})
+				: t('kanso', '{blocker} blocks {blocked}', {
+					blocker: from.card.title,
+					blocked: to.card.title,
+				}),
+		})
+	}
+	return out
 })
 
 // Dynamic tick step in Fit mode: ensure labels stay readable when px/day is tiny.
@@ -1271,7 +1551,9 @@ onBeforeUnmount(() => {
 	width: 2px;
 	background: var(--color-error);
 	opacity: 0.7;
-	z-index: 3;
+	/* Above the dependency-arrow overlay (also z-index 3, but later in DOM order,
+	 * so it would otherwise paint over this marker). */
+	z-index: 4;
 }
 
 /* A small cap at the top of the today line makes it read as a clear marker. */
@@ -1466,6 +1748,94 @@ onBeforeUnmount(() => {
 
 .timeline__bar-offwindow--end {
 	right: 2px;
+}
+
+/* ── Dependency arrows (#5896) ──
+ * An overlay spanning the whole inner track. Deliberately lighter in visual
+ * weight than the bars: thin muted strokes that read as annotation, not data.
+ * The overlay itself is click-through; only the connectors take the pointer. */
+.timeline__deps {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	z-index: 3;
+	pointer-events: none;
+}
+
+.timeline__dep {
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+/* Fat invisible stroke so a 1.5px line is still comfortably hoverable/clickable.
+ * Painted only over the short entry stub (see hitPath) — never along the whole
+ * elbow, whose vertical run crosses other lanes and would steal their clicks.
+ * 14px keeps it well inside the 36px lane it belongs to. */
+.timeline__dep-hit {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 14;
+	pointer-events: stroke;
+}
+
+.timeline__dep-line {
+	fill: none;
+	stroke: var(--color-border-dark);
+	stroke-width: 1.5;
+	stroke-linejoin: round;
+	pointer-events: none;
+}
+
+.timeline__dep-head {
+	fill: var(--color-border-dark);
+	pointer-events: none;
+}
+
+/* Violated dependency: the blocked card starts before its blocker finishes. */
+.timeline__dep--violated .timeline__dep-line {
+	stroke: var(--color-error);
+	stroke-width: 2;
+}
+
+.timeline__dep--violated .timeline__dep-head {
+	fill: var(--color-error);
+}
+
+/* Hovering either bar (or the connector itself) brings its arrows forward. */
+.timeline__dep--active .timeline__dep-line,
+.timeline__dep:hover .timeline__dep-line {
+	stroke: var(--color-primary-element);
+	stroke-width: 2.5;
+}
+
+.timeline__dep--active .timeline__dep-head,
+.timeline__dep:hover .timeline__dep-head {
+	fill: var(--color-primary-element);
+}
+
+.timeline__dep--violated.timeline__dep--active .timeline__dep-line,
+.timeline__dep--violated:hover .timeline__dep-line {
+	stroke: var(--color-error);
+	stroke-width: 3;
+}
+
+.timeline__dep--violated.timeline__dep--active .timeline__dep-head,
+.timeline__dep--violated:hover .timeline__dep-head {
+	fill: var(--color-error);
+}
+
+.timeline__deps-btn--active {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	border-color: var(--color-primary-element);
+}
+
+.timeline__deps-btn--active:hover:not(:disabled) {
+	background: var(--color-primary-element-hover, var(--color-primary-element));
+	color: var(--color-primary-element-text);
 }
 
 .timeline__unscheduled {

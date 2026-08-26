@@ -74,6 +74,14 @@ msgstr ""
 msgid "{base} on {days}"
 msgstr ""
 
+#: src/components/BoardTimelineView.vue
+msgid "{blocker} blocks {blocked}"
+msgstr ""
+
+#: src/components/BoardTimelineView.vue
+msgid "{blocker} blocks {blocked} — {blocked} starts before {blocker} finishes"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "{card} is due"
 msgstr ""
@@ -275,7 +283,7 @@ msgid_plural "%n overdue"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardTimelineView.vue:251
+#: src/components/BoardTimelineView.vue:295
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] ""
@@ -1661,6 +1669,10 @@ msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Density"
+msgstr ""
+
+#: src/components/BoardTimelineView.vue
+msgid "Dependencies"
 msgstr ""
 
 #: src/views/BoardView.vue

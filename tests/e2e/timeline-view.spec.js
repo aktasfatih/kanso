@@ -346,3 +346,212 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
 	})
 })
+
+// #5896: a `blocks` relation between two dated cards is drawn on the timeline as
+// an elbow connector from the blocker's right edge into the blocked card's left
+// edge. A violated dependency (the blocked card starts before its blocker
+// finishes) is colour-coded differently — that contradiction is the whole point
+// of putting dependencies on a date axis.
+test.describe('Timeline dependency arrows (#5896)', () => {
+	const state = { boardId: 0, blocker: 0, after: 0, overlapping: 0, dateless: 0 }
+
+	// Relative to today so the fixture always lands inside the rendered window
+	// (today−6mo … today+12mo), whatever date CI runs on.
+	const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString()
+
+	async function openTimeline(page) {
+		await ncLogin(page)
+		await page.addInitScript(() => { try { localStorage.clear() } catch (e) {} })
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByText('Timeline', { exact: true }).click()
+		await expect(page.locator('.timeline__bar', { hasText: 'Blocker task' })).toBeVisible({ timeout: 8_000 })
+	}
+
+	// Track-local geometry of every bar and every connector, read in one pass.
+	// A bar's offsetLeft is relative to its lane, and a lane starts at x=0 of the
+	// inner track — the same coordinate space the SVG paths are drawn in.
+	async function readGeometry(page) {
+		return page.evaluate(() => {
+			const bars = [...document.querySelectorAll('.timeline__bar')].map((b) => ({
+				title: b.textContent.trim(),
+				left: b.offsetLeft,
+				right: b.offsetLeft + b.offsetWidth,
+			}))
+			const arrows = [...document.querySelectorAll('.timeline__dep')].map((g) => {
+				const d = g.querySelector('.timeline__dep-line').getAttribute('d')
+				const points = [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])])
+				return {
+					d,
+					violated: g.classList.contains('timeline__dep--violated'),
+					title: g.querySelector('title').textContent,
+					start: points[0],
+					end: points[points.length - 1],
+				}
+			})
+			return { bars, arrows }
+		})
+	}
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: 'Timeline deps ' + Math.floor(Date.now() / 1000) })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+
+		const blocker = await api.post('/cards', { stackId: stack.id, title: 'Blocker task' })
+		await api.patch(`/cards/${blocker.id}`, { startDate: day(1), duedate: day(6) })
+		state.blocker = blocker.id
+
+		// Starts AFTER the blocker finishes → a healthy dependency.
+		const after = await api.post('/cards', { stackId: stack.id, title: 'Downstream task' })
+		await api.patch(`/cards/${after.id}`, { startDate: day(10), duedate: day(15) })
+		state.after = after.id
+
+		// Starts BEFORE the blocker finishes → a violated dependency.
+		const overlapping = await api.post('/cards', { stackId: stack.id, title: 'Overlapping task' })
+		await api.patch(`/cards/${overlapping.id}`, { startDate: day(3), duedate: day(8) })
+		state.overlapping = overlapping.id
+
+		// Blocked but undated: it can't be drawn, and must not break anything.
+		const dateless = await api.post('/cards', { stackId: stack.id, title: 'Undated task' })
+		state.dateless = dateless.id
+
+		await api.post(`/cards/${blocker.id}/relations`, { otherCardId: after.id, kind: 'blocks' })
+		await api.post(`/cards/${blocker.id}/relations`, { otherCardId: overlapping.id, kind: 'blocks' })
+		await api.post(`/cards/${blocker.id}/relations`, { otherCardId: dateless.id, kind: 'blocks' })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	// Delivery only. The visibility MASKING rule (an edge with an endpoint the
+	// viewer can't see is dropped whole) is covered where it can be exercised
+	// cheaply against every visibility class: CardRelationServiceTest.
+	test('the board payload carries the board-scoped blocks edges', async () => {
+		const board = await api.get(`/boards/${state.boardId}`)
+		expect(Array.isArray(board.blocksEdges)).toBe(true)
+		const pairs = board.blocksEdges.map((e) => `${e.from}>${e.to}`).sort()
+		expect(pairs).toEqual([
+			`${state.blocker}>${state.after}`,
+			`${state.blocker}>${state.dateless}`,
+			`${state.blocker}>${state.overlapping}`,
+		].sort())
+	})
+
+	test('draws an elbow arrow blocker→blocked, flags the violated one, and glues to the bars', async ({ page }) => {
+		await openTimeline(page)
+
+		// Two dated blocked cards → two connectors. The undated one is blocked too
+		// but has no bar to point at, so it is silently skipped (its red "blocked"
+		// chip on the card tile stays the fallback signal).
+		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+
+		const { bars, arrows } = await readGeometry(page)
+		const blockerBar = bars.find((b) => b.title.includes('Blocker task'))
+		const afterBar = bars.find((b) => b.title.includes('Downstream task'))
+		const overlappingBar = bars.find((b) => b.title.includes('Overlapping task'))
+		expect(blockerBar && afterBar && overlappingBar).toBeTruthy()
+
+		// Exactly one violated dependency: the overlapping card.
+		const violated = arrows.filter((a) => a.violated)
+		expect(violated).toHaveLength(1)
+		expect(violated[0].title).toContain('Overlapping task')
+		expect(violated[0].title).toContain('Blocker task')
+
+		const healthy = arrows.find((a) => !a.violated)
+		expect(healthy.title).toContain('Downstream task')
+
+		// Glued: every connector leaves the blocker's right edge and lands on the
+		// blocked card's left edge.
+		for (const arrow of arrows) {
+			expect(Math.abs(arrow.start[0] - blockerBar.right)).toBeLessThanOrEqual(1)
+		}
+		expect(Math.abs(healthy.end[0] - afterBar.left)).toBeLessThanOrEqual(1)
+		expect(Math.abs(violated[0].end[0] - overlappingBar.left)).toBeLessThanOrEqual(1)
+
+		// Elbow, not a straight diagonal: the path has interior turns.
+		expect(healthy.d.split('L').length).toBeGreaterThanOrEqual(3)
+	})
+
+	test('arrows follow the bars across zoom and disappear with a collapsed group', async ({ page }) => {
+		await openTimeline(page)
+		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+
+		const before = await readGeometry(page)
+
+		// Zoom in: px/day triples, so both the bars and their connectors move.
+		await page.getByRole('button', { name: 'Day', exact: true }).click()
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
+		const after = await readGeometry(page)
+		expect(after.arrows[0].d).not.toBe(before.arrows[0].d)
+
+		// Still glued at the new zoom.
+		const blockerBar = after.bars.find((b) => b.title.includes('Blocker task'))
+		for (const arrow of after.arrows) {
+			expect(Math.abs(arrow.start[0] - blockerBar.right)).toBeLessThanOrEqual(1)
+		}
+
+		// Collapsing the group removes the rows, so their connectors go with them.
+		await page.locator('.timeline__group-row').first().click()
+		await expect(page.locator('.timeline__lane')).toHaveCount(0)
+		await expect(page.locator('.timeline__dep')).toHaveCount(0)
+
+		// Expanding restores them, still anchored to the bars.
+		await page.locator('.timeline__group-row').first().click()
+		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+		const restored = await readGeometry(page)
+		const restoredBlocker = restored.bars.find((b) => b.title.includes('Blocker task'))
+		for (const arrow of restored.arrows) {
+			expect(Math.abs(arrow.start[0] - restoredBlocker.right)).toBeLessThanOrEqual(1)
+		}
+	})
+
+	test('the toolbar toggle hides and restores the arrows, and clicking one opens the blocked card', async ({ page }) => {
+		await openTimeline(page)
+		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+
+		const toggle = page.getByRole('button', { name: 'Dependencies' })
+		await expect(toggle).toBeVisible()
+		await toggle.click()
+		await expect(page.locator('.timeline__dep')).toHaveCount(0)
+		await toggle.click()
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
+
+		// Clicking a connector opens the BLOCKED end (the card whose plan the
+		// dependency constrains).
+		const violated = page.locator('.timeline__dep--violated').first()
+		await violated.locator('.timeline__dep-hit').dispatchEvent('click')
+		await expect(page).toHaveURL(
+			new RegExp(`/board/${state.boardId}/card/${state.overlapping}`),
+			{ timeout: 8_000 },
+		)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+	})
+
+	test('adding and removing a relation updates the timeline through the normal sync path', async ({ page }) => {
+		// No reload anywhere in here: the edge has to arrive over the delta/push
+		// channel, whose slow fallback tick is 30s - so give this one room.
+		test.slow()
+		await openTimeline(page)
+		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+
+		// A third dated card, newly blocked by the same blocker.
+		const stack = (await api.get(`/boards/${state.boardId}`)).stacks[0]
+		const extra = await api.post('/cards', { stackId: stack.id, title: 'Late task' })
+		await api.patch(`/cards/${extra.id}`, { startDate: day(20), duedate: day(24) })
+		const relation = await api.post(`/cards/${state.blocker}/relations`, {
+			otherCardId: extra.id,
+			kind: 'blocks',
+		})
+
+		// No reload: the delta/realtime path must carry the new edge in.
+		await expect(page.locator('.timeline__dep')).toHaveCount(3, { timeout: 70_000 })
+
+		await api.delete(`/cards/${state.blocker}/relations/${relation.id}`)
+		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 70_000 })
+
+		await api.delete(`/cards/${extra.id}`).catch(() => {})
+	})
+})

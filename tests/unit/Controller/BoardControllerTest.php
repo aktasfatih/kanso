@@ -33,6 +33,7 @@ use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
@@ -70,6 +71,7 @@ class BoardControllerTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private SubscriptionService&MockObject $subscriptionService;
 	private CardRelationMapper&MockObject $cardRelationMapper;
+	private CardRelationService&MockObject $cardRelationService;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private BoardController $controller;
@@ -98,6 +100,11 @@ class BoardControllerTest extends TestCase {
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
+		// The board-scoped timeline edge list; masking itself is the service's
+		// job (and is tested there) - the controller only has to carry it.
+		// Left unstubbed here so each test can state its own edges; the mock's
+		// array return type already defaults to [].
+		$this->cardRelationService = $this->createMock(CardRelationService::class);
 		// show()/changes() resolve the viewer context once, after the READ gate
 		// (#3743); the mapper mocks just receive it.
 		$this->boardAccess = $this->createMock(BoardAccess::class);
@@ -143,7 +150,8 @@ class BoardControllerTest extends TestCase {
 			$this->permissionService,
 			$this->subscriptionService,
 			$this->boardAccess,
-			$cardSummaryService
+			$cardSummaryService,
+			$this->cardRelationService
 		);
 	}
 
@@ -596,6 +604,101 @@ class BoardControllerTest extends TestCase {
 
 		$response = $this->controller->changes(1, 5);
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	// ---- blocksEdges: the timeline's dependency arrows ---------------------
+
+	public function testShowIncludesBlocksEdges(): void {
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
+		$this->request->method('getHeader')->with('If-None-Match')->willReturn('');
+		$this->stackMapper->method('findByBoard')->willReturn([]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->aclMapper->method('findByBoard')->willReturn([]);
+		$this->cardMapper->method('findSummariesByBoard')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+
+		// The service is handed the SAME board object show() already gated, and
+		// the requesting uid - the payload is just its (already masked) output.
+		$edges = [['from' => 10, 'to' => 20], ['from' => 10, 'to' => 30]];
+		$this->cardRelationService->expects(self::once())
+			->method('blocksEdgesForBoard')
+			->with($board, 'alice')
+			->willReturn($edges);
+
+		$data = $this->controller->show(1)->getData();
+		self::assertSame($edges, $data['blocksEdges']);
+	}
+
+	public function testShowSkipsTheEdgeQueryOn304(): void {
+		// The ETag covers the edge list (a relation change notifies both endpoint
+		// cards → the board's latest change id moves), so a 304 must not pay for it.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
+		$this->request->method('getHeader')->with('If-None-Match')->willReturn('"7"');
+
+		$this->cardRelationService->expects(self::never())->method('blocksEdgesForBoard');
+
+		$response = $this->controller->show(1);
+		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
+	}
+
+	public function testChangesIncludesBlocksEdgesOnNonEmptyWindow(): void {
+		// Edges aren't derivable from the card summaries, and a relation
+		// add/remove always puts ENTITY_CARD rows in the window - so a non-empty
+		// window resends the whole freshly-masked list.
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		$this->cardMapper->method('findSummariesByIds')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$edges = [['from' => 42, 'to' => 43]];
+		$this->cardRelationService->expects(self::once())
+			->method('blocksEdgesForBoard')
+			->with($board, 'alice')
+			->willReturn($edges);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertSame($edges, $data['blocksEdges']);
+	}
+
+	public function testChangesOmitsBlocksEdgesOnEmptyWindow(): void {
+		// The idle poll: nothing changed, so the key is omitted ENTIRELY (the
+		// client keeps its current list) and the extra query never runs.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(5);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+		$this->cardMapper->method('findSummariesByIds')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$this->cardRelationService->expects(self::never())->method('blocksEdgesForBoard');
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertArrayNotHasKey('blocksEdges', $data);
+	}
+
+	public function testChangesOmitsBlocksEdgesOnResync(): void {
+		// A resync sends the client to show(), which carries the list anyway -
+		// so the resync early-return must not pay for the query either.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(9);
+
+		$this->cardRelationService->expects(self::never())->method('blocksEdgesForBoard');
+
+		$data = $this->controller->changes(1, 0)->getData();
+		self::assertTrue($data['resync']);
+		self::assertArrayNotHasKey('blocksEdges', $data);
 	}
 
 	public function testUpdateReturnsUpdatedBoard(): void {

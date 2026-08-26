@@ -436,6 +436,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:cards-by-stack="cardsByStack"
 			:board-prefix="boardData?.board?.prefix ?? ''"
 			:can-edit="canEditBoard"
+			:dependencies="boardData?.blocksEdges ?? NO_DEPENDENCIES"
 			:board-id="props.id" />
 
 		<!-- Keyboard shortcuts overlay -->
@@ -631,6 +632,11 @@ import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-sc
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { NEST_ENABLED } from '../services/cardNesting.js'
 import { CARD_FEATURES, normalizeCardFeatures } from '../services/cardFeatures.js'
+
+// Stable identity for the "no dependency edges yet" case (#5896): a fresh `[]`
+// in the template would be a new prop value on every render while the board
+// loads, invalidating the timeline's arrow geometry each time.
+const NO_DEPENDENCIES = []
 
 const props = defineProps({
 	id: {
