@@ -23,9 +23,20 @@ performance-first kanban board. AGPL, targets Nextcloud 30–34.
 - NEVER test against prod (sv1). Use the local docker dev stack in `dev/` (copied from ../deck_recurrence/dev). Prod only gets tagged releases via the scoped deploy playbook.
 - The PM charter lives in `.claude/pm-charter.md` — goal, stage, non-goals, ship bar. Respect its over-engineering guard: this is an MVP; no speculative abstractions.
 
-## Nextcloud Deck (for /work and /create-tasks)
-- Board ID: 14 (Kanso)
-- Working column: Dev List (stack id 42) — /work drains this top-to-bottom by order
-- Escalation column: Dev Priority (stack id 43) — cards needing a human decision
-- Other stacks: Triage (41), Backlog (44, parked/deferred), Done (45)
-- Label IDs: improvement=78, bug=79, security=80, scalability=81, testing=82, deferred=83, sprint-2026-07-22=84
+## Nextcloud Kanso (for /work and /create-tasks)
+
+Kanso now tracks its own development on a Kanso board (dogfooding — it used to live on Deck).
+
+- Board: Kanso (id **19**)
+- Working column: Dev List — /work drains this top-to-bottom by `sortKey`
+- Escalation column: Dev Priority — cards needing a human decision
+- Other columns: Triage, Backlog (parked/deferred), Done
+- Labels: improvement, bug, security, scalability, testing, deferred, sprint-<YYYY-MM-DD>
+
+**Resolve ids by name at runtime — don't hardcode them.** The board moved from Nextcloud
+Deck to **Kanso**, a separate app with its own tables and API, so board access goes through
+the **`kanso` MCP server** (`mcp__kanso__kanso_*`); the `nextcloud` server's `deck_*` tools do
+**not** reach it, and the old Deck ids address nothing. One `mcp__kanso__kanso_get_board`
+call returns the board record, all `stacks` (id + title), all `labels` (id + title) and every
+card summary, so matching the names above costs nothing extra. The board id above was verified against the live API; column and label ids are NOT
+pinned because they are the ones most likely to drift as the board is reshaped.
