@@ -80,6 +80,15 @@ browser profile) picks up the new `l10n/<lang>.js`.
   translatable, then picked up by `npm run l10n:extract`. CI fails if the
   extracted template or the compiled bundles are stale (the `build-frontend`
   job re-runs extract + compile and diffs), so commit the regenerated files.
+- CI also runs `npm run l10n:lint` on every `translationfiles/<lang>/kanso.po`:
+  it rejects malformed PO syntax and a `Plural-Forms` header that doesn't match
+  the `msgstr[n]` forms actually supplied, and — the main point — diffs the
+  placeholders (`{count}`, `%n`, `%1$s`, …) in every non-empty `msgstr` against
+  those in its `msgid`/`msgid_plural`. A renamed or dropped placeholder fails
+  the build with the language and msgid, instead of only breaking at runtime
+  for users of that language. Empty `msgstr`s (untranslated) are never
+  checked. Run it locally with `npm run l10n:lint`; its own fixture tests are
+  `npm run test:l10n`.
 - Built-in enum labels (card types, priority levels, filter facets, swimlane
   groups) are wrapped **at their definition** — `label: t('kanso', 'Bug')` in
   `useCardType.js`, `usePriority.js`, `useBoardFilters.js`, `useSwimlanes.js`,
