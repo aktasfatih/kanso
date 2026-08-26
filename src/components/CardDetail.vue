@@ -1135,6 +1135,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
 									<span v-if="descPasteError" class="card-modal__save-error">{{ descPasteError }}</span>
 								</div>
+
+								<!-- Save conflict (#9845): somebody else changed the description
+								     while this editor was open. NOTHING is thrown away - the
+								     draft stays in the editor above, their text is shown here in
+								     full, and the user picks which one wins. -->
+								<div v-if="descriptionConflict" class="card-modal__desc-conflict">
+									<p class="card-modal__desc-conflict-msg">
+										{{ t('kanso', 'Someone else changed this description while you were editing. Your text is kept in the editor above — their version is shown below.') }}
+									</p>
+									<pre class="card-modal__desc-conflict-theirs">{{ descriptionConflict.description || t('kanso', '(empty)') }}</pre>
+									<div class="card-modal__desc-conflict-actions">
+										<NcButton type="primary" :disabled="isSaving" @click="overwriteDescription">
+											{{ t('kanso', 'Keep my version') }}
+										</NcButton>
+										<NcButton :disabled="isSaving" @click="useTheirDescription">
+											{{ t('kanso', 'Discard mine, use theirs') }}
+										</NcButton>
+									</div>
+								</div>
 							</template>
 
 							<template v-else>
@@ -3360,29 +3379,132 @@ const draftDescription = ref('')
 const isSaving = ref(false)
 const saveError = ref('')
 
+// Optimistic-concurrency state for the description (#9845). Both are captured
+// ONCE, when the editor opens, and deliberately not recomputed from cardData:
+// a realtime delta may refresh the card underneath an open editor, and the base
+// must keep pointing at the version this draft was actually derived from.
+// `descriptionConflict` holds the server's current text after a rejected save.
+const descriptionBaseVersion = ref(null)
+const descriptionBaseText = ref('')
+const descriptionConflict = ref(null)
+
+// The board shell renders this component through an UNKEYED router-view, so
+// navigating card→card REUSES it. Every piece of description-editing state is
+// per-card and must be dropped on the switch - carrying the optimistic base
+// version across would compare the new card's version against the old card's
+// and silently skip the conflict guard, and a stale conflict panel would show
+// the wrong card's text. Not `immediate`: there is nothing to clear on mount.
+watch(() => props.cardId, () => {
+	editingDescription.value = false
+	draftDescription.value = ''
+	descriptionBaseVersion.value = null
+	descriptionBaseText.value = ''
+	descriptionConflict.value = null
+	saveError.value = ''
+})
+
 function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
+	descriptionBaseText.value = draftDescription.value
+	descriptionBaseVersion.value = cardData.value?.lastModified ?? null
+	descriptionConflict.value = null
 	editingDescription.value = true
 	saveError.value = ''
 }
 
 function cancelDescriptionEdit() {
+	// Cancelling on top of an UNRESOLVED conflict would throw away exactly the
+	// text the server just refused to overwrite - and Escape makes that one
+	// reflex away. Confirm before losing it; an ordinary cancel is untouched.
+	if (descriptionConflict.value
+		&& !window.confirm(t('kanso', 'Discard your unsaved description? The other version will be kept.'))) {
+		return
+	}
 	editingDescription.value = false
+	descriptionConflict.value = null
 	saveError.value = ''
+}
+
+/**
+ * One guarded description save. `baseVersion` is the card version this draft
+ * was derived from; the server refuses the write with 409 when the card has
+ * moved on AND the stored text differs, so a second author's work is never
+ * silently overwritten.
+ *
+ * `lastModified` has second resolution and also moves for edits that never
+ * touched the description (a title change, a move), so a 409 alone does not
+ * prove a real collision. The rejection carries the server's current text: when
+ * that is byte-identical to what this editor started from, only some unrelated
+ * field moved and the save is retried once, transparently. Anything else is a
+ * genuine two-author conflict and is surfaced with BOTH versions intact.
+ *
+ * @param {number|null} baseVersion card `lastModified` this draft is based on
+ * @param {boolean} allowRetry whether a provably-spurious 409 may be retried
+ */
+async function pushDescription(baseVersion, allowRetry) {
+	try {
+		const saved = await updateCard.mutateAsync({
+			data: { description: draftDescription.value, baseLastModified: baseVersion },
+		})
+		descriptionBaseText.value = draftDescription.value
+		descriptionBaseVersion.value = saved?.lastModified ?? null
+		descriptionConflict.value = null
+		editingDescription.value = false
+	} catch (err) {
+		const data = err?.response?.data
+		if (err?.response?.status === 409 && data?.error === 'description_conflict') {
+			const theirs = data.description ?? ''
+			if (allowRetry && theirs === descriptionBaseText.value) {
+				await pushDescription(data.lastModified ?? null, false)
+				return
+			}
+			// Keep the editor open with the draft untouched; the panel renders
+			// their version alongside it.
+			descriptionConflict.value = { description: theirs, lastModified: data.lastModified ?? null }
+			return
+		}
+		saveError.value = data?.error || t('kanso', 'Failed to save.')
+	}
 }
 
 async function saveDescription() {
 	isSaving.value = true
 	saveError.value = ''
+	descriptionConflict.value = null
 	try {
-		await updateCard.mutateAsync({ data: { description: draftDescription.value } })
-		editingDescription.value = false
-	} catch (err) {
-		saveError.value =
-			err?.response?.data?.error || t('kanso', 'Failed to save.')
+		await pushDescription(descriptionBaseVersion.value, true)
 	} finally {
 		isSaving.value = false
 	}
+}
+
+/** Conflict resolution: the user's draft wins over the version shown to them. */
+async function overwriteDescription() {
+	const base = descriptionConflict.value?.lastModified ?? null
+	isSaving.value = true
+	saveError.value = ''
+	descriptionConflict.value = null
+	try {
+		await pushDescription(base, false)
+	} finally {
+		isSaving.value = false
+	}
+}
+
+/**
+ * Conflict resolution: adopt their version into the editor. This REPLACES the
+ * user's draft and there is no undo - which is why it is a deliberate click on
+ * a button that says so, next to a panel showing both texts, and never the
+ * default. "Keep my version" is the primary action.
+ */
+function useTheirDescription() {
+	const conflict = descriptionConflict.value
+	if (!conflict) return
+	draftDescription.value = conflict.description
+	descriptionBaseText.value = conflict.description
+	descriptionBaseVersion.value = conflict.lastModified
+	descriptionConflict.value = null
+	saveError.value = ''
 }
 
 // ── Checklist ────────────────────────────────────────────────────────────────
@@ -7884,6 +8006,38 @@ body.theme--dark .card-modal,
 	display: flex;
 	align-items: center;
 	gap: 10px;
+}
+
+/* ── Description save conflict (#9845) ───────────────────────────────────── */
+.card-modal__desc-conflict {
+	margin-top: 10px;
+	padding: 12px;
+	border: 1px solid var(--color-warning, var(--color-border-dark));
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-background-hover);
+}
+.card-modal__desc-conflict-msg {
+	margin: 0 0 8px;
+	font-size: 0.85rem;
+}
+.card-modal__desc-conflict-theirs {
+	margin: 0;
+	max-height: 240px;
+	overflow: auto;
+	padding: 8px;
+	border-radius: var(--border-radius, 4px);
+	background: var(--color-main-background);
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.8rem;
+	white-space: pre-wrap;
+	word-break: break-word;
+	user-select: text;
+}
+.card-modal__desc-conflict-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
 }
 
 /* ── Shared error text ───────────────────────────────────────────────────── */

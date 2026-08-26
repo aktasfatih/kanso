@@ -11,7 +11,9 @@
 // here, matching realtime.spec.js.
 //
 // Draft safety is asserted too: the modal's editors copy into local draft refs
-// on edit-start, so a remote refresh must never clobber a dirty editor.
+// on edit-start, so a remote refresh must never clobber a dirty editor - and
+// since #9845 the dirty draft's SAVE no longer clobbers the remote text either;
+// it surfaces the conflict and lets the user pick (see description-conflict.spec.js).
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
@@ -118,9 +120,19 @@ test.describe('Realtime card modal freshness', () => {
 			await expect(editorSection).toBeVisible()
 			await expect(prose).toContainText('my precious local draft')
 
-			// The tester's save then wins (deliberate last-writer-wins, same as any
-			// two-user edit): the draft is what gets persisted and rendered.
+			// The tester's save no longer wins silently (#9845): the description was
+			// rewritten under them, so the save is refused and BOTH versions are
+			// put in front of them - their draft stays in the editor, the text that
+			// landed while they typed is shown beside it.
 			await page.locator('.card-modal__desc-actions button', { hasText: 'Save' }).click()
+			const conflict = page.locator('.card-modal__desc-conflict')
+			await expect(conflict).toBeVisible({ timeout: 15_000 })
+			await expect(conflict).toContainText('remote description v2')
+			await expect(prose).toContainText('my precious local draft')
+
+			// Choosing "Keep my version" is what makes the draft win now - the same
+			// end state as before, but deliberately, never by accident.
+			await conflict.locator('button', { hasText: 'Keep my version' }).click()
 			await expect(page.locator('.card-modal__desc-rendered')).toContainText('my precious local draft', { timeout: 15_000 })
 		} finally {
 			await testerCtx.close()

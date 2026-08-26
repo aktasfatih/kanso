@@ -23,6 +23,7 @@ use OCA\Kanso\Service\AutomationService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
+use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -729,6 +730,98 @@ class CardServiceTest extends TestCase {
 		self::assertSame('A description', $updated->getDescription());
 		self::assertTrue($updated->getArchived());
 		self::assertGreaterThan(0, $updated->getLastModified());
+	}
+
+	// ---- description optimistic concurrency (#9845) -----------------------
+	//
+	// `baseLastModified` is OPTIONAL: omitting it keeps the historical
+	// last-writer-wins behaviour (existing API clients, the MCP server). When it
+	// is supplied, a description write based on a version the card has already
+	// moved past is REFUSED rather than clobbering the other author's text.
+
+	/** A card whose description was last written at $lastModified. */
+	private function describedCard(string $description, int $lastModified): Card {
+		$card = $this->card();
+		$card->setDescription($description);
+		$card->setLastModified($lastModified);
+		return $card;
+	}
+
+	public function testUpdateRejectsDescriptionWriteBasedOnStaleVersion(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard('theirs', 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// The write must be refused BEFORE anything is persisted or logged.
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		try {
+			$this->service->update(9, null, 'mine', null, null, null, 'bob', baseLastModified: 100);
+			self::fail('Expected a DescriptionConflictException');
+		} catch (DescriptionConflictException $e) {
+			// The rejection carries the CURRENT text + version so the client can
+			// show both sides and let the user recover their own draft.
+			self::assertSame('description_conflict', $e->getMessage());
+			self::assertSame('theirs', $e->getCurrentDescription());
+			self::assertSame(200, $e->getCurrentLastModified());
+		}
+	}
+
+	public function testUpdateAcceptsDescriptionWriteOnTheCurrentVersion(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard('theirs', 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, 'mine', null, null, null, 'bob', baseLastModified: 200);
+		self::assertSame('mine', $updated->getDescription());
+	}
+
+	public function testUpdateWithoutABaseVersionStaysLastWriterWins(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard('theirs', 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// No base version supplied - exactly the pre-#9845 behaviour.
+		$updated = $this->service->update(9, null, 'mine', null, null, null, 'bob');
+		self::assertSame('mine', $updated->getDescription());
+	}
+
+	public function testUpdateDoesNotConflictWhenTheTextIsAlreadyIdentical(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard('same text', 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// A stale base, but the write would not change a byte - nothing to lose,
+		// so it must not be surfaced as a conflict.
+		$updated = $this->service->update(9, null, 'same text', null, null, null, 'bob', baseLastModified: 100);
+		self::assertSame('same text', $updated->getDescription());
+	}
+
+	public function testUpdateBaseVersionDoesNotBlockNonDescriptionFields(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard('theirs', 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// The guard is description-scoped: a title save from the same open card
+		// is never blocked by somebody else's unrelated edit.
+		$updated = $this->service->update(9, 'Renamed', null, null, null, null, 'bob', baseLastModified: 100);
+		self::assertSame('Renamed', $updated->getTitle());
+		self::assertSame('theirs', $updated->getDescription());
+	}
+
+	public function testUpdateChecksPermissionBeforeTheConflictGuard(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard('theirs', 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		// A conflicting base must not turn a permission denial into a 409.
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, 'mine', null, null, null, 'mallory', baseLastModified: 100);
 	}
 
 	// ---- granular activity verbs (#70) ------------------------------------
