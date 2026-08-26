@@ -702,8 +702,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Cover colour -->
-					<div v-if="canEdit" class="card-modal__attr">
+					<!-- Cover colour. Hidden when the board switched cover colours off
+					     (#5894); any colour already set stays stored and comes back. -->
+					<div v-if="canEdit && cardFeatures.coverColor" class="card-modal__attr">
 						<button
 							class="card-modal__pill"
 							:class="currentCoverColor ? '' : 'card-modal__pill--dashed'"
@@ -784,8 +785,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
 
-						<!-- Contacts (#3530) - read-only Contacts links, only when the Contacts app is available -->
-						<template v-if="contactsAvailable">
+						<!-- Contacts (#3530) - read-only Contacts links, only when the Contacts app is
+						     available AND the board still shows contacts (#5894). Existing links stay
+						     in the database while hidden. -->
+						<template v-if="contactsAvailable && cardFeatures.contacts">
 							<span
 								v-for="c in cardContacts"
 								:key="c.contactUri"
@@ -1443,8 +1446,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
 						</section>
 
-						<!-- GitHub links -->
-						<section class="card-modal__section card-modal__section--tight">
+						<!-- GitHub links. Hidden when the board switched GitHub off (#5894);
+						     linked issues/PRs are kept and reappear when it is switched on. -->
+						<section v-if="cardFeatures.github" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
 								<GithubIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'GitHub') }}</span>
@@ -1490,8 +1494,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
 						</section>
 
-						<!-- File attachments (#3526) -->
-						<section class="card-modal__section card-modal__section--tight">
+						<!-- File attachments (#3526). Hidden when the board switched attachments
+						     off (#5894); nothing is deleted - every file is still listed here the
+						     moment it is switched back on. -->
+						<section v-if="cardFeatures.attachments" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
 								<PaperclipIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Attachments') }}</span>
@@ -1528,8 +1534,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="attachmentError" class="card-modal__save-error">{{ attachmentError }}</span>
 						</section>
 
-						<!-- Time tracking (#3536): manual entries + per-card total -->
-						<section class="card-modal__section card-modal__section--tight">
+						<!-- Time tracking (#3536): manual entries + per-card total. Hidden when
+						     the board switched time tracking off (#5894). Entries are kept, and a
+						     timer that is already running keeps running - it is just not shown. -->
+						<section v-if="cardFeatures.timeTracking" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
 								<ClockOutlineIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Time tracking') }}</span>
@@ -2335,6 +2343,7 @@ import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
+import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 
@@ -2495,6 +2504,10 @@ const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
 const boardCardFields = computed(() => boardData.value?.cardFields ?? [])
+// Built-in card sections this board's manager left switched on (#5894). Read
+// straight off the board payload, so a change propagates through the normal
+// delta/realtime path. A board that predates the feature reads as all-enabled.
+const cardFeatures = computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures))
 
 // ── Card fields: value mutations ──────────────────────────────────────────────
 const { setCardFieldValue, clearCardFieldValue } = useCardFields(boardId)
@@ -5134,7 +5147,10 @@ const timerElapsed = computed(() => {
 let timerInterval = null
 
 function syncTimerInterval() {
-	const hasTimer = !!(cardData.value?.runningTimer)
+	// Only the visible counter needs the tick. With time tracking switched off
+	// (#5894) the row is not rendered, so skip the interval entirely - the timer
+	// itself is untouched and keeps running server-side.
+	const hasTimer = !!(cardData.value?.runningTimer) && cardFeatures.value.timeTracking
 	if (hasTimer && timerInterval === null) {
 		timerInterval = setInterval(() => {
 			timerNow.value = Math.floor(Date.now() / 1000)
@@ -5146,7 +5162,7 @@ function syncTimerInterval() {
 }
 
 // Start/stop the interval whenever the running timer appears or disappears.
-watch(() => cardData.value?.runningTimer, syncTimerInterval, { immediate: true })
+watch([() => cardData.value?.runningTimer, () => cardFeatures.value.timeTracking], syncTimerInterval, { immediate: true })
 
 // Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
 function formatDuration(totalSeconds) {

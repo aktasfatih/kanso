@@ -23,9 +23,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:checked="selected"
 				tabindex="-1"
 				@click.stop />
-			<!-- Cover band - a solid colour strip at the top of the tile (#3549) -->
+			<!-- Cover band - a solid colour strip at the top of the tile (#3549).
+				 Hidden when the board switched cover colours off (#5894): the stored
+				 colour is untouched and comes back when it is switched on again. -->
 			<span
-				v-if="card.coverColor"
+				v-if="card.coverColor && cardFeatures.coverColor"
 				class="card-tile__cover"
 				:style="{ background: cssColor(card.coverColor) }"
 				aria-hidden="true" />
@@ -47,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.recurring || card.timerRunning || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- In-progress status chip -->
 				<span
@@ -139,7 +141,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     The boolean rides the board summary; pulses green to draw the
 				     eye without adding a text label that clutters compact tiles. -->
 				<span
-					v-if="card.timerRunning"
+					v-if="card.timerRunning && cardFeatures.timeTracking"
 					class="card-tile__timer-running"
 					:aria-label="t('kanso', 'Timer running')"
 					:title="t('kanso', 'Timer running')">
@@ -245,6 +247,7 @@ import { humanId } from '../services/humanId.js'
 import { formatCardDate } from '../utils/dateDisplay.js'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
+import { useCardFeatures } from '../services/cardFeatures.js'
 
 const props = defineProps({
 	card: {
@@ -317,6 +320,11 @@ let cleanup = () => {}
 // board that owns the card drag monitor and is in manual sort; defaults to
 // false everywhere else so no dead affordance is ever rendered.
 const nestEnabled = inject(NEST_ENABLED, computed(() => false))
+
+// Built-in card sections this board still shows (#5894). Injected, not a
+// prop, so it reaches the tile through StackColumn / SwimlaneRow untouched;
+// a surface with no provider (a cross-board View) gets all-enabled.
+const cardFeatures = useCardFeatures()
 
 onMounted(() => {
 	if (!el.value) return

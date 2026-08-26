@@ -265,11 +265,18 @@ class BoardController extends Controller {
 		});
 	}
 
+	/**
+	 * `$cardFeatures` is a PARTIAL built-in card feature patch (#5894), e.g.
+	 * `{"attachments": false}`; omitted keys keep their current value. MANAGE-only,
+	 * enforced (like every other field here) in BoardService.
+	 *
+	 * @param array<array-key, mixed>|null $cardFeatures
+	 */
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures): JSONResponse {
 			return new JSONResponse(
-				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl)
+				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures)
 			);
 		});
 	}

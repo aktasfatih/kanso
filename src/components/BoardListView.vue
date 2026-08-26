@@ -241,7 +241,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 							<!-- Timer running (#73) -->
 							<TimerOutlineIcon
-								v-if="rows[vRow.index].card.timerRunning"
+								v-if="rows[vRow.index].card.timerRunning && cardFeatures.timeTracking"
 								:size="15"
 								class="board-list-row__timer-running"
 								:title="t('kanso', 'Timer running')" />
@@ -343,7 +343,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 						<!-- Timer running (#73) -->
 						<TimerOutlineIcon
-							v-if="rows[vRow.index].card.timerRunning"
+							v-if="rows[vRow.index].card.timerRunning && cardFeatures.timeTracking"
 							:size="15"
 							class="board-list-row__timer-running"
 							:title="t('kanso', 'Timer running')" />
@@ -397,6 +397,7 @@ import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
+import { useCardFeatures } from '../services/cardFeatures.js'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
@@ -485,6 +486,11 @@ const dropMode = ref(null)          // 'reorder' | 'nest' | null (#5885)
 // View (which renders this component with `groups` and has no monitor) gets the
 // false default, so no dead affordance is shown there.
 const nestEnabled = inject(NEST_ENABLED, computed(() => false))
+
+// Built-in card sections this board still shows (#5894). A cross-board View
+// renders this component without a provider and gets all-enabled, since its
+// rows can mix boards with different settings.
+const cardFeatures = useCardFeatures()
 
 // ── Group-level drop targets (column drop zone) ────────────────────────────────
 // One dropTargetForElements per group header element, keyed by stackId. These

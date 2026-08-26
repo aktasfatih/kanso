@@ -710,6 +710,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					role="tabpanel"
 					aria-labelledby="bs-rail-tab-card-fields">
 
+				<!-- Built-in sections (#5894): switch off the card features this board
+				     never uses so their controls stop cluttering every card. Hiding is
+				     NOT deleting - the data stays and comes back on re-enable. -->
+				<div data-test="builtin-sections">
+					<h4 class="label-settings__create-heading">{{ t('kanso', 'Built-in sections') }}</h4>
+					<p class="board-settings__general-hint">
+						{{ t('kanso', 'Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there.') }}
+					</p>
+					<NcCheckboxRadioSwitch
+						v-for="feature in builtinCardFeatures"
+						:key="feature.key"
+						:model-value="cardFeatureState[feature.key]"
+						:disabled="!canManage || cardFeatureSaving === feature.key"
+						:data-test="`builtin-${feature.key}`"
+						@update:model-value="(v) => onCardFeatureChange(feature.key, v)">
+						{{ feature.label }}
+					</NcCheckboxRadioSwitch>
+					<span v-if="cardFeatureError" class="label-settings__error">{{ cardFeatureError }}</span>
+				</div>
+
+				<h4 class="label-settings__create-heading">{{ t('kanso', 'Custom fields') }}</h4>
+
 				<ul class="rt-settings__list" role="list">
 					<li v-if="cardFields.length === 0" class="label-settings__empty">
 						{{ t('kanso', 'No custom fields yet. Create one below.') }}
@@ -2051,8 +2073,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="workflow__select automation__form-select">
 								<option value="request_review">{{ t('kanso', 'Request a review') }}</option>
 								<option value="add_label">{{ t('kanso', 'Add a label') }}</option>
-								<option value="start_timer">{{ t('kanso', 'Start the timer') }}</option>
-								<option value="stop_timer">{{ t('kanso', 'Stop the timer') }}</option>
+								<option v-if="cardFeatureState.timeTracking" value="start_timer">{{ t('kanso', 'Start the timer') }}</option>
+								<option v-if="cardFeatureState.timeTracking" value="stop_timer">{{ t('kanso', 'Stop the timer') }}</option>
 							</select>
 						</div>
 
@@ -2158,6 +2180,7 @@ import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
+import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { getScaleOptions, scaleTokens } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
@@ -2520,7 +2543,7 @@ const railSections = computed(() => {
 		{ id: 'general', name: t('kanso', 'General'), icon: CogIcon },
 		{ id: 'labels', name: t('kanso', 'Labels'), icon: TagMultipleIcon },
 		{ id: 'review-types', name: t('kanso', 'Review types'), icon: CheckDecagramIcon },
-		{ id: 'card-fields', name: t('kanso', 'Custom fields'), icon: TableColumnIcon },
+		{ id: 'card-fields', name: t('kanso', 'Card fields'), icon: TableColumnIcon },
 	]
 	if (canShare.value || canManage.value) {
 		sections.push({ id: 'sharing', name: t('kanso', 'Sharing'), icon: ShareVariantIcon })
@@ -2756,6 +2779,53 @@ async function onEstimateScaleChange(newScale) {
 		scaleSelectKey.value++ // a failed save shouldn't leave the wrong option shown
 	} finally {
 		estimateScaleSaving.value = false
+	}
+}
+
+// ── Built-in card sections (per-board, #5894) ────────────────────────────────
+// A board that never links a contact or attaches a file shouldn't have to look
+// at those controls. Each switch hides ONE built-in card section board-wide.
+// Hiding is not deleting: attachments, contact links, GitHub links, time
+// entries and cover colours stay in the database and reappear untouched when
+// the switch goes back on, and a running timer is never stopped. Enforcement is
+// client-side only — see lib/Db/CardFeatures.php for why.
+const builtinCardFeatures = [
+	{ key: 'contacts', label: t('kanso', 'Contacts') },
+	{ key: 'attachments', label: t('kanso', 'Attachments') },
+	{ key: 'github', label: t('kanso', 'GitHub links') },
+	{ key: 'timeTracking', label: t('kanso', 'Time tracking') },
+	{ key: 'coverColor', label: t('kanso', 'Cover colour') },
+]
+// Reads straight off the board payload, so a change another manager makes
+// arrives through the normal delta/realtime path with no reload.
+const cardFeatureState = computed(() => normalizeCardFeatures(boardQueryData.value?.board?.cardFeatures))
+// The key currently being saved (null = idle), so only that one switch is busy.
+const cardFeatureSaving = ref(null)
+const cardFeatureError = ref('')
+// The automation rule builder offers start_timer / stop_timer only while time
+// tracking is on (both panes live in this one modal instance). If it goes off
+// while one of those is selected, the select would render blank but still submit
+// a timer rule - so fall back to the default action.
+watch(() => cardFeatureState.value.timeTracking, (on) => {
+	if (!on && (newAutoAction.value === 'start_timer' || newAutoAction.value === 'stop_timer')) {
+		newAutoAction.value = 'request_review'
+	}
+})
+
+async function onCardFeatureChange(key, enabled) {
+	if (!canManage.value) return
+	cardFeatureSaving.value = key
+	cardFeatureError.value = ''
+	try {
+		// A one-key patch: the server merges it onto the board's CURRENT stored
+		// state, so flipping one switch never resets the other four. (Two managers
+		// flipping switches at the same instant is still last-write-wins on the
+		// row - there is no optimistic-concurrency check here.)
+		await updateBoard.mutateAsync({ cardFeatures: { [key]: enabled } })
+	} catch (err) {
+		cardFeatureError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
+	} finally {
+		cardFeatureSaving.value = null
 	}
 }
 

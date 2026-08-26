@@ -630,6 +630,7 @@ import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/clo
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { NEST_ENABLED } from '../services/cardNesting.js'
+import { CARD_FEATURES, normalizeCardFeatures } from '../services/cardFeatures.js'
 
 const props = defineProps({
 	id: {
@@ -887,6 +888,14 @@ const { setParent: setCardParent } = useCardHierarchy(boardId)
 // CardTile / BoardListView inject this; anything without a provider (a
 // cross-board View, which has no card monitor at all) gets `false`.
 provide(NEST_ENABLED, computed(() => sortMode.value === 'manual'))
+
+// Built-in card sections this board's manager left switched on (#5894). Tiles
+// and list rows inject it rather than take a prop, so it reaches CardTile
+// through StackColumn / SwimlaneRow untouched. Rides the board payload, so a
+// manager's change propagates through the normal delta/realtime path - no
+// reload. A cross-board View has no provider and gets all-enabled, since its
+// rows mix boards with different settings.
+provide(CARD_FEATURES, computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures)))
 
 // Screen-reader announcer (aria-live="polite"). Provided here so descendants
 // (CardModal via router-view) can announce their own actions through one region.

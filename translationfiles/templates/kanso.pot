@@ -245,19 +245,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3995
+#: src/components/CardDetail.vue:4008
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3993
+#: src/components/CardDetail.vue:4006
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3991
+#: src/components/CardDetail.vue:4004
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -602,6 +602,7 @@ msgstr ""
 msgid "Attaching…"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Attachments"
 msgstr ""
@@ -781,6 +782,10 @@ msgstr ""
 msgid "Bug"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Built-in sections"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Bulk action failed."
 msgstr ""
@@ -854,6 +859,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Card deleted"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Card fields"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -1243,6 +1252,10 @@ msgstr ""
 msgid "Condition"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Contacts"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Copied!"
 msgstr ""
@@ -1397,6 +1410,10 @@ msgstr ""
 msgid "Cover"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Cover colour"
+msgstr ""
+
 #: src/components/CardDetail.vue
 #: src/views/ProjectsView.vue
 msgid "Create"
@@ -1493,7 +1510,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4171
+#: src/components/CardDetail.vue:4184
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2657,6 +2674,10 @@ msgstr ""
 msgid "GitHub label name"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "GitHub links"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "GitHub Projects (coming soon)"
 msgstr ""
@@ -2710,6 +2731,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Hide changes"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3057,7 +3082,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4173
+#: src/components/CardDetail.vue:4186
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4635,6 +4660,7 @@ msgstr ""
 msgid "Thu"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Time tracking"
 msgstr ""
@@ -4939,7 +4965,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4172
+#: src/components/CardDetail.vue:4185
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5019,7 +5045,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4174
+#: src/components/CardDetail.vue:4187
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

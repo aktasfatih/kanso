@@ -14,6 +14,7 @@ use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPinMapper;
 use OCA\Kanso\Db\BoardPrefix;
+use OCA\Kanso\Db\CardFeatures;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
@@ -186,9 +187,11 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title, color, background, estimate scale, prefix or chat URL
+	 * @throws InvalidInputException on invalid title, color, background, estimate scale, prefix, chat URL or card-feature key
+	 *
+	 * @param array<array-key, mixed>|null $cardFeatures partial enabled-map patch, e.g. `['attachments' => false]`
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -238,6 +241,25 @@ class BoardService {
 			// XSS gate (rejects javascript:, data:, etc.) since the client
 			// renders this as an <a href>.
 			$board->setChatUrl($this->validateChatUrl($chatUrl));
+		}
+		// An empty patch is a no-op, not a write: it would bump lastModified and
+		// invalidate every client's board cache for nothing.
+		if ($cardFeatures !== null && $cardFeatures !== []) {
+			// Built-in card sections (#5894). A PARTIAL patch merged onto the
+			// board's current state, so flipping one switch can't clobber the
+			// other four. Switching a feature off HIDES it and nothing else -
+			// no attachment, contact link, GitHub link, time entry or cover
+			// colour is deleted here, and a running timer is deliberately left
+			// running (see CardFeatures for the full rationale, including why
+			// enforcement is client-side only).
+			$board->setDisabledCardFeatures(
+				CardFeatures::encode(
+					CardFeatures::applyPatch(
+						CardFeatures::decode($board->getDisabledCardFeatures()),
+						$cardFeatures
+					)
+				)
+			);
 		}
 
 		$now = time();

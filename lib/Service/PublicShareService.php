@@ -10,6 +10,7 @@ namespace OCA\Kanso\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardFeatures;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -164,7 +165,7 @@ class PublicShareService {
 	 * is added and the person-free baseline holds.
 	 *
 	 * @return array{
-	 *   board: array{title: ?string, color: ?string, prefix: string, commentsEnabled: bool},
+	 *   board: array{title: ?string, color: ?string, prefix: string, commentsEnabled: bool, cardFeatures: array<string, bool>},
 	 *   stacks: list<array{id: int, title: ?string, color: ?string}>,
 	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, coverColor: ?string, startDate: ?string, estimate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}, comments?: list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>}>
 	 * }
@@ -279,6 +280,11 @@ class PublicShareService {
 				'color' => $board->getColor(),
 				'prefix' => $prefix,
 				'commentsEnabled' => $commentsEnabled,
+				// Built-in card sections (#5894). The public link is ONE board, so a
+				// section its manager switched off stays hidden here too. Only cover
+				// colour has a public surface today; the map is emitted whole so a
+				// future public surface needs no payload change.
+				'cardFeatures' => CardFeatures::decode($board->getDisabledCardFeatures()),
 			],
 			'stacks' => $stacks,
 			'cards' => $cards,

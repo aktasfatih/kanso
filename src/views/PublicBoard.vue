@@ -77,9 +77,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				role="dialog"
 				aria-modal="true"
 				tabindex="-1">
-				<!-- Cover-colour band (#3951): a presentational accent, not a person. -->
+				<!-- Cover-colour band (#3951): a presentational accent, not a person.
+				     Hidden when the board switched cover colours off (#5894) - the public
+				     link is the same board, so it follows the same switch. -->
 				<div
-					v-if="selectedCard.coverColor"
+					v-if="selectedCard.coverColor && coverColorEnabled"
 					class="public-detail__cover"
 					:style="{ background: '#' + selectedCard.coverColor }" />
 				<div class="public-detail__top">
@@ -182,6 +184,9 @@ export default {
 			cards: [],
 			selectedCard: null,
 			commentsEnabled: false,
+			// Built-in card sections (#5894); defaults to ON so a payload without the
+			// flag (or an older server) looks exactly as it did before.
+			coverColorEnabled: true,
 		}
 	},
 	computed: {
@@ -234,6 +239,7 @@ export default {
 			this.stacks = data.stacks
 			this.cards = data.cards
 			this.commentsEnabled = !!(data.board && data.board.commentsEnabled)
+			this.coverColorEnabled = data.board?.cardFeatures?.coverColor !== false
 		} catch (e) {
 			this.error = true
 		} finally {

@@ -272,11 +272,20 @@ class PublicShareServiceTest extends TestCase {
 		// Board: no owner, no acl, no webhook secret, no share token. The
 		// `commentsEnabled` flag is a public-safe boolean gate (#3949) - it says
 		// WHETHER comments are shown, never who; with the opt-in OFF here it is
-		// false and no comment data is present.
+		// false and no comment data is present. `cardFeatures` (#5894) is the same
+		// shape: five booleans saying which built-in card sections this board
+		// renders, so the public link honours the manager's switches. No PII, no
+		// internal identifier, nothing about a person.
 		$boardKeys = array_keys($payload['board']);
 		sort($boardKeys);
-		self::assertSame(['color', 'commentsEnabled', 'prefix', 'title'], $boardKeys);
+		self::assertSame(['cardFeatures', 'color', 'commentsEnabled', 'prefix', 'title'], $boardKeys);
 		self::assertFalse($payload['board']['commentsEnabled']);
+		// A board that never touched the switches reads as all-enabled - the public
+		// link looks exactly as it did before the feature landed.
+		self::assertSame(
+			['contacts' => true, 'attachments' => true, 'github' => true, 'timeTracking' => true, 'coverColor' => true],
+			$payload['board']['cardFeatures']
+		);
 
 		// Card: exactly the whitelisted, people-free field set.
 		$cardKeys = array_keys($payload['cards'][0]);
