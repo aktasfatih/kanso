@@ -8,6 +8,8 @@
 	<id>kanso</id>
 	<name>Kanso</name>
 	<summary>Fast open-source kanban boards with reviews, projects and realtime sync</summary>
+	<summary lang="de">Schnelle Open-Source-Kanban-Boards mit Reviews, Projekten und Echtzeit-Synchronisierung</summary>
+	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
 	<description><![CDATA[
 Kanso is a kanban board app for Nextcloud, built for speed. Boards, stacks and
 cards with instant drag & drop, optimistic updates and payloads sized for large
@@ -25,6 +27,54 @@ reviews, inbox), cross-board Projects, and per-board and per-project analytics
 Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
 roles, a command palette with full-text search, trash with restore, GitHub
 links and webhook, and one-click Import from Deck.
+	]]></description>
+	<description lang="de"><![CDATA[
+Kanso ist eine Kanban-Board-App für Nextcloud, entwickelt für Geschwindigkeit.
+Boards, Spalten und Karten mit sofortigem Drag & Drop, optimistischen
+Aktualisierungen und Datenmengen, die auch für große Boards (2.000+ Karten)
+ausgelegt sind. Echtzeit-Updates über notify_push, mit Polling als
+Rückfallebene.
+
+Umfangreiche Karten mit Markdown, Labels, Fälligkeitsdaten, Zuständigen,
+Prioritäten, Checklisten, übergeordneten/untergeordneten Karten und
+verschachtelten Kommentaren mit @-Erwähnungen und Beobachtern. Board-Freigabe
+mit Zugriffskontrolle pro Benutzer und Gruppe.
+
+Ein Review-Workflow (Review anfordern, genehmigen / Änderungen anfordern,
+anpassbare Review-Typen und ein optionales Fertig-Gate). Ein
+board-übergreifendes „Meine Arbeit“-Zentrum (meine Aufgaben, Reviews,
+Posteingang), board-übergreifende Projekte sowie Analysen pro Board und
+Projekt (Velocity, Durchlaufzeit, Durchsatz). Board-, Listen- und
+Timeline-Ansicht (Gantt).
+
+Wiederkehrende Karten nach RRULE-Zeitplänen, Regeln zum automatischen
+Archivieren, WIP-Limits und Spaltenrollen, eine Befehlspalette mit
+Volltextsuche, Papierkorb mit Wiederherstellung, GitHub-Verknüpfungen und
+Webhook sowie Import aus Deck mit einem Klick.
+	]]></description>
+	<description lang="fr"><![CDATA[
+Kanso est une application de tableau kanban pour Nextcloud, conçue pour la
+rapidité. Tableaux, colonnes et cartes avec glisser-déposer instantané, mises
+à jour optimistes et volumes de données pensés pour les grands tableaux
+(2 000+ cartes). Mises à jour en temps réel via notify_push, avec repli sur
+l'interrogation périodique.
+
+Cartes riches avec markdown, étiquettes, dates d'échéance, personnes
+assignées, priorités, listes de tâches, cartes parent/enfant et commentaires
+en fil de discussion avec mentions @ et observateurs. Partage de tableaux
+avec contrôle d'accès par utilisateur et par groupe.
+
+Un flux de revue (demander une revue, approuver / demander des modifications,
+types de revue personnalisables et une porte de validation optionnelle). Un
+espace « Mon travail » multi-tableaux (mes tâches, revues, boîte de
+réception), des projets multi-tableaux, et des statistiques par tableau et
+par projet (vélocité, temps de cycle, débit). Vues Tableau, Liste et
+Chronologie (Gantt).
+
+Cartes récurrentes selon des règles RRULE, archivage automatique, limites de
+travail en cours et rôles de colonne, une palette de commandes avec
+recherche plein texte, corbeille avec restauration, liens GitHub et webhook,
+et import depuis Deck en un clic.
 	]]></description>
 	<version>0.16.0</version>
 	<licence>agpl</licence>
