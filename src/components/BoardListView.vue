@@ -386,7 +386,7 @@ import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
-import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -474,29 +474,60 @@ const dropEdge = ref(null)          // 'top' | 'bottom' | null
 // ── Group-level drop targets (column drop zone) ────────────────────────────────
 // One dropTargetForElements per group header element, keyed by stackId. These
 // carry { type:'column', stackId, laneKey:'' } — exactly the shape the BoardView
-// card monitor's `columnTarget` branch reads. They provide a drop target for an
-// empty group (no card target exists there) and for drops below the last card in
-// a group (the drop lands on the column element, not a card element, in that case).
-const groupDropCleanups = new Map() // stackId → cleanup fn
+// card monitor's `columnTarget` branch reads. They are the ONLY drop target an
+// empty group has — with no cards there is no card row to aim at — so without
+// them a card can never be moved into an empty column from the list.
+const groupDrops = new Map() // stackId → { el, cleanup }
+
+const DROP_ACTIVE_CLASS = 'board-list-group-drop--active'
+const DROP_OVER_CLASS = 'board-list-group-drop--over'
+
+// Whether a card drag is currently in flight. Deliberately a plain `let`, not a
+// reactive ref: the overlay's live/inert state is applied imperatively via
+// classList, because ANY re-render re-invokes the inline `:ref` callbacks below
+// and would otherwise tear down + re-register every group drop target in the
+// middle of a drag.
+let cardDragActive = false
+
+function applyDragActive(el, active) {
+	el.classList.toggle(DROP_ACTIVE_CLASS, active)
+	if (!active) el.classList.remove(DROP_OVER_CLASS)
+}
+
+function setCardDragActive(active) {
+	cardDragActive = active
+	for (const { el } of groupDrops.values()) applyDragActive(el, active)
+}
 
 function setGroupDropRef(stackId, el) {
-	// Always tear down a previous registration for this stackId (element recycled
-	// by the virtualizer or ref changed).
-	if (groupDropCleanups.has(stackId)) {
-		groupDropCleanups.get(stackId)()
-		groupDropCleanups.delete(stackId)
-	}
-	if (!el || !stackId) return
 	// Only wire the column drop target on the classic per-stack path (stackId is
-	// real). The cross-board groups path yields stackId:null → skipped above.
+	// real). The cross-board groups path yields stackId:null → skipped here.
+	if (!stackId) return
+	const existing = groupDrops.get(stackId)
+	// Same element on a re-render → keep the live registration. Re-registering
+	// would break an in-flight drop target the pointer is already hovering.
+	if (existing && existing.el === el) return
+	// Vue clears a function ref with `null` before re-applying it on every
+	// re-render, so only tear down when the element is genuinely gone.
+	if (el === null && existing && existing.el.isConnected) return
+	if (existing) {
+		existing.cleanup()
+		groupDrops.delete(stackId)
+	}
+	if (!el) return
 	const cleanup = dropTargetForElements({
 		element: el,
 		canDrop: ({ source }) => source.data.type === 'card',
 		// Match StackColumn's column drop-target data shape exactly so the BoardView
 		// card monitor's `columnTarget` branch resolves it correctly.
 		getData: () => ({ type: 'column', stackId, laneKey: '' }),
+		onDragEnter: () => el.classList.add(DROP_OVER_CLASS),
+		onDragLeave: () => el.classList.remove(DROP_OVER_CLASS),
+		onDrop: () => el.classList.remove(DROP_OVER_CLASS),
 	})
-	groupDropCleanups.set(stackId, cleanup)
+	groupDrops.set(stackId, { el, cleanup })
+	// A header scrolled into view mid-drag has to be droppable immediately.
+	applyDragActive(el, cardDragActive)
 }
 
 // ── vCardDnd custom directive ──────────────────────────────────────────────────
@@ -606,10 +637,21 @@ const vCardDnd = {
 // near the top/bottom edge scrolls the list, revealing off-screen groups.
 let autoscrollCleanup = null
 
+// Board-level drag monitor: flips the group drop overlays from inert to live for
+// the duration of a card drag (see the .board-list-group-drop CSS for why they
+// cannot be permanently live).
+let dragMonitorCleanup = null
+
 onMounted(() => {
 	if (scrollRef.value) {
 		autoscrollCleanup = autoScrollForElements({ element: scrollRef.value })
 	}
+	dragMonitorCleanup = monitorForElements({
+		canMonitor: ({ source }) => source.data.type === 'card',
+		onDragStart: () => setCardDragActive(true),
+		// Fires for a cancelled drag too, so the overlays always go inert again.
+		onDrop: () => setCardDragActive(false),
+	})
 })
 
 onBeforeUnmount(() => {
@@ -617,9 +659,13 @@ onBeforeUnmount(() => {
 		autoscrollCleanup()
 		autoscrollCleanup = null
 	}
+	if (dragMonitorCleanup) {
+		dragMonitorCleanup()
+		dragMonitorCleanup = null
+	}
 	// Tear down all group drop targets
-	for (const cleanup of groupDropCleanups.values()) cleanup()
-	groupDropCleanups.clear()
+	for (const { cleanup } of groupDrops.values()) cleanup()
+	groupDrops.clear()
 })
 
 // Persisted collapse scope: per board for the classic path, or a fixed 'views'
@@ -1140,14 +1186,34 @@ body.theme--dark .board-list-table,
 	flex: 0 0 auto;
 }
 
-/* Hidden drop target overlaid on the group header so drops onto the header
-   area (empty group / below-last-card space) route to the column target branch
-   in the BoardView monitor. It sits behind pointer events for the button itself
-   but the DnD library reads the drop tree, not pointer events. */
+/* Drop target overlaid on the group header so drops onto the header area (an
+   empty group, which has no card row to aim at) route to the column-target
+   branch in the BoardView monitor.
+
+   It must be inert while nothing is being dragged — it covers the header
+   button, whose click toggles the group collapse. But it must NOT be inert
+   during a drag: Pragmatic's element adapter resolves drop targets from the
+   native drag event's `target`, and native dragenter/dragover hit-testing skips
+   `pointer-events: none` elements, so a permanently-inert overlay can never
+   receive a drop. Hence inert by default, live only while a card drag is in
+   flight (class toggled imperatively from the drag monitor in the script). */
 .board-list-group-drop {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
+}
+
+.board-list-group-drop--active {
+	pointer-events: auto;
+}
+
+/* Highlight the whole group header while a dragged card hovers it, so the
+   pending drop is visible (the card rows use edge lines instead). */
+.board-list-group-drop--over {
+	background: color-mix(in srgb, var(--color-primary-element) 18%, transparent);
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+	border-radius: var(--border-radius, 3px);
 }
 
 /* ── Quick-add composer ─────────────────────────────────────────────────────── */
