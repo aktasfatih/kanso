@@ -97,9 +97,9 @@ et import depuis Deck en un clic.
 	<dependencies>
 		<nextcloud min-version="30" max-version="34"/>
 	</dependencies>
-	<commands>
-		<command>OCA\Kanso\Command\Rebalance</command>
-	</commands>
+	<!-- Element order below is fixed by the App Store schema's xs:sequence
+	     (background-jobs before commands, etc.). scripts/validate-info-xml.mjs
+	     enforces it in CI — reorder these and the build-frontend job fails. -->
 	<background-jobs>
 		<job>OCA\Kanso\Cron\PruneChanges</job>
 		<job>OCA\Kanso\Cron\ArchiveDoneCards</job>
@@ -108,6 +108,9 @@ et import depuis Deck en un clic.
 		<job>OCA\Kanso\Cron\SendPersonalReminders</job>
 		<job>OCA\Kanso\Cron\BackupBoards</job>
 	</background-jobs>
+	<commands>
+		<command>OCA\Kanso\Command\Rebalance</command>
+	</commands>
 	<settings>
 		<admin>OCA\Kanso\Settings\BackupAdmin</admin>
 		<admin-section>OCA\Kanso\Settings\AdminSection</admin-section>

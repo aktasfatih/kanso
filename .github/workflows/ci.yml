@@ -83,6 +83,12 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      # Guard: appinfo/info.xml must validate against the App Store schema it
+      # declares. The store validates it at upload, so without this the first
+      # sign of an invalid manifest is a rejected release. Uses xmllint-wasm
+      # (libxml2 via WebAssembly) — the runners have no system xmllint.
+      - name: Validate appinfo/info.xml against the App Store schema
+        run: npm run lint:info-xml
       - name: Build frontend
         run: npm run build
       # Guard: the extracted template and the compiled l10n bundles must match the
