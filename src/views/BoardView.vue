@@ -556,7 +556,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { showSuccess, showWarning } from '@nextcloud/dialogs'
@@ -617,6 +617,7 @@ import { useBoardSubscription } from '../composables/useBoardSubscription.js'
 import { boardQueryKey, invalidateMyWork } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
+import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { provideAnnouncer } from '../composables/useAnnouncer.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { cssColor } from '../services/color.js'
@@ -628,6 +629,7 @@ import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/ad
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
+import { NEST_ENABLED } from '../services/cardNesting.js'
 
 const props = defineProps({
 	id: {
@@ -873,6 +875,18 @@ const boardErrorMessage = computed(() => {
 	return t('kanso', 'Couldn\'t load this board. Please try again.')
 })
 const { enqueueMove, lastError: moveError, dismissError: dismissMoveError } = useCardMove(boardId)
+// Drag-to-nest (#5885): a centre-band drop re-parents instead of reordering.
+// Reuses the same optimistic setParent mutation the card detail panel's
+// "Set parent" / "Add sub-cards" pickers use, so both paths patch (and roll
+// back) the board + card caches identically.
+const { setParent: setCardParent } = useCardHierarchy(boardId)
+
+// Drag-to-nest is offered only on this board's own surfaces, and only while the
+// display sort is manual — the card monitor below discards card drops in every
+// other sort mode, so an affordance there would promise a nest that never runs.
+// CardTile / BoardListView inject this; anything without a provider (a
+// cross-board View, which has no card monitor at all) gets `false`.
+provide(NEST_ENABLED, computed(() => sortMode.value === 'manual'))
 
 // Screen-reader announcer (aria-live="polite"). Provided here so descendants
 // (CardModal via router-view) can announce their own actions through one region.
@@ -881,6 +895,73 @@ const { message: announceMessage, announce } = provideAnnouncer()
 /** Human title of a stack by id, for announcements. */
 function stackTitleById(stackId) {
 	return sortedStacks.value.find((s) => s.id === stackId)?.title ?? ''
+}
+
+/** Human title of a card by id, for announcements. */
+function cardTitleById(id) {
+	return allVisibleCards.value.find((c) => c.id === Number(id))?.title || t('kanso', 'Card')
+}
+
+/**
+ * Drag-to-nest (#5885): make `cardId` a sub-card of the card described by
+ * `targetData`. Called from the card monitor when the drop landed in a target
+ * card's centre band.
+ *
+ * Every rule the server enforces has already been applied client-side (the
+ * centre band is simply not offered otherwise), so this is the happy path; a
+ * rejection can still arrive from a concurrent edit and surfaces as a warning
+ * with the optimistic patch rolled back by the mutation.
+ *
+ * The re-parent is AWAITED before any column move is queued, for two reasons:
+ * setParent's own onSettled invalidates the board, which would refetch pre-move
+ * state over an in-flight move's optimistic patch (the "no invalidate while a
+ * move is pending" invariant in useCardMove), and a rejected nest must not
+ * leave the card sitting in a column the user never asked for.
+ *
+ * @param {number} cardId the dragged card
+ * @param {object} targetData the hovered card's drop-target data
+ * @param {number} sourceStackId the column the dragged card came from
+ * @param {?number} sourceParentId the dragged card's current parent, if any
+ */
+async function nestCard(cardId, targetData, sourceStackId, sourceParentId) {
+	const parentCardId = Number(targetData.cardId)
+	// Dropped onto the parent it already has - nothing to write.
+	if (sourceParentId != null && Number(sourceParentId) === parentCardId) return
+
+	const movedTitle = cardTitleById(cardId)
+	const parentTitle = cardTitleById(parentCardId)
+	try {
+		await setCardParent(
+			Number(cardId),
+			parentCardId,
+			sourceParentId != null ? Number(sourceParentId) : null,
+		)
+	} catch (err) {
+		showWarning(err?.response?.data?.error || t('kanso', 'Couldn\'t make this card a sub-card.'))
+		return
+	}
+	announce(t('kanso', '{card} is now a sub-card of {parent}', { card: movedTitle, parent: parentTitle }))
+
+	// setParent does not touch the column, and the list view only indents a child
+	// under a parent in the SAME group - so a cross-column nest also moves the
+	// card in, landing it directly beneath its new parent.
+	if (targetData.stackId === sourceStackId) return
+	const stackCards = (cardsByStack.value.get(targetData.stackId) ?? [])
+		.filter((c) => c.id !== cardId)
+	const parentIdx = stackCards.findIndex((c) => c.id === parentCardId)
+	const parentCard = stackCards[parentIdx]
+	if (!parentCard) return // parent moved away under us; the relation still stands
+	const nextCard = parentIdx < stackCards.length - 1 ? stackCards[parentIdx + 1] : null
+	let optimisticKey
+	try {
+		optimisticKey = nextCard
+			? between(parentCard.sortKey, nextCard.sortKey)
+			: after(parentCard.sortKey)
+	} catch {
+		optimisticKey = parentCard.sortKey // fixed on reconcile
+	}
+	expandStack(targetData.stackId)
+	enqueueMove({ cardId, targetStackId: targetData.stackId, afterCardId: parentCard.id, optimisticKey })
 }
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
@@ -1568,6 +1649,9 @@ onMounted(() => {
 				// the fractional order, so ignore card drops until Manual is active.
 				if (sortMode.value !== 'manual') return
 				const { cardId, stackId: sourceStackId } = source.data
+				// The dragged card's current parent (#5885). Rides the drag payload so
+				// a drop can tell "nest under X" from "take this sub-card out".
+				const sourceParentId = source.data.parentCardId ?? null
 
 				// Walk drop targets innermost-first to find what we landed on
 				const targets = location.current.dropTargets
@@ -1589,6 +1673,15 @@ onMounted(() => {
 				const sourceLaneKey = source.data.laneKey ?? ''
 				const targetLaneKey = (cardTarget?.data.laneKey ?? columnTarget?.data.laneKey) ?? ''
 				if (sourceLaneKey !== targetLaneKey) return
+
+				// Nest branch (#5885): the pointer was in the target card's centre
+				// band, which only offers itself when the server would accept the
+				// relation. This is a parent change, NOT a reorder, so it skips the
+				// move resolution entirely.
+				if (cardTarget && cardTarget.data.dropMode === 'nest') {
+					nestCard(cardId, cardTarget.data, sourceStackId, sourceParentId)
+					return
+				}
 
 				if (cardTarget) {
 					const edge = extractClosestEdge(cardTarget.data)
@@ -1663,13 +1756,14 @@ onMounted(() => {
 
 				enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey })
 
-				// Announce the user's own move to assistive tech.
-				const movedTitle = (cardsByStack.value.get(targetStackId) ?? [])
-					.find((c) => c.id === cardId)?.title
-					|| allVisibleCards.value.find((c) => c.id === cardId)?.title
-					|| t('kanso', 'Card')
+				// Announce the user's own move to assistive tech. A reorder never
+				// touches parentCardId (#5885): on a kanban board a sub-card is an
+				// ordinary-looking tile, so moving one between columns must not
+				// silently break the relation. Detaching stays an explicit action in
+				// the card's detail panel.
 				announce(t('kanso', '{card} moved to {stack}', {
-					card: movedTitle,
+					card: (cardsByStack.value.get(targetStackId) ?? []).find((c) => c.id === cardId)?.title
+						|| cardTitleById(cardId),
 					stack: stackTitleById(targetStackId),
 				}))
 			},

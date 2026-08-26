@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<button
 			ref="el"
 			class="card-tile"
-			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact }"
+			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact, 'card-tile--nest-target': isNestTarget }"
 			:data-card-id="card.id"
 			@click="onTileClick"
 			@mouseenter="$emit('hover', card.id)"
@@ -200,11 +200,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Bottom drop indicator -->
 		<div v-if="closestEdge === 'bottom'" class="card-tile__drop-line card-tile__drop-line--bottom" />
+
+		<!-- Nest hint (#5885): an indented ghost row previewing where the dragged
+		     card lands as a sub-card. Absolutely positioned so it never changes the
+		     tile's measured height (the virtualizer caches those). -->
+		<div v-if="isNestTarget" class="card-tile__nest-hint" aria-hidden="true">
+			{{ t('kanso', 'Drop to nest as sub-card') }}
+		</div>
 	</div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
@@ -236,7 +243,8 @@ import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { cssColor, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { formatCardDate } from '../utils/dateDisplay.js'
-import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
+import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
+import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
 
 const props = defineProps({
 	card: {
@@ -299,35 +307,43 @@ function onTileClick(event) {
 const el = ref(null)
 const isDragging = ref(false)
 const closestEdge = ref(null)
+// #5885: the pointer is in this tile's centre band and the dragged card may be
+// nested under it. Mutually exclusive with closestEdge — the two affordances
+// must never render together, or the user can't tell which drop they'll get.
+const isNestTarget = ref(false)
 let cleanup = () => {}
+
+// Whether this surface offers drag-to-nest at all (#5885). Provided only by a
+// board that owns the card drag monitor and is in manual sort; defaults to
+// false everywhere else so no dead affordance is ever rendered.
+const nestEnabled = inject(NEST_ENABLED, computed(() => false))
 
 onMounted(() => {
 	if (!el.value) return
 	cleanup = combine(
 		draggable({
 			element: el.value,
-			getInitialData: () => ({
-				type: 'card',
-				cardId: props.card.id,
-				stackId: props.card.stackId,
-				sortKey: props.card.sortKey,
-				laneKey: props.laneKey,
-			}),
+			getInitialData: () => buildCardDragData(props.card, props.laneKey),
 			onDragStart: () => { isDragging.value = true },
 			onDrop: () => { isDragging.value = false },
 		}),
 		dropTargetForElements({
 			element: el.value,
 			canDrop: ({ source }) => source.data.type === 'card' && source.data.cardId !== props.card.id,
-			getData: ({ input, element: el2 }) => attachClosestEdge(
-				{ type: 'card', cardId: props.card.id, stackId: props.card.stackId, sortKey: props.card.sortKey, laneKey: props.laneKey },
-				{ input, element: el2, allowedEdges: ['top', 'bottom'] },
-			),
+			getData: ({ input, element: el2, source }) => buildCardDropData({
+				base: buildCardDragData(props.card, props.laneKey),
+				input,
+				element: el2,
+				source,
+				nestEnabled: nestEnabled.value === true,
+			}),
 			onDrag: ({ self }) => {
-				closestEdge.value = extractClosestEdge(self.data)
+				const nesting = self.data.dropMode === 'nest'
+				if (isNestTarget.value !== nesting) isNestTarget.value = nesting
+				closestEdge.value = nesting ? null : extractClosestEdge(self.data)
 			},
-			onDragLeave: () => { closestEdge.value = null },
-			onDrop: () => { closestEdge.value = null },
+			onDragLeave: () => { closestEdge.value = null; isNestTarget.value = false },
+			onDrop: () => { closestEdge.value = null; isNestTarget.value = false },
 		}),
 	)
 })
@@ -442,6 +458,47 @@ const extraAssigneeCount = computed(() => {
 
 .card-tile__drop-line--bottom {
 	bottom: -1px;
+}
+
+/* ── Nest drop affordance (#5885) ─────────────────────────────────────────────
+ * Dropping on a card's CENTRE nests the dragged card under it, dropping on an
+ * edge reorders. The two must read differently before the pointer is released:
+ * reorder keeps the thin 2px edge line above, nesting highlights the whole
+ * target tile with a dashed outline and an inset left bar — the same "indent
+ * guide" vocabulary the list view uses for a child row. */
+/* Doubled class so the highlight also wins over `.card-tile--done`'s background
+ * (same single-class specificity, and --done is declared later in this file). */
+.card-tile.card-tile--nest-target {
+	outline: 2px dashed var(--color-primary-element);
+	outline-offset: 1px;
+	background: color-mix(in srgb, var(--color-primary-element) 10%, var(--color-main-background));
+	box-shadow: inset 6px 0 0 0 var(--color-primary-element);
+}
+
+/* The "it lands here" label. Absolutely positioned INSIDE the tile bounds: it
+ * must not change the tile's measured height (StackColumn's virtualizer caches
+ * those per card) and must not spill past the column's scroll container, which
+ * would clip it on the last tile and jitter the scroll height mid-drag. */
+.card-tile__nest-hint {
+	position: absolute;
+	inset-inline-end: 6px;
+	bottom: 5px;
+	max-width: calc(100% - 32px);
+	z-index: 11;
+	pointer-events: none;
+	display: flex;
+	align-items: center;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: var(--border-radius);
+	border: 1px dashed var(--color-primary-element);
+	background: var(--color-main-background);
+	color: var(--color-primary-element);
+	font-size: 0.68rem;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Selected state - outline highlight when card is in multi-select selection */
