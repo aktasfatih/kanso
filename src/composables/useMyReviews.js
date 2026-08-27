@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { getMyReviews as apiGetMyReviews, setReviewState as apiSetReviewState } from '../services/api.js'
-import { boardQueryKey, invalidateMyWork, MY_WORK_POLL_INTERVAL } from './queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds, MY_WORK_POLL_INTERVAL } from './queryKeys.js'
 
 /**
  * Composable for the "My Reviews" feed - all review requests assigned to the
@@ -53,8 +53,8 @@ export function useMyReviews() {
 
 		onSettled: (_data, _err, { cardId, boardId }) => {
 			// A verdict changes My Reviews membership (pending → answered), and the
-			// other feeds render card context too - refresh the whole family (#3766).
-			invalidateMyWork(queryClient)
+			// other feeds render card context too - refresh the whole family (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 			// Best-effort invalidation of related board/card caches
 			if (cardId) {
 				queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })

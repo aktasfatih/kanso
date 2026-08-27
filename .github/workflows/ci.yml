@@ -89,6 +89,14 @@ jobs:
       # (libxml2 via WebAssembly) — the runners have no system xmllint.
       - name: Validate appinfo/info.xml against the App Store schema
         run: npm run lint:info-xml
+      # Frontend unit tests for dependency-free modules that encode a contract
+      # the browser suite cannot reach. Currently the cross-board feed
+      # invalidation split (#9859): its regression trigger is a notify_push
+      # event, and push is disabled in CI, so Playwright would assert it
+      # vacuously. Milliseconds, and needs no build output — so it runs BEFORE
+      # the build and fails fast on a pure logic regression.
+      - name: Frontend unit tests
+        run: npm run test:unit
       - name: Build frontend
         run: npm run build
       # Guard: the extracted template and the compiled l10n bundles must match the

@@ -21,7 +21,7 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { fetchTrash, restoreCard, purgeCard } from '../services/api.js'
-import { boardQueryKey, invalidateMyWork } from './queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
  * @param {import('vue').Ref<string|number>} boardId  - reactive board id
@@ -72,8 +72,8 @@ export function useTrash(boardId, enabled) {
 			// board cache so the restored card appears in the stack column.
 			queryClient.invalidateQueries({ queryKey: trashKey.value })
 			queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
-			// Restoring can return the card to the My Work feeds (#3766).
-			invalidateMyWork(queryClient)
+			// Restoring can return the card to the cross-board feeds (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 

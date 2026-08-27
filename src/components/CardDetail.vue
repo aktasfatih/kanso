@@ -2329,7 +2329,7 @@ import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/us
 import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { allDayInputValue, timedInputValue, formatCardDate } from '../utils/dateDisplay.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
-import { boardQueryKey, invalidateMyWork } from '../composables/queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { useAnnouncer } from '../composables/useAnnouncer.js'
 import { initial, between, after, before } from '../services/sortKey.js'
@@ -3137,7 +3137,7 @@ async function setStage(col) {
 		await apiMoveCard(props.cardId, { targetStackId: col.id, afterCardId: null })
 		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
 		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
-		invalidateMyWork(queryClient)
+		invalidateCrossBoardFeeds(queryClient)
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
 	} finally {
@@ -4648,7 +4648,7 @@ async function confirmMoveToBoard() {
 		queryClient.invalidateQueries({ queryKey: ['boards'] })
 		// A cross-board move changes the board context the My Work feeds render,
 		// and can drop the card from a feed entirely (#3766).
-		invalidateMyWork(queryClient)
+		invalidateCrossBoardFeeds(queryClient)
 		showCopyDialog.value = false
 		showSuccess(t('kanso', 'Card moved.'))
 		// The card no longer exists on this board (its id changed on the target),

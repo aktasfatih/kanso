@@ -3,7 +3,7 @@
 
 import { useQuery } from '@tanstack/vue-query'
 import { getViewCards as apiGetViewCards } from '../services/api.js'
-import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
+import { MY_WORK_POLL_INTERVAL, VIEW_CARDS_QUERY_KEY } from './queryKeys.js'
 
 /**
  * The cross-board card feed a View renders over (#3815): enriched card
@@ -13,7 +13,10 @@ import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
  * under a single query key, warmed once and reused across views.
  *
  * Like the My Work feeds it is cross-board (no board delta poll covers it), so
- * refetchOnMount 'always' + a focus/interval refetch keep it current.
+ * refetchOnMount 'always' + a focus/interval refetch keep it current - and,
+ * because the card detail opens as an overlay ON the View (never blurring the
+ * window, so focus refetch never fires there), card mutations invalidate
+ * VIEW_CARDS_QUERY_KEY from their settle phase via invalidateCrossBoardFeeds.
  *
  * `data` is the server envelope `{ cards, capped, total, limit }` - `cards` is
  * hard-capped server-side to bound this single unbounded feed; `capped`/`total`
@@ -21,7 +24,7 @@ import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
  */
 export function useViewCards() {
 	return useQuery({
-		queryKey: ['view-cards'],
+		queryKey: VIEW_CARDS_QUERY_KEY,
 		queryFn: apiGetViewCards,
 		refetchOnWindowFocus: true,
 		refetchOnMount: 'always',

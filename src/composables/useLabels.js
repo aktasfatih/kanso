@@ -10,6 +10,7 @@ import {
 	unassignLabel as apiUnassignLabel,
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
+import { invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
  * Label mutations for a given board.
@@ -22,8 +23,8 @@ import { boardQueryKey } from './useBoard.js'
  *      useCardMove).
  *   3. Also snapshot the previous board cache value so we can roll back by
  *      re-setting it on error.
- *   4. On settled: invalidate ['card', cardId] (detail query) and board query
- *      so the UI reconciles with server truth.
+ *   4. On settled: invalidate ['card', cardId] (detail query), the board query
+ *      and the cross-board feeds so the UI reconciles with server truth.
  *
  * For create / update / delete label we do NOT do optimistic patches because
  * these are low-frequency settings-panel actions; invalidating on settled is
@@ -137,6 +138,10 @@ export function useLabels(boardId) {
 			// Sync card detail query and board query with server truth
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// A label is both a View filter dimension and a chip the View renders,
+			// and the card detail opens as an overlay ON the View - so without this
+			// a toggle never reaches the feed (#9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 

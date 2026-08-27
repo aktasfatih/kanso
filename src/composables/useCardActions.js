@@ -18,7 +18,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { updateCard as apiUpdateCard, deleteCard as apiDeleteCard, restoreCard as apiRestoreCard } from '../services/api.js'
-import { boardQueryKey, invalidateMyWork } from './queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -95,8 +95,8 @@ export function useCardActions(boardId, cardId) {
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
-			// Archiving removes the card from the My Work feeds (#3766).
-			invalidateMyWork(queryClient)
+			// Archiving removes the card from the cross-board feeds (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
@@ -139,8 +139,8 @@ export function useCardActions(boardId, cardId) {
 		onSettled: () => {
 			// Board is the only remaining relevant cache; card detail was removed.
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
-			// Deleting removes the card from the My Work feeds (#3766).
-			invalidateMyWork(queryClient)
+			// Deleting removes the card from the cross-board feeds (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
@@ -151,8 +151,8 @@ export function useCardActions(boardId, cardId) {
 		mutationFn: () => apiRestoreCard(resolve(cardId)),
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
-			// Restoring can return the card to the My Work feeds (#3766).
-			invalidateMyWork(queryClient)
+			// Restoring can return the card to the cross-board feeds (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
