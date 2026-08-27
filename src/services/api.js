@@ -484,8 +484,8 @@ export const getMyCards = () =>
 export const getViews = () =>
 	axios.get(url('/api/views')).then((r) => r.data.views)
 
-export const saveView = ({ name, filter, groupBy, display }) =>
-	axios.put(url('/api/views'), { name, filter, groupBy, display }).then((r) => r.data.views)
+export const saveView = ({ name, filter, groupBy, display, sort }) =>
+	axios.put(url('/api/views'), { name, filter, groupBy, display, sort }).then((r) => r.data.views)
 
 export const renameView = (id, name) =>
 	axios.patch(url(`/api/views/${encodeURIComponent(id)}`), { name }).then((r) => r.data.views)
@@ -498,8 +498,10 @@ export const deleteView = (id) =>
 // server returns an envelope `{cards, capped, total, limit}` - `cards` is hard-
 // capped to bound this single unbounded feed; `capped`/`total`/`limit` let the
 // UI honestly report when it is showing only the first N of M readable cards.
-export const getViewCards = () =>
-	axios.get(url('/api/views/cards')).then((r) => {
+// The View's saved sort is applied SERVER-side, before the cap, so a sorted View
+// starts at the true first row rather than the first row of an arbitrary window.
+export const getViewCards = ({ sortMode = 'default', sortDir = 'asc' } = {}) =>
+	axios.get(url('/api/views/cards'), { params: { sortMode, sortDir } }).then((r) => {
 		const d = r.data ?? {}
 		return {
 			cards: Array.isArray(d.cards) ? d.cards : [],

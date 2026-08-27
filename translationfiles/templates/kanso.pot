@@ -556,6 +556,7 @@ msgid "Are you sure?"
 msgstr ""
 
 #: src/views/BoardView.vue
+#: src/views/ViewPage.vue
 msgid "Ascending"
 msgstr ""
 
@@ -1481,6 +1482,7 @@ msgid "Create your first view"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
+#: src/views/ViewPage.vue
 msgid "Created"
 msgstr ""
 
@@ -1543,6 +1545,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Days"
+msgstr ""
+
+#: src/views/ViewPage.vue
+msgid "Default"
 msgstr ""
 
 #: src/components/BoardFilterBar.vue
@@ -1685,6 +1691,7 @@ msgid "Dependencies"
 msgstr ""
 
 #: src/views/BoardView.vue
+#: src/views/ViewPage.vue
 msgid "Descending"
 msgstr ""
 
@@ -1705,6 +1712,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Detach sub-card"
+msgstr ""
+
+#: src/views/ViewPage.vue
+msgid "Direction"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2950,6 +2961,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Labels are board-specific: only labels that also exist (same name and color) on the target board are kept."
+msgstr ""
+
+#: src/views/ViewPage.vue
+msgid "Last modified"
 msgstr ""
 
 #: src/admin-backup.js
@@ -4445,7 +4460,12 @@ msgid "Someone else changed this description while you were editing. Your text i
 msgstr ""
 
 #: src/views/BoardView.vue
+#: src/views/ViewPage.vue
 msgid "Sort"
+msgstr ""
+
+#: src/views/ViewPage.vue
+msgid "Sort by"
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -4719,6 +4739,7 @@ msgstr ""
 #: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
+#: src/views/ViewPage.vue
 msgid "Title"
 msgstr ""
 

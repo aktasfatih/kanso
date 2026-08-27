@@ -150,4 +150,115 @@ class ViewControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame($feed, $response->getData());
 	}
+
+	// ── Sort (#9860) ─────────────────────────────────────────────────────────
+
+	public function testCreateStoresTheSortAndDefaultsItWhenOmitted(): void {
+		$views = $this->controller->create('Soonest', ['a' => 1], 'status', 'list', ['mode' => 'due', 'dir' => 'asc'])
+			->getData()['views'];
+		self::assertSame(['mode' => 'due', 'dir' => 'asc'], $views[0]['sort']);
+
+		// Omitted entirely → the default order, i.e. exactly how a View behaved
+		// before the sort control shipped.
+		$views = $this->controller->create('No sort given', ['a' => 1])->getData()['views'];
+		$stored = array_values(array_filter($views, static fn (array $v): bool => $v['name'] === 'No sort given'));
+		self::assertSame(['mode' => 'default', 'dir' => 'asc'], $stored[0]['sort']);
+	}
+
+	public function testCreateUpsertOverwritesTheSortOfAnExistingView(): void {
+		$id = $this->controller->create('Mine', ['a' => 1], 'status', 'list', ['mode' => 'due', 'dir' => 'asc'])
+			->getData()['views'][0]['id'];
+		$views = $this->controller->create('Mine', ['a' => 1], 'status', 'list', ['mode' => 'priority', 'dir' => 'desc'])
+			->getData()['views'];
+		self::assertCount(1, $views);
+		self::assertSame($id, $views[0]['id']);
+		self::assertSame(['mode' => 'priority', 'dir' => 'desc'], $views[0]['sort']);
+	}
+
+	public function testCreateRejectsAnUnknownSortModeOrDirection(): void {
+		// The board-only modes are deliberately NOT offered on a cross-board View:
+		// 'manual' is a per-stack fractional key and 'estimate' ranks against one
+		// board's scale.
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'list', ['mode' => 'manual'])->getStatus());
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'list', ['mode' => 'estimate'])->getStatus());
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'list', ['mode' => 'sideways'])->getStatus());
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'list', ['mode' => 'due', 'dir' => 'up'])->getStatus());
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->create('X', ['a' => 1], 'status', 'list', 'not-an-object')->getStatus());
+	}
+
+	public function testIndexDefaultsTheSortOfARecordSavedBeforeTheSortControl(): void {
+		// A record written by an older version: no `sort` key at all.
+		$this->stored = (string)json_encode([[
+			'id' => 'abc123',
+			'name' => 'Legacy',
+			'filter' => ['done' => 'open'],
+			'groupBy' => 'board',
+			'display' => 'list',
+		]]);
+
+		$response = $this->controller->index();
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$views = $response->getData()['views'];
+		self::assertSame('Legacy', $views[0]['name']);
+		self::assertSame(['mode' => 'default', 'dir' => 'asc'], $views[0]['sort']);
+	}
+
+	public function testIndexIgnoresAnUnknownStoredSortRatherThanFailing(): void {
+		// A value this version doesn't know (a newer client, a hand-edited config):
+		// ignored and defaulted, never rejected - the list must always load.
+		$this->stored = (string)json_encode([[
+			'id' => 'abc123',
+			'name' => 'From the future',
+			'filter' => [],
+			'groupBy' => 'status',
+			'display' => 'list',
+			'sort' => ['mode' => 'vibes', 'dir' => 'sideways'],
+		]]);
+
+		$response = $this->controller->index();
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['mode' => 'default', 'dir' => 'asc'], $response->getData()['views'][0]['sort']);
+	}
+
+	public function testCardsPassesTheSortThroughAndDefaultsUnknownValues(): void {
+		$feed = ['cards' => [], 'labels' => [], 'capped' => false, 'total' => 0, 'limit' => 5000];
+		$calls = [];
+		$this->viewService->method('findMine')
+			->willReturnCallback(function (string $uid, string $mode, string $dir) use ($feed, &$calls): array {
+				$calls[] = [$uid, $mode, $dir];
+				return $feed;
+			});
+
+		self::assertSame(Http::STATUS_OK, $this->controller->cards('priority', 'desc')->getStatus());
+		// An unknown sort is DEFAULTED, not rejected - this is a read path an older
+		// or newer client must never be able to hard-fail. 'estimate' is one of the
+		// board-only modes a cross-board View deliberately doesn't offer.
+		self::assertSame(Http::STATUS_OK, $this->controller->cards('estimate', 'sideways')->getStatus());
+		// Even a malformed query string (`?sortMode[]=due` arrives as an array)
+		// defaults instead of blowing up.
+		self::assertSame(Http::STATUS_OK, $this->controller->cards(['due'], null)->getStatus());
+
+		self::assertSame([
+			['alice', 'priority', 'desc'],
+			['alice', 'default', 'asc'],
+			['alice', 'default', 'asc'],
+		], $calls);
+	}
+
+	/**
+	 * Permission denial: with no user session there is no per-user config to read
+	 * and no readable set to feed, so every endpoint refuses rather than falling
+	 * back to some other user's data.
+	 */
+	public function testEndpointsDenyWithoutAUserSession(): void {
+		$session = $this->createMock(IUserSession::class);
+		$session->method('getUser')->willReturn(null);
+		$this->viewService->expects(self::never())->method('findMine');
+		$controller = new ViewController('kanso', $this->request, $session, $this->config, $this->viewService);
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $controller->index()->getStatus());
+		self::assertSame(Http::STATUS_FORBIDDEN, $controller->cards()->getStatus());
+		self::assertSame(Http::STATUS_FORBIDDEN, $controller->create('X', ['a' => 1])->getStatus());
+		self::assertSame(Http::STATUS_FORBIDDEN, $controller->destroy('abc')->getStatus());
+	}
 }

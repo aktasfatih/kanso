@@ -49,6 +49,10 @@ export const MY_WORK_QUERY_KEYS = [['my-cards'], ['my-reviews'], ['inbox']]
  * Deliberately NOT a member of MY_WORK_QUERY_KEYS - see
  * invalidateCrossBoardFeeds for why the two lists must stay separate.
  *
+ * This is the key PREFIX: the feed is server-sorted, so useViewCards appends the
+ * active sort mode + direction (one cache entry per ordering). Invalidating the
+ * prefix reaches every one of them - TanStack matches keys by prefix.
+ *
  * @type {[string]}
  */
 export const VIEW_CARDS_QUERY_KEY = ['view-cards']

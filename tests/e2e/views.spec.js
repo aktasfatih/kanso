@@ -286,6 +286,77 @@ test.describe('Cross-board Views (#3815)', () => {
 		}
 	})
 
+	test('the sort control reorders a View and the choice persists across a reload (#9860)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		const stamp = Math.floor(Date.now() / 1000)
+		// One board, two cards created in a known order, so the DEFAULT feed order
+		// (board, then creation) is Zed then Alpha. Their due dates run the OTHER
+		// way round, so sorting by due date must flip the rows - something the
+		// unsorted feed cannot produce.
+		const board = await api.post('/boards', { title: 'ViewsSortBoard ' + stamp })
+		const label = await api.post('/labels', { boardId: board.id, title: 'vsort ' + stamp, color: '0000ff' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+		const zed = 'ViewsSort Zed ' + stamp
+		const alpha = 'ViewsSort Alpha ' + stamp
+		const zedCard = await api.post('/cards', { stackId: stack.id, title: zed })
+		await api.put(`/cards/${zedCard.id}/labels/${label.id}`)
+		await api.patch(`/cards/${zedCard.id}`, { duedate: '2031-02-02T09:00:00+00:00' })
+		const alphaCard = await api.post('/cards', { stackId: stack.id, title: alpha })
+		await api.put(`/cards/${alphaCard.id}/labels/${label.id}`)
+		await api.patch(`/cards/${alphaCard.id}`, { duedate: '2031-01-01T09:00:00+00:00' })
+
+		// Saved with NO sort, exactly like every View that existed before the sort
+		// control shipped: the server defaults it, so such a View still loads and
+		// still looks the way it always did.
+		const created = await api.put('/views', {
+			name: 'Views sort ' + stamp,
+			filter: { labels: [label.id] },
+			groupBy: 'status',
+			display: 'list',
+		})
+		const view = created.views[created.views.length - 1]
+		expect(view.sort).toEqual({ mode: 'default', dir: 'asc' })
+
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${view.id}`)
+
+			const titles = async () =>
+				(await page.locator('.board-list-row__title').allTextContents()).map((s) => s.trim())
+			await expect(page.locator('.board-list-row__title').first()).toBeVisible({ timeout: 15_000 })
+			await expect.poll(titles, { timeout: 15_000 }).toEqual([zed, alpha])
+
+			// Pick "Due date". Selecting a mode resets to its natural direction
+			// (soonest first), which the toolbar label spells out with an arrow.
+			const sortMenu = page.locator('.view-page__sort button').first()
+			await sortMenu.click()
+			// Let the teleported popover settle before clicking the radio.
+			await page.waitForTimeout(400)
+			await page.locator('.action-radio__text', { hasText: /^Due date$/ }).click()
+			await page.waitForTimeout(150)
+			await page.keyboard.press('Escape')
+
+			await expect.poll(titles, { timeout: 15_000 }).toEqual([alpha, zed])
+			await expect(page.locator('.view-page__sort')).toContainText('Due date ↑')
+
+			// Save it onto the View and reload: the order (and the control) survive.
+			await page.locator('.view-page__save').click()
+			await page.waitForTimeout(500)
+			await page.reload()
+			await expect(page.locator('.board-list-row__title').first()).toBeVisible({ timeout: 15_000 })
+			await expect.poll(titles, { timeout: 15_000 }).toEqual([alpha, zed])
+			await expect(page.locator('.view-page__sort')).toContainText('Due date ↑')
+
+			// It is on the stored record, not just in the page's memory.
+			const reread = (await api.get('/views')).views.find((v) => v.id === view.id)
+			expect(reread.sort).toEqual({ mode: 'due', dir: 'asc' })
+		} finally {
+			await api.delete(`/views/${view.id}`).catch(() => {})
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+
 	test('create a view from the nav (UI, not the API) → opens it → inline rename persists (#3891)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 		await ncLogin(page)
