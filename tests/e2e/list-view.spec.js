@@ -12,9 +12,8 @@ async function dragWithMouse(page, sourceLocator, targetLocator, targetPosition 
 	const srcX = srcBox.x + srcBox.width / 2
 	const srcY = srcBox.y + srcBox.height / 2
 	const tgtX = tgtBox.x + tgtBox.width / 2
-	const tgtY = targetPosition === 'top'
-		? tgtBox.y + tgtBox.height * 0.2
-		: tgtBox.y + tgtBox.height * 0.8
+	const frac = targetPosition === 'top' ? 0.2 : targetPosition === 'middle' ? 0.5 : 0.8
+	const tgtY = tgtBox.y + tgtBox.height * frac
 
 	await page.mouse.move(srcX, srcY)
 	await page.mouse.down()
@@ -456,5 +455,212 @@ test.describe('List view — drag-and-drop reorder', () => {
 
 		// Cleanup
 		await api.delete(`/boards/${board2.id}`).catch(() => {})
+	})
+})
+
+// ── Column composer (#9853) ───────────────────────────────────────────────────
+// List view had no way to create a column. The ⋯ More → "Add column" action is
+// not kanban-gated (it only checks edit permission), but it revealed a composer
+// that lives at the end of the KANBAN track — never rendered in list view — so
+// in list view the menu item silently did nothing. The list now owns a composer
+// of its own, at the end of the group list, and the same single menu action
+// targets it while list view is active.
+
+test.describe('List view — column composer (#9853)', () => {
+	// Roomy enough that the ⋯ More menu keeps its visible "More" label.
+	test.use({ viewport: { width: 1600, height: 900 } })
+
+	const state = { boardId: 0, stackId: 0, boardUrl: '' }
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: 'List Add Column ' + Math.floor(Date.now() / 1000) })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Inbox' })
+		state.stackId = stack.id
+		await api.post('/cards', { stackId: stack.id, title: 'Movable card' })
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	const composer = (page) => page.locator('[data-test="list-add-column"]')
+	const groupCount = (page, title) => page
+		.locator('.board-list-group')
+		.filter({ hasText: title })
+		.locator('.board-list-group__count')
+
+	async function openListView(page) {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+		await page.keyboard.press('Escape')
+		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+	}
+
+	test('creates a column in place, and the new column takes a dragged card with no reload', async ({ page }) => {
+		await openListView(page)
+
+		const input = composer(page)
+		await expect(input).toBeVisible({ timeout: 8_000 })
+		await input.fill('In review')
+		await input.press('Enter')
+
+		// The column appears in the list itself — no switch to Board view.
+		await expect(page.locator('.board-list-group', { hasText: 'In review' }))
+			.toBeVisible({ timeout: 10_000 })
+		// …and the composer clears + stays focused for a second column.
+		await expect(input).toHaveValue('', { timeout: 8_000 })
+		await expect(input).toBeFocused()
+
+		// The server is the source of truth; grab the new column's real id.
+		let newStackId = 0
+		await expect.poll(async () => {
+			const { stacks } = await api.get(`/boards/${state.boardId}`)
+			newStackId = (stacks ?? []).find((s) => s.title === 'In review')?.id ?? 0
+			return newStackId
+		}, { timeout: 8_000 }).toBeGreaterThan(0)
+
+		// A brand-new (empty) column must be a live drop target immediately — its
+		// only drop target is the group-header overlay (there is no card row to
+		// aim at), so this is the b5edae1 empty-column path on a fresh column.
+		const card = page.locator('.board-list-row-wrap').filter({ hasText: 'Movable card' })
+		const drop = page.locator(`.board-list-group-drop[data-stack-id="${newStackId}"]`)
+		await expect(drop).toHaveCount(1, { timeout: 8_000 })
+		await dragWithMouse(page, card, drop, 'middle')
+
+		await expect(groupCount(page, 'In review')).toHaveText('1', { timeout: 8_000 })
+		await expect(groupCount(page, 'Inbox')).toHaveText('0')
+
+		// Both the column and the move survive a reload.
+		await page.reload()
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
+		await expect(groupCount(page, 'In review')).toHaveText('1', { timeout: 10_000 })
+		await expect(groupCount(page, 'Inbox')).toHaveText('0')
+	})
+
+	test('⋯ More → "Add column" focuses the list composer instead of doing nothing', async ({ page }) => {
+		await openListView(page)
+
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: 'Add column' }).click()
+
+		const input = composer(page)
+		// Let the menu finish closing first: NcActions restores focus to its
+		// trigger on close, so asserting only on an early poll could hide a steal.
+		// This asserts the STEADY state after that restore would have happened.
+		await page.waitForTimeout(600)
+		await expect(input).toBeFocused({ timeout: 8_000 })
+		// The kanban track's own composer stays unrevealed — one action, one target.
+		await expect(page.locator('.add-stack')).toHaveCount(0)
+
+		await input.fill('From the menu')
+		await input.press('Enter')
+		await expect(page.locator('.board-list-group', { hasText: 'From the menu' }))
+			.toBeVisible({ timeout: 10_000 })
+		await expect.poll(async () => {
+			const { stacks } = await api.get(`/boards/${state.boardId}`)
+			return (stacks ?? []).some((s) => s.title === 'From the menu')
+		}, { timeout: 8_000 }).toBe(true)
+	})
+
+	test('the composer keeps its focus and half-typed draft while the list recycles rows', async ({ page }) => {
+		// This is the whole reason the composer is rendered OUTSIDE the virtualizer:
+		// as a virtual row it would be unmounted and recycled onto another card the
+		// moment the list scrolled, taking the focus and the draft with it. Needs
+		// its own board — long enough that scrolling really does recycle rows.
+		const board = await api.post('/boards', { title: 'List Column Scroll ' + Math.floor(Date.now() / 1000) })
+		try {
+			const stack = await api.post('/stacks', { boardId: board.id, title: 'Long' })
+			for (let i = 1; i <= 50; i++) {
+				await api.post('/cards', { stackId: stack.id, title: `Row ${String(i).padStart(2, '0')}` })
+			}
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}`)
+			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+			await page.keyboard.press('Escape')
+			await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+
+			const input = composer(page)
+			await input.click()
+			await input.fill('Half typed')
+			await expect(input).toBeFocused()
+
+			// Scroll to the very top and back down: every row element rendered a
+			// moment ago is now bound to a different card.
+			const list = page.locator('.board-list-table')
+			await list.evaluate((el) => { el.scrollTop = 0 })
+			await page.waitForTimeout(400)
+			await expect(page.locator('.board-list-row', { hasText: 'Row 01' })).toBeVisible({ timeout: 8_000 })
+			await list.evaluate((el) => { el.scrollTop = el.scrollHeight })
+			await page.waitForTimeout(400)
+			await expect(page.locator('.board-list-row', { hasText: 'Row 50' })).toBeVisible({ timeout: 8_000 })
+
+			// Neither the draft nor the focus was recycled away with the rows.
+			await expect(input).toHaveValue('Half typed')
+			await expect(input).toBeFocused()
+		} finally {
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+})
+
+test.describe('List view — add-column is editors only (#9853)', () => {
+	// A second identity logs in explicitly, so this describe must NOT inherit the
+	// shared admin storageState (it would silently stay admin and false-pass).
+	test.use({ storageState: { cookies: [], origins: [] }, viewport: { width: 1600, height: 900 } })
+
+	const state = { boardId: 0, boardUrl: '' }
+
+	test.beforeAll(async ({ peer }) => {
+		const board = await api.post('/boards', { title: 'List Column ACL ' + Math.floor(Date.now() / 1000) })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Inbox' })
+		await api.post('/cards', { stackId: stack.id, title: 'Read-only card' })
+		// READ only (1) — no EDIT bit, so canEditBoard is false for the peer.
+		await api.post(`/boards/${board.id}/acl`, {
+			participant: peer.user,
+			participantType: 'user',
+			permission: 1,
+		})
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('a viewer sees no add-column affordance in list view', async ({ browser, peer }) => {
+		const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } })
+		try {
+			const page = await ctx.newPage()
+			await ncLogin(page, { user: peer.user, pass: peer.pass })
+			await page.goto(state.boardUrl)
+			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+			await page.keyboard.press('Escape')
+			await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+
+			// The list renders for them…
+			await expect(page.locator('.board-list-row', { hasText: 'Read-only card' }))
+				.toBeVisible({ timeout: 8_000 })
+			// …but neither the composer nor the menu action is offered.
+			await expect(page.locator('[data-test="list-add-column"]')).toHaveCount(0)
+			await page.getByRole('button', { name: 'More' }).click()
+			// Prove the menu actually opened before asserting an absence — a
+			// not-yet-rendered popover satisfies toHaveCount(0) for free.
+			await expect(page.getByRole('menuitem', { name: /deleted cards/i }))
+				.toBeVisible({ timeout: 8_000 })
+			await expect(page.getByRole('menuitem', { name: 'Add column' })).toHaveCount(0)
+		} finally {
+			await ctx.close()
+		}
 	})
 })

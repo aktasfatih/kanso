@@ -374,6 +374,7 @@ msgstr ""
 msgid "Add column"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/views/BoardView.vue
 msgid "Add column…"
 msgstr ""
@@ -2128,6 +2129,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 #: src/components/StackColumn.vue
 msgid "Failed to create card."
+msgstr ""
+
+#: src/components/BoardListView.vue
+msgid "Failed to create column."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

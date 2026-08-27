@@ -313,11 +313,45 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:data-stack-id="rows[vRow.index].stackId" />
 			</div>
 		</div>
+
+		<!-- Column composer (#9853). List view had no way to create a column: the
+		     ⋯ More → "Add column" action revealed a composer that only exists on the
+		     kanban track, so in list view it silently did nothing. This is the list's
+		     own target for that action, and a standing affordance in its own right —
+		     the same shape as the per-group "Add card…" composer, at the end of the
+		     group list.
+
+		     Deliberately rendered OUTSIDE the virtualizer (a sibling of the row host,
+		     not a virtual row): the list recycles row elements as it scrolls, which
+		     would blow away the input's focus and half-typed draft. Out here it is a
+		     plain, stable DOM node.
+
+		     Editors only — BoardView passes the callback only when the user may edit
+		     the board, so a viewer gets no affordance at all. The cross-board Views
+		     path (props.groups, whose rows have no stack behind them) never passes
+		     one either. -->
+		<form
+			v-if="addColumnEnabled"
+			class="add-column-composer"
+			@submit.prevent="submitNewColumn">
+			<input
+				ref="addColumnInputRef"
+				v-model="addColumnTitle"
+				class="add-column-composer__input"
+				type="text"
+				maxlength="100"
+				data-test="list-add-column"
+				:aria-label="t('kanso', 'Add column…')"
+				:placeholder="t('kanso', 'Add column…')"
+				:disabled="addColumnPending"
+				@keydown.enter.prevent="submitNewColumn">
+			<p v-if="addColumnError" class="add-column-composer__error">{{ addColumnError }}</p>
+		</form>
 	</div>
 </template>
 
 <script setup>
-import { ref, computed, inject, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, computed, inject, nextTick, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -386,6 +420,14 @@ const props = defineProps({
 	 * Async fn (stackId, templateId) → Promise - creates a card from a template.
 	 */
 	onCreateFromTemplate: { type: Function, default: null },
+	/**
+	 * Async fn (title) → Promise - creates a column (#9853). When provided (and
+	 * props.groups is absent) an "Add column…" composer renders at the end of the
+	 * group list, and `focusAddColumn()` (exposed below) is what the board's
+	 * ⋯ More → "Add column" action targets while list view is active. BoardView
+	 * passes it only to editors, so a viewer sees no add-column affordance.
+	 */
+	onCreateStack: { type: Function, default: null },
 	/**
 	 * Board's "new cards on top" preference. When true, multi-line pastes are
 	 * submitted in reverse order so the first pasted line appears topmost.
@@ -1072,6 +1114,60 @@ async function createFromTemplate(stackId, templateId) {
 		isPendingByStack[stackId] = false
 	}
 }
+
+// ── Column composer (#9853) ──────────────────────────────────────────────────
+// Only on the classic per-stack path: the cross-board Views path renders
+// arbitrary groups with no stack behind them, so "add column" is meaningless
+// there (the same reason setGroupDropRef skips a null stackId). Non-manual sort
+// modes are NOT gated: unlike a drag, creating a column doesn't touch any sort
+// key, and kanban offers it in every sort mode.
+const addColumnEnabled = computed(() => !props.groups && typeof props.onCreateStack === 'function')
+
+const addColumnTitle = ref('')
+const addColumnError = ref('')
+const addColumnPending = ref(false)
+const addColumnInputRef = ref(null)
+
+// A failure message describes the title that failed, so it goes stale the moment
+// that title is edited — otherwise the user retypes and still stares at the old
+// error next to text that is now fine.
+watch(addColumnTitle, () => { addColumnError.value = '' })
+
+async function submitNewColumn() {
+	const title = addColumnTitle.value.trim()
+	if (!title || addColumnPending.value || !props.onCreateStack) return
+	addColumnError.value = ''
+	addColumnPending.value = true
+	try {
+		await props.onCreateStack(title)
+		addColumnTitle.value = ''
+	} catch (err) {
+		addColumnError.value = err?.response?.data?.error || t('kanso', 'Failed to create column.')
+	} finally {
+		addColumnPending.value = false
+	}
+	// Re-focus for rapid entry, mirroring the card composer — and after a failure
+	// too, so the title can be corrected and retried. Must come after the pending
+	// flag clears: a disabled input cannot take focus.
+	await nextTick()
+	addColumnInputRef.value?.focus()
+}
+
+/**
+ * Reveal + focus the column composer. This is what the board's ⋯ More →
+ * "Add column" action calls while list view is active — one menu action, two
+ * targets, instead of one that quietly aims at the hidden kanban track.
+ */
+function focusAddColumn() {
+	if (!addColumnEnabled.value) return
+	addColumnError.value = ''
+	nextTick(() => {
+		addColumnInputRef.value?.scrollIntoView?.({ block: 'nearest' })
+		addColumnInputRef.value?.focus()
+	})
+}
+
+defineExpose({ focusAddColumn })
 </script>
 
 <style scoped>
@@ -1314,6 +1410,52 @@ body.theme--dark .board-list-table,
 	color: var(--kanso-error-legible);
 	margin: 0;
 	white-space: nowrap;
+}
+
+/* ── Column composer ────────────────────────────────────────────────────────── */
+
+/* Sits after the virtualized row host (outside the virtualizer), so it reads as
+   the end of the group list. Same max-width as the host so its input lines up
+   with the rows above it. */
+.add-column-composer {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 1100px;
+	padding: 10px 8px 0;
+}
+
+.add-column-composer__input {
+	flex: 1;
+	min-width: 0;
+	max-width: 320px;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px dashed var(--color-border-dark);
+	border-radius: var(--border-radius, 3px);
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+}
+
+.add-column-composer__input:focus {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
+	border-color: transparent;
+	background: var(--color-main-background);
+}
+
+.add-column-composer__input::placeholder {
+	color: var(--color-text-maxcontrast);
+}
+
+.add-column-composer__error {
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+	color: var(--kanso-error-legible);
+	margin: 0;
 }
 
 /* ── Card row wrapper (DnD host) ────────────────────────────────────────────── */

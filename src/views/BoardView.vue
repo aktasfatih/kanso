@@ -417,6 +417,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     cards. Read-oriented: rows open the card modal. -->
 		<BoardListView
 			v-if="viewMode === 'list' && boardData"
+			ref="listViewRef"
 			:stacks="sortedStacks"
 			:cards-by-stack="cardsByStack"
 			:labels-by-id="labelsById"
@@ -426,6 +427,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:on-create-card="handleCreateCard"
 			:on-fetch-templates="handleFetchTemplates"
 			:on-create-from-template="handleCreateFromTemplate"
+			:on-create-stack="canEditBoard ? handleCreateStack : null"
 			:sort-mode="sortMode" />
 
 		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->
@@ -1991,12 +1993,20 @@ function goToTrash() {
 	router.push({ name: 'board-trash', params: { id: props.id } })
 }
 
+// The single, view-agnostic column create. The kanban composer below and the
+// list view's own composer (#9853) both go through it, so a column created from
+// either surface is the same single-row insert reconciled by the same board
+// invalidation — and appears (and becomes a drop target) without a reload.
+async function handleCreateStack(title) {
+	await createStack.mutateAsync({ boardId: Number(props.id), title })
+}
+
 async function submitNewStack() {
 	const title = newStackTitle.value.trim()
 	if (!title) return
 	stackError.value = ''
 	try {
-		await createStack.mutateAsync({ boardId: Number(props.id), title })
+		await handleCreateStack(title)
 		newStackTitle.value = ''
 	} catch (err) {
 		stackError.value =
@@ -2009,9 +2019,20 @@ async function submitNewStack() {
 // board is empty (onboarding). Esc / empty-blur collapses it.
 const showAddColumn = ref(false)
 const addColumnInputRef = ref(null)
+// The mounted BoardListView, when list view is the active one. Its composer is
+// the other target of the single "Add column" menu action (#9853).
+const listViewRef = ref(null)
 
 function revealAddColumn() {
 	stackError.value = ''
+	// ONE menu action, two targets. The composer below lives at the end of the
+	// kanban track, which list view doesn't render — aiming at it there focused
+	// nothing and the action silently did nothing. In list view, hand off to the
+	// list's own composer instead.
+	if (viewMode.value === 'list') {
+		listViewRef.value?.focusAddColumn()
+		return
+	}
 	showAddColumn.value = true
 	nextTick(() => {
 		// Scroll the composer into view (it sits at the far right of the columns row)
