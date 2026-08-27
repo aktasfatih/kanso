@@ -32,6 +32,8 @@ Kanso now tracks its own development on a Kanso board (dogfooding — it used to
 - Escalation column: Dev Priority — cards needing a human decision
 - Other columns: Triage, Backlog (parked/deferred), Done
 - Labels: improvement, bug, security, scalability, testing, deferred, sprint-<YYYY-MM-DD>
+- Human reviewer: `faktas` — assigned + review-requested whenever a card needs a human
+  decision, so it surfaces in Kanso's *My Reviews* feed instead of blocking silently
 
 **Resolve ids by name at runtime — don't hardcode them.** The board moved from Nextcloud
 Deck to **Kanso**, a separate app with its own tables and API, so board access goes through
