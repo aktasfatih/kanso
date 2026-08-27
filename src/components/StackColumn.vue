@@ -191,8 +191,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 		</div>
 
-		<!-- Inline card composer at TOP - signature rapid-entry UX -->
-		<div v-show="!collapsed" class="card-composer-wrap">
+		<!-- Inline card composer at TOP - signature rapid-entry UX. Rendered only
+		     for users who may actually create a card: the parent passes a null
+		     onCreateCard for read-only members, and showing the input to them is a
+		     dead affordance the server would reject. -->
+		<div v-if="canQuickAdd" v-show="!collapsed" class="card-composer-wrap">
 			<form class="card-composer" @submit.prevent="submitCard">
 				<input
 					ref="composerInputRef"
@@ -265,7 +268,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				virtualizer never loses its scrollRect.
 			-->
 			<div v-if="cards.length === 0" class="stack-column__empty-placeholder">
-				<span v-if="!collapsed" class="stack-column__empty-hint">
+				<!-- The hint invites two writes (drop a card, press n) that a read-only
+				     member cannot perform, so it goes with the composer. The empty
+				     placeholder itself stays either way — it holds the scroll height. -->
+				<span v-if="!collapsed && canQuickAdd" class="stack-column__empty-hint">
 					{{ t('kanso', 'Drop cards here · press n') }}
 				</span>
 			</div>
@@ -348,10 +354,12 @@ const props = defineProps({
 	/**
 	 * Async fn (stackId, title, duedate?, allDay?) → Promise - provided by parent
 	 * BoardView. duedate/allDay carry an optional natural-date token (#3416).
+	 * Null when the current user may not edit the board - the composer is then
+	 * not rendered at all.
 	 */
 	onCreateCard: {
 		type: Function,
-		required: true,
+		default: null,
 	},
 	/**
 	 * Async fn () → Promise<Card[]> - lazily fetches the board's card templates
@@ -653,6 +661,13 @@ const wipBadgeText = computed(() => {
 	return `${props.cards.length} / ${props.stack.wipLimit}`
 })
 
+/**
+ * Whether to render the inline "Add card…" composer. The parent gates the
+ * callback on the board's EDIT permission, so a read-only member gets null here
+ * and never sees an input the server would refuse to act on.
+ */
+const canQuickAdd = computed(() => typeof props.onCreateCard === 'function')
+
 const composerInputRef = ref(null)
 const cardListRef = ref(null)
 const columnRef = ref(null)
@@ -850,6 +865,7 @@ function splitTitles(text) {
  * reverse: the last-created card lands on top, leaving the first line topmost.
  */
 async function createCardsFromText(text) {
+	if (!canQuickAdd.value) return
 	const titles = splitTitles(text)
 	if (titles.length === 0) return
 	composerError.value = ''
