@@ -5,7 +5,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <template>
 	<div
 		class="card-modal"
-		:class="[`card-modal--tab-${viewMode}`, `card-modal--mode-${mode}`]"
+		:class="[
+			`card-modal--tab-${viewMode}`,
+			`card-modal--mode-${mode}`,
+			{ 'card-modal--discussion-collapsed': discussionCollapsed },
+		]"
 		@keydown.escape="onRootEscape">
 		<!-- Loading state - real layout, shimmer, never a spinner -->
 			<div v-if="isLoading" class="card-modal__skeleton">
@@ -194,6 +198,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 
 					<div class="card-modal__header-actions">
+						<!-- Collapse/expand the discussion pane (#9854). Lives in the header
+						     so the affordance costs zero horizontal space - collapsing gives
+						     the main pane the entire body width, with no residual rail.
+						     Hidden below 680px, where the panes are tabbed instead. -->
+						<button
+							class="card-modal__discussion-toggle"
+							:class="{ 'card-modal__discussion-toggle--collapsed': discussionCollapsed }"
+							:aria-expanded="!discussionCollapsed"
+							:aria-controls="discussionPaneId"
+							:title="discussionToggleLabel"
+							:aria-label="discussionToggleLabel"
+							@click="toggleDiscussionCollapsed">
+							<DockRightIcon :size="18" />
+							<!-- Collapsed, the pane's comment count is the only signal left
+							     that the card has a conversation - keep it visible. -->
+							<span
+								v-if="discussionCollapsed && commentCount > 0"
+								class="card-modal__discussion-toggle-count">{{ commentCount }}</span>
+						</button>
 						<!-- Expand the modal into the standalone full-page card view.
 						     Only shown in modal mode - the page has nothing to expand to. -->
 						<button
@@ -1789,8 +1812,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span class="card-modal__resizer-grip" />
 					</div>
 
-					<!-- RIGHT: discussion pane -->
-					<aside class="card-modal__discussion">
+					<!-- RIGHT: discussion pane. Collapsed via CSS (never v-if) so the
+					     comment query keeps feeding the header badge and the mobile
+					     Discussion tab stays intact. -->
+					<aside :id="discussionPaneId" class="card-modal__discussion">
 						<div class="card-modal__discussion-head card-modal__discussion-tabs" role="tablist">
 							<button
 								class="card-modal__discussion-tab"
@@ -2297,6 +2322,7 @@ import VectorLinkIcon from 'vue-material-design-icons/VectorLink.vue'
 import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import DockRightIcon from 'vue-material-design-icons/DockRight.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
@@ -4304,6 +4330,13 @@ async function scrollToTargetComment() {
 	}
 	if (!el) return
 	scrollHandled = true
+	// A collapsed discussion pane (#9854) still renders the node, so the scroll and
+	// highlight below would "succeed" into a hidden element and a user arriving from
+	// a mention or notification would land on a card showing nothing. Reveal the
+	// pane. Deliberately NOT persisted: a one-off reveal for this deep link, not a
+	// change to the saved preference. (Set here, after the first await, so it can
+	// never run before the collapse state below is initialised.)
+	discussionCollapsed.value = false
 	// Defer one extra frame to let any async-loaded components (e.g. the Tiptap
 	// MarkdownEditor chunk that loads on first open) finish painting and settle the
 	// layout before we scroll. Without this wait the scroll runs before the editor
@@ -5557,6 +5590,42 @@ function persistDiscussionWidth() {
 		localStorage.setItem(DISCUSSION_WIDTH_KEY, String(discussionWidth.value))
 	} catch (e) { /* ignore persistence failure */ }
 }
+
+// Collapsing the discussion pane entirely (#9854). A state class on the root
+// collapses the body to a single grid track and hides the pane + its handle, so
+// the main pane gets the full body width with no leftover rail. The pane is only
+// hidden, never unmounted - the comment query keeps the header badge live and the
+// mobile Discussion tab keeps working. Persisted per user, like the width above.
+// The collapse rules live in a media block that is the exact complement of the
+// 680px stacking query, so this persisted flag can never leak into the
+// stacked/tabbed layout and blank the Discussion tab.
+const DISCUSSION_COLLAPSED_KEY = 'kanso.cardDiscussionCollapsed'
+const discussionCollapsed = ref(false)
+try {
+	discussionCollapsed.value = localStorage.getItem(DISCUSSION_COLLAPSED_KEY) === '1'
+} catch (e) { /* localStorage unavailable - default to expanded */ }
+// Unique per card so `aria-controls` still resolves if two card views coexist.
+const discussionPaneId = computed(() => `card-modal-discussion-${props.cardId}`)
+// An aria-label replaces the whole accessible name, so the count badge would be
+// silent for screen readers unless it is folded into the label itself.
+const discussionToggleLabel = computed(() => {
+	if (!discussionCollapsed.value) return t('kanso', 'Hide the discussion panel')
+	if (commentCount.value > 0) {
+		return n('kanso', 'Show the discussion panel (%n comment)', 'Show the discussion panel (%n comments)', commentCount.value)
+	}
+	return t('kanso', 'Show the discussion panel')
+})
+function toggleDiscussionCollapsed() {
+	discussionCollapsed.value = !discussionCollapsed.value
+	try {
+		if (discussionCollapsed.value) {
+			localStorage.setItem(DISCUSSION_COLLAPSED_KEY, '1')
+		} else {
+			localStorage.removeItem(DISCUSSION_COLLAPSED_KEY)
+		}
+	} catch (e) { /* ignore persistence failure */ }
+}
+
 const bodyRef = ref(null)
 let resizePointerId = null
 function onResizePointerMove(e) {
@@ -8154,6 +8223,58 @@ body.theme--dark .card-modal,
 	aspect-ratio: 1;
 }
 
+/* Discussion collapse toggle (#9854) - same ghost idiom as the expand button,
+   but it can grow to fit the comment-count badge shown while collapsed. Declared
+   ABOVE the responsive block below, which switches it off in the tabbed layout. */
+.card-modal__discussion-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-width: 34px;
+	height: 34px;
+	padding: 0 6px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+.card-modal__discussion-toggle:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+/* Collapsed reads as "pressed" - keep that on hover too, so the affordance does
+   not vanish exactly when the pointer is on it. */
+.card-modal__discussion-toggle--collapsed,
+.card-modal__discussion-toggle--collapsed:hover {
+	color: var(--color-main-text);
+	background: var(--color-background-dark);
+}
+.card-modal__discussion-toggle-count {
+	font-size: 0.75rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Collapsed discussion pane (#9854) ───────────────────────────────────────
+   Scoped to the desktop split layout on purpose. Below 680px the panes stack and
+   tab-switch, and a persisted collapse flag from a desktop session must never
+   apply there - it would `display: none` the pane and render a blank Discussion
+   tab. Keeping these rules inside a media block makes that impossible regardless
+   of specificity or source order - and the block is the exact complement of the
+   stacked-layout query, so a fractional viewport width (zoom, display scaling)
+   can never fall between the two and leave the toggle inert. */
+@media not all and (max-width: 680px) {
+	.card-modal--discussion-collapsed .card-modal__body {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.card-modal--discussion-collapsed .card-modal__discussion,
+	.card-modal--discussion-collapsed .card-modal__resizer {
+		display: none;
+	}
+}
+
 /* ── Responsive: stack panes, switch via tabs ────────────────────────────── */
 @media (max-width: 680px) {
 	/* Reflow the header so the action cluster wraps below the title instead of
@@ -8208,6 +8329,10 @@ body.theme--dark .card-modal,
 	.card-modal__body { grid-template-columns: 1fr; }
 	/* Panes stack: the persisted split width and its drag handle are ignored. */
 	.card-modal__resizer { display: none; }
+	/* The tab bar below switches panes here, so the desktop collapse toggle has
+	   no job. Its persisted state is inert too - the collapse rules are confined
+	   to the complement of this query (see #9854). */
+	.card-modal__discussion-toggle { display: none; }
 	.card-modal__content,
 	.card-modal__discussion { max-height: none; }
 	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }

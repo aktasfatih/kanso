@@ -257,19 +257,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4008
+#: src/components/CardDetail.vue:4034
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4006
+#: src/components/CardDetail.vue:4032
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4004
+#: src/components/CardDetail.vue:4030
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -293,7 +293,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:244
+#: src/components/CardDetail.vue:267
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] ""
@@ -1529,7 +1529,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4184
+#: src/components/CardDetail.vue:4210
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2778,6 +2778,10 @@ msgstr ""
 msgid "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there."
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Hide the discussion panel"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Hide this board without deleting it. You can restore it later."
 msgstr ""
@@ -3127,7 +3131,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4186
+#: src/components/CardDetail.vue:4212
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4406,6 +4410,16 @@ msgstr ""
 msgid "Show formatting toolbar"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Show the discussion panel"
+msgstr ""
+
+#: src/components/CardDetail.vue:5614
+msgid "Show the discussion panel (%n comment)"
+msgid_plural "Show the discussion panel (%n comments)"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/BoardTimelineView.vue
 msgid "Show the full date range"
 msgstr ""
@@ -5017,7 +5031,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4185
+#: src/components/CardDetail.vue:4211
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5097,7 +5111,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4187
+#: src/components/CardDetail.vue:4213
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
