@@ -133,7 +133,8 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 **Boards**
 
 - `kanso_list_boards` — list all boards (with per-board stats)
-- `kanso_get_board` — read a board: stacks, labels, card summaries
+- `kanso_get_board` — read a board: stacks, labels, card summaries (archived
+  cards are excluded unless you pass `include_archived=true`)
 - `kanso_list_board_members` — list assignable users (uid + name) for a board
 - `kanso_create_board` / `kanso_update_board` / `kanso_delete_board`
 
@@ -174,7 +175,8 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 **My work**
 
-- `kanso_list_my_cards` — cards assigned to you across all boards
+- `kanso_list_my_cards` — open cards assigned to you across all boards (never
+  archived or done cards)
 
 ## Development
 

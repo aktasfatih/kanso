@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `kanso_get_board` no longer returns archived cards by default. The board
+  endpoint ships archived and live cards in one list, so every caller used to
+  get a mixed set with no way to separate them; `cards` is now the live board.
+  Pass the new `include_archived=true` argument to get archived cards back —
+  every card keeps its `archived` flag either way, and only `cards` is filtered
+  (stacks, labels and the rest of the payload are untouched).
+- `kanso_list_my_cards` documents what it has always returned: open work only —
+  never archived or done cards, capped at 200.
+
 ## [0.1.0] - 2026-08-14
 
 ### Added

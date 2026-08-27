@@ -17,6 +17,28 @@ from mcp.server.fastmcp import FastMCP
 from kanso_mcp.client import KansoClient
 
 
+def _without_archived_cards(board: dict) -> dict:
+    """Drop archived cards from a dumped board payload.
+
+    The board endpoint (`GET /boards/{id}`) has no `archived` query parameter —
+    it deliberately ships archived cards alongside live ones, because the web
+    client renders both views (the board and the Archived page) from that one
+    payload, and its shape is pinned by the ETag / delta-sync contract. So the
+    filter is a presentation choice made HERE, in the tool layer, leaving
+    `KansoClient.get_board` a faithful mirror of the endpoint.
+
+    Only `cards` is touched — every other key is passed through untouched — and
+    the `archived` flag is left on each card that survives, so a caller that
+    asked for both kinds can still tell them apart. The argument is a dumped
+    :class:`BoardDetail`, so `cards` and each card's `archived` are always
+    present (both are modelled with defaults).
+    """
+    return {
+        **board,
+        "cards": [c for c in board["cards"] if not c["archived"]],
+    }
+
+
 def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     """Register every Kanso tool on the given FastMCP instance."""
 
@@ -38,15 +60,26 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         title="Get a Kanso board",
         annotations={"readOnlyHint": True},
     )
-    async def kanso_get_board(board_id: int) -> dict:
+    async def kanso_get_board(board_id: int, include_archived: bool = False) -> dict:
         """Read one board in full: the board record, its stacks (columns), its
         labels and all card SUMMARIES (no descriptions — open a card with
         `kanso_get_card` to read its description).
 
+        Archived cards are EXCLUDED by default: `cards` then holds every
+        non-archived card of the board — including cards that sit in an archived
+        (hidden) column, since archiving a column does not archive its cards.
+        Pass `include_archived=True` to get archived cards too; either way every
+        card keeps its `archived` flag, so you can tell the two apart. Only
+        `cards` is filtered — `stacks` (archived columns included) and `labels`
+        always come back in full. The filter is a view, not an access rule:
+        `kanso_get_card` still reads an archived card by id.
+
         Args:
             board_id: The numeric board id.
+            include_archived: Include archived cards in `cards` (default false).
         """
-        return (await client.get_board(board_id)).model_dump()
+        board = (await client.get_board(board_id)).model_dump()
+        return board if include_archived else _without_archived_cards(board)
 
     @mcp.tool(
         title="List Kanso board members",
@@ -514,6 +547,11 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     async def kanso_list_my_cards() -> List[dict]:
         """List the open cards assigned to the current user across every board
         they can read ("My tasks").
+
+        Open means exactly that: the server returns only cards that are neither
+        archived nor done, and there is no way to ask for the rest — to see a
+        board's archived cards, call `kanso_get_board` with
+        `include_archived=True`. The result is capped server-side at 200 cards.
         """
         cards = await client.list_my_cards()
         return [c.model_dump() for c in cards]
