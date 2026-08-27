@@ -361,6 +361,18 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			await page.getByText('Timeline', { exact: true }).click()
 			await expect(page.locator('.timeline__bar').first()).toBeVisible({ timeout: 8_000 })
 
+			// The one-time keyboard-shortcut hint (#3413) is `position: fixed` at
+			// right:16px/bottom:16px, z-index 2000, so it lands squarely on the
+			// right-hand hit-test probe below — this spec passed locally and failed
+			// in CI for exactly that reason. Suppress it as unrelated chrome rather
+			// than dismissing it: the hint renders only after an async getSettings(),
+			// so a click would race its appearance, and its dismissal is per-user
+			// state that differs between a dev account and a freshly provisioned CI
+			// worker user. A stylesheet applies whenever the element shows up, under
+			// whichever account is logged in.
+			await page.addStyleTag({ content: '.board-view__shortcuts-hint { display: none !important; }' })
+			await expect(page.locator('[data-test="shortcuts-hint"]')).toBeHidden()
+
 			// Precondition: the rows really do overflow, so the assertions below are
 			// exercising the scrolled-to-the-bottom state and not a board that fits.
 			const overflows = await page.locator('.timeline__body').evaluate(
