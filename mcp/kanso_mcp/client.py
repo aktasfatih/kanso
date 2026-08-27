@@ -272,6 +272,34 @@ class KansoClient:
     async def unassign_user(self, card_id: int, user_id: str) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}/assignees/{user_id}")
 
+    # ----------------------------------------------------------------- reviews
+    async def request_review(
+        self, card_id: int, user_id: str, review_type_id: Optional[int] = None
+    ) -> Any:
+        # Idempotent server-side: re-requesting an already-pending reviewer
+        # succeeds without writing (the controller swallows the unique-constraint
+        # violation), so callers never have to check first.
+        return await self._request(
+            "PUT",
+            f"/cards/{card_id}/reviews/{user_id}",
+            json={"reviewTypeId": review_type_id},
+        )
+
+    async def withdraw_review(self, card_id: int, review_id: int) -> Any:
+        # Also idempotent - withdrawing an absent request is a no-op.
+        return await self._request("DELETE", f"/cards/{card_id}/reviews/{review_id}")
+
+    async def list_my_reviews(self) -> List[Dict[str, Any]]:
+        # Cross-board feed of reviews requested FROM the authenticated user.
+        data = await self._request("GET", "/reviews/mine")
+        return data or []
+
+    # NB: no set_review_state() wrapper. PATCH /cards/{id}/reviews/{reviewId}
+    # records a verdict and the server only permits the reviewer themselves to
+    # call it - which, since this server authenticates as that same user, would
+    # let an agent approve the very review it just requested. Verdicts are a
+    # human action in the UI; leaving it unexposed keeps the gate meaningful.
+
     # ---------------------------------------------------------------- comments
     async def list_comments(self, card_id: int) -> List[Comment]:
         data = await self._request("GET", f"/cards/{card_id}/comments")

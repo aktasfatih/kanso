@@ -162,6 +162,17 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 - `kanso_assign_label` / `kanso_unassign_label`
 - `kanso_assign_user` / `kanso_unassign_user`
 
+**Reviews** (hand work back to a human without it getting lost)
+
+- `kanso_request_review` — ask a user to review a card; lands in their "My Reviews" feed and notifies them (idempotent)
+- `kanso_withdraw_review` — cancel a pending request by its **review** id
+- `kanso_list_my_reviews` — every review requested from you, across all boards
+
+There is deliberately **no** tool for recording a verdict. The server only lets
+the reviewer set their own review state, and this server authenticates as that
+same user — exposing it would let an agent approve the very review it just
+requested. Approving/rejecting stays a human action in the UI.
+
 **Comments**
 
 - `kanso_list_comments` — read a card's comments (author + body + timestamps)

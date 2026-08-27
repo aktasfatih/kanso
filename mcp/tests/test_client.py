@@ -6,6 +6,8 @@ method + path + headers (OCS-APIRequest present) + body, and parses responses.
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -820,3 +822,65 @@ async def test_error_raises_kanso_api_error():
             await c.create_board("X")
     assert excinfo.value.status_code == 412
     assert "CSRF" in excinfo.value.body
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_request_review_put_path():
+    route = respx.put(f"{BASE}/cards/100/reviews/bob").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.request_review(100, "bob")
+    assert route.called
+    _assert_api_headers(route.calls.last.request)
+    # No review type given, so _request drops the null and sends an empty body
+    # rather than reviewTypeId=null (which the controller would reject).
+    assert json.loads(route.calls.last.request.content) == {}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_request_review_forwards_review_type_id():
+    route = respx.put(f"{BASE}/cards/100/reviews/bob").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.request_review(100, "bob", review_type_id=7)
+    assert json.loads(route.calls.last.request.content) == {"reviewTypeId": 7}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_withdraw_review_targets_review_id_not_card_id():
+    route = respx.delete(f"{BASE}/cards/100/reviews/42").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.withdraw_review(100, 42)
+    assert route.called
+    assert route.calls.last.request.method == "DELETE"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_my_reviews_parses():
+    route = respx.get(f"{BASE}/reviews/mine").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": 2, "cardId": 9, "cardTitle": "T", "state": "pending"}],
+        )
+    )
+    async with _client() as c:
+        reviews = await c.list_my_reviews()
+    assert route.called
+    assert reviews[0]["cardId"] == 9
+    assert reviews[0]["state"] == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_my_reviews_empty_body_is_a_list():
+    respx.get(f"{BASE}/reviews/mine").mock(return_value=httpx.Response(204))
+    async with _client() as c:
+        assert await c.list_my_reviews() == []

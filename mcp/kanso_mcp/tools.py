@@ -376,6 +376,68 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         await client.unassign_user(card_id, user_id)
         return {"unassigned": True, "cardId": card_id, "userId": user_id}
 
+    # ----------------------------------------------------------------- reviews
+    @mcp.tool(title="Request a review of a Kanso card")
+    async def kanso_request_review(
+        card_id: int, user_id: str, review_type_id: Optional[int] = None
+    ) -> dict:
+        """Ask a user to review a card. The request lands in that user's
+        cross-board "My Reviews" feed and notifies them, which is how you hand
+        work back to a human without it going unnoticed on a column.
+
+        Idempotent — re-requesting a reviewer who is already pending succeeds
+        without creating a duplicate.
+
+        The reviewer must be able to read the board (and the card), or the
+        server rejects the request rather than leaking the title into their feed.
+
+        Args:
+            card_id: The numeric card id.
+            user_id: The Nextcloud user id (uid) to request the review from.
+            review_type_id: Optional board review-type id to categorise the
+                request; omit for an untyped review.
+        """
+        await client.request_review(card_id, user_id, review_type_id)
+        return {"requested": True, "cardId": card_id, "reviewer": user_id}
+
+    @mcp.tool(
+        title="Withdraw a review request from a Kanso card",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_withdraw_review(card_id: int, review_id: int) -> dict:
+        """Cancel a pending review request — use when the question resolved
+        itself and the human no longer needs to look.
+
+        Note `review_id` is the REVIEW's own id (the `id` field of an entry in
+        the card's `reviews` array), NOT the card id and NOT the reviewer's uid.
+        Idempotent.
+
+        Args:
+            card_id: The numeric card id.
+            review_id: The numeric review id to withdraw.
+        """
+        await client.withdraw_review(card_id, review_id)
+        return {"withdrawn": True, "cardId": card_id, "reviewId": review_id}
+
+    @mcp.tool(
+        title="List reviews requested from you",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_my_reviews() -> List[dict]:
+        """List every review requested FROM the authenticated user, across all
+        boards, newest first — the backlog of things waiting on a human.
+
+        Each entry carries `id` (the review id), `cardId`, `cardTitle`,
+        `boardId`, `boardTitle`, `state` ("pending" until a verdict is recorded),
+        `requestedBy` and `createdAt`.
+
+        There is deliberately NO tool for recording a verdict: the server only
+        lets the reviewer set their own review state, and this server
+        authenticates as that user — so exposing it would let the agent approve
+        the very review it requested. Verdicts stay a human action in the UI.
+        """
+        return await client.list_my_reviews()
+
     # ---------------------------------------------------------------- comments
     @mcp.tool(
         title="List a Kanso card's comments",
