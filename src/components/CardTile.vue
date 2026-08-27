@@ -49,8 +49,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="isInProgress || card.blocked || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="card.parentCardId || isInProgress || card.blocked || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
+				<!-- Sub-card marker: this card hangs under another one. The board draws
+				     no indent (columns are flat), so without this a sub-card is
+				     indistinguishable from any other card. The parent's title is not in
+				     the board summary and is deliberately not fetched for it — the
+				     board payload stays summary-only, and the panel names the parent. -->
+				<span
+					v-if="card.parentCardId"
+					class="card-tile__subcard"
+					role="img"
+					:aria-label="t('kanso', 'Sub-card')"
+					:title="t('kanso', 'Sub-card')">
+					<SubdirectoryArrowRightIcon :size="14" />
+				</span>
 				<!-- In-progress status chip -->
 				<span
 					v-if="isInProgress"
@@ -221,6 +234,7 @@ import ProgressClockIcon from 'vue-material-design-icons/ProgressClock.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
+import SubdirectoryArrowRightIcon from 'vue-material-design-icons/SubdirectoryArrowRight.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
 import ArrowUpBoldIcon from 'vue-material-design-icons/ArrowUpBold.vue'
 import SignalCellular2Icon from 'vue-material-design-icons/SignalCellular2.vue'
@@ -905,6 +919,15 @@ body.theme--dark .card-tile,
 	background: rgba(240, 168, 68, 0.1);
 }
 
+/* Sub-card marker - a muted ↳ glyph in the same neutral vocabulary as the
+ * recurring badge: an attribute of the card, not an alert. It leads the meta
+ * row so "this belongs under another card" is the first thing read. */
+.card-tile__subcard {
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-text-maxcontrast);
+}
+
 /* Recurring badge (#61) - a muted repeat glyph; neutral so it reads as an
  * attribute of the card, not an alert. */
 .card-tile__recurring {
@@ -1045,6 +1068,12 @@ body.theme--dark .card-tile,
 
 /* Compact: match the timer-running icon size to the recurring badge. */
 .card-tile--compact .card-tile__timer-running :deep(svg) {
+	width: 12px;
+	height: 12px;
+}
+
+/* Compact: same treatment for the sub-card marker. */
+.card-tile--compact .card-tile__subcard :deep(svg) {
 	width: 12px;
 	height: 12px;
 }

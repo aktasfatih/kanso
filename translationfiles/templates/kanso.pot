@@ -91,6 +91,10 @@ msgid "{card} is due tomorrow"
 msgstr ""
 
 #: src/views/BoardView.vue
+msgid "{card} is no longer a sub-card"
+msgstr ""
+
+#: src/views/BoardView.vue
 msgid "{card} is now a sub-card of {parent}"
 msgstr ""
 
@@ -370,6 +374,7 @@ msgstr ""
 msgid "Add column"
 msgstr ""
 
+#: src/components/BoardListView.vue
 #: src/views/BoardView.vue
 msgid "Add column…"
 msgstr ""
@@ -1410,6 +1415,10 @@ msgstr ""
 msgid "Couldn't make this card a sub-card."
 msgstr ""
 
+#: src/views/BoardView.vue
+msgid "Couldn't remove this card from its parent."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Count"
 msgstr ""
@@ -1804,6 +1813,10 @@ msgstr ""
 msgid "Drop to nest as sub-card"
 msgstr ""
 
+#: src/components/BoardListView.vue
+msgid "Drop to remove from parent"
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Due"
 msgstr ""
@@ -2118,6 +2131,10 @@ msgstr ""
 msgid "Failed to create card."
 msgstr ""
 
+#: src/components/BoardListView.vue
+msgid "Failed to create column."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to create custom field."
 msgstr ""
@@ -2295,6 +2312,7 @@ msgid "Failed to move card."
 msgstr ""
 
 #: src/composables/useCardMove.js
+#: src/views/BoardView.vue
 msgid "Failed to move card. Please try again."
 msgstr ""
 
@@ -4512,6 +4530,7 @@ msgstr ""
 msgid "Strikethrough"
 msgstr ""
 
+#: src/components/CardTile.vue
 #: src/composables/useBoardFilters.js
 msgid "Sub-card"
 msgstr ""

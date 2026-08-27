@@ -126,10 +126,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</p>
 				</div>
 
-				<!-- Card row (top-level only gets DnD; children and composer are inert) -->
+				<!-- Card row. Top-level AND child rows are draggable: the list draws the
+				     indent, so dragging a sub-card out of it is a gesture the user can
+				     see themselves make (the kanban board draws no indent, so a tile
+				     drag there never touches the parent). -->
 				<div
-					v-else-if="rows[vRow.index].type === 'card' && !rows[vRow.index].isChild"
-					v-card-dnd="{ card: rows[vRow.index].card, sortMode: props.sortMode }"
+					v-else-if="rows[vRow.index].type === 'card'"
+					v-card-dnd="{ card: rows[vRow.index].card, sortMode: props.sortMode, rowParentId: rows[vRow.index].isChild ? rows[vRow.index].card.parentCardId : null }"
 					class="board-list-row-wrap"
 					:class="{
 						'board-list-row-wrap--dragging': isDraggingCard === rows[vRow.index].card.id,
@@ -139,10 +142,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					}">
 					<button
 						class="board-list-row"
-						:class="{ 'board-list-row--draggable': props.sortMode === 'manual' }"
+						:class="{
+							'board-list-row--draggable': props.sortMode === 'manual',
+							'board-list-row--child': rows[vRow.index].isChild,
+						}"
 						@click="openCard(rows[vRow.index].card)">
 
-						<!-- Expand/collapse caret for parent cards with children; spacer for all others -->
+						<!-- Expand/collapse caret for parent cards with children; spacer for
+						     all other top-level rows. A child row has neither (its own indent
+						     already carries the hierarchy). -->
 						<span
 							v-if="rows[vRow.index].hasChildren"
 							class="board-list-row__caret"
@@ -164,7 +172,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</span>
 						<!-- Spacer keeps status dot aligned when there is no caret -->
 						<span
-							v-else
+							v-else-if="!rows[vRow.index].isChild"
 							class="board-list-row__caret-spacer" />
 
 						<span
@@ -259,107 +267,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</span>
 						</span>
 					</button>
-					<!-- Drop indicator lines (top / bottom edge) -->
-					<div v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'top'" class="board-list-drop-indicator board-list-drop-indicator--top" />
-					<div v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'bottom'" class="board-list-drop-indicator board-list-drop-indicator--bottom" />
-					<!-- Nest hint (#5885): centre-band drop makes the dragged card a sub-card -->
+					<!-- Drop indicator lines (top / bottom edge). The line is indented to
+					     the level the card would land at, so leaving a parent is visible
+					     as the line jumping back to the left margin; an un-nesting drop
+					     also switches it to the dashed detach style. -->
+					<div
+						v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'top'"
+						class="board-list-drop-indicator board-list-drop-indicator--top"
+						:class="{
+							'board-list-drop-indicator--nested': dropNested,
+							'board-list-drop-indicator--unnest': dropIntent === 'unnest',
+						}" />
+					<div
+						v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'bottom'"
+						class="board-list-drop-indicator board-list-drop-indicator--bottom"
+						:class="{
+							'board-list-drop-indicator--nested': dropNested,
+							'board-list-drop-indicator--unnest': dropIntent === 'unnest',
+						}" />
+					<!-- Nest hint (#5885): centre-band drop makes the dragged card a
+					     sub-card. A reorder drop that lands among ANOTHER card's children
+					     adopts it into that parent, so it carries the same label. -->
 					<span
-						v-if="dropTargetCardId === rows[vRow.index].card.id && dropMode === 'nest'"
+						v-if="dropTargetCardId === rows[vRow.index].card.id && (dropMode === 'nest' || dropIntent === 'reparent')"
 						class="board-list-nest-hint">
 						{{ t('kanso', 'Drop to nest as sub-card') }}
 					</span>
+					<!-- Un-nest hint: this reorder position is outside the dragged card's
+					     parent, so the drop takes it out. Deliberately worded as the
+					     action, and styled apart from the nest hint. -->
+					<span
+						v-else-if="dropTargetCardId === rows[vRow.index].card.id && dropIntent === 'unnest'"
+						class="board-list-nest-hint board-list-nest-hint--unnest">
+						{{ t('kanso', 'Drop to remove from parent') }}
+					</span>
 				</div>
-
-				<!-- Child card row (inert for DnD — never draggable/droppable) -->
-				<button
-					v-else-if="rows[vRow.index].type === 'card' && rows[vRow.index].isChild"
-					class="board-list-row board-list-row--child"
-					@click="openCard(rows[vRow.index].card)">
-
-					<span
-						class="board-list-row__status"
-						:class="`board-list-row__status--${statusOf(rows[vRow.index].card)}`"
-						:title="statusLabel(rows[vRow.index].card)" />
-
-					<span
-						v-if="cardHumanId(rows[vRow.index].card)"
-						class="board-list-row__id">
-						{{ cardHumanId(rows[vRow.index].card) }}
-					</span>
-
-					<span
-						v-if="(rows[vRow.index].card.labelIds || []).length"
-						class="board-list-row__labels">
-						<span
-							v-for="labelId in (rows[vRow.index].card.labelIds || []).slice(0, 4)"
-							:key="labelId"
-							class="board-list-row__label-dot"
-							:title="labelTitle(labelId)"
-							:style="{ background: labelColor(labelId) }" />
-					</span>
-
-					<span
-						class="board-list-row__title"
-						:class="{ 'board-list-row__title--done': isDone(rows[vRow.index].card) }">
-						{{ rows[vRow.index].card.title }}
-					</span>
-
-					<span class="board-list-row__meta">
-						<span
-							v-if="rows[vRow.index].card.priority > 0"
-							class="board-list-row__priority"
-							:class="`board-list-row__priority--${rows[vRow.index].card.priority}`">
-							{{ priorityLabel(rows[vRow.index].card.priority) }}
-						</span>
-
-						<span
-							v-if="cardProgress(rows[vRow.index].card)"
-							class="board-list-row__count">
-							<CheckboxMarkedOutlineIcon :size="14" />
-							{{ cardProgress(rows[vRow.index].card).done }}/{{ cardProgress(rows[vRow.index].card).total }}
-						</span>
-
-						<span
-							v-if="rows[vRow.index].card.duedate"
-							class="board-list-row__due"
-							:class="{ 'board-list-row__due--overdue': isOverdue(rows[vRow.index].card) }">
-							<CalendarIcon :size="14" />
-							{{ formatDue(rows[vRow.index].card) }}
-						</span>
-
-						<span v-if="rows[vRow.index].card.commentCount > 0" class="board-list-row__count">
-							<CommentOutlineIcon :size="14" />
-							{{ rows[vRow.index].card.commentCount }}
-						</span>
-
-						<CheckDecagramIcon
-							v-if="rows[vRow.index].card.reviewState === 'approved'"
-							:size="15"
-							class="board-list-row__review board-list-row__review--approved" />
-						<AlertDecagramIcon
-							v-else-if="rows[vRow.index].card.reviewState === 'changes_requested'"
-							:size="15"
-							class="board-list-row__review board-list-row__review--changes" />
-
-						<!-- Timer running (#73) -->
-						<TimerOutlineIcon
-							v-if="rows[vRow.index].card.timerRunning && cardFeatures.timeTracking"
-							:size="15"
-							class="board-list-row__timer-running"
-							:title="t('kanso', 'Timer running')" />
-
-						<span
-							v-if="(rows[vRow.index].card.assigneeIds || []).length"
-							class="board-list-row__assignees">
-							<NcAvatar
-								v-for="uid in (rows[vRow.index].card.assigneeIds || []).slice(0, 3)"
-								:key="uid"
-								:user="uid"
-								:size="24"
-								:hide-status="true" />
-						</span>
-					</span>
-				</button>
 
 				<!-- Group-level column drop target for empty groups (appends to end).
 				     Rendered as the last slot inside each header vrow so it occupies the
@@ -371,11 +313,45 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:data-stack-id="rows[vRow.index].stackId" />
 			</div>
 		</div>
+
+		<!-- Column composer (#9853). List view had no way to create a column: the
+		     ⋯ More → "Add column" action revealed a composer that only exists on the
+		     kanban track, so in list view it silently did nothing. This is the list's
+		     own target for that action, and a standing affordance in its own right —
+		     the same shape as the per-group "Add card…" composer, at the end of the
+		     group list.
+
+		     Deliberately rendered OUTSIDE the virtualizer (a sibling of the row host,
+		     not a virtual row): the list recycles row elements as it scrolls, which
+		     would blow away the input's focus and half-typed draft. Out here it is a
+		     plain, stable DOM node.
+
+		     Editors only — BoardView passes the callback only when the user may edit
+		     the board, so a viewer gets no affordance at all. The cross-board Views
+		     path (props.groups, whose rows have no stack behind them) never passes
+		     one either. -->
+		<form
+			v-if="addColumnEnabled"
+			class="add-column-composer"
+			@submit.prevent="submitNewColumn">
+			<input
+				ref="addColumnInputRef"
+				v-model="addColumnTitle"
+				class="add-column-composer__input"
+				type="text"
+				maxlength="100"
+				data-test="list-add-column"
+				:aria-label="t('kanso', 'Add column…')"
+				:placeholder="t('kanso', 'Add column…')"
+				:disabled="addColumnPending"
+				@keydown.enter.prevent="submitNewColumn">
+			<p v-if="addColumnError" class="add-column-composer__error">{{ addColumnError }}</p>
+		</form>
 	</div>
 </template>
 
 <script setup>
-import { ref, computed, inject, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, computed, inject, nextTick, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -445,6 +421,14 @@ const props = defineProps({
 	 */
 	onCreateFromTemplate: { type: Function, default: null },
 	/**
+	 * Async fn (title) → Promise - creates a column (#9853). When provided (and
+	 * props.groups is absent) an "Add column…" composer renders at the end of the
+	 * group list, and `focusAddColumn()` (exposed below) is what the board's
+	 * ⋯ More → "Add column" action targets while list view is active. BoardView
+	 * passes it only to editors, so a viewer sees no add-column affordance.
+	 */
+	onCreateStack: { type: Function, default: null },
+	/**
 	 * Board's "new cards on top" preference. When true, multi-line pastes are
 	 * submitted in reverse order so the first pasted line appears topmost.
 	 */
@@ -480,6 +464,17 @@ const isDraggingCard = ref(null)    // cardId currently being dragged (for opaci
 const dropTargetCardId = ref(null)  // cardId the pointer is hovering over
 const dropEdge = ref(null)          // 'top' | 'bottom' | null
 const dropMode = ref(null)          // 'reorder' | 'nest' | null (#5885)
+// What a reorder drop would do to the dragged card's PARENT: 'unnest' (it
+// leaves its parent), 'reparent' (it joins another card's children) or
+// 'reorder' (parent untouched). Drives the drop affordance so the two are never
+// confusable before the pointer is released.
+const dropIntent = ref('reorder')
+// Whether the dragged card would land INSIDE a parent at the hovered position.
+// Read from the drop data rather than from the hovered row's own level, so the
+// indicator is drawn at the indent the card actually takes — a refused adoption
+// (a card that has children of its own cannot become one) lands top-level even
+// though the row under the pointer is indented.
+const dropNested = ref(false)
 
 // Whether this surface offers drag-to-nest (#5885). Provided as true only by a
 // board that owns the card drag monitor and is in manual sort; a cross-board
@@ -540,7 +535,11 @@ function setGroupDropRef(stackId, el) {
 		element: el,
 		canDrop: ({ source }) => source.data.type === 'card',
 		// Match StackColumn's column drop-target data shape exactly so the BoardView
-		// card monitor's `columnTarget` branch resolves it correctly.
+		// card monitor's `columnTarget` branch resolves it correctly. Deliberately
+		// no `parentChange`: this overlay covers a whole group header and paints
+		// only a generic highlight, so a drop here must stay a plain move. Taking a
+		// card out of its parent needs the visible gesture — dragging the row out
+		// of the indent onto another top-level row.
 		getData: () => ({ type: 'column', stackId, laneKey: '' }),
 		onDragEnter: () => el.classList.add(DROP_OVER_CLASS),
 		onDragLeave: () => el.classList.remove(DROP_OVER_CLASS),
@@ -552,37 +551,45 @@ function setGroupDropRef(stackId, el) {
 }
 
 // ── vCardDnd custom directive ──────────────────────────────────────────────────
-// Attaches draggable + dropTarget (identical data contract as CardTile) to each
-// top-level card row wrapper. The directive lives on the outermost <div
-// class="board-list-row-wrap"> so the full row area is the drag handle and
-// drop target. Because virtualizer recycles DOM nodes, we use mounted/updated/
-// unmounted to always re-sync the registration with the current card binding.
+// Attaches draggable + dropTarget (identical data contract as CardTile) to EVERY
+// card row wrapper — top-level and indented child rows alike. The directive
+// lives on the outermost <div class="board-list-row-wrap"> so the full row area
+// is the drag handle and drop target. Because virtualizer recycles DOM nodes, we
+// use mounted/updated/unmounted to always re-sync the registration with the
+// current card binding.
 //
 // Data contract (built by buildCardDragData, so it cannot drift from CardTile):
 //   draggable getInitialData: { type:'card', cardId, stackId, sortKey, laneKey:null,
 //                               parentCardId, hasChildren }
 //   dropTarget getData:       buildCardDropData(…) → either
 //                               { same fields, dropMode:'nest' }               (centre band)
-//                             or attachClosestEdge({ … , dropMode:'reorder' }) (edges)
+//                             or attachClosestEdge({ … , dropMode:'reorder',
+//                                                    parentChange })           (edges)
 //   dropTarget canDrop:       source.data.type === 'card' && source.data.cardId !== cardId
 //
 // laneKey is null (not '') because the list view is always the flat/no-swimlane
 // path; the BoardView monitor's swimlane guard checks `laneKey ?? ''` so null
 // collapses to '' and cross-lane drops are correctly rejected.
 //
-// A 'reorder' drop still only changes stackId + sortKey — it never touches
-// parentCardId. A 'nest' drop (#5885) makes the dragged card a sub-card of the
-// hovered one; the BoardView monitor owns that mutation. Child rows stay inert
-// (they never receive this directive); a sub-card is detached from the card's
-// own detail panel.
+// `rowParentId` is what makes drag-OUT possible here and nowhere else: it is the
+// level the row sits at (null for a top-level row, the parent's id for an
+// indented child row), so a reorder drop resolves the parent the card takes at
+// that position — dropping a sub-card among its own siblings keeps it a
+// sub-card, dropping it at a top-level position takes it out. The kanban tile
+// passes no rowParentId at all, so a tile reorder or column move can never
+// change a parent the board does not draw. Detaching also stays available from
+// the card's own detail panel (the keyboard-accessible path).
 
-function makeCardDndBinding(el, { card, sortMode: mode }) {
+function makeCardDndBinding(el, { card, sortMode: mode, rowParentId }) {
 	// Only wire DnD when we are in the classic per-stack path (card has a real
 	// stackId) and the display sort is manual.
 	if (!card?.id || !card?.stackId || mode !== 'manual') return () => {}
 
 	const cardId = card.id
-	const base = buildCardDragData(card, null)
+	// The row's rendered level rides BOTH payloads: as a drag source it says what
+	// indent the card is being dragged out of, as a drop target what indent the
+	// position offers.
+	const base = buildCardDragData(card, null, rowParentId ?? null)
 
 	return combine(
 		draggable({
@@ -600,12 +607,17 @@ function makeCardDndBinding(el, { card, sortMode: mode }) {
 				element: el2,
 				source,
 				nestEnabled: nestEnabled.value === true,
+				rowParentId: rowParentId ?? null,
 			}),
 			onDrag: ({ self }) => {
 				if (dropTargetCardId.value !== cardId) dropTargetCardId.value = cardId
 				const nesting = self.data.dropMode === 'nest'
 				const nextMode = nesting ? 'nest' : 'reorder'
 				if (dropMode.value !== nextMode) dropMode.value = nextMode
+				const intent = nesting ? 'reorder' : (self.data.parentChange?.intent ?? 'reorder')
+				if (dropIntent.value !== intent) dropIntent.value = intent
+				const nested = !nesting && self.data.landsNested === true
+				if (dropNested.value !== nested) dropNested.value = nested
 				// Edge line and nest highlight are mutually exclusive, so the user
 				// can always tell which drop is pending before releasing.
 				const edge = nesting ? null : extractClosestEdge(self.data)
@@ -616,12 +628,16 @@ function makeCardDndBinding(el, { card, sortMode: mode }) {
 					dropTargetCardId.value = null
 					dropEdge.value = null
 					dropMode.value = null
+					dropIntent.value = 'reorder'
+					dropNested.value = false
 				}
 			},
 			onDrop: () => {
 				dropTargetCardId.value = null
 				dropEdge.value = null
 				dropMode.value = null
+				dropIntent.value = 'reorder'
+				dropNested.value = false
 			},
 		}),
 	)
@@ -670,6 +686,9 @@ const vCardDnd = {
 			// gained/lost a parent or a child must be re-registered too.
 			&& (prev?.card?.parentCardId ?? null) === (next?.card?.parentCardId ?? null)
 			&& Number(prev?.card?.childProgress?.total ?? 0) === Number(next?.card?.childProgress?.total ?? 0)
+			// The row's own level decides what a reorder drop does to the parent,
+			// so a row that moved between the indent and the margin must re-register.
+			&& (prev?.rowParentId ?? null) === (next?.rowParentId ?? null)
 		if (sameCard) {
 			pendingRebinds.delete(el)
 			return
@@ -1095,6 +1114,60 @@ async function createFromTemplate(stackId, templateId) {
 		isPendingByStack[stackId] = false
 	}
 }
+
+// ── Column composer (#9853) ──────────────────────────────────────────────────
+// Only on the classic per-stack path: the cross-board Views path renders
+// arbitrary groups with no stack behind them, so "add column" is meaningless
+// there (the same reason setGroupDropRef skips a null stackId). Non-manual sort
+// modes are NOT gated: unlike a drag, creating a column doesn't touch any sort
+// key, and kanban offers it in every sort mode.
+const addColumnEnabled = computed(() => !props.groups && typeof props.onCreateStack === 'function')
+
+const addColumnTitle = ref('')
+const addColumnError = ref('')
+const addColumnPending = ref(false)
+const addColumnInputRef = ref(null)
+
+// A failure message describes the title that failed, so it goes stale the moment
+// that title is edited — otherwise the user retypes and still stares at the old
+// error next to text that is now fine.
+watch(addColumnTitle, () => { addColumnError.value = '' })
+
+async function submitNewColumn() {
+	const title = addColumnTitle.value.trim()
+	if (!title || addColumnPending.value || !props.onCreateStack) return
+	addColumnError.value = ''
+	addColumnPending.value = true
+	try {
+		await props.onCreateStack(title)
+		addColumnTitle.value = ''
+	} catch (err) {
+		addColumnError.value = err?.response?.data?.error || t('kanso', 'Failed to create column.')
+	} finally {
+		addColumnPending.value = false
+	}
+	// Re-focus for rapid entry, mirroring the card composer — and after a failure
+	// too, so the title can be corrected and retried. Must come after the pending
+	// flag clears: a disabled input cannot take focus.
+	await nextTick()
+	addColumnInputRef.value?.focus()
+}
+
+/**
+ * Reveal + focus the column composer. This is what the board's ⋯ More →
+ * "Add column" action calls while list view is active — one menu action, two
+ * targets, instead of one that quietly aims at the hidden kanban track.
+ */
+function focusAddColumn() {
+	if (!addColumnEnabled.value) return
+	addColumnError.value = ''
+	nextTick(() => {
+		addColumnInputRef.value?.scrollIntoView?.({ block: 'nearest' })
+		addColumnInputRef.value?.focus()
+	})
+}
+
+defineExpose({ focusAddColumn })
 </script>
 
 <style scoped>
@@ -1339,6 +1412,52 @@ body.theme--dark .board-list-table,
 	white-space: nowrap;
 }
 
+/* ── Column composer ────────────────────────────────────────────────────────── */
+
+/* Sits after the virtualized row host (outside the virtualizer), so it reads as
+   the end of the group list. Same max-width as the host so its input lines up
+   with the rows above it. */
+.add-column-composer {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 1100px;
+	padding: 10px 8px 0;
+}
+
+.add-column-composer__input {
+	flex: 1;
+	min-width: 0;
+	max-width: 320px;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px dashed var(--color-border-dark);
+	border-radius: var(--border-radius, 3px);
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+}
+
+.add-column-composer__input:focus {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -1px;
+	border-color: transparent;
+	background: var(--color-main-background);
+}
+
+.add-column-composer__input::placeholder {
+	color: var(--color-text-maxcontrast);
+}
+
+.add-column-composer__error {
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+	color: var(--kanso-error-legible);
+	margin: 0;
+}
+
 /* ── Card row wrapper (DnD host) ────────────────────────────────────────────── */
 
 /* The wrapper is a block that fills the vrow slot and positions the drop
@@ -1360,8 +1479,7 @@ body.theme--dark .board-list-table,
    matching the kanban card tile's closest-edge indicator style. */
 .board-list-drop-indicator {
 	position: absolute;
-	left: 0;
-	right: 0;
+	inset-inline: 0;
 	height: 2px;
 	background: var(--color-primary-element);
 	border-radius: 1px;
@@ -1375,6 +1493,24 @@ body.theme--dark .board-list-table,
 
 .board-list-drop-indicator--bottom {
 	bottom: 0;
+}
+
+/* The line is drawn at the INDENT of the position it marks: flush left for a
+   top-level slot, inset to the child gutter for a slot inside a parent's
+   children. Dragging a sub-card out of its parent is then visible as the line
+   snapping back to the margin, before anything is committed. */
+.board-list-drop-indicator--nested {
+	/* Logical, so it matches the child row's own padding-inline-start under RTL. */
+	inset-inline-start: 46px;
+}
+
+/* …and an un-nesting drop (the card leaves its parent) is drawn apart from a
+   plain reorder: a thicker dashed rule in the warning tone, so "this changes
+   the hierarchy" never reads as "this just moves the row". */
+.board-list-drop-indicator--unnest {
+	height: 0;
+	background: none;
+	border-top: 3px dashed var(--kanso-warning-legible);
 }
 
 /* ── Nest drop affordance (#5885) ─────────────────────────────────────────────
@@ -1408,6 +1544,14 @@ body.theme--dark .board-list-table,
 	font-size: 0.68rem;
 	font-weight: 600;
 	white-space: nowrap;
+}
+
+/* The opposite move: this drop takes the dragged card OUT of its parent. Same
+   pill, the warning tone of the un-nest rule — never the primary colour the
+   nest affordance owns. */
+.board-list-nest-hint--unnest {
+	border-color: var(--kanso-warning-legible);
+	color: var(--kanso-warning-legible);
 }
 
 /* ── Card rows ──────────────────────────────────────────────────────────────── */
