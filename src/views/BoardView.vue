@@ -978,6 +978,76 @@ async function nestCard(cardId, targetData, sourceStackId, sourceParentId) {
 	expandStack(targetData.stackId)
 	enqueueMove({ cardId, targetStackId: targetData.stackId, afterCardId: parentCard.id, optimisticKey })
 }
+
+/**
+ * Apply a plain (edge / column) card drop: the optional parent change the drop
+ * position implies, then the move itself.
+ *
+ * `parentChange` is non-null only in list view, which renders children indented
+ * under their parent — so "drag the row out of the indent" is a gesture the user
+ * can see themselves perform. Dropping a sub-card at a top-level position clears
+ * its parent; reordering it among its own siblings does not (the row stays at
+ * the same level, so no change is produced at all).
+ *
+ * The re-parent is AWAITED before the move is queued, for the same two reasons
+ * nestCard does it: setParent's onSettled invalidates the board, which must not
+ * land on top of an in-flight optimistic move, and a rejected re-parent must not
+ * leave the card in a column the user never asked for.
+ *
+ * @param {object} args arguments
+ * @param {number} args.cardId the dragged card
+ * @param {?number} args.sourceParentId the dragged card's parent before the drop
+ * @param {?{parentCardId: ?number, intent: string}} args.parentChange the level change, if any
+ * @param {?object} args.move the enqueueMove payload, or null when the position is unchanged
+ */
+async function applyCardDrop({ cardId, sourceParentId, parentChange, move }) {
+	// The drop data was built when the row registered its drop target, which a
+	// realtime delta can outdate mid-drag (row registrations are deliberately
+	// held back for the duration of a drag). Re-read the card's parent from the
+	// cache so a change someone else already made is not written a second time.
+	const storedParentId = allVisibleCards.value.find((c) => c.id === Number(cardId))?.parentCardId ?? null
+	if (parentChange !== null && Number(storedParentId ?? 0) === Number(parentChange.parentCardId ?? 0)) {
+		parentChange = null
+	}
+
+	if (parentChange !== null) {
+		const movedTitle = cardTitleById(cardId)
+		try {
+			await setCardParent(
+				Number(cardId),
+				parentChange.parentCardId,
+				storedParentId != null ? Number(storedParentId) : (sourceParentId != null ? Number(sourceParentId) : null),
+			)
+		} catch (err) {
+			showWarning(err?.response?.data?.error
+				|| (parentChange.parentCardId === null
+					? t('kanso', 'Couldn\'t remove this card from its parent.')
+					: t('kanso', 'Couldn\'t make this card a sub-card.')))
+			return
+		}
+		announce(parentChange.parentCardId === null
+			? t('kanso', '{card} is no longer a sub-card', { card: movedTitle })
+			: t('kanso', '{card} is now a sub-card of {parent}', {
+				card: movedTitle,
+				parent: cardTitleById(parentChange.parentCardId),
+			}))
+	}
+
+	if (!move) return
+
+	// A card dropped onto a collapsed column's rail lands at the end of that
+	// stack; expand it so the moved card is visible rather than silently
+	// disappearing into a collapsed rail.
+	expandStack(move.targetStackId)
+	enqueueMove(move)
+
+	// Announce the user's own move to assistive tech.
+	announce(t('kanso', '{card} moved to {stack}', {
+		card: (cardsByStack.value.get(move.targetStackId) ?? []).find((c) => c.id === cardId)?.title
+			|| cardTitleById(cardId),
+		stack: stackTitleById(move.targetStackId),
+	}))
+}
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
 // key → CSS mapping lives client-side; an unknown key resolves to null.
@@ -1755,32 +1825,39 @@ onMounted(() => {
 					return // No valid target
 				}
 
-				// No-op guard: check if card is already in this position
+				// No-op guard: check if card is already in this position. A drop that
+				// only changes the LEVEL (dragging a sub-card out onto the very slot
+				// it already occupies) still has work to do, so this suppresses the
+				// move, not the whole drop.
+				let samePosition = false
 				if (targetStackId === sourceStackId) {
 					const stackCards = cardsByStack.value.get(targetStackId) ?? []
 					const draggedIdx = stackCards.findIndex((c) => c.id === cardId)
 					const cardBefore = draggedIdx > 0 ? stackCards[draggedIdx - 1] : null
 					const currentAfterCardId = cardBefore?.id ?? null
-					if (currentAfterCardId === afterCardId) return // already in this position
+					samePosition = currentAfterCardId === afterCardId
 				}
 
-				// A card dropped onto a collapsed column's rail lands at the end of
-				// that stack (columnTarget branch above); expand it so the moved card
-				// is visible rather than silently disappearing into a collapsed rail.
-				expandStack(targetStackId)
+				// The parent the drop position implies, when the view renders the
+				// hierarchy (list view only — see reorderParentChange). On the kanban
+				// board this is always null: a sub-card is an ordinary-looking tile
+				// there, so a reorder or a column move must never silently break the
+				// relation. Detaching stays an explicit action in the card's detail
+				// panel on both surfaces.
+				const parentChange = (cardTarget ?? columnTarget)?.data.parentChange ?? null
+				if (parentChange === null && samePosition) return
 
-				enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey })
-
-				// Announce the user's own move to assistive tech. A reorder never
-				// touches parentCardId (#5885): on a kanban board a sub-card is an
-				// ordinary-looking tile, so moving one between columns must not
-				// silently break the relation. Detaching stays an explicit action in
-				// the card's detail panel.
-				announce(t('kanso', '{card} moved to {stack}', {
-					card: (cardsByStack.value.get(targetStackId) ?? []).find((c) => c.id === cardId)?.title
-						|| cardTitleById(cardId),
-					stack: stackTitleById(targetStackId),
-				}))
+				applyCardDrop({
+					cardId,
+					sourceParentId,
+					parentChange,
+					move: samePosition ? null : { cardId, targetStackId, afterCardId, optimisticKey },
+				}).catch(() => {
+					// The mutation surfaces its own failure; this only keeps an
+					// unexpected throw from escaping the drag callback as an
+					// unhandled rejection.
+					showWarning(t('kanso', 'Failed to move card. Please try again.'))
+				})
 			},
 		}),
 		// Stack reordering: header-dragged columns dropped on another column's

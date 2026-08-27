@@ -425,12 +425,12 @@ test.describe('List view — drag-and-drop reorder', () => {
 		await expect(afterRows.nth(2)).toContainText('L2')
 	})
 
-	test('child rows are inert — dragging a child row does not move it', async ({ page }) => {
-		// Regression guard: child rows must not participate in DnD. We verify that
-		// a child row element does not carry the vCardDnd directive by checking that
-		// it does NOT have the board-list-row-wrap container (that wrapper is only
-		// rendered for top-level cards). Children render as bare board-list-row--child
-		// buttons, not inside board-list-row-wrap.
+	test('child rows are draggable — a child row is its own DnD host', async ({ page }) => {
+		// Child rows used to be inert, which made dragging a sub-card back out of
+		// its parent impossible. They now carry the same DnD host (board-list-row-wrap
+		// + the vCardDnd directive) as a top-level row, while still rendering
+		// indented. Which drop position keeps the parent and which clears it is
+		// covered in dnd-unnest.spec.js.
 		const board2 = await api.post('/boards', { title: 'List DnD Child Guard ' + Date.now() })
 		const stack2 = await api.post('/stacks', { boardId: board2.id, title: 'Tasks' })
 		const parent = await api.post('/cards', { stackId: stack2.id, title: 'Parent' })
@@ -445,13 +445,14 @@ test.describe('List view — drag-and-drop reorder', () => {
 		await page.keyboard.press('Escape')
 		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
 
-		// The child row should be a .board-list-row--child element and must NOT be
-		// wrapped inside a .board-list-row-wrap (which is the DnD host element).
+		// The child row still renders indented…
 		const childRow = page.locator('.board-list-row--child', { hasText: 'Child' })
 		await expect(childRow).toBeVisible({ timeout: 8_000 })
 
-		const wrapCount = await page.locator('.board-list-row-wrap', { hasText: 'Child' }).count()
-		expect(wrapCount).toBe(0)
+		// …and now sits inside the DnD host, marked draggable like any other row.
+		const childWrap = page.locator('.board-list-row-wrap', { hasText: 'Child' })
+		await expect(childWrap).toHaveCount(1)
+		await expect(childWrap.locator('.board-list-row--child.board-list-row--draggable')).toHaveCount(1)
 
 		// Cleanup
 		await api.delete(`/boards/${board2.id}`).catch(() => {})
