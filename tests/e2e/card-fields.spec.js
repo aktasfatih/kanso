@@ -123,7 +123,9 @@ test.describe('Custom fields', () => {
 		// Board settings now lives in the consolidated ⋯ More overflow menu.
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
-		await page.getByRole('tab', { name: /custom fields/i }).click()
+		// The rail entry is "Card fields" since #5894 - the pane now also hosts
+		// the built-in-section switches alongside the user-defined fields.
+		await page.getByRole('tab', { name: /card fields/i }).click()
 
 		await page.locator('[data-test="cf-name-input"]').fill('Team')
 		await page.locator('[data-test="cf-type-select"]').selectOption('text')

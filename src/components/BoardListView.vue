@@ -135,6 +135,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						'board-list-row-wrap--dragging': isDraggingCard === rows[vRow.index].card.id,
 						'board-list-row-wrap--drag-over-top': dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'top',
 						'board-list-row-wrap--drag-over-bottom': dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'bottom',
+						'board-list-row-wrap--nest-target': dropTargetCardId === rows[vRow.index].card.id && dropMode === 'nest',
 					}">
 					<button
 						class="board-list-row"
@@ -240,7 +241,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 							<!-- Timer running (#73) -->
 							<TimerOutlineIcon
-								v-if="rows[vRow.index].card.timerRunning"
+								v-if="rows[vRow.index].card.timerRunning && cardFeatures.timeTracking"
 								:size="15"
 								class="board-list-row__timer-running"
 								:title="t('kanso', 'Timer running')" />
@@ -261,6 +262,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<!-- Drop indicator lines (top / bottom edge) -->
 					<div v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'top'" class="board-list-drop-indicator board-list-drop-indicator--top" />
 					<div v-if="dropTargetCardId === rows[vRow.index].card.id && dropEdge === 'bottom'" class="board-list-drop-indicator board-list-drop-indicator--bottom" />
+					<!-- Nest hint (#5885): centre-band drop makes the dragged card a sub-card -->
+					<span
+						v-if="dropTargetCardId === rows[vRow.index].card.id && dropMode === 'nest'"
+						class="board-list-nest-hint">
+						{{ t('kanso', 'Drop to nest as sub-card') }}
+					</span>
 				</div>
 
 				<!-- Child card row (inert for DnD — never draggable/droppable) -->
@@ -336,7 +343,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 						<!-- Timer running (#73) -->
 						<TimerOutlineIcon
-							v-if="rows[vRow.index].card.timerRunning"
+							v-if="rows[vRow.index].card.timerRunning && cardFeatures.timeTracking"
 							:size="15"
 							class="board-list-row__timer-running"
 							:title="t('kanso', 'Timer running')" />
@@ -368,7 +375,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, computed, inject, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -386,9 +393,11 @@ import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
-import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
-import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
+import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
+import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
+import { useCardFeatures } from '../services/cardFeatures.js'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
@@ -470,33 +479,76 @@ const scrollRef = ref(null)
 const isDraggingCard = ref(null)    // cardId currently being dragged (for opacity)
 const dropTargetCardId = ref(null)  // cardId the pointer is hovering over
 const dropEdge = ref(null)          // 'top' | 'bottom' | null
+const dropMode = ref(null)          // 'reorder' | 'nest' | null (#5885)
+
+// Whether this surface offers drag-to-nest (#5885). Provided as true only by a
+// board that owns the card drag monitor and is in manual sort; a cross-board
+// View (which renders this component with `groups` and has no monitor) gets the
+// false default, so no dead affordance is shown there.
+const nestEnabled = inject(NEST_ENABLED, computed(() => false))
+
+// Built-in card sections this board still shows (#5894). A cross-board View
+// renders this component without a provider and gets all-enabled, since its
+// rows can mix boards with different settings.
+const cardFeatures = useCardFeatures()
 
 // ── Group-level drop targets (column drop zone) ────────────────────────────────
 // One dropTargetForElements per group header element, keyed by stackId. These
 // carry { type:'column', stackId, laneKey:'' } — exactly the shape the BoardView
-// card monitor's `columnTarget` branch reads. They provide a drop target for an
-// empty group (no card target exists there) and for drops below the last card in
-// a group (the drop lands on the column element, not a card element, in that case).
-const groupDropCleanups = new Map() // stackId → cleanup fn
+// card monitor's `columnTarget` branch reads. They are the ONLY drop target an
+// empty group has — with no cards there is no card row to aim at — so without
+// them a card can never be moved into an empty column from the list.
+const groupDrops = new Map() // stackId → { el, cleanup }
+
+const DROP_ACTIVE_CLASS = 'board-list-group-drop--active'
+const DROP_OVER_CLASS = 'board-list-group-drop--over'
+
+// Whether a card drag is currently in flight. Deliberately a plain `let`, not a
+// reactive ref: the overlay's live/inert state is applied imperatively via
+// classList, because ANY re-render re-invokes the inline `:ref` callbacks below
+// and would otherwise tear down + re-register every group drop target in the
+// middle of a drag.
+let cardDragActive = false
+
+function applyDragActive(el, active) {
+	el.classList.toggle(DROP_ACTIVE_CLASS, active)
+	if (!active) el.classList.remove(DROP_OVER_CLASS)
+}
+
+function setCardDragActive(active) {
+	cardDragActive = active
+	for (const { el } of groupDrops.values()) applyDragActive(el, active)
+}
 
 function setGroupDropRef(stackId, el) {
-	// Always tear down a previous registration for this stackId (element recycled
-	// by the virtualizer or ref changed).
-	if (groupDropCleanups.has(stackId)) {
-		groupDropCleanups.get(stackId)()
-		groupDropCleanups.delete(stackId)
-	}
-	if (!el || !stackId) return
 	// Only wire the column drop target on the classic per-stack path (stackId is
-	// real). The cross-board groups path yields stackId:null → skipped above.
+	// real). The cross-board groups path yields stackId:null → skipped here.
+	if (!stackId) return
+	const existing = groupDrops.get(stackId)
+	// Same element on a re-render → keep the live registration. Re-registering
+	// would break an in-flight drop target the pointer is already hovering.
+	if (existing && existing.el === el) return
+	// Vue clears a function ref with `null` before re-applying it on every
+	// re-render, so only tear down when the element is genuinely gone.
+	if (el === null && existing && existing.el.isConnected) return
+	if (existing) {
+		existing.cleanup()
+		groupDrops.delete(stackId)
+	}
+	if (!el) return
 	const cleanup = dropTargetForElements({
 		element: el,
 		canDrop: ({ source }) => source.data.type === 'card',
 		// Match StackColumn's column drop-target data shape exactly so the BoardView
 		// card monitor's `columnTarget` branch resolves it correctly.
 		getData: () => ({ type: 'column', stackId, laneKey: '' }),
+		onDragEnter: () => el.classList.add(DROP_OVER_CLASS),
+		onDragLeave: () => el.classList.remove(DROP_OVER_CLASS),
+		onDrop: () => el.classList.remove(DROP_OVER_CLASS),
 	})
-	groupDropCleanups.set(stackId, cleanup)
+	groupDrops.set(stackId, { el, cleanup })
+	// A header scrolled into view mid-drag has to be droppable immediately.
+	applyDragActive(el, cardDragActive)
 }
 
 // ── vCardDnd custom directive ──────────────────────────────────────────────────
@@ -506,18 +558,23 @@ function setGroupDropRef(stackId, el) {
 // drop target. Because virtualizer recycles DOM nodes, we use mounted/updated/
 // unmounted to always re-sync the registration with the current card binding.
 //
-// Data contract (matches CardTile byte-for-byte):
-//   draggable getInitialData: { type:'card', cardId, stackId, sortKey, laneKey:null }
-//   dropTarget getData:       attachClosestEdge({ same fields }, allowedEdges:['top','bottom'] )
+// Data contract (built by buildCardDragData, so it cannot drift from CardTile):
+//   draggable getInitialData: { type:'card', cardId, stackId, sortKey, laneKey:null,
+//                               parentCardId, hasChildren }
+//   dropTarget getData:       buildCardDropData(…) → either
+//                               { same fields, dropMode:'nest' }               (centre band)
+//                             or attachClosestEdge({ … , dropMode:'reorder' }) (edges)
 //   dropTarget canDrop:       source.data.type === 'card' && source.data.cardId !== cardId
 //
 // laneKey is null (not '') because the list view is always the flat/no-swimlane
 // path; the BoardView monitor's swimlane guard checks `laneKey ?? ''` so null
 // collapses to '' and cross-lane drops are correctly rejected.
 //
-// Note: A drop NEVER changes parentCardId — it only changes stackId + sortKey,
-// matching kanban board semantics. Child rows are inert (never receive this
-// directive).
+// A 'reorder' drop still only changes stackId + sortKey — it never touches
+// parentCardId. A 'nest' drop (#5885) makes the dragged card a sub-card of the
+// hovered one; the BoardView monitor owns that mutation. Child rows stay inert
+// (they never receive this directive); a sub-card is detached from the card's
+// own detail panel.
 
 function makeCardDndBinding(el, { card, sortMode: mode }) {
 	// Only wire DnD when we are in the classic per-stack path (card has a real
@@ -525,43 +582,46 @@ function makeCardDndBinding(el, { card, sortMode: mode }) {
 	if (!card?.id || !card?.stackId || mode !== 'manual') return () => {}
 
 	const cardId = card.id
-	const stackId = card.stackId
-	const sortKey = card.sortKey
+	const base = buildCardDragData(card, null)
 
 	return combine(
 		draggable({
 			element: el,
-			getInitialData: () => ({
-				type: 'card',
-				cardId,
-				stackId,
-				sortKey,
-				laneKey: null,
-			}),
+			getInitialData: () => ({ ...base }),
 			onDragStart: () => { isDraggingCard.value = cardId },
 			onDrop: () => { isDraggingCard.value = null },
 		}),
 		dropTargetForElements({
 			element: el,
 			canDrop: ({ source }) => source.data.type === 'card' && source.data.cardId !== cardId,
-			getData: ({ input, element: el2 }) => attachClosestEdge(
-				{ type: 'card', cardId, stackId, sortKey, laneKey: null },
-				{ input, element: el2, allowedEdges: ['top', 'bottom'] },
-			),
+			getData: ({ input, element: el2, source }) => buildCardDropData({
+				base,
+				input,
+				element: el2,
+				source,
+				nestEnabled: nestEnabled.value === true,
+			}),
 			onDrag: ({ self }) => {
 				if (dropTargetCardId.value !== cardId) dropTargetCardId.value = cardId
-				const edge = extractClosestEdge(self.data)
+				const nesting = self.data.dropMode === 'nest'
+				const nextMode = nesting ? 'nest' : 'reorder'
+				if (dropMode.value !== nextMode) dropMode.value = nextMode
+				// Edge line and nest highlight are mutually exclusive, so the user
+				// can always tell which drop is pending before releasing.
+				const edge = nesting ? null : extractClosestEdge(self.data)
 				if (dropEdge.value !== edge) dropEdge.value = edge
 			},
 			onDragLeave: () => {
 				if (dropTargetCardId.value === cardId) {
 					dropTargetCardId.value = null
 					dropEdge.value = null
+					dropMode.value = null
 				}
 			},
 			onDrop: () => {
 				dropTargetCardId.value = null
 				dropEdge.value = null
+				dropMode.value = null
 			},
 		}),
 	)
@@ -571,6 +631,27 @@ function makeCardDndBinding(el, { card, sortMode: mode }) {
 // virtualizer reuses elements — the same element may render different cards across
 // scrolls. We always tear down the previous cleanup before installing the new one.
 const cardDndCleanups = new WeakMap()
+
+// Re-registrations postponed because a drag is in flight, flushed when it ends.
+// Pragmatic's element adapter only re-evaluates a drop target on a native
+// dragover, so tearing one down and re-creating it under a pointer that is
+// already parked on it silently kills the drop: the new registration never
+// hears about the hover. A realtime delta landing mid-drag (someone else moved
+// or re-parented a card) is exactly that scenario, so re-registration waits.
+const pendingRebinds = new Map() // el → binding value
+
+function rebindCardDnd(el, value) {
+	const oldCleanup = cardDndCleanups.get(el)
+	if (oldCleanup) oldCleanup()
+	cardDndCleanups.set(el, makeCardDndBinding(el, value))
+}
+
+function flushPendingRebinds() {
+	for (const [el, value] of pendingRebinds) {
+		if (el.isConnected) rebindCardDnd(el, value)
+	}
+	pendingRebinds.clear()
+}
 
 const vCardDnd = {
 	mounted(el, binding) {
@@ -585,14 +666,25 @@ const vCardDnd = {
 			&& prev?.card?.stackId === next?.card?.stackId
 			&& prev?.card?.sortKey === next?.card?.sortKey
 			&& prev?.sortMode === next?.sortMode
-		if (sameCard) return
-		// Tear down old registration before installing new one.
-		const oldCleanup = cardDndCleanups.get(el)
-		if (oldCleanup) oldCleanup()
-		const cleanup = makeCardDndBinding(el, next)
-		cardDndCleanups.set(el, cleanup)
+			// The nest rules (#5885) are baked into the drop data, so a card that
+			// gained/lost a parent or a child must be re-registered too.
+			&& (prev?.card?.parentCardId ?? null) === (next?.card?.parentCardId ?? null)
+			&& Number(prev?.card?.childProgress?.total ?? 0) === Number(next?.card?.childProgress?.total ?? 0)
+		if (sameCard) {
+			pendingRebinds.delete(el)
+			return
+		}
+		if (cardDragActive) {
+			// Keep the live registration until the drop; the drop data the monitor
+			// actually consumes (target card id + stack) is re-resolved from the
+			// cache at drop time anyway.
+			pendingRebinds.set(el, next)
+			return
+		}
+		rebindCardDnd(el, next)
 	},
 	unmounted(el) {
+		pendingRebinds.delete(el)
 		const cleanup = cardDndCleanups.get(el)
 		if (cleanup) {
 			cleanup()
@@ -606,10 +698,26 @@ const vCardDnd = {
 // near the top/bottom edge scrolls the list, revealing off-screen groups.
 let autoscrollCleanup = null
 
+// Board-level drag monitor: flips the group drop overlays from inert to live for
+// the duration of a card drag (see the .board-list-group-drop CSS for why they
+// cannot be permanently live).
+let dragMonitorCleanup = null
+
 onMounted(() => {
 	if (scrollRef.value) {
 		autoscrollCleanup = autoScrollForElements({ element: scrollRef.value })
 	}
+	dragMonitorCleanup = monitorForElements({
+		canMonitor: ({ source }) => source.data.type === 'card',
+		onDragStart: () => setCardDragActive(true),
+		// Fires for a cancelled drag too, so the overlays always go inert again.
+		onDrop: () => {
+			setCardDragActive(false)
+			// Any row registration we held back for the duration of the drag can
+			// now safely be rebuilt.
+			flushPendingRebinds()
+		},
+	})
 })
 
 onBeforeUnmount(() => {
@@ -617,9 +725,14 @@ onBeforeUnmount(() => {
 		autoscrollCleanup()
 		autoscrollCleanup = null
 	}
+	if (dragMonitorCleanup) {
+		dragMonitorCleanup()
+		dragMonitorCleanup = null
+	}
 	// Tear down all group drop targets
-	for (const cleanup of groupDropCleanups.values()) cleanup()
-	groupDropCleanups.clear()
+	for (const { cleanup } of groupDrops.values()) cleanup()
+	groupDrops.clear()
+	pendingRebinds.clear()
 })
 
 // Persisted collapse scope: per board for the classic path, or a fixed 'views'
@@ -1140,14 +1253,34 @@ body.theme--dark .board-list-table,
 	flex: 0 0 auto;
 }
 
-/* Hidden drop target overlaid on the group header so drops onto the header
-   area (empty group / below-last-card space) route to the column target branch
-   in the BoardView monitor. It sits behind pointer events for the button itself
-   but the DnD library reads the drop tree, not pointer events. */
+/* Drop target overlaid on the group header so drops onto the header area (an
+   empty group, which has no card row to aim at) route to the column-target
+   branch in the BoardView monitor.
+
+   It must be inert while nothing is being dragged — it covers the header
+   button, whose click toggles the group collapse. But it must NOT be inert
+   during a drag: Pragmatic's element adapter resolves drop targets from the
+   native drag event's `target`, and native dragenter/dragover hit-testing skips
+   `pointer-events: none` elements, so a permanently-inert overlay can never
+   receive a drop. Hence inert by default, live only while a card drag is in
+   flight (class toggled imperatively from the drag monitor in the script). */
 .board-list-group-drop {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
+}
+
+.board-list-group-drop--active {
+	pointer-events: auto;
+}
+
+/* Highlight the whole group header while a dragged card hovers it, so the
+   pending drop is visible (the card rows use edge lines instead). */
+.board-list-group-drop--over {
+	background: color-mix(in srgb, var(--color-primary-element) 18%, transparent);
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+	border-radius: var(--border-radius, 3px);
 }
 
 /* ── Quick-add composer ─────────────────────────────────────────────────────── */
@@ -1242,6 +1375,39 @@ body.theme--dark .board-list-table,
 
 .board-list-drop-indicator--bottom {
 	bottom: 0;
+}
+
+/* ── Nest drop affordance (#5885) ─────────────────────────────────────────────
+ * The centre band of a row nests the dragged card under it; the edges still
+ * reorder. Nesting therefore must NOT look like the 2px edge line — it tints
+ * the whole row and grows an inset left bar in the same gutter position the
+ * child rows use for their indent guide, previewing the indent the card is
+ * about to take. */
+.board-list-row-wrap--nest-target > .board-list-row {
+	background: color-mix(in srgb, var(--color-primary-element) 14%, transparent);
+	box-shadow: inset 20px 0 0 -18px var(--color-primary-element);
+	outline: 2px dashed var(--color-primary-element);
+	outline-offset: -2px;
+	border-radius: var(--border-radius, 3px);
+}
+
+/* Inline "this becomes a sub-card" label, pinned to the row's right edge so it
+   never reflows the row (the virtualizer assumes fixed row heights). */
+.board-list-nest-hint {
+	position: absolute;
+	inset-inline-end: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	z-index: 11;
+	pointer-events: none;
+	padding: 1px 6px;
+	border-radius: var(--border-radius, 3px);
+	border: 1px dashed var(--color-primary-element);
+	background: var(--color-main-background);
+	color: var(--color-primary-element);
+	font-size: 0.68rem;
+	font-weight: 600;
+	white-space: nowrap;
 }
 
 /* ── Card rows ──────────────────────────────────────────────────────────────── */

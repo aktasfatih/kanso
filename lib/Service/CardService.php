@@ -933,9 +933,20 @@ class CardService {
 	 * $type sets the card's built-in issue type (#3402): '' clears it (none), a
 	 * non-empty value must be one of Card::TYPES.
 	 *
+	 * $baseLastModified is OPTIONAL optimistic concurrency for the description
+	 * (#9845): the `lastModified` the caller's editor was seeded from. When it is
+	 * supplied together with a $description that differs from the stored one, and
+	 * the card has moved on since, the write is REJECTED
+	 * ({@see DescriptionConflictException} → 409) instead of silently discarding
+	 * the other author's text. Best-effort, not a hard guarantee - see the
+	 * comment on the guard for the two windows it does not cover. Callers that
+	 * omit it (existing API clients, the MCP server) keep last-writer-wins
+	 * exactly as before.
+	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
 	 * @throws InvalidInputException on invalid title, duedate, cover colour or type
+	 * @throws DescriptionConflictException if the description write is based on a stale version
 	 */
 	public function update(
 		int $id,
@@ -954,11 +965,43 @@ class CardService {
 		?string $coverColor = null,
 		?string $type = null,
 		?string $visibility = null,
+		?int $baseLastModified = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $uid);
+
+		// Optimistic concurrency for the description (#9845). Checked BEFORE any
+		// setter runs, so a rejected write leaves the card completely untouched.
+		// Three conditions, all required:
+		//  - the caller opted in by sending the version its editor started from
+		//    (omitted → the historical last-writer-wins behaviour, unchanged);
+		//  - this write actually carries a description (a title/date/priority save
+		//    from the same open card must never be blocked by a foreign edit);
+		//  - the stored text really differs from what is being written - a re-save
+		//    of identical text loses nothing, so it is never a conflict.
+		// `lastModified` is a coarse token, so this is a strong safety net rather
+		// than a hard guarantee, and the two gaps are deliberate for this phase:
+		//  - it also moves for edits that never touched the description, which
+		//    would over-report. The browser client resolves that itself: on a 409
+		//    it compares the returned text with the one its editor was seeded from
+		//    and retries transparently when they match.
+		//  - it has SECOND resolution, so a competing write landing inside the very
+		//    second the editor was seeded still slips through unnoticed (a ~1s
+		//    window at edit-start). Closing that needs a real revision token (a
+		//    per-card counter or a base-text digest), which is follow-up work.
+		// The check is also read-then-write rather than a conditional UPDATE, so
+		// two requests arriving inside the same window can still both pass.
+		if ($baseLastModified !== null
+			&& $description !== null
+			&& $card->getLastModified() > $baseLastModified
+			&& $card->getDescription() !== $description) {
+			throw new DescriptionConflictException(
+				(string)$card->getDescription(),
+				$card->getLastModified(),
+			);
+		}
 
 		// Snapshot the tracked fields BEFORE any setter runs, so the change row can
 		// be stamped with a field-specific verb (#70) when exactly one of them moves.

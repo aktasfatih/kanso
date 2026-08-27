@@ -30,6 +30,7 @@ use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ContactService;
+use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -307,6 +308,41 @@ class CardControllerTest extends TestCase {
 		$response = $this->controller->update(9, null, null, 'not-a-date');
 		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testUpdateThreadsTheBaseVersionThrough(): void {
+		$card = $this->card();
+		$this->cardService->expects(self::once())->method('update')
+			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, 1700)
+			->willReturn($card);
+
+		$response = $this->controller->update(9, null, 'New description', baseLastModified: 1700);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	public function testUpdateOmittingTheBaseVersionPassesNull(): void {
+		// Back-compat: clients that never heard of optimistic concurrency (the MCP
+		// server, third-party API callers) keep last-writer-wins.
+		$card = $this->card();
+		$this->cardService->expects(self::once())->method('update')
+			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, null)
+			->willReturn($card);
+
+		$response = $this->controller->update(9, null, 'New description');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	public function testUpdateMapsDescriptionConflictTo409WithBothVersions(): void {
+		$this->cardService->method('update')
+			->willThrowException(new DescriptionConflictException('their current text', 1800));
+
+		$response = $this->controller->update(9, null, 'my text', baseLastModified: 1700);
+		self::assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		self::assertSame([
+			'error' => 'description_conflict',
+			'description' => 'their current text',
+			'lastModified' => 1800,
+		], $response->getData());
 	}
 
 	public function testUpdateMapsDoesNotExistTo404(): void {

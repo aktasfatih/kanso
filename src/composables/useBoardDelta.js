@@ -301,6 +301,12 @@ export async function syncBoardDelta(queryClient, boardId) {
 			...old,
 			cards: applyDelta(old.cards, delta.cards),
 			stacks: applyDelta(old.stacks, delta.stacks),
+			// Dependency edges (#5896) are a whole-list replacement, not a
+			// per-id delta: they aren't derivable from card summaries, and the
+			// server only sends them when the window was non-empty (a relation
+			// add/remove always puts ENTITY_CARD rows in it). Absent key = no
+			// relation change rode this window, so keep what we have.
+			...(Array.isArray(delta.blocksEdges) ? { blocksEdges: delta.blocksEdges } : {}),
 		}
 	})
 

@@ -83,6 +83,12 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      # Guard: appinfo/info.xml must validate against the App Store schema it
+      # declares. The store validates it at upload, so without this the first
+      # sign of an invalid manifest is a rejected release. Uses xmllint-wasm
+      # (libxml2 via WebAssembly) — the runners have no system xmllint.
+      - name: Validate appinfo/info.xml against the App Store schema
+        run: npm run lint:info-xml
       - name: Build frontend
         run: npm run build
       # Guard: the extracted template and the compiled l10n bundles must match the
@@ -96,6 +102,16 @@ jobs:
             echo "::error::Translations are stale — run 'npm run l10n:extract && npm run l10n:compile' and commit the result."
             exit 1
           }
+      # Guard: docs/TRANSLATING.md tells contributors to keep placeholders like
+      # {count} / %n / %1$s exactly as-is, but nothing enforced it — a renamed
+      # or dropped placeholder only breaks that one locale, which nobody on the
+      # project runs, so it would reach users unnoticed. Self-tests first so a
+      # regression in the checker itself (e.g. a false positive) fails loudly
+      # here instead of as a confusing failure on a real catalogue below.
+      - name: l10n lint self-tests
+        run: npm run test:l10n
+      - name: Lint translation catalogues (syntax + placeholders)
+        run: npm run l10n:lint
 
   # Cross-version × cross-DB install/migration matrix. This is what actually
   # VALIDATES the info.xml claim of NC 30–34: for each (version, db) combo it

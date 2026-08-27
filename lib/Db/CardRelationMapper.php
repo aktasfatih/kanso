@@ -139,6 +139,67 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
+	 * The same `blocks` edges as {@see self::findBlocksEdgesByBoard()}, but with
+	 * BOTH endpoints' visibility triples joined in - the board-scoped edge list
+	 * behind the timeline's dependency arrows.
+	 *
+	 * Why the triples ride along: the caller must mask edges per viewer, and a
+	 * board can hold hundreds of edges - re-fetching two cards per edge would
+	 * turn one arrow layer into an N+1. Same trick as {@see self::joinedRows()}:
+	 * ship the (visibility, creator_role, owner) triple and let
+	 * {@see \OCA\Kanso\Service\CardVisibilityScope::isVisibleTo()} decide in PHP,
+	 * off the exact rule the SQL scope encodes.
+	 *
+	 * Deliberately NOT merged into findBlocksEdgesByBoard(): that one feeds the
+	 * cycle check, which must see the graph WHOLE (an unmasked edge still
+	 * closes a cycle) and would only pay for the joins.
+	 *
+	 * @return list<array{from: int, to: int, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
+	 * @throws Exception
+	 */
+	public function findBlocksEdgesWithVisibilityByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectAlias('r.card_id', 'from_id')
+			->selectAlias('r.other_card_id', 'to_id')
+			->selectAlias('src.visibility', 'from_visibility')
+			->selectAlias('src.creator_role', 'from_creator_role')
+			->selectAlias('src.owner', 'from_owner')
+			->selectAlias('dst.visibility', 'to_visibility')
+			->selectAlias('dst.creator_role', 'to_creator_role')
+			->selectAlias('dst.owner', 'to_owner')
+			->from($this->getTableName(), 'r')
+			// Both ends joined so a soft-deleted endpoint drops the edge here
+			// rather than leaving the client an arrow to a card it never got.
+			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
+			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
+			->where($qb->expr()->eq('r.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
+			->andWhere($qb->expr()->eq('src.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('dst.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			// Stable output: the payload is diffed client-side, so a fixed order
+			// keeps an unchanged graph from looking changed.
+			->orderBy('r.card_id', 'ASC')
+			->addOrderBy('r.other_card_id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$edges = [];
+		while (($row = $result->fetch()) !== false) {
+			$edges[] = [
+				'from' => (int)$row['from_id'],
+				'to' => (int)$row['to_id'],
+				'fromVisibility' => $row['from_visibility'] !== null ? (string)$row['from_visibility'] : null,
+				'fromCreatorRole' => $row['from_creator_role'] !== null ? (string)$row['from_creator_role'] : null,
+				'fromOwner' => (string)$row['from_owner'],
+				'toVisibility' => $row['to_visibility'] !== null ? (string)$row['to_visibility'] : null,
+				'toCreatorRole' => $row['to_creator_role'] !== null ? (string)$row['to_creator_role'] : null,
+				'toOwner' => (string)$row['to_owner'],
+			];
+		}
+		$result->closeCursor();
+		return $edges;
+	}
+
+	/**
 	 * Card ids on the board that are blocked by at least one NOT-done card -
 	 * powers the tile "blocked" badge in one board-scoped query.
 	 *

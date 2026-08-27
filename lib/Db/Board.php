@@ -52,6 +52,8 @@ use OCP\DB\Types;
  * @method void setIcalFeedToken(?string $icalFeedToken)
  * @method string|null getChatUrl()
  * @method void setChatUrl(?string $chatUrl)
+ * @method string|null getDisabledCardFeatures()
+ * @method void setDisabledCardFeatures(?string $disabledCardFeatures)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -109,6 +111,12 @@ class Board extends Entity implements \JsonSerializable {
 	// http/https. A pure display address (typically a Talk room) - no Talk API
 	// coupling. NULL = no chat link. Emitted to every board member.
 	protected ?string $chatUrl = null;
+	// Built-in card sections a MANAGE user switched OFF for this board (#5894),
+	// stored as a JSON array of the DISABLED keys ({@see CardFeatures}). NULL =
+	// nothing disabled, which is every board that predates the column - so the
+	// upgrade is a no-op. A pure presentation flag: the data behind a hidden
+	// feature is never touched and returns intact when it is re-enabled.
+	protected ?string $disabledCardFeatures = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -129,10 +137,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('publicShareComments', Types::BOOLEAN);
 		$this->addType('icalFeedToken', Types::STRING);
 		$this->addType('chatUrl', Types::STRING);
+		$this->addType('disabledCardFeatures', Types::TEXT);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string, cardFeatures: array<string, bool>}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -150,6 +159,10 @@ class Board extends Entity implements \JsonSerializable {
 			// that predate the column and haven't been backfilled yet.
 			'prefix' => $this->prefix ?? BoardPrefix::DEFAULT,
 			'chatUrl' => $this->chatUrl,
+			// Built-in card sections, emitted as a NORMALISED enabled-map
+			// ({contacts: true, attachments: false, ...}) so the client never
+			// parses the raw storage and a NULL column reads as all-enabled.
+			'cardFeatures' => CardFeatures::decode($this->disabledCardFeatures),
 		];
 	}
 }

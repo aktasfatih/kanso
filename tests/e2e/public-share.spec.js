@@ -78,8 +78,10 @@ test.describe('Public read-only board share', () => {
 		expect(res.body.board.title).toBe('Public Share E2E')
 
 		// The board object carries no owner / acl / token / webhook - only the
-		// presentational fields plus the comments opt-in flag (#3949).
-		expect(Object.keys(res.body.board).sort()).toEqual(['color', 'commentsEnabled', 'prefix', 'title'])
+		// presentational fields, the comments opt-in flag (#3949) and the
+		// built-in-section switches (#5894, five booleans about the BOARD, never
+		// about a person) so the public link honours what the manager hid.
+		expect(Object.keys(res.body.board).sort()).toEqual(['cardFeatures', 'color', 'commentsEnabled', 'prefix', 'title'])
 
 		const card = res.body.cards.find((c) => c.title === 'Public visible card')
 		expect(card).toBeTruthy()

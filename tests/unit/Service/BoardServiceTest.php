@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPinMapper;
+use OCA\Kanso\Db\CardFeatures;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
@@ -389,6 +390,104 @@ class BoardServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		// A non-MANAGE user cannot set the chat link.
 		$this->service->update(1, null, null, null, 'bob', null, null, null, null, 'https://cloud.example.com/call/abc123');
+	}
+
+	// --- Built-in card features (#5894) -------------------------------------
+
+	public function testUpdatePersistsDisabledCardFeatures(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, [
+			CardFeatures::ATTACHMENTS => false,
+			CardFeatures::TIME_TRACKING => false,
+		]);
+
+		// Only the disabled keys are stored, and they read back as an
+		// enabled-map on the payload.
+		self::assertSame('["attachments","timeTracking"]', $updated->getDisabledCardFeatures());
+		$payload = $updated->jsonSerialize();
+		self::assertSame([
+			CardFeatures::CONTACTS => true,
+			CardFeatures::ATTACHMENTS => false,
+			CardFeatures::GITHUB => true,
+			CardFeatures::TIME_TRACKING => false,
+			CardFeatures::COVER_COLOR => true,
+		], $payload['cardFeatures']);
+	}
+
+	public function testUpdateMergesPartialCardFeaturePatch(): void {
+		$board = $this->board();
+		$board->setDisabledCardFeatures('["github"]');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// Flipping ONE switch must not clobber the other four.
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, [
+			CardFeatures::CONTACTS => false,
+		]);
+		self::assertSame('["contacts","github"]', $updated->getDisabledCardFeatures());
+	}
+
+	public function testUpdateReEnablingEveryFeatureClearsTheColumn(): void {
+		$board = $this->board();
+		$board->setDisabledCardFeatures('["attachments"]');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, [
+			CardFeatures::ATTACHMENTS => true,
+		]);
+		// All-enabled is stored as NULL, not a redundant "[]".
+		self::assertNull($updated->getDisabledCardFeatures());
+	}
+
+	public function testUpdateRejectsUnknownCardFeatureKey(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, null, null, null, 'alice', null, null, null, null, null, ['telepathy' => false]);
+	}
+
+	public function testUpdateRejectsNonBooleanCardFeatureValue(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, null, null, null, 'alice', null, null, null, null, null, [CardFeatures::GITHUB => 'off']);
+	}
+
+	public function testUpdateCardFeaturesAssertsManagePermission(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		// A non-MANAGE member cannot switch built-in card sections off.
+		$this->service->update(1, null, null, null, 'bob', null, null, null, null, null, [CardFeatures::ATTACHMENTS => false]);
+	}
+
+	public function testUpdateWithoutCardFeaturesLeavesThemUntouched(): void {
+		$board = $this->board();
+		$board->setDisabledCardFeatures('["coverColor"]');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$updated = $this->service->update(1, 'Renamed', null, null, 'alice');
+		self::assertSame('["coverColor"]', $updated->getDisabledCardFeatures());
 	}
 
 	public function testDeleteSoftDeletesAndWritesChangeRow(): void {

@@ -6,6 +6,7 @@
  *
  *   node scripts/l10n.mjs extract     # scan sources → translationfiles/templates/kanso.pot
  *   node scripts/l10n.mjs compile     # each translationfiles/<lang>/kanso.po → l10n/<lang>.{js,json}
+ *   node scripts/l10n.mjs lint        # validate PO syntax + placeholder consistency (CI)
  *   node scripts/l10n.mjs init <lang> # scaffold translationfiles/<lang>/kanso.po from the POT
  *
  * Why a bespoke tool instead of the Nextcloud `translationtool.phar`: it needs
@@ -199,6 +200,246 @@ function unquote(s) {
 		({ n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\' }[c]))
 }
 
+// ── PO linting (syntax + placeholder consistency) ───────────────────────────
+//
+// A separate, stricter parser from `parsePo` above: `parsePo` is deliberately
+// lenient (it just wants whatever msgstr text it can get for `compile`), but
+// `lint` needs to catch the input `parsePo` would silently mangle — stray
+// lines, msgstr[n] with no msgid_plural, a missing/malformed Plural-Forms
+// header. Kept separate so hardening `lint` can never change what `compile`
+// emits.
+
+/** Truncate a msgid for a one-line error message. */
+function trunc(s, n = 60) {
+	return s.length > n ? s.slice(0, n) + '…' : s
+}
+
+/**
+ * Strictly parse PO source into `{ entries, errors }`. Every non-blank,
+ * non-comment line must be one of: msgid / msgid_plural / msgstr / msgstr[n],
+ * or a `"…"` continuation of whichever came before — anything else (a stray
+ * line, a continuation with no open entry, msgstr before any msgid) is
+ * recorded in `errors` instead of silently ignored or misattributed.
+ */
+function parsePoStrict(text) {
+	const errors = []
+	const entries = []
+	let cur = null
+	let key = null
+
+	const flush = () => {
+		if (cur) {
+			if (cur.plural === null && Object.keys(cur.plurals).length > 0) {
+				errors.push({ line: cur.msgidLine, message: `msgid "${trunc(cur.msgid)}" has msgstr[n] forms but no msgid_plural` })
+			}
+			if (cur.plural !== null && cur.msgstr !== '') {
+				errors.push({ line: cur.msgidLine, message: `msgid "${trunc(cur.msgid)}" has both msgid_plural and a plain msgstr` })
+			}
+			entries.push(cur)
+		}
+		cur = null
+		key = null
+	}
+
+	const lines = text.split('\n')
+	for (let i = 0; i < lines.length; i++) {
+		const lineNo = i + 1
+		const raw = lines[i]
+		const line = raw.trim()
+		if (line === '') { flush(); continue }
+		if (line.startsWith('#')) continue
+		let m
+		if ((m = line.match(/^msgid "(.*)"$/))) {
+			flush()
+			cur = { msgid: unquote(m[1]), plural: null, msgstr: '', plurals: {}, msgidLine: lineNo }
+			key = 'msgid'
+		} else if ((m = line.match(/^msgid_plural "(.*)"$/))) {
+			if (!cur) { errors.push({ line: lineNo, message: 'msgid_plural with no preceding msgid' }); continue }
+			cur.plural = unquote(m[1])
+			key = 'plural'
+		} else if ((m = line.match(/^msgstr "(.*)"$/))) {
+			if (!cur) { errors.push({ line: lineNo, message: 'msgstr with no preceding msgid' }); continue }
+			cur.msgstr = unquote(m[1])
+			key = 'msgstr'
+		} else if ((m = line.match(/^msgstr\[(\d+)\] "(.*)"$/))) {
+			if (!cur) { errors.push({ line: lineNo, message: 'msgstr[n] with no preceding msgid' }); continue }
+			cur.plurals[m[1]] = unquote(m[2])
+			key = 'plural' + m[1]
+		} else if ((m = line.match(/^"(.*)"$/))) {
+			if (!cur || !key) { errors.push({ line: lineNo, message: `stray string continuation: ${raw.trim()}` }); continue }
+			const v = unquote(m[1])
+			if (key === 'msgid') cur.msgid += v
+			else if (key === 'plural') cur.plural += v
+			else if (key === 'msgstr') cur.msgstr += v
+			else if (key.startsWith('plural')) cur.plurals[key.slice(6)] += v
+		} else {
+			errors.push({ line: lineNo, message: `unrecognized PO syntax: ${raw.trim()}` })
+		}
+	}
+	flush()
+	return { entries, errors }
+}
+
+// A placeholder token is either `{ident}` (kept verbatim across languages) or
+// a printf-style conversion: `%n` (Nextcloud's plural count), `%s`/`%d`/…, or
+// a positional `%1$s`. `%%` is gettext/printf's escaped literal percent, not
+// a placeholder, and is matched (and dropped) so it can't be misread as one.
+const PLACEHOLDER_RE = /\{[A-Za-z_][A-Za-z0-9_]*\}|%%|%\d+\$[a-zA-Z]|%[a-zA-Z]/g
+
+/** Extract the multiset of placeholder tokens from a msgid/msgstr string. */
+function extractPlaceholders(str) {
+	if (!str) return []
+	const out = []
+	for (const m of str.matchAll(PLACEHOLDER_RE)) {
+		if (m[0] === '%%') continue
+		out.push(m[0])
+	}
+	return out
+}
+
+/** token -> occurrence count. */
+function tally(arr) {
+	return arr.reduce((m, t) => m.set(t, (m.get(t) || 0) + 1), new Map())
+}
+
+/** Diff two placeholder multisets. Order doesn't matter; identity and count do. */
+function diffMultisets(expected, actual) {
+	const exp = tally(expected)
+	const act = tally(actual)
+	const missing = []
+	const extra = []
+	for (const [tok, n] of exp) {
+		for (let i = 0; i < n - (act.get(tok) || 0); i++) missing.push(tok)
+	}
+	for (const [tok, n] of act) {
+		for (let i = 0; i < n - (exp.get(tok) || 0); i++) extra.push(tok)
+	}
+	return { missing, extra }
+}
+
+/**
+ * Merge the placeholder multisets of `msgid` and `msgid_plural` by taking, per
+ * token, the MAX of its count in either form — not the sum. English singular
+ * and plural forms usually repeat the same placeholder ("%n card" / "%n
+ * cards" both use %n once); summing would demand two %n's in every target
+ * msgstr[n], which is wrong — each target form only needs what it actually
+ * uses, capped at whichever source form uses the most of that token.
+ */
+function mergePlaceholderExpectations(msgidTokens, pluralTokens) {
+	const a = tally(msgidTokens)
+	const b = tally(pluralTokens)
+	const keys = new Set([...a.keys(), ...b.keys()])
+	const out = []
+	for (const k of keys) {
+		const n = Math.max(a.get(k) || 0, b.get(k) || 0)
+		for (let i = 0; i < n; i++) out.push(k)
+	}
+	return out
+}
+
+/**
+ * Lint one catalogue's PO source. Pure function (no I/O, no process.exit) so
+ * it can be unit-tested directly. Returns `{ ok, problems }`, where each
+ * problem is `{ line, message }`.
+ *
+ * Empty `msgstr`/`msgstr[n]` values are untranslated-by-design (English
+ * fallback) and are never checked — only content a translator actually wrote
+ * has to preserve placeholders.
+ */
+function lintCatalogText(lang, text) {
+	const problems = []
+	const { entries, errors: parseErrors } = parsePoStrict(text)
+	for (const e of parseErrors) {
+		problems.push({ line: e.line, message: `[${lang}] ${e.message}` })
+	}
+
+	const header = entries.find((e) => e.msgid === '')
+	let nplurals = null
+	if (!header) {
+		problems.push({ line: 1, message: `[${lang}] missing PO header (empty msgid) entry` })
+	} else {
+		const m = header.msgstr.match(/Plural-Forms:\s*nplurals\s*=\s*(\d+)\s*;/)
+		if (!m) {
+			problems.push({ line: header.msgidLine, message: `[${lang}] header is missing a valid "Plural-Forms: nplurals=N;" declaration` })
+		} else {
+			nplurals = Number(m[1])
+		}
+	}
+
+	for (const e of entries) {
+		if (e.msgid === '') continue // the header entry itself
+		if (e.plural !== null) {
+			if (nplurals !== null) {
+				for (const idxStr of Object.keys(e.plurals)) {
+					const idx = Number(idxStr)
+					if (idx >= nplurals) {
+						problems.push({
+							line: e.msgidLine,
+							message: `[${lang}] msgid "${trunc(e.msgid)}": msgstr[${idx}] present but Plural-Forms declares nplurals=${nplurals} (valid indices 0..${nplurals - 1})`,
+						})
+					}
+				}
+			}
+			const expected = mergePlaceholderExpectations(extractPlaceholders(e.msgid), extractPlaceholders(e.plural))
+			for (const idxStr of Object.keys(e.plurals).sort()) {
+				const val = e.plurals[idxStr]
+				if (!val) continue // untranslated plural form — allowed
+				const { missing, extra } = diffMultisets(expected, extractPlaceholders(val))
+				if (missing.length || extra.length) {
+					problems.push({
+						line: e.msgidLine,
+						message: `[${lang}] msgid "${trunc(e.msgid)}" msgstr[${idxStr}]: placeholder mismatch`
+							+ (missing.length ? ` — missing ${missing.join(', ')}` : '')
+							+ (extra.length ? ` — unexpected ${extra.join(', ')}` : ''),
+					})
+				}
+			}
+		} else {
+			if (!e.msgstr) continue // untranslated — allowed
+			const expected = extractPlaceholders(e.msgid)
+			const { missing, extra } = diffMultisets(expected, extractPlaceholders(e.msgstr))
+			if (missing.length || extra.length) {
+				problems.push({
+					line: e.msgidLine,
+					message: `[${lang}] msgid "${trunc(e.msgid)}": placeholder mismatch`
+						+ (missing.length ? ` — missing ${missing.join(', ')}` : '')
+						+ (extra.length ? ` — unexpected ${extra.join(', ')}` : ''),
+				})
+			}
+		}
+	}
+
+	return { ok: problems.length === 0, problems }
+}
+
+/** Lint every translationfiles/<lang>/kanso.po. Prints `::error::` annotations. */
+function lintAll() {
+	const langs = fs.existsSync(PO_DIR)
+		? fs.readdirSync(PO_DIR).filter((d) => d !== 'templates'
+			&& fs.existsSync(path.join(PO_DIR, d, 'kanso.po')))
+		: []
+	if (!langs.length) {
+		console.log('No translationfiles/<lang>/kanso.po to lint.')
+		return true
+	}
+	let ok = true
+	for (const lang of langs) {
+		const file = path.join(PO_DIR, lang, 'kanso.po')
+		const rel = path.relative(ROOT, file)
+		const text = fs.readFileSync(file, 'utf8')
+		const { ok: fileOk, problems } = lintCatalogText(lang, text)
+		if (!fileOk) {
+			ok = false
+			for (const p of problems) {
+				console.error(`::error file=${rel},line=${p.line}::${p.message}`)
+			}
+		} else {
+			console.log(`${rel} — OK`)
+		}
+	}
+	return ok
+}
+
 // ── compile PO → l10n/<lang>.{js,json} ──────────────────────────────────────
 
 function compileLang(lang) {
@@ -253,25 +494,36 @@ function initLang(lang) {
 }
 
 // ── main ────────────────────────────────────────────────────────────────────
+//
+// Guarded so `l10n.lint.test.mjs` can `import { lintCatalogText, … }` from
+// this file without also running the CLI dispatch below (and calling
+// `process.exit` out from under the test runner).
 
-const cmd = process.argv[2]
-if (cmd === 'extract') {
-	const map = new Map()
-	extractFrontend(map)
-	extractBackend(map)
-	writePot(map)
-} else if (cmd === 'compile') {
-	const langs = fs.existsSync(PO_DIR)
-		? fs.readdirSync(PO_DIR).filter((d) => d !== 'templates'
-			&& fs.existsSync(path.join(PO_DIR, d, 'kanso.po')))
-		: []
-	if (!langs.length) console.log('No translationfiles/<lang>/kanso.po to compile.')
-	langs.forEach(compileLang)
-} else if (cmd === 'init') {
-	const lang = process.argv[3]
-	if (!lang) { console.error('Usage: node scripts/l10n.mjs init <lang>'); process.exit(1) }
-	initLang(lang)
-} else {
-	console.error('Usage: node scripts/l10n.mjs <extract|compile|init <lang>>')
-	process.exit(1)
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+if (isMain) {
+	const cmd = process.argv[2]
+	if (cmd === 'extract') {
+		const map = new Map()
+		extractFrontend(map)
+		extractBackend(map)
+		writePot(map)
+	} else if (cmd === 'compile') {
+		const langs = fs.existsSync(PO_DIR)
+			? fs.readdirSync(PO_DIR).filter((d) => d !== 'templates'
+				&& fs.existsSync(path.join(PO_DIR, d, 'kanso.po')))
+			: []
+		if (!langs.length) console.log('No translationfiles/<lang>/kanso.po to compile.')
+		langs.forEach(compileLang)
+	} else if (cmd === 'lint') {
+		process.exit(lintAll() ? 0 : 1)
+	} else if (cmd === 'init') {
+		const lang = process.argv[3]
+		if (!lang) { console.error('Usage: node scripts/l10n.mjs init <lang>'); process.exit(1) }
+		initLang(lang)
+	} else {
+		console.error('Usage: node scripts/l10n.mjs <extract|compile|lint|init <lang>>')
+		process.exit(1)
+	}
 }
+
+export { parsePoStrict, extractPlaceholders, diffMultisets, mergePlaceholderExpectations, lintCatalogText }

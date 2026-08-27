@@ -702,8 +702,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Cover colour -->
-					<div v-if="canEdit" class="card-modal__attr">
+					<!-- Cover colour. Hidden when the board switched cover colours off
+					     (#5894); any colour already set stays stored and comes back. -->
+					<div v-if="canEdit && cardFeatures.coverColor" class="card-modal__attr">
 						<button
 							class="card-modal__pill"
 							:class="currentCoverColor ? '' : 'card-modal__pill--dashed'"
@@ -784,8 +785,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
 
-						<!-- Contacts (#3530) - read-only Contacts links, only when the Contacts app is available -->
-						<template v-if="contactsAvailable">
+						<!-- Contacts (#3530) - read-only Contacts links, only when the Contacts app is
+						     available AND the board still shows contacts (#5894). Existing links stay
+						     in the database while hidden. -->
+						<template v-if="contactsAvailable && cardFeatures.contacts">
 							<span
 								v-for="c in cardContacts"
 								:key="c.contactUri"
@@ -1135,6 +1138,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
 									<span v-if="descPasteError" class="card-modal__save-error">{{ descPasteError }}</span>
 								</div>
+
+								<!-- Save conflict (#9845): somebody else changed the description
+								     while this editor was open. NOTHING is thrown away - the
+								     draft stays in the editor above, their text is shown here in
+								     full, and the user picks which one wins. -->
+								<div v-if="descriptionConflict" class="card-modal__desc-conflict">
+									<p class="card-modal__desc-conflict-msg">
+										{{ t('kanso', 'Someone else changed this description while you were editing. Your text is kept in the editor above — their version is shown below.') }}
+									</p>
+									<pre class="card-modal__desc-conflict-theirs">{{ descriptionConflict.description || t('kanso', '(empty)') }}</pre>
+									<div class="card-modal__desc-conflict-actions">
+										<NcButton type="primary" :disabled="isSaving" @click="overwriteDescription">
+											{{ t('kanso', 'Keep my version') }}
+										</NcButton>
+										<NcButton :disabled="isSaving" @click="useTheirDescription">
+											{{ t('kanso', 'Discard mine, use theirs') }}
+										</NcButton>
+									</div>
+								</div>
 							</template>
 
 							<template v-else>
@@ -1424,8 +1446,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
 						</section>
 
-						<!-- GitHub links -->
-						<section class="card-modal__section card-modal__section--tight">
+						<!-- GitHub links. Hidden when the board switched GitHub off (#5894);
+						     linked issues/PRs are kept and reappear when it is switched on. -->
+						<section v-if="cardFeatures.github" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
 								<GithubIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'GitHub') }}</span>
@@ -1471,8 +1494,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="linkError" class="card-modal__save-error">{{ linkError }}</span>
 						</section>
 
-						<!-- File attachments (#3526) -->
-						<section class="card-modal__section card-modal__section--tight">
+						<!-- File attachments (#3526). Hidden when the board switched attachments
+						     off (#5894); nothing is deleted - every file is still listed here the
+						     moment it is switched back on. -->
+						<section v-if="cardFeatures.attachments" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
 								<PaperclipIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Attachments') }}</span>
@@ -1509,8 +1534,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="attachmentError" class="card-modal__save-error">{{ attachmentError }}</span>
 						</section>
 
-						<!-- Time tracking (#3536): manual entries + per-card total -->
-						<section class="card-modal__section card-modal__section--tight">
+						<!-- Time tracking (#3536): manual entries + per-card total. Hidden when
+						     the board switched time tracking off (#5894). Entries are kept, and a
+						     timer that is already running keeps running - it is just not shown. -->
+						<section v-if="cardFeatures.timeTracking" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
 								<ClockOutlineIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Time tracking') }}</span>
@@ -2316,6 +2343,7 @@ import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
+import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 
@@ -2476,6 +2504,10 @@ const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
 const boardCardFields = computed(() => boardData.value?.cardFields ?? [])
+// Built-in card sections this board's manager left switched on (#5894). Read
+// straight off the board payload, so a change propagates through the normal
+// delta/realtime path. A board that predates the feature reads as all-enabled.
+const cardFeatures = computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures))
 
 // ── Card fields: value mutations ──────────────────────────────────────────────
 const { setCardFieldValue, clearCardFieldValue } = useCardFields(boardId)
@@ -3360,29 +3392,132 @@ const draftDescription = ref('')
 const isSaving = ref(false)
 const saveError = ref('')
 
+// Optimistic-concurrency state for the description (#9845). Both are captured
+// ONCE, when the editor opens, and deliberately not recomputed from cardData:
+// a realtime delta may refresh the card underneath an open editor, and the base
+// must keep pointing at the version this draft was actually derived from.
+// `descriptionConflict` holds the server's current text after a rejected save.
+const descriptionBaseVersion = ref(null)
+const descriptionBaseText = ref('')
+const descriptionConflict = ref(null)
+
+// The board shell renders this component through an UNKEYED router-view, so
+// navigating card→card REUSES it. Every piece of description-editing state is
+// per-card and must be dropped on the switch - carrying the optimistic base
+// version across would compare the new card's version against the old card's
+// and silently skip the conflict guard, and a stale conflict panel would show
+// the wrong card's text. Not `immediate`: there is nothing to clear on mount.
+watch(() => props.cardId, () => {
+	editingDescription.value = false
+	draftDescription.value = ''
+	descriptionBaseVersion.value = null
+	descriptionBaseText.value = ''
+	descriptionConflict.value = null
+	saveError.value = ''
+})
+
 function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
+	descriptionBaseText.value = draftDescription.value
+	descriptionBaseVersion.value = cardData.value?.lastModified ?? null
+	descriptionConflict.value = null
 	editingDescription.value = true
 	saveError.value = ''
 }
 
 function cancelDescriptionEdit() {
+	// Cancelling on top of an UNRESOLVED conflict would throw away exactly the
+	// text the server just refused to overwrite - and Escape makes that one
+	// reflex away. Confirm before losing it; an ordinary cancel is untouched.
+	if (descriptionConflict.value
+		&& !window.confirm(t('kanso', 'Discard your unsaved description? The other version will be kept.'))) {
+		return
+	}
 	editingDescription.value = false
+	descriptionConflict.value = null
 	saveError.value = ''
+}
+
+/**
+ * One guarded description save. `baseVersion` is the card version this draft
+ * was derived from; the server refuses the write with 409 when the card has
+ * moved on AND the stored text differs, so a second author's work is never
+ * silently overwritten.
+ *
+ * `lastModified` has second resolution and also moves for edits that never
+ * touched the description (a title change, a move), so a 409 alone does not
+ * prove a real collision. The rejection carries the server's current text: when
+ * that is byte-identical to what this editor started from, only some unrelated
+ * field moved and the save is retried once, transparently. Anything else is a
+ * genuine two-author conflict and is surfaced with BOTH versions intact.
+ *
+ * @param {number|null} baseVersion card `lastModified` this draft is based on
+ * @param {boolean} allowRetry whether a provably-spurious 409 may be retried
+ */
+async function pushDescription(baseVersion, allowRetry) {
+	try {
+		const saved = await updateCard.mutateAsync({
+			data: { description: draftDescription.value, baseLastModified: baseVersion },
+		})
+		descriptionBaseText.value = draftDescription.value
+		descriptionBaseVersion.value = saved?.lastModified ?? null
+		descriptionConflict.value = null
+		editingDescription.value = false
+	} catch (err) {
+		const data = err?.response?.data
+		if (err?.response?.status === 409 && data?.error === 'description_conflict') {
+			const theirs = data.description ?? ''
+			if (allowRetry && theirs === descriptionBaseText.value) {
+				await pushDescription(data.lastModified ?? null, false)
+				return
+			}
+			// Keep the editor open with the draft untouched; the panel renders
+			// their version alongside it.
+			descriptionConflict.value = { description: theirs, lastModified: data.lastModified ?? null }
+			return
+		}
+		saveError.value = data?.error || t('kanso', 'Failed to save.')
+	}
 }
 
 async function saveDescription() {
 	isSaving.value = true
 	saveError.value = ''
+	descriptionConflict.value = null
 	try {
-		await updateCard.mutateAsync({ data: { description: draftDescription.value } })
-		editingDescription.value = false
-	} catch (err) {
-		saveError.value =
-			err?.response?.data?.error || t('kanso', 'Failed to save.')
+		await pushDescription(descriptionBaseVersion.value, true)
 	} finally {
 		isSaving.value = false
 	}
+}
+
+/** Conflict resolution: the user's draft wins over the version shown to them. */
+async function overwriteDescription() {
+	const base = descriptionConflict.value?.lastModified ?? null
+	isSaving.value = true
+	saveError.value = ''
+	descriptionConflict.value = null
+	try {
+		await pushDescription(base, false)
+	} finally {
+		isSaving.value = false
+	}
+}
+
+/**
+ * Conflict resolution: adopt their version into the editor. This REPLACES the
+ * user's draft and there is no undo - which is why it is a deliberate click on
+ * a button that says so, next to a panel showing both texts, and never the
+ * default. "Keep my version" is the primary action.
+ */
+function useTheirDescription() {
+	const conflict = descriptionConflict.value
+	if (!conflict) return
+	draftDescription.value = conflict.description
+	descriptionBaseText.value = conflict.description
+	descriptionBaseVersion.value = conflict.lastModified
+	descriptionConflict.value = null
+	saveError.value = ''
 }
 
 // ── Checklist ────────────────────────────────────────────────────────────────
@@ -5012,7 +5147,10 @@ const timerElapsed = computed(() => {
 let timerInterval = null
 
 function syncTimerInterval() {
-	const hasTimer = !!(cardData.value?.runningTimer)
+	// Only the visible counter needs the tick. With time tracking switched off
+	// (#5894) the row is not rendered, so skip the interval entirely - the timer
+	// itself is untouched and keeps running server-side.
+	const hasTimer = !!(cardData.value?.runningTimer) && cardFeatures.value.timeTracking
 	if (hasTimer && timerInterval === null) {
 		timerInterval = setInterval(() => {
 			timerNow.value = Math.floor(Date.now() / 1000)
@@ -5024,7 +5162,7 @@ function syncTimerInterval() {
 }
 
 // Start/stop the interval whenever the running timer appears or disappears.
-watch(() => cardData.value?.runningTimer, syncTimerInterval, { immediate: true })
+watch([() => cardData.value?.runningTimer, () => cardFeatures.value.timeTracking], syncTimerInterval, { immediate: true })
 
 // Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
 function formatDuration(totalSeconds) {
@@ -7884,6 +8022,38 @@ body.theme--dark .card-modal,
 	display: flex;
 	align-items: center;
 	gap: 10px;
+}
+
+/* ── Description save conflict (#9845) ───────────────────────────────────── */
+.card-modal__desc-conflict {
+	margin-top: 10px;
+	padding: 12px;
+	border: 1px solid var(--color-warning, var(--color-border-dark));
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-background-hover);
+}
+.card-modal__desc-conflict-msg {
+	margin: 0 0 8px;
+	font-size: 0.85rem;
+}
+.card-modal__desc-conflict-theirs {
+	margin: 0;
+	max-height: 240px;
+	overflow: auto;
+	padding: 8px;
+	border-radius: var(--border-radius, 4px);
+	background: var(--color-main-background);
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.8rem;
+	white-space: pre-wrap;
+	word-break: break-word;
+	user-select: text;
+}
+.card-modal__desc-conflict-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
 }
 
 /* ── Shared error text ───────────────────────────────────────────────────── */

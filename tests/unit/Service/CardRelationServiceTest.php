@@ -215,6 +215,136 @@ class CardRelationServiceTest extends TestCase {
 		);
 	}
 
+	// ---- blocksEdgesForBoard(): the board-scoped timeline edge list ---------
+
+	/**
+	 * One mapper row in findBlocksEdgesWithVisibilityByBoard() shape. Endpoints
+	 * default to public/internal-created/someone-else's, so each test only
+	 * states the triple it actually cares about.
+	 */
+	private function edgeRow(int $from, int $to, array $overrides = []): array {
+		return $overrides + [
+			'from' => $from,
+			'to' => $to,
+			'fromVisibility' => 'public',
+			'fromCreatorRole' => 'internal',
+			'fromOwner' => 'someone-else',
+			'toVisibility' => 'public',
+			'toCreatorRole' => 'internal',
+			'toOwner' => 'someone-else',
+		];
+	}
+
+	/**
+	 * No endpoint of a masked edge may appear ANYWHERE in the emitted graph -
+	 * asserted structurally over the from/to values rather than by searching the
+	 * serialized JSON (where "10" also matches 100, 210, ...).
+	 *
+	 * @param list<array{from: int, to: int}> $edges
+	 */
+	private function assertCardIdAbsent(int $cardId, array $edges): void {
+		foreach ($edges as $edge) {
+			self::assertNotSame($cardId, $edge['from']);
+			self::assertNotSame($cardId, $edge['to']);
+		}
+	}
+
+	private function boardOne(): Board {
+		$board = new Board();
+		$board->setId(1);
+		$board->setDeletedAt(0);
+		return $board;
+	}
+
+	public function testBlocksEdgesForBoardReturnsAllVisibleEdgesInOrder(): void {
+		// The mapper already orders by (card_id, other_card_id); the service
+		// must preserve that order, not re-key or re-sort.
+		$this->relationMapper->method('findBlocksEdgesWithVisibilityByBoard')->with(1)->willReturn([
+			$this->edgeRow(10, 20),
+			$this->edgeRow(10, 30),
+			$this->edgeRow(20, 30),
+		]);
+
+		self::assertSame(
+			[['from' => 10, 'to' => 20], ['from' => 10, 'to' => 30], ['from' => 20, 'to' => 30]],
+			$this->service->blocksEdgesForBoard($this->boardOne(), 'alice'),
+		);
+	}
+
+	public function testBlocksEdgesForBoardDropsWholeEdgeWhenTargetIsHidden(): void {
+		// Card 99 is private and owned by someone else. Emitting ANY trace of
+		// the edge - even just the visible source id 10 - would confirm a
+		// restricted card exists on this board. The whole edge must vanish.
+		$this->relationMapper->method('findBlocksEdgesWithVisibilityByBoard')->willReturn([
+			$this->edgeRow(10, 99, ['toVisibility' => 'private', 'toCreatorRole' => null, 'toOwner' => 'someone-else']),
+			$this->edgeRow(10, 20),
+		]);
+
+		$edges = $this->service->blocksEdgesForBoard($this->boardOne(), 'alice');
+		// The all-public edge in the same fixture still survives.
+		self::assertSame([['from' => 10, 'to' => 20]], $edges);
+		// No id from the masked edge leaks anywhere in the output.
+		$this->assertCardIdAbsent(99, $edges);
+	}
+
+	public function testBlocksEdgesForBoardDropsWholeEdgeWhenSourceIsHidden(): void {
+		// Same rule from the other direction: a hidden BLOCKER must not show up
+		// as an arrow into a card the viewer can see.
+		$this->relationMapper->method('findBlocksEdgesWithVisibilityByBoard')->willReturn([
+			$this->edgeRow(99, 10, ['fromVisibility' => 'private', 'fromCreatorRole' => null, 'fromOwner' => 'someone-else']),
+			$this->edgeRow(20, 30),
+		]);
+
+		$edges = $this->service->blocksEdgesForBoard($this->boardOne(), 'alice');
+		self::assertSame([['from' => 20, 'to' => 30]], $edges);
+		$this->assertCardIdAbsent(99, $edges);
+		// The visible endpoint of the masked edge is not emitted on its own.
+		$this->assertCardIdAbsent(10, $edges);
+	}
+
+	public function testBlocksEdgesForBoardKeepsPrivateEndpointOwnedByTheViewer(): void {
+		// Private is owner-scoped, not blanket-hidden: alice's own private card
+		// is visible TO ALICE, so the edge stays.
+		$this->relationMapper->method('findBlocksEdgesWithVisibilityByBoard')->willReturn([
+			$this->edgeRow(10, 20, ['toVisibility' => 'private', 'toCreatorRole' => null, 'toOwner' => 'alice']),
+		]);
+
+		self::assertSame(
+			[['from' => 10, 'to' => 20]],
+			$this->service->blocksEdgesForBoard($this->boardOne(), 'alice'),
+		);
+	}
+
+	public function testBlocksEdgesForBoardMasksInternalEndpointFromTheOtherSide(): void {
+		// The viewer resolves as 'internal' (see setUp). An 'internal' card
+		// CREATED by the external side is not theirs to see - masked whole-edge,
+		// exactly like the private case.
+		$this->relationMapper->method('findBlocksEdgesWithVisibilityByBoard')->willReturn([
+			$this->edgeRow(10, 99, ['toVisibility' => 'internal', 'toCreatorRole' => 'external']),
+			$this->edgeRow(20, 30),
+		]);
+
+		$edges = $this->service->blocksEdgesForBoard($this->boardOne(), 'alice');
+		self::assertSame([['from' => 20, 'to' => 30]], $edges);
+		$this->assertCardIdAbsent(99, $edges);
+	}
+
+	public function testBlocksEdgesForBoardTreatsNullVisibilityAsPublic(): void {
+		// Rows predating the visibility migration carry NULLs; they must read
+		// as public (the backfill value), not fail closed and hide the graph.
+		$this->relationMapper->method('findBlocksEdgesWithVisibilityByBoard')->willReturn([
+			$this->edgeRow(10, 20, [
+				'fromVisibility' => null, 'fromCreatorRole' => null,
+				'toVisibility' => null, 'toCreatorRole' => null,
+			]),
+		]);
+
+		self::assertSame(
+			[['from' => 10, 'to' => 20]],
+			$this->service->blocksEdgesForBoard($this->boardOne(), 'alice'),
+		);
+	}
+
 	public function testAddToInvisibleCounterpartReadsAsNotFound(): void {
 		$this->wireCards();
 		// The actor may see card 10 but NOT card 20 - relating to a hidden

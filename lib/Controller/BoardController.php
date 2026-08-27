@@ -17,6 +17,7 @@ use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -51,6 +52,7 @@ class BoardController extends Controller {
 		private SubscriptionService $subscriptionService,
 		private BoardAccess $boardAccess,
 		private CardSummaryService $cardSummaryService,
+		private CardRelationService $cardRelationService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -104,6 +106,15 @@ class BoardController extends Controller {
 				// Custom-field DEFINITIONS ride the board payload (#3537); their
 				// per-card VALUES live only in the card detail payload.
 				'cardFields' => $this->cardFieldMapper->findByBoard($id),
+				// Board-scoped `blocks` edge list feeding the timeline's dependency
+				// arrows - one query here instead of a relations fetch per card.
+				// Visibility-masked WHOLE-EDGE: an edge with an endpoint this viewer
+				// cannot see is dropped entirely, never half-emitted (the reasoning
+				// lives on CardRelationService::blocksEdgesForBoard). The ETag above
+				// already covers it - adding or removing a relation notifies BOTH
+				// endpoint cards (ChangeNotifier), so new kanso_changes rows move the
+				// board's latest change id, which IS this response's ETag.
+				'blocksEdges' => $this->cardRelationService->blocksEdgesForBoard($board, $uid),
 				'acl' => $this->aclMapper->findByBoard($id),
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.
@@ -220,7 +231,7 @@ class BoardController extends Controller {
 				static fn (int $sid): bool => !isset($presentStackIds[$sid])
 			));
 
-			return new JSONResponse([
+			$payload = [
 				'cursor' => $latest,
 				'resync' => false,
 				'cards' => [
@@ -231,7 +242,23 @@ class BoardController extends Controller {
 					'upsert' => $liveStacks,
 					'remove' => $removedStackIds,
 				],
-			]);
+			];
+
+			// Dependency arrows are NOT derivable from the card summaries above, so
+			// a delta that changed cards must also refresh them. A relation add or
+			// remove always lands ENTITY_CARD rows for BOTH endpoints in the window,
+			// so "window non-empty" is a sound (if slightly eager) trigger: we resend
+			// the whole freshly-masked list and the client replaces its copy - far
+			// cheaper than modelling per-edge upsert/remove for a list this small.
+			// An EMPTY window omits the key entirely - the client keeps what it has,
+			// which keeps the idle delta poll free of this extra query. The resync
+			// early-returns above deliberately skip it too: the client refetches via
+			// show(), which carries the list anyway.
+			if ($rows !== []) {
+				$payload['blocksEdges'] = $this->cardRelationService->blocksEdgesForBoard($board, $uid);
+			}
+
+			return new JSONResponse($payload);
 		});
 	}
 
@@ -265,11 +292,18 @@ class BoardController extends Controller {
 		});
 	}
 
+	/**
+	 * `$cardFeatures` is a PARTIAL built-in card feature patch (#5894), e.g.
+	 * `{"attachments": false}`; omitted keys keep their current value. MANAGE-only,
+	 * enforced (like every other field here) in BoardService.
+	 *
+	 * @param array<array-key, mixed>|null $cardFeatures
+	 */
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures): JSONResponse {
 			return new JSONResponse(
-				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl)
+				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures)
 			);
 		});
 	}

@@ -120,6 +120,59 @@ class CardRelationService {
 	}
 
 	/**
+	 * Every `blocks` edge on the board as {from, to} pairs, masked for $uid -
+	 * the timeline's dependency arrows in ONE board-scoped query instead of a
+	 * relations fetch per card.
+	 *
+	 * WHOLE-EDGE masking (#3743) - the security point of this payload. If
+	 * EITHER endpoint is invisible to the viewer the edge is dropped ENTIRELY:
+	 * no half-edge, no nulled side, and the visible endpoint's id is not
+	 * emitted on its own either. A half-edge would still assert "this visible
+	 * card is blocked by SOMETHING", which - repeated across the board - makes
+	 * the list an existence oracle for restricted cards, and the arrow count
+	 * alone would leak how many. The card-detail panel can afford a masked row
+	 * ({@see self::groupedForCard()}: the relation is board-visible there and
+	 * must stay removable); a bare board-wide edge list carries no such
+	 * affordance, so it masks by omission instead.
+	 *
+	 * No permission check here: the caller has ALREADY gated READ on the board
+	 * (BoardController::show()/changes() via BoardService::find) - the same
+	 * contract {@see self::groupedForCard()} runs under.
+	 *
+	 * @return list<array{from: int, to: int}>
+	 * @throws \OCP\DB\Exception
+	 */
+	public function blocksEdgesForBoard(Board $board, string $uid): array {
+		$rows = $this->relationMapper->findBlocksEdgesWithVisibilityByBoard((int)$board->getId());
+
+		// Resolve the viewer's side ONCE; each endpoint then evaluates the same
+		// rule the SQL scope applies - no per-row card fetch, no per-row ACL.
+		$role = $this->visibilityGuard->roleOn($board, $uid);
+		$sees = function (?string $visibility, ?string $creatorRole, string $owner) use ($uid, $role): bool {
+			$endpoint = new Card();
+			$endpoint->setOwner($owner);
+			// Pre-migration NULLs read as 'public'; a null creator_role is left
+			// UNSET so the scope applies its own backfill fold - verbatim the
+			// null handling in groupedForCard()'s $entry closure.
+			$endpoint->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+			if ($creatorRole !== null) {
+				$endpoint->setCreatorRole($creatorRole);
+			}
+			return $this->visibilityScope->isVisibleTo($endpoint, $uid, $role);
+		};
+
+		$edges = [];
+		foreach ($rows as $row) {
+			if (!$sees($row['fromVisibility'], $row['fromCreatorRole'], $row['fromOwner'])
+				|| !$sees($row['toVisibility'], $row['toCreatorRole'], $row['toOwner'])) {
+				continue;
+			}
+			$edges[] = ['from' => $row['from'], 'to' => $row['to']];
+		}
+		return $edges;
+	}
+
+	/**
 	 * Adds a relation from $cardId to $otherCardId. Idempotent per stored row.
 	 *
 	 * @throws DoesNotExistException if either card or the board does not exist or is deleted
