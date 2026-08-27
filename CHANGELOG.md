@@ -11,6 +11,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.17.0](https://github.com/aktasfatih/kanso/compare/v0.16.0...v0.17.0) (2026-08-27)
+
+
+### Bug Fixes
+
+* **appinfo:** make info.xml valid against the App Store schema ([d49a644](https://github.com/aktasfatih/kanso/commit/d49a644259c6e4e7a5d9374613cbe2014f94831e))
+* **card:** editing a description no longer silently overwrites someone else ([9d34fca](https://github.com/aktasfatih/kanso/commit/9d34fca68f6feba89892ee9416b19af7ac8382de))
+* **list-view:** allow dragging a card into an empty column in list view ([b5edae1](https://github.com/aktasfatih/kanso/commit/b5edae1640497f496a2ab1d4a4855eb9991d9481))
+
+
+### Features
+
+* **appinfo:** add German and French App Store summary and description ([ee53980](https://github.com/aktasfatih/kanso/commit/ee53980a25668bb9fe6ab0fd79a92163c782173f))
+* **board:** drop a card onto another card's centre to make it a sub-card ([52a66e6](https://github.com/aktasfatih/kanso/commit/52a66e627ad1fecdd0c740ed1700ed25a9ed0305))
+* **board:** let board managers hide card sections their team never uses ([125e1e6](https://github.com/aktasfatih/kanso/commit/125e1e689526e04dbbbddbb158ea57ea5733d251))
+* **timeline:** draw blocking dependencies as arrows, flagging violated ones ([1594740](https://github.com/aktasfatih/kanso/commit/159474075b629caa5194fbf0635595daec9e93aa))
+
 # [0.16.0](https://github.com/aktasfatih/kanso/compare/v0.15.0...v0.16.0) (2026-08-25)
 
 
