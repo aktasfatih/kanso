@@ -17,7 +17,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { updateCard as apiUpdateCard } from '../services/api.js'
-import { boardQueryKey } from './queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -103,6 +103,11 @@ export function usePriority(boardId, cardId) {
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Priority is a View group-by dimension and filter facet, and it is set
+			// from the same card detail the View opens as an overlay - so the feed
+			// needs the settle invalidation even though priority is not a My Work
+			// membership criterion (#9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 

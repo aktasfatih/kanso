@@ -99,13 +99,14 @@ class GithubWebhookServiceTest extends TestCase {
 		return 'sha256=' . hash_hmac('sha256', $body, self::SECRET);
 	}
 
-	private function prBody(string $action, string $branch, bool $merged = false): string {
+	private function prBody(string $action, string $branch, bool $merged = false, string $title = ''): string {
 		return json_encode([
 			'action' => $action,
 			'pull_request' => [
 				'head' => ['ref' => $branch],
 				'html_url' => 'https://github.com/octo/app/pull/3',
 				'merged' => $merged,
+				'title' => $title,
 			],
 		]);
 	}
@@ -759,5 +760,356 @@ class GithubWebhookServiceTest extends TestCase {
 		$result = $service->handleWebhook(1, $this->sign($body), $body);
 
 		self::assertSame(9, $result['cardId']);
+	}
+
+	// ---- PR title references (#9855) --------------------------------------
+
+	private function prefixBoard(string $prefix = 'KAN'): Board {
+		$b = $this->board();
+		$b->setPrefix($prefix);
+		return $b;
+	}
+
+	/** Rebuilds the service around a custom CardMapper (the egress gate's source). */
+	private function serviceWithCardMapper(CardMapper $cardMapper): GithubWebhookService {
+		return new GithubWebhookService(
+			$this->boardMapper,
+			$this->stackMapper,
+			$this->cardService,
+			$cardMapper,
+			$this->cardLinkService,
+			$this->cardLinkMapper,
+			$this->permissionService,
+			new CardVisibilityScope(),
+			$this->secureRandom,
+			$this->urlGenerator,
+		);
+	}
+
+	public function testOpenedPrWithTitleReferenceLinksAndMovesThatCard(): void {
+		// The headline case: a branch following no convention at all, the card
+		// named only by the human reference the UI actually shows.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->expects(self::once())->method('findByRef')
+			->with(1, 'KANSO-14', 'alice')->willReturn($this->card(77, 1));
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_REVIEW)
+			->willReturn($this->stack(4, Stack::ROLE_REVIEW));
+		$this->cardLinkService->expects(self::once())->method('addLink')
+			->with(77, 'https://github.com/octo/app/pull/3', 'alice');
+		$this->cardService->expects(self::once())->method('move')
+			->with(77, 4, null, 'alice')->willReturn($this->card(77, 1));
+
+		$body = $this->prBody('opened', 'my-random-branch', title: 'Fix the crash on load (KANSO-14)');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['moved']);
+		self::assertSame(77, $result['cardId']);
+	}
+
+	public function testMergedPrWithTitleReferenceMovesThatCardToDoneStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->with(1, 'KANSO-14', 'alice')
+			->willReturn($this->card(77, 1));
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(5, Stack::ROLE_DONE));
+		$this->cardService->expects(self::once())->method('move')
+			->with(77, 5, null, 'alice')->willReturn($this->card(77, 1));
+
+		$body = $this->prBody('closed', 'my-random-branch', true, 'KANSO-14 fix the crash');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['moved']);
+		self::assertSame(77, $result['cardId']);
+	}
+
+	public function testTitleReferenceUsesTheBoardsDefaultPrefixWhenUnset(): void {
+		// A board created before the prefix backfill falls back to the shared
+		// default, exactly as CardService::findByRef does.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board()); // no prefix
+		$this->cardService->expects(self::once())->method('findByRef')
+			->with(1, 'KAN-3', 'alice')->willReturn($this->card(31, 1));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'KAN-3 tidy up');
+		self::assertSame(31, $this->service->handleWebhook(1, $this->sign($body), $body)['cardId']);
+	}
+
+	public function testBranchOnlyPrIsUnchangedByTitleMatching(): void {
+		// Regression: the pre-#9855 `kanso-<id>` path behaves exactly as before,
+		// and a title with no reference costs no resolver call at all.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->cardService->expects(self::never())->method('findByRef');
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_REVIEW)
+			->willReturn($this->stack(4, Stack::ROLE_REVIEW));
+		$this->cardLinkService->expects(self::once())->method('addLink')->with(9, self::anything(), 'alice');
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 4, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = $this->prBody('opened', 'kanso-9-fix', title: 'Fix the crash on load');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['moved']);
+		self::assertSame(9, $result['cardId']);
+	}
+
+	public function testBranchAndTitleReferenceBothLinkAndMove(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->cardService->method('findByRef')->with(1, 'KANSO-14', 'alice')
+			->willReturn($this->card(77, 1));
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_REVIEW)
+			->willReturn($this->stack(4, Stack::ROLE_REVIEW));
+		$linked = [];
+		$this->cardLinkService->expects(self::exactly(2))->method('addLink')
+			->willReturnCallback(function (int $cardId) use (&$linked): CardLink {
+				$linked[] = $cardId;
+				return $this->link(1, $cardId);
+			});
+		$moves = [];
+		$this->cardService->expects(self::exactly(2))->method('move')
+			->willReturnCallback(function (int $cardId, int $stackId) use (&$moves): Card {
+				$moves[] = [$cardId, $stackId];
+				return $this->card($cardId, 1);
+			});
+
+		$body = $this->prBody('opened', 'kanso-9-fix', title: 'Also closes KANSO-14');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		// Branch first, then the title match - each card once.
+		self::assertSame([9, 77], $linked);
+		self::assertSame([[9, 4], [77, 4]], $moves);
+		// The branch id is an echo of what the sender supplied, so it is named.
+		self::assertSame(9, $result['cardId']);
+	}
+
+	public function testBranchAndTitleNamingTheSameCardActOnceEachAndKeepTheEcho(): void {
+		// The union dedupes by card id: one link, one move, not two. The card is
+		// deliberately NON-public, so the assertion also pins that a later title
+		// match cannot DOWNGRADE the branch card's echo flag - with a plain `=`
+		// instead of `??=` the id would fall to the public-only gate and vanish.
+		$hidden = $this->card(9, 1);
+		$hidden->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$hidden->setOwner('alice');
+		$cardMapper = $this->createMock(CardMapper::class);
+		$cardMapper->method('find')->with(9)->willReturn($hidden);
+		$service = $this->serviceWithCardMapper($cardMapper);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($hidden);
+		$this->cardService->method('findByRef')->willReturn($hidden); // same card
+		$this->stackMapper->method('findByBoardAndRole')->willReturn($this->stack(4, Stack::ROLE_REVIEW));
+		$this->cardLinkService->expects(self::once())->method('addLink');
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 4, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = $this->prBody('opened', 'kanso-9-fix', title: 'KANSO-3 rework');
+		self::assertSame(9, $service->handleWebhook(1, $this->sign($body), $body)['cardId']);
+	}
+
+	public function testTitleReferencesAreDedupedAndCappedAtFive(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$refs = [];
+		$this->cardService->expects(self::exactly(5))->method('findByRef')
+			->willReturnCallback(function (int $boardId, string $ref) use (&$refs): Card {
+				$refs[] = $ref;
+				return $this->card(100 + (int)substr($ref, 6), 1);
+			});
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$this->cardLinkService->expects(self::exactly(5))->method('addLink');
+
+		$title = 'KANSO-1 KANSO-2 KANSO-1 KANSO-3 KANSO-4 KANSO-5 KANSO-6 KANSO-7';
+		$body = $this->prBody('opened', 'topic/whatever', title: $title);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertSame(['KANSO-1', 'KANSO-2', 'KANSO-3', 'KANSO-4', 'KANSO-5'], $refs);
+		self::assertTrue($result['handled']);
+		self::assertSame(101, $result['cardId']);
+	}
+
+	public function testGenericHyphenTokensInTitleAreNeverProbed(): void {
+		// The whole point of matching on THIS board's prefix only: none of these
+		// may cost a resolver call.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->expects(self::never())->method('findByRef');
+		$this->cardService->expects(self::never())->method('move');
+
+		$title = 'Handle UTF-8, SHA-256 and ISO-8601 in GH-123 under AGPL-3';
+		$body = $this->prBody('opened', 'topic/whatever', title: $title);
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testForeignPrefixTitleReferenceIsNeverProbed(): void {
+		// Another board's prefix would resolve to null anyway - it must not even
+		// reach the resolver.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->expects(self::never())->method('findByRef');
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'Fix OTHER-14 too');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testUnknownOrHiddenTitleReferenceIsAnAcceptedNoop(): void {
+		// findByRef returns null for an unknown, trashed or viewer-hidden card.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->willReturn(null);
+		$this->cardService->expects(self::never())->method('move');
+		$this->cardLinkService->expects(self::never())->method('addLink');
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'Fix KANSO-999');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testTitleReferenceResolverFailureNeverEscapes(): void {
+		// findByRef throws (deleted board / permission); the delivery must still
+		// be accepted - a 5xx makes GitHub disable the hook.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')
+			->willThrowException(new NotPermittedException('no read'));
+		$this->cardService->expects(self::never())->method('move');
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'Fix KANSO-14');
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testTargetStackLookupFailureIsSwallowed(): void {
+		// A title can match several cards, so the role-stack lookup now runs once
+		// per match - a DB error there must not escape as a 5xx (GitHub disables
+		// a hook that 5xxes) but degrade to link-only.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->willReturn($this->card(77, 1));
+		$this->stackMapper->method('findByBoardAndRole')
+			->willThrowException(new \RuntimeException('db is down'));
+		$this->cardLinkService->expects(self::once())->method('addLink');
+		$this->cardService->expects(self::never())->method('move');
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'Fix KANSO-14');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertFalse($result['moved']);
+	}
+
+	public function testEditedPrLinksTheTitleReferenceButDoesNotMove(): void {
+		// Adding the reference after opening is the common case; `edited` also
+		// fires on body edits, so it must never re-move a card.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->with(1, 'KANSO-14', 'alice')
+			->willReturn($this->card(77, 1));
+		$this->stackMapper->expects(self::never())->method('findByBoardAndRole');
+		$this->cardLinkService->expects(self::once())->method('addLink')
+			->with(77, 'https://github.com/octo/app/pull/3', 'alice');
+		$this->cardService->expects(self::never())->method('move');
+
+		$body = $this->prBody('edited', 'topic/whatever', title: 'Fix the crash (KANSO-14)');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertFalse($result['moved']);
+		self::assertSame(77, $result['cardId']);
+	}
+
+	/**
+	 * A lowercase `kanso-<id>` BRANCH name quoted in a title is not a seq
+	 * reference. On a board whose prefix is literally KANSO the two spellings
+	 * collide case-insensitively, and reading "kanso-42" as seq 42 would link
+	 * AND auto-move whatever unrelated card holds board_seq 42.
+	 *
+	 * @dataProvider quotedBranchTitleProvider
+	 */
+	public function testQuotedBranchNameInTitleIsNotReadAsASequenceReference(string $title): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->expects(self::never())->method('findByRef');
+		$this->cardService->expects(self::never())->method('move');
+		$this->cardLinkService->expects(self::never())->method('addLink');
+
+		$body = $this->prBody('opened', 'topic/whatever', title: $title);
+		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/**
+	 * @return array<string, array{string}>
+	 */
+	public static function quotedBranchTitleProvider(): array {
+		return [
+			'bare branch name' => ['Merge kanso-42 into main'],
+			'branch name with slug' => ['Merge kanso-9-fix into main'],
+			'quoted revert' => ['Revert "kanso-42"'],
+			'branch URL' => ['See https://github.com/octo/app/tree/kanso-42'],
+			'lowercase reference' => ['fix kanso-42'],
+		];
+	}
+
+	// ---- PR title egress (#3760 × #9855) ----------------------------------
+
+	public function testPrResponseNeverNamesANonPublicTitleMatchedCard(): void {
+		// THE security case: the sender supplied "KANSO-14", NOT an internal id.
+		// Resolving it and naming the result would leak the seq -> id mapping and
+		// confirm that a non-public card exists. The card is still linked and
+		// moved - only the naming is withheld.
+		$hidden = $this->card(77, 1);
+		$hidden->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$hidden->setOwner('alice');
+		$cardMapper = $this->createMock(CardMapper::class);
+		$cardMapper->method('find')->with(77)->willReturn($hidden);
+		$service = $this->serviceWithCardMapper($cardMapper);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->with(1, 'KANSO-14', 'alice')->willReturn($hidden);
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_REVIEW)
+			->willReturn($this->stack(4, Stack::ROLE_REVIEW));
+		$this->cardLinkService->expects(self::once())->method('addLink')
+			->with(77, 'https://github.com/octo/app/pull/3', 'alice');
+		$this->cardService->expects(self::once())->method('move')
+			->with(77, 4, null, 'alice')->willReturn($this->card(77, 1));
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'Fix the crash (KANSO-14)');
+		$result = $service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['moved']);
+		self::assertSame(0, $result['cardId']);
+	}
+
+	public function testPrResponseNamesTheFirstPublicTitleMatchWhenMixed(): void {
+		$internal = $this->card(77, 1);
+		$internal->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$cardMapper = $this->createMock(CardMapper::class);
+		$cardMapper->method('find')->willReturnCallback(
+			fn (int $id): Card => $id === 77 ? $internal : $this->card($id, 1),
+		);
+		$service = $this->serviceWithCardMapper($cardMapper);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->willReturnCallback(
+			fn (int $boardId, string $ref): Card => $ref === 'KANSO-14' ? $internal : $this->card(78, 1),
+		);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$body = $this->prBody('opened', 'topic/whatever', title: 'KANSO-14 and KANSO-15');
+		$result = $service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertSame(78, $result['cardId']);
+	}
+
+	public function testBranchCardIdIsStillEchoedWhenNotPublic(): void {
+		// Unchanged pre-#9855 behavior: the branch id is a verbatim echo of what
+		// the request itself supplied, so the public-only gate does not apply.
+		$hidden = $this->card(9, 1);
+		$hidden->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$hidden->setOwner('alice');
+		$cardMapper = $this->createMock(CardMapper::class);
+		$cardMapper->method('find')->with(9)->willReturn($hidden);
+		$service = $this->serviceWithCardMapper($cardMapper);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($hidden);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$body = $this->prBody('opened', 'kanso-9-fix');
+		self::assertSame(9, $service->handleWebhook(1, $this->sign($body), $body)['cardId']);
 	}
 }

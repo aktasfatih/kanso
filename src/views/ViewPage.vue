@@ -44,6 +44,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:aria-label="t('kanso', 'Group by')" />
 				</div>
 
+				<!-- Sort control: mode + direction. The order is applied SERVER-side
+				     (before the feed's cap) and saved on the View, so it survives a
+				     reload. The trigger label carries the direction arrow so the active
+				     order reads straight off the toolbar. Sorting orders cards WITHIN
+				     each group - group ordering stays owned by the group-by field, and
+				     in Timeline it reorders the rows inside each group while the
+				     horizontal date axis stays date-driven. -->
+				<div class="view-page__select">
+					<label class="view-page__select-label">{{ t('kanso', 'Sort') }}</label>
+					<NcActions
+						class="view-page__sort"
+						:menu-name="sortMenuName"
+						:aria-label="t('kanso', 'Sort')">
+						<template #icon>
+							<SortIcon :size="18" />
+						</template>
+						<NcActionCaption :name="t('kanso', 'Sort by')" />
+						<NcActionRadio
+							v-for="opt in sortOptions"
+							:key="opt.id"
+							:model-value="sortMode"
+							:value="opt.id"
+							name="kanso-view-sort"
+							@update:model-value="setSortMode">
+							{{ opt.label }}
+						</NcActionRadio>
+						<template v-if="sortMode !== 'default'">
+							<NcActionCaption :name="t('kanso', 'Direction')" />
+							<NcActionRadio :model-value="sortDir" value="asc" name="kanso-view-sort-dir" @update:model-value="setSortDir">
+								{{ t('kanso', 'Ascending') }}
+							</NcActionRadio>
+							<NcActionRadio :model-value="sortDir" value="desc" name="kanso-view-sort-dir" @update:model-value="setSortDir">
+								{{ t('kanso', 'Descending') }}
+							</NcActionRadio>
+						</template>
+					</NcActions>
+				</div>
+
 				<!-- Display switcher: List | Timeline | Kanban. -->
 				<div class="view-page__display" role="group" :aria-label="t('kanso', 'Display mode')">
 					<button
@@ -156,6 +194,10 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
+import SortIcon from 'vue-material-design-icons/Sort.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ViewColumnOutlineIcon from 'vue-material-design-icons/ViewColumnOutline.vue'
@@ -180,8 +222,53 @@ const props = defineProps({
 	id: { type: String, required: true },
 })
 
+// ── Sort (mode + direction) ──────────────────────────────────────────────────
+// Unlike the filter and the group-by, the sort is applied SERVER-side: it runs
+// before the feed's hard cap, so a sorted View starts at the true first row
+// rather than the first row of an arbitrary window. It therefore travels to the
+// server with the feed request (and is saved on the View record) instead of
+// being a client re-sort. Declared above useViewCards() because it is part of
+// that query's key.
+//
+// Semantics mirror the board's display sort: every mode has a NATURAL direction
+// that selecting it resets to, and missing values (no due date, never modified)
+// always sort last in BOTH directions - the server owns that rule.
+//
+// 'manual' and 'estimate' are deliberately not offered: manual is the per-stack
+// fractional sort key (meaningless compared across boards) and estimate ranks
+// against one board's estimate scale, which a cross-board View can span two of.
+const SORT_LABELS = {
+	default: t('kanso', 'Default'),
+	due: t('kanso', 'Due date'),
+	priority: t('kanso', 'Priority'),
+	title: t('kanso', 'Title'),
+	board: t('kanso', 'Board'),
+	created: t('kanso', 'Created'),
+	modified: t('kanso', 'Last modified'),
+}
+const SORT_MODES = Object.keys(SORT_LABELS)
+const NATURAL_SORT_DIR = { due: 'asc', priority: 'desc', title: 'asc', board: 'asc', created: 'desc', modified: 'desc' }
+const sortOptions = SORT_MODES.map((id) => ({ id, label: SORT_LABELS[id] }))
+const sortMode = ref('default')
+const sortDir = ref('asc')
+function setSortMode(mode) {
+	if (!SORT_MODES.includes(mode)) return
+	sortMode.value = mode
+	// Picking a mode resets to its natural direction (Due soonest-first, Title A→Z…).
+	sortDir.value = NATURAL_SORT_DIR[mode] ?? 'asc'
+}
+function setSortDir(dir) {
+	sortDir.value = dir === 'desc' ? 'desc' : 'asc'
+}
+const sort = computed(() => ({ mode: sortMode.value, dir: sortDir.value }))
+// The toolbar label carries the direction arrow, so the active order is legible
+// without opening the menu. 'default' has no meaningful direction.
+const sortMenuName = computed(() => (sortMode.value === 'default'
+	? SORT_LABELS.default
+	: `${SORT_LABELS[sortMode.value]} ${sortDir.value === 'asc' ? '↑' : '↓'}`))
+
 const { data: viewsData, save, rename } = useViews()
-const { data: cardsData, isLoading, isError } = useViewCards()
+const { data: cardsData, isLoading, isError } = useViewCards(sort)
 
 const view = computed(() => (viewsData.value ?? []).find((v) => String(v.id) === String(props.id)) ?? null)
 
@@ -236,6 +323,11 @@ watch(view, (v) => {
 	if (v) {
 		display.value = ['list', 'timeline', 'kanban'].includes(v.display) ? v.display : 'list'
 		groupBySel.value = groupByOptions.find((o) => o.id === v.groupBy) ?? groupByOptions[0]
+		// A View saved before the sort control shipped has no `sort` at all, and an
+		// unknown value must be ignored rather than break the page - both fall back
+		// to the default order (which is exactly how such a View looked before).
+		sortMode.value = SORT_MODES.includes(v.sort?.mode) ? v.sort.mode : 'default'
+		sortDir.value = (v.sort?.dir === 'asc' || v.sort?.dir === 'desc') ? v.sort.dir : 'asc'
 	}
 }, { immediate: true })
 
@@ -333,6 +425,7 @@ async function persistCurrent() {
 			filter: serializeFilter(filterState),
 			groupBy: groupBy.value,
 			display: display.value,
+			sort: sort.value,
 		})
 	} finally {
 		saving.value = false
@@ -349,6 +442,7 @@ async function onSaveFromBar(name) {
 			filter: serializeFilter(filterState),
 			groupBy: groupBy.value,
 			display: display.value,
+			sort: sort.value,
 		})
 	} finally {
 		saving.value = false

@@ -1272,7 +1272,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</p>
 				<template v-else>
 					<p class="github-webhook__hint">
-						{{ t('kanso', 'Add a GitHub webhook sending "pull_request" and "issues" events to the URL below. A PR opened on a kanso-<id> branch moves its card to your Review column; a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards.') }}
+						{{ t('kanso', 'Add a GitHub webhook sending "pull_request" and "issues" events to the URL below. Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards.', { example: (boardPrefix || 'KAN') + '-123' }) }}
 					</p>
 
 					<label class="github-webhook__label">{{ t('kanso', 'Payload URL') }}</label>

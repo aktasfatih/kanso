@@ -70,9 +70,14 @@ class ViewService {
 	 * (e.g. "KAN-123") and label COLOURS — matching the board tiles (#3950) — from
 	 * this one feed, with no extra per-board request.
 	 *
+	 * The feed is ordered by the View's saved sort (`$sortMode` / `$sortDir`) BEFORE
+	 * the cap, so a sorted View starts at the true first row rather than the first
+	 * row of an arbitrary window. `default` keeps the historical stable
+	 * (boardId, id) order, so a View saved before the sort control looks unchanged.
+	 *
 	 * @return array{cards: list<array<string, mixed>>, labels: list<array<string, mixed>>, capped: bool, total: int, limit: int}
 	 */
-	public function findMine(string $uid): array {
+	public function findMine(string $uid, string $sortMode = 'default', string $sortDir = 'asc'): array {
 		$boards = $this->boardService->findAll($uid);
 
 		$out = [];
@@ -111,13 +116,12 @@ class ViewService {
 			}
 		}
 
-		// Order by a STABLE deterministic key (boardId, then card id) so the cap
-		// always slices the same first-N window across requests - never a random
-		// subset. Runs over the already ACL-gated set, so it moves no leak boundary.
-		usort($out, static function (array $a, array $b): int {
-			return [(int)($a['boardId'] ?? 0), (int)($a['id'] ?? 0)]
-				<=> [(int)($b['boardId'] ?? 0), (int)($b['id'] ?? 0)];
-		});
+		// Order the WHOLE readable set before the cap slices it, so the cap always
+		// takes the true first N rows of the requested order (never the first N of
+		// an arbitrary window) and repeats the same window across requests. Runs
+		// strictly AFTER the per-board ACL / #3743 masking loop above, so it moves
+		// no leak boundary - it only reorders rows the viewer may already see.
+		$out = self::sortRows($out, $sortMode, $sortDir);
 
 		$total = count($out);
 		$capped = $total > self::MAX_CARDS;
@@ -132,5 +136,98 @@ class ViewService {
 			'total' => $total,
 			'limit' => self::MAX_CARDS,
 		];
+	}
+
+	/**
+	 * Order the feed rows by a View's saved sort. Semantics mirror the board's
+	 * display sort (BoardView.sortCards) so a card orders the same way wherever it
+	 * is read:
+	 *  - each mode maps a row to a comparable key, or null when the field is
+	 *    MISSING (no due date / never modified). 0 priority is a real low value,
+	 *    not "missing" - same as the board;
+	 *  - missing values always sort LAST, in both directions;
+	 *  - ties fall back to the stable (boardId, id) key the cap has always sliced on.
+	 *
+	 * Sorted decorate-sort-undecorate: this runs over the WHOLE uncapped readable
+	 * set (which the cap exists precisely because it can be large), so each row's
+	 * key is computed exactly once instead of O(n log n) times - a per-comparison
+	 * key would re-parse every due date on every comparison.
+	 *
+	 * An unknown mode (an older/newer client, a hand-edited config value) leaves the
+	 * rows in that stable key order - ignored and defaulted, never an error, so a
+	 * saved record can't hard-fail the feed.
+	 *
+	 * `manual` and `estimate` are deliberately absent: manual is the per-stack
+	 * fractional sort key (meaningless compared across boards) and estimate ranks
+	 * against a single board's estimate scale (a cross-board View can span two
+	 * different scales).
+	 *
+	 * @param list<array<string, mixed>> $rows
+	 * @return list<array<string, mixed>>
+	 */
+	private static function sortRows(array $rows, string $mode, string $dir): array {
+		$keyOf = self::keyExtractor($mode);
+		$mult = $dir === 'desc' ? -1 : 1;
+
+		// Decorate: [sort key or null, boardId, id, original index].
+		$decorated = [];
+		foreach ($rows as $i => $row) {
+			$decorated[] = [
+				$keyOf === null ? null : $keyOf($row),
+				(int)($row['boardId'] ?? 0),
+				(int)($row['id'] ?? 0),
+				$i,
+			];
+		}
+
+		usort($decorated, static function (array $a, array $b) use ($mult): int {
+			$ka = $a[0];
+			$kb = $b[0];
+			if ($ka !== null && $kb !== null) {
+				$cmp = $ka <=> $kb;
+				if ($cmp !== 0) {
+					return $cmp * $mult;
+				}
+			} elseif ($ka !== $kb) {
+				// Missing always last, regardless of direction.
+				return $ka === null ? 1 : -1;
+			}
+			// Equal keys (and two missing values) fall back to the stable
+			// (boardId, id) key the cap has always sliced on.
+			return [$a[1], $a[2]] <=> [$b[1], $b[2]];
+		});
+
+		return array_map(static fn (array $d): array => $rows[$d[3]], $decorated);
+	}
+
+	/**
+	 * The per-mode sort key, or null for the default/unknown mode (which leaves the
+	 * rows in stable (boardId, id) order).
+	 *
+	 * Text keys are case-folded, so "apple" and "Apple" sort together and compare by
+	 * BYTE order thereafter. That is deterministic and reads as A→Z for Latin text,
+	 * but - unlike the client's localeCompare - it does not interleave accented or
+	 * non-Latin titles with the plain-ASCII range; they trail it. Collation-accurate
+	 * ordering would mean depending on ext-intl, which this app does not require.
+	 *
+	 * @return (callable(array<string, mixed>): (int|string|null))|null
+	 */
+	private static function keyExtractor(string $mode): ?callable {
+		return match ($mode) {
+			'due' => static function (array $c): ?int {
+				$raw = $c['duedate'] ?? null;
+				if (!is_string($raw) || $raw === '') {
+					return null;
+				}
+				$ts = strtotime($raw);
+				return $ts === false ? null : $ts;
+			},
+			'priority' => static fn (array $c): int => (int)($c['priority'] ?? 0),
+			'title' => static fn (array $c): string => mb_strtolower((string)($c['title'] ?? '')),
+			'board' => static fn (array $c): string => mb_strtolower((string)($c['boardTitle'] ?? '')),
+			'created' => static fn (array $c): ?int => ((int)($c['createdAt'] ?? 0)) ?: null,
+			'modified' => static fn (array $c): ?int => ((int)($c['lastModified'] ?? 0)) ?: null,
+			default => null,
+		};
 	}
 }

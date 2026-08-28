@@ -74,10 +74,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- Timeline body: a frozen left pane (id/title/assignee) beside a
-		     horizontally-scrollable track (two-tier axis + bars). Both scroll
-		     vertically together as one flex row; only the track scrolls sideways,
-		     so a bar always stays aligned with its row in the frozen pane. -->
-		<div v-else class="timeline__body">
+		     horizontally-scrollable track (two-tier axis + bars). The BODY is the
+		     one and only scroll container, on both axes (#9858): the pane freezes
+		     with `position: sticky; left: 0` and the axis pins with
+		     `position: sticky; top: 0`, both against that single scrollport, so a
+		     bar always stays aligned with its row in the frozen pane. The track
+		     wrapper must NOT carry overflow of its own — that would make it a
+		     scroll container, which sizes to the flex line instead of its content
+		     and clips every row below the fold. -->
+		<div v-else ref="bodyRef" class="timeline__body">
 			<!-- Frozen left pane -->
 			<div class="timeline__pane">
 				<div class="timeline__pane-head">{{ t('kanso', 'Card') }}</div>
@@ -127,38 +132,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</div>
 
-			<!-- Scrollable track -->
+			<!-- Track wrapper: no overflow of its own (see .timeline__scroll), it
+			     only measures the track's visible width. -->
 			<div ref="scrollRef" class="timeline__scroll">
-				<!-- Clipped-edge affordances (#4129): when a card's real date range
-				     reaches beyond the rendered window, flag it at the track edge so
-				     the outlier is indicated, not silently dropped. Sticky so they
-				     stay pinned to the viewport edges as the track scrolls. In Fit
-				     mode the window == full extent so these are never shown. -->
-				<div
-					v-if="extendsEarlier"
-					class="timeline__edge timeline__edge--start"
-					:title="t('kanso', 'Show the full date range')"
-					:aria-label="t('kanso', 'Some cards extend earlier than shown')"
-					role="button"
-					tabindex="0"
-					@click="fitAll = true"
-					@keydown.enter.prevent="fitAll = true"
-					@keydown.space.prevent="fitAll = true">
-					<ChevronLeftIcon :size="16" />
-				</div>
-				<div
-					v-if="extendsLater"
-					class="timeline__edge timeline__edge--end"
-					:title="t('kanso', 'Show the full date range')"
-					:aria-label="t('kanso', 'Some cards extend later than shown')"
-					role="button"
-					tabindex="0"
-					@click="fitAll = true"
-					@keydown.enter.prevent="fitAll = true"
-					@keydown.space.prevent="fitAll = true">
-					<ChevronRightIcon :size="16" />
-				</div>
 				<div ref="trackRef" class="timeline__inner" :class="{ 'timeline__inner--drop-active': dropActive }" :style="{ width: `${trackWidth}px` }">
+					<!-- Clipped-edge affordances (#4129): when a card's real date range
+					     reaches beyond the rendered window, flag it at the track edge so
+					     the outlier is indicated, not silently dropped. Sticky so they
+					     stay pinned to the viewport edges as the body scrolls. In Fit
+					     mode the window == full extent so these are never shown.
+					     They live INSIDE the inner track deliberately (#9858): a sticky
+					     box can only travel within its containing block, and only the
+					     inner track spans the whole scrollable width AND height — pinned
+					     to the wrapper instead, they'd slide out of view long before
+					     either end of the scroll range. -->
+					<div
+						v-if="extendsEarlier"
+						class="timeline__edge timeline__edge--start"
+						:title="t('kanso', 'Show the full date range')"
+						:aria-label="t('kanso', 'Some cards extend earlier than shown')"
+						role="button"
+						tabindex="0"
+						@click="fitAll = true"
+						@keydown.enter.prevent="fitAll = true"
+						@keydown.space.prevent="fitAll = true">
+						<ChevronLeftIcon :size="16" />
+					</div>
+					<div
+						v-if="extendsLater"
+						class="timeline__edge timeline__edge--end"
+						:title="t('kanso', 'Show the full date range')"
+						:aria-label="t('kanso', 'Some cards extend later than shown')"
+						role="button"
+						tabindex="0"
+						@click="fitAll = true"
+						@keydown.enter.prevent="fitAll = true"
+						@keydown.space.prevent="fitAll = true">
+						<ChevronRightIcon :size="16" />
+					</div>
 					<!-- Drop affordance: a vertical guide at the day under the cursor
 					     while an unscheduled card is dragged over the track. -->
 					<div
@@ -380,7 +391,12 @@ const hasOpenHandler = !!getCurrentInstance()?.vnode?.props?.onOpen
 const router = useRouter()
 const queryClient = useQueryClient()
 
-// The horizontally-scrolling track container (for jump-to-today + page-fill sizing).
+// The body — the single scroll container, on both axes (#9858). Jump-to-today
+// drives this one.
+const bodyRef = ref(null)
+// The track wrapper. No longer scrolls itself, but its width IS the track's
+// visible width (the body's minus the frozen pane), so it stays the thing we
+// measure for page-fill sizing and for centering jump-to-today.
 const scrollRef = ref(null)
 // The inner track element (drop target for scheduling unscheduled cards).
 const trackRef = ref(null)
@@ -1062,17 +1078,21 @@ function openCard(cardId) {
 }
 
 // Scroll the track so today's marker is centered (or as close as the range allows).
+// The BODY is the horizontal scroller (#9858), but the visible width of the track
+// is the wrapper's — the body's own clientWidth also spans the frozen pane, which
+// would push the centering 150px off.
 function jumpToToday() {
-	const el = scrollRef.value
-	if (!el) return
+	const body = bodyRef.value
+	const track = scrollRef.value
+	if (!body || !track) return
 	nextTick(() => {
 		const today = dayFloor(now.value)
 		// Fall back to the axis origin if today isn't on the (padded) axis.
 		const x = (axisStart.value !== null && today >= axisStart.value && today <= axisEnd.value)
 			? xForMs(today)
 			: LEFT_PAD
-		const target = x - el.clientWidth / 2
-		el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+		const target = x - track.clientWidth / 2
+		body.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
 	})
 }
 
@@ -1331,13 +1351,17 @@ onBeforeUnmount(() => {
 	max-width: 420px;
 }
 
-/* Body = frozen pane + scrollable track, scrolling vertically as one unit. */
+/* Body = frozen pane + track, and the SINGLE scroll container for both axes
+ * (#9858). Vertical AND horizontal scrolling both belong here: it is what makes
+ * the sticky pane (left) and the sticky axis (top) pin against the same
+ * scrollport, and what lets the track grow to its full row height instead of
+ * being clipped to one screenful. */
 .timeline__body {
 	flex: 1;
 	min-height: 0;
 	display: flex;
 	align-items: stretch;
-	overflow-y: auto;
+	overflow: auto;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, var(--border-radius));
 }
@@ -1352,6 +1376,12 @@ onBeforeUnmount(() => {
 	left: 0;
 	z-index: 4;
 	background: var(--color-main-background);
+	/* Size to the rows, but never shorter than the frame (#9858): `stretch` would
+	 * tie the pane to the flex line, and the pane is what carries `.timeline__pane-head`'s
+	 * sticky top — it must be a box that spans the whole scrollable height. */
+	align-self: flex-start;
+	height: max-content;
+	min-height: 100%;
 }
 
 .timeline__pane-head {
@@ -1476,13 +1506,17 @@ onBeforeUnmount(() => {
 	margin-inline-start: -8px;
 }
 
-/* ── Scrollable track ── */
+/* ── Track wrapper ── */
+/* Deliberately overflow-FREE (#9858). It used to carry `overflow-x: auto`, which
+ * made it a scroll container: a scroll container is sized by its flex line and
+ * clips its content, so the track ended one screenful down while the pane kept
+ * listing rows. Now it just shrinks to the space left of the pane (so its
+ * clientWidth is still the track's visible width, which `viewportWidth` measures)
+ * and lets `.timeline__inner` overflow into the body's scroll area. */
 .timeline__scroll {
 	position: relative;
 	flex: 1;
 	min-width: 0;
-	overflow-x: auto;
-	overflow-y: hidden;
 }
 
 .timeline__inner {
@@ -1492,9 +1526,9 @@ onBeforeUnmount(() => {
 
 /* Clipped-edge affordance (#4129): a small chevron pinned to the viewport edge of
  * the scroll container, shown when cards extend beyond the rendered window. Sticky
- * keeps it fixed at the edge as the track scrolls sideways; margin-bottom: -28px
- * collapses its vertical footprint so it overlays the track rather than pushing
- * the (full-width) .timeline__inner sibling down. Clickable to activate Fit mode. */
+ * keeps it fixed at the edge as the body scrolls; margin-bottom: -28px collapses
+ * its vertical footprint so it overlays the track rather than pushing the axis
+ * down. Clickable to activate Fit mode. */
 .timeline__edge {
 	position: sticky;
 	top: 60px;
@@ -1516,8 +1550,11 @@ onBeforeUnmount(() => {
 	opacity: 1;
 }
 
+/* The scrollport's left edge is now the body's, and its first 300px are covered by
+ * the frozen pane (#9858) — so this offset clears the pane rather than hiding
+ * under it. */
 .timeline__edge--start {
-	left: 4px;
+	left: 304px;
 	float: left;
 }
 

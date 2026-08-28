@@ -104,6 +104,115 @@ test.describe('Board rename + Add column', () => {
 	})
 })
 
+// ── "Add column" availability per view state (#9856) ──────────────────────────
+// The action targets a composer, and only two view states render one: the flat
+// kanban track and list view. Swimlane and timeline are projections over the
+// board's columns with no composer, so the item used to render there and do
+// nothing at all. Availability is now derived from that single target, so these
+// tests pin both halves — offered where it works, gone where it can't.
+test.describe('Add column is offered only where it works (#9856)', () => {
+	// Roomy enough that the ⋯ More menu keeps its visible "More" label.
+	test.use({ viewport: { width: 1600, height: 900 } })
+
+	const state = { boardId: 0, boardUrl: '' }
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: 'Add column views ' + Math.floor(Date.now() / 1000) })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+		// One dated card so the timeline has a real bar to render and the swimlane
+		// board has a card in its catch-all lane.
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Grouped card' })
+		await api.patch(`/cards/${card.id}`, {
+			startDate: '2026-08-01T00:00:00+00:00',
+			duedate: '2026-08-06T00:00:00+00:00',
+		})
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	const addColumnItem = (page) => page.getByRole('menuitem', { name: 'Add column' })
+
+	// Open ⋯ More, count the "Add column" item, close the menu again. Counting
+	// (rather than visibility) is what proves absence.
+	async function addColumnItemCount(page) {
+		await page.getByRole('button', { name: 'More' }).click()
+		// Wait on an item that is always in this menu, so a count of 0 means the
+		// action is absent rather than the menu not having opened yet.
+		await expect(page.getByRole('menuitem', { name: 'Deleted cards' }))
+			.toBeVisible({ timeout: 8_000 })
+		const count = await addColumnItem(page).count()
+		await page.keyboard.press('Escape')
+		await expect(page.getByRole('menuitem', { name: 'Deleted cards' }))
+			.toHaveCount(0, { timeout: 8_000 })
+		return count
+	}
+
+	async function setDisplayOption(page, name) {
+		await page.locator('.board-view__display-menu button').first().click()
+		const option = page.getByRole('menuitemradio', { name, exact: true })
+		await option.click()
+		await page.keyboard.press('Escape')
+		// Assert the Display popover actually closed — otherwise the next ⋯ More
+		// click blocks on actionability until the test timeout instead of failing
+		// here with a legible message.
+		await expect(option).toHaveCount(0, { timeout: 8_000 })
+	}
+
+	async function openBoard(page) {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+	}
+
+	test('offered on the flat board, gone once swimlanes group the board', async ({ page }) => {
+		await openBoard(page)
+
+		// Baseline: the flat kanban track hosts the composer, so the item is there
+		// AND it actually reveals a focused input (the non-vacuous half).
+		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible()
+		expect(await addColumnItemCount(page)).toBe(1)
+		await page.getByRole('button', { name: 'More' }).click()
+		await addColumnItem(page).click()
+		const colInput = page.locator('.add-stack__input')
+		await expect(colInput).toBeVisible({ timeout: 8_000 })
+		await expect(colInput).toBeFocused({ timeout: 5_000 })
+		await colInput.press('Escape')
+
+		// Group by label → lanes replace the flat track, which takes the composer
+		// with it. The action must not be offered any more.
+		await setDisplayOption(page, 'Label')
+		await expect(page.locator('.swimlane')).not.toHaveCount(0, { timeout: 8_000 })
+		expect(await addColumnItemCount(page)).toBe(0)
+
+		// Back to a flat board → the action returns.
+		await setDisplayOption(page, 'None')
+		await expect(page.locator('.swimlane')).toHaveCount(0, { timeout: 8_000 })
+		expect(await addColumnItemCount(page)).toBe(1)
+	})
+
+	test('gone in timeline view, offered again in list view', async ({ page }) => {
+		await openBoard(page)
+		expect(await addColumnItemCount(page)).toBe(1)
+
+		// Timeline renders no column composer at all → not offered.
+		await setDisplayOption(page, 'Timeline')
+		await expect(page.locator('.timeline')).toBeVisible({ timeout: 10_000 })
+		expect(await addColumnItemCount(page)).toBe(0)
+
+		// List view owns its own composer → offered, and it still focuses it.
+		await setDisplayOption(page, 'List')
+		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		expect(await addColumnItemCount(page)).toBe(1)
+		await page.getByRole('button', { name: 'More' }).click()
+		await addColumnItem(page).click()
+		await expect(page.locator('[data-test="list-add-column"]')).toBeFocused({ timeout: 8_000 })
+	})
+})
+
 test.describe('Empty board onboarding composer', () => {
 	test.use({ viewport: { width: 1600, height: 900 } })
 

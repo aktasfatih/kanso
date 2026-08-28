@@ -5,8 +5,10 @@
 # the Nextcloud major line, so an ocp-major PR is the signal that a new
 # Nextcloud is out — raise appinfo/info.xml max-version and re-verify the app
 # (see CONTRIBUTING.md, "Staying current with Nextcloud"). Minor/patch updates
-# are grouped into one weekly PR per ecosystem; majors get their own PR so they
-# get real review. Nothing auto-merges — every PR runs the full CI first.
+# are grouped into one weekly PR per ecosystem — npm splits into two, because
+# production and dev deps differ in whether they ship to users — and majors get
+# their own PR so they get real review. Nothing auto-merges — every PR runs the
+# full CI first.
 version: 2
 updates:
   # PHP / Nextcloud (nextcloud/ocp = NC-version radar) + dev tooling
@@ -36,10 +38,23 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+    # Production deps are bundled into js/ by Vite and ship inside the App Store
+    # tarball, so a bump there is user-facing: `fix(deps)` lets semantic-release
+    # cut a patch instead of leaving it parked until the next unrelated release.
+    # devDependencies never reach users, so they stay `chore(deps)` (no release).
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "fix(deps)"
+      prefix-development: "chore(deps)"
     groups:
-      npm-minor:
+      npm-production:
+        dependency-type: production
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      npm-development:
+        dependency-type: development
         patterns:
           - "*"
         update-types:

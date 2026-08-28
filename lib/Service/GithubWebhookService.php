@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
@@ -26,10 +27,24 @@ use OCP\Security\ISecureRandom;
  * unauthenticated write path, so every field is treated as untrusted and the
  * signature is checked in constant time before anything is parsed.
  *
- * Auto-move reuses stack ROLES, not a config surface: a PR opened moves its card
- * (matched by its `kanso-<id>` branch) to the board's ROLE_REVIEW stack; a PR
- * merged moves it to the ROLE_DONE stack (which stamps it done via the existing
- * move automation). An issue has no branch, so its cards are matched in reverse:
+ * A PR names its cards two ways, and both are honored on the same delivery:
+ * a `kanso-<id>` head branch (the internal card id), and any `PREFIX-<seq>`
+ * human reference in the PR TITLE - the identifier the UI actually shows, so
+ * nobody has to name a branch after an id they cannot see. Title matching is a
+ * single anchored, case-SENSITIVE pass for THIS board's own prefix (never a
+ * generic `[A-Z]+-\d+` scan, which would burn a lookup on every `UTF-8` /
+ * `SHA-256` in a title, and never case-insensitive, which would read a quoted
+ * lowercase `kanso-<id>` branch name as a seq reference to a different card),
+ * resolved through {@see CardService::findByRef} - viewer-scoped, so
+ * an unknown, trashed, hidden or foreign-prefix reference is simply not a
+ * match. The branch and title matches are unioned (branch first), deduped by
+ * card id and capped, then each card is linked and auto-moved.
+ *
+ * Auto-move reuses stack ROLES, not a config surface: a PR opened moves its
+ * matched cards to the board's ROLE_REVIEW stack; a PR merged moves them to the
+ * ROLE_DONE stack (which stamps them done via the existing move automation).
+ * A `pull_request`/`edited` delivery matches no role, so re-titling a PR links
+ * without moving. An issue has no branch, so its cards are matched in reverse:
  * alive cards on this board with that issue URL attached as a link. An issue
  * closed moves them to ROLE_DONE; reopened moves them back to ROLE_IN_PROGRESS
  * (or ROLE_TODO if the board has no in-progress stack). A board with no matching
@@ -50,13 +65,27 @@ use OCP\Security\ISecureRandom;
  * log, readable by repo admins who need not be board members). It therefore
  * carries ids and booleans only - NEVER card titles or content - and a card id
  * it reports is either an echo of the request's own `kanso-<id>` branch name
- * (PR path) or restricted to PUBLIC cards (issue path: a non-public linked
- * card is processed but not named, so egress can't confirm hidden card ids).
+ * (PR branch path) or restricted to PUBLIC cards. A TITLE-derived id is NOT an
+ * echo: the sender supplied `PREFIX-<seq>` and we resolved it to an internal id
+ * they never had, so naming it would leak the seq -> id mapping and confirm that
+ * a non-public card exists. It therefore passes the same public-only gate as the
+ * issue path (a non-public matched card is still linked and moved, just never
+ * named). What the gate withholds is the card ID; a `handled: true` with
+ * `cardId: 0` still tells the sender that the seq THEY supplied resolved to
+ * something - the same residual the issue path has always had, and the reason
+ * the endpoint is HMAC-gated per board rather than open.
  * Every card mutation runs as the board owner through CardService, whose
  * visibility gates (#3743) apply - a card hidden from the owner is untouched
  * (the no-op response every business-level miss produces).
  */
 class GithubWebhookService {
+	/**
+	 * How many distinct `PREFIX-<seq>` references a single PR title is read for
+	 * (#9855). A PR closing a handful of cards is normal; a title carrying more
+	 * than this is noise, and the cap bounds the per-delivery lookup cost.
+	 */
+	private const MAX_TITLE_REFS = 5;
+
 	public function __construct(
 		private BoardMapper $boardMapper,
 		private StackMapper $stackMapper,
@@ -186,8 +215,15 @@ class GithubWebhookService {
 	}
 
 	/**
-	 * A `pull_request` event: the card is named by the PR's `kanso-<id>` head
-	 * branch; the PR is recorded as a link and the card auto-moved per action.
+	 * A `pull_request` event: the PR's cards are named by its `kanso-<id>` head
+	 * branch AND by any `PREFIX-<seq>` reference in its title (#9855). Every
+	 * distinct match is recorded as a link and auto-moved per action.
+	 *
+	 * The response may name only ONE card (the shape is singular), and which one
+	 * is an EGRESS decision, not a convenience: the branch id is safe because it
+	 * is a verbatim echo of what the sender supplied, while a title-derived id
+	 * was resolved by us and is therefore public-only. Every match is processed
+	 * either way; naming is the only thing the gate withholds.
 	 *
 	 * @param array<string, mixed> $pr
 	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool}
@@ -198,34 +234,123 @@ class GithubWebhookService {
 		if (isset($pr['head']) && is_array($pr['head']) && is_string($pr['head']['ref'] ?? null)) {
 			$branch = $pr['head']['ref'];
 		}
-		$cardId = $this->cardIdFromBranch($branch);
-		if ($cardId === null) {
-			return ['handled' => false];
-		}
+		$title = is_string($pr['title'] ?? null) ? $pr['title'] : '';
 
+		// cardId => whether the id is an echo of the request's own branch name
+		// (and so may be named outward without the public-only gate).
+		/** @var array<int, bool> $targets */
+		$targets = [];
+		$branchCardId = $this->cardIdFromBranch($branch);
 		// The branch names a card - it must live on THIS board and be alive.
-		try {
-			$card = $this->cardService->find($cardId, $board->getOwner());
-		} catch (\Throwable) {
-			return ['handled' => false];
+		if ($branchCardId !== null && $this->cardIsOnBoard($branchCardId, $board)) {
+			$targets[$branchCardId] = true;
 		}
-		if ($card->getBoardId() !== $boardId) {
+		foreach ($this->cardIdsFromTitle($board, $title) as $titleCardId) {
+			// Never downgrade the branch card's echo flag on a title that also
+			// references it - the union dedupes to one card, one link, one move.
+			$targets[$titleCardId] ??= false;
+		}
+		if ($targets === []) {
 			return ['handled' => false];
 		}
 
-		// Record the PR as a link on the card (best-effort, idempotent).
 		$prUrl = is_string($pr['html_url'] ?? null) ? $pr['html_url'] : '';
-		if ($prUrl !== '') {
-			try {
-				$this->cardLinkService->addLink($cardId, $prUrl, $board->getOwner());
-			} catch (\Throwable) {
-				// Non-critical - a bad/duplicate URL must not fail the webhook.
+		$moved = false;
+		$namedCardId = 0;
+		foreach ($targets as $cardId => $isEcho) {
+			// Record the PR as a link on the card (best-effort, idempotent).
+			if ($prUrl !== '') {
+				try {
+					$this->cardLinkService->addLink($cardId, $prUrl, $board->getOwner());
+				} catch (\Throwable) {
+					// Non-critical - a bad/duplicate URL must not fail the webhook.
+				}
+			}
+			if ($this->applyAutoMove($boardId, $cardId, $action, $pr, $board->getOwner())) {
+				$moved = true;
+			}
+			if ($namedCardId === 0 && ($isEcho || $this->isPublicCard($cardId))) {
+				$namedCardId = $cardId;
 			}
 		}
 
-		$moved = $this->applyAutoMove($boardId, $cardId, $action, $pr, $board->getOwner());
+		return ['handled' => true, 'action' => $action, 'cardId' => $namedCardId, 'moved' => $moved];
+	}
 
-		return ['handled' => true, 'action' => $action, 'cardId' => $cardId, 'moved' => $moved];
+	/**
+	 * Whether the internal card id resolves to an alive card of THIS board, read
+	 * as the board owner. Swallows the lookup's exceptions: a webhook delivery
+	 * must never 5xx on a business-level miss (GitHub disables a hook that does).
+	 */
+	private function cardIsOnBoard(int $cardId, Board $board): bool {
+		try {
+			return $this->cardService->find($cardId, $board->getOwner())->getBoardId() === $board->getId();
+		} catch (\Throwable) {
+			return false;
+		}
+	}
+
+	/**
+	 * The cards a PR title references as `PREFIX-<seq>` (#9855), in title order.
+	 *
+	 * Matching is ONE anchored pass built from the board's own prefix rather than
+	 * a generic `[A-Z][A-Z0-9]*-\d+` scan: a generic scan hits `UTF-8`,
+	 * `SHA-256`, `ISO-8601`, `AGPL-3` and `GH-123`, and each hit would cost a
+	 * findByRef that reloads the board and re-runs the permission check only to
+	 * fail the prefix comparison.
+	 *
+	 * The pass is deliberately CASE-SENSITIVE, and that is a correctness rule,
+	 * not pedantry: a stored prefix is always uppercase (BoardPrefix), the UI
+	 * renders references uppercase - and a board titled "Kanso" derives the
+	 * prefix `KANSO`, which case-insensitively collides with the lowercase
+	 * `kanso-<id>` BRANCH spelling. A title quoting that branch ("Merge kanso-42
+	 * into main") would otherwise be read as seq 42 and link + auto-move whatever
+	 * unrelated card holds that board_seq. Excluding a trailing `[\w-]` covers
+	 * the `kanso-<id>-slug` form for the same reason.
+	 *
+	 * Resolution goes through {@see CardService::findByRef} as the board owner,
+	 * which is board-scoped, prefix-checked and viewer-scoped - so an unknown,
+	 * trashed or hidden card is simply not a match. It THROWS for a missing board
+	 * or a permission failure, which this service's contract forbids surfacing,
+	 * so every call is wrapped.
+	 *
+	 * @return int[] distinct card ids, from at most self::MAX_TITLE_REFS references
+	 */
+	private function cardIdsFromTitle(Board $board, string $title): array {
+		if (trim($title) === '') {
+			return [];
+		}
+		$prefix = $board->getPrefix() ?? BoardPrefix::DEFAULT;
+		if ($prefix === '') {
+			return [];
+		}
+
+		// Bounded digits: a longer run cannot be a real board_seq, and the bound
+		// keeps `(int)` from silently rewriting it to PHP_INT_MAX.
+		$pattern = '/(?<![A-Za-z0-9])' . preg_quote($prefix, '/') . '-(\d{1,9})(?![\w-])/';
+		if (preg_match_all($pattern, $title, $matches) < 1) {
+			return [];
+		}
+
+		$seqs = [];
+		foreach ($matches[1] as $digits) {
+			$seq = (int)$digits;
+			if ($seq > 0) {
+				$seqs[$seq] = true;
+			}
+		}
+		$cardIds = [];
+		foreach (array_slice(array_keys($seqs), 0, self::MAX_TITLE_REFS) as $seq) {
+			try {
+				$card = $this->cardService->findByRef($board->getId(), $prefix . '-' . $seq, $board->getOwner());
+			} catch (\Throwable) {
+				continue;
+			}
+			if ($card !== null) {
+				$cardIds[] = $card->getId();
+			}
+		}
+		return $cardIds;
 	}
 
 	/**
@@ -433,6 +558,11 @@ class GithubWebhookService {
 	 * A merged PR → ROLE_DONE (stamps done); an opened/reopened/ready PR →
 	 * ROLE_REVIEW. Returns whether a move actually happened.
 	 *
+	 * Every other action - `edited` included - matches no role and returns false
+	 * without a lookup. That is what makes title matching safe on `edited`, which
+	 * also fires on body edits and base-branch changes: adding a reference to a
+	 * title links (idempotently), it never re-moves a card a human moved on.
+	 *
 	 * @param array<string, mixed> $pr
 	 */
 	private function applyAutoMove(int $boardId, int $cardId, string $action, array $pr, string $actorUid): bool {
@@ -446,17 +576,18 @@ class GithubWebhookService {
 			return false;
 		}
 
-		$target = $this->stackMapper->findByBoardAndRole($boardId, $targetRole);
-		if ($target === null) {
-			return false;
-		}
-
 		try {
+			$target = $this->stackMapper->findByBoardAndRole($boardId, $targetRole);
+			if ($target === null) {
+				return false;
+			}
 			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
 			return true;
 		} catch (\Throwable) {
 			// e.g. the review gate blocks a merge while reviews are unapproved -
-			// the link is still recorded; the move is simply skipped.
+			// the link is still recorded; the move is simply skipped. The stack
+			// lookup is inside the try too: a title can match several cards, so a
+			// DB error here would otherwise escape as a 5xx and disable the hook.
 			return false;
 		}
 	}

@@ -67,10 +67,14 @@ const props = defineProps({
 		type: Function,
 		required: true,
 	},
-	/** Async (stackId, title) → Promise — inline card create (still allowed in lanes). */
+	/**
+	 * Async (stackId, title) → Promise — inline card create (still allowed in
+	 * lanes). Null for read-only members; forwarded as-is so the column hides
+	 * its composer rather than offering a create the server would reject.
+	 */
 	onCreateCard: {
 		type: Function,
-		required: true,
+		default: null,
 	},
 	onCardFocus: {
 		type: Function,

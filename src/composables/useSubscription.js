@@ -29,7 +29,7 @@ import {
 	subscribeWatcher as apiSubscribeWatcher,
 	unsubscribeWatcher as apiUnsubscribeWatcher,
 } from '../services/api.js'
-import { invalidateMyWork } from './queryKeys.js'
+import { invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -108,8 +108,8 @@ export function useSubscription(cardId) {
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			// Watching/unwatching changes which comments the Inbox feed surfaces
-			// for the affected watcher (#3766).
-			invalidateMyWork(queryClient)
+			// for the affected watcher (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
@@ -162,8 +162,8 @@ export function useSubscription(cardId) {
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			// Watching/unwatching changes which comments the Inbox feed surfaces
-			// for the affected watcher (#3766).
-			invalidateMyWork(queryClient)
+			// for the affected watcher (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 

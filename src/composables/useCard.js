@@ -4,7 +4,7 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { fetchCard, updateCard as apiUpdateCard } from '../services/api.js'
-import { boardQueryKey, invalidateMyWork } from './queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
 
 export function useCard(id, enabled) {
 	const queryClient = useQueryClient()
@@ -42,8 +42,8 @@ export function useCard(id, enabled) {
 				queryClient.invalidateQueries({ queryKey: ['board'] })
 			}
 			// Card updates can change My Work membership (done) or the card
-			// context the feeds render (title, due date) (#3766).
-			invalidateMyWork(queryClient)
+			// context the feeds render (title, due date) (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 

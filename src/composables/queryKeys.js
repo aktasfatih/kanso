@@ -40,6 +40,24 @@ export function boardQueryKey(id) {
 export const MY_WORK_QUERY_KEYS = [['my-cards'], ['my-reviews'], ['inbox']]
 
 /**
+ * Key for the cross-board card feed every saved View renders over (#3815).
+ *
+ * Single-sourced here rather than inlined in useViewCards.js so the feed can
+ * never again become a cache island that no mutation knows how to reach - the
+ * exact bug this key's first year shipped with.
+ *
+ * Deliberately NOT a member of MY_WORK_QUERY_KEYS - see
+ * invalidateCrossBoardFeeds for why the two lists must stay separate.
+ *
+ * This is the key PREFIX: the feed is server-sorted, so useViewCards appends the
+ * active sort mode + direction (one cache entry per ordering). Invalidating the
+ * prefix reaches every one of them - TanStack matches keys by prefix.
+ *
+ * @type {[string]}
+ */
+export const VIEW_CARDS_QUERY_KEY = ['view-cards']
+
+/**
  * Visible-tab polling cadence for the My Work feeds (#3768).
  *
  * The feeds are cross-board, so no board delta poll ever covers them - while
@@ -78,4 +96,42 @@ export function invalidateMyWork(queryClient) {
 	for (const queryKey of MY_WORK_QUERY_KEYS) {
 		queryClient.invalidateQueries({ queryKey })
 	}
+}
+
+/**
+ * Invalidate EVERY cross-board feed: the three My Work feeds plus the View feed.
+ *
+ * This is the one to call from the settle phase of a card mutation. A View is a
+ * cross-board feed exactly like My Tasks - board-scoped invalidation and delta
+ * sync never reach it - and it is worse off than they are: the card detail opens
+ * as an in-place overlay ON the View (ViewPage.vue), so editing never blurs the
+ * window and refetchOnWindowFocus never fires. Without this the tile behind the
+ * overlay keeps the old values until the 60s interval ticks.
+ *
+ * ── Why this is NOT just `MY_WORK_QUERY_KEYS + ['view-cards']` ──────────────
+ * main.js drives invalidateMyWork from the REALTIME path: every notify_push
+ * event and every applied board delta, throttled to 30s. That is right for the
+ * My Work feeds (small, per-user, server-filtered list reads) and wrong for the
+ * View feed, which is the heaviest query in the app - enriched summaries across
+ * every readable board, up to the server cap. Folding view-cards into the
+ * My Work list would put that query on a 30s push-driven cadence, i.e. DOUBLE
+ * its own 60s interval, purely as a side effect of someone else touching any
+ * board. And it would bite precisely where it hurts: useViewCards is mounted
+ * only by ViewPage, so the key is an ACTIVE query - the only kind
+ * invalidateQueries refetches - exactly when the user is sitting on a View.
+ *
+ * So: mutations (a user action, bounded, already paying for a round trip) call
+ * this; the realtime funnel keeps calling the narrow invalidateMyWork. The two
+ * functions are separate on purpose - do not merge them.
+ *
+ * Same rule as invalidateMyWork: settle phase only, never onMutate, so it can
+ * never race an optimistic patch or its rollback. And no optimistic patch of
+ * the feed itself - once filtering moves server-side, a client-side field patch
+ * cannot know whether the card still belongs in the filtered set.
+ *
+ * @param {import('@tanstack/vue-query').QueryClient} queryClient
+ */
+export function invalidateCrossBoardFeeds(queryClient) {
+	invalidateMyWork(queryClient)
+	queryClient.invalidateQueries({ queryKey: VIEW_CARDS_QUERY_KEY })
 }

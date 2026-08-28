@@ -108,7 +108,9 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await expect(page.locator('.timeline__legend-swatch')).toHaveCount(5)
 
 		// Page-fill: on this short-range board the inner track still fills the viewport.
-		const fill = await page.locator('.timeline__scroll').evaluate((el) => {
+		// `.timeline__body` is THE scroll container on both axes (#9858) — asserting
+		// against `.timeline__scroll` would be vacuous, it no longer scrolls.
+		const fill = await page.locator('.timeline__body').evaluate((el) => {
 			return { scroll: el.scrollWidth, client: el.clientWidth }
 		})
 		expect(fill.scroll).toBeGreaterThanOrEqual(fill.client)
@@ -116,13 +118,13 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		// Jump-to-today scrolls the track horizontally toward the today marker.
 		const todayBtn = page.getByRole('button', { name: 'Jump to today' })
 		await expect(todayBtn).toBeVisible()
-		const scrollBefore = await page.locator('.timeline__scroll').evaluate((el) => {
+		const scrollBefore = await page.locator('.timeline__body').evaluate((el) => {
 			el.scrollLeft = 0
 			return el.scrollLeft
 		})
 		await todayBtn.click()
 		await page.waitForTimeout(700) // smooth scroll settles
-		const scrollAfter = await page.locator('.timeline__scroll').evaluate((el) => el.scrollLeft)
+		const scrollAfter = await page.locator('.timeline__body').evaluate((el) => el.scrollLeft)
 		// With a track wider than the viewport and today near the right edge, the
 		// jump moves the scroll position off zero (or leaves it at zero only when
 		// today is already centered within the first viewport).
@@ -258,7 +260,8 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			// Bounded width: with a ~12-year raw domain the OLD code produced a track
 			// of ~52000px+ (4380 days × 12px/day at week zoom). The windowed render
 			// keeps it well under 30000px regardless of the outlier span.
-			const scrollWidthDefault = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
+			// Measured on `.timeline__body` — the single scroll container (#9858).
+			const scrollWidthDefault = await page.locator('.timeline__body').evaluate((el) => el.scrollWidth)
 			expect(scrollWidthDefault).toBeLessThan(30_000)
 
 			// The card reaches before the window start (2018 ≪ today−6mo) and after the
@@ -299,7 +302,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			// become invisibly thin, so on a very wide span in a narrow viewport the
 			// track can be modestly wider than the viewport; the guarantee under test is
 			// that it stays bounded (vs the old ~52000px), not that it exactly fits.
-			const scrollWidthFit = await page.locator('.timeline__scroll').evaluate((el) => el.scrollWidth)
+			const scrollWidthFit = await page.locator('.timeline__body').evaluate((el) => el.scrollWidth)
 			expect(scrollWidthFit).toBeLessThan(30_000)
 
 			// ── Clicking an edge chevron also triggers Fit ────────────────────────────
@@ -328,6 +331,132 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		// The shared board's dates are all near today, well inside the window.
 		await expect(page.locator('.timeline__edge--start')).toHaveCount(0)
 		await expect(page.locator('.timeline__edge--end')).toHaveCount(0)
+	})
+
+	// #9858: the track must grow to the FULL row height, not one screenful. The
+	// regression this guards was invisible to every assertion above because the
+	// lane and bar nodes exist in the DOM (and report a bounding box) even while
+	// their scroll container clips them — counting `.timeline__lane` or calling
+	// toBeVisible() on a bar both pass with the bug present. So this asserts
+	// GEOMETRY and HIT-TESTING at the bottom of a board that overflows the
+	// viewport: the bar for the last row must actually be painted there.
+	test('a board taller than the viewport paints track, grid and bars down to the last row (#9858)', async ({ page }) => {
+		// A dedicated board: the shared 3-card fixture is far too short to overflow.
+		const board = await api.post('/boards', { title: 'Timeline tall ' + Math.floor(Date.now() / 1000) })
+		try {
+			const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+			const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString()
+			// 30 dated rows ≈ 1080px of lanes — comfortably past the ~500px body at 720p.
+			for (let i = 0; i < 30; i++) {
+				const c = await api.post('/cards', { stackId: stack.id, title: `Row ${String(i).padStart(2, '0')}` })
+				await api.patch(`/cards/${c.id}`, { startDate: day(i % 20), duedate: day((i % 20) + 4) })
+			}
+
+			await ncLogin(page)
+			await page.setViewportSize({ width: 1280, height: 720 })
+			await page.addInitScript(() => { try { localStorage.clear() } catch (e) {} })
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}`)
+			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByText('Timeline', { exact: true }).click()
+			await expect(page.locator('.timeline__bar').first()).toBeVisible({ timeout: 8_000 })
+
+			// The one-time keyboard-shortcut hint (#3413) is `position: fixed` at
+			// right:16px/bottom:16px, z-index 2000, so it lands squarely on the
+			// right-hand hit-test probe below — this spec passed locally and failed
+			// in CI for exactly that reason. Suppress it as unrelated chrome rather
+			// than dismissing it: the hint renders only after an async getSettings(),
+			// so a click would race its appearance, and its dismissal is per-user
+			// state that differs between a dev account and a freshly provisioned CI
+			// worker user. A stylesheet applies whenever the element shows up, under
+			// whichever account is logged in.
+			await page.addStyleTag({ content: '.board-view__shortcuts-hint { display: none !important; }' })
+			await expect(page.locator('[data-test="shortcuts-hint"]')).toBeHidden()
+
+			// Precondition: the rows really do overflow, so the assertions below are
+			// exercising the scrolled-to-the-bottom state and not a board that fits.
+			const overflows = await page.locator('.timeline__body').evaluate(
+				(el) => el.scrollHeight - el.clientHeight,
+			)
+			expect(overflows).toBeGreaterThan(200)
+
+			const geom = await page.evaluate(() => {
+				const body = document.querySelector('.timeline__body')
+				// Scroll to the very bottom and let sticky positions settle.
+				body.scrollTop = body.scrollHeight
+				const lanes = [...document.querySelectorAll('.timeline__lane')]
+				const paneRows = [...document.querySelectorAll('.timeline__pane-row')]
+				const lastLane = lanes[lanes.length - 1]
+				const lastPane = paneRows[paneRows.length - 1]
+				const bodyRect = body.getBoundingClientRect()
+				const laneRect = lastLane.getBoundingClientRect()
+				const paneRect = lastPane.getBoundingClientRect()
+				const bar = lastLane.querySelector('.timeline__bar, .timeline__milestone')
+				const barRect = bar ? bar.getBoundingClientRect() : null
+
+				// Hit-test across the track at the last row's vertical centre. With the
+				// track clipped, every probe lands on `.timeline__body` (blank frame).
+				const y = Math.round(laneRect.top + laneRect.height / 2)
+				const probes = [0.1, 0.35, 0.6, 0.9].map((f) => {
+					const x = Math.round(bodyRect.left + 300 + (bodyRect.width - 320) * f)
+					const el = document.elementFromPoint(x, y)
+					return el ? (el.closest('.timeline__lane') ? 'lane' : el.className.toString().trim()) : 'null'
+				})
+
+				const axis = document.querySelector('.timeline__axis')
+				const paneHead = document.querySelector('.timeline__pane-head')
+				const grid = document.querySelector('.timeline__grid')
+				const inner = document.querySelector('.timeline__inner')
+				return {
+					lastLaneTitle: lastLane.getAttribute('title'),
+					lastPaneTitle: lastPane.getAttribute('title'),
+					// Lane must sit inside the visible frame, aligned with its pane row.
+					laneInFrame: laneRect.top >= bodyRect.top - 1 && laneRect.bottom <= bodyRect.bottom + 1,
+					laneVsPane: Math.round(laneRect.top - paneRect.top),
+					hasBar: !!bar,
+					barInFrame: barRect
+						? barRect.top >= bodyRect.top - 1 && barRect.bottom <= bodyRect.bottom + 1 && barRect.width > 0
+						: false,
+					probes,
+					// Both frozen headers stay pinned to the top of the body.
+					axisOffset: Math.round(axis.getBoundingClientRect().top - bodyRect.top),
+					paneHeadOffset: Math.round(paneHead.getBoundingClientRect().top - bodyRect.top),
+					// Gridlines span the whole track, not just the first screenful.
+					gridHeight: Math.round(grid.getBoundingClientRect().height),
+					innerHeight: Math.round(inner.getBoundingClientRect().height),
+				}
+			})
+
+			// The pane and the track still show the SAME last row, aligned.
+			expect(geom.lastLaneTitle).toBe(geom.lastPaneTitle)
+			expect(geom.laneInFrame).toBe(true)
+			expect(Math.abs(geom.laneVsPane)).toBeLessThanOrEqual(4)
+
+			// THE regression assertion: a real, painted bar for the last row.
+			expect(geom.hasBar).toBe(true)
+			expect(geom.barInFrame).toBe(true)
+			expect(geom.probes).toEqual(['lane', 'lane', 'lane', 'lane'])
+
+			// Both sticky headers survive the restructure (both were unpinned before).
+			expect(geom.axisOffset).toBeLessThanOrEqual(2)
+			expect(geom.axisOffset).toBeGreaterThanOrEqual(-2)
+			expect(geom.paneHeadOffset).toBeLessThanOrEqual(2)
+			expect(geom.paneHeadOffset).toBeGreaterThanOrEqual(-2)
+
+			// Gridlines run the full height of the track (52px axis excluded).
+			expect(geom.gridHeight).toBeGreaterThan(geom.innerHeight - 60)
+
+			// The frozen pane still freezes horizontally, scrolled to the bottom.
+			const paneLeft = await page.evaluate(() => {
+				const body = document.querySelector('.timeline__body')
+				body.scrollLeft = 400
+				const pane = document.querySelector('.timeline__pane')
+				return Math.round(pane.getBoundingClientRect().left - body.getBoundingClientRect().left)
+			})
+			expect(Math.abs(paneLeft)).toBeLessThanOrEqual(2)
+		} finally {
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
 	})
 
 	test('a lane is keyboard-openable: focus + Enter opens the card (#3512)', async ({ page }) => {

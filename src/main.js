@@ -85,7 +85,8 @@ if (openCard) {
 //    feeds are refreshed at most once per 30s (global staleTime) - the 60s
 //    interval is the backstop for anything a throttled window skipped.
 //  - isMutating: never race an optimistic my-work patch (review verdict) with
-//    a refetch; the mutation's own settle-phase invalidateMyWork covers it.
+//    a refetch; the mutation's own settle-phase invalidateCrossBoardFeeds
+//    covers it.
 //  - hidden tab: push events still arrive there, and invalidateQueries
 //    refetches active queries regardless of focus (the feeds' own interval is
 //    focus-gated by TanStack) - skip, and let refetchOnWindowFocus +
@@ -104,6 +105,10 @@ function invalidateMyWorkThrottled() {
 		return
 	}
 	lastMyWorkSignal = now
+	// The NARROW variant, deliberately: this fires on every push for every board
+	// the user participates in. The View feed (invalidateCrossBoardFeeds) is the
+	// heaviest query in the app and must not ride a 30s push cadence - it keeps
+	// its own 60s interval. See invalidateCrossBoardFeeds in queryKeys.js (#9859).
 	invalidateMyWork(queryClient)
 }
 onBoardChangesApplied(invalidateMyWorkThrottled)

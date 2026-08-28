@@ -168,12 +168,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 
 				<!-- Add column — moved off the board (was a persistent trailing input)
-				     into this menu so the board stays uncluttered. Editors only.
-				     Clicking reveals an on-demand composer at the end of the board and
-				     focuses it (a text INPUT here would strip the menu's role=menuitem
-				     semantics, so this stays a plain action button). -->
+				     into this menu so the board stays uncluttered. Clicking reveals
+				     (and focuses) the composer belonging to the active view (a text
+				     INPUT here would strip the menu's role=menuitem semantics, so this
+				     stays a plain action button). Offered only to editors AND only in
+				     views that actually host a composer — `canAddColumn` derives both
+				     from `addColumnTarget`, so the affordance can never be shown in a
+				     view where clicking it would do nothing (#9856). -->
 
-				<template v-if="canEditBoard">
+				<template v-if="canAddColumn">
 					<NcActionButton
 						class="board-view__add-column-btn"
 						:close-after-click="true"
@@ -339,10 +342,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:labels-by-id="labelsById"
 					:board-prefix="boardData.board.prefix"
 					:new-cards-on-top="boardData.board.newCardsOnTop === true"
-					:on-create-card="handleCreateCard"
-					:on-fetch-templates="handleFetchTemplates"
-					:on-create-from-template="handleCreateFromTemplate"
-					:on-manage-templates="() => { showManageTemplates = true }"
+					:on-create-card="canEditBoard ? handleCreateCard : null"
+					:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
+					:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
+					:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
 					:on-delete-stack="handleDeleteStack"
 					:on-restore-stack="handleRestoreStack"
 					:on-rename-stack="handleRenameStack"
@@ -361,9 +364,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<!-- Column composer (#3413). No longer a PERSISTENT trailing input: it
 				     appears only when revealed from the ⋯ More menu ("Add column"), or
 				     as onboarding on a brand-new empty board so a fresh board isn't a
-				     dead end. Editors only. Esc or an empty blur collapses it again. -->
+				     dead end. Editors only. Esc or an empty blur collapses it again.
+				     Gated on being the active add-column target rather than on the view
+				     conditions again (#9856), so it is never rendered — even hidden —
+				     into a view that doesn't own it. -->
 				<div
-					v-if="canEditBoard && (showAddColumn || sortedStacks.length === 0)"
+					v-if="canEditBoard && addColumnTarget === 'track' && (showAddColumn || sortedStacks.length === 0)"
 					class="add-stack add-stack--empty">
 					<p v-if="sortedStacks.length === 0" class="add-stack__hint" data-test="empty-board-hint">
 						{{ t('kanso', 'Start by adding a column, e.g. “To do”.') }}
@@ -401,7 +407,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:labels-by-id="labelsById"
 					:board-prefix="boardData.board.prefix"
 					:register-column-ref="registerLaneColumnRef"
-					:on-create-card="handleCreateCard"
+					:on-create-card="canEditBoard ? handleCreateCard : null"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:collapsed-stacks="collapsedStacks"
@@ -424,9 +430,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:board-prefix="boardData?.board?.prefix ?? ''"
 			:board-id="props.id"
 			:new-cards-on-top="boardData.board.newCardsOnTop === true"
-			:on-create-card="handleCreateCard"
-			:on-fetch-templates="handleFetchTemplates"
-			:on-create-from-template="handleCreateFromTemplate"
+			:on-create-card="canEditBoard ? handleCreateCard : null"
+			:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
+			:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
 			:on-create-stack="canEditBoard ? handleCreateStack : null"
 			:sort-mode="sortMode" />
 
@@ -617,7 +623,7 @@ import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { useBoardSubscription } from '../composables/useBoardSubscription.js'
-import { boardQueryKey, invalidateMyWork } from '../composables/queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useCardMove } from '../composables/useCardMove.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
@@ -1677,8 +1683,8 @@ function handleKeydown(e) {
 			})
 			.finally(() => {
 				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
-				// Done-state changes My Tasks membership (#3766).
-				invalidateMyWork(queryClient)
+				// Done-state changes My Tasks membership (#3766, #9859).
+				invalidateCrossBoardFeeds(queryClient)
 			})
 		return
 	}
@@ -2023,16 +2029,34 @@ const addColumnInputRef = ref(null)
 // the other target of the single "Add column" menu action (#9853).
 const listViewRef = ref(null)
 
+// The single source of truth for "Add column" (#9853, #9856). Creating a column
+// needs somewhere to type the name, and only two of the view states render such
+// a composer:
+//   'track' — the flat kanban board, whose composer sits at the end of the
+//             columns row (`addColumnInputRef` below);
+//   'list'  — list view, which owns its own composer (`focusAddColumn()`).
+// Swimlane and timeline are projections over the board's columns and render no
+// composer at all, so the target is null there. Both the menu item's visibility
+// (`canAddColumn`) and the click handler's dispatch read this one value, which
+// is what keeps the affordance from ever being offered where it would silently
+// do nothing. A view that grows a composer only has to be added here.
+const addColumnTarget = computed(() => {
+	if (viewMode.value === 'list') return 'list'
+	if (viewMode.value === 'board' && swimlaneMode.value === 'none') return 'track'
+	return null
+})
+const canAddColumn = computed(() => canEditBoard.value && addColumnTarget.value !== null)
+
 function revealAddColumn() {
 	stackError.value = ''
-	// ONE menu action, two targets. The composer below lives at the end of the
-	// kanban track, which list view doesn't render — aiming at it there focused
-	// nothing and the action silently did nothing. In list view, hand off to the
-	// list's own composer instead.
-	if (viewMode.value === 'list') {
+	if (addColumnTarget.value === 'list') {
 		listViewRef.value?.focusAddColumn()
 		return
 	}
+	// Guard the fall-through too: the menu item is hidden without a target, but a
+	// stale menu (or a view switched while it was open) must not reveal the track
+	// composer inside a hidden subtree.
+	if (addColumnTarget.value !== 'track') return
 	showAddColumn.value = true
 	nextTick(() => {
 		// Scroll the composer into view (it sits at the far right of the columns row)

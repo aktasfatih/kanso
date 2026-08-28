@@ -225,6 +225,169 @@ class ViewServiceTest extends TestCase {
 		self::assertNotContains(7, $boardIds);
 	}
 
+	/**
+	 * Wire up a readable board per entry of $rowsByBoard (boardId => summary rows),
+	 * so a sort test can describe the feed it wants in one line.
+	 *
+	 * @param array<int, array{title?: string, rows: list<array<string, mixed>>}> $rowsByBoard
+	 */
+	private function seedFeed(array $rowsByBoard): void {
+		$boards = [];
+		$contexts = [];
+		foreach ($rowsByBoard as $boardId => $spec) {
+			$board = $this->board($boardId, $spec['title'] ?? ('Board ' . $boardId));
+			$boards[] = $board;
+			$contexts[] = [$board, 'alice', ViewerContext::forMember('alice', $boardId, ViewerContext::ROLE_INTERNAL, true)];
+		}
+		$this->boardService->method('findAll')->with('alice')->willReturn($boards);
+		$this->boardAccess->method('contextFor')->willReturnMap($contexts);
+		$this->cardMapper->method('findSummariesByBoard')
+			->willReturnCallback(fn (int $boardId): array => array_map(
+				fn (array $row): Card => $this->summaryCard((int)$row['id'], $boardId),
+				$rowsByBoard[$boardId]['rows'],
+			));
+		$this->cardSummaryService->method('serialize')
+			->willReturnCallback(static fn (int $boardId): array => $rowsByBoard[$boardId]['rows']);
+	}
+
+	/**
+	 * @param array<string, mixed> $result
+	 * @return list<int>
+	 */
+	private function idsOf(array $result): array {
+		return array_map(static fn (array $c): int => (int)$c['id'], $result['cards']);
+	}
+
+	/**
+	 * Due sort (#9860). Semantics match the board's display sort: present values
+	 * flip with the direction, and a card with NO due date sorts last in BOTH
+	 * directions rather than leading the descending list.
+	 */
+	public function testFindMineSortsByDueDateWithMissingValuesLastInBothDirections(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'duedate' => '2030-01-03T09:00:00+00:00'],
+			['id' => 2, 'duedate' => null],
+			['id' => 3, 'duedate' => '2030-01-01T09:00:00+00:00'],
+			['id' => 4, 'duedate' => '2030-01-02T09:00:00+00:00'],
+		]]]);
+
+		self::assertSame([3, 4, 1, 2], $this->idsOf($this->service->findMine('alice', 'due', 'asc')));
+		self::assertSame([1, 4, 3, 2], $this->idsOf($this->service->findMine('alice', 'due', 'desc')));
+	}
+
+	/**
+	 * Priority sort: 0 ("no priority") is a real LOW value, not a missing one -
+	 * same as the board - so it leads ascending and trails descending.
+	 */
+	public function testFindMineSortsByPriorityTreatingZeroAsARealLowValue(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'priority' => 0],
+			['id' => 2, 'priority' => 3],
+			['id' => 3, 'priority' => 1],
+		]]]);
+
+		self::assertSame([2, 3, 1], $this->idsOf($this->service->findMine('alice', 'priority', 'desc')));
+		self::assertSame([1, 3, 2], $this->idsOf($this->service->findMine('alice', 'priority', 'asc')));
+	}
+
+	/** Title sort is case-insensitive (A→Z), so "Apple" and "apricot" sit together. */
+	public function testFindMineSortsByTitleCaseInsensitively(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'title' => 'banana'],
+			['id' => 2, 'title' => 'Apple'],
+			['id' => 3, 'title' => 'cherry'],
+		]]]);
+
+		self::assertSame([2, 1, 3], $this->idsOf($this->service->findMine('alice', 'title', 'asc')));
+		self::assertSame([3, 1, 2], $this->idsOf($this->service->findMine('alice', 'title', 'desc')));
+	}
+
+	/**
+	 * Board sort orders by board TITLE, so it genuinely replaces the old fixed
+	 * (boardId, id) order rather than dressing it up: board 9 "Alpha" leads board
+	 * 3 "Zulu" even though its id is higher.
+	 */
+	public function testFindMineSortsByBoardTitleNotBoardId(): void {
+		$this->seedFeed([
+			3 => ['title' => 'Zulu', 'rows' => [['id' => 11]]],
+			9 => ['title' => 'Alpha', 'rows' => [['id' => 22]]],
+		]);
+
+		self::assertSame([22, 11], $this->idsOf($this->service->findMine('alice', 'board', 'asc')));
+		self::assertSame([11, 22], $this->idsOf($this->service->findMine('alice', 'board', 'desc')));
+	}
+
+	/**
+	 * The whole point of sorting SERVER-side (#9860): the sort runs over the whole
+	 * readable set BEFORE the cap slices it, so a sorted View starts at the true
+	 * first row - not at the first row of the arbitrary default-ordered window.
+	 * Here the oldest card is the LAST row in default order, so it would be cut by
+	 * the cap if the slice happened first.
+	 */
+	public function testFindMineAppliesTheSortBeforeTheCap(): void {
+		$overCap = ViewService::MAX_CARDS + 250;
+		// createdAt descends with the id: the oldest card is the very last row of
+		// the default (boardId, id) order, i.e. outside the capped window.
+		$rows = array_map(
+			static fn (int $i): array => ['id' => $i, 'createdAt' => $overCap - $i + 1],
+			range(1, $overCap),
+		);
+		$this->seedFeed([1 => ['rows' => $rows]]);
+
+		$result = $this->service->findMine('alice', 'created', 'asc');
+
+		self::assertTrue($result['capped']);
+		self::assertSame($overCap, $result['total']);
+		self::assertCount(ViewService::MAX_CARDS, $result['cards']);
+		// The oldest card leads the payload, so the cap sliced the SORTED set.
+		self::assertSame($overCap, $result['cards'][0]['id']);
+		self::assertSame($overCap - 1, $result['cards'][1]['id']);
+	}
+
+	/**
+	 * A sort mode this version doesn't know - an older/newer client, or one of the
+	 * deliberately excluded board-only modes ('manual', 'estimate') - is IGNORED and
+	 * defaulted to the stable (boardId, id) order. Never an error: a saved View must
+	 * not be able to hard-fail the feed.
+	 */
+	public function testFindMineIgnoresAnUnknownSortModeAndKeepsTheStableOrder(): void {
+		$this->seedFeed([
+			3 => ['rows' => [['id' => 22, 'title' => 'zzz'], ['id' => 11, 'title' => 'aaa']]],
+			9 => ['rows' => [['id' => 5, 'title' => 'mmm']]],
+		]);
+
+		self::assertSame([11, 22, 5], $this->idsOf($this->service->findMine('alice', 'manual', 'asc')));
+		self::assertSame([11, 22, 5], $this->idsOf($this->service->findMine('alice', 'estimate', 'desc')));
+		self::assertSame([11, 22, 5], $this->idsOf($this->service->findMine('alice', 'nonsense', 'sideways')));
+		// And the untouched default is the same order the feed always had.
+		self::assertSame([11, 22, 5], $this->idsOf($this->service->findMine('alice')));
+	}
+
+	/**
+	 * Sorting must run strictly AFTER the per-board ACL / #3743 masking loop, never
+	 * as a shortcut around it: with a sort active the readable set is still the ONLY
+	 * thing queried, so no unreadable board's card can be sorted into the feed.
+	 */
+	public function testFindMineWithASortStillNeverQueriesABoardOutsideTheReadableSet(): void {
+		$b3 = $this->board(3, 'Readable');
+		$this->boardService->method('findAll')->with('alice')->willReturn([$b3]);
+		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
+		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
+
+		$this->cardMapper->expects(self::once())
+			->method('findSummariesByBoard')
+			->with(3, $ctx3)
+			->willReturn([$this->summaryCard(11, 3)]);
+		$this->cardSummaryService->method('serialize')
+			->willReturn([['id' => 11, 'title' => 'Only mine']]);
+
+		$rows = $this->service->findMine('alice', 'title', 'asc')['cards'];
+
+		$boardIds = array_map(static fn (array $c): int => (int)$c['boardId'], $rows);
+		self::assertSame([3], array_values(array_unique($boardIds)));
+		self::assertNotContains(7, $boardIds);
+	}
+
 	public function testFindMineEmptyWhenNoReadableBoards(): void {
 		$this->boardService->method('findAll')->with('bob')->willReturn([]);
 		$this->boardAccess->expects(self::never())->method('contextFor');
