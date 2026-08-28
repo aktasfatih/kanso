@@ -11,6 +11,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.18.0](https://github.com/aktasfatih/kanso/compare/v0.17.0...v0.18.0) (2026-08-28)
+
+
+### Bug Fixes
+
+* **board:** hide the add-card composer from members with read-only access ([d9744ec](https://github.com/aktasfatih/kanso/commit/d9744eccc49f8d6eb289e3af37f1008e51f3b554))
+* **board:** stop offering "Add column" in views that have nowhere to put one ([44955a1](https://github.com/aktasfatih/kanso/commit/44955a10851694c1fca613e5f26c6b71202896b6))
+* **mcp:** hide archived cards from the MCP board tool unless you ask for them ([0e30189](https://github.com/aktasfatih/kanso/commit/0e30189ad3032b6c0d6125e3ad77d82cfb9c4447))
+* **timeline:** show the track, gridlines and bars for every row, not just the first screenful ([e8033f4](https://github.com/aktasfatih/kanso/commit/e8033f4f182a63889bb1f168eed46b0ada496fc0))
+* **views:** show card edits in a view straight away instead of after a minute ([d475205](https://github.com/aktasfatih/kanso/commit/d475205f333bc6912ad452abe6797941601702db))
+
+
+### Features
+
+* **board:** drag a sub-card out of its parent to make it top-level again ([35e9153](https://github.com/aktasfatih/kanso/commit/35e9153e33cd6ec5d882415da646ae687387ab55))
+* **card:** collapse the discussion panel to give a card the full width ([b6f395c](https://github.com/aktasfatih/kanso/commit/b6f395c6fdfd5096b2c665bece1462f7f46b63e3))
+* **github:** link a pull request to a card by its card reference in the PR title ([3c00dce](https://github.com/aktasfatih/kanso/commit/3c00dceb80232bdb867ddb325dae6aae25a0edea))
+* **list-view:** add a column without switching back to the board ([9fc0287](https://github.com/aktasfatih/kanso/commit/9fc02876dae00af4493f2875364ad9d7ad6641d4))
+* **views:** sort a saved view by due date, priority, title, board or date ([5391145](https://github.com/aktasfatih/kanso/commit/539114561c79a99127ccb44069241786f11b2181))
+
 # [0.17.0](https://github.com/aktasfatih/kanso/compare/v0.16.0...v0.17.0) (2026-08-27)
 
 
