@@ -11,6 +11,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.19.0](https://github.com/aktasfatih/kanso/compare/v0.18.0...v0.19.0) (2026-08-28)
+
+
+### Bug Fixes
+
+* **deps:** bump the npm-production group across 1 directory with 7 updates ([e4df2ce](https://github.com/aktasfatih/kanso/commit/e4df2ce84039ae13c97919630a534954c8199ec1))
+
+
+### Features
+
+* create and manage repeating cards from the MCP server ([3d45141](https://github.com/aktasfatih/kanso/commit/3d451412fbdc5a034d03fbd86095ad10c27995b2))
+* pin a repeating card's schedule to a chosen timezone ([c626083](https://github.com/aktasfatih/kanso/commit/c626083fe1e5d67c05912161774de2d5ddfe1c56))
+
 # [0.18.0](https://github.com/aktasfatih/kanso/compare/v0.17.0...v0.18.0) (2026-08-28)
 
 

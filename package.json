@@ -1,6 +1,6 @@
 {
   "name": "kanso",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Fast open-source kanban boards for Nextcloud",
   "license": "AGPL-3.0-or-later",
   "private": true,
