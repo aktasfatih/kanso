@@ -539,6 +539,170 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """
         return (await client.create_label(board_id, title, color)).model_dump()
 
+    # ------------------------------------------------------------- recurrence
+    @mcp.tool(
+        title="List a Kanso board's recurring-card rules",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_recur_rules(board_id: int) -> List[dict]:
+        """List a board's recurring-card rules (its repeat schedules).
+
+        Recurrence in Kanso is BOARD AUTOMATION, not a card field: a rule is
+        anchored on a *template* card and spawns work into a target stack on a
+        schedule. Rules whose template card is in the trash are hidden.
+
+        Each rule carries `templateCardId`, `targetStackId`, `rrule`, `mode`,
+        `duedatePolicy`, `timezone`, `enabled` and the server-maintained
+        `nextOccurrenceAt` / `lastSpawnedAt` / `occurrencesSpawned` counters
+        (unix timestamps).
+
+        Args:
+            board_id: The numeric board id.
+        """
+        rules = await client.list_recur_rules(board_id)
+        return [r.model_dump() for r in rules]
+
+    @mcp.tool(title="Create a Kanso recurring-card rule")
+    async def kanso_create_recur_rule(
+        board_id: int,
+        template_card_id: int,
+        target_stack_id: int,
+        rrule: str,
+        mode: int = 0,
+        duedate_policy: int = 0,
+        duedate_offset_seconds: int = 0,
+        skip_while_open: bool = False,
+        timezone: Optional[str] = None,
+    ) -> dict:
+        """Make a card recur on a schedule. Requires MANAGE on the board.
+
+        There is no "recurrence" field on a card — to make a card repeat, create
+        it first (`kanso_create_card`) and then pass its id here as the
+        `template_card_id`. The template card and the target stack must both
+        belong to `board_id`.
+
+        `rrule` is an RFC 5545 recurrence rule WITHOUT the "RRULE:" prefix, e.g.
+        "FREQ=DAILY", "FREQ=WEEKLY;BYDAY=MO,WE,FR", "FREQ=MONTHLY;BYMONTHDAY=1",
+        "FREQ=DAILY;COUNT=10", "FREQ=WEEKLY;UNTIL=20261231T000000Z". It is
+        anchored at the rule's creation time, so a daily rule created at 09:00
+        fires at 09:00. Unparseable rules are rejected with an API error.
+
+        Args:
+            board_id: The board the rule lives on.
+            template_card_id: The card to repeat (the template).
+            target_stack_id: The stack each occurrence lands in.
+            rrule: The RFC 5545 schedule, e.g. "FREQ=WEEKLY;BYDAY=MO".
+            mode: 0 = CLONE (default) — each occurrence creates a FRESH card in
+                the target stack, copying the template's title, description,
+                labels and assignees. 1 = RESET — move the template card ITSELF
+                back to the target stack and clear its done state (chore style;
+                there is only ever one card).
+            duedate_policy: 0 = due at the occurrence time (default),
+                1 = due at the occurrence + `duedate_offset_seconds`,
+                2 = spawned cards get no due date.
+            duedate_offset_seconds: Offset for policy 1, in seconds (0 to ten
+                years); ignored by the other policies.
+            skip_while_open: CLONE mode only — skip a scheduled spawn while the
+                previously spawned card is still open (no pile-up of undone
+                copies). Manual `kanso_recur_rule_create_now` ignores this.
+            timezone: IANA timezone id the schedule is expanded in, e.g.
+                "Europe/Istanbul". Occurrences are floating wall-clock times, so
+                "daily at 09:00" stays 09:00 local across DST. Omit to use the
+                calling user's personal Nextcloud timezone.
+        """
+        return (
+            await client.create_recur_rule(
+                board_id,
+                template_card_id,
+                target_stack_id,
+                rrule,
+                mode=mode,
+                duedate_policy=duedate_policy,
+                duedate_offset_seconds=duedate_offset_seconds,
+                skip_while_open=skip_while_open,
+                timezone=timezone,
+            )
+        ).model_dump()
+
+    @mcp.tool(title="Update a Kanso recurring-card rule")
+    async def kanso_update_recur_rule(
+        rule_id: int,
+        template_card_id: Optional[int] = None,
+        target_stack_id: Optional[int] = None,
+        mode: Optional[int] = None,
+        rrule: Optional[str] = None,
+        duedate_policy: Optional[int] = None,
+        duedate_offset_seconds: Optional[int] = None,
+        skip_while_open: Optional[bool] = None,
+        enabled: Optional[bool] = None,
+        timezone: Optional[str] = None,
+    ) -> dict:
+        """Change a recurring-card rule. Only the fields you pass are changed.
+        Requires MANAGE on the rule's board.
+
+        Note `rule_id` is the RULE's own id (from `kanso_list_recur_rules`), NOT
+        a card id. Pause a schedule with `enabled=false` and resume it with
+        `enabled=true` (resuming re-arms it to the next future occurrence).
+
+        Args:
+            rule_id: The numeric rule id.
+            template_card_id: Re-anchor the rule on a different template card
+                (same board).
+            target_stack_id: Spawn into a different stack (same board).
+            mode: 0 = CLONE, 1 = RESET (see `kanso_create_recur_rule`).
+            rrule: A new RFC 5545 schedule, e.g. "FREQ=WEEKLY;BYDAY=MO".
+            duedate_policy: 0 = at occurrence, 1 = occurrence + offset, 2 = none.
+            duedate_offset_seconds: Offset in seconds for policy 1.
+            skip_while_open: Skip a spawn while the last card is still open.
+            enabled: false pauses the rule, true resumes it.
+            timezone: New IANA timezone id for the schedule; omit to leave the
+                rule's zone unchanged (it cannot be cleared).
+        """
+        return (
+            await client.update_recur_rule(
+                rule_id,
+                template_card_id=template_card_id,
+                target_stack_id=target_stack_id,
+                mode=mode,
+                rrule=rrule,
+                duedate_policy=duedate_policy,
+                duedate_offset_seconds=duedate_offset_seconds,
+                skip_while_open=skip_while_open,
+                enabled=enabled,
+                timezone=timezone,
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        title="Delete a Kanso recurring-card rule",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_delete_recur_rule(rule_id: int) -> dict:
+        """Delete a recurring-card rule. The template card and any cards it
+        already spawned are left alone — only the schedule goes away. To stop a
+        schedule reversibly, use `kanso_update_recur_rule(enabled=false)`.
+
+        Args:
+            rule_id: The numeric rule id (NOT a card id).
+        """
+        result = await client.delete_recur_rule(rule_id)
+        return {"deleted": True, "result": result}
+
+    @mcp.tool(title="Spawn a Kanso recurring-card rule now")
+    async def kanso_recur_rule_create_now(rule_id: int) -> dict:
+        """Fire a recurring-card rule once immediately, ignoring its schedule
+        (and ignoring `skipWhileOpen` — an explicit run always spawns).
+
+        This does NOT bring the schedule forward: the next scheduled occurrence
+        still fires as planned, so this just stamps one extra card now. Returns
+        the spawned card (CLONE mode) or the reset template card (RESET mode).
+
+        Args:
+            rule_id: The numeric rule id (NOT a card id).
+        """
+        card = await client.recur_rule_create_now(rule_id)
+        return {"spawned": card is not None, "card": card.model_dump() if card else None}
+
     # ----------------------------------------------------------------- my work
     @mcp.tool(
         title="List my Kanso cards",

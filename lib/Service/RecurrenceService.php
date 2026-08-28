@@ -172,6 +172,27 @@ class RecurrenceService {
 		return date_default_timezone_get() ?: 'UTC';
 	}
 
+	/**
+	 * The timezone a create/update should store: an explicitly supplied IANA id
+	 * when the caller sent one (API clients scheduling on someone else's behalf),
+	 * otherwise the owner's personal timezone. Unlike {@see self::timezoneFor},
+	 * which is lenient about already-stored values for back-compat, an explicit
+	 * bad id is a client error and is rejected.
+	 *
+	 * @throws InvalidInputException if $timezone is a non-empty, unparseable id
+	 */
+	private function resolveTimezone(?string $timezone, string $uid): string {
+		if ($timezone === null || $timezone === '') {
+			return $this->defaultTimezoneFor($uid);
+		}
+		try {
+			new \DateTimeZone($timezone);
+		} catch (\Exception $e) {
+			throw new InvalidInputException('Invalid timezone');
+		}
+		return $timezone;
+	}
+
 	// ---- rule CRUD --------------------------------------------------------
 
 	/**
@@ -210,7 +231,7 @@ class RecurrenceService {
 	 *
 	 * @throws DoesNotExistException if the board, template card or target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid mode, policy, offset, RRULE or cross-board references
+	 * @throws InvalidInputException on invalid mode, policy, offset, RRULE, timezone or cross-board references
 	 */
 	public function create(
 		int $boardId,
@@ -222,6 +243,7 @@ class RecurrenceService {
 		int $duedateOffsetSeconds,
 		bool $skipWhileOpen,
 		string $uid,
+		?string $timezone = null,
 	): RecurRule {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
@@ -248,10 +270,10 @@ class RecurrenceService {
 		$rule->setLastSpawnedAt(0);
 		$rule->setOccurrencesSpawned(0);
 		$rule->setCreatedAt($now);
-		// Default the rule's timezone to the owner's personal timezone (server
-		// default fallback); the schedule is expanded as floating wall-clock time
-		// in this zone.
-		$rule->setTimezone($this->defaultTimezoneFor($uid));
+		// The schedule is expanded as floating wall-clock time in this zone: an
+		// explicit IANA id from the caller wins, otherwise the owner's personal
+		// timezone (server default fallback).
+		$rule->setTimezone($this->resolveTimezone($timezone, $uid));
 		// Work out when this rule should fire for the FIRST time.
 		//
 		// The schedule is anchored at the card's Start date (its due date, then the
@@ -271,14 +293,14 @@ class RecurrenceService {
 	/**
 	 * Updates the given fields of a rule (null = leave unchanged). The cached
 	 * `next_occurrence_at` is re-armed only when the schedule actually changes (a
-	 * different RRULE) or the rule is re-enabled (disabled → enabled), and even
-	 * then it is never rewound onto an occurrence the cron already spawned - a
+	 * different RRULE or timezone) or the rule is re-enabled (disabled → enabled),
+	 * and even then it is never rewound onto an occurrence the cron already spawned - a
 	 * no-op edit leaves the cursor exactly where it was, so editing a rule can no
 	 * longer duplicate an already-fired occurrence dated today (#65).
 	 *
 	 * @throws DoesNotExistException if the rule, its board, the template card or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid mode, policy, offset, RRULE or cross-board references
+	 * @throws InvalidInputException on invalid mode, policy, offset, RRULE, timezone or cross-board references
 	 */
 	public function update(
 		int $id,
@@ -291,6 +313,7 @@ class RecurrenceService {
 		?bool $skipWhileOpen,
 		?bool $enabled,
 		string $uid,
+		?string $timezone = null,
 	): RecurRule {
 		$rule = $this->ruleMapper->find($id);
 		$board = $this->loadBoard($rule->getBoardId());
@@ -312,8 +335,16 @@ class RecurrenceService {
 		// cursor may only be re-armed when the schedule really changed, and never
 		// rewound onto an occurrence the cron has already spawned.
 		$originalRrule = $rule->getRrule();
+		$originalTimezone = $rule->getTimezone();
 		$wasEnabled = $rule->getEnabled();
+		// A null/empty timezone means "leave the zone alone"; there is no way to
+		// clear it (a rule always expands in SOME zone, cleared just means the
+		// server default). An explicit bad id is rejected by resolveTimezone().
+		$newTimezone = ($timezone === null || $timezone === '')
+			? $originalTimezone
+			: $this->resolveTimezone($timezone, $uid);
 
+		$rule->setTimezone($newTimezone);
 		$rule->setTemplateCardId($newTemplate);
 		$rule->setTargetStackId($newStack);
 		$rule->setMode($newMode);
@@ -347,7 +378,10 @@ class RecurrenceService {
 		//      "Daily" did nothing for up to a week. It's also safe: a date after now
 		//      is always in the future, so it can never be one we already fired -
 		//      meaning no duplicate card (still safe for #65).
-		$scheduleChanged = $newRrule !== $originalRrule;
+		//
+		// A timezone change counts as a schedule change too: re-anchoring the same
+		// repeat rule in a different zone shifts every future occurrence.
+		$scheduleChanged = $newRrule !== $originalRrule || $newTimezone !== $originalTimezone;
 		$reEnabled = $rule->getEnabled() && !$wasEnabled;
 		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
 			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));

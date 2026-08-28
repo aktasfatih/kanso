@@ -565,6 +565,185 @@ async def test_list_board_members_forwards_q():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_list_recur_rules_parses():
+    route = respx.get(f"{BASE}/boards/7/recur-rules").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 3,
+                    "boardId": 7,
+                    "templateCardId": 100,
+                    "targetStackId": 11,
+                    "mode": 0,
+                    "rrule": "FREQ=WEEKLY;BYDAY=MO",
+                    "duedatePolicy": 1,
+                    "duedateOffsetSeconds": 86400,
+                    "skipWhileOpen": True,
+                    "enabled": True,
+                    "owner": "alice",
+                    "lastSpawnedAt": 0,
+                    "nextOccurrenceAt": 1800000000,
+                    "occurrencesSpawned": 0,
+                    "createdAt": 1799000000,
+                    "timezone": "Europe/Istanbul",
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        rules = await c.list_recur_rules(7)
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/boards/7/recur-rules"
+    assert rules[0].id == 3
+    assert rules[0].templateCardId == 100
+    assert rules[0].rrule == "FREQ=WEEKLY;BYDAY=MO"
+    assert rules[0].duedatePolicy == 1
+    assert rules[0].skipWhileOpen is True
+    assert rules[0].timezone == "Europe/Istanbul"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_recur_rule_body():
+    route = respx.post(f"{BASE}/boards/7/recur-rules").mock(
+        return_value=httpx.Response(200, json={"id": 3, "boardId": 7, "rrule": "FREQ=DAILY"})
+    )
+    async with _client() as c:
+        rule = await c.create_recur_rule(
+            7,
+            100,
+            11,
+            "FREQ=DAILY",
+            mode=1,
+            duedate_policy=1,
+            duedate_offset_seconds=3600,
+            skip_while_open=True,
+            timezone="Europe/Istanbul",
+        )
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    # boardId rides in the PATH, everything else is camelCase in the body.
+    assert _json.loads(req.content) == {
+        "templateCardId": 100,
+        "targetStackId": 11,
+        "mode": 1,
+        "rrule": "FREQ=DAILY",
+        "duedatePolicy": 1,
+        "duedateOffsetSeconds": 3600,
+        "skipWhileOpen": True,
+        "timezone": "Europe/Istanbul",
+    }
+    assert rule.id == 3
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_recur_rule_sends_zero_and_false_defaults():
+    route = respx.post(f"{BASE}/boards/7/recur-rules").mock(
+        return_value=httpx.Response(200, json={"id": 4, "boardId": 7})
+    )
+    async with _client() as c:
+        await c.create_recur_rule(7, 100, 11, "FREQ=DAILY")
+    import json as _json
+
+    # 0 / False are meaningful values and must survive the None-filter; only the
+    # unset timezone is dropped (=> the owner's personal timezone server-side).
+    assert _json.loads(route.calls.last.request.content) == {
+        "templateCardId": 100,
+        "targetStackId": 11,
+        "mode": 0,
+        "rrule": "FREQ=DAILY",
+        "duedatePolicy": 0,
+        "duedateOffsetSeconds": 0,
+        "skipWhileOpen": False,
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_recur_rule_drops_none():
+    route = respx.patch(f"{BASE}/recur-rules/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "boardId": 7, "enabled": False})
+    )
+    async with _client() as c:
+        rule = await c.update_recur_rule(3, enabled=False)
+    import json as _json
+
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    # PATCH targets the rule id directly, NOT nested under the board.
+    assert req.url.path == "/index.php/apps/kanso/api/recur-rules/3"
+    # enabled=False must survive; every unset field is dropped.
+    assert _json.loads(req.content) == {"enabled": False}
+    assert rule.enabled is False
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_recur_rule_forwards_timezone_and_rrule():
+    route = respx.patch(f"{BASE}/recur-rules/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "timezone": "Asia/Tokyo"})
+    )
+    async with _client() as c:
+        await c.update_recur_rule(3, rrule="FREQ=MONTHLY", timezone="Asia/Tokyo")
+    import json as _json
+
+    assert _json.loads(route.calls.last.request.content) == {
+        "rrule": "FREQ=MONTHLY",
+        "timezone": "Asia/Tokyo",
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_delete_recur_rule_path():
+    route = respx.delete(f"{BASE}/recur-rules/3").mock(
+        return_value=httpx.Response(200, json={"id": 3})
+    )
+    async with _client() as c:
+        await c.delete_recur_rule(3)
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.method == "DELETE"
+    assert req.url.path == "/index.php/apps/kanso/api/recur-rules/3"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_recur_rule_create_now_unwraps_card():
+    route = respx.post(f"{BASE}/recur-rules/3/create-now").mock(
+        return_value=httpx.Response(
+            200, json={"card": {"id": 500, "title": "Water the plants", "stackId": 11}}
+        )
+    )
+    async with _client() as c:
+        card = await c.recur_rule_create_now(3)
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/recur-rules/3/create-now"
+    assert card is not None
+    assert card.id == 500
+    assert card.title == "Water the plants"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_recur_rule_create_now_null_card_is_none():
+    respx.post(f"{BASE}/recur-rules/3/create-now").mock(
+        return_value=httpx.Response(200, json={"card": None})
+    )
+    async with _client() as c:
+        card = await c.recur_rule_create_now(3)
+    # A null card must come back as None, not blow up model validation.
+    assert card is None
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_error_raises_kanso_api_error():
     respx.post(f"{BASE}/boards").mock(
         return_value=httpx.Response(412, text="CSRF check failed")

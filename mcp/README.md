@@ -173,6 +173,19 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 - `kanso_add_checklist_item` — add a checklist item to a card
 - `kanso_toggle_checklist_item` — mark an item done / not done
 
+**Recurrence (repeating cards)**
+
+Recurrence is board automation, not a card field: a rule is anchored on a
+*template* card and spawns into a target stack on an RFC 5545 `RRULE`. To make a
+card repeat, create the card first, then create a rule with its id as the
+template. Mutations need MANAGE on the board.
+
+- `kanso_list_recur_rules` — a board's repeat schedules (+ next occurrence)
+- `kanso_create_recur_rule` — repeat a template card (rrule, CLONE/RESET mode, due-date policy, timezone)
+- `kanso_update_recur_rule` — edit a rule; `enabled=false` pauses it
+- `kanso_delete_recur_rule` — drop the schedule (template + spawned cards stay)
+- `kanso_recur_rule_create_now` — fire once now without touching the schedule
+
 **My work**
 
 - `kanso_list_my_cards` — open cards assigned to you across all boards (never
