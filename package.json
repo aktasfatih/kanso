@@ -48,7 +48,7 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.6.1",
+    "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
     "@nextcloud/vite-config": "^2.2.0",
     "@playwright/test": "^1.62.1",
