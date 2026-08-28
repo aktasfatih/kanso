@@ -169,6 +169,37 @@ class Card(CardSummary):
     relations: Optional[Any] = None
 
 
+class RecurRule(_Base):
+    """A recurring-card rule from ``/api/boards/{id}/recur-rules``.
+
+    Board automation, NOT a card field: the rule is anchored on a *template*
+    card (``templateCardId``) and spawns into ``targetStackId`` on an RFC 5545
+    ``rrule`` schedule, expanded as floating wall-clock time in ``timezone``.
+    ``mode`` is 0 (CLONE — a fresh card per occurrence) or 1 (RESET — move the
+    template back and clear its done state). ``duedatePolicy`` is 0 (due at the
+    occurrence), 1 (occurrence + ``duedateOffsetSeconds``) or 2 (no due date).
+    The bookkeeping fields (``lastSpawnedAt``, ``nextOccurrenceAt``,
+    ``occurrencesSpawned``) are server-maintained unix timestamps/counters.
+    """
+
+    id: int
+    boardId: Optional[int] = None
+    templateCardId: Optional[int] = None
+    targetStackId: Optional[int] = None
+    mode: int = 0
+    rrule: Optional[str] = None
+    duedatePolicy: int = 0
+    duedateOffsetSeconds: int = 0
+    skipWhileOpen: bool = False
+    enabled: bool = False
+    owner: Optional[str] = None
+    lastSpawnedAt: int = 0
+    nextOccurrenceAt: int = 0
+    occurrencesSpawned: int = 0
+    createdAt: int = 0
+    timezone: Optional[str] = None
+
+
 class BoardDetail(_Base):
     """The full ``GET /boards/{id}`` payload: board + stacks + card summaries + labels."""
 

@@ -19,7 +19,7 @@ use OCP\IUserSession;
  * Recurring-card rule endpoints. Rules are board-automation config, so
  * mutations require MANAGE and listing requires READ (enforced in
  * {@see RecurrenceService}). create-now spawns one card immediately. Errors
- * map through ApiErrorTrait (bad RRULE / mode / policy → 400).
+ * map through ApiErrorTrait (bad RRULE / mode / policy / timezone → 400).
  */
 class RecurRuleController extends Controller {
 	use ApiErrorTrait;
@@ -52,8 +52,9 @@ class RecurRuleController extends Controller {
 		int $duedatePolicy = 0,
 		int $duedateOffsetSeconds = 0,
 		bool $skipWhileOpen = false,
+		?string $timezone = null,
 	): JSONResponse {
-		return $this->respond(function () use ($id, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds, $skipWhileOpen): JSONResponse {
+		return $this->respond(function () use ($id, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds, $skipWhileOpen, $timezone): JSONResponse {
 			return new JSONResponse(
 				$this->recurrenceService->create(
 					$id,
@@ -65,6 +66,7 @@ class RecurRuleController extends Controller {
 					$duedateOffsetSeconds,
 					$skipWhileOpen,
 					$this->currentUserId(),
+					$timezone,
 				)
 			);
 		});
@@ -81,8 +83,9 @@ class RecurRuleController extends Controller {
 		?int $duedateOffsetSeconds = null,
 		?bool $skipWhileOpen = null,
 		?bool $enabled = null,
+		?string $timezone = null,
 	): JSONResponse {
-		return $this->respond(function () use ($id, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds, $skipWhileOpen, $enabled): JSONResponse {
+		return $this->respond(function () use ($id, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds, $skipWhileOpen, $enabled, $timezone): JSONResponse {
 			return new JSONResponse(
 				$this->recurrenceService->update(
 					$id,
@@ -95,6 +98,7 @@ class RecurRuleController extends Controller {
 					$skipWhileOpen,
 					$enabled,
 					$this->currentUserId(),
+					$timezone,
 				)
 			);
 		});

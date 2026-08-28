@@ -91,6 +91,16 @@ class RecurRuleControllerTest extends TestCase {
 		self::assertSame($rule, $response->getData());
 	}
 
+	public function testCreateForwardsTimezone(): void {
+		$this->recurrenceService->expects(self::once())
+			->method('create')
+			->with(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', 0, 0, false, 'alice', 'Europe/Istanbul')
+			->willReturn($this->rule());
+
+		$response = $this->controller->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', 0, 0, false, 'Europe/Istanbul');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
 	public function testCreateMapsInvalidRruleTo400(): void {
 		$this->recurrenceService->method('create')->willThrowException(new InvalidInputException('Invalid recurrence rule'));
 
@@ -113,6 +123,16 @@ class RecurRuleControllerTest extends TestCase {
 			->willReturn($this->rule());
 
 		$response = $this->controller->update(3, null, null, null, 'FREQ=WEEKLY', null, null, null, false);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	public function testUpdateForwardsTimezone(): void {
+		$this->recurrenceService->expects(self::once())
+			->method('update')
+			->with(3, null, null, null, null, null, null, null, null, 'alice', 'Europe/Istanbul')
+			->willReturn($this->rule());
+
+		$response = $this->controller->update(3, null, null, null, null, null, null, null, null, 'Europe/Istanbul');
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 	}
 

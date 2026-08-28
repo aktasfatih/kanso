@@ -145,6 +145,97 @@ async def test_get_board_schema_exposes_optional_include_archived():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_create_recur_rule_tool_sends_its_defaults():
+    route = respx.post(f"{BASE}/boards/7/recur-rules").mock(
+        return_value=httpx.Response(200, json={"id": 3, "boardId": 7, "rrule": "FREQ=DAILY"})
+    )
+    tools, client = _tools()
+    async with client:
+        rule = await tools["kanso_create_recur_rule"](7, 100, 10, "FREQ=DAILY")
+    import json as _json
+
+    # The tool's own defaults (CLONE, due-at-occurrence, no offset, no skip) must
+    # reach the API rather than being dropped as "unset".
+    assert _json.loads(route.calls.last.request.content) == {
+        "templateCardId": 100,
+        "targetStackId": 10,
+        "mode": 0,
+        "rrule": "FREQ=DAILY",
+        "duedatePolicy": 0,
+        "duedateOffsetSeconds": 0,
+        "skipWhileOpen": False,
+    }
+    assert rule["id"] == 3
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_recur_rule_tool_sends_only_what_changed():
+    route = respx.patch(f"{BASE}/recur-rules/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "enabled": False})
+    )
+    tools, client = _tools()
+    async with client:
+        rule = await tools["kanso_update_recur_rule"](3, enabled=False)
+    import json as _json
+
+    assert _json.loads(route.calls.last.request.content) == {"enabled": False}
+    assert rule["enabled"] is False
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_recur_rule_create_now_tool_unwraps_the_card():
+    respx.post(f"{BASE}/recur-rules/3/create-now").mock(
+        return_value=httpx.Response(
+            200, json={"card": {"id": 500, "title": "Water the plants", "stackId": 10}}
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_recur_rule_create_now"](3)
+
+    # The tool flattens the {"card": ...} envelope into a spawned flag + card.
+    assert result["spawned"] is True
+    assert result["card"]["id"] == 500
+
+
+@pytest.mark.asyncio
+async def test_create_recur_rule_schema_only_requires_the_essentials():
+    # An agent must be able to set up a repeat with just the anchor + schedule;
+    # mode / policy / offset / skip / timezone all have to stay optional or the
+    # simple call becomes an argument error.
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(
+        KansoConfig(host="http://nc.test", username="admin", password="pw")
+    )
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tools = {t.name: t for t in await server.list_tools()}
+
+    schema = tools["kanso_create_recur_rule"].inputSchema
+    assert set(schema["required"]) == {
+        "board_id",
+        "template_card_id",
+        "target_stack_id",
+        "rrule",
+    }
+    assert schema["properties"]["mode"]["default"] == 0
+    assert schema["properties"]["duedate_policy"]["default"] == 0
+    assert schema["properties"]["skip_while_open"]["default"] is False
+    # The whole recurrence surface must be registered, not just create.
+    assert {
+        "kanso_list_recur_rules",
+        "kanso_update_recur_rule",
+        "kanso_delete_recur_rule",
+        "kanso_recur_rule_create_now",
+    } <= set(tools)
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_get_board_with_no_archived_cards_is_unchanged():
     respx.get(f"{BASE}/boards/8").mock(
         return_value=httpx.Response(

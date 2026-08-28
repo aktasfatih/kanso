@@ -1480,4 +1480,130 @@ class RecurrenceServiceTest extends TestCase {
 		// Must not throw despite the rule write failing.
 		$this->service->rearmForTemplateCard($card);
 	}
+
+	// ---- explicit timezone -------------------------------------------------
+
+	/**
+	 * An explicit IANA timezone from the caller (API/MCP clients scheduling for a
+	 * zone that is not the creator's own) wins over the owner's personal timezone.
+	 */
+	public function testCreateHonoursAnExplicitTimezoneOverTheOwnerDefault(): void {
+		$config = $this->createMock(IConfig::class);
+		$config->method('getUserValue')->willReturn('America/New_York');
+		$service = new RecurrenceService(
+			$this->ruleMapper, $this->cardMapper, $this->stackMapper, $this->boardMapper,
+			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
+			$this->changeNotifier, $this->permissionService, $this->visibilityGuard,
+			$this->time, $this->db, $config, $this->logger,
+		);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('insert')->willReturnCallback(static function (RecurRule $r): RecurRule {
+			self::assertSame('Europe/Istanbul', $r->getTimezone());
+			$r->setId(9);
+			return $r;
+		});
+
+		$service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice', 'Europe/Istanbul');
+	}
+
+	/**
+	 * An empty timezone means "not supplied" - it falls back to the owner default
+	 * rather than storing a blank zone.
+	 */
+	public function testCreateWithEmptyTimezoneFallsBackToTheOwnerDefault(): void {
+		$config = $this->createMock(IConfig::class);
+		$config->method('getUserValue')->willReturn('America/New_York');
+		$service = new RecurrenceService(
+			$this->ruleMapper, $this->cardMapper, $this->stackMapper, $this->boardMapper,
+			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
+			$this->changeNotifier, $this->permissionService, $this->visibilityGuard,
+			$this->time, $this->db, $config, $this->logger,
+		);
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('insert')->willReturnCallback(static function (RecurRule $r): RecurRule {
+			self::assertSame('America/New_York', $r->getTimezone());
+			$r->setId(9);
+			return $r;
+		});
+
+		$service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice', '');
+	}
+
+	/**
+	 * A garbage zone id is a client error (400), NOT a silent fall-back to the
+	 * server default - a schedule quietly expanded in the wrong zone fires at the
+	 * wrong wall-clock hour forever.
+	 */
+	public function testCreateRejectsAnInvalidTimezone(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', 0, 0, false, 'alice', 'Mars/Olympus_Mons');
+	}
+
+	/**
+	 * Re-anchoring the same RRULE in a DIFFERENT zone shifts every future
+	 * occurrence, so it counts as a schedule change and re-arms the cursor.
+	 */
+	public function testUpdateWithChangedTimezoneReArmsCursor(): void {
+		// Cursor parked on a stale value that is NOT a daily occurrence, so a
+		// re-arm is observable (a no-op edit would leave it exactly as-is).
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 50_000);
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, null, null, null, null, null, 'alice', 'Europe/Istanbul');
+
+		self::assertSame('Europe/Istanbul', $rule->getTimezone());
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Re-sending the zone the rule already carries is a no-op edit: it must not
+	 * re-arm the cursor (same duplicate-clone risk as an unchanged RRULE, #65).
+	 */
+	public function testUpdateWithUnchangedTimezoneDoesNotReArmCursor(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 50_000);
+		$rule->setTimezone('Europe/Istanbul');
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, null, null, null, null, null, 'alice', 'Europe/Istanbul');
+
+		self::assertSame(self::NOW + 50_000, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * A null timezone leaves the rule's zone alone (it is not clearable - a rule
+	 * always expands in some zone).
+	 */
+	public function testUpdateWithNullTimezoneLeavesTheZoneUntouched(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 50_000);
+		$rule->setTimezone('Europe/Istanbul');
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, null, null, null, null, null, 'alice', null);
+
+		self::assertSame('Europe/Istanbul', $rule->getTimezone());
+		self::assertSame(self::NOW + 50_000, $rule->getNextOccurrenceAt());
+	}
+
+	public function testUpdateRejectsAnInvalidTimezone(): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(3, null, null, null, null, null, null, null, null, 'alice', 'Mars/Olympus_Mons');
+	}
 }

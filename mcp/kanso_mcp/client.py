@@ -25,6 +25,7 @@ from kanso_mcp.models import (
     ChecklistItem,
     Comment,
     Label,
+    RecurRule,
     Stack,
 )
 
@@ -364,6 +365,88 @@ class KansoClient:
                 response.status_code, "PUT", f"/cards/{card_id}/parent", response.text
             )
         return Card.model_validate(response.json())
+
+    # ------------------------------------------------------------- recurrence
+    async def list_recur_rules(self, board_id: int) -> List[RecurRule]:
+        data = await self._request("GET", f"/boards/{board_id}/recur-rules")
+        return [RecurRule.model_validate(r) for r in (data or [])]
+
+    async def create_recur_rule(
+        self,
+        board_id: int,
+        template_card_id: int,
+        target_stack_id: int,
+        rrule: str,
+        *,
+        mode: int = 0,
+        duedate_policy: int = 0,
+        duedate_offset_seconds: int = 0,
+        skip_while_open: bool = False,
+        timezone: Optional[str] = None,
+    ) -> RecurRule:
+        # The board id rides in the PATH; the rest is the body. mode/policy/
+        # offset/skip are sent explicitly (not dropped when 0/False) so the rule
+        # is created with exactly what the caller asked for rather than with
+        # whatever the controller defaults happen to be.
+        data = await self._request(
+            "POST",
+            f"/boards/{board_id}/recur-rules",
+            json={
+                "templateCardId": template_card_id,
+                "targetStackId": target_stack_id,
+                "mode": mode,
+                "rrule": rrule,
+                "duedatePolicy": duedate_policy,
+                "duedateOffsetSeconds": duedate_offset_seconds,
+                "skipWhileOpen": skip_while_open,
+                "timezone": timezone,
+            },
+        )
+        return RecurRule.model_validate(data)
+
+    async def update_recur_rule(
+        self,
+        rule_id: int,
+        *,
+        template_card_id: Optional[int] = None,
+        target_stack_id: Optional[int] = None,
+        mode: Optional[int] = None,
+        rrule: Optional[str] = None,
+        duedate_policy: Optional[int] = None,
+        duedate_offset_seconds: Optional[int] = None,
+        skip_while_open: Optional[bool] = None,
+        enabled: Optional[bool] = None,
+        timezone: Optional[str] = None,
+    ) -> RecurRule:
+        # PATCH targets the rule id directly (/recur-rules/{id}), NOT nested
+        # under the board. None fields are dropped => left unchanged.
+        data = await self._request(
+            "PATCH",
+            f"/recur-rules/{rule_id}",
+            json={
+                "templateCardId": template_card_id,
+                "targetStackId": target_stack_id,
+                "mode": mode,
+                "rrule": rrule,
+                "duedatePolicy": duedate_policy,
+                "duedateOffsetSeconds": duedate_offset_seconds,
+                "skipWhileOpen": skip_while_open,
+                "enabled": enabled,
+                "timezone": timezone,
+            },
+        )
+        return RecurRule.model_validate(data)
+
+    async def delete_recur_rule(self, rule_id: int) -> Any:
+        return await self._request("DELETE", f"/recur-rules/{rule_id}")
+
+    async def recur_rule_create_now(self, rule_id: int) -> Optional[Card]:
+        # Returns {"card": {...}}: an explicit create-now always spawns (it
+        # ignores skipWhileOpen), but the payload is typed nullable server-side,
+        # so tolerate a null card rather than blowing up on validation.
+        data = await self._request("POST", f"/recur-rules/{rule_id}/create-now")
+        card = (data or {}).get("card")
+        return Card.model_validate(card) if card else None
 
     # ----------------------------------------------------------------- my work
     async def list_my_cards(self) -> List[CardSummary]:
