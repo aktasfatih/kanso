@@ -384,6 +384,15 @@ class CsvImportServiceTest extends TestCase {
 		$log = [];
 		$this->traceTransactions($log);
 
+		// The retry must not double-count. The first attempt writes its CREATE
+		// change rows and then rolls back, so if those rows survived the rollback -
+		// or were recorded outside the transaction - the count here is 4, not 2,
+		// and every importer would ship duplicate deltas to every connected client
+		// on any stack that hit the sort-key wall. Same for the board-changed push:
+		// exactly one, at the end of the successful attempt.
+		$this->changeNotifier->expects(self::exactly(2))->method('recordChange');
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(self::BOARD_ID);
+
 		// The real rebalanceStack() opens its OWN transaction and locks the stack's
 		// rows FOR UPDATE, so it must never run nested inside the import's. Mirror
 		// that here: assert nothing is open, then open/close one of its own.

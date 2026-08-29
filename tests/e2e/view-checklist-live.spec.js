@@ -80,8 +80,13 @@ test.describe('Cross-board feed invalidation, the missed paths (#9898)', () => {
 		await api.patch(`/checklist/${bDone.id}`, { done: true })
 		await api.post(`/cards/${state.incompleteCardId}/checklist`, { title: SEED_OPEN })
 
-		// A third card for the board-route priority shortcut. Assigned to the
-		// current user so it is genuinely a My Tasks row.
+		// A third card, created LAST, for the board-route priority shortcut test.
+		// It is not the card that test acts on - it presses the shortcut on the
+		// FIRST tile, which is COMPLETE_CARD. This one is the paint gate: because
+		// it is the last row inserted it is the last to appear, so waiting for it
+		// means the whole stack has rendered before the keyboard sequence starts.
+		// No assignee is needed - every card here is owned by the API user, which
+		// is what puts it in the My Work feeds.
 		await api.post('/cards', { stackId: stack.id, title: PRIORITY_CARD })
 
 		await api.put(`/cards/${state.completeCardId}/labels/${state.scopeLabelId}`)
@@ -250,7 +255,10 @@ test.describe('Cross-board feed invalidation, the missed paths (#9898)', () => {
 		// resolves its card id lazily and would roll back the wrong card if focus
 		// moved mid-PATCH), so its .finally() is the only thing that can reach the
 		// cross-board feeds.
-		// ArrowDown with nothing focused seeds to the first card of the first stack.
+		// ArrowDown with nothing focused seeds to the first card of the first stack
+		// - COMPLETE_CARD, the first row inserted. Which card it lands on does not
+		// matter here; what is under test is that the shortcut's settle phase
+		// invalidates the cross-board feeds at all.
 		const firstTile = page.locator('.stack-column').nth(0).locator('.card-tile').first()
 		await page.keyboard.press('ArrowDown')
 		await expect(firstTile).toBeFocused({ timeout: 8000 })
