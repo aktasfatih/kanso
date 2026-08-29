@@ -87,9 +87,15 @@ jobs:
   # seconds. The project's aversion was to CI cost and flakiness, not to a
   # number.
   #
-  # `--frozen` + the committed mcp/uv.lock make the run hermetic: pyproject
+  # `--locked` + the committed mcp/uv.lock make the run hermetic: pyproject
   # pins only floors, so without the lock every run would resolve fresh from
   # PyPI and an upstream release could redden an unrelated PHP-only PR.
+  #
+  # `--locked`, NOT `--frozen`. Both install strictly from the lock, but only
+  # `--locked` first ASSERTS the lock is in sync with pyproject and fails if it
+  # is not. Under `--frozen` a contributor who bumps a dependency and forgets
+  # `uv lock` gets a green run that quietly tested the OLD resolution — which
+  # defeats the point of committing the lockfile at all.
   unit-mcp:
     runs-on: kanso-runners
     defaults:
@@ -106,7 +112,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: mcp/uv.lock
       - name: Run MCP server unit tests
-        run: uv run --frozen --extra dev pytest
+        run: uv run --locked --extra dev pytest
 
   build-frontend:
     runs-on: kanso-runners

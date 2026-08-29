@@ -30,10 +30,15 @@ php-cs-fixer). Before opening a PR:
   the `kanso_changes` delta log, ETags) — don't regress these.
 
 `main` is a protected branch: every change lands through a pull request and can
-only be merged once **all** CI checks pass — `cs-check`, `psalm`, `unit-php` (on
-PHP 8.2 and 8.3), `unit-mcp` (the `mcp/` Python server's pytest suite),
-`build-frontend`, and the full `e2e` suite. Open your PR
-against `main`; CI runs automatically on push.
+only be merged once **all** required CI checks pass — `cs-check`, `psalm`,
+`unit-php` (on PHP 8.2 and 8.3), `build-frontend`, and the full `e2e` suite.
+Open your PR against `main`; CI runs automatically on push.
+
+`unit-mcp` (the `mcp/` Python server's pytest suite) also runs on every PR, but
+it is **advisory for now** — it is not yet in the branch-protection required
+list, so a red `unit-mcp` will not block a merge. Adding it there is a
+maintainer action in the repository settings that has not happened yet. Please
+treat it as required anyway: don't merge on a red `unit-mcp`.
 
 ## Translations
 
