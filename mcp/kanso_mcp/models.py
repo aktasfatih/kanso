@@ -201,12 +201,28 @@ class RecurRule(_Base):
 
 
 class BoardDetail(_Base):
-    """The full ``GET /boards/{id}`` payload: board + stacks + card summaries + labels."""
+    """The full ``GET /boards/{id}`` payload: board + stacks + card summaries +
+    labels, plus the board-scoped side payloads the endpoint ships alongside
+    them.
+
+    ``reviewTypes``, ``cardFields``, ``blocksEdges``, ``acl`` and
+    ``subscription`` are declared so ``extra='ignore'`` stops dropping them on
+    the floor — the server has always returned them
+    (``BoardController::show``), the model just never named them. They are
+    typed loosely on purpose: they exist to be handed to the LLM as context
+    (review workflow, custom-field definitions, dependency edges, sharing,
+    watch state), not to be validated here.
+    """
 
     board: Board
     stacks: List[Stack] = Field(default_factory=list)
     cards: List[CardSummary] = Field(default_factory=list)
     labels: List[Label] = Field(default_factory=list)
+    reviewTypes: List[Any] = Field(default_factory=list)
+    cardFields: List[Any] = Field(default_factory=list)
+    blocksEdges: List[Any] = Field(default_factory=list)
+    acl: List[Any] = Field(default_factory=list)
+    subscription: Optional[Any] = None
     permissions: Optional[int] = None
     role: Optional[str] = None
     cursor: Optional[int] = None

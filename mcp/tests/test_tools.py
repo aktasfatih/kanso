@@ -18,7 +18,8 @@ import respx
 
 from kanso_mcp.client import KansoClient
 from kanso_mcp.config import KansoConfig
-from kanso_mcp.tools import register_tools
+from kanso_mcp.models import CardSummary
+from kanso_mcp.tools import _without_archived_cards, register_tools
 
 BASE = "http://nc.test/index.php/apps/kanso/api"
 
@@ -232,6 +233,67 @@ async def test_create_recur_rule_schema_only_requires_the_essentials():
         "kanso_delete_recur_rule",
         "kanso_recur_rule_create_now",
     } <= set(tools)
+
+
+def test_archived_survives_a_card_summary_round_trip_and_the_filter():
+    # `_without_archived_cards` reads `c["archived"]` off a DUMPED CardSummary,
+    # so the whole filter hangs on that one key surviving validate -> dump. The
+    # model defaults it to False, which means a server-side rename would not
+    # raise — every card would silently look active and the filter would become
+    # a no-op. Pin both halves: the round-trip, then the filter on a mixed set.
+    dumped = [
+        CardSummary.model_validate(
+            {"id": 1, "title": "Active", "archived": False}
+        ).model_dump(),
+        CardSummary.model_validate(
+            {"id": 2, "title": "Archived", "archived": True}
+        ).model_dump(),
+    ]
+    assert [c["archived"] for c in dumped] == [False, True]
+
+    filtered = _without_archived_cards({"board": {"id": 7}, "cards": dumped})
+    assert [c["id"] for c in filtered["cards"]] == [1]
+    # Non-card keys are passed through untouched.
+    assert filtered["board"] == {"id": 7}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_board_keeps_the_side_payloads_the_api_ships():
+    # BoardController::show returns reviewTypes / cardFields / blocksEdges /
+    # acl / subscription alongside the core four. BoardDetail is extra="ignore",
+    # so any key it does not declare is dropped before the tool layer ever sees
+    # it — this pins that they reach the LLM.
+    respx.get(f"{BASE}/boards/9").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "board": {"id": 9, "title": "Rich"},
+                "stacks": [],
+                "cards": [],
+                "labels": [],
+                "reviewTypes": [{"id": 1, "title": "QA"}],
+                "cardFields": [{"id": 2, "title": "Story points", "type": "number"}],
+                "blocksEdges": [{"fromCardId": 100, "toCardId": 101}],
+                "acl": [{"id": 3, "participant": "alice", "type": 0}],
+                "subscription": {"subscribed": True, "count": 2},
+                "permissions": 31,
+                "role": "internal",
+                "cursor": 77,
+            },
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        board = await tools["kanso_get_board"](9)
+
+    assert board["reviewTypes"] == [{"id": 1, "title": "QA"}]
+    assert board["cardFields"] == [
+        {"id": 2, "title": "Story points", "type": "number"}
+    ]
+    assert board["blocksEdges"] == [{"fromCardId": 100, "toCardId": 101}]
+    assert board["acl"] == [{"id": 3, "participant": "alice", "type": 0}]
+    assert board["subscription"] == {"subscribed": True, "count": 2}
 
 
 @respx.mock

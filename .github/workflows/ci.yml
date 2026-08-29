@@ -73,6 +73,41 @@ jobs:
       - name: Run unit tests
         run: vendor/bin/phpunit -c phpunit.xml
 
+  # The in-repo Python MCP server (mcp/) ships its own pytest suite, and until
+  # now nothing in the repo ran it — mcp/Dockerfile only `pip install .`s the
+  # package, so every MCP change was verified purely by whoever happened to run
+  # pytest locally.
+  #
+  # Why its own job rather than a step bolted onto build-frontend (as the
+  # info.xml and l10n guards were): those are Node-toolchain checks with a
+  # natural host job. Python has no such host here, and wiring uv into the Node
+  # job purely to keep the job count at six is a contortion, not a saving.
+  # Likewise no `paths:` filter — paths-scoping a *required* check drags in
+  # required-check semantics (a skipped job never reports) for a job that costs
+  # seconds. The project's aversion was to CI cost and flakiness, not to a
+  # number.
+  #
+  # `--frozen` + the committed mcp/uv.lock make the run hermetic: pyproject
+  # pins only floors, so without the lock every run would resolve fresh from
+  # PyPI and an upstream release could redden an unrelated PHP-only PR.
+  unit-mcp:
+    runs-on: kanso-runners
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          # Don't depend on whatever Python the runner image happens to ship —
+          # uv fetches its own managed interpreter (pyproject needs >=3.11).
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: mcp/uv.lock
+      - name: Run MCP server unit tests
+        run: uv run --frozen --extra dev pytest
+
   build-frontend:
     runs-on: kanso-runners
     steps:

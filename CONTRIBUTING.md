@@ -31,7 +31,8 @@ php-cs-fixer). Before opening a PR:
 
 `main` is a protected branch: every change lands through a pull request and can
 only be merged once **all** CI checks pass — `cs-check`, `psalm`, `unit-php` (on
-PHP 8.2 and 8.3), `build-frontend`, and the full `e2e` suite. Open your PR
+PHP 8.2 and 8.3), `unit-mcp` (the `mcp/` Python server's pytest suite),
+`build-frontend`, and the full `e2e` suite. Open your PR
 against `main`; CI runs automatically on push.
 
 ## Translations

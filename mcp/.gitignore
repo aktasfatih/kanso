@@ -6,4 +6,8 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
-uv.lock
+# uv.lock is deliberately COMMITTED, not ignored: the CI `unit-mcp` job runs
+# `uv run --frozen`, so the lock is what pins the resolution. pyproject only
+# declares floors (mcp>=1.2, httpx>=0.27, pydantic>=2) — without the lock every
+# run would resolve fresh from PyPI and an upstream release could redden an
+# unrelated PR.
