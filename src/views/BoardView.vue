@@ -475,11 +475,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<td class="shortcuts-modal__key"><kbd>Space</kbd></td>
 							<td>{{ t('kanso', 'Quick preview of the hovered / focused card') }}</td>
 						</tr>
-						<tr>
+						<!-- The two shortcuts the handler now refuses for a read-only
+						     member (#9978) — don't teach a viewer a key that is gated.
+						     ('n' above stays listed: it is inert rather than refused,
+						     since the composer it focuses isn't rendered for a viewer.) -->
+						<tr v-if="canEditBoard">
 							<td class="shortcuts-modal__key"><kbd>d</kbd></td>
 							<td>{{ t('kanso', 'Toggle done on focused card') }}</td>
 						</tr>
-						<tr>
+						<tr v-if="canEditBoard">
 							<td class="shortcuts-modal__key"><kbd>0</kbd>–<kbd>4</kbd></td>
 							<td>{{ t('kanso', 'Set priority on focused card (0=None, 1=Low … 4=Urgent)') }}</td>
 						</tr>
@@ -1674,6 +1678,10 @@ function handleKeydown(e) {
 
 	if (key === 'd') {
 		e.preventDefault()
+		// Read-only members: same gate as the column actions menu and card drag
+		// (#9897). j/k still move the focus ring, so without this a viewer could
+		// fire a PATCH the server can only answer with 403 "Access denied" (#9978).
+		if (!canEditBoard.value) return
 		if (focusedCardId.value == null) return
 		const id = focusedCardId.value
 		// Look up current done state from cardsByStack cache
@@ -1687,14 +1695,21 @@ function handleKeydown(e) {
 			}
 		}
 		apiUpdateCard(id, { done: !isDone })
+			.then(() => {
+				// Done-state changes My Tasks membership (#3766, #9859).
+				// SUCCESS path, not .finally(): the optimistic call sites invalidate
+				// from onSettled because they patched the cache up front and must
+				// resync after a rollback. This branch patches nothing locally, so a
+				// refused write leaves nothing stale — refetching every cross-board
+				// feed after a 403 would be pure waste (#9978).
+				invalidateCrossBoardFeeds(queryClient)
+			})
 			.catch((err) => {
 				shortcutError.value =
 					err?.response?.data?.error || t('kanso', 'Failed to update the card.')
 			})
 			.finally(() => {
 				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
-				// Done-state changes My Tasks membership (#3766, #9859).
-				invalidateCrossBoardFeeds(queryClient)
 			})
 		return
 	}
@@ -1703,22 +1718,27 @@ function handleKeydown(e) {
 	// Key 0 clears priority (sets to None). Skip when no card is focused.
 	if ((key === '0' || key === '1' || key === '2' || key === '3' || key === '4') && focusedCardId.value != null) {
 		e.preventDefault()
+		// Read-only members: see the 'd' branch above (#9978).
+		if (!canEditBoard.value) return
 		const priority = Number(key)
 		const id = focusedCardId.value
 		apiUpdateCard(id, { priority })
+			.then(() => {
+				// Priority is a My Work sort key and a View filter facet, so the
+				// quick-set has to reach the cross-board feeds too (#9859, #9898).
+				// Deliberately NOT routed through usePriority: that composable
+				// resolves its card id lazily inside onError/onSettled, so a j/k
+				// focus move mid-PATCH would roll back the wrong card. The plain
+				// promise chain here closes over the id captured at keypress.
+				// SUCCESS path, not .finally(), for the same reason as 'd' (#9978).
+				invalidateCrossBoardFeeds(queryClient)
+			})
 			.catch((err) => {
 				shortcutError.value =
 					err?.response?.data?.error || t('kanso', 'Failed to set priority.')
 			})
 			.finally(() => {
 				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
-				// Priority is a My Work sort key and a View filter facet, so the
-				// quick-set has to reach the cross-board feeds too (#9859, #9898).
-				// Deliberately NOT routed through usePriority: that composable
-				// resolves its card id lazily inside onError/onSettled, so a j/k
-				// focus move mid-PATCH would roll back the wrong card. The plain
-				// .finally() here closes over the id captured at keypress.
-				invalidateCrossBoardFeeds(queryClient)
 			})
 		return
 	}
