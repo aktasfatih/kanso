@@ -27,12 +27,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="stack-column__rail-title">{{ stack.title }}</span>
 		</button>
 
-		<!-- Column header - drag handle for stack reordering -->
+		<!-- Column header - drag handle for stack reordering (editors only; a
+		     read-only member gets no handle and no grab cursor) -->
 		<div
 			ref="headerRef"
 			v-show="!collapsed"
 			class="stack-column__header"
-			:class="{ 'stack-column__header--colored': !!stack.color }"
+			:class="{
+				'stack-column__header--colored': !!stack.color,
+				'stack-column__header--draggable': !laneKey && canEditBoard,
+			}"
 			:style="stack.color ? { '--stack-color': cssColor(stack.color) } : {}">
 			<div class="stack-column__header-row">
 				<!-- Collapse toggle (#3677). A real button that stops propagation so a
@@ -341,6 +345,7 @@ import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { useBoardCanEdit } from '../services/boardPermissions.js'
 
 const props = defineProps({
 	stack: {
@@ -528,6 +533,13 @@ const props = defineProps({
 
 const router = useRouter()
 const route = useRoute()
+
+// Whether the viewer may EDIT this board. Reordering a column is a write
+// (StackService::move asserts PERMISSION_EDIT), so a read-only member gets
+// neither the header drag handle nor its grab cursor. The per-entry menu
+// affordances are already gated by their null callbacks. True by default on a
+// surface with no provider — see ../services/boardPermissions.js.
+const canEditBoard = useBoardCanEdit()
 
 // ── Inline column-title editing ─────────────────────────────────────────────
 const editingTitle = ref(false)
@@ -735,8 +747,38 @@ function measureVirtualEl(el, index) {
 	virtualizer.value.measureElement(el)
 }
 
+// ── Stack reorder handle ──────────────────────────────────────────────────────
+// Held apart from `cleanup` because it is the one registration that comes and
+// goes: it exists only for a member who may EDIT, and a board ACL change reaches
+// the client through the periodic board refetch, NOT through a remount. Since
+// the header's grab cursor is a reactive class, a one-shot read at mount would
+// leave the two out of step after a promotion (cursor, no handle) or a
+// demotion (handle, no cursor) — exactly the dead-affordance mismatch this gate
+// exists to remove.
+let stackDragCleanup = () => {}
+
+/** (Re-)wire the header drag handle to the current permission. */
+function syncStackDragHandle() {
+	stackDragCleanup()
+	stackDragCleanup = () => {}
+	// Stack reordering is a board-level operation on a shared stack, so it is
+	// only wired when NOT inside a swimlane (a stack renders once per lane; per-
+	// lane reorder handles would be duplicative and ambiguous). Within a lane
+	// only card drag survives — the swimlane requirement.
+	if (props.laneKey || !canEditBoard.value || !headerRef.value) return
+	stackDragCleanup = draggable({
+		element: headerRef.value,
+		getInitialData: () => ({ type: 'stack', stackId: props.stack.id }),
+		onDragStart: () => { isStackDragging.value = true },
+		onDrop: () => { isStackDragging.value = false },
+	})
+}
+
+watch(canEditBoard, syncStackDragHandle)
+
 // ── Drop targets & auto-scroll ────────────────────────────────────────────────
 onMounted(() => {
+	syncStackDragHandle()
 	if (!cardListRef.value) return
 	const registrations = [
 		// Column-level drop target: catches drops on the empty space below all cards
@@ -754,20 +796,12 @@ onMounted(() => {
 		}),
 	]
 
-	// Stack reordering is a board-level operation on a shared stack, so it is
-	// only wired when NOT inside a swimlane (a stack renders once per lane; per-
-	// lane reorder handles would be duplicative and ambiguous). Within a lane
-	// only card drag survives — the swimlane requirement.
-	if (!props.laneKey && headerRef.value && columnRef.value) {
+	// The drag handle itself lives in syncStackDragHandle() above (it toggles
+	// with the EDIT bit); the column stays a drop target for whatever stack an
+	// editor drags, on the same not-inside-a-swimlane condition.
+	if (!props.laneKey && columnRef.value) {
 		registrations.push(
-			// Stack reordering: only the header is the drag handle …
-			draggable({
-				element: headerRef.value,
-				getInitialData: () => ({ type: 'stack', stackId: props.stack.id }),
-				onDragStart: () => { isStackDragging.value = true },
-				onDrop: () => { isStackDragging.value = false },
-			}),
-			// … but the whole column is the drop target (left/right edges).
+			// The whole column is the drop target (left/right edges).
 			dropTargetForElements({
 				element: columnRef.value,
 				canDrop: ({ source }) => source.data.type === 'stack' && source.data.stackId !== props.stack.id,
@@ -789,6 +823,7 @@ onMounted(() => {
 
 onUnmounted(() => {
 	cleanup()
+	stackDragCleanup()
 })
 
 function openCard(cardId) {
@@ -1112,6 +1147,11 @@ body.theme--dark .stack-column,
 	display: flex;
 	flex-direction: column;
 	gap: 0;
+}
+/* The grab cursor only where the header really is a drag handle: the flat board
+   (a stack inside a swimlane is never reorderable) and only for a member who may
+   edit — a viewer's stack move is refused server-side. */
+.stack-column__header--draggable {
 	cursor: grab;
 }
 .stack-column__header-row {

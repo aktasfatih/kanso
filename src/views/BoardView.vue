@@ -346,12 +346,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
 					:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
 					:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
-					:on-delete-stack="handleDeleteStack"
-					:on-restore-stack="handleRestoreStack"
-					:on-rename-stack="handleRenameStack"
-					:on-set-role="handleSetRole"
-					:on-set-wip="handleSetWip"
-					:on-set-color="handleSetColor"
+					:on-delete-stack="canEditBoard ? handleDeleteStack : null"
+					:on-restore-stack="canEditBoard ? handleRestoreStack : null"
+					:on-rename-stack="canEditBoard ? handleRenameStack : null"
+					:on-set-role="canEditBoard ? handleSetRole : null"
+					:on-set-wip="canEditBoard ? handleSetWip : null"
+					:on-set-color="canEditBoard ? handleSetColor : null"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:selection-mode="bulk.selectionMode.value"
@@ -640,6 +640,7 @@ import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-sc
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { NEST_ENABLED } from '../services/cardNesting.js'
 import { CARD_FEATURES, normalizeCardFeatures } from '../services/cardFeatures.js'
+import { BOARD_CAN_EDIT } from '../services/boardPermissions.js'
 
 // Stable identity for the "no dependency edges yet" case (#5896): a fresh `[]`
 // in the template would be a new prop value on every render while the board
@@ -1098,6 +1099,15 @@ const showManageTemplates = ref(false)
 
 /** Whether the current user may EDIT this board (bit 2). Gates template mutations. */
 const canEditBoard = computed(() => ((boardData.value?.permissions ?? 0) & 2) !== 0)
+
+// Published to every descendant so the write affordances that are too deep to
+// take a prop — a card tile's drag handle, a list row's, a column's reorder
+// handle — disappear for a read-only member instead of offering a gesture the
+// server can only answer with a 403. Provided here rather than beside the other
+// `provide()` calls above because `canEditBoard` is declared at this point.
+// Surfaces with no provider (a cross-board View) default to true; see
+// ../services/boardPermissions.js.
+provide(BOARD_CAN_EDIT, canEditBoard)
 
 /** First (sorted, non-archived) stack id — hosts a freshly created blank template. */
 const firstStackId = computed(() => sortedStacks.value[0]?.id ?? null)

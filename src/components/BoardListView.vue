@@ -132,7 +132,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     drag there never touches the parent). -->
 				<div
 					v-else-if="rows[vRow.index].type === 'card'"
-					v-card-dnd="{ card: rows[vRow.index].card, sortMode: props.sortMode, rowParentId: rows[vRow.index].isChild ? rows[vRow.index].card.parentCardId : null }"
+					v-card-dnd="{ card: rows[vRow.index].card, sortMode: props.sortMode, rowParentId: rows[vRow.index].isChild ? rows[vRow.index].card.parentCardId : null, canEdit: canEditBoard }"
 					class="board-list-row-wrap"
 					:class="{
 						'board-list-row-wrap--dragging': isDraggingCard === rows[vRow.index].card.id,
@@ -143,7 +143,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<button
 						class="board-list-row"
 						:class="{
-							'board-list-row--draggable': props.sortMode === 'manual',
+							'board-list-row--draggable': props.sortMode === 'manual' && canEditBoard,
 							'board-list-row--child': rows[vRow.index].isChild,
 						}"
 						@click="openCard(rows[vRow.index].card)">
@@ -373,6 +373,7 @@ import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
+import { useBoardCanEdit } from '../services/boardPermissions.js'
 import { useCardFeatures } from '../services/cardFeatures.js'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
 import { cssColor } from '../services/color.js'
@@ -487,6 +488,12 @@ const nestEnabled = inject(NEST_ENABLED, computed(() => false))
 // rows can mix boards with different settings.
 const cardFeatures = useCardFeatures()
 
+// Whether the viewer may EDIT this board. A row drag ends in a card move, which
+// the server refuses without PERMISSION_EDIT, so a read-only member gets no drag
+// handle and no grab cursor. A cross-board View renders this component without a
+// provider and keeps its drag (default true) — see ../services/boardPermissions.js.
+const canEditBoard = useBoardCanEdit()
+
 // ── Group-level drop targets (column drop zone) ────────────────────────────────
 // One dropTargetForElements per group header element, keyed by stackId. These
 // carry { type:'column', stackId, laneKey:'' } — exactly the shape the BoardView
@@ -582,8 +589,12 @@ function setGroupDropRef(stackId, el) {
 
 function makeCardDndBinding(el, { card, sortMode: mode, rowParentId }) {
 	// Only wire DnD when we are in the classic per-stack path (card has a real
-	// stackId) and the display sort is manual.
-	if (!card?.id || !card?.stackId || mode !== 'manual') return () => {}
+	// stackId), the display sort is manual, and the viewer may actually edit the
+	// board — a viewer's move is refused server-side, so the grab is dead. The
+	// permission is read from the injected computed rather than the binding value
+	// so it cannot be weakened by a caller; the binding still CARRIES it (as
+	// `canEdit`) purely so the `updated` hook below notices a mid-session flip.
+	if (!card?.id || !card?.stackId || mode !== 'manual' || !canEditBoard.value) return () => {}
 
 	const cardId = card.id
 	// The row's rendered level rides BOTH payloads: as a drag source it says what
@@ -689,6 +700,8 @@ const vCardDnd = {
 			// The row's own level decides what a reorder drop does to the parent,
 			// so a row that moved between the indent and the margin must re-register.
 			&& (prev?.rowParentId ?? null) === (next?.rowParentId ?? null)
+			// Losing (or gaining) EDIT mid-session must add or drop the drag handle.
+			&& (prev?.canEdit !== false) === (next?.canEdit !== false)
 		if (sameCard) {
 			pendingRebinds.delete(el)
 			return
