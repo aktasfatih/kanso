@@ -182,7 +182,14 @@ class ViewService {
 		return [
 			'cards' => $out,
 			'labels' => array_values($labels),
-			'participants' => array_keys($participants),
+			// strval() because PHP silently coerces a canonical decimal string array
+			// KEY to int - so a numeric uid (routine with LDAP employee-number
+			// provisioning) would come back as int(12345) and ship as a JSON number,
+			// which the client drops as "not a uid". That would resurrect the very
+			// facet self-narrowing this vocabulary exists to prevent: the numeric
+			// account would vanish from the assignee/owner facet with no way to
+			// re-add them.
+			'participants' => array_map('strval', array_keys($participants)),
 			'capped' => $capped,
 			'total' => $total,
 			'limit' => self::MAX_CARDS,

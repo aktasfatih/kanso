@@ -489,6 +489,32 @@ class ViewServiceTest extends TestCase {
 	}
 
 	/**
+	 * A NUMERIC uid must survive as a STRING. `participants` is accumulated as an
+	 * array KEY set, and PHP silently coerces a canonical decimal string key to int -
+	 * so a uid like '12345' (routine wherever accounts are provisioned from LDAP
+	 * employee numbers) would be stored as int(12345), come back from array_keys() as
+	 * a number, and ship in the envelope as a JSON number. The client drops non-string
+	 * entries, so that account would disappear from the assignee/owner facet with no
+	 * way to add them back - and at zero matches the facet hides entirely. That is
+	 * precisely the facet self-narrowing this vocabulary exists to prevent, which is
+	 * why the type is pinned here and not just the membership.
+	 */
+	public function testFindMineShipsNumericUidsAsStringsNotNumbers(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'owner' => '12345', 'assigneeIds' => ['67890']],
+			['id' => 2, 'owner' => 'alice', 'assigneeIds' => ['alice']],
+		]]]);
+
+		$participants = $this->service->findMine('alice')['participants'];
+
+		// assertSame is strict: int(12345) would NOT satisfy '12345'.
+		self::assertSame(['12345', '67890', 'alice'], $participants);
+		foreach ($participants as $uid) {
+			self::assertIsString($uid, 'every participant uid must ship as a string');
+		}
+	}
+
+	/**
 	 * The ACL boundary again, this time with a filter active (REQUIRED leak-denial).
 	 * Filtering must never become a shortcut around the per-board permission
 	 * masking: it runs strictly AFTER that loop, over rows the viewer may already
