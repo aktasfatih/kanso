@@ -11,6 +11,7 @@ path = [
     "package.json",
     "package-lock.json",
     "tests/psalm-baseline.xml",
+    "tests/fixtures/**",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"

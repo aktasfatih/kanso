@@ -4433,7 +4433,7 @@ msgid "Show watchers"
 msgstr ""
 
 #: src/views/ViewPage.vue
-msgid "Showing the first {shown} of {total} cards — refine your filter to see the rest."
+msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

@@ -494,20 +494,30 @@ export const deleteView = (id) =>
 	axios.delete(url(`/api/views/${encodeURIComponent(id)}`)).then((r) => r.data.views)
 
 // The cross-board card feed a View renders over: enriched summaries from every
-// readable board. The client applies the View's saved filter + group-by. The
-// server returns an envelope `{cards, capped, total, limit}` - `cards` is hard-
-// capped to bound this single unbounded feed; `capped`/`total`/`limit` let the
-// UI honestly report when it is showing only the first N of M readable cards.
-// The View's saved sort is applied SERVER-side, before the cap, so a sorted View
-// starts at the true first row rather than the first row of an arbitrary window.
-export const getViewCards = ({ sortMode = 'default', sortDir = 'asc' } = {}) =>
-	axios.get(url('/api/views/cards'), { params: { sortMode, sortDir } }).then((r) => {
+// readable board. The server returns an envelope
+// `{cards, labels, participants, capped, total, limit}` - `cards` is hard-capped
+// to bound this single unbounded feed; `capped`/`total`/`limit` let the UI
+// honestly report when it is showing only the first N of M MATCHING cards.
+//
+// Both the View's saved SORT and its active FILTER are applied SERVER-side,
+// before that cap (#9862), so a narrow filter reaches matches anywhere in the
+// readable set instead of only within the first capped window. `filter` is the
+// flat short-key object `filterToQuery()` already produces for shareable board
+// filter links - the same encoding, spread straight into the query string. The
+// client still re-filters the rows it receives, so this is a superset guard.
+export const getViewCards = ({ sortMode = 'default', sortDir = 'asc', filter = {} } = {}) =>
+	axios.get(url('/api/views/cards'), { params: { sortMode, sortDir, ...filter } }).then((r) => {
 		const d = r.data ?? {}
 		return {
 			cards: Array.isArray(d.cards) ? d.cards : [],
 			// Union of label metadata (id/title/color) across the readable boards, so
 			// the client can build a labelsById map and colour card-tile label chips.
 			labels: Array.isArray(d.labels) ? d.labels : [],
+			// Facet VOCABULARY (assignee + owner uids across the readable boards),
+			// shipped separately from the rows on purpose: it is accumulated before
+			// the filter, so narrowing to one person never collapses the facet to the
+			// survivors — you can always add a second person, even at zero matches.
+			participants: Array.isArray(d.participants) ? d.participants.filter((u) => typeof u === 'string') : [],
 			capped: !!d.capped,
 			total: Number.isFinite(d.total) ? d.total : (Array.isArray(d.cards) ? d.cards.length : 0),
 			limit: Number.isFinite(d.limit) ? d.limit : 0,

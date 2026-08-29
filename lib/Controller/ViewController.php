@@ -9,6 +9,7 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ViewFilter;
 use OCA\Kanso\Service\ViewService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -39,9 +40,11 @@ use OCP\IUserSession;
  * it is applied server-side before the feed's cap.
  *
  * The cross-board card feed itself is served by {@see self::cards()} via
- * {@see ViewService::findMine()} - the server stays filter-agnostic and returns
- * the whole readable-set summaries; the client applies the View's filter and
- * grouping. ACL lives entirely in ViewService (readable-set one-query).
+ * {@see ViewService::findMine()}. The stored `filter` blob stays opaque to the
+ * CRUD above, but the FEED does act on it (#9862): the client sends the active
+ * filter as flat query params and the server applies a mirrored predicate before
+ * the feed's cap, so the cap slices the matching set. Grouping stays entirely
+ * client-side. ACL lives entirely in ViewService (readable-set one-query).
  */
 class ViewController extends Controller {
 	use ApiErrorTrait;
@@ -217,28 +220,60 @@ class ViewController extends Controller {
 
 	/**
 	 * The cross-board card feed a View renders over: enriched card summaries from
-	 * every board the user can read (ACL enforced in {@see ViewService}). The
-	 * server stays filter-agnostic - the client applies the View's saved filter
-	 * and group-by client-side, reusing the board filter predicate.
+	 * every board the user can read (ACL enforced in {@see ViewService}).
 	 *
-	 * Returns an envelope `{cards, capped, total, limit}` (see
+	 * Returns an envelope `{cards, labels, participants, capped, total, limit}` (see
 	 * {@see ViewService::findMine()}): `cards` is hard-capped to keep this single
 	 * unbounded feed bounded, and `capped`/`total` let the client honestly report
-	 * when it is showing only the first N of M readable cards.
+	 * when it is showing only the first N of M MATCHING cards.
 	 *
 	 * The caller passes the View's saved sort, which is applied server-side BEFORE
-	 * that cap so a sorted View starts at the true first row. Unknown values are
-	 * ignored and defaulted here (never rejected) - this is a read path an older or
-	 * newer client must never be able to hard-fail. The params are typed `mixed`
-	 * for the same reason: a malformed query string (`?sortMode[]=due` hands the
-	 * dispatcher an array) would otherwise be a TypeError thrown before the error
-	 * wrapper can turn it into a response.
+	 * that cap so a sorted View starts at the true first row, and the View's active
+	 * filter in the SAME flat short-key form the board's shareable filter links
+	 * already use (`filterToQuery()`: fl/fa/fp/ft/fe/fo/fr/fd/fs/fw/fb/fk/fsd/fsc/fcm).
+	 * The filter runs before the cap too (#9862) - the client still re-filters the
+	 * rows it receives, so this is a superset guard whose job is to make the cap
+	 * slice the matching set.
+	 *
+	 * Unknown values are ignored and defaulted here (never rejected) - this is a
+	 * read path an older or newer client must never be able to hard-fail. Every
+	 * param is typed `mixed` for the same reason: a malformed query string
+	 * (`?sortMode[]=due` hands the dispatcher an array) would otherwise be a
+	 * TypeError thrown before the error wrapper can turn it into a response.
 	 */
 	#[NoAdminRequired]
-	public function cards(mixed $sortMode = 'default', mixed $sortDir = 'asc'): JSONResponse {
-		return $this->respond(function () use ($sortMode, $sortDir): JSONResponse {
+	public function cards(
+		mixed $sortMode = 'default',
+		mixed $sortDir = 'asc',
+		mixed $fl = null,
+		mixed $fa = null,
+		mixed $fp = null,
+		mixed $ft = null,
+		mixed $fe = null,
+		mixed $fo = null,
+		mixed $fr = null,
+		mixed $fd = null,
+		mixed $fs = null,
+		mixed $fw = null,
+		mixed $fb = null,
+		mixed $fk = null,
+		mixed $fsd = null,
+		mixed $fsc = null,
+		mixed $fcm = null,
+	): JSONResponse {
+		$query = [
+			'fl' => $fl, 'fa' => $fa, 'fp' => $fp, 'ft' => $ft, 'fe' => $fe,
+			'fo' => $fo, 'fr' => $fr, 'fd' => $fd, 'fs' => $fs, 'fw' => $fw,
+			'fb' => $fb, 'fk' => $fk, 'fsd' => $fsd, 'fsc' => $fsc, 'fcm' => $fcm,
+		];
+		return $this->respond(function () use ($sortMode, $sortDir, $query): JSONResponse {
 			$sort = $this->normalizeSort(['mode' => $sortMode, 'dir' => $sortDir]);
-			return new JSONResponse($this->viewService->findMine($this->currentUserId(), $sort['mode'], $sort['dir']));
+			return new JSONResponse($this->viewService->findMine(
+				$this->currentUserId(),
+				$sort['mode'],
+				$sort['dir'],
+				ViewFilter::fromQuery($query),
+			));
 		});
 	}
 
