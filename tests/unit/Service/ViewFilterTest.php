@@ -109,6 +109,53 @@ class ViewFilterTest extends TestCase {
 	}
 
 	/**
+	 * The short keys `ViewController::cards()` actually FORWARDS, parsed out of the
+	 * hand-written `$query` literal in its body, in literal order.
+	 *
+	 * The controller binds the wire in two independent places - the param list and
+	 * this literal that copies each param into the array handed to
+	 * {@see ViewFilter::fromQuery()} - and only the second one decides what the
+	 * filter sees. Reflection over the signature cannot see it: drop
+	 * `'fsc' => $fsc,` from the literal while keeping `mixed $fsc = null` and the
+	 * dispatcher still binds the param, the filter still never receives it, and the
+	 * server silently stops constraining `subcard`. That is the #9862 symptom with
+	 * the param half left intact, so the guard has to read this half too.
+	 *
+	 * Each entry must also forward its OWN param: `'fsd' => $fsc` would compile,
+	 * type-check and quietly cross two dimensions.
+	 *
+	 * @return list<string> the literal's keys, in the order they appear
+	 */
+	private static function feedQueryLiteralKeys(): array {
+		$src = file_get_contents(__DIR__ . '/../../../lib/Controller/ViewController.php');
+		self::assertIsString($src, 'the feed controller must be readable');
+
+		$method = strpos($src, 'public function cards(');
+		self::assertIsInt($method, 'ViewController::cards() must still exist');
+		$start = strpos($src, '$query = [', $method);
+		self::assertIsInt($start, 'cards() must still build a $query array literal');
+		$end = strpos($src, '];', $start);
+		self::assertIsInt($end, 'the $query literal must be terminated');
+		$literal = substr($src, $start, $end - $start);
+
+		$count = preg_match_all('/\'(\w+)\'\s*=>\s*\$(\w+)/', $literal, $m, PREG_SET_ORDER);
+		self::assertNotFalse($count, 'the $query literal pattern must compile');
+		self::assertGreaterThan(0, $count, 'no entries parsed out of the $query literal');
+
+		$keys = [];
+		foreach ($m as $match) {
+			self::assertSame(
+				$match[1],
+				$match[2],
+				"the '{$match[1]}' entry of cards()'s \$query forwards \${$match[2]} - "
+				. 'each key must carry its own param, or two dimensions are crossed',
+			);
+			$keys[] = $match[1];
+		}
+		return $keys;
+	}
+
+	/**
 	 * Every card id in the fixture, in fixture order - what a filter that constrains
 	 * nothing must return. Derived so adding a card to the fixture does not silently
 	 * weaken the tolerance assertions below into a stale subset.
@@ -186,17 +233,19 @@ class ViewFilterTest extends TestCase {
 	/**
 	 * The golden fixture pins the two PREDICATES against each other, but it cannot
 	 * see the wire: it feeds `ViewFilter::fromQuery()` an array built in this file.
-	 * The feed endpoint gets its array from the dispatcher, which fills it from
-	 * `cards()`'s DECLARED PARAMETERS ({@see ViewController::cards()}) - so a short
-	 * key with no matching `mixed $fXX = null` param never reaches the filter at
-	 * all. The server then silently stops constraining that dimension, and because
-	 * the client re-filters whatever it receives, nothing looks wrong until an
-	 * account has more readable cards than the feed's cap - the exact regression
-	 * #9862 fixed.
+	 * The feed endpoint builds its array in TWO steps, and a key has to survive
+	 * both: the dispatcher fills `cards()`'s DECLARED PARAMETERS, and the body then
+	 * copies each of them into the `$query` literal it hands the filter. Lose the
+	 * key on either side - no `mixed $fXX = null` param, or no `'fXX' => $fXX,`
+	 * entry - and the filter never receives that dimension. The server silently
+	 * stops constraining it, and because the client re-filters whatever it
+	 * receives, nothing looks wrong until an account has more readable cards than
+	 * the feed's cap: the exact regression #9862 fixed.
 	 *
-	 * Reflection over the controller signature is the cheap honest guard for that:
-	 * it proves the BINDING, which is the failure mode, without spending a round
-	 * trip per key on the shared e2e backend.
+	 * So this asserts BOTH halves - the signature by reflection, the literal by
+	 * parsing the method body ({@see self::feedQueryLiteralKeys()}) - which is the
+	 * cheap honest guard for the whole binding, without spending a round trip per
+	 * key on the shared e2e backend.
 	 */
 	public function testEveryWireKeyIsBoundOnTheFeedController(): void {
 		$map = self::wireKeys();
@@ -213,6 +262,17 @@ class ViewFilterTest extends TestCase {
 				. "declares no \${$key} param - the dispatcher will never pass it through",
 			);
 		}
+
+		// A bound param that the body never copies into $query is just as invisible
+		// to the filter as a missing param, so the forwarding literal is pinned too
+		// - exactly, and in the same order the client emits.
+		self::assertSame(
+			array_values($map),
+			self::feedQueryLiteralKeys(),
+			'the $query literal in ViewController::cards() must forward every short key the client '
+			. 'emits, and nothing else - a param bound but not forwarded leaves that dimension '
+			. 'unconstrained on the server',
+		);
 
 		// …and the map covers exactly the dimensions ViewFilter itself carries, in
 		// the same order. A 16th dimension added on one side only turns this red.

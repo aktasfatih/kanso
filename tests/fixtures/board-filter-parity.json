@@ -23,6 +23,16 @@
     "green. Do not give either card a due/start date that is merely NEAR the",
     "boundary: the point is the equality case.",
     "",
+    "Card 9 is due `now + 8d`, one day PAST the window, and pins its WIDTH.",
+    "The boundary cards only pin the comparison OPERATORS: with card 7 as the",
+    "last due date before card 4's far-future one, widening the window from 7d",
+    "to 14d or 30d changed no expectation at all, and the duplicated constant",
+    "(lib/Service/ViewFilter.php's WEEK_MS and the inline `7 * 24 * 60 * 60 *",
+    "1000` in src/composables/useBoardFilters.js) is exactly the kind that",
+    "drifts. Card 9 must stay OUT of the `due: week` case, so any widening on",
+    "either side turns that runner red. Card 9 is otherwise a copy of card 7,",
+    "so it changes no other dimension's meaning - only its membership.",
+    "",
     "Card 8 is the sparse row - an older cached summary, or a payload from a",
     "version that did not carry an enrichment field yet. Its keys are OMITTED,",
     "not set to null: both predicates read `card.x ?? default`, which treats",
@@ -180,10 +190,30 @@
     {
       "id": 8,
       "title": "Sparse row: every enrichment field ABSENT (not null)"
+    },
+    {
+      "id": 9,
+      "title": "Due eight days out: one day OUTSIDE the week window",
+      "labelIds": [13],
+      "assigneeIds": ["erin"],
+      "priority": 2,
+      "type": "task",
+      "estimate": "5",
+      "owner": "erin",
+      "reviewState": "pending",
+      "duedate": "2026-01-09T00:00:00+00:00",
+      "startDate": null,
+      "doneAt": 0,
+      "waitingOnExternal": false,
+      "blocked": false,
+      "checklist": { "total": 0, "done": 0 },
+      "parentCardId": null,
+      "childProgress": { "total": 0, "done": 0 },
+      "commentCount": 0
     }
   ],
   "cases": [
-    { "name": "empty filter keeps everything", "filter": {}, "expected": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "name": "empty filter keeps everything", "filter": {}, "expected": [1, 2, 3, 4, 5, 6, 7, 8, 9] },
 
     { "name": "labels: OR within", "filter": { "labels": [11] }, "expected": [1, 3] },
     { "name": "labels: two selected", "filter": { "labels": [10, 12] }, "expected": [1, 4] },
@@ -193,7 +223,7 @@
     { "name": "assignees: __none__ sentinel", "filter": { "assignees": ["__none__"] }, "expected": [2, 8] },
     { "name": "assignees: sentinel OR uid", "filter": { "assignees": ["__none__", "dave"] }, "expected": [2, 5, 8] },
 
-    { "name": "priorities: 0 is a real value", "filter": { "priorities": [0, 2] }, "expected": [2, 5, 6, 7, 8] },
+    { "name": "priorities: 0 is a real value", "filter": { "priorities": [0, 2] }, "expected": [2, 5, 6, 7, 8, 9] },
     { "name": "priorities: high only", "filter": { "priorities": [3, 4] }, "expected": [1, 3] },
 
     { "name": "types: OR within, typeless never matches", "filter": { "types": ["bug", "chore"] }, "expected": [1, 4] },
@@ -205,37 +235,37 @@
     { "name": "owners: OR within", "filter": { "owners": ["alice", "dave"] }, "expected": [1, 4, 5] },
 
     { "name": "reviews: none sentinel", "filter": { "reviews": ["none"] }, "expected": [2, 5, 8] },
-    { "name": "reviews: real states", "filter": { "reviews": ["approved", "pending"] }, "expected": [1, 3, 6, 7] },
+    { "name": "reviews: real states", "filter": { "reviews": ["approved", "pending"] }, "expected": [1, 3, 6, 7, 9] },
     { "name": "reviews: changes requested", "filter": { "reviews": ["changes_requested"] }, "expected": [4] },
 
     { "name": "due: overdue", "filter": { "due": "overdue" }, "expected": [1] },
-    { "name": "due: this week", "filter": { "due": "week" }, "expected": [3, 6, 7] },
+    { "name": "due: this week (card 9, at now + 8d, must stay out - pins the window WIDTH)", "filter": { "due": "week" }, "expected": [3, 6, 7] },
     { "name": "due: none", "filter": { "due": "none" }, "expected": [2, 5, 8] },
 
     { "name": "done: done", "filter": { "done": "done" }, "expected": [2] },
-    { "name": "done: open", "filter": { "done": "open" }, "expected": [1, 3, 4, 5, 6, 7, 8] },
+    { "name": "done: open", "filter": { "done": "open" }, "expected": [1, 3, 4, 5, 6, 7, 8, 9] },
 
     { "name": "waiting: waiting", "filter": { "waiting": "waiting" }, "expected": [1, 4] },
-    { "name": "waiting: not waiting", "filter": { "waiting": "not_waiting" }, "expected": [2, 3, 5, 6, 7, 8] },
+    { "name": "waiting: not waiting", "filter": { "waiting": "not_waiting" }, "expected": [2, 3, 5, 6, 7, 8, 9] },
 
     { "name": "blocked: blocked", "filter": { "blocked": "blocked" }, "expected": [1, 5] },
-    { "name": "blocked: not blocked", "filter": { "blocked": "not_blocked" }, "expected": [2, 3, 4, 6, 7, 8] },
+    { "name": "blocked: not blocked", "filter": { "blocked": "not_blocked" }, "expected": [2, 3, 4, 6, 7, 8, 9] },
 
     { "name": "checklist: has", "filter": { "checklist": "has" }, "expected": [1, 3, 4] },
     { "name": "checklist: incomplete", "filter": { "checklist": "incomplete" }, "expected": [1, 4] },
     { "name": "checklist: complete", "filter": { "checklist": "complete" }, "expected": [3] },
-    { "name": "checklist: none", "filter": { "checklist": "none" }, "expected": [2, 5, 6, 7, 8] },
+    { "name": "checklist: none", "filter": { "checklist": "none" }, "expected": [2, 5, 6, 7, 8, 9] },
 
     { "name": "startDate: started", "filter": { "startDate": "started" }, "expected": [1, 5, 6] },
     { "name": "startDate: upcoming", "filter": { "startDate": "upcoming" }, "expected": [3] },
-    { "name": "startDate: none", "filter": { "startDate": "none" }, "expected": [2, 4, 7, 8] },
+    { "name": "startDate: none", "filter": { "startDate": "none" }, "expected": [2, 4, 7, 8, 9] },
 
-    { "name": "subcard: top-level", "filter": { "subcard": "top_level" }, "expected": [1, 3, 5, 6, 7, 8] },
+    { "name": "subcard: top-level", "filter": { "subcard": "top_level" }, "expected": [1, 3, 5, 6, 7, 8, 9] },
     { "name": "subcard: parent (a card can be both)", "filter": { "subcard": "parent" }, "expected": [1, 4] },
     { "name": "subcard: child", "filter": { "subcard": "child" }, "expected": [2, 4] },
 
     { "name": "comments: has", "filter": { "comments": "has" }, "expected": [1, 3, 5] },
-    { "name": "comments: none", "filter": { "comments": "none" }, "expected": [2, 4, 6, 7, 8] },
+    { "name": "comments: none", "filter": { "comments": "none" }, "expected": [2, 4, 6, 7, 8, 9] },
 
     { "name": "AND across two dimensions", "filter": { "labels": [11], "done": "open" }, "expected": [1, 3] },
     { "name": "AND narrows to one", "filter": { "labels": [11], "owners": ["alice"] }, "expected": [1] },

@@ -138,12 +138,17 @@ test.describe('View feed burst collapsing (#9981)', () => {
 		await page.waitForTimeout(3000)
 		const observed = feedRequests
 
-		// Leading edge + one trailing catch-up is the contract. The third slot is
-		// slack for a settle that straddles the window on a slow runner; on
-		// unguarded code this is ITEMS, so the assertion has real teeth either way.
+		// Leading edge + one trailing catch-up is the contract. The slots above
+		// that are deliberate slack, not sloppiness: on a 2-worker, 4-CPU runner
+		// the 8 stubbed settles need not all land inside one 400ms window, and the
+		// counter matches on URL alone — the View feed's own 60s refetchInterval
+		// ticking mid-burst would add a spurious read this route handler cannot
+		// tell apart. Slack is the right answer here rather than `retries`, which
+		// would mask a real regression in the suite's longest pole. The teeth are
+		// unaffected: unguarded code issues ITEMS (8) of these.
 		expect(observed,
 			`${ITEMS} ticks issued ${observed} /api/views/cards reads — the burst was not collapsed`)
-			.toBeLessThanOrEqual(3)
+			.toBeLessThanOrEqual(4)
 		expect(observed).toBeLessThan(ITEMS)
 
 		// …and the leading edge still fired, so the View behind the overlay is not

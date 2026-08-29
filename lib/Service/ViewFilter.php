@@ -78,6 +78,14 @@ final class ViewFilter {
 	 * match is an O(1) isset() rather than an in_array() scan per row - the
 	 * predicate runs once per card over a set that can reach the cap.
 	 *
+	 * THIS SIGNATURE IS A WIRE CONTRACT, not just an argument list. ViewFilterTest
+	 * derives the filter's dimension list from these parameter NAMES and asserts it
+	 * against the emit ORDER of the client's `filterToQuery()`, which is what pins
+	 * the two predicates to the same set of dimensions. So renaming a param, or
+	 * swapping two of them here and in fromQuery() below - behaviour-preserving as
+	 * that is - turns the PHP runner red until the client's emit order matches
+	 * again. Add a dimension in both places, in the same position, or not at all.
+	 *
 	 * @param array<int, true> $labels
 	 * @param array<string, true> $assignees
 	 * @param array<int, true> $priorities

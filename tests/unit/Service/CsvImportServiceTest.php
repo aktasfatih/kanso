@@ -384,12 +384,25 @@ class CsvImportServiceTest extends TestCase {
 		$log = [];
 		$this->traceTransactions($log);
 
-		// The retry must not double-count. The first attempt writes its CREATE
-		// change rows and then rolls back, so if those rows survived the rollback -
-		// or were recorded outside the transaction - the count here is 4, not 2,
-		// and every importer would ship duplicate deltas to every connected client
-		// on any stack that hit the sort-key wall. Same for the board-changed push:
-		// exactly one, at the end of the successful attempt.
+		// The retry must not double-count: two rows imported, exactly two CREATE
+		// change rows, no matter how many attempts it took.
+		//
+		// Two is what the CURRENT code produces for a structural reason, not an
+		// accidental one: appendSequence() throws at CsvImportService::import()
+		// BEFORE the insert loop is reached, so the first attempt records nothing
+		// at all and only the successful second attempt writes. That is precisely
+		// why this number is worth pinning - the regression it catches is the
+		// overflow check MOVING INTO the loop (per-row key allocation, a
+		// partially-written first attempt), which would make the count 4 while
+		// every other assertion in this test stayed green, and every importer
+		// would ship duplicate deltas to every connected client on any stack that
+		// hit the sort-key wall.
+		//
+		// Note this cannot lean on the rollback: IDBConnection is a mock here, so
+		// rollBack() only appends to $log - it could never un-count a recordChange
+		// the service had already made. The count has to be right by construction.
+		// Same for the board-changed push: exactly one, at the end of the
+		// successful attempt.
 		$this->changeNotifier->expects(self::exactly(2))->method('recordChange');
 		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(self::BOARD_ID);
 
