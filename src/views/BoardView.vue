@@ -1712,6 +1712,13 @@ function handleKeydown(e) {
 			})
 			.finally(() => {
 				queryClient.invalidateQueries({ queryKey: boardQueryKey(props.id) })
+				// Priority is a My Work sort key and a View filter facet, so the
+				// quick-set has to reach the cross-board feeds too (#9859, #9898).
+				// Deliberately NOT routed through usePriority: that composable
+				// resolves its card id lazily inside onError/onSettled, so a j/k
+				// focus move mid-PATCH would roll back the wrong card. The plain
+				// .finally() here closes over the id captured at keypress.
+				invalidateCrossBoardFeeds(queryClient)
 			})
 		return
 	}
