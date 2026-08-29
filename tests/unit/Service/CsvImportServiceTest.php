@@ -19,6 +19,7 @@ use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\CsvImportService;
 use OCA\Kanso\Service\InvalidInputException;
@@ -39,6 +40,7 @@ class CsvImportServiceTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private CardService&MockObject $cardService;
 	private IUserManager&MockObject $userManager;
 	private IDBConnection&MockObject $db;
 	private CsvImportService $service;
@@ -56,6 +58,7 @@ class CsvImportServiceTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->cardService = $this->createMock(CardService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(IDBConnection::class);
 
@@ -69,6 +72,7 @@ class CsvImportServiceTest extends TestCase {
 			new SortKeyService(),
 			$this->changeNotifier,
 			$this->permissionService,
+			$this->cardService,
 			$this->userManager,
 			$this->db,
 		);
@@ -315,6 +319,162 @@ class CsvImportServiceTest extends TestCase {
 
 		$this->labelMapper->method('findByBoard')->willReturn([]);
 		$this->cardMapper->method('insert')->willThrowException(new \RuntimeException('boom'));
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->import("title\nX\n", self::BOARD_ID, self::STACK_ID, ['title' => 0], true, 'alice');
+	}
+
+	// ── sort-key wall: auto-rebalance + retry ───────────────────────────────────
+
+	/**
+	 * Wires the board/stack lookups with a tail card whose sort key is read
+	 * through $tailKey by reference, so a simulated rebalance can shorten it
+	 * mid-test the way the real one would.
+	 */
+	private function primeStackWithTail(string &$tailKey): void {
+		$this->boardService->method('find')->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturn($this->stack());
+		$this->permissionService->method('assertPermission');
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardMapper->method('nextBoardSeq')->willReturnCallback(function (): int {
+			static $n = 0;
+			return ++$n;
+		});
+		$this->cardMapper->method('findLastInStack')->willReturnCallback(
+			function () use (&$tailKey): Card {
+				$tail = new Card();
+				$tail->setId(1);
+				$tail->setStackId(self::STACK_ID);
+				$tail->setSortKey($tailKey);
+				return $tail;
+			},
+		);
+	}
+
+	/**
+	 * Records the transaction lifecycle into $log and refuses a nested
+	 * beginTransaction(), so a rebalance issued from INSIDE the import
+	 * transaction fails the test instead of silently deadlocking in production.
+	 */
+	private function traceTransactions(array &$log): void {
+		$depth = 0;
+		$this->db->method('beginTransaction')->willReturnCallback(function () use (&$log, &$depth): void {
+			self::assertSame(0, $depth, 'a transaction was opened while another was still open');
+			$depth++;
+			$log[] = 'begin';
+		});
+		$this->db->method('commit')->willReturnCallback(function () use (&$log, &$depth): void {
+			$depth--;
+			$log[] = 'commit';
+		});
+		$this->db->method('rollBack')->willReturnCallback(function () use (&$log, &$depth): void {
+			$depth--;
+			$log[] = 'rollback';
+		});
+		$this->db->method('inTransaction')->willReturnCallback(static fn (): bool => $depth > 0);
+	}
+
+	public function testRebalancesAndRetriesWhenTheTargetStackIsAtTheSortKeyWall(): void {
+		// A long-lived stack whose tail key already fills the varchar(64) column:
+		// appending a block past it overflows, which used to fail the whole import
+		// with a 409 only `occ kanso:rebalance` could clear.
+		$tailKey = str_repeat('Z', SortKeyService::MAX_KEY_LENGTH);
+		$this->primeStackWithTail($tailKey);
+
+		$log = [];
+		$this->traceTransactions($log);
+
+		// The real rebalanceStack() opens its OWN transaction and locks the stack's
+		// rows FOR UPDATE, so it must never run nested inside the import's. Mirror
+		// that here: assert nothing is open, then open/close one of its own.
+		$this->cardService->expects(self::once())->method('rebalanceStack')
+			->with(self::STACK_ID)
+			->willReturnCallback(function () use (&$log, &$tailKey): int {
+				self::assertFalse(
+					$this->db->inTransaction(),
+					'rebalanceStack() ran inside the import transaction',
+				);
+				$log[] = 'rebalance';
+				$this->db->beginTransaction();
+				$this->db->commit();
+				$tailKey = 'MM'; // the stack now carries short, rebalanced keys
+				return 3;
+			});
+
+		$cards = [];
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c) use (&$cards): Card {
+			$c->setId(200 + count($cards));
+			$cards[] = $c;
+			return $c;
+		});
+
+		$result = $this->service->import(
+			"title\nAlpha\nBeta\n",
+			self::BOARD_ID,
+			self::STACK_ID,
+			['title' => 0],
+			true,
+			'alice',
+		);
+
+		// The import succeeds instead of returning `rebalance_required`.
+		self::assertSame(2, $result['cards']);
+		self::assertCount(2, $cards);
+		self::assertSame(['Alpha', 'Beta'], array_map(static fn (Card $c): string => $c->getTitle(), $cards));
+		foreach ($cards as $card) {
+			self::assertGreaterThan('MM', $card->getSortKey());
+			self::assertLessThanOrEqual(SortKeyService::MAX_KEY_LENGTH, strlen($card->getSortKey()));
+		}
+		self::assertTrue($cards[0]->getSortKey() < $cards[1]->getSortKey());
+
+		// The rebalance sits BETWEEN the two attempts - after the first attempt
+		// rolled back, before the second began - never inside either.
+		self::assertSame(
+			['begin', 'rollback', 'rebalance', 'begin', 'commit', 'begin', 'commit'],
+			$log,
+		);
+	}
+
+	public function testStillSurfacesOverflowWhenTheRebalanceDoesNotHelp(): void {
+		// Retry ONCE, not a loop: if the keys still overflow after the rebalance
+		// the caller gets the same 409 `rebalance_required` as before, and not a
+		// single row was written.
+		$tailKey = str_repeat('Z', SortKeyService::MAX_KEY_LENGTH);
+		$this->primeStackWithTail($tailKey);
+
+		$this->cardService->expects(self::once())->method('rebalanceStack')
+			->with(self::STACK_ID)
+			->willReturn(0);
+
+		$this->db->expects(self::exactly(2))->method('beginTransaction');
+		$this->db->expects(self::exactly(2))->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->expectException(\OverflowException::class);
+		$this->service->import(
+			"title\nAlpha\n",
+			self::BOARD_ID,
+			self::STACK_ID,
+			['title' => 0],
+			true,
+			'alice',
+		);
+	}
+
+	public function testDoesNotRebalanceWhenTheImportFailsForAnotherReason(): void {
+		// A genuine failure still rolls back completely - no rebalance, no retry,
+		// no partial rows.
+		$tailKey = 'MM';
+		$this->primeStackWithTail($tailKey);
+		$this->cardService->expects(self::never())->method('rebalanceStack');
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->cardMapper->expects(self::once())->method('insert')
+			->willThrowException(new \RuntimeException('boom'));
 
 		$this->expectException(\RuntimeException::class);
 		$this->service->import("title\nX\n", self::BOARD_ID, self::STACK_ID, ['title' => 0], true, 'alice');
