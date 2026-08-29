@@ -1696,6 +1696,11 @@ function handleKeydown(e) {
 		}
 		apiUpdateCard(id, { done: !isDone })
 			.then(() => {
+				// A shortcut that worked retires the previous shortcut's banner
+				// (#10008) — otherwise the manual × is the only way out, and the
+				// board goes on reporting a failed action while the same key is
+				// visibly working again.
+				shortcutError.value = ''
 				// Done-state changes My Tasks membership (#3766, #9859).
 				// SUCCESS path, not .finally(): the optimistic call sites invalidate
 				// from onSettled because they patched the cache up front and must
@@ -1724,6 +1729,8 @@ function handleKeydown(e) {
 		const id = focusedCardId.value
 		apiUpdateCard(id, { priority })
 			.then(() => {
+				// Clear a previous shortcut's banner on success (#10008), as in 'd'.
+				shortcutError.value = ''
 				// Priority is a My Work sort key and a View filter facet, so the
 				// quick-set has to reach the cross-board feeds too (#9859, #9898).
 				// Deliberately NOT routed through usePriority: that composable
@@ -1983,6 +1990,8 @@ onMounted(() => {
 				apiMoveStack(draggedStackId, afterStackId)
 					.then((updated) => {
 						patchStackKey(updated.sortKey)
+						// Same as the shortcuts (#10008): success retires the banner.
+						shortcutError.value = ''
 					})
 					.catch((err) => {
 						const serverError = err?.response?.data?.error
@@ -2196,6 +2205,12 @@ function handleCardSelect({ id, shiftKey }) {
 async function runBulkAction(action, params) {
 	try {
 		const result = await bulk.apply(action, params)
+		// Same as the shortcuts (#10008): success retires the banner. All four
+		// writers of shortcutError share that one ref, so it is latest-outcome-
+		// wins between them — clearing on only some of them would be harder to
+		// reason about than the bug was. (moveError is a separate ref that wins
+		// the OR at the banner, and clears on its own success.)
+		shortcutError.value = ''
 		const okCount = result?.ok?.length ?? 0
 		const skippedCount = result?.skipped?.length ?? 0
 		if (skippedCount > 0) {

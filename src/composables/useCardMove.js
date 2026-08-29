@@ -142,6 +142,11 @@ export function useCardMove(boardId) {
 					afterCardId: afterCardId ?? null,
 				})
 				reconcileFromServer(updated)
+				// A move that lands retires the previous move's banner (#10008).
+				// Identical defect to the keyboard shortcuts: lastError was only
+				// ever cleared by the manual ×, so one failed drag left the board
+				// claiming failure through every later successful drag.
+				lastError.value = null
 			} catch (err) {
 				// 409 = rebalance_required; 403 = review gate; anything else is a generic error
 				const status = err?.response?.status
