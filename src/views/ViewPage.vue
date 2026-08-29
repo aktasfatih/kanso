@@ -28,13 +28,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     (#3815 reuses useBoardFilters + BoardFilterBar). Editing the state
 				     re-filters the loaded rows live AND refetches the feed with the
 				     filter applied server-side (#9862); the save button persists it to
-				     the View. The facets are cross-board: `labels` is the union the feed
-				     envelope carries, `participants` the server-supplied uid vocabulary.
-				     `estimate-scale` is deliberately not passed — an estimate scale is
-				     board-scoped and a cross-board View can span two of them. -->
+				     the View. `participants` is the server-supplied cross-board uid
+				     vocabulary.
+				     `labels` is deliberately NOT passed, so the label facet stays
+				     hidden in a View. Label ids are board-scoped and COLLIDE across
+				     boards (see ViewService.php:139-144): the envelope's union is keyed
+				     by id, so board A's label 5 "Bug" and board B's label 5 "Urgent"
+				     become one chip (last board wins) while the predicate matches the
+				     bare id — picking "Bug" would return the other board's "Urgent"
+				     cards. Wrong results are worse than a missing facet; a
+				     board-qualified label identity is follow-up work.
+				     `estimate-scale` is deliberately not passed either — an estimate
+				     scale is board-scoped and a cross-board View can span two of them. -->
 				<BoardFilterBar
 					:state="filterState"
-					:labels="[...labelsById.values()]"
 					:participants="participants"
 					@save="onSaveFromBar" />
 
