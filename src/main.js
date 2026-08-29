@@ -109,6 +109,10 @@ function invalidateMyWorkThrottled() {
 	// the user participates in. The View feed (invalidateCrossBoardFeeds) is the
 	// heaviest query in the app and must not ride a 30s push cadence - it keeps
 	// its own 60s interval. See invalidateCrossBoardFeeds in queryKeys.js (#9859).
+	// One policy, two ends: this throttle guards the REALTIME funnel, and
+	// VIEW_FEED_INVALIDATE_THROTTLE in queryKeys.js guards the MUTATION funnel,
+	// where a burst of overlay edits would otherwise refetch the feed per tick
+	// (#9981).
 	invalidateMyWork(queryClient)
 }
 onBoardChangesApplied(invalidateMyWorkThrottled)
