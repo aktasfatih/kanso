@@ -357,6 +357,18 @@ let dragCleanup = () => {}
 /** (Re-)wire the tile's drag handle to the current permission. */
 function syncDragHandle() {
 	dragCleanup()
+	// Destroying the draggable means its onDrop will never run, so a flip that
+	// lands mid-drag would latch `card-tile-wrap--dragging` on forever. Clear it
+	// here — the flag belongs to the registration we just tore down.
+	//
+	// Deliberately NOT the pendingRebinds deferral BoardListView uses: that one
+	// defers rebinding a DROP TARGET, because pragmatic only re-evaluates a drop
+	// target on a native dragover, so re-creating one under a parked pointer
+	// silently kills the drop. This is a DRAGGABLE, and the tile's drop target is
+	// left registered through the flip, so the drop still resolves through the
+	// board-level monitorForElements. The only consequence here is the stale
+	// class.
+	isDragging.value = false
 	dragCleanup = () => {}
 	if (!el.value || !canEditBoard.value) return
 	dragCleanup = draggable({

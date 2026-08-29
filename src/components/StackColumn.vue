@@ -760,6 +760,14 @@ let stackDragCleanup = () => {}
 /** (Re-)wire the header drag handle to the current permission. */
 function syncStackDragHandle() {
 	stackDragCleanup()
+	// Same reason as CardTile's syncDragHandle: tearing the draggable down means
+	// its onDrop never fires, so a permission flip landing mid-drag would latch
+	// `stack-column--dragging` on forever. And likewise NOT BoardListView's
+	// pendingRebinds deferral — that defers a DROP TARGET rebind (pragmatic only
+	// re-evaluates those on a native dragover, so rebinding under a parked
+	// pointer kills the drop). This is a draggable; the column's drop targets
+	// survive the flip untouched.
+	isStackDragging.value = false
 	stackDragCleanup = () => {}
 	// Stack reordering is a board-level operation on a shared stack, so it is
 	// only wired when NOT inside a swimlane (a stack renders once per lane; per-
