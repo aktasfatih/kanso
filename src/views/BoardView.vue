@@ -1707,9 +1707,21 @@ function handleKeydown(e) {
 				// resync after a rollback. This branch patches nothing locally, so a
 				// refused write leaves nothing stale — refetching every cross-board
 				// feed after a 403 would be pure waste (#9978).
+				//
+				// The trade: a write that LANDS but fails client-side (a proxy
+				// timeout, a 5xx after commit, a dropped response) now skips the
+				// cross-board resync. Self-limiting and worth it — .finally() below
+				// still invalidates the board query, and the feeds poll on their own
+				// 60s interval — where invalidating from .finally() wasted a full
+				// cross-board read after every refused write.
 				invalidateCrossBoardFeeds(queryClient)
-			})
-			.catch((err) => {
+			},
+			// Second argument, deliberately, rather than a chained .catch(): an
+			// onRejected passed to .then() sees only the request's own failure. A
+			// chained .catch() would ALSO catch a throw out of the success handler
+			// above and paint "Failed to update the card." over a write that
+			// actually succeeded.
+			(err) => {
 				shortcutError.value =
 					err?.response?.data?.error || t('kanso', 'Failed to update the card.')
 			})
@@ -1737,10 +1749,13 @@ function handleKeydown(e) {
 				// resolves its card id lazily inside onError/onSettled, so a j/k
 				// focus move mid-PATCH would roll back the wrong card. The plain
 				// promise chain here closes over the id captured at keypress.
-				// SUCCESS path, not .finally(), for the same reason as 'd' (#9978).
+				// SUCCESS path, not .finally(), for the same reason as 'd' (#9978),
+				// and with the same trade recorded there.
 				invalidateCrossBoardFeeds(queryClient)
-			})
-			.catch((err) => {
+			},
+			// onRejected as .then()'s second argument, not a chained .catch() —
+			// see the 'd' branch above.
+			(err) => {
 				shortcutError.value =
 					err?.response?.data?.error || t('kanso', 'Failed to set priority.')
 			})

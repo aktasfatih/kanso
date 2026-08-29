@@ -176,6 +176,36 @@ test('an isolated edit after the window still refetches the View feed at once', 
 		'a lone edit outside the burst window must not be deferred')
 })
 
+test('a backwards clock step cannot park the trailing refetch past the window', async () => {
+	// The burst window is measured with Date.now(), which is NOT monotonic: an
+	// NTP correction or a resumed VM can step it backwards. That makes `elapsed`
+	// negative, and an unclamped `THROTTLE - elapsed` would arm the trailing timer
+	// for the whole size of the jump. Every later call then takes the "a trailing
+	// refetch is already scheduled" early-out, so the View feed stops invalidating
+	// on mutations entirely until that timer finally fires — a minute here, but as
+	// long as the clock jumped in the field.
+	const { invalidateCrossBoardFeeds: invalidate, VIEW_FEED_INVALIDATE_THROTTLE: window }
+		= await freshQueryKeys()
+	const client = recordingClient()
+	const realNow = Date.now
+
+	try {
+		invalidate(client) // leading edge — stamps the wall clock
+		assert.equal(viewFeedHits(client), 1)
+
+		Date.now = () => realNow() - 60_000 // the clock jumps a minute backwards
+		invalidate(client) // …so this call computes a negative `elapsed`
+	} finally {
+		Date.now = realNow
+	}
+
+	await sleep(window * 3)
+
+	assert.equal(viewFeedHits(client), 2,
+		'the trailing refetch must still land within the window after a backwards '
+		+ 'clock step — an unclamped delay silently disables View feed invalidation')
+})
+
 test('the burst window is short enough to read as instant', async () => {
 	const { VIEW_FEED_INVALIDATE_THROTTLE: window } = await freshQueryKeys()
 

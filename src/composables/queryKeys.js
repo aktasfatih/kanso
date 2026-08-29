@@ -159,13 +159,19 @@ function invalidateViewFeed(queryClient) {
 	if (viewFeedTrailingTimer !== null) {
 		return
 	}
+	// The delay is CLAMPED to the window. `elapsed` comes from the wall clock,
+	// which can step BACKWARDS (an NTP correction, a suspended VM resuming), and a
+	// negative `elapsed` would otherwise arm this timer for the whole size of the
+	// jump. Every later call would then take the "already scheduled" early-out
+	// above, so the View feed would simply stop invalidating on mutations until
+	// the timer finally fired.
 	viewFeedTrailingTimer = setTimeout(() => {
 		viewFeedTrailingTimer = null
 		viewFeedLastInvalidate = Date.now()
 		const client = viewFeedPendingClient
 		viewFeedPendingClient = null
 		client.invalidateQueries({ queryKey: VIEW_CARDS_QUERY_KEY })
-	}, VIEW_FEED_INVALIDATE_THROTTLE - elapsed)
+	}, Math.min(VIEW_FEED_INVALIDATE_THROTTLE, Math.max(0, VIEW_FEED_INVALIDATE_THROTTLE - elapsed)))
 	// Node's timer object only - a browser setTimeout returns a number.
 	viewFeedTrailingTimer.unref?.()
 }
