@@ -570,17 +570,22 @@ class ViewServiceTest extends TestCase {
 	/**
 	 * The filter runs BEFORE the sort, so the sort orders the matching set. Both
 	 * still run after the ACL loop.
+	 *
+	 * The rows are deliberately seeded so the sorted answer REVERSES fixture order:
+	 * alice owns 1:'cherry' and 3:'apple', so an unsorted (or mis-sorted) pass
+	 * returns [1, 3] and only a real `title asc` returns [3, 1]. Sorting by title
+	 * rather than id also keeps this honest if the seed order ever changes.
 	 */
 	public function testFindMineSortsTheFilteredSet(): void {
 		$this->seedFeed([1 => ['rows' => [
-			['id' => 1, 'title' => 'banana', 'owner' => 'alice'],
-			['id' => 2, 'title' => 'apple', 'owner' => 'bob'],
-			['id' => 3, 'title' => 'cherry', 'owner' => 'alice'],
+			['id' => 1, 'title' => 'cherry', 'owner' => 'alice'],
+			['id' => 2, 'title' => 'banana', 'owner' => 'bob'],
+			['id' => 3, 'title' => 'apple', 'owner' => 'alice'],
 		]]]);
 
 		$result = $this->service->findMine('alice', 'title', 'asc', ViewFilter::fromQuery(['fo' => 'alice']));
 
-		self::assertSame([1, 3], $this->idsOf($result));
+		self::assertSame([3, 1], $this->idsOf($result));
 		self::assertSame(2, $result['total']);
 	}
 

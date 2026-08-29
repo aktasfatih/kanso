@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Controller\ViewController;
 use OCA\Kanso\Service\ViewFilter;
 use PHPUnit\Framework\TestCase;
 
@@ -30,6 +31,9 @@ class ViewFilterTest extends TestCase {
 	/** @var array{now: int, cards: list<array<string, mixed>>, cases: list<array{name: string, filter: array<string, mixed>, expected: list<int>}>} */
 	private static array $fixture;
 
+	/** @var array<string, string>|null memoized {@see self::wireKeys()} */
+	private static ?array $wireKeys = null;
+
 	public static function setUpBeforeClass(): void {
 		parent::setUpBeforeClass();
 		$raw = file_get_contents(__DIR__ . '/../../fixtures/board-filter-parity.json');
@@ -41,6 +45,48 @@ class ViewFilterTest extends TestCase {
 	}
 
 	/**
+	 * The dimension -> short-key map, PARSED FROM THE ONE REAL SOURCE: the body of
+	 * `filterToQuery()` in src/composables/useBoardFilters.js.
+	 *
+	 * It used to be a hand-copied literal here, and that copy was the hole. Rename a
+	 * short key symmetrically in `filterToQuery()` + `queryToFilter()` and the JS
+	 * runner stays green (its round trip is self-consistent) - while this file kept
+	 * encoding the OLD key, so it stayed green too, and the server silently stopped
+	 * reading that dimension. Deriving the map means the encoder here now emits
+	 * whatever the client emits: rename `fl` to `fll` and PHP sends `fll`,
+	 * {@see ViewFilter::fromQuery()} still reads `fl`, and the first labels case in
+	 * testGoldenFixtureParity() goes red. No extra assertion needed - deleting the
+	 * duplicate copy of the truth is the guard.
+	 *
+	 * @return array<string, string> dimension name => short query key, in emit order
+	 */
+	private static function wireKeys(): array {
+		if (self::$wireKeys !== null) {
+			return self::$wireKeys;
+		}
+		$src = file_get_contents(__DIR__ . '/../../../src/composables/useBoardFilters.js');
+		self::assertIsString($src, 'the client filter composable must be readable');
+
+		$start = strpos($src, 'export function filterToQuery(');
+		$end = strpos($src, 'export function queryToFilter(');
+		self::assertIsInt($start, 'filterToQuery() must still exist in useBoardFilters.js');
+		self::assertIsInt($end, 'queryToFilter() must still exist in useBoardFilters.js');
+		self::assertGreaterThan($start, $end, 'filterToQuery() must precede queryToFilter()');
+		$body = substr($src, $start, $end - $start);
+
+		// Each emit line reads `if (ser.<dimension>…) q.<key> = …`.
+		$count = preg_match_all('/ser\.(\w+)[^\n]*?q\.(\w+) =/', $body, $m, PREG_SET_ORDER);
+		self::assertNotFalse($count, 'the filterToQuery() emit-line pattern must compile');
+		self::assertGreaterThan(0, $count, 'no emit lines parsed out of filterToQuery()');
+
+		$map = [];
+		foreach ($m as $match) {
+			$map[$match[1]] = $match[2];
+		}
+		return self::$wireKeys = $map;
+	}
+
+	/**
 	 * Encode a serialized filter into the flat short-key query the client's
 	 * `filterToQuery()` produces - the exact wire format the feed endpoint reads.
 	 *
@@ -48,29 +94,46 @@ class ViewFilterTest extends TestCase {
 	 * @return array<string, string>
 	 */
 	private static function toQuery(array $serialized): array {
-		$multi = [
-			'labels' => 'fl', 'assignees' => 'fa', 'priorities' => 'fp',
-			'types' => 'ft', 'estimates' => 'fe', 'owners' => 'fo', 'reviews' => 'fr',
-		];
-		$single = [
-			'due' => 'fd', 'done' => 'fs', 'waiting' => 'fw', 'blocked' => 'fb',
-			'checklist' => 'fk', 'startDate' => 'fsd', 'subcard' => 'fsc', 'comments' => 'fcm',
-		];
-
 		$query = [];
-		foreach ($multi as $dimension => $key) {
-			$values = $serialized[$dimension] ?? [];
-			if (is_array($values) && $values !== []) {
-				$query[$key] = implode(',', array_map(static fn ($v): string => (string)$v, $values));
-			}
-		}
-		foreach ($single as $dimension => $key) {
+		foreach (self::wireKeys() as $dimension => $key) {
 			$value = $serialized[$dimension] ?? null;
-			if (is_string($value) && $value !== '') {
+			if (is_array($value)) {
+				if ($value !== []) {
+					$query[$key] = implode(',', array_map(static fn ($v): string => (string)$v, $value));
+				}
+			} elseif (is_string($value) && $value !== '') {
 				$query[$key] = $value;
 			}
 		}
 		return $query;
+	}
+
+	/**
+	 * Every card id in the fixture, in fixture order - what a filter that constrains
+	 * nothing must return. Derived so adding a card to the fixture does not silently
+	 * weaken the tolerance assertions below into a stale subset.
+	 *
+	 * @return list<int>
+	 */
+	private static function allCardIds(): array {
+		return array_map(static fn (array $card): int => (int)$card['id'], self::$fixture['cards']);
+	}
+
+	/**
+	 * The filter's dimensions, taken from {@see ViewFilter}'s own constructor
+	 * signature rather than a literal - so a 16th dimension added to the class
+	 * without a golden case, a wire key, or a controller param turns this red.
+	 * The JS half already derives its list from `createFilterState()`.
+	 *
+	 * @return list<string>
+	 */
+	private static function filterDimensions(): array {
+		$ctor = (new \ReflectionClass(ViewFilter::class))->getConstructor();
+		self::assertNotNull($ctor, 'ViewFilter must declare a constructor');
+		return array_map(
+			static fn (\ReflectionParameter $p): string => $p->getName(),
+			$ctor->getParameters(),
+		);
 	}
 
 	/**
@@ -108,11 +171,7 @@ class ViewFilterTest extends TestCase {
 	 * asserts the mirror image of this.
 	 */
 	public function testTheGoldenFixtureExercisesAllFifteenDimensions(): void {
-		$dimensions = [
-			'labels', 'assignees', 'priorities', 'types', 'estimates', 'owners',
-			'reviews', 'due', 'done', 'waiting', 'blocked', 'checklist',
-			'startDate', 'subcard', 'comments',
-		];
+		$dimensions = self::filterDimensions();
 		self::assertCount(15, $dimensions);
 
 		$covered = [];
@@ -122,6 +181,42 @@ class ViewFilterTest extends TestCase {
 			}
 		}
 		self::assertSame([], array_values(array_diff($dimensions, array_keys($covered))));
+	}
+
+	/**
+	 * The golden fixture pins the two PREDICATES against each other, but it cannot
+	 * see the wire: it feeds `ViewFilter::fromQuery()` an array built in this file.
+	 * The feed endpoint gets its array from the dispatcher, which fills it from
+	 * `cards()`'s DECLARED PARAMETERS ({@see ViewController::cards()}) - so a short
+	 * key with no matching `mixed $fXX = null` param never reaches the filter at
+	 * all. The server then silently stops constraining that dimension, and because
+	 * the client re-filters whatever it receives, nothing looks wrong until an
+	 * account has more readable cards than the feed's cap - the exact regression
+	 * #9862 fixed.
+	 *
+	 * Reflection over the controller signature is the cheap honest guard for that:
+	 * it proves the BINDING, which is the failure mode, without spending a round
+	 * trip per key on the shared e2e backend.
+	 */
+	public function testEveryWireKeyIsBoundOnTheFeedController(): void {
+		$map = self::wireKeys();
+
+		$params = array_map(
+			static fn (\ReflectionParameter $p): string => $p->getName(),
+			(new \ReflectionMethod(ViewController::class, 'cards'))->getParameters(),
+		);
+		foreach ($map as $dimension => $key) {
+			self::assertContains(
+				$key,
+				$params,
+				"the client emits '{$key}' for the '{$dimension}' filter, but ViewController::cards() "
+				. "declares no \${$key} param - the dispatcher will never pass it through",
+			);
+		}
+
+		// …and the map covers exactly the dimensions ViewFilter itself carries, in
+		// the same order. A 16th dimension added on one side only turns this red.
+		self::assertSame(self::filterDimensions(), array_keys($map));
 	}
 
 	/**
@@ -146,7 +241,7 @@ class ViewFilterTest extends TestCase {
 	public function testAnUnknownQueryKeyIsIgnoredAndNeverDropsARow(): void {
 		$filter = ViewFilter::fromQuery(['fzz' => 'from-a-newer-client', 'sortMode' => 'due']);
 		self::assertTrue($filter->isEmpty(), 'an unknown key must impose no constraint');
-		self::assertSame([1, 2, 3, 4, 5], self::survivors($filter), 'an unknown key must never drop a row');
+		self::assertSame(self::allCardIds(), self::survivors($filter), 'an unknown key must never drop a row');
 
 		// And an unknown key alongside a known one leaves the known one intact.
 		$mixed = ViewFilter::fromQuery(['fzz' => 'nonsense', 'fl' => '11']);
@@ -169,7 +264,7 @@ class ViewFilterTest extends TestCase {
 			'fsc' => 'sibling',       // not a sub-card relation
 		]);
 		self::assertTrue($filter->isEmpty());
-		self::assertSame([1, 2, 3, 4, 5], self::survivors($filter));
+		self::assertSame(self::allCardIds(), self::survivors($filter));
 	}
 
 	/**
