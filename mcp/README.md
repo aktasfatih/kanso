@@ -194,7 +194,9 @@ template. Mutations need MANAGE on the board.
 ## Development
 
 ```sh
-uv run pytest      # unit tests (respx-mocked, no live server needed)
+# Unit tests (respx-mocked, no live server needed). Same command CI runs in the
+# `unit-mcp` job: --extra dev pulls pytest, --frozen pins uv.lock exactly.
+uv run --frozen --extra dev pytest
 ```
 
 ## License

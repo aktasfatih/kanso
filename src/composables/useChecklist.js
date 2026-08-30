@@ -12,7 +12,10 @@
  *   4. ALSO patch the board cache's per-card checklist summary so the tile badge
  *      updates immediately without waiting for the settle invalidation.
  *   5. On settled: invalidate the card detail query AND the board query so server
- *      truth eventually wins.
+ *      truth eventually wins — plus, for the three mutations that move the
+ *      {total,done} summary (add / toggle / delete), the cross-board feeds —
+ *      `checklist` is a View filter facet, so a card can enter or leave a
+ *      filtered View on one of them (#9898).
  *
  * Items are sorted by sortKey using plain codepoint string comparison (< / >),
  * which matches the app's lexorank-style keys. Never use localeCompare here.
@@ -37,7 +40,7 @@ import {
 	unassignChecklistItem as apiUnassignChecklistItem,
 	setChecklistItemDue as apiSetChecklistItemDue,
 } from '../services/api.js'
-import { boardQueryKey } from './queryKeys.js'
+import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
@@ -195,6 +198,9 @@ export function useChecklist(cardId, boardId) {
 			queryClient.invalidateQueries({ queryKey: getChecklistKey() })
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Moves the {total,done} summary, and that is a View filter facet, so
+			// the card can enter or leave a filtered View on it (#9898).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
@@ -241,6 +247,9 @@ export function useChecklist(cardId, boardId) {
 			queryClient.invalidateQueries({ queryKey: getChecklistKey() })
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Moves the {total,done} summary, and that is a View filter facet, so
+			// the card can enter or leave a filtered View on it (#9898).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
@@ -323,6 +332,9 @@ export function useChecklist(cardId, boardId) {
 			queryClient.invalidateQueries({ queryKey: getChecklistKey() })
 			queryClient.invalidateQueries({ queryKey: getCardKey() })
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Moves the {total,done} summary, and that is a View filter facet, so
+			// the card can enter or leave a filtered View on it (#9898).
+			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 

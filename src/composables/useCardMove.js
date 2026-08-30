@@ -119,6 +119,22 @@ export function useCardMove(boardId) {
 	}
 
 	function enqueueMove({ cardId, targetStackId, afterCardId, optimisticKey }) {
+		// A NEW GESTURE retires the previous move's banner (#10008) — this is the
+		// only place the clear can safely live. Moves are serialised through the
+		// promise chain below, so clearing on success instead meant: drag A fails,
+		// its revert is painted and its banner raised, then the already-queued
+		// drag B lands a round trip later and wipes the explanation off a revert
+		// the user can still see. Clearing here is ordered by the USER's actions
+		// rather than the server's replies — B's enqueue happened before A failed,
+		// so A's message correctly outlives it — and it needs no extra state.
+		//
+		// Known, deliberately not fixed here: BoardView renders
+		// `moveError || shortcutError`, so clearing moveError can re-expose an
+		// older shortcutError that is still set. Collapsing the two refs into one
+		// action-error ref was considered and ruled out; the banner is
+		// latest-outcome-wins across four writers as it is.
+		lastError.value = null
+
 		// Cancel any in-flight board queries so they don't clobber the optimistic patch
 		queryClient.cancelQueries({ queryKey: getBoardQueryKey() })
 
@@ -142,6 +158,9 @@ export function useCardMove(boardId) {
 					afterCardId: afterCardId ?? null,
 				})
 				reconcileFromServer(updated)
+				// No clear here: see enqueueMove()'s head. A success arriving from
+				// the queue is not a user gesture, and clearing on it wipes an
+				// earlier failure's banner off a revert still on screen.
 			} catch (err) {
 				// 409 = rebalance_required; 403 = review gate; anything else is a generic error
 				const status = err?.response?.status

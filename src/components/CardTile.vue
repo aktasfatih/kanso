@@ -226,7 +226,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, inject, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, watch, onMounted, onUnmounted } from 'vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
@@ -262,6 +262,7 @@ import { formatCardDate } from '../utils/dateDisplay.js'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
 import { useCardFeatures } from '../services/cardFeatures.js'
+import { useBoardCanEdit } from '../services/boardPermissions.js'
 
 const props = defineProps({
 	card: {
@@ -340,15 +341,50 @@ const nestEnabled = inject(NEST_ENABLED, computed(() => false))
 // a surface with no provider (a cross-board View) gets all-enabled.
 const cardFeatures = useCardFeatures()
 
+// Whether the viewer may EDIT this board. A read-only member's move is refused
+// server-side (CardService::move asserts PERMISSION_EDIT), so picking the tile
+// up can only end in a rollback — don't offer the grab at all. Defaults to true
+// on a surface with no provider (a cross-board View), which keeps its drag.
+const canEditBoard = useBoardCanEdit()
+
+// The drag handle is held apart from `cleanup` because it is the one
+// registration that comes and goes: a board ACL change reaches the client on the
+// periodic board refetch, not through a remount, so a one-shot read at mount
+// would leave a promoted member without a grab and a demoted one with a dead
+// one. The drop target is untouched by the flip and stays registered.
+let dragCleanup = () => {}
+
+/** (Re-)wire the tile's drag handle to the current permission. */
+function syncDragHandle() {
+	dragCleanup()
+	// Destroying the draggable means its onDrop will never run, so a flip that
+	// lands mid-drag would latch `card-tile-wrap--dragging` on forever. Clear it
+	// here — the flag belongs to the registration we just tore down.
+	//
+	// Deliberately NOT the pendingRebinds deferral BoardListView uses: that one
+	// defers rebinding a DROP TARGET, because pragmatic only re-evaluates a drop
+	// target on a native dragover, so re-creating one under a parked pointer
+	// silently kills the drop. This is a DRAGGABLE, and the tile's drop target is
+	// left registered through the flip, so the drop still resolves through the
+	// board-level monitorForElements. The only consequence here is the stale
+	// class.
+	isDragging.value = false
+	dragCleanup = () => {}
+	if (!el.value || !canEditBoard.value) return
+	dragCleanup = draggable({
+		element: el.value,
+		getInitialData: () => buildCardDragData(props.card, props.laneKey),
+		onDragStart: () => { isDragging.value = true },
+		onDrop: () => { isDragging.value = false },
+	})
+}
+
+watch(canEditBoard, syncDragHandle)
+
 onMounted(() => {
 	if (!el.value) return
+	syncDragHandle()
 	cleanup = combine(
-		draggable({
-			element: el.value,
-			getInitialData: () => buildCardDragData(props.card, props.laneKey),
-			onDragStart: () => { isDragging.value = true },
-			onDrop: () => { isDragging.value = false },
-		}),
 		dropTargetForElements({
 			element: el.value,
 			canDrop: ({ source }) => source.data.type === 'card' && source.data.cardId !== props.card.id,
@@ -372,6 +408,7 @@ onMounted(() => {
 
 onUnmounted(() => {
 	cleanup()
+	dragCleanup()
 })
 
 // Resolve label objects from the labelsById map for the card's assigned labelIds

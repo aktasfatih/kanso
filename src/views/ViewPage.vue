@@ -26,7 +26,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div class="view-page__controls">
 				<!-- Filter editor: the SAME progressive filter control the board uses
 				     (#3815 reuses useBoardFilters + BoardFilterBar). Editing the state
-				     re-filters live; the save button persists it to the View. -->
+				     re-filters the loaded rows live AND refetches the feed with the
+				     filter applied server-side (#9862); the save button persists it to
+				     the View. `participants` is the server-supplied cross-board uid
+				     vocabulary.
+				     `labels` is deliberately NOT passed, so the label facet stays
+				     hidden in a View. Label ids are board-scoped and COLLIDE across
+				     boards (see ViewService.php:139-144): the envelope's union is keyed
+				     by id, so board A's label 5 "Bug" and board B's label 5 "Urgent"
+				     become one chip (last board wins) while the predicate matches the
+				     bare id — picking "Bug" would return the other board's "Urgent"
+				     cards. Wrong results are worse than a missing facet; a
+				     board-qualified label identity is follow-up work.
+				     `estimate-scale` is deliberately not passed either — an estimate
+				     scale is board-scoped and a cross-board View can span two of them. -->
 				<BoardFilterBar
 					:state="filterState"
 					:participants="participants"
@@ -136,8 +149,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Resolved view: an optional truncation notice, then the chosen display. -->
 		<template v-else>
-			<!-- Honest truncation notice: the readable set exceeded the server cap,
-			     so the feed carries only the first N of M cards (no silent
+			<!-- Honest truncation notice: the MATCHING set exceeded the server cap,
+			     so the feed carries only the first N of M matches (no silent
 			     truncation). -->
 			<div
 				v-if="capped"
@@ -214,6 +227,7 @@ import {
 	serializeFilter,
 	applyFilter,
 	makePredicate,
+	filterToQuery,
 } from '../composables/useBoardFilters.js'
 import { groupCardsByField, VIEW_GROUP_BY } from '../composables/useSwimlanes.js'
 
@@ -267,8 +281,19 @@ const sortMenuName = computed(() => (sortMode.value === 'default'
 	? SORT_LABELS.default
 	: `${SORT_LABELS[sortMode.value]} ${sortDir.value === 'asc' ? '↑' : '↓'}`))
 
+// The live, editable filter state (the reused board filter). Declared up here
+// because - like the sort - it is part of the feed query's key: the SAME filter
+// travels to the server, where it runs before the feed's hard cap so the cap
+// slices the matching set rather than the first window of the readable set
+// (#9862). It is still applied client-side over the rows that come back, so
+// editing a chip re-filters the cached rows on the same tick and the refetch
+// only widens the pool underneath - no debounce, no loading flash.
+// It is seeded from the saved View's blob by the `view` watch further down.
+const filterState = createFilterState()
+const filterQuery = computed(() => filterToQuery(serializeFilter(filterState)))
+
 const { data: viewsData, save, rename } = useViews()
-const { data: cardsData, isLoading, isError } = useViewCards(sort)
+const { data: cardsData, isLoading, isError } = useViewCards(sort, filterQuery)
 
 const view = computed(() => (viewsData.value ?? []).find((v) => String(v.id) === String(props.id)) ?? null)
 
@@ -314,10 +339,9 @@ function setDisplay(mode) {
 	display.value = mode
 }
 
-// The live, editable filter state (reused board filter). Seeded from the saved
-// View's opaque blob and re-seeded whenever the resolved View changes - and the
-// display mode + group-by are seeded from the View at the same time.
-const filterState = createFilterState()
+// Seed the filter state from the saved View's opaque blob, re-seeded whenever
+// the resolved View changes - and the display mode + group-by are seeded from
+// the View at the same time.
 watch(view, (v) => {
 	applyFilter(filterState, v ? v.filter : {})
 	if (v) {
@@ -333,12 +357,14 @@ watch(view, (v) => {
 
 const cards = computed(() => cardsData.value?.cards ?? [])
 
-// Honest truncation hint: when the readable set exceeds the server's hard cap the
-// feed carries only the first `limit` of `total` cards. Surface that rather than
-// silently dropping rows (house rule: no silent truncation).
+// Honest truncation hint: when the MATCHING set exceeds the server's hard cap the
+// feed carries only the first `limit` of `total` matches. `total` counts matching
+// cards, not readable ones (#9862 - the filter runs server-side before the cap),
+// so narrowing the filter genuinely brings the number down. Surface that rather
+// than silently dropping rows (house rule: no silent truncation).
 const capped = computed(() => cardsData.value?.capped === true)
 const cappedHint = computed(() =>
-	t('kanso', 'Showing the first {shown} of {total} cards — refine your filter to see the rest.', {
+	t('kanso', 'Showing the first {shown} of {total} matching cards — refine your filter to see the rest.', {
 		shown: cardsData.value?.limit ?? cards.value.length,
 		total: cardsData.value?.total ?? cards.value.length,
 	}),
@@ -351,10 +377,19 @@ const filteredCards = computed(() => {
 	return cards.value.filter(predicate)
 })
 
-// Assignee display names + board titles for the group headers, derived from the
-// loaded cross-board cards (no extra request).
+// Assignee display names + board titles for the group headers (no extra request).
+//
+// The uid vocabulary comes from the envelope's `participants`, which the server
+// accumulates across the whole readable set BEFORE applying the filter. Deriving
+// it from the returned rows instead would make it self-narrowing now that the
+// server filters: filter to alice and the facet would collapse to alice, so you
+// could never add bob - and at zero matches the facet would vanish outright
+// (BoardFilterBar hides it on an empty participants list), leaving no way back.
+// The row-derived pass is kept as a fallback so an older/cached envelope without
+// `participants` still renders group headers.
 const nameByUid = computed(() => {
 	const m = new Map()
+	for (const uid of cardsData.value?.participants ?? []) if (!m.has(uid)) m.set(uid, uid)
 	for (const c of cards.value) {
 		for (const uid of c.assigneeIds || []) if (!m.has(uid)) m.set(uid, uid)
 		if (c.owner && !m.has(c.owner)) m.set(c.owner, c.owner)
@@ -371,7 +406,8 @@ const groups = computed(() =>
 	groupCardsByField(groupBy.value, filteredCards.value, { nameByUid: nameByUid.value, titleByBoard: titleByBoard.value }),
 )
 
-// Cross-board assignee facet for the filter control: uids seen across the feed.
+// Cross-board assignee/owner facet for the filter control — the server-supplied
+// vocabulary above, so it stays complete however narrow the filter gets.
 const participants = computed(() =>
 	[...nameByUid.value.keys()].map((uid) => ({ uid, displayName: uid })),
 )

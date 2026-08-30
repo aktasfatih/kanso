@@ -19,25 +19,36 @@ import { MY_WORK_POLL_INTERVAL, VIEW_CARDS_QUERY_KEY } from './queryKeys.js'
  * window, so focus refetch never fires there), card mutations invalidate
  * VIEW_CARDS_QUERY_KEY from their settle phase via invalidateCrossBoardFeeds.
  *
- * `data` is the server envelope `{ cards, capped, total, limit }` - `cards` is
- * hard-capped server-side to bound this single unbounded feed; `capped`/`total`
- * let the surface honestly report when it shows only the first N of M cards.
+ * `data` is the server envelope `{ cards, labels, participants, capped, total,
+ * limit }` - `cards` is hard-capped server-side to bound this single unbounded
+ * feed; `capped`/`total` let the surface honestly report when it shows only the
+ * first N of M matching cards.
  *
- * The View's SORT is the one part of a View the server acts on: it is applied
- * before that cap (so a sorted View starts at the true first row, not the first
- * row of an arbitrary window), which makes the ordering part of the cache
- * identity - hence the sort mode + direction on the query key. Changing the sort
- * therefore refetches; `placeholderData` keeps the previous rows on screen for
- * that beat instead of flashing the loading state.
+ * The View's SORT and FILTER are both applied server-side, before that cap - the
+ * sort so a sorted View starts at the true first row, the filter (#9862) so the
+ * cap slices the MATCHING set instead of the first window of the readable set.
+ * Both therefore belong to the cache identity, hence sort mode + direction + the
+ * flat filter query object on the key. Changing either refetches;
+ * `placeholderData` keeps the previous rows on screen for that beat instead of
+ * flashing the loading state - which is also what keeps chip editing feeling
+ * instant: the client predicate re-filters those cached rows on the same tick,
+ * and the refetch only widens the pool underneath.
  *
  * @param {object|import('vue').Ref<object>} [sort] the active `{ mode, dir }`
+ * @param {object|import('vue').Ref<object>} [filter] the active filter as flat
+ *   short-key params (from `filterToQuery(serializeFilter(state))`)
  */
-export function useViewCards(sort) {
+export function useViewCards(sort, filter) {
 	const sortMode = computed(() => unref(sort)?.mode ?? 'default')
 	const sortDir = computed(() => unref(sort)?.dir ?? 'asc')
+	const filterQuery = computed(() => unref(filter) ?? {})
 	return useQuery({
-		queryKey: [...VIEW_CARDS_QUERY_KEY, sortMode, sortDir],
-		queryFn: () => apiGetViewCards({ sortMode: sortMode.value, sortDir: sortDir.value }),
+		queryKey: [...VIEW_CARDS_QUERY_KEY, sortMode, sortDir, filterQuery],
+		queryFn: () => apiGetViewCards({
+			sortMode: sortMode.value,
+			sortDir: sortDir.value,
+			filter: filterQuery.value,
+		}),
 		placeholderData: (previous) => previous,
 		refetchOnWindowFocus: true,
 		refetchOnMount: 'always',

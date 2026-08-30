@@ -99,3 +99,120 @@ test('main.js wires the realtime path to the narrow invalidator only', async () 
 		'main.js must not put the View feed on the realtime path — that is the #9859 regression',
 	)
 })
+
+// ── #9981 — the mutation-side burst guard ────────────────────────────────────
+//
+// invalidateCrossBoardFeeds is called from ~20 mutation settle sites. With the
+// card overlay open ON a View, ViewPage stays mounted, so ['view-cards'] is an
+// ACTIVE query and every one of those calls used to trigger a full cross-board
+// refetch. Ticking five checklist items = five of the heaviest reads in the app.
+//
+// The guard is leading-edge + trailing-debounce, and BOTH halves matter: the
+// leading edge is what keeps the View tile repainting on the first edit (the
+// property tests/e2e/view-checklist-live.spec.js asserts in a browser), the
+// trailing edge is what collapses the rest of the burst.
+//
+// The throttle keeps burst state in module scope, so each test below imports its
+// own fresh copy of the module (a unique ?burst= makes Node treat it as a
+// distinct module) rather than leaking a hot window into its neighbours.
+
+let burstCounter = 0
+/** A fresh, un-warmed copy of queryKeys.js with its own burst state. */
+function freshQueryKeys() {
+	return import(`../../src/composables/queryKeys.js?burst=${++burstCounter}`)
+}
+
+/** Count of view-cards invalidations recorded by a recordingClient. */
+function viewFeedHits(client) {
+	return client.invalidated.filter((k) => k === 'view-cards').length
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+test('a burst of mutations refetches the View feed once, immediately', async () => {
+	const { invalidateCrossBoardFeeds: invalidate } = await freshQueryKeys()
+	const client = recordingClient()
+
+	for (let i = 0; i < 5; i++) invalidate(client)
+
+	// Leading edge only, and it already fired — synchronously, before any await.
+	assert.equal(viewFeedHits(client), 1,
+		'five settle calls in one tick must not be five cross-board reads')
+	// The cheap per-user feeds are deliberately NOT throttled: 5 calls × 3 keys.
+	assert.equal(client.invalidated.filter((k) => k === 'my-cards').length, 5,
+		'the My Work feeds must stay immediate — only the heavy query is guarded')
+})
+
+test('the burst settles with exactly one catch-up refetch', async () => {
+	const { invalidateCrossBoardFeeds: invalidate, VIEW_FEED_INVALIDATE_THROTTLE: window }
+		= await freshQueryKeys()
+	const client = recordingClient()
+
+	for (let i = 0; i < 5; i++) invalidate(client)
+	assert.equal(viewFeedHits(client), 1)
+
+	await sleep(window * 2)
+
+	// Leading + one trailing. The trailing edge is what makes the feed agree with
+	// the LAST edit of the burst, not just the first.
+	assert.equal(viewFeedHits(client), 2,
+		'the burst must settle on exactly one catch-up refetch, not one per tick')
+})
+
+test('an isolated edit after the window still refetches the View feed at once', async () => {
+	const { invalidateCrossBoardFeeds: invalidate, VIEW_FEED_INVALIDATE_THROTTLE: window }
+		= await freshQueryKeys()
+	const client = recordingClient()
+
+	invalidate(client)
+	assert.equal(viewFeedHits(client), 1)
+
+	await sleep(window * 2)
+
+	// A single edit is not a burst: the leading edge must fire on the spot, or
+	// the View tile behind the overlay stops repainting promptly.
+	invalidate(client)
+	assert.equal(viewFeedHits(client), 2,
+		'a lone edit outside the burst window must not be deferred')
+})
+
+test('a backwards clock step cannot park the trailing refetch past the window', async () => {
+	// The burst window is measured with Date.now(), which is NOT monotonic: an
+	// NTP correction or a resumed VM can step it backwards. That makes `elapsed`
+	// negative, and an unclamped `THROTTLE - elapsed` would arm the trailing timer
+	// for the whole size of the jump. Every later call then takes the "a trailing
+	// refetch is already scheduled" early-out, so the View feed stops invalidating
+	// on mutations entirely until that timer finally fires — a minute here, but as
+	// long as the clock jumped in the field.
+	const { invalidateCrossBoardFeeds: invalidate, VIEW_FEED_INVALIDATE_THROTTLE: window }
+		= await freshQueryKeys()
+	const client = recordingClient()
+	const realNow = Date.now
+
+	try {
+		invalidate(client) // leading edge — stamps the wall clock
+		assert.equal(viewFeedHits(client), 1)
+
+		Date.now = () => realNow() - 60_000 // the clock jumps a minute backwards
+		invalidate(client) // …so this call computes a negative `elapsed`
+	} finally {
+		Date.now = realNow
+	}
+
+	await sleep(window * 3)
+
+	assert.equal(viewFeedHits(client), 2,
+		'the trailing refetch must still land within the window after a backwards '
+		+ 'clock step — an unclamped delay silently disables View feed invalidation')
+})
+
+test('the burst window is short enough to read as instant', async () => {
+	const { VIEW_FEED_INVALIDATE_THROTTLE: window } = await freshQueryKeys()
+
+	// Bounded on both sides on purpose. Too long and the trailing refetch stops
+	// feeling live (view-checklist-live.spec.js would need a longer wait — the
+	// signal that this number, not the spec, is wrong). Too short and it stops
+	// collapsing anything.
+	assert.ok(window >= 200 && window <= 600,
+		`View feed burst window out of range: ${window}ms`)
+})

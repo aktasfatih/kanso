@@ -44,6 +44,13 @@ use OCP\IUserManager;
  * appended to the board's change log, and a single realtime push fires after the
  * commit so the board updates live.
  *
+ * Because the block is anchored past the stack's CURRENT tail key, a long-lived
+ * stack whose keys have already grown to the varchar(64) wall would otherwise
+ * fail the whole import with a 409 `rebalance_required` that only an `occ`
+ * command could clear. Instead the import self-heals: the overflow is caught,
+ * the target stack is rebalanced to short keys ({@see CardService::rebalanceStack})
+ * and the import is replayed ONCE - see {@see self::import}.
+ *
  * Column mapping (0-based source column indexes chosen by the caller):
  *   - title       REQUIRED. A row with a blank title is skipped, not fatal.
  *   - description optional.
@@ -88,6 +95,9 @@ class CsvImportService {
 		private SortKeyService $sortKeyService,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		// Only for rebalanceStack(): the recovery when the target stack's tail
+		// sort key is already at the varchar(64) wall (see import()).
+		private CardService $cardService,
 		private IUserManager $userManager,
 		private IDBConnection $db,
 	) {
@@ -101,10 +111,15 @@ class CsvImportService {
 	 * that field is not mapped); `title` MUST be mapped. When $hasHeader is true
 	 * the first parsed row is treated as headers and skipped.
 	 *
+	 * If the target stack's existing keys are already at the sort-key wall the
+	 * first attempt overflows before writing anything; the stack is then
+	 * rebalanced and the import replayed once (see below).
+	 *
 	 * @param array{title: int, description?: ?int, duedate?: ?int, labels?: ?int, assignees?: ?int} $mapping
 	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int}
 	 * @throws InvalidInputException on an oversized/malformed CSV, a missing title mapping, or too many rows
 	 * @throws NotPermittedException if the actor lacks EDIT on the board
+	 * @throws \OverflowException if the sort keys still overflow after the rebalance
 	 */
 	public function import(
 		string $rawDocument,
@@ -141,13 +156,22 @@ class CsvImportService {
 			}
 
 			rewind($handle);
-			$this->db->beginTransaction();
 			try {
-				$result = $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
-				$this->db->commit();
-			} catch (\Throwable $e) {
-				$this->db->rollBack();
-				throw $e;
+				$result = $this->attempt($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
+			} catch (\OverflowException) {
+				// The stack's tail key is already at MAX_KEY_LENGTH, so no block of
+				// keys fits past it: appendSequence() threw BEFORE the first insert
+				// and attempt() has already rolled its transaction back - nothing was
+				// written and, critically, NO transaction is open at this point.
+				// That is what makes the recovery safe: rebalanceStack() opens its
+				// OWN transaction and takes SELECT ... FOR UPDATE locks on the
+				// stack's rows, so it must never be called from inside the import's
+				// transaction. Reset the stack to short keys here, between attempts,
+				// then replay the import ONCE (still all-or-nothing). A second
+				// overflow is genuine and propagates as the 409 it always was.
+				$this->cardService->rebalanceStack($stackId);
+				rewind($handle);
+				$result = $this->attempt($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
 			}
 		} finally {
 			fclose($handle);
@@ -159,6 +183,30 @@ class CsvImportService {
 			$this->changeNotifier->pushBoardChanged($boardId);
 		}
 		return $result;
+	}
+
+	/**
+	 * ONE all-or-nothing import attempt: {@see rebuild} wrapped in a single
+	 * transaction that is rolled back completely on any failure.
+	 *
+	 * It always returns with NO transaction open - committed on success, rolled
+	 * back on failure - which is precisely what lets {@see import} rebalance the
+	 * target stack between attempts without nesting inside this transaction.
+	 *
+	 * @param resource $handle a rewound CSV stream positioned at the first record
+	 * @param array{title: int, description?: ?int, duedate?: ?int, labels?: ?int, assignees?: ?int} $mapping
+	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int}
+	 */
+	private function attempt($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
+		$this->db->beginTransaction();
+		try {
+			$result = $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
+			$this->db->commit();
+			return $result;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 	}
 
 	/**

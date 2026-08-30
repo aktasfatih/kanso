@@ -99,6 +99,84 @@ export function invalidateMyWork(queryClient) {
 }
 
 /**
+ * Burst window for the View feed invalidation (#9981).
+ *
+ * The sibling of main.js's MY_WORK_SIGNAL_THROTTLE, and the same policy read
+ * from the other end: the View feed is the heaviest query in the app, so
+ * neither the realtime cadence nor a mutation burst may drive it once per tick.
+ * main.js throttles the REALTIME funnel (30s, and to the narrow invalidator);
+ * this throttles the MUTATION funnel.
+ *
+ * Much shorter than the realtime one because the trigger is different in kind.
+ * A push event is someone else's change, invisible until it lands, so 30s of
+ * staleness is a fair trade. Here the user is typing in an overlay ON the View,
+ * so the feed must repaint at human speed - hence leading edge + a short
+ * trailing window, not a long throttle.
+ *
+ * @type {number}
+ */
+export const VIEW_FEED_INVALIDATE_THROTTLE = 400
+
+// Burst state for invalidateViewFeed. Module-scoped, like main.js's
+// lastMyWorkSignal: there is exactly one View feed and one QueryClient per app.
+let viewFeedLastInvalidate = 0
+let viewFeedTrailingTimer = null
+let viewFeedPendingClient = null
+
+/**
+ * Invalidate the View feed at most twice per burst: immediately on the first
+ * call, then once more when the burst settles (#9981).
+ *
+ * Why this is needed at all: ticking a checklist item, toggling a label and
+ * setting a priority all settle through invalidateCrossBoardFeeds, and roughly
+ * twenty call sites do. When the card overlay was opened FROM a View, ViewPage
+ * stays mounted behind it, so ['view-cards'] is an ACTIVE query - the only kind
+ * invalidateQueries actually refetches. Five quick edits therefore meant five
+ * full cross-board reads. And TanStack does not absorb them: invalidateQueries
+ * defaults to cancelRefetch:true, but getViewCards is a plain axios GET with no
+ * AbortSignal, so a "cancelled" refetch's request still runs to completion
+ * server-side. N ticks really were N round trips.
+ *
+ * LEADING EDGE FIRES IMMEDIATELY - do not turn this into a plain debounce. The
+ * first edit of a burst is the one the user is watching for, and the View tile
+ * behind the overlay has to repaint on it (tests/e2e/view-checklist-live.spec.js
+ * asserts exactly that). The trailing edge then folds the rest of the burst into
+ * a single catch-up refetch, so the feed still ends up consistent with the last
+ * edit.
+ *
+ * @param {import('@tanstack/vue-query').QueryClient} queryClient
+ */
+function invalidateViewFeed(queryClient) {
+	const elapsed = Date.now() - viewFeedLastInvalidate
+	if (viewFeedTrailingTimer === null && elapsed >= VIEW_FEED_INVALIDATE_THROTTLE) {
+		viewFeedLastInvalidate = Date.now()
+		queryClient.invalidateQueries({ queryKey: VIEW_CARDS_QUERY_KEY })
+		return
+	}
+	// Inside the window: remember the client and make sure exactly one trailing
+	// refetch is scheduled. Later calls in the same burst are absorbed by it.
+	viewFeedPendingClient = queryClient
+	if (viewFeedTrailingTimer !== null) {
+		return
+	}
+	// The delay is CLAMPED to the window. `elapsed` comes from the wall clock,
+	// which can step BACKWARDS (an NTP correction, a suspended VM resuming), and a
+	// negative `elapsed` would otherwise arm this timer for the whole size of the
+	// jump. Every later call would then take the "already scheduled" early-out
+	// above, so the View feed would simply stop invalidating on mutations until
+	// the timer finally fired.
+	viewFeedTrailingTimer = setTimeout(() => {
+		viewFeedTrailingTimer = null
+		viewFeedLastInvalidate = Date.now()
+		const client = viewFeedPendingClient
+		viewFeedPendingClient = null
+		client.invalidateQueries({ queryKey: VIEW_CARDS_QUERY_KEY })
+	}, Math.min(VIEW_FEED_INVALIDATE_THROTTLE, Math.max(0, VIEW_FEED_INVALIDATE_THROTTLE - elapsed)))
+	// Node's timer object only - a browser setTimeout returns a number.
+	viewFeedTrailingTimer.unref?.()
+}
+
+/**
  * Invalidate EVERY cross-board feed: the three My Work feeds plus the View feed.
  *
  * This is the one to call from the settle phase of a card mutation. A View is a
@@ -129,9 +207,13 @@ export function invalidateMyWork(queryClient) {
  * the feed itself - once filtering moves server-side, a client-side field patch
  * cannot know whether the card still belongs in the filtered set.
  *
+ * The View half is burst-collapsed (see invalidateViewFeed); the My Work half is
+ * NOT, and must stay immediate - three cheap per-user GETs, as the note on
+ * invalidateMyWork says. Only the heavy query needs the guard.
+ *
  * @param {import('@tanstack/vue-query').QueryClient} queryClient
  */
 export function invalidateCrossBoardFeeds(queryClient) {
 	invalidateMyWork(queryClient)
-	queryClient.invalidateQueries({ queryKey: VIEW_CARDS_QUERY_KEY })
+	invalidateViewFeed(queryClient)
 }

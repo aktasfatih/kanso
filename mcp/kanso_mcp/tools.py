@@ -10,7 +10,7 @@ payload is JSON-serializable for the MCP transport.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP
 

@@ -16,6 +16,7 @@ use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardSummaryService;
+use OCA\Kanso\Service\ViewFilter;
 use OCA\Kanso\Service\ViewService;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -163,9 +164,14 @@ class ViewServiceTest extends TestCase {
 
 	/**
 	 * The scale guard (#3892): the feed is a SINGLE unbounded payload, so it is
-	 * hard-capped. Whatever the readable-set size, `cards` never exceeds
-	 * MAX_CARDS, `total` reports the true pre-cap count, and `capped` is honest -
-	 * the cap is applied AFTER the per-board ACL loop, so it moves no leak boundary.
+	 * hard-capped. Whatever the set size, `cards` never exceeds MAX_CARDS, `total`
+	 * reports the true pre-cap count, and `capped` is honest - the cap is applied
+	 * AFTER the per-board ACL loop, so it moves no leak boundary.
+	 *
+	 * Post-filter semantics (#9862): `total` counts MATCHING rows, so with no
+	 * filter - as here - it is still the whole readable-set count. The filtered
+	 * counterparts live in testFindMineAppliesTheFilterBeforeTheCap() and
+	 * testFindMineReportsTheMatchingTotalNotTheReadableTotal() below.
 	 */
 	public function testFindMineCapsThePayloadAndReportsTotalWhenReadableSetIsHuge(): void {
 		$overCap = ViewService::MAX_CARDS + 250;
@@ -386,6 +392,201 @@ class ViewServiceTest extends TestCase {
 		$boardIds = array_map(static fn (array $c): int => (int)$c['boardId'], $rows);
 		self::assertSame([3], array_values(array_unique($boardIds)));
 		self::assertNotContains(7, $boardIds);
+	}
+
+	// ── The View filter (#9862) ──────────────────────────────────────────────────
+
+	/**
+	 * THE bug this filter exists to fix. The feed is hard-capped, and the filter
+	 * used to run only in the browser - so on an account with more readable cards
+	 * than the cap, a narrow filter searched ONLY the first MAX_CARDS rows of the
+	 * sorted order and silently missed every match past them.
+	 *
+	 * Asserting that at >5000 rows through the UI is impractical, so it is pinned
+	 * here instead, at the exact seam that was wrong: the readable set is larger
+	 * than the cap and the ONLY matching cards sit at the very END of it, well
+	 * outside the capped window. They come back, which is only possible if the
+	 * filter ran before the slice.
+	 */
+	public function testFindMineAppliesTheFilterBeforeTheCap(): void {
+		$overCap = ViewService::MAX_CARDS + 250;
+		// Every row is owned by 'alice' EXCEPT the last three, which are the only
+		// ones the filter wants - i.e. they are outside the first MAX_CARDS rows of
+		// the default (boardId, id) order the cap slices on.
+		$needles = [$overCap - 2, $overCap - 1, $overCap];
+		$rows = array_map(
+			static fn (int $i): array => [
+				'id' => $i,
+				'owner' => $i > $overCap - 3 ? 'zoe' : 'alice',
+			],
+			range(1, $overCap),
+		);
+		$this->seedFeed([1 => ['rows' => $rows]]);
+
+		$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['fo' => 'zoe']));
+
+		// Pre-fix this returned an empty list: the cap had already thrown these rows
+		// away before any filter could see them.
+		self::assertSame($needles, $this->idsOf($result));
+		self::assertFalse($result['capped'], 'the matching set fits well inside the cap');
+		self::assertSame(3, $result['total'], 'total counts MATCHING cards, not readable ones');
+	}
+
+	/**
+	 * `total` / `capped` describe the MATCHING set, so the "showing the first N of
+	 * M" banner is honest about what refining the filter would actually do. Here
+	 * the matching set is itself larger than the cap.
+	 */
+	public function testFindMineReportsTheMatchingTotalNotTheReadableTotal(): void {
+		$overCap = ViewService::MAX_CARDS + 250;
+		// Half the readable set is done; the filter keeps only the open ones, which
+		// still overflow the cap.
+		$rows = array_map(
+			static fn (int $i): array => ['id' => $i, 'doneAt' => $i % 2 === 0 ? 1700000000 : 0],
+			range(1, 2 * $overCap),
+		);
+		$this->seedFeed([1 => ['rows' => $rows]]);
+
+		$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['fs' => 'open']));
+
+		self::assertTrue($result['capped']);
+		self::assertSame($overCap, $result['total'], 'the matching count, not the 2x readable count');
+		self::assertCount(ViewService::MAX_CARDS, $result['cards']);
+		// …and the window it kept is the head of the MATCHING set (odd ids only).
+		self::assertSame([1, 3, 5], array_slice($this->idsOf($result), 0, 3));
+	}
+
+	/**
+	 * The facet-collapse guard. `participants` is accumulated in the per-board loop
+	 * BEFORE the filter, so the client's assignee/owner facets keep offering
+	 * everyone however narrow the filter gets - including at ZERO matches, where a
+	 * row-derived facet would vanish outright and leave no way to add a second
+	 * person back.
+	 */
+	public function testFindMineShipsTheWholeParticipantVocabularyEvenAtZeroMatches(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'owner' => 'alice', 'assigneeIds' => ['alice']],
+			['id' => 2, 'owner' => 'bob', 'assigneeIds' => ['bob', 'carol']],
+		]]]);
+
+		// A filter nobody matches.
+		$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['fo' => 'nobody']));
+
+		self::assertSame([], $result['cards']);
+		self::assertSame(0, $result['total']);
+		// The facet vocabulary survives the wipe-out, sorted and de-duplicated.
+		self::assertSame(['alice', 'bob', 'carol'], $result['participants']);
+	}
+
+	/** Unfiltered, the same vocabulary is the union across every readable board. */
+	public function testFindMineUnionsParticipantsAcrossReadableBoards(): void {
+		$this->seedFeed([
+			3 => ['rows' => [['id' => 11, 'owner' => 'alice', 'assigneeIds' => ['dave']]]],
+			9 => ['rows' => [['id' => 22, 'owner' => 'bob', 'assigneeIds' => ['alice']]]],
+		]);
+
+		self::assertSame(['alice', 'bob', 'dave'], $this->service->findMine('alice')['participants']);
+	}
+
+	/**
+	 * A NUMERIC uid must survive as a STRING. `participants` is accumulated as an
+	 * array KEY set, and PHP silently coerces a canonical decimal string key to int -
+	 * so a uid like '12345' (routine wherever accounts are provisioned from LDAP
+	 * employee numbers) would be stored as int(12345), come back from array_keys() as
+	 * a number, and ship in the envelope as a JSON number. The client drops non-string
+	 * entries, so that account would disappear from the assignee/owner facet with no
+	 * way to add them back - and at zero matches the facet hides entirely. That is
+	 * precisely the facet self-narrowing this vocabulary exists to prevent, which is
+	 * why the type is pinned here and not just the membership.
+	 */
+	public function testFindMineShipsNumericUidsAsStringsNotNumbers(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'owner' => '12345', 'assigneeIds' => ['67890']],
+			['id' => 2, 'owner' => 'alice', 'assigneeIds' => ['alice']],
+		]]]);
+
+		$participants = $this->service->findMine('alice')['participants'];
+
+		// assertSame is strict: int(12345) would NOT satisfy '12345'.
+		self::assertSame(['12345', '67890', 'alice'], $participants);
+		foreach ($participants as $uid) {
+			self::assertIsString($uid, 'every participant uid must ship as a string');
+		}
+	}
+
+	/**
+	 * The ACL boundary again, this time with a filter active (REQUIRED leak-denial).
+	 * Filtering must never become a shortcut around the per-board permission
+	 * masking: it runs strictly AFTER that loop, over rows the viewer may already
+	 * see, so it can only ever REMOVE rows - never surface one from a board outside
+	 * the readable set, however the filter is spelled.
+	 */
+	public function testFindMineWithAFilterStillNeverQueriesABoardOutsideTheReadableSet(): void {
+		// alice can read board 3 only. Board 7 exists but is absent from findAll().
+		$b3 = $this->board(3, 'Readable');
+		$this->boardService->method('findAll')->with('alice')->willReturn([$b3]);
+		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
+		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
+
+		// Asked ONLY for board 3, under board 3's viewer context - the filter does
+		// not widen, re-run or bypass the query.
+		$this->cardMapper->expects(self::once())
+			->method('findSummariesByBoard')
+			->with(3, $ctx3)
+			->willReturn([$this->summaryCard(11, 3)]);
+		$this->cardSummaryService->method('serialize')
+			->willReturn([['id' => 11, 'owner' => 'mallory', 'assigneeIds' => ['mallory']]]);
+
+		// A filter deliberately shaped to describe the unreadable board's card.
+		$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery([
+			'fo' => 'mallory',
+			'fa' => 'mallory',
+		]));
+
+		$boardIds = array_map(static fn (array $c): int => (int)$c['boardId'], $result['cards']);
+		self::assertSame([3], array_values(array_unique($boardIds)));
+		self::assertNotContains(7, $boardIds, 'a filter must never surface a card from an unreadable board');
+		// The vocabulary is scoped to the readable set too - it cannot become a
+		// side channel for uids seen only on boards alice cannot read.
+		self::assertSame(['mallory'], $result['participants']);
+	}
+
+	/**
+	 * An empty filter (or one whose every value this version doesn't recognise) is a
+	 * no-op: the feed is exactly what it was before the filter shipped. This is the
+	 * tolerance half of the contract - a filter must never be able to blank a View.
+	 */
+	public function testFindMineTreatsAnEmptyOrUnrecognisedFilterAsNoConstraint(): void {
+		$this->seedFeed([1 => ['rows' => [['id' => 1], ['id' => 2], ['id' => 3]]]]);
+
+		self::assertSame([1, 2, 3], $this->idsOf($this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery([]))));
+		// An unknown key and an unrecognised value in a known dimension are both
+		// ignored rather than dropping every row.
+		self::assertSame([1, 2, 3], $this->idsOf($this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['fzz' => 'x', 'fd' => 'someday']))));
+		// …and passing no filter at all is the same thing.
+		self::assertSame([1, 2, 3], $this->idsOf($this->service->findMine('alice')));
+	}
+
+	/**
+	 * The filter runs BEFORE the sort, so the sort orders the matching set. Both
+	 * still run after the ACL loop.
+	 *
+	 * The rows are deliberately seeded so the sorted answer REVERSES fixture order:
+	 * alice owns 1:'cherry' and 3:'apple', so an unsorted (or mis-sorted) pass
+	 * returns [1, 3] and only a real `title asc` returns [3, 1]. Sorting by title
+	 * rather than id also keeps this honest if the seed order ever changes.
+	 */
+	public function testFindMineSortsTheFilteredSet(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'title' => 'cherry', 'owner' => 'alice'],
+			['id' => 2, 'title' => 'banana', 'owner' => 'bob'],
+			['id' => 3, 'title' => 'apple', 'owner' => 'alice'],
+		]]]);
+
+		$result = $this->service->findMine('alice', 'title', 'asc', ViewFilter::fromQuery(['fo' => 'alice']));
+
+		self::assertSame([3, 1], $this->idsOf($result));
+		self::assertSame(2, $result['total']);
 	}
 
 	public function testFindMineEmptyWhenNoReadableBoards(): void {
