@@ -76,7 +76,7 @@ travail en cours et rôles de colonne, une palette de commandes avec
 recherche plein texte, corbeille avec restauration, liens GitHub et webhook,
 et import depuis Deck en un clic.
 	]]></description>
-	<version>0.19.0</version>
+	<version>0.19.1</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>

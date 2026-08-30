@@ -11,6 +11,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.19.1](https://github.com/aktasfatih/kanso/compare/v0.19.0...v0.19.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **board:** a failed card move keeps its explanation until you act again ([5f1e776](https://github.com/aktasfatih/kanso/commit/5f1e776a104dd78acd608bf73b277f5b05b38987))
+* **board:** the done and priority keyboard shortcuts no longer fire for read-only members ([e73af17](https://github.com/aktasfatih/kanso/commit/e73af1760135e6b3a03530118b141f81b7120920))
+* **board:** the error banner clears itself once the next action succeeds ([41a9637](https://github.com/aktasfatih/kanso/commit/41a963705985db9ea8afab0c4f4742476d52891f))
+* hide column actions, Delete column and card drag from read-only members ([ff518ef](https://github.com/aktasfatih/kanso/commit/ff518efde915f1c87d1737cea042234e700bc7f3)), closes [#9897](https://github.com/aktasfatih/kanso/issues/9897)
+* import a CSV into a long-lived column instead of failing with a rebalance error ([73005a1](https://github.com/aktasfatih/kanso/commit/73005a1712c334302f2a54a084902f4087f08aee)), closes [#6180](https://github.com/aktasfatih/kanso/issues/6180)
+* keep numeric usernames in a View's assignee and owner filters ([da47cbc](https://github.com/aktasfatih/kanso/commit/da47cbc39e55557e4c2f7648b065bc1de73a0840))
+* refresh Views and My Work when a checklist item or the priority shortcut changes a card ([c3df899](https://github.com/aktasfatih/kanso/commit/c3df8994dd78f5ac7c128e31a6118dd508d997cd))
+* search every readable card when filtering a View, not just the first 5000 ([c50be5f](https://github.com/aktasfatih/kanso/commit/c50be5f72c9e3bbf347d808e006e27acc5470ec3))
+* **views:** rapid edits in a card opened from a View refresh the feed once, not once per edit ([4d863df](https://github.com/aktasfatih/kanso/commit/4d863dfb754b8503d7c5137073b7ac29405066bf)), closes [#9981](https://github.com/aktasfatih/kanso/issues/9981)
+
 # [0.19.0](https://github.com/aktasfatih/kanso/compare/v0.18.0...v0.19.0) (2026-08-28)
 
 
