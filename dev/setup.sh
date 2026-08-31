@@ -102,8 +102,9 @@ fi
 
 # --- notify_push (realtime push) ---------------------------------------------
 # Optional: the app falls back to delta-polling without it, and the e2e suite
-# doesn't need realtime. Skip in CI (KANSO_SKIP_NOTIFY_PUSH=1) so a flaky/absent
-# appstore release can't fail the whole boot. Only wired for postgres (the
+# doesn't need realtime. CI sets KANSO_SKIP_NOTIFY_PUSH=1 to skip the whole
+# block (no appstore reachable there anyway); when it isn't set, a failed
+# install only warns — see the guard below. Only wired for postgres (the
 # notify_push service only runs under the postgres profile).
 if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ] || [ "$KANSO_DB" != "postgres" ]; then
 	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=${KANSO_SKIP_NOTIFY_PUSH:-0}, db=${KANSO_DB})"
@@ -122,14 +123,38 @@ CONF
 	apache2ctl graceful
 ' 2>/dev/null
 
+# Best-effort install: `occ app:install` needs the container to reach
+# apps.nextcloud.com, which it often can't (no egress, a stale appstore cache,
+# or appstoreenabled=false) — the same wall install-optional-apps.sh side-steps
+# with tarballs. Under `set -eu` a failure here would kill the whole boot, so
+# it only downgrades realtime instead. Everything downstream (including
+# notify_push:setup, which would fail against a missing app) stays inside the
+# success branch.
+notify_push_ready=1
 if ! $OCC app:list | grep -q notify_push; then
-	$OCC app:install notify_push
+	$OCC app:install notify_push || notify_push_ready=0
 fi
-# The daemon talks to Nextcloud as http://nextcloud and sits behind the
-# compose network's apache proxy.
-$OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
-$OCC config:system:set trusted_domains 1 --value nextcloud
-$OCC notify_push:setup http://localhost:8891/push
+
+if [ "$notify_push_ready" = "1" ]; then
+	# The daemon talks to Nextcloud as http://nextcloud and sits behind the
+	# compose network's apache proxy.
+	$OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
+	$OCC config:system:set trusted_domains 1 --value nextcloud
+	$OCC notify_push:setup http://localhost:8891/push
+else
+	echo >&2
+	echo "WARNING: could not install notify_push — continuing without realtime push." >&2
+	echo "  * Kanso works normally; realtime falls back to delta-polling." >&2
+	echo "  * tests/e2e/realtime.spec.js's push test will now FAIL rather than skip" >&2
+	echo "    (it only skips on the env var), so run the suite with" >&2
+	echo "    KANSO_SKIP_NOTIFY_PUSH=1 for a clean local result." >&2
+	echo "  * The usual cause is this container not reaching apps.nextcloud.com," >&2
+	echo "    NOT a missing release: notify_push v1.4.0 supports Nextcloud 30-35." >&2
+	echo "    To side-load it by hand, unpack this into the container's" >&2
+	echo "    custom_apps and re-run:" >&2
+	echo "    https://github.com/nextcloud-releases/notify_push/releases/download/v1.4.0/notify_push-v1.4.0.tar.gz" >&2
+	echo >&2
+fi
 fi
 
 echo

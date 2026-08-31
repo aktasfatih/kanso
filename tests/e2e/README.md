@@ -33,6 +33,13 @@ afterwards. The pins support Nextcloud **34** only, so on a stack booted with
 `NC_VERSION=30..33` the script skips itself and those two specs stay red —
 that's expected, not a regression.
 
+One more spec depends on an optional app: [`realtime.spec.js`](./realtime.spec.js)'s
+push test needs `notify_push`, which `dev/setup.sh` installs from the appstore.
+That install is best-effort — if it printed a `WARNING: could not install
+notify_push`, push is unavailable and the test **fails rather than skips**. Run
+the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and exercise only the
+delta-poll fallback.
+
 ## Shared helpers — use these, don't re-roll them
 
 Every spec imports its plumbing from [`helpers.js`](./helpers.js) instead of
