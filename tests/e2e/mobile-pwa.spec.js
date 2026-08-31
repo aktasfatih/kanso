@@ -72,26 +72,85 @@ test('has an installable web app manifest', async ({ page }) => {
 	expect(manifest.display).toBe('standalone')
 	expect(manifest.start_url).toContain('/apps/kanso/')
 	expect(Array.isArray(manifest.icons) && manifest.icons.length).toBeTruthy()
+
+	// Every icon must actually resolve to an image. A non-empty icons array with
+	// a 404 icon (theming failing to rasterise the app SVG) still leaves the app
+	// UNINSTALLABLE — that regression shipped once and passed the old assertion.
+	for (const icon of manifest.icons) {
+		const iconRes = await page.request.get(new URL(icon.src, BASE).toString())
+		expect(iconRes.status(), `manifest icon ${icon.src}`).toBe(200)
+		expect(iconRes.headers()['content-type'] || '').toMatch(/image\//)
+	}
 })
 
-test('serves the service worker with app scope and registers it', async ({ page }) => {
+test('serves the service worker with app scope and registers it', async ({ page, browserName }) => {
 	// The worker must carry Service-Worker-Allowed so its scope can cover the app.
 	const res = await page.request.get(`${BASE}/index.php/apps/kanso/sw.js`)
 	expect(res.status()).toBe(200)
 	expect(res.headers()['content-type']).toContain('javascript')
 	expect(res.headers()['service-worker-allowed']).toBe('/apps/kanso/')
 
+	// Capture any CSP / failed-fetch errors from here on — the regression below
+	// surfaces as exactly these console messages.
+	// Match the CSP-block signature specifically. A bare "Failed to fetch" also
+	// fires when a reload aborts an in-flight request (a false positive), so key
+	// on the CSP wording that the block actually produces.
+	const swErrors = []
+	const isCspError = (t) => /Content Security Policy|Refused to connect|violates the following|ERR_FAILED/i.test(t)
+	page.on('console', (m) => { const t = m.text(); if (isCspError(t)) swErrors.push(t) })
+	page.on('pageerror', (e) => { if (isCspError(e.message)) swErrors.push('pageerror:' + e.message) })
+
 	// The PWA layer is off under automation by default (it destabilises the
 	// parallel suite); force it on for THIS test so we still cover real
-	// registration. Must be set before the app script runs.
+	// registration + control. Must be set before the app script runs.
 	await page.addInitScript(() => { window.__KANSO_FORCE_PWA__ = true })
 
-	// The app registers the worker on load — wait for it to become active.
-	await gotoBoard(page, state.boardId)
+	// Navigate to the PRETTY app URL (/apps/kanso/), which is what the worker's
+	// scope + the manifest start_url use. gotoBoard() uses /index.php/apps/kanso,
+	// which is OUTSIDE the worker scope, so it would never be controlled.
+	await page.goto(`${BASE}/apps/kanso/`, { waitUntil: 'load' })
 	const registered = await page.waitForFunction(async () => {
 		if (!('serviceWorker' in navigator)) return false
 		const reg = await navigator.serviceWorker.getRegistration()
 		return !!reg
 	}, null, { timeout: 20_000 }).then(() => true).catch(() => false)
 	expect(registered).toBe(true)
+
+	// Registration alone is NOT enough. The CSP bug let the worker register but
+	// blocked every fetch() it made (NC's default default-src 'none' with no
+	// connect-src), so navigations it controlled failed with ERR_FAILED. Assert
+	// the worker actually CONTROLS the page and can fetch through it — the exact
+	// regression, encoded.
+	//
+	// Chromium only: Playwright's WebKit registers + activates the worker but does
+	// NOT reliably set navigator.serviceWorker.controller (a known WebKit-in-
+	// Playwright limitation), so the control+fetch deep-check can't run there.
+	// WebKit still covers the iOS-Safari engine for the layout/manifest/icon/
+	// registration assertions above and below.
+	if (browserName === 'chromium') {
+		// A truthy registration isn't yet ACTIVE — wait for activation, then a
+		// fresh in-scope load is controlled by the worker.
+		const active = await page.waitForFunction(async () => {
+			const reg = await navigator.serviceWorker.getRegistration()
+			return !!(reg && reg.active)
+		}, null, { timeout: 20_000 }).then(() => true).catch(() => false)
+		expect(active).toBe(true)
+
+		let controlled = false
+		for (let i = 0; i < 3 && !controlled; i++) {
+			await page.reload({ waitUntil: 'load' })
+			controlled = await page.evaluate(() => !!navigator.serviceWorker.controller)
+		}
+		expect(controlled).toBe(true)
+
+		// A fetch routed THROUGH the controlled worker must return an HTTP status,
+		// not throw a CSP "Failed to fetch" TypeError.
+		const swFetch = await page.evaluate(async () => {
+			try { const r = await fetch(location.origin + '/apps/kanso/sw.js'); return String(r.status) } catch (e) { return 'THREW:' + e.message }
+		})
+		expect(swFetch).toMatch(/^\d+$/)
+	}
+
+	// No CSP violation must appear on either engine during the forced-PWA session.
+	expect(swErrors, swErrors.join('\n')).toEqual([])
 })
