@@ -29,14 +29,18 @@ use Sabre\VObject\Recur\RRuleIterator;
  * (RFC 5545 RRULE). Rules are board-automation config (like labels and
  * auto-archive rules), so creating/editing them needs MANAGE and listing needs
  * READ. The schedule is expanded with sabre/vobject's {@see RRuleIterator},
- * anchored at the rule's `createdAt` (its DTSTART), and the next fire time is
- * cached in `next_occurrence_at` so the cron scan is a single indexed range
- * query. The schedule is expanded as floating wall-clock time (RFC 5545 /
- * CalDAV) in the rule's IANA `timezone` (defaulting to the owner's personal
- * timezone, server default as fallback), so e.g. "daily at 09:00" fires 09:00
- * local on both sides of a DST boundary. A delayed/downed cron catches up on
- * every MISSED occurrence - one card per occurrence - bounded per run by
- * {@see self::MAX_CATCHUP}; see {@see self::runDueRules}.
+ * anchored (its DTSTART) at the template card's Start date, else its due date,
+ * else the rule's `createdAt` - see {@see self::anchorFor}. RFC 5545 puts
+ * DTSTART itself in the recurrence set, so a template card dated in the FUTURE
+ * first fires on that date to the minute, unfiltered by any BY* rule part; the
+ * BY* parts shape every occurrence after it (see {@see self::firstFireFor}).
+ * The next fire time is cached in `next_occurrence_at` so the cron scan is a
+ * single indexed range query. The schedule is expanded as floating wall-clock
+ * time (RFC 5545 / CalDAV) in the rule's IANA `timezone` (defaulting to the
+ * owner's personal timezone, server default as fallback), so e.g. "daily at
+ * 09:00" fires 09:00 local on both sides of a DST boundary. A delayed/downed
+ * cron catches up on every MISSED occurrence - one card per occurrence -
+ * bounded per run by {@see self::MAX_CATCHUP}; see {@see self::runDueRules}.
  *
  * Two modes (see {@see RecurRule} MODE_* constants):
  *   - CLONE: each occurrence creates a fresh card in the target stack, copying
@@ -90,9 +94,11 @@ class RecurrenceService {
 	 * COUNT/UNTIL embedded in the RRULE. Returns 0 when the rule is exhausted
 	 * (no further occurrence) - the caller treats 0 as "self-disable".
 	 *
-	 * The RRULE is anchored at $dtstartTs (the rule's creation time) reinterpreted
-	 * as a wall-clock time in $timezone, so occurrences are floating local times
-	 * per RFC 5545 / CalDAV: "daily at 09:00" fires 09:00 local on both sides of a
+	 * The RRULE is anchored at $dtstartTs - the DTSTART callers get from
+	 * {@see self::anchorFor} (the template card's Start date, else its due date,
+	 * else the rule's creation time) - reinterpreted as a wall-clock time in
+	 * $timezone, so occurrences are floating local times per RFC 5545 / CalDAV:
+	 * "daily at 09:00" fires 09:00 local on both sides of a
 	 * DST boundary and the concrete UTC instant shifts to keep the local hour
 	 * stable. $timezone null falls back to the server default timezone (back-compat
 	 * for rules created before the timezone column existed). We do NOT hand-roll

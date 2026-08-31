@@ -319,6 +319,54 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->create(1, 10, 5, RecurRule::MODE_RESET, 'FREQ=YEARLY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
 	}
 
+	public function testFutureAnchorFiresOnTheAnchorThenFollowsTheByMonthDayRule(): void {
+		// Documents the anchor contract the MCP/UI hints now spell out. The Start
+		// date is a FUTURE date that is deliberately NOT the 15th: RFC 5545 puts
+		// DTSTART itself in the recurrence set, so occurrence #1 is the Start date
+		// to the minute, UNFILTERED by BYMONTHDAY. Only from #2 on does the BY*
+		// part apply. Timezone pinned to UTC so the calendar-day maths is not
+		// host-tz dependent.
+		$anchor = (new \DateTimeImmutable('2027-03-04T09:00:00Z'))->getTimestamp();
+		self::assertGreaterThan(self::NOW, $anchor, 'the anchor must be in the future for this case');
+
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $anchor));
+
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r): RecurRule {
+				$r->setId(7);
+				return $r;
+			});
+
+		$rule = $this->service->create(
+			1, 10, 5,
+			RecurRule::MODE_CLONE,
+			'FREQ=MONTHLY;BYMONTHDAY=15',
+			RecurRule::POLICY_AT_OCCURRENCE,
+			0,
+			false,
+			'alice',
+			'UTC',
+		);
+
+		// #1 - the anchor itself (4 March), NOT the 15th.
+		$first = $rule->getNextOccurrenceAt();
+		self::assertSame($anchor, $first);
+
+		// #2 and #3 - now the BYMONTHDAY filter bites: the 15th of each month,
+		// keeping the anchor's 09:00 wall-clock time.
+		$second = $this->service->computeNextOccurrence('FREQ=MONTHLY;BYMONTHDAY=15', $first, $anchor, 'UTC');
+		self::assertSame((new \DateTimeImmutable('2027-03-15T09:00:00Z'))->getTimestamp(), $second);
+
+		$third = $this->service->computeNextOccurrence('FREQ=MONTHLY;BYMONTHDAY=15', $second, $anchor, 'UTC');
+		self::assertSame((new \DateTimeImmutable('2027-04-15T09:00:00Z'))->getTimestamp(), $third);
+	}
+
 	public function testCreateWithoutManageThrows403(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);

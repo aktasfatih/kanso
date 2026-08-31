@@ -583,9 +583,29 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
         `rrule` is an RFC 5545 recurrence rule WITHOUT the "RRULE:" prefix, e.g.
         "FREQ=DAILY", "FREQ=WEEKLY;BYDAY=MO,WE,FR", "FREQ=MONTHLY;BYMONTHDAY=1",
-        "FREQ=DAILY;COUNT=10", "FREQ=WEEKLY;UNTIL=20261231T000000Z". It is
-        anchored at the rule's creation time, so a daily rule created at 09:00
-        fires at 09:00. Unparseable rules are rejected with an API error.
+        "FREQ=DAILY;COUNT=10", "FREQ=WEEKLY;UNTIL=20261231T000000Z".
+        Unparseable rules are rejected with an API error.
+
+        ANCHOR (the RFC 5545 DTSTART the schedule is expanded from) — the server
+        picks it, you cannot pass it here. It is the template card's **start
+        date**, else the template card's **due date**, else the **rule's
+        creation time** as a last resort. So a daily rule on an undated card
+        created at 09:00 fires at 09:00.
+
+        DTSTART is itself part of the recurrence set, so if the template card is
+        dated in the FUTURE the first fire (`nextOccurrenceAt`) is that date to
+        the minute, REGARDLESS of any BY* part you pass — a
+        "FREQ=MONTHLY;BYMONTHDAY=15" rule on a card starting 4 March first fires
+        4 March, then 15 March, then 15 April. The BY* parts shape every
+        occurrence after the anchor, not the anchor itself. (If the anchor is in
+        the past, the first fire is the next occurrence after now and the BY*
+        parts do apply to it.)
+
+        To control the anchor, DATE THE CARD FIRST: call `kanso_update_card`
+        with `start_date` (or `due_date`) on the template card BEFORE creating
+        the rule. Creating the rule first and dating the card afterwards
+        re-points the schedule too (but only while the rule is enabled), and the
+        rule is armed on the old anchor in the meantime.
 
         Args:
             board_id: The board the rule lives on.
@@ -643,6 +663,14 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         Note `rule_id` is the RULE's own id (from `kanso_list_recur_rules`), NOT
         a card id. Pause a schedule with `enabled=false` and resume it with
         `enabled=true` (resuming re-arms it to the next future occurrence).
+
+        The schedule's anchor is not a field here either — see
+        `kanso_create_recur_rule` for how the server derives it from the
+        template card's dates, and change it by re-dating that card with
+        `kanso_update_card`. Note that re-pointing `template_card_id` on its own
+        does NOT recompute the pending `nextOccurrenceAt`: it stays on the old
+        card's anchor until the schedule is edited (`rrule`/`timezone`), the
+        rule is re-enabled, or the new template card is re-dated.
 
         Args:
             rule_id: The numeric rule id.

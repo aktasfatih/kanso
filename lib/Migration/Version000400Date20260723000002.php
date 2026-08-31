@@ -117,7 +117,9 @@ class Version000400Date20260723000002 extends SimpleMigrationStep {
 			'notnull' => true,
 			'default' => 0,
 		]);
-		// Also the DTSTART anchor the RRULE is expanded from.
+		// Also the last-resort DTSTART anchor the RRULE is expanded from, used
+		// only when the template card has neither a start nor a due date (see
+		// RecurrenceService::anchorFor()).
 		$table->addColumn('created_at', Types::BIGINT, [
 			'notnull' => true,
 			'length' => 8,

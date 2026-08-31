@@ -257,19 +257,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4034
+#: src/components/CardDetail.vue:4038
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4032
+#: src/components/CardDetail.vue:4036
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4030
+#: src/components/CardDetail.vue:4034
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -789,7 +789,7 @@ msgid "Bring this card back"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "Brings the card back on a schedule. Its start and due dates slide forward together each time."
+msgid "Brings the card back on a schedule, counting from the card's start date, or its due date. A card dated in the future comes back on that date first, then follows the schedule. Its start and due dates slide forward together each time."
 msgstr ""
 
 #: src/composables/useCardType.js
@@ -1529,7 +1529,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4210
+#: src/components/CardDetail.vue:4214
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3131,7 +3131,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4212
+#: src/components/CardDetail.vue:4216
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4414,7 +4414,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:5614
+#: src/components/CardDetail.vue:5618
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5031,7 +5031,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4211
+#: src/components/CardDetail.vue:4215
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5111,7 +5111,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4213
+#: src/components/CardDetail.vue:4217
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

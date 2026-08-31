@@ -3347,10 +3347,14 @@ async function clearStartDate() {
 
 // Short plain-language tips shown behind the ⓘ next to each date/repeat field,
 // so people don't have to guess. Wording matches the window model: a repeat
-// slides the start and due dates forward together.
+// slides the start and due dates forward together. The repeat hint also spells
+// out the anchor (start date, else due date - the rule's own creation time is a
+// last-resort fallback not worth a tooltip), because the first repeat lands on
+// that date itself even when the schedule says otherwise (e.g. "monthly on the
+// 15th" on a card starting the 4th). See RecurrenceService::anchorFor().
 const startDateHint = t('kanso', 'Optional. When work can begin. It moves with the card when it repeats.')
 const dueDateHint = t('kanso', 'Optional. When the card is due. It moves with the card when it repeats, and sends a reminder.')
-const repeatHint = t('kanso', 'Brings the card back on a schedule. Its start and due dates slide forward together each time.')
+const repeatHint = t('kanso', 'Brings the card back on a schedule, counting from the card\'s start date, or its due date. A card dated in the future comes back on that date first, then follows the schedule. Its start and due dates slide forward together each time.')
 
 // ── Due date color class (respects done state) ───────────────────────────────
 const dueDateClass = computed(() => {
