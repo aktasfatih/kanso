@@ -13,6 +13,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
@@ -58,7 +59,7 @@ class PageController extends Controller {
 			return new DataDisplayResponse('', Http::STATUS_NOT_FOUND, ['Content-Type' => 'text/plain']);
 		}
 
-		return new DataDisplayResponse(
+		$response = new DataDisplayResponse(
 			$body,
 			Http::STATUS_OK,
 			[
@@ -67,5 +68,14 @@ class PageController extends Controller {
 				'Cache-Control' => 'no-cache',
 			],
 		);
+
+		// A service worker's fetch()es are governed by the CSP of the WORKER SCRIPT
+		// response, not the page. Nextcloud's default response CSP is
+		// `default-src 'none'` with no connect-src, which blocks every fetch the
+		// worker makes — so navigations it controls fail with ERR_FAILED. Allow the
+		// worker to connect to its own origin (all Kanso assets + API are
+		// same-origin); the default ContentSecurityPolicy sets connect-src 'self'.
+		$response->setContentSecurityPolicy(new ContentSecurityPolicy());
+		return $response;
 	}
 }

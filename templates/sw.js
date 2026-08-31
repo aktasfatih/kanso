@@ -11,10 +11,9 @@
 // story is the persisted TanStack Query cache in the app; this worker only makes
 // the app installable and lets it boot + show its last assets while offline.
 
-const VERSION = 'kanso-pwa-v2'
+const VERSION = 'kanso-pwa-v3'
 const SHELL_CACHE = VERSION + '-shell'
-const ASSET_CACHE = VERSION + '-assets'
-const DATA_CACHE = VERSION + '-data'
+const RUNTIME_CACHE = VERSION + '-runtime'
 
 // A stable key under which the last good app-shell HTML is stored, so an offline
 // launch (any in-scope navigation) can still boot the SPA.
@@ -48,19 +47,6 @@ function scopePath() {
 	} catch {
 		return '/'
 	}
-}
-
-async function cacheFirst(request, cacheName) {
-	const cache = await caches.open(cacheName)
-	const cached = await cache.match(request)
-	if (cached) {
-		return cached
-	}
-	const response = await fetch(request)
-	if (response && response.ok) {
-		cache.put(request, response.clone())
-	}
-	return response
 }
 
 async function networkFirst(request, cacheName) {
@@ -125,16 +111,15 @@ self.addEventListener('fetch', (event) => {
 		return
 	}
 
-	// Hashed, content-addressed bundles (js/css/img) are immutable — serve them
-	// from cache first for an instant, offline-capable load.
-	if (/\/(js|css|img)\//.test(url.pathname)) {
-		event.respondWith(cacheFirst(request, ASSET_CACHE))
-		return
-	}
-
-	// Everything else in scope is board data (/api/*): prefer the network, fall
-	// back to the last response so an offline reload still shows something.
-	event.respondWith(networkFirst(request, DATA_CACHE))
+	// Everything else in scope — the app bundles (js/css/img) AND /api data — is
+	// network-first with a cache fallback. Deliberately NOT cache-first for the
+	// bundles: Vite's ENTRY files (kanso-main.mjs, kanso-public.mjs) are NOT
+	// content-hashed, so a cache-first entry would survive an app update/rebuild
+	// and keep importing chunk hashes that no longer exist on disk — white-
+	// screening the app until the cache was manually cleared. Network-first
+	// always picks up an update when online; the cache is still populated so an
+	// offline reload boots from the last good copy.
+	event.respondWith(networkFirst(request, RUNTIME_CACHE))
 })
 
 // ── Web push (#mobile-pwa) ──────────────────────────────────────────────────
