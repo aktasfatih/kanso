@@ -60,9 +60,8 @@ jobs:
         run: |
           set -euo pipefail
           # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
-          # dirs on PATH. Without this the assertion below would fail with
-          # "command not found" on a runner that HAS the library and would have
-          # been green — the exact false red this step exists to remove.
+          # dirs on PATH. Without this the probe below reports "missing" on a
+          # runner that HAS the library, and the step does a pointless apt run.
           PATH="$PATH:/usr/sbin:/sbin"
           if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
             echo "libsodium.so.23 already present, skipping apt"
@@ -77,10 +76,18 @@ jobs:
             # taken as the command name and the step dies with 127. `env` works
             # identically with and without the sudo prefix. Non-interactive so
             # a debconf prompt cannot hang the job for the 6h default timeout.
-            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
-            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23
+            #
+            # Best-effort, both lines. This step is REMEDIATION, not a gate: on a
+            # newer runner image the package is named something else entirely
+            # (libsodium26 on a Debian trixie / Ubuntu 26.04-class image), so a
+            # hard `apt-get install` failure would redden cs-check, psalm and both
+            # unit-php jobs on a PR whose PHP was perfectly fine - the exact false
+            # red this step exists to remove. If PHP really cannot start, the
+            # "Verify the PHP binary starts" step below says so under an obvious
+            # name; that is the honest gate, so there is no assertion here.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update || true
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23 || true
           fi
-          ldconfig -p | grep 'libsodium\.so\.23'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -104,9 +111,8 @@ jobs:
         run: |
           set -euo pipefail
           # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
-          # dirs on PATH. Without this the assertion below would fail with
-          # "command not found" on a runner that HAS the library and would have
-          # been green — the exact false red this step exists to remove.
+          # dirs on PATH. Without this the probe below reports "missing" on a
+          # runner that HAS the library, and the step does a pointless apt run.
           PATH="$PATH:/usr/sbin:/sbin"
           if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
             echo "libsodium.so.23 already present, skipping apt"
@@ -121,10 +127,18 @@ jobs:
             # taken as the command name and the step dies with 127. `env` works
             # identically with and without the sudo prefix. Non-interactive so
             # a debconf prompt cannot hang the job for the 6h default timeout.
-            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
-            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23
+            #
+            # Best-effort, both lines. This step is REMEDIATION, not a gate: on a
+            # newer runner image the package is named something else entirely
+            # (libsodium26 on a Debian trixie / Ubuntu 26.04-class image), so a
+            # hard `apt-get install` failure would redden cs-check, psalm and both
+            # unit-php jobs on a PR whose PHP was perfectly fine - the exact false
+            # red this step exists to remove. If PHP really cannot start, the
+            # "Verify the PHP binary starts" step below says so under an obvious
+            # name; that is the honest gate, so there is no assertion here.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update || true
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23 || true
           fi
-          ldconfig -p | grep 'libsodium\.so\.23'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -151,9 +165,8 @@ jobs:
         run: |
           set -euo pipefail
           # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
-          # dirs on PATH. Without this the assertion below would fail with
-          # "command not found" on a runner that HAS the library and would have
-          # been green — the exact false red this step exists to remove.
+          # dirs on PATH. Without this the probe below reports "missing" on a
+          # runner that HAS the library, and the step does a pointless apt run.
           PATH="$PATH:/usr/sbin:/sbin"
           if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
             echo "libsodium.so.23 already present, skipping apt"
@@ -168,10 +181,18 @@ jobs:
             # taken as the command name and the step dies with 127. `env` works
             # identically with and without the sudo prefix. Non-interactive so
             # a debconf prompt cannot hang the job for the 6h default timeout.
-            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
-            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23
+            #
+            # Best-effort, both lines. This step is REMEDIATION, not a gate: on a
+            # newer runner image the package is named something else entirely
+            # (libsodium26 on a Debian trixie / Ubuntu 26.04-class image), so a
+            # hard `apt-get install` failure would redden cs-check, psalm and both
+            # unit-php jobs on a PR whose PHP was perfectly fine - the exact false
+            # red this step exists to remove. If PHP really cannot start, the
+            # "Verify the PHP binary starts" step below says so under an obvious
+            # name; that is the honest gate, so there is no assertion here.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update || true
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23 || true
           fi
-          ldconfig -p | grep 'libsodium\.so\.23'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
