@@ -11,6 +11,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.20.0](https://github.com/aktasfatih/kanso/compare/v0.19.1...v0.20.0) (2026-08-31)
+
+
+### Bug Fixes
+
+* a description edit can no longer be lost to a simultaneous save ([7015462](https://github.com/aktasfatih/kanso/commit/7015462b195bc1f80f9d92027bb13c421cc969fb))
+* a rejected GitHub webhook delivery no longer blames your content type ([cec9c15](https://github.com/aktasfatih/kanso/commit/cec9c15bd13318d76eb6b8306e5551285b334989))
+* an unreadable repeat schedule in an imported board is skipped, not stored ([24da3f3](https://github.com/aktasfatih/kanso/commit/24da3f32619eeeff212771f9d32ed82c1c598985))
+* importing a board no longer fails on a repeat rule with no frequency ([5224209](https://github.com/aktasfatih/kanso/commit/5224209fb3bc1b9844fbe002bd2f7987a507be77))
+* make the installable PWA load reliably ([6be4363](https://github.com/aktasfatih/kanso/commit/6be43638b27fd79db7aa0ab6bac11c85f5848ce8))
+* pointing a repeat at another card now reschedules it from that card ([926fccb](https://github.com/aktasfatih/kanso/commit/926fccbacab889b20b78c9d79463206fbfb10d27))
+* **recurrence:** a repeat set to stop after N times now actually stops ([634448d](https://github.com/aktasfatih/kanso/commit/634448d33ffe47307256135334817565bdbbed8b)), closes [#10002](https://github.com/aktasfatih/kanso/issues/10002)
+* **recurrence:** explain what a repeating card's schedule anchors to ([644f11c](https://github.com/aktasfatih/kanso/commit/644f11ca0ed24b92d15ae1a770ee8afa7e5af4c5))
+* render the app icon so the PWA can be installed ([2b58d0e](https://github.com/aktasfatih/kanso/commit/2b58d0eb6d28889b2badf5cb2a6a9d2aca177055))
+* setting a repeat to end after N times now gives you N more cards ([c497667](https://github.com/aktasfatih/kanso/commit/c49766713e3b4bf05fd6480750521341562c83e9))
+* tell you the GitHub webhook needs the JSON content type ([76e11ed](https://github.com/aktasfatih/kanso/commit/76e11edec9acf2cf699d505a1ec1757bb708ad1f))
+
+
+### Features
+
+* installable, offline-capable mobile PWA ([4410617](https://github.com/aktasfatih/kanso/commit/4410617962630e91003a1ecf54b146dbc0b35872))
+
 ## [0.19.1](https://github.com/aktasfatih/kanso/compare/v0.19.0...v0.19.1) (2026-08-30)
 
 
