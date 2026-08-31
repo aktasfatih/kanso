@@ -312,6 +312,12 @@ jobs:
       # No realtime push needed for install/migration validation; skipping keeps
       # the boot from depending on an appstore fetch of notify_push.
       KANSO_SKIP_NOTIFY_PUSH: '1'
+      # Likewise for the optional e2e apps (deck/contacts): this job runs no
+      # Playwright, so it has no use for either. install-optional-apps.sh
+      # self-skips on NC != 34 (the pins support 34 only), so this flag is what
+      # spares the NC-34 rows a pointless download — and it states the intent
+      # for the whole matrix in one place.
+      KANSO_SKIP_OPTIONAL_APPS: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -373,6 +379,12 @@ jobs:
       # Realtime push isn't needed for the UI specs (they poll); skip it so a
       # flaky appstore release can't fail the boot.
       KANSO_SKIP_NOTIFY_PUSH: '1'
+      # setup.sh's default anyway, but stated explicitly: the deck/contacts pins
+      # in dev/install-optional-apps.sh support NC 34 only, and the script skips
+      # itself on any other major. Pinning the version here keeps the two specs
+      # that need those apps from silently going red if NC_VERSION ever leaks
+      # into the runner environment.
+      NC_VERSION: '34'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -403,31 +415,18 @@ jobs:
       # Boot the same throwaway Nextcloud stack used locally (dev/setup.sh):
       # postgres + redis + notify_push + nextcloud:34-apache, app enabled,
       # firstrunwizard disabled, tester user + push wired up. Idempotent.
+      #
+      # setup.sh also side-loads the optional apps two specs need — deck (for
+      # deck-import.spec.js) and contacts (for card-contacts.spec.js) — via
+      # dev/install-optional-apps.sh. That used to be two steps here, which
+      # meant a local stack silently lacked both and those specs were red for
+      # everyone but CI; the pins now live in the script, in one place. It still
+      # side-loads signed release tarballs rather than using `occ app:install`,
+      # because the cluster's dind network can't reach the NC appstore (the
+      # runner host can reach GitHub, so the download happens outside the
+      # container and is `docker cp`-ed in).
       - name: Boot dev Nextcloud stack
         run: ./dev/setup.sh
-
-      # deck-import.spec.js drives the real Deck API to seed a source board, so
-      # Deck must be installed. The cluster's dind network can't reach the NC
-      # appstore, so side-load the signed release tarball (runner has internet):
-      # download here, copy into the container, enable. Pinned to the version
-      # the dev stack uses.
-      - name: Install Deck (for the import spec)
-        run: |
-          curl -fsSL https://github.com/nextcloud-releases/deck/releases/download/v1.18.3/deck-v1.18.3.tar.gz -o /tmp/deck.tar.gz
-          docker cp /tmp/deck.tar.gz kanso-dev:/tmp/deck.tar.gz
-          docker exec kanso-dev bash -c 'tar -xzf /tmp/deck.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/deck'
-          docker exec -u www-data kanso-dev php occ app:enable deck
-
-      # card-contacts.spec.js exercises the feature-detected contact picker,
-      # which needs the Contacts app installed. Same appstore-unreachable
-      # constraint as Deck above, so side-load the signed release tarball.
-      # Pinned to v8.7.5 (info.xml min-version=33 max-version=34 — NC34-compatible).
-      - name: Install Contacts (for the card-contacts spec)
-        run: |
-          curl -fsSL https://github.com/nextcloud-releases/contacts/releases/download/v8.7.5/contacts-v8.7.5.tar.gz -o /tmp/contacts.tar.gz
-          docker cp /tmp/contacts.tar.gz kanso-dev:/tmp/contacts.tar.gz
-          docker exec kanso-dev bash -c 'tar -xzf /tmp/contacts.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/contacts'
-          docker exec -u www-data kanso-dev php occ app:enable contacts
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium

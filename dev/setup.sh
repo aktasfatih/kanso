@@ -8,6 +8,9 @@
 #   NC_VERSION  Nextcloud major version → image nextcloud:<NC_VERSION>-apache
 #               (default 34)
 #   KANSO_DB    database driver: postgres (default) | mysql | sqlite
+#   KANSO_SKIP_OPTIONAL_APPS=1
+#               don't side-load the optional apps two e2e specs need (deck,
+#               contacts) — see install-optional-apps.sh
 #
 # Examples:
 #   ./setup.sh                                  # NC 34 + postgres (default)
@@ -90,6 +93,12 @@ $OCC app:disable firstrunwizard
 if ! $OCC user:list | grep -q '^  - tester:'; then
 	docker exec -u www-data -e OC_PASS='kanso-dev-tester!1' kanso-dev php occ user:add --password-from-env tester
 fi
+
+# --- optional apps the e2e suite needs ---------------------------------------
+# deck (deck-import.spec.js) and contacts (card-contacts.spec.js). Kept in its
+# own script so the local stack and the CI e2e job provision from one set of
+# pins instead of duplicating the side-load in the workflow file.
+./install-optional-apps.sh
 
 # --- notify_push (realtime push) ---------------------------------------------
 # Optional: the app falls back to delta-polling without it, and the e2e suite
