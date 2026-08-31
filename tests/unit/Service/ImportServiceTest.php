@@ -312,6 +312,25 @@ class ImportServiceTest extends TestCase {
 						'id' => 81, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
 						'rrule' => 'FREQ=NONSENSE', 'owner' => 'bob', 'enabled' => true,
 					],
+					// FREQ-less rules: sabre CONSTRUCTS these happily and only blows up
+					// while iterating - as an \Error, not an \Exception. Documents with
+					// an empty rrule exist in the wild (older exports defaulted it to ''
+					// and nothing ever parsed it), so this must be a drop, not a 500
+					// that takes the whole import down with it.
+					[
+						'id' => 83, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => '', 'owner' => 'bob', 'enabled' => true,
+					],
+					[
+						'id' => 84, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'COUNT=3', 'owner' => 'bob', 'enabled' => true,
+					],
+					// No `rrule` key at all - the importer defaults it to '', which is
+					// the same FREQ-less trap.
+					[
+						'id' => 85, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'owner' => 'bob', 'enabled' => true,
+					],
 					// A perfectly good rule right behind it still lands intact.
 					[
 						'id' => 82, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
@@ -377,8 +396,9 @@ class ImportServiceTest extends TestCase {
 		self::assertSame(31, $capturedRecur[0]->getTargetStackId());
 		self::assertSame('importer', $capturedRecur[0]->getOwner());
 
-		// The rule carrying an unparseable RRULE never reached the mapper, while
-		// the valid rule behind it imported with its RRULE intact.
+		// None of the unparseable RRULEs reached the mapper - the outright-invalid
+		// FREQ and the three FREQ-less variants alike - while the valid rule sitting
+		// behind all of them imported with its RRULE intact.
 		self::assertSame(
 			['FREQ=DAILY', 'FREQ=WEEKLY;BYDAY=MO'],
 			array_map(static fn (RecurRule $r): string => $r->getRrule(), $capturedRecur),

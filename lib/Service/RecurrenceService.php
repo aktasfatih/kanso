@@ -114,9 +114,10 @@ class RecurrenceService {
 		$start = (new \DateTimeImmutable('@' . $dtstartTs))->setTimezone($tz);
 		try {
 			$iterator = new RRuleIterator($rrule, $start);
-		} catch (\Exception $e) {
+		} catch (\Throwable $e) {
 			// sabre throws assorted exception types for malformed input;
-			// normalize to the API's InvalidInputException.
+			// normalize to the API's InvalidInputException. \Throwable, not
+			// \Exception - see the fastForward() catch below for why.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 
@@ -125,8 +126,14 @@ class RecurrenceService {
 		$target = (new \DateTimeImmutable('@' . ($afterTs + 1)))->setTimezone($tz);
 		try {
 			$iterator->fastForward($target);
-		} catch (\Exception $e) {
-			// Some malformed rules only fail while iterating.
+		} catch (\Throwable $e) {
+			// Some malformed rules only fail while iterating - and NOT always as an
+			// \Exception. sabre never checks that FREQ is present: '', 'COUNT=3' and
+			// 'INTERVAL=2' all construct cleanly, then hit `switch ($this->frequency)`
+			// on a typed-but-uninitialized property and raise an \Error. Catching only
+			// \Exception let that escape as a 500 - crashing a board import, turning an
+			// invalid-rule API call into a fatal instead of a 400, and killing the cron
+			// pass on a rule stored before this was validated.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 

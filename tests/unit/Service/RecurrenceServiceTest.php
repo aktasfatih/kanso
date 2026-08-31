@@ -242,6 +242,22 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->computeNextOccurrence('NOT AN RRULE', self::NOW, self::NOW);
 	}
 
+	/**
+	 * A rule with no FREQ is the nastiest shape of malformed: sabre never checks
+	 * that FREQ is present, so the iterator CONSTRUCTS cleanly and only dies while
+	 * stepping - and it dies with an \Error, not an \Exception. Anything catching
+	 * just \Exception let that through as a fatal: a 500 on the API instead of a
+	 * 400, a board import aborted whole, a cron pass killed by one stored rule.
+	 *
+	 * @testWith [""]
+	 *           ["COUNT=3"]
+	 *           ["INTERVAL=2"]
+	 */
+	public function testComputeNextOccurrenceRejectsAFreqLessRule(string $rrule): void {
+		$this->expectException(InvalidInputException::class);
+		$this->service->computeNextOccurrence($rrule, self::NOW, self::NOW);
+	}
+
 	// ---- create -----------------------------------------------------------
 
 	public function testCreateRequiresManageValidatesAndComputesNext(): void {
@@ -384,6 +400,20 @@ class RecurrenceServiceTest extends TestCase {
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'TOTAL GARBAGE', 0, 0, false, 'alice');
+	}
+
+	/**
+	 * A FREQ-less rule is a 400 like any other bad input, NOT a fatal. sabre builds
+	 * the iterator for it without complaint and only blows up while stepping - as
+	 * an \Error - so validate() has to catch more than \Exception to answer this
+	 * with a rejection instead of a 500.
+	 */
+	public function testCreateRejectsAFreqLessRruleWith400(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'COUNT=3', 0, 0, false, 'alice');
 	}
 
 	public function testCreateRejectsTemplateCardOnAnotherBoard(): void {
