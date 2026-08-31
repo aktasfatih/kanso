@@ -41,6 +41,10 @@ trait ApiErrorTrait {
 				'error' => 'description_conflict',
 				'description' => $e->getCurrentDescription(),
 				'lastModified' => $e->getCurrentLastModified(),
+				// The card's current description revision (#9848) - the base a
+				// client must retry on. `lastModified` stays in the body
+				// unchanged for clients written against #9845.
+				'revision' => $e->getCurrentRevision(),
 			], Http::STATUS_CONFLICT);
 		} catch (\OverflowException) {
 			// A derived fractional sort key would exceed the column width, or a

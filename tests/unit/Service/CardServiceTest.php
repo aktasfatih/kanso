@@ -824,6 +824,181 @@ class CardServiceTest extends TestCase {
 		$this->service->update(9, null, 'mine', null, null, null, 'mallory', baseLastModified: 100);
 	}
 
+	// ---- description revision token (#9848) -------------------------------
+	//
+	// `baseDescriptionRevision` replaces the coarse timestamp with a per-card
+	// counter enforced by a CONDITIONAL UPDATE inside the write transaction
+	// (CardMapper::claimDescriptionRevision). These cases pin the branching and
+	// the transaction boundary; the "exactly one of two concurrent writers wins"
+	// property is untestable against a mocked mapper and is covered by
+	// tests/e2e/description-conflict.spec.js against a real database.
+
+	/** A card whose description sits at revision $revision. */
+	private function revisionedCard(string $description, int $revision, int $lastModified = 200): Card {
+		$card = $this->describedCard($description, $lastModified);
+		$card->setDescriptionRevision($revision);
+		return $card;
+	}
+
+	public function testUpdateClaimsTheDescriptionRevisionAndAdvancesIt(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->revisionedCard('theirs', 3));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())
+			->method('claimDescriptionRevision')
+			->with(9, 3)
+			->willReturn(1);
+		$this->cardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturn(new Change());
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$updated = $this->service->update(9, null, 'mine', null, null, null, 'bob', baseDescriptionRevision: 3);
+		self::assertSame('mine', $updated->getDescription());
+		// The claimed value is mirrored onto the entity, so the response re-seeds
+		// the editor with the version it just created (saving twice in a row from
+		// the same editor must not 409 against the user's own write).
+		self::assertSame(4, $updated->getDescriptionRevision());
+	}
+
+	public function testUpdateRejectsTheDescriptionWriteWhenTheClaimIsLost(): void {
+		// find() twice: once to load the card, once to re-read the winner AFTER
+		// the transaction was rolled back.
+		$this->cardMapper->method('find')->with(9)->willReturnOnConsecutiveCalls(
+			$this->revisionedCard('baseline', 3),
+			$this->revisionedCard('theirs', 4, 250),
+		);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Somebody else's description write landed between the read and the claim.
+		$this->cardMapper->method('claimDescriptionRevision')->with(9, 3)->willReturn(0);
+		// Nothing may be persisted or logged, and the realtime push must not fire.
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+
+		try {
+			$this->service->update(9, null, 'mine', null, null, null, 'bob', baseDescriptionRevision: 3);
+			self::fail('Expected a DescriptionConflictException');
+		} catch (DescriptionConflictException $e) {
+			self::assertSame('description_conflict', $e->getMessage());
+			self::assertSame('theirs', $e->getCurrentDescription());
+			self::assertSame(250, $e->getCurrentLastModified());
+			// The revision a retry has to be based on.
+			self::assertSame(4, $e->getCurrentRevision());
+		}
+	}
+
+	public function testUpdateWithoutABaseRevisionSkipsTheClaimButStillAdvancesIt(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->revisionedCard('theirs', 3));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Unguarded callers (the MCP server, third-party API clients) keep
+		// last-writer-wins - the CAS must not run for them...
+		$this->cardMapper->expects(self::never())->method('claimDescriptionRevision');
+		// ...but the counter still moves, or a guarded editor seeded before this
+		// write would silently overwrite it on its next save. It moves via the
+		// mapper's in-SQL bump, never by incrementing the value this request read
+		// before the transaction opened.
+		$this->cardMapper->expects(self::once())
+			->method('bumpDescriptionRevision')
+			->with(9)
+			->willReturn(4);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, 'mine', null, null, null, 'bob');
+		self::assertSame('mine', $updated->getDescription());
+		// The bumped value is what the response carries back.
+		self::assertSame(4, $updated->getDescriptionRevision());
+	}
+
+	public function testUpdateDoesNotClaimWhenTheTextIsAlreadyIdentical(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->revisionedCard('same text', 3));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// A stale base, but the write would not change a byte: nothing to lose, so
+		// no claim, no conflict, and the counter stays put.
+		$this->cardMapper->expects(self::never())->method('claimDescriptionRevision');
+		$this->cardMapper->expects(self::never())->method('bumpDescriptionRevision');
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, 'same text', null, null, null, 'bob', baseDescriptionRevision: 1);
+		self::assertSame('same text', $updated->getDescription());
+		self::assertSame(3, $updated->getDescriptionRevision());
+	}
+
+	public function testUpdateBaseRevisionDoesNotBlockNonDescriptionFields(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->revisionedCard('theirs', 3));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// The claim is description-scoped: a title save from the same open card is
+		// never blocked by somebody else's unrelated edit.
+		$this->cardMapper->expects(self::never())->method('claimDescriptionRevision');
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, 'Renamed', null, null, null, null, 'bob', baseDescriptionRevision: 1);
+		self::assertSame('Renamed', $updated->getTitle());
+		self::assertSame('theirs', $updated->getDescription());
+	}
+
+	public function testUpdateChecksPermissionBeforeTheRevisionClaim(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->revisionedCard('theirs', 3));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('claimDescriptionRevision');
+		$this->cardMapper->expects(self::never())->method('update');
+
+		// A stale base must not turn a permission denial into a 409.
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, 'mine', null, null, null, 'mallory', baseDescriptionRevision: 1);
+	}
+
+	public function testUpdateRevisionSupersedesTheLegacyTimestampGuard(): void {
+		// Both tokens sent: the revision wins, so the coarse timestamp guard - which
+		// over-reports because `lastModified` also moves for unrelated edits - must
+		// not fire on its own.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->revisionedCard('theirs', 3));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())->method('claimDescriptionRevision')->willReturn(1);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(
+			9, null, 'mine', null, null, null, 'bob',
+			baseLastModified: 100,
+			baseDescriptionRevision: 3,
+		);
+		self::assertSame('mine', $updated->getDescription());
+	}
+
+	public function testUpdateWithBothTokensStillConflictsOnTheRevision(): void {
+		// The mirror of the case above: both tokens sent and the CAS loses. The
+		// 409 must come from the revision path (rolled-back transaction, re-read
+		// winner) and not from the coarse timestamp guard, which would have thrown
+		// before any setter ran and reported the pre-transaction values.
+		$this->cardMapper->method('find')->with(9)->willReturnOnConsecutiveCalls(
+			$this->revisionedCard('baseline', 3),
+			$this->revisionedCard('theirs', 4, 250),
+		);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())->method('claimDescriptionRevision')->willReturn(0);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->db->expects(self::once())->method('rollBack');
+
+		try {
+			$this->service->update(
+				9, null, 'mine', null, null, null, 'bob',
+				baseLastModified: 100,
+				baseDescriptionRevision: 3,
+			);
+			self::fail('Expected a DescriptionConflictException');
+		} catch (DescriptionConflictException $e) {
+			self::assertSame('theirs', $e->getCurrentDescription());
+			self::assertSame(4, $e->getCurrentRevision());
+		}
+	}
+
 	// ---- granular activity verbs (#70) ------------------------------------
 	//
 	// The card-field update path stamps a field-specific verb when EXACTLY one

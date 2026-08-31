@@ -3422,10 +3422,13 @@ const draftDescription = ref('')
 const isSaving = ref(false)
 const saveError = ref('')
 
-// Optimistic-concurrency state for the description (#9845). Both are captured
+// Optimistic-concurrency state for the description (#9848). Both are captured
 // ONCE, when the editor opens, and deliberately not recomputed from cardData:
 // a realtime delta may refresh the card underneath an open editor, and the base
 // must keep pointing at the version this draft was actually derived from.
+// `descriptionBaseVersion` is the card's `descriptionRevision` — a per-card
+// counter that moves ONLY when the description itself changes, so an unrelated
+// title or due-date save can never look like a conflict.
 // `descriptionConflict` holds the server's current text after a rejected save.
 const descriptionBaseVersion = ref(null)
 const descriptionBaseText = ref('')
@@ -3449,7 +3452,13 @@ watch(() => props.cardId, () => {
 function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
 	descriptionBaseText.value = draftDescription.value
-	descriptionBaseVersion.value = cardData.value?.lastModified ?? null
+	// `descriptionRevision` rides on the DETAIL payload only (it is deliberately
+	// absent from board/stack summaries, next to the description it guards), and
+	// this cache is filled solely by the single-card fetch, so it is always a
+	// number here — 0 included, which `??` correctly keeps. A card object from
+	// anywhere else would leave it undefined and silently drop the guard back to
+	// last-writer-wins, so keep this reading the detail query.
+	descriptionBaseVersion.value = cardData.value?.descriptionRevision ?? null
 	descriptionConflict.value = null
 	editingDescription.value = true
 	saveError.value = ''
@@ -3474,23 +3483,23 @@ function cancelDescriptionEdit() {
  * moved on AND the stored text differs, so a second author's work is never
  * silently overwritten.
  *
- * `lastModified` has second resolution and also moves for edits that never
- * touched the description (a title change, a move), so a 409 alone does not
- * prove a real collision. The rejection carries the server's current text: when
- * that is byte-identical to what this editor started from, only some unrelated
- * field moved and the save is retried once, transparently. Anything else is a
- * genuine two-author conflict and is surfaced with BOTH versions intact.
+ * The base is the card's `descriptionRevision`, and the server enforces it with
+ * a conditional UPDATE, so exactly one of two simultaneous saves can win. The
+ * rejection carries the server's current text: when that is byte-identical to
+ * what this editor started from, the other write cost us nothing and the save is
+ * retried once, transparently. Anything else is a genuine two-author conflict
+ * and is surfaced with BOTH versions intact.
  *
- * @param {number|null} baseVersion card `lastModified` this draft is based on
+ * @param {number|null} baseVersion card `descriptionRevision` this draft is based on
  * @param {boolean} allowRetry whether a provably-spurious 409 may be retried
  */
 async function pushDescription(baseVersion, allowRetry) {
 	try {
 		const saved = await updateCard.mutateAsync({
-			data: { description: draftDescription.value, baseLastModified: baseVersion },
+			data: { description: draftDescription.value, baseDescriptionRevision: baseVersion },
 		})
 		descriptionBaseText.value = draftDescription.value
-		descriptionBaseVersion.value = saved?.lastModified ?? null
+		descriptionBaseVersion.value = saved?.descriptionRevision ?? null
 		descriptionConflict.value = null
 		editingDescription.value = false
 	} catch (err) {
@@ -3498,12 +3507,12 @@ async function pushDescription(baseVersion, allowRetry) {
 		if (err?.response?.status === 409 && data?.error === 'description_conflict') {
 			const theirs = data.description ?? ''
 			if (allowRetry && theirs === descriptionBaseText.value) {
-				await pushDescription(data.lastModified ?? null, false)
+				await pushDescription(data.revision ?? null, false)
 				return
 			}
 			// Keep the editor open with the draft untouched; the panel renders
 			// their version alongside it.
-			descriptionConflict.value = { description: theirs, lastModified: data.lastModified ?? null }
+			descriptionConflict.value = { description: theirs, revision: data.revision ?? null }
 			return
 		}
 		saveError.value = data?.error || t('kanso', 'Failed to save.')
@@ -3523,7 +3532,7 @@ async function saveDescription() {
 
 /** Conflict resolution: the user's draft wins over the version shown to them. */
 async function overwriteDescription() {
-	const base = descriptionConflict.value?.lastModified ?? null
+	const base = descriptionConflict.value?.revision ?? null
 	isSaving.value = true
 	saveError.value = ''
 	descriptionConflict.value = null
@@ -3545,7 +3554,7 @@ function useTheirDescription() {
 	if (!conflict) return
 	draftDescription.value = conflict.description
 	descriptionBaseText.value = conflict.description
-	descriptionBaseVersion.value = conflict.lastModified
+	descriptionBaseVersion.value = conflict.revision
 	descriptionConflict.value = null
 	saveError.value = ''
 }

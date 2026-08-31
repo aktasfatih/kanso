@@ -933,15 +933,20 @@ class CardService {
 	 * $type sets the card's built-in issue type (#3402): '' clears it (none), a
 	 * non-empty value must be one of Card::TYPES.
 	 *
-	 * $baseLastModified is OPTIONAL optimistic concurrency for the description
-	 * (#9845): the `lastModified` the caller's editor was seeded from. When it is
-	 * supplied together with a $description that differs from the stored one, and
-	 * the card has moved on since, the write is REJECTED
-	 * ({@see DescriptionConflictException} → 409) instead of silently discarding
-	 * the other author's text. Best-effort, not a hard guarantee - see the
-	 * comment on the guard for the two windows it does not cover. Callers that
-	 * omit it (existing API clients, the MCP server) keep last-writer-wins
-	 * exactly as before.
+	 * $baseDescriptionRevision is OPTIONAL optimistic concurrency for the
+	 * description (#9848): the `descriptionRevision` the caller's editor was
+	 * seeded from. When it is supplied together with a $description that differs
+	 * from the stored one, the write is claimed with a conditional UPDATE inside
+	 * the write transaction; if another author's description write landed first
+	 * the whole transaction is REJECTED ({@see DescriptionConflictException} →
+	 * 409) instead of silently discarding their text.
+	 *
+	 * $baseLastModified is the original, coarser form of the same guard (#9845),
+	 * kept working for clients written against it; it applies only when no
+	 * revision is supplied. Callers that omit BOTH (existing API clients, the
+	 * MCP server) keep last-writer-wins exactly as before - but a description
+	 * write still advances the revision, so a guarded editor that seeded before
+	 * it is correctly refused afterwards.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
@@ -966,40 +971,38 @@ class CardService {
 		?string $type = null,
 		?string $visibility = null,
 		?int $baseLastModified = null,
+		?int $baseDescriptionRevision = null,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		// Optimistic concurrency for the description (#9845). Checked BEFORE any
-		// setter runs, so a rejected write leaves the card completely untouched.
-		// Three conditions, all required:
+		// LEGACY optimistic concurrency for the description (#9845), for clients
+		// written against `baseLastModified` before the revision token existed.
+		// Superseded by $baseDescriptionRevision below, so it only applies when
+		// no revision was sent. Checked BEFORE any setter runs, so a rejected
+		// write leaves the card completely untouched. Three conditions, all
+		// required:
 		//  - the caller opted in by sending the version its editor started from
 		//    (omitted → the historical last-writer-wins behaviour, unchanged);
 		//  - this write actually carries a description (a title/date/priority save
 		//    from the same open card must never be blocked by a foreign edit);
 		//  - the stored text really differs from what is being written - a re-save
 		//    of identical text loses nothing, so it is never a conflict.
-		// `lastModified` is a coarse token, so this is a strong safety net rather
-		// than a hard guarantee, and the two gaps are deliberate for this phase:
-		//  - it also moves for edits that never touched the description, which
-		//    would over-report. The browser client resolves that itself: on a 409
-		//    it compares the returned text with the one its editor was seeded from
-		//    and retries transparently when they match.
-		//  - it has SECOND resolution, so a competing write landing inside the very
-		//    second the editor was seeded still slips through unnoticed (a ~1s
-		//    window at edit-start). Closing that needs a real revision token (a
-		//    per-card counter or a base-text digest), which is follow-up work.
-		// The check is also read-then-write rather than a conditional UPDATE, so
-		// two requests arriving inside the same window can still both pass.
-		if ($baseLastModified !== null
+		// `lastModified` is a coarse token, so this stays a best-effort safety net
+		// rather than a guarantee: it also moves for edits that never touched the
+		// description (over-reporting), it has SECOND resolution, and the check is
+		// read-then-write. Those are exactly the gaps the revision token closes.
+		if ($baseDescriptionRevision === null
+			&& $baseLastModified !== null
 			&& $description !== null
 			&& $card->getLastModified() > $baseLastModified
 			&& $card->getDescription() !== $description) {
 			throw new DescriptionConflictException(
 				(string)$card->getDescription(),
 				$card->getLastModified(),
+				$card->getDescriptionRevision() ?? 0,
 			);
 		}
 
@@ -1188,19 +1191,62 @@ class CardService {
 			'status' => $origStatus,
 		]);
 
+		// The description write, INSIDE the transaction that also writes the change
+		// row. Two jobs, both of which have to happen here or not at all:
+		//  - a guarded caller (#9848) claims the revision first, with a single
+		//    conditional UPDATE. 0 rows means another author's description write
+		//    landed in between: bail out, which rolls the whole transaction back
+		//    (no card row, no change row, no realtime push) and surfaces as 409.
+		//    Claiming it OUTSIDE this callback would write the description with no
+		//    change row - delta sync and the board ETag would go quietly wrong.
+		//  - an unguarded caller (existing API clients, the MCP server) keeps
+		//    last-writer-wins, but STILL advances the counter - otherwise its write
+		//    would leave the revision stale and a guarded editor that seeded before
+		//    it would silently overwrite it on its next save. That bump is computed
+		//    in SQL, not from the value this request read before the transaction
+		//    opened, so two overlapping writers cannot stall it or walk it back.
+		// Either way the resulting revision is mirrored onto the entity, so the
+		// response re-seeds the editor with the version this write created.
+		$write = function () use ($card, $id, $descriptionChanged, $baseDescriptionRevision): Card {
+			if ($descriptionChanged) {
+				if ($baseDescriptionRevision === null) {
+					$card->setDescriptionRevision($this->cardMapper->bumpDescriptionRevision($id));
+				} elseif ($this->cardMapper->claimDescriptionRevision($id, $baseDescriptionRevision) === 0) {
+					throw new StaleDescriptionRevisionException();
+				} else {
+					$card->setDescriptionRevision($baseDescriptionRevision + 1);
+				}
+			}
+			return $this->cardMapper->update($card);
+		};
+
 		// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
 		// row commit together (or roll back together); the realtime push fires only
 		// after commit. Side effects below (mentions, parent auto-complete) run
 		// after the card + its change row have landed.
-		$card = $this->writeCardChange(
-			$card->getBoardId(),
-			$id,
-			Change::ACTION_UPDATE,
-			$uid,
-			$verb,
-			fn (): Card => $this->cardMapper->update($card),
-			$detail,
-		);
+		try {
+			$card = $this->writeCardChange(
+				$card->getBoardId(),
+				$id,
+				Change::ACTION_UPDATE,
+				$uid,
+				$verb,
+				$write,
+				$detail,
+			);
+		} catch (StaleDescriptionRevisionException) {
+			// writeCardChange has already rolled back. Re-read OUTSIDE the doomed
+			// transaction (no isolation-level assumptions) so the 409 carries the
+			// winner's text and the revision a retry must be based on. A raw
+			// mapper read is safe here: this is the same card whose permission and
+			// visibility were asserted at the top of this method.
+			$current = $this->cardMapper->find($id);
+			throw new DescriptionConflictException(
+				(string)$current->getDescription(),
+				$current->getLastModified(),
+				$current->getDescriptionRevision() ?? 0,
+			);
+		}
 
 		// If this card drives a repeat and its schedule anchor (Start/due date) just
 		// moved, re-point the series so future occurrences follow the new dates -
