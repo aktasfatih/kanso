@@ -182,22 +182,34 @@ class GithubWebhookService {
 	/**
 	 * Verifies and processes an inbound GitHub delivery. Returns a small summary
 	 * of what happened (for the 200 response body). NEVER throws for
-	 * business-level no-ops (unknown branch, no target stack) - only for a failed
-	 * signature check, which the controller maps to 401.
+	 * business-level no-ops (unknown branch, no target stack, a ping, a bare JSON
+	 * scalar) - only for a failed signature check, which the controller maps to
+	 * 401, and for a body that is not JSON at all, which it maps to 400.
 	 *
 	 * @param string $signatureHeader the raw `X-Hub-Signature-256` value
 	 * @param string $rawBody the exact request body bytes (HMAC is over these)
 	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the signature is missing or invalid
+	 * @throws NonJsonWebhookBodyException if the body is not JSON (wrong webhook content type)
+	 * @throws InvalidInputException if a card create/move triggered by the event is rejected
 	 */
 	public function handleWebhook(int $boardId, string $signatureHeader, string $rawBody): array {
 		$board = $this->loadBoard($boardId);
 		$this->verifySignature($board, $signatureHeader, $rawBody);
 
 		$payload = json_decode($rawBody, true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			// Not JSON at all - in practice the webhook was created with GitHub's
+			// `application/x-www-form-urlencoded` content type, which sends the JSON
+			// wrapped as `payload=<urlencoded>`. GitHub signs whatever it sends, so
+			// that body PASSES the HMAC check above and would otherwise be recorded
+			// as a green 200 while nothing happens on the board - undiagnosable from
+			// the delivery log. Say so instead: the controller maps this to a 400.
+			throw new NonJsonWebhookBodyException('Webhook body is not JSON - set the GitHub webhook Content type to application/json');
+		}
 		if (!is_array($payload)) {
-			// A bare JSON scalar / null / malformed body - accepted, nothing to do.
+			// Valid JSON that is a bare scalar / null - accepted, nothing to do (#3477).
 			return ['handled' => false];
 		}
 		$action = is_string($payload['action'] ?? null) ? $payload['action'] : '';

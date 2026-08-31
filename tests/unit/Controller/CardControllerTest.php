@@ -313,10 +313,22 @@ class CardControllerTest extends TestCase {
 	public function testUpdateThreadsTheBaseVersionThrough(): void {
 		$card = $this->card();
 		$this->cardService->expects(self::once())->method('update')
-			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, 1700)
+			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, 1700, null)
 			->willReturn($card);
 
 		$response = $this->controller->update(9, null, 'New description', baseLastModified: 1700);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	public function testUpdateThreadsTheBaseDescriptionRevisionThrough(): void {
+		// #9848: the browser editor sends the revision token instead of the
+		// coarse timestamp, and it must reach the service untouched.
+		$card = $this->card();
+		$this->cardService->expects(self::once())->method('update')
+			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, null, 4)
+			->willReturn($card);
+
+		$response = $this->controller->update(9, null, 'New description', baseDescriptionRevision: 4);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 	}
 
@@ -325,7 +337,7 @@ class CardControllerTest extends TestCase {
 		// server, third-party API callers) keep last-writer-wins.
 		$card = $this->card();
 		$this->cardService->expects(self::once())->method('update')
-			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, null)
+			->with(9, null, 'New description', null, null, null, 'alice', null, null, null, null, null, null, null, null, null, null, null)
 			->willReturn($card);
 
 		$response = $this->controller->update(9, null, 'New description');
@@ -334,14 +346,17 @@ class CardControllerTest extends TestCase {
 
 	public function testUpdateMapsDescriptionConflictTo409WithBothVersions(): void {
 		$this->cardService->method('update')
-			->willThrowException(new DescriptionConflictException('their current text', 1800));
+			->willThrowException(new DescriptionConflictException('their current text', 1800, 7));
 
-		$response = $this->controller->update(9, null, 'my text', baseLastModified: 1700);
+		$response = $this->controller->update(9, null, 'my text', baseDescriptionRevision: 6);
 		self::assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		// `error`/`description`/`lastModified` keep the #9845 shape byte for byte;
+		// `revision` is additive, and is the base a retry must be built on.
 		self::assertSame([
 			'error' => 'description_conflict',
 			'description' => 'their current text',
 			'lastModified' => 1800,
+			'revision' => 7,
 		], $response->getData());
 	}
 

@@ -220,17 +220,21 @@ class CardController extends Controller {
 	/**
 	 * Updates the given fields (omitted = unchanged).
 	 *
-	 * $baseLastModified is optional optimistic concurrency for the description
-	 * (#9845): the card's `lastModified` at the moment the caller's editor was
-	 * seeded. If the card has since been changed and the description being
-	 * written differs from the stored one, the write is refused with
-	 * 409 {"error": "description_conflict", "description": <current text>,
-	 * "lastModified": <current version>} via ApiErrorTrait - matching the
+	 * $baseDescriptionRevision is optional optimistic concurrency for the
+	 * description (#9848): the card's `descriptionRevision` at the moment the
+	 * caller's editor was seeded. If another author's description write has
+	 * landed since, and the description being written differs from the stored
+	 * one, the write is refused with 409 {"error": "description_conflict",
+	 * "description": <current text>, "lastModified": <current version>,
+	 * "revision": <current revision>} via ApiErrorTrait - matching the
 	 * `rebalance_required` conflict shape - instead of clobbering the other
-	 * author's text. It is a best-effort guard, not a lock (see the guard in
-	 * {@see \OCA\Kanso\Service\CardService::update()} for the windows it does not
-	 * cover). Omitting it keeps the previous last-writer-wins behaviour, so
-	 * existing API clients are unaffected.
+	 * author's text. Enforced by a conditional UPDATE inside the write
+	 * transaction, so exactly one of two racing writers can win.
+	 *
+	 * $baseLastModified is the original, coarser form of the same guard (#9845),
+	 * kept working for clients written against it. It applies only when no
+	 * revision is supplied. Omitting BOTH keeps the previous last-writer-wins
+	 * behaviour, so existing API clients are unaffected.
 	 */
 	#[NoAdminRequired]
 	public function update(
@@ -250,10 +254,11 @@ class CardController extends Controller {
 		?string $type = null,
 		?string $visibility = null,
 		?int $baseLastModified = null,
+		?int $baseDescriptionRevision = null,
 	): JSONResponse {
-		return $this->respond(function () use ($id, $title, $description, $duedate, $done, $archived, $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility, $baseLastModified): JSONResponse {
+		return $this->respond(function () use ($id, $title, $description, $duedate, $done, $archived, $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility, $baseLastModified, $baseDescriptionRevision): JSONResponse {
 			return new JSONResponse(
-				$this->cardService->update($id, $title, $description, $duedate, $done, $archived, $this->currentUserId(), $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility, $baseLastModified)
+				$this->cardService->update($id, $title, $description, $duedate, $done, $archived, $this->currentUserId(), $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility, $baseLastModified, $baseDescriptionRevision)
 			);
 		});
 	}

@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Service\GithubWebhookService;
+use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\NonJsonWebhookBodyException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -59,6 +61,30 @@ class WebhookController extends Controller {
 			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
 			$response->throttle(['action' => 'kansoWebhook']);
 			return $response;
+		} catch (NonJsonWebhookBodyException $e) {
+			// A correctly-signed delivery whose body is not JSON: the webhook was
+			// created with the form-encoded content type. That is a misconfigured
+			// user, not an attacker, so this is deliberately NOT throttled - and the
+			// body carries the hint rather than a silent 200, so the mistake is
+			// visible in GitHub's delivery log. No board data is exposed (#3760).
+			//
+			// The dedicated marker type matters: handleWebhook() also creates and
+			// moves cards, and those throw the plain InvalidInputException below. On
+			// the broad catch this hint went out for those too, telling a user whose
+			// content type was already correct to go and change it.
+			return new JSONResponse([
+				'error' => 'invalid_payload',
+				'hint' => 'Set the webhook Content type to application/json',
+			], Http::STATUS_BAD_REQUEST);
+		} catch (InvalidInputException $e) {
+			// The body parsed fine, but the card create/move the event asked for was
+			// rejected (e.g. an issue whose title trims to empty). Still a 400, still
+			// not throttled, but reported as what it is - the message is the same one
+			// the REST API returns for the identical rejection.
+			return new JSONResponse([
+				'error' => 'invalid_payload',
+				'message' => $e->getMessage(),
+			], Http::STATUS_BAD_REQUEST);
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
 		}

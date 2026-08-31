@@ -400,6 +400,78 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * Compare-and-set on `description_revision` - the atomic half of the
+	 * description's optimistic concurrency (#9848). Advances the counter to
+	 * $baseRevision + 1 ONLY while the stored value is still $baseRevision, in
+	 * ONE statement, so two writers that started from the same version cannot
+	 * both pass: the loser's WHERE no longer matches. Called inside the update
+	 * transaction, so the row lock it takes also serialises the description
+	 * write that follows it.
+	 *
+	 * Plain integer comparison, so it behaves identically on SQLite, MySQL and
+	 * PostgreSQL - a text digest could not (SQLite has no built-in sha1/md5,
+	 * and comparing the raw text collates case-insensitively on MySQL).
+	 *
+	 * Affected rows are 1 = claimed, 0 = somebody else got there first - and that
+	 * is unambiguous BECAUSE the counter strictly increments: the row always
+	 * changes when the WHERE matches, so a driver that reports changed-rows
+	 * (MySQL without CLIENT_FOUND_ROWS) can never report 0 for a match. Do not
+	 * "optimise" this into a no-op-when-equal write.
+	 *
+	 * A targeted UPDATE (not a full-entity write), same shape as
+	 * {@see self::updateSortKeyById()}; the description text itself is written
+	 * by the ordinary entity update in the same transaction.
+	 *
+	 * @return int the number of affected rows
+	 * @throws Exception
+	 */
+	public function claimDescriptionRevision(int $cardId, int $baseRevision): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('description_revision', $qb->createNamedParameter($baseRevision + 1, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('description_revision', $qb->createNamedParameter($baseRevision, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
+	 * Unconditionally advances `description_revision` by one and returns the new
+	 * value - what an UNGUARDED description write (an API client, the MCP server)
+	 * uses to keep the counter moving without claiming anything.
+	 *
+	 * The increment is computed IN SQL (`= description_revision + 1`), never from
+	 * a value read earlier in PHP: a read-modify-write would be evaluated against
+	 * a row another writer may already have moved, which could stall the counter
+	 * (letting a guarded editor's next save clobber this text unnoticed) or even
+	 * walk it BACKWARDS (making a correctly-seeded editor conflict). Everything
+	 * else here assumes the counter only ever climbs.
+	 *
+	 * The read-back runs in the caller's transaction, after the UPDATE has taken
+	 * the row lock, so it returns exactly the value this write will commit.
+	 *
+	 * @return int the card's new description revision
+	 * @throws Exception
+	 */
+	public function bumpDescriptionRevision(int $cardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('description_revision', $qb->createFunction($qb->getColumnName('description_revision') . ' + 1'))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+
+		$read = $this->db->getQueryBuilder();
+		$read->select('description_revision')
+			->from($this->getTableName())
+			->where($read->expr()->eq('id', $read->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+		$result = $read->executeQuery();
+		$revision = $result->fetchOne();
+		$result->closeCursor();
+
+		return (int)$revision;
+	}
+
+	/**
 	 * Summary (no description) of the non-deleted card directly after the
 	 * given sort key in a stack - the lower neighbour of a move target
 	 * position. Null when the position is at the end of the stack.

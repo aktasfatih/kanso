@@ -180,6 +180,15 @@ Recurrence is board automation, not a card field: a rule is anchored on a
 card repeat, create the card first, then create a rule with its id as the
 template. Mutations need MANAGE on the board.
 
+The schedule's `DTSTART` anchor is derived by the server, never passed to
+`kanso_create_recur_rule`: it is the template card's **start date**, else its
+**due date**, else the **rule's creation time**. Because `DTSTART` is part of
+the recurrence set, a template card dated in the *future* first fires on that
+date to the minute — regardless of any `BY*` part in the rule, which only
+shapes the occurrences after it. So date the template card (via
+`kanso_update_card`) *before* creating the rule if you care where the series
+starts.
+
 - `kanso_list_recur_rules` — a board's repeat schedules (+ next occurrence)
 - `kanso_create_recur_rule` — repeat a template card (rrule, CLONE/RESET mode, due-date policy, timezone)
 - `kanso_update_recur_rule` — edit a rule; `enabled=false` pauses it

@@ -68,9 +68,10 @@ your work, on your own Nextcloud, laid out plainly.
 - **GitHub links**: attach PRs/issues to a card with live open/merged/closed
   badges, and copy a ready-made `kanso-<id>` branch name.
 - **GitHub webhook**: an HMAC-verified webhook (send it `pull_request` and
-  `issues` events) moves a card to your Review column when its PR opens and to
-  Done when it merges. Closing an issue linked on a card moves that card to
-  Done; reopening it moves the card back to In progress. Opt-in **issue
+  `issues` events, content type `application/json`) moves a card to your Review
+  column when its PR opens and to Done when it merges. Closing an issue linked
+  on a card moves that card to Done; reopening it moves the card back to In
+  progress. Opt-in **issue
   intake**: pick a column in the board's webhook settings and every newly
   opened issue (optionally filtered to one GitHub label) becomes a linked card
   there — title plus issue link only, no body copy. No credentials, no OAuth.
@@ -185,6 +186,14 @@ cross-version matrix uses):
 NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on Postgres
 NC_VERSION=30 KANSO_DB=sqlite   ./setup.sh   # NC 30 on SQLite (no db container)
 NC_VERSION=34 KANSO_DB=mysql    ./setup.sh   # NC 34 on MariaDB
+```
+
+The boot also side-loads two optional Nextcloud apps (Deck and Contacts) that a
+couple of the end-to-end tests need. They're downloaded from GitHub; if you're
+offline, skip them — only those two tests care:
+
+```sh
+KANSO_SKIP_OPTIONAL_APPS=1 ./setup.sh
 ```
 
 ## MCP server (AI access)

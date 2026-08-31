@@ -13,6 +13,33 @@ npm run test:e2e                 # full suite, serial (workers: 1)
 npx playwright test labels       # a single spec
 ```
 
+## Optional Nextcloud apps some specs need
+
+Two specs exercise integrations with other Nextcloud apps, and fail with a
+confusing "button is missing" / "board not found" error if that app isn't
+installed rather than saying so:
+
+| Spec | Needs |
+| --- | --- |
+| [`card-contacts.spec.js`](./card-contacts.spec.js) | `contacts` — `ContactService::isAvailable()` is false without the app, so the picker's search returns an empty list and the spec times out waiting for its option |
+| [`deck-import.spec.js`](./deck-import.spec.js) | `deck` — its `beforeAll` seeds a source board through the real Deck API, so the whole describe errors out |
+
+`dev/setup.sh` side-loads both (pinned release tarballs) through
+[`dev/install-optional-apps.sh`](../../dev/install-optional-apps.sh), and the CI
+`e2e` job gets them from the same script, so a local run and CI provision
+identically. If you booted with `KANSO_SKIP_OPTIONAL_APPS=1`, run
+`./dev/install-optional-apps.sh` against the running stack to add them
+afterwards. The pins support Nextcloud **34** only, so on a stack booted with
+`NC_VERSION=30..33` the script skips itself and those two specs stay red —
+that's expected, not a regression.
+
+One more spec depends on an optional app: [`realtime.spec.js`](./realtime.spec.js)'s
+push test needs `notify_push`, which `dev/setup.sh` installs from the appstore.
+That install is best-effort — if it printed a `WARNING: could not install
+notify_push`, push is unavailable and the test **fails rather than skips**. Run
+the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and exercise only the
+delta-poll fallback.
+
 ## Shared helpers — use these, don't re-roll them
 
 Every spec imports its plumbing from [`helpers.js`](./helpers.js) instead of

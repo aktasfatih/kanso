@@ -32,10 +32,71 @@ jobs:
     runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v7
+      # The ARC runner image intermittently lacks libsodium.so.23, which the
+      # php binary setup-php installs links directly. setup-php still reports
+      # success, but php then dies with "error while loading shared libraries"
+      # and exit 127 before a single test runs — a red required check on a PR
+      # that is fine, whose only remedy is a manual re-run. Same "the lean
+      # runner image is missing X, so install X" pattern as the two Compose
+      # plugin steps below. Runs BEFORE setup-php so the lib exists for
+      # setup-php's own php invocations.
+      #
+      # Conditional on purpose: apt is reached only on a runner that lacks
+      # libsodium.so.23 — where php was going to exit 127 regardless — so a
+      # flaky apt mirror can never redden a job that would otherwise have
+      # passed. An unconditional `apt-get update` would trade one flake for
+      # another. That equivalence holds only while setup-php's php links this
+      # exact soname: if it ever links a different one, update the soname and
+      # package below, or this will run apt on every job on every runner.
+      #
+      # `grep >/dev/null`, NOT `grep -q`: under `set -o pipefail`, grep -q exits
+      # at the first match and SIGPIPEs `ldconfig -p` mid-write (its output is
+      # far larger than the 64 KiB pipe buffer), so the pipeline reports 141 and
+      # the check reads ABSENT even when the library IS present — reproduced
+      # every time on a host that has it. That would invert the conditional and
+      # run apt on every job on every runner, i.e. exactly the failure mode the
+      # conditional exists to avoid. Do not "simplify" it back to -q.
+      - name: Ensure libsodium runtime library
+        run: |
+          set -euo pipefail
+          # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
+          # dirs on PATH. Without this the probe below reports "missing" on a
+          # runner that HAS the library, and the step does a pointless apt run.
+          PATH="$PATH:/usr/sbin:/sbin"
+          if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
+            echo "libsodium.so.23 already present, skipping apt"
+          else
+            echo "libsodium.so.23 missing on this runner, installing it"
+            SUDO=
+            if [ "$(id -u)" -ne 0 ]; then SUDO=sudo; fi
+            # Via `env`, not an assignment prefix and not `export`: sudo scrubs
+            # the environment (so an exported value would not reach apt-get as
+            # non-root), and a bare `$SUDO VAR=x apt-get` breaks as ROOT — with
+            # $SUDO empty the shell has already parsed the command, so VAR=x is
+            # taken as the command name and the step dies with 127. `env` works
+            # identically with and without the sudo prefix. Non-interactive so
+            # a debconf prompt cannot hang the job for the 6h default timeout.
+            #
+            # Best-effort, both lines. This step is REMEDIATION, not a gate: on a
+            # newer runner image the package is named something else entirely
+            # (libsodium26 on a Debian trixie / Ubuntu 26.04-class image), so a
+            # hard `apt-get install` failure would redden cs-check, psalm and both
+            # unit-php jobs on a PR whose PHP was perfectly fine - the exact false
+            # red this step exists to remove. If PHP really cannot start, the
+            # "Verify the PHP binary starts" step below says so under an obvious
+            # name; that is the honest gate, so there is no assertion here.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update || true
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23 || true
+          fi
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           tools: composer
+      # Tripwire: setup-php reports success even when the php it installed
+      # cannot start, so assert it here — at a named step with an obvious
+      # meaning — rather than letting the 127 surface inside `composer install`.
+      - name: Verify the PHP binary starts
+        run: php -v
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: php-cs-fixer
@@ -45,10 +106,45 @@ jobs:
     runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v7
+      # See cs-check above for why this step exists and why it is not `grep -q`.
+      - name: Ensure libsodium runtime library
+        run: |
+          set -euo pipefail
+          # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
+          # dirs on PATH. Without this the probe below reports "missing" on a
+          # runner that HAS the library, and the step does a pointless apt run.
+          PATH="$PATH:/usr/sbin:/sbin"
+          if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
+            echo "libsodium.so.23 already present, skipping apt"
+          else
+            echo "libsodium.so.23 missing on this runner, installing it"
+            SUDO=
+            if [ "$(id -u)" -ne 0 ]; then SUDO=sudo; fi
+            # Via `env`, not an assignment prefix and not `export`: sudo scrubs
+            # the environment (so an exported value would not reach apt-get as
+            # non-root), and a bare `$SUDO VAR=x apt-get` breaks as ROOT — with
+            # $SUDO empty the shell has already parsed the command, so VAR=x is
+            # taken as the command name and the step dies with 127. `env` works
+            # identically with and without the sudo prefix. Non-interactive so
+            # a debconf prompt cannot hang the job for the 6h default timeout.
+            #
+            # Best-effort, both lines. This step is REMEDIATION, not a gate: on a
+            # newer runner image the package is named something else entirely
+            # (libsodium26 on a Debian trixie / Ubuntu 26.04-class image), so a
+            # hard `apt-get install` failure would redden cs-check, psalm and both
+            # unit-php jobs on a PR whose PHP was perfectly fine - the exact false
+            # red this step exists to remove. If PHP really cannot start, the
+            # "Verify the PHP binary starts" step below says so under an obvious
+            # name; that is the honest gate, so there is no assertion here.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update || true
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23 || true
+          fi
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           tools: composer
+      - name: Verify the PHP binary starts
+        run: php -v
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Psalm static analysis
@@ -64,10 +160,45 @@ jobs:
         php-version: ['8.2', '8.3']
     steps:
       - uses: actions/checkout@v7
+      # See cs-check above for why this step exists and why it is not `grep -q`.
+      - name: Ensure libsodium runtime library
+        run: |
+          set -euo pipefail
+          # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
+          # dirs on PATH. Without this the probe below reports "missing" on a
+          # runner that HAS the library, and the step does a pointless apt run.
+          PATH="$PATH:/usr/sbin:/sbin"
+          if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
+            echo "libsodium.so.23 already present, skipping apt"
+          else
+            echo "libsodium.so.23 missing on this runner, installing it"
+            SUDO=
+            if [ "$(id -u)" -ne 0 ]; then SUDO=sudo; fi
+            # Via `env`, not an assignment prefix and not `export`: sudo scrubs
+            # the environment (so an exported value would not reach apt-get as
+            # non-root), and a bare `$SUDO VAR=x apt-get` breaks as ROOT — with
+            # $SUDO empty the shell has already parsed the command, so VAR=x is
+            # taken as the command name and the step dies with 127. `env` works
+            # identically with and without the sudo prefix. Non-interactive so
+            # a debconf prompt cannot hang the job for the 6h default timeout.
+            #
+            # Best-effort, both lines. This step is REMEDIATION, not a gate: on a
+            # newer runner image the package is named something else entirely
+            # (libsodium26 on a Debian trixie / Ubuntu 26.04-class image), so a
+            # hard `apt-get install` failure would redden cs-check, psalm and both
+            # unit-php jobs on a PR whose PHP was perfectly fine - the exact false
+            # red this step exists to remove. If PHP really cannot start, the
+            # "Verify the PHP binary starts" step below says so under an obvious
+            # name; that is the honest gate, so there is no assertion here.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update || true
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23 || true
+          fi
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer
+      - name: Verify the PHP binary starts
+        run: php -v
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Run unit tests
@@ -202,6 +333,12 @@ jobs:
       # No realtime push needed for install/migration validation; skipping keeps
       # the boot from depending on an appstore fetch of notify_push.
       KANSO_SKIP_NOTIFY_PUSH: '1'
+      # Likewise for the optional e2e apps (deck/contacts): this job runs no
+      # Playwright, so it has no use for either. install-optional-apps.sh
+      # self-skips on NC != 34 (the pins support 34 only), so this flag is what
+      # spares the NC-34 rows a pointless download — and it states the intent
+      # for the whole matrix in one place.
+      KANSO_SKIP_OPTIONAL_APPS: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -263,6 +400,12 @@ jobs:
       # Realtime push isn't needed for the UI specs (they poll); skip it so a
       # flaky appstore release can't fail the boot.
       KANSO_SKIP_NOTIFY_PUSH: '1'
+      # setup.sh's default anyway, but stated explicitly: the deck/contacts pins
+      # in dev/install-optional-apps.sh support NC 34 only, and the script skips
+      # itself on any other major. Pinning the version here keeps the two specs
+      # that need those apps from silently going red if NC_VERSION ever leaks
+      # into the runner environment.
+      NC_VERSION: '34'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -293,31 +436,18 @@ jobs:
       # Boot the same throwaway Nextcloud stack used locally (dev/setup.sh):
       # postgres + redis + notify_push + nextcloud:34-apache, app enabled,
       # firstrunwizard disabled, tester user + push wired up. Idempotent.
+      #
+      # setup.sh also side-loads the optional apps two specs need — deck (for
+      # deck-import.spec.js) and contacts (for card-contacts.spec.js) — via
+      # dev/install-optional-apps.sh. That used to be two steps here, which
+      # meant a local stack silently lacked both and those specs were red for
+      # everyone but CI; the pins now live in the script, in one place. It still
+      # side-loads signed release tarballs rather than using `occ app:install`,
+      # because the cluster's dind network can't reach the NC appstore (the
+      # runner host can reach GitHub, so the download happens outside the
+      # container and is `docker cp`-ed in).
       - name: Boot dev Nextcloud stack
         run: ./dev/setup.sh
-
-      # deck-import.spec.js drives the real Deck API to seed a source board, so
-      # Deck must be installed. The cluster's dind network can't reach the NC
-      # appstore, so side-load the signed release tarball (runner has internet):
-      # download here, copy into the container, enable. Pinned to the version
-      # the dev stack uses.
-      - name: Install Deck (for the import spec)
-        run: |
-          curl -fsSL https://github.com/nextcloud-releases/deck/releases/download/v1.18.3/deck-v1.18.3.tar.gz -o /tmp/deck.tar.gz
-          docker cp /tmp/deck.tar.gz kanso-dev:/tmp/deck.tar.gz
-          docker exec kanso-dev bash -c 'tar -xzf /tmp/deck.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/deck'
-          docker exec -u www-data kanso-dev php occ app:enable deck
-
-      # card-contacts.spec.js exercises the feature-detected contact picker,
-      # which needs the Contacts app installed. Same appstore-unreachable
-      # constraint as Deck above, so side-load the signed release tarball.
-      # Pinned to v8.7.5 (info.xml min-version=33 max-version=34 — NC34-compatible).
-      - name: Install Contacts (for the card-contacts spec)
-        run: |
-          curl -fsSL https://github.com/nextcloud-releases/contacts/releases/download/v8.7.5/contacts-v8.7.5.tar.gz -o /tmp/contacts.tar.gz
-          docker cp /tmp/contacts.tar.gz kanso-dev:/tmp/contacts.tar.gz
-          docker exec kanso-dev bash -c 'tar -xzf /tmp/contacts.tar.gz -C /var/www/html/custom_apps && chown -R www-data:www-data /var/www/html/custom_apps/contacts'
-          docker exec -u www-data kanso-dev php occ app:enable contacts
 
       # chromium runs the whole desktop suite + the mobile-chromium (Pixel 7)
       # project; webkit runs the mobile-webkit (iPhone 14) project so the PWA is

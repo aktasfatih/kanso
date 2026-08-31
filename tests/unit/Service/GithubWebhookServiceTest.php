@@ -19,6 +19,7 @@ use OCA\Kanso\Service\CardLinkService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\GithubWebhookService;
+use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\IURLGenerator;
@@ -155,6 +156,20 @@ class GithubWebhookServiceTest extends TestCase {
 		$this->cardService->expects(self::never())->method('move');
 
 		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	public function testFormEncodedBodyIsRejectedNotSilentlyAccepted(): void {
+		// A webhook created with GitHub's `application/x-www-form-urlencoded`
+		// content type sends `payload=<urlencoded JSON>`, and GitHub signs it - so
+		// it PASSES the HMAC check. Swallowing it as a no-op recorded a green 200
+		// in the delivery log while nothing happened on the board; it must be
+		// reported so the misconfiguration is diagnosable.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$body = 'payload=' . urlencode($this->prBody('opened', 'kanso-9-x'));
+		$this->cardService->expects(self::never())->method('move');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->handleWebhook(1, $this->sign($body), $body);
 	}
 
 	public function testUnknownBranchIsNoop(): void {

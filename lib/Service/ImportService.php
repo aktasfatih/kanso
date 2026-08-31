@@ -34,6 +34,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\IDBConnection;
 use OCP\IUserManager;
+use Psr\Log\LoggerInterface;
 
 /**
  * Recreates a whole board graph from a Kanso export document (see
@@ -88,6 +89,8 @@ class ImportService {
 		private IUserManager $userManager,
 		private IDBConnection $db,
 		private BoardAccess $boardAccess,
+		private RecurrenceService $recurrenceService,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -592,6 +595,21 @@ class ImportService {
 			if ($newTemplateId === null || $newTargetId === null) {
 				continue;
 			}
+			$rrule = $this->str($row, 'rrule', '');
+			// Every other write path parse-validates the RRULE before storing it
+			// (see RecurrenceService::create/update); import must not be the one
+			// hole. A rule we cannot parse spawns nothing and disables itself on
+			// the first cron pass anyway, so drop it now - silently, like the
+			// sibling drops above.
+			try {
+				$this->recurrenceService->computeNextOccurrence($rrule, $now, $now);
+			} catch (InvalidInputException) {
+				$this->logger->warning(
+					'Kanso import: dropped a repeat rule whose recurrence rule could not be parsed',
+					['rrule' => $rrule],
+				);
+				continue;
+			}
 			$owner = $this->nullableStr($row, 'owner');
 			if ($owner === null || !$this->userManager->userExists($owner)) {
 				$owner = $actorUid;
@@ -601,7 +619,7 @@ class ImportService {
 			$rule->setTemplateCardId($newTemplateId);
 			$rule->setTargetStackId($newTargetId);
 			$rule->setMode((int)($row['mode'] ?? RecurRule::MODE_CLONE));
-			$rule->setRrule($this->str($row, 'rrule', ''));
+			$rule->setRrule($rrule);
 			$rule->setDuedatePolicy((int)($row['duedatePolicy'] ?? RecurRule::POLICY_AT_OCCURRENCE));
 			$rule->setDuedateOffsetSeconds((int)($row['duedateOffsetSeconds'] ?? 0));
 			$rule->setSkipWhileOpen((bool)($row['skipWhileOpen'] ?? false));

@@ -19,8 +19,10 @@ use OCP\DB\Types;
  * (see the POLICY_* constants). `nextOccurrenceAt` caches the next fire time so
  * the cron scan is a single indexed range query; 0 means exhausted/never and,
  * together with `enabled = false`, marks a rule that self-disabled after its
- * COUNT/UNTIL ran out. `createdAt` doubles as the DTSTART anchor the RRULE is
- * expanded from.
+ * COUNT/UNTIL ran out. The DTSTART anchor the RRULE is expanded from is the
+ * template card's Start date, else its due date, else this rule's `createdAt`
+ * as a last resort (see `RecurrenceService::anchorFor()`); a template dated in
+ * the future first fires on that date itself, unfiltered by any BY* rule part.
  *
  * @method int getBoardId()
  * @method void setBoardId(int $boardId)

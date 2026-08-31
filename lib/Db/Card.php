@@ -73,6 +73,8 @@ use OCP\DB\Types;
  * @method void setVisibility(string $visibility)
  * @method string|null getCreatorRole()
  * @method void setCreatorRole(string $creatorRole)
+ * @method int|null getDescriptionRevision()
+ * @method void setDescriptionRevision(int $descriptionRevision)
  */
 class Card extends Entity implements \JsonSerializable {
 	public const PRIORITY_NONE = 0;
@@ -138,6 +140,16 @@ class Card extends Entity implements \JsonSerializable {
 	// the scope (epic 3, #3743).
 	protected ?string $visibility = null;
 	protected ?string $creatorRole = null;
+	// Description revision (#9848): a per-card counter bumped by every write
+	// that CHANGES the description - the real optimistic-concurrency token for
+	// the description editor. `lastModified` could not do this job: it has
+	// second resolution and also moves for edits that never touched the
+	// description. Deliberately NOT in CardMapper::SUMMARY_COLUMNS - it is only
+	// meaningful next to the description, which the summary payload does not
+	// carry either - so a summary-hydrated entity leaves it null (hence the
+	// `?? 0` at every read). For the same reason setDescriptionRevision() must
+	// only ever be called on an entity loaded by CardMapper::find().
+	protected ?int $descriptionRevision = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -167,6 +179,7 @@ class Card extends Entity implements \JsonSerializable {
 		$this->addType('isTemplate', Types::BOOLEAN);
 		$this->addType('visibility', Types::STRING);
 		$this->addType('creatorRole', Types::STRING);
+		$this->addType('descriptionRevision', Types::INTEGER);
 	}
 
 	/**
@@ -230,6 +243,13 @@ class Card extends Entity implements \JsonSerializable {
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
-		return $this->jsonSerializeSummary() + ['description' => $this->description];
+		return $this->jsonSerializeSummary() + [
+			'description' => $this->description,
+			// The description's optimistic-concurrency token (#9848). Detail-only,
+			// exactly like the description it guards - a summary row carries
+			// neither. The editor seeds its base version from this and sends it
+			// back as `baseDescriptionRevision` on save.
+			'descriptionRevision' => $this->descriptionRevision ?? 0,
+		];
 	}
 }

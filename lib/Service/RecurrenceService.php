@@ -22,6 +22,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IConfig;
 use OCP\IDBConnection;
+use Sabre\VObject\Property\ICalendar\Recur;
 use Sabre\VObject\Recur\RRuleIterator;
 
 /**
@@ -29,14 +30,18 @@ use Sabre\VObject\Recur\RRuleIterator;
  * (RFC 5545 RRULE). Rules are board-automation config (like labels and
  * auto-archive rules), so creating/editing them needs MANAGE and listing needs
  * READ. The schedule is expanded with sabre/vobject's {@see RRuleIterator},
- * anchored at the rule's `createdAt` (its DTSTART), and the next fire time is
- * cached in `next_occurrence_at` so the cron scan is a single indexed range
- * query. The schedule is expanded as floating wall-clock time (RFC 5545 /
- * CalDAV) in the rule's IANA `timezone` (defaulting to the owner's personal
- * timezone, server default as fallback), so e.g. "daily at 09:00" fires 09:00
- * local on both sides of a DST boundary. A delayed/downed cron catches up on
- * every MISSED occurrence - one card per occurrence - bounded per run by
- * {@see self::MAX_CATCHUP}; see {@see self::runDueRules}.
+ * anchored (its DTSTART) at the template card's Start date, else its due date,
+ * else the rule's `createdAt` - see {@see self::anchorFor}. RFC 5545 puts
+ * DTSTART itself in the recurrence set, so a template card dated in the FUTURE
+ * first fires on that date to the minute, unfiltered by any BY* rule part; the
+ * BY* parts shape every occurrence after it (see {@see self::firstFireFor}).
+ * The next fire time is cached in `next_occurrence_at` so the cron scan is a
+ * single indexed range query. The schedule is expanded as floating wall-clock
+ * time (RFC 5545 / CalDAV) in the rule's IANA `timezone` (defaulting to the
+ * owner's personal timezone, server default as fallback), so e.g. "daily at
+ * 09:00" fires 09:00 local on both sides of a DST boundary. A delayed/downed
+ * cron catches up on every MISSED occurrence - one card per occurrence -
+ * bounded per run by {@see self::MAX_CATCHUP}; see {@see self::runDueRules}.
  *
  * Two modes (see {@see RecurRule} MODE_* constants):
  *   - CLONE: each occurrence creates a fresh card in the target stack, copying
@@ -90,9 +95,11 @@ class RecurrenceService {
 	 * COUNT/UNTIL embedded in the RRULE. Returns 0 when the rule is exhausted
 	 * (no further occurrence) - the caller treats 0 as "self-disable".
 	 *
-	 * The RRULE is anchored at $dtstartTs (the rule's creation time) reinterpreted
-	 * as a wall-clock time in $timezone, so occurrences are floating local times
-	 * per RFC 5545 / CalDAV: "daily at 09:00" fires 09:00 local on both sides of a
+	 * The RRULE is anchored at $dtstartTs - the DTSTART callers get from
+	 * {@see self::anchorFor} (the template card's Start date, else its due date,
+	 * else the rule's creation time) - reinterpreted as a wall-clock time in
+	 * $timezone, so occurrences are floating local times per RFC 5545 / CalDAV:
+	 * "daily at 09:00" fires 09:00 local on both sides of a
 	 * DST boundary and the concrete UTC instant shifts to keep the local hour
 	 * stable. $timezone null falls back to the server default timezone (back-compat
 	 * for rules created before the timezone column existed). We do NOT hand-roll
@@ -107,9 +114,10 @@ class RecurrenceService {
 		$start = (new \DateTimeImmutable('@' . $dtstartTs))->setTimezone($tz);
 		try {
 			$iterator = new RRuleIterator($rrule, $start);
-		} catch (\Exception $e) {
+		} catch (\Throwable $e) {
 			// sabre throws assorted exception types for malformed input;
-			// normalize to the API's InvalidInputException.
+			// normalize to the API's InvalidInputException. \Throwable, not
+			// \Exception - see the fastForward() catch below for why.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 
@@ -118,8 +126,14 @@ class RecurrenceService {
 		$target = (new \DateTimeImmutable('@' . ($afterTs + 1)))->setTimezone($tz);
 		try {
 			$iterator->fastForward($target);
-		} catch (\Exception $e) {
-			// Some malformed rules only fail while iterating.
+		} catch (\Throwable $e) {
+			// Some malformed rules only fail while iterating - and NOT always as an
+			// \Exception. sabre never checks that FREQ is present: '', 'COUNT=3' and
+			// 'INTERVAL=2' all construct cleanly, then hit `switch ($this->frequency)`
+			// on a typed-but-uninitialized property and raise an \Error. Catching only
+			// \Exception let that escape as a 500 - crashing a board import, turning an
+			// invalid-rule API call into a fatal instead of a 400, and killing the cron
+			// pass on a rule stored before this was validated.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 
@@ -293,10 +307,15 @@ class RecurrenceService {
 	/**
 	 * Updates the given fields of a rule (null = leave unchanged). The cached
 	 * `next_occurrence_at` is re-armed only when the schedule actually changes (a
-	 * different RRULE or timezone) or the rule is re-enabled (disabled → enabled),
+	 * different RRULE, timezone or template card - the template carries the
+	 * anchor date) or the rule is re-enabled (disabled → enabled),
 	 * and even then it is never rewound onto an occurrence the cron already spawned - a
 	 * no-op edit leaves the cursor exactly where it was, so editing a rule can no
 	 * longer duplicate an already-fired occurrence dated today (#65).
+	 *
+	 * A changed RRULE additionally resets the `occurrences_spawned` tally, so an
+	 * "ends after N times" edit means N MORE cards rather than N counted from the
+	 * rule's creation - see the reset below for the trade-off.
 	 *
 	 * @throws DoesNotExistException if the rule, its board, the template card or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
@@ -336,6 +355,7 @@ class RecurrenceService {
 		// rewound onto an occurrence the cron has already spawned.
 		$originalRrule = $rule->getRrule();
 		$originalTimezone = $rule->getTimezone();
+		$originalTemplate = $rule->getTemplateCardId();
 		$wasEnabled = $rule->getEnabled();
 		// A null/empty timezone means "leave the zone alone"; there is no way to
 		// clear it (a rule always expands in SOME zone, cleared just means the
@@ -356,6 +376,20 @@ class RecurrenceService {
 		}
 		if ($enabled !== null) {
 			$rule->setEnabled($enabled);
+		}
+
+		// A new RRULE means a new series, so the "ends after N times" tally starts
+		// again from zero. `occurrences_spawned` is a LIFETIME counter, and the only
+		// thing that reads it is the COUNT guard in advanceSchedule(); leaving it
+		// alone made an edit that adds or lowers COUNT collapse to a single card -
+		// a weekly rule that had already spawned 12, edited to FREQ=WEEKLY;COUNT=4
+		// ("four more"), spawned one and then disabled itself because 13 >= 4.
+		// Trade-off, taken deliberately: lowering COUNT=10 to COUNT=3 half-way
+		// through also restarts the count instead of ending the series early. An
+		// RRULE edit is read as "this is the new schedule", not as a correction to
+		// the old one. Only an actual rule change resets - a no-op re-save does not.
+		if ($newRrule !== $originalRrule) {
+			$rule->setOccurrencesSpawned(0);
 		}
 
 		// Do we need to recalculate when this rule fires next?
@@ -380,8 +414,15 @@ class RecurrenceService {
 		//      meaning no duplicate card (still safe for #65).
 		//
 		// A timezone change counts as a schedule change too: re-anchoring the same
-		// repeat rule in a different zone shifts every future occurrence.
-		$scheduleChanged = $newRrule !== $originalRrule || $newTimezone !== $originalTimezone;
+		// repeat rule in a different zone shifts every future occurrence. So does
+		// pointing the rule at a DIFFERENT template card: the schedule is anchored
+		// on the template's own Start/End date, so the old card's anchor is
+		// meaningless once the rule follows another card. Without this the rule
+		// would keep firing on the old card's dates while stamping copies of the
+		// new one, until some unrelated schedule edit happened to re-arm it.
+		$scheduleChanged = $newRrule !== $originalRrule
+			|| $newTimezone !== $originalTimezone
+			|| $newTemplate !== $originalTemplate;
 		$reEnabled = $rule->getEnabled() && !$wasEnabled;
 		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
 			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
@@ -809,16 +850,6 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Advances the rule's cached next fire time to the first occurrence strictly
-	 * after the occurrence that just fired ($firedOccurrenceTs) - NOT to now.
-	 * Walking the cursor occurrence-by-occurrence is what lets a delayed cron
-	 * catch up on every missed occurrence instead of skipping to the next future
-	 * one. 0 (COUNT/UNTIL exhausted) self-disables the rule. A malformed RRULE
-	 * (should be impossible past create/update validation, but a rule could
-	 * predate a stricter parser) is treated as exhausted and disables the rule
-	 * rather than throwing out of the spawn.
-	 */
-	/**
 	 * The point the schedule should advance PAST after this spawn.
 	 *
 	 * Scheduled spawns advance strictly past the occurrence that just fired, so
@@ -832,6 +863,83 @@ class RecurrenceService {
 		return $manual ? $this->time->getTime() - 1 : $occurrenceTs;
 	}
 
+	/**
+	 * The COUNT limit an RRULE carries, or null for an open-ended (or
+	 * UNTIL-limited) series.
+	 *
+	 * Deliberately reads the rule the way sabre does rather than with a
+	 * hand-rolled regex, so the cap enforced here cannot disagree with the cap
+	 * {@see RRuleIterator} enforces: split with sabre's own
+	 * {@see Recur::stringToArray} (which also upper-cases the parts), then the
+	 * same plain int cast and "must be >= 1" rejection the iterator applies to
+	 * COUNT. That equivalence matters - a stricter read (say, digits-only) would
+	 * quietly hand back null for values sabre accepts, like `COUNT=+3`, and leave
+	 * exactly those rules running away. Anything sabre would not accept as a
+	 * positive integer returns null, which just leaves the iterator's own verdict
+	 * standing; a genuinely malformed rule already throws out of
+	 * {@see self::computeNextOccurrence} and is disabled by the caller.
+	 */
+	private function countLimitFor(string $rrule): ?int {
+		try {
+			$parts = Recur::stringToArray($rrule);
+		} catch (\Exception $e) {
+			return null;
+		}
+		$count = $parts['COUNT'] ?? null;
+		if (!is_scalar($count)) {
+			return null;
+		}
+		$limit = (int)$count;
+		return $limit >= 1 ? $limit : null;
+	}
+
+	/**
+	 * Advances the rule's cached next fire time to the first occurrence strictly
+	 * after the occurrence that just fired ($firedOccurrenceTs) - NOT to now.
+	 * Walking the cursor occurrence-by-occurrence is what lets a delayed cron
+	 * catch up on every missed occurrence instead of skipping to the next future
+	 * one. 0 (COUNT/UNTIL exhausted) self-disables the rule. A malformed RRULE
+	 * (should be impossible past create/update validation, but a rule could
+	 * predate a stricter parser) is treated as exhausted and disables the rule
+	 * rather than throwing out of the spawn.
+	 *
+	 * COUNT gets a second, independent cap from the rule's own durable tally,
+	 * because the iterator alone cannot be trusted for it:
+	 * {@see self::computeNextOccurrence} builds a FRESH RRuleIterator per call,
+	 * whose COUNT window restarts from whatever DTSTART it is handed. In RESET
+	 * mode {@see self::spawnReset} rewrites the template card's own dates to each
+	 * fired occurrence, so {@see self::anchorFor} hands the next call a DTSTART one
+	 * occurrence later and the window restarts every spawn - a "repeat 3 times"
+	 * rule repeating forever. Checking occurrences_spawned against the RRULE's
+	 * COUNT closes that: the tally is persisted with the rest of the spawn
+	 * bookkeeping inside the spawn transaction, so the anchor drifting cannot
+	 * touch it. Rules already running away in the wild need no backfill - the
+	 * tally has been maintained since the feature shipped, so the next spawn
+	 * delivers one last card and then retires the rule.
+	 *
+	 * The guard is mode-agnostic, and can only ever pull $next DOWN to 0 - it
+	 * never extends a series. CLONE keeps a stable DTSTART, so there the iterator
+	 * is still the binding constraint and the guard merely agrees with it.
+	 *
+	 * The tally counts CARDS ACTUALLY PRODUCED, which decides what spends a COUNT
+	 * slot as far as THIS guard is concerned:
+	 *   - a skip does not bump the tally, so the guard never charges the user for
+	 *     a card that was never created (skip_while_open and the trashed-template
+	 *     pause both take this path). Note this does not hand the occurrence back:
+	 *     a skip still advances the cursor past it, so a skipped occurrence is
+	 *     gone from the series either way - that is pre-existing skip behaviour,
+	 *     not something the guard changes;
+	 *   - a manual "create now" DOES bump it, so it spends one of the N and the
+	 *     series ends one scheduled fire earlier. That is the intended reading of
+	 *     "ends after N times", and it is the one behaviour this guard changes for
+	 *     CLONE, which was otherwise already correct.
+	 *
+	 * Re-enabling an already-exhausted rule yields one final card before the guard
+	 * disables it again (the re-arm in {@see self::update} goes through
+	 * {@see self::firstFireFor}, which has no tally to consult). Bounded, and
+	 * arguably what "turn it back on" should do, so it is left alone rather than
+	 * plumbing the tally into a path that also serves brand-new rules.
+	 */
 	private function advanceSchedule(RecurRule $rule, int $firedOccurrenceTs, int $anchorTs): void {
 		try {
 			$next = $this->computeNextOccurrence($rule->getRrule(), $firedOccurrenceTs, $anchorTs, $rule->getTimezone());
@@ -840,6 +948,10 @@ class RecurrenceService {
 				'kanso: recurring rule ' . $rule->getId() . ' has an invalid RRULE, disabling',
 				['exception' => $e]
 			);
+			$next = 0;
+		}
+		$countLimit = $this->countLimitFor($rule->getRrule());
+		if ($countLimit !== null && $rule->getOccurrencesSpawned() >= $countLimit) {
 			$next = 0;
 		}
 		$rule->setNextOccurrenceAt($next);

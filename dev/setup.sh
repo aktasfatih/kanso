@@ -8,6 +8,9 @@
 #   NC_VERSION  Nextcloud major version → image nextcloud:<NC_VERSION>-apache
 #               (default 34)
 #   KANSO_DB    database driver: postgres (default) | mysql | sqlite
+#   KANSO_SKIP_OPTIONAL_APPS=1
+#               don't side-load the optional apps two e2e specs need (deck,
+#               contacts) — see install-optional-apps.sh
 #
 # Examples:
 #   ./setup.sh                                  # NC 34 + postgres (default)
@@ -91,10 +94,17 @@ if ! $OCC user:list | grep -q '^  - tester:'; then
 	docker exec -u www-data -e OC_PASS='kanso-dev-tester!1' kanso-dev php occ user:add --password-from-env tester
 fi
 
+# --- optional apps the e2e suite needs ---------------------------------------
+# deck (deck-import.spec.js) and contacts (card-contacts.spec.js). Kept in its
+# own script so the local stack and the CI e2e job provision from one set of
+# pins instead of duplicating the side-load in the workflow file.
+./install-optional-apps.sh
+
 # --- notify_push (realtime push) ---------------------------------------------
 # Optional: the app falls back to delta-polling without it, and the e2e suite
-# doesn't need realtime. Skip in CI (KANSO_SKIP_NOTIFY_PUSH=1) so a flaky/absent
-# appstore release can't fail the whole boot. Only wired for postgres (the
+# doesn't need realtime. CI sets KANSO_SKIP_NOTIFY_PUSH=1 to skip the whole
+# block (no appstore reachable there anyway); when it isn't set, a failed
+# install only warns — see the guard below. Only wired for postgres (the
 # notify_push service only runs under the postgres profile).
 if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ] || [ "$KANSO_DB" != "postgres" ]; then
 	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=${KANSO_SKIP_NOTIFY_PUSH:-0}, db=${KANSO_DB})"
@@ -113,14 +123,51 @@ CONF
 	apache2ctl graceful
 ' 2>/dev/null
 
+# Best-effort install: `occ app:install` needs the container to reach
+# apps.nextcloud.com, which it often can't (no egress, a stale appstore cache,
+# or appstoreenabled=false) — the same wall install-optional-apps.sh side-steps
+# with tarballs. Under `set -eu` a failure here would kill the whole boot, so
+# it only downgrades realtime instead.
+#
+# EVERY step below can flip the flag off, not just the install. `occ app:list`
+# prints DISABLED apps too, so matching notify_push there does not mean it is
+# usable: an installed-but-disabled app skips the install entirely, and then
+# `notify_push:setup` is an unregistered command whose non-zero exit would kill
+# the boot under `set -e` — exactly the failure this block exists to remove.
+# So gate on the commands actually WORKING, and warn once at the end.
+notify_push_ready=1
 if ! $OCC app:list | grep -q notify_push; then
-	$OCC app:install notify_push
+	$OCC app:install notify_push || notify_push_ready=0
 fi
-# The daemon talks to Nextcloud as http://nextcloud and sits behind the
-# compose network's apache proxy.
-$OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
-$OCC config:system:set trusted_domains 1 --value nextcloud
-$OCC notify_push:setup http://localhost:8891/push
+
+# Idempotent, and the step that turns "present" into "usable".
+if [ "$notify_push_ready" = "1" ]; then
+	$OCC app:enable notify_push || notify_push_ready=0
+fi
+
+if [ "$notify_push_ready" = "1" ]; then
+	# The daemon talks to Nextcloud as http://nextcloud and sits behind the
+	# compose network's apache proxy.
+	$OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
+	$OCC config:system:set trusted_domains 1 --value nextcloud
+	# The gate that actually matters: whether the command runs at all.
+	$OCC notify_push:setup http://localhost:8891/push || notify_push_ready=0
+fi
+
+if [ "$notify_push_ready" != "1" ]; then
+	echo >&2
+	echo "WARNING: could not set up notify_push — continuing without realtime push." >&2
+	echo "  * Kanso works normally; realtime falls back to delta-polling." >&2
+	echo "  * tests/e2e/realtime.spec.js's push test will now FAIL rather than skip" >&2
+	echo "    (it only skips on the env var), so run the suite with" >&2
+	echo "    KANSO_SKIP_NOTIFY_PUSH=1 for a clean local result." >&2
+	echo "  * The usual cause is this container not reaching apps.nextcloud.com," >&2
+	echo "    NOT a missing release: notify_push v1.4.0 supports Nextcloud 30-35." >&2
+	echo "    To side-load it by hand, unpack this into the container's" >&2
+	echo "    custom_apps and re-run:" >&2
+	echo "    https://github.com/nextcloud-releases/notify_push/releases/download/v1.4.0/notify_push-v1.4.0.tar.gz" >&2
+	echo >&2
+fi
 fi
 
 echo
