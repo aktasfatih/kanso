@@ -188,6 +188,14 @@ NC_VERSION=30 KANSO_DB=sqlite   ./setup.sh   # NC 30 on SQLite (no db container)
 NC_VERSION=34 KANSO_DB=mysql    ./setup.sh   # NC 34 on MariaDB
 ```
 
+The boot also side-loads two optional Nextcloud apps (Deck and Contacts) that a
+couple of the end-to-end tests need. They're downloaded from GitHub; if you're
+offline, skip them — only those two tests care:
+
+```sh
+KANSO_SKIP_OPTIONAL_APPS=1 ./setup.sh
+```
+
 ## MCP server (AI access)
 
 Kanso ships an optional **[Model Context Protocol](https://modelcontextprotocol.io)

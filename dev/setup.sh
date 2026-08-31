@@ -127,12 +127,22 @@ CONF
 # apps.nextcloud.com, which it often can't (no egress, a stale appstore cache,
 # or appstoreenabled=false) — the same wall install-optional-apps.sh side-steps
 # with tarballs. Under `set -eu` a failure here would kill the whole boot, so
-# it only downgrades realtime instead. Everything downstream (including
-# notify_push:setup, which would fail against a missing app) stays inside the
-# success branch.
+# it only downgrades realtime instead.
+#
+# EVERY step below can flip the flag off, not just the install. `occ app:list`
+# prints DISABLED apps too, so matching notify_push there does not mean it is
+# usable: an installed-but-disabled app skips the install entirely, and then
+# `notify_push:setup` is an unregistered command whose non-zero exit would kill
+# the boot under `set -e` — exactly the failure this block exists to remove.
+# So gate on the commands actually WORKING, and warn once at the end.
 notify_push_ready=1
 if ! $OCC app:list | grep -q notify_push; then
 	$OCC app:install notify_push || notify_push_ready=0
+fi
+
+# Idempotent, and the step that turns "present" into "usable".
+if [ "$notify_push_ready" = "1" ]; then
+	$OCC app:enable notify_push || notify_push_ready=0
 fi
 
 if [ "$notify_push_ready" = "1" ]; then
@@ -140,10 +150,13 @@ if [ "$notify_push_ready" = "1" ]; then
 	# compose network's apache proxy.
 	$OCC config:system:set trusted_proxies 0 --value 172.16.0.0/12
 	$OCC config:system:set trusted_domains 1 --value nextcloud
-	$OCC notify_push:setup http://localhost:8891/push
-else
+	# The gate that actually matters: whether the command runs at all.
+	$OCC notify_push:setup http://localhost:8891/push || notify_push_ready=0
+fi
+
+if [ "$notify_push_ready" != "1" ]; then
 	echo >&2
-	echo "WARNING: could not install notify_push — continuing without realtime push." >&2
+	echo "WARNING: could not set up notify_push — continuing without realtime push." >&2
 	echo "  * Kanso works normally; realtime falls back to delta-polling." >&2
 	echo "  * tests/e2e/realtime.spec.js's push test will now FAIL rather than skip" >&2
 	echo "    (it only skips on the env var), so run the suite with" >&2
