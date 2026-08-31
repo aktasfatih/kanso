@@ -182,6 +182,16 @@ export function dropCursor(boardId) {
 }
 
 /**
+ * Drop every board's cursor. Used after an offline period (see initOfflineSync):
+ * we can't trust any cursor across a connectivity gap - the change window may
+ * have advanced past it or been pruned - so the next fetch re-seeds each board
+ * from the server's latest change id.
+ */
+export function dropAllCursors() {
+	cursorByBoard.clear()
+}
+
+/**
  * Immutably apply a `{upsert, remove}` delta to an array of entities keyed by
  * `id`: upsert replaces-by-id-or-appends, remove filters out the given ids.
  *

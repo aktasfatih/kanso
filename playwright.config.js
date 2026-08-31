@@ -1,6 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { defineConfig } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test'
+
+// The mobile PWA spec runs on TWO engines so the phone experience is covered on
+// both the Chromium (Android Chrome) and WebKit (iOS Safari) families — WebKit is
+// the closest we can get to iOS Safari without Apple hardware. Everything else in
+// the suite is desktop Chromium exactly as before; projects only fan the ONE
+// mobile spec across devices (matched by file), so the existing suite's test
+// count and behaviour are unchanged.
+const MOBILE_SPEC = '**/mobile-pwa.spec.js'
 
 export default defineConfig({
 	testDir: './tests/e2e',
@@ -47,4 +55,34 @@ export default defineConfig({
 	// and is intentionally slow. Run it explicitly with:
 	//   npx playwright test --config playwright.perf.config.js
 	testIgnore: ['**/perf.spec.js'],
+	projects: [
+		{
+			// The whole existing suite: desktop Chromium, unchanged. No device spread
+			// so the environment is byte-for-byte the pre-projects behaviour (default
+			// chromium, default viewport); it only adds the mobile-spec/perf excludes.
+			name: 'desktop',
+			testIgnore: ['**/perf.spec.js', MOBILE_SPEC],
+		},
+		{
+			// The mobile spec on Android-Chrome (Chromium engine).
+			name: 'mobile-chromium',
+			use: { ...devices['Pixel 7'] },
+			testMatch: MOBILE_SPEC,
+		},
+		{
+			// The mobile spec on iOS-Safari (WebKit engine) — no KVM/Apple hardware
+			// needed; the closest approximation to real iOS Safari on Linux CI.
+			name: 'mobile-webkit',
+			use: {
+				...devices['iPhone 14'],
+				// Playwright's WebKit advertises a synthetic Safari version
+				// ("Version/26.5") that Nextcloud's supported-browser gate rejects,
+				// redirecting the app to /unsupported. Pin a real, NC-supported iOS
+				// Safari UA so we get into the app; the rendering ENGINE is still
+				// WebKit (that's what we're exercising — the UA is just a header).
+				userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+			},
+			testMatch: MOBILE_SPEC,
+		},
+	],
 })
