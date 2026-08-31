@@ -10,6 +10,7 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 use OCA\Kanso\Controller\WebhookController;
 use OCA\Kanso\Service\GithubWebhookService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\NonJsonWebhookBodyException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -47,7 +48,7 @@ class WebhookControllerTest extends TestCase {
 
 	public function testFormEncodedBodyGets400WithTheContentTypeHint(): void {
 		$this->webhookService->method('handleWebhook')
-			->willThrowException(new InvalidInputException('Webhook body is not JSON'));
+			->willThrowException(new NonJsonWebhookBodyException('Webhook body is not JSON'));
 
 		$response = $this->controller->github(1);
 
@@ -62,9 +63,27 @@ class WebhookControllerTest extends TestCase {
 		// mis-created their webhook, not an attacker - throttling them would
 		// punish the very deliveries the 400 is meant to help them fix.
 		$this->webhookService->method('handleWebhook')
-			->willThrowException(new InvalidInputException('Webhook body is not JSON'));
+			->willThrowException(new NonJsonWebhookBodyException('Webhook body is not JSON'));
 
 		self::assertFalse($this->controller->github(1)->isThrottled());
+	}
+
+	public function testARejectedCardMutationDoesNotGetTheContentTypeHint(): void {
+		// handleWebhook() also creates and moves cards (issue intake, PR moves),
+		// and those throw the plain InvalidInputException. Their content type was
+		// already application/json, so telling them to change it is a confidently
+		// wrong diagnosis - and it is the only line the user sees in GitHub's
+		// delivery log. Still a 400, but reported as what actually went wrong.
+		$this->webhookService->method('handleWebhook')
+			->willThrowException(new InvalidInputException('Card title must not be empty'));
+
+		$response = $this->controller->github(1);
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		self::assertArrayNotHasKey('hint', $data);
+		self::assertSame('Card title must not be empty', $data['message']);
+		self::assertFalse($response->isThrottled());
 	}
 
 	public function testInvalidSignatureIs401AndStillThrottled(): void {

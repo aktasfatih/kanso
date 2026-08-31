@@ -191,7 +191,8 @@ class GithubWebhookService {
 	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the signature is missing or invalid
-	 * @throws InvalidInputException if the body is not JSON (wrong webhook content type)
+	 * @throws NonJsonWebhookBodyException if the body is not JSON (wrong webhook content type)
+	 * @throws InvalidInputException if a card create/move triggered by the event is rejected
 	 */
 	public function handleWebhook(int $boardId, string $signatureHeader, string $rawBody): array {
 		$board = $this->loadBoard($boardId);
@@ -205,7 +206,7 @@ class GithubWebhookService {
 			// that body PASSES the HMAC check above and would otherwise be recorded
 			// as a green 200 while nothing happens on the board - undiagnosable from
 			// the delivery log. Say so instead: the controller maps this to a 400.
-			throw new InvalidInputException('Webhook body is not JSON - set the GitHub webhook Content type to application/json');
+			throw new NonJsonWebhookBodyException('Webhook body is not JSON - set the GitHub webhook Content type to application/json');
 		}
 		if (!is_array($payload)) {
 			// Valid JSON that is a bare scalar / null - accepted, nothing to do (#3477).
