@@ -1,7 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
-SPDX-License-Identifier: AGPL-3.0-or-later
--->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
 	<rect x="3" y="3" width="5" height="18" rx="1" fill="#fff"/>
 	<rect x="10" y="3" width="5" height="12" rx="1" fill="#fff"/>
