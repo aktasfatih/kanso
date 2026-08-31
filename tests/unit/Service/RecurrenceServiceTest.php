@@ -856,6 +856,257 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertFalse($rule->getEnabled());
 	}
 
+	/**
+	 * A RESET rule with COUNT=3 delivers EXACTLY three cards and then stops for
+	 * good. RESET rewrites the template card's own dates to each fired occurrence,
+	 * so the DTSTART the next spawn expands from walks forward with the series;
+	 * because every computeNextOccurrence() call builds a fresh iterator, the
+	 * COUNT window used to restart on that moved anchor and the rule repeated
+	 * forever. The tally on the rule is what bounds it now.
+	 *
+	 * The exhaustion assertions are the load-bearing half: "spawned 3" alone would
+	 * pass even unfixed, because runDueRules stops once the cursor passes now. The
+	 * rule must be provably OUT of occurrences, not merely waiting for the clock -
+	 * unfixed this run produces a 4th card and leaves the rule armed for tomorrow.
+	 */
+	public function testResetCountLimitedSeriesStopsAfterItsLastOccurrence(): void {
+		// Series origin 3 days back → occurrences at t-3d, t-2d, t-1d. A 4th daily
+		// step would land exactly on now, so an unbounded rule spawns it too.
+		$origin = self::NOW - 3 * 86400;
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: $origin);
+
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		// One shared instance for every read: spawnReset mutates the template's
+		// dates and the next spawn re-reads its anchor from it, so the same object
+		// reproduces the real anchor drift.
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardService->method('move')->willReturn($template);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$starts = [];
+		$this->cardMapper->method('update')->willReturnCallback(static function (Card $c) use (&$starts): Card {
+			$starts[] = $c->getStartDate()?->getTimestamp();
+			return $c;
+		});
+
+		$spawned = $this->service->runDueRules();
+
+		self::assertSame(3, $spawned);
+		// RESET still slides the template's window to each occurrence, unchanged.
+		self::assertSame([$origin, $origin + 86400, $origin + 2 * 86400], $starts);
+		self::assertSame(3, $rule->getOccurrencesSpawned());
+		// Exhausted for good - not just "not due yet".
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * The cap has to be read exactly the way sabre reads it. `COUNT=+3` is a value
+	 * the iterator happily accepts as 3, but a stricter digits-only read would
+	 * hand back "no COUNT" - and precisely those rules would keep running away.
+	 */
+	public function testResetSeriesIsBoundedForACountSpellingSabreAccepts(): void {
+		$origin = self::NOW - 3 * 86400;
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY;COUNT=+3', nextOccurrenceAt: $origin);
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardService->method('move')->willReturn($template);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		self::assertSame(3, $this->service->runDueRules());
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * The short COUNT-limited RESET series were never broken - the drifted anchor
+	 * happens to burn two iterator steps per spawn, so COUNT=1 and COUNT=2 already
+	 * terminated on their own. They must keep terminating on exactly their own
+	 * last occurrence: the guard has to agree with the iterator, not pre-empt it.
+	 *
+	 * @testWith [1]
+	 *           [2]
+	 */
+	public function testShortCountLimitedResetSeriesStillYieldExactlyCountCards(int $count): void {
+		$origin = self::NOW - 3 * 86400;
+		$rule = $this->rule(
+			mode: RecurRule::MODE_RESET,
+			rrule: 'FREQ=DAILY;COUNT=' . $count,
+			nextOccurrenceAt: $origin,
+		);
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardService->method('move')->willReturn($template);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		self::assertSame($count, $this->service->runDueRules());
+		self::assertSame($count, $rule->getOccurrencesSpawned());
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * A manual "create now" DOES spend one of the COUNT slots - it stamps a real
+	 * card, and "ends after 3 times" means three cards however they were produced.
+	 * This is the one behaviour the guard changes for CLONE, so pin it down.
+	 */
+	public function testCreateNowConsumesACountSlot(): void {
+		// Two of three already delivered; the manual fire is the third and last.
+		$rule = $this->rule(rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: self::NOW, occurrencesSpawned: 2);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		self::assertNotNull($this->service->createNow(3, 'alice'));
+		self::assertSame(3, $rule->getOccurrencesSpawned());
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * The same COUNT=3 series in CLONE mode still yields exactly three cards. CLONE
+	 * mutates the spawned copy, never the template, so its DTSTART never moved and
+	 * the iterator already exhausted correctly - the guard must AGREE with it at
+	 * the same occurrence, never double-count and cut the series short.
+	 */
+	public function testCloneCountLimitedSeriesStillYieldsExactlyCountCards(): void {
+		$origin = self::NOW - 3 * 86400;
+		$rule = $this->rule(rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: $origin);
+
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$id = 300;
+		$this->cardService->method('create')->willReturnCallback(function () use (&$id): Card {
+			return $this->spawnedCard($id++);
+		});
+
+		self::assertSame(3, $this->service->runDueRules());
+		self::assertSame(3, $rule->getOccurrencesSpawned());
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * UNTIL-limited RESET rules are untouched by the COUNT guard: UNTIL is an
+	 * absolute cut-off, independent of DTSTART and of any tally, so it already
+	 * ended the series correctly and must keep doing so.
+	 */
+	public function testResetUntilLimitedSeriesIsUnchanged(): void {
+		$origin = self::NOW - 3 * 86400;
+		// Last allowed occurrence is yesterday → t-3d, t-2d, t-1d, then done.
+		$rrule = 'FREQ=DAILY;UNTIL=' . gmdate('Ymd\THis\Z', self::NOW - 86400);
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: $rrule, nextOccurrenceAt: $origin);
+
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardService->method('move')->willReturn($template);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		self::assertSame(3, $this->service->runDueRules());
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * A skipped occurrence must not trip the COUNT guard: the guard reads
+	 * occurrences_spawned, and a skip produced no card, so it deliberately leaves
+	 * that untouched and the rule stays armed for the occurrence after it.
+	 *
+	 * Note what this does NOT claim. A skip still advances the cursor past its
+	 * occurrence (pre-existing behaviour, untouched here), so the skipped
+	 * occurrence is spent: this COUNT=3 series ends having delivered 2 cards, not
+	 * 3. The guard's job is only to avoid charging a slot for a card that was
+	 * never created - it cannot hand the occurrence back.
+	 */
+	public function testSkipWhileOpenDoesNotTripTheCountGuard(): void {
+		// One of three delivered at t-1d; the cursor sits on the second of the
+		// three occurrences (t-1d, now, t+1d).
+		$rule = $this->rule(
+			rrule: 'FREQ=DAILY;COUNT=3',
+			skipWhileOpen: true,
+			nextOccurrenceAt: self::NOW,
+			lastSpawnedAt: 42,
+			occurrencesSpawned: 1,
+		);
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . (self::NOW - 86400)));
+		$openCard = $this->spawnedCard(42); // still open → this occurrence is skipped
+		$this->cardMapper->method('find')->willReturnCallback(
+			static fn (int $id): Card => $id === 42 ? $openCard : $template
+		);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+		$this->cardService->method('create')->willReturn($this->spawnedCard(400));
+
+		self::assertNull($this->service->spawn($rule));
+		// The guard did not fire: the tally is untouched and the rule is still
+		// armed, for the third occurrence rather than being retired here.
+		self::assertSame(1, $rule->getOccurrencesSpawned());
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+		self::assertTrue($rule->getEnabled());
+
+		// The previous card is closed, so the last occurrence really does spawn,
+		// and only then is the series done - 2 cards delivered out of COUNT=3,
+		// because the skipped occurrence was spent, not returned.
+		$openCard->setDoneAt(self::NOW - 10);
+		self::assertNotNull($this->service->spawn($rule));
+		self::assertSame(2, $rule->getOccurrencesSpawned());
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
+	 * A trashed-template pause does not spend a COUNT slot either - same reasoning
+	 * as a skip: no card was delivered, so the series still owes the user one.
+	 */
+	public function testTrashedTemplatePauseDoesNotConsumeACountSlot(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: self::NOW, occurrencesSpawned: 2);
+		$trashed = $this->templateCard();
+		$trashed->setStartDate(new \DateTime('@' . (self::NOW - 86400)));
+		$trashed->setDeletedAt(self::NOW - 5);
+		$this->cardMapper->method('find')->with(10)->willReturn($trashed);
+		$this->cardService->expects(self::never())->method('create');
+		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		self::assertNull($this->service->spawn($rule));
+		self::assertSame(2, $rule->getOccurrencesSpawned());
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+		self::assertTrue($rule->getEnabled());
+	}
+
 	// ---- atomic spawn (idempotency on cron retry) -------------------------
 
 	public function testSpawnCommitsOnSuccess(): void {
