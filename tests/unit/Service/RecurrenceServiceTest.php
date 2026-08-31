@@ -1702,6 +1702,50 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	/**
+	 * Editing a long-running rule to "repeat weekly, 4 times" means FOUR MORE
+	 * cards. `occurrences_spawned` is a lifetime tally and the COUNT guard reads it
+	 * raw, so without a reset the first spawn after the edit saw 13 >= 4, zeroed
+	 * the cursor and switched the rule off - one card instead of four, silently.
+	 */
+	public function testEditingTheRepeatToAddACountStartsTheTallyOver(): void {
+		// A weekly RESET rule that has been running for months: 12 cards so far.
+		$origin = self::NOW - 20 * 7 * 86400;
+		$rule = $this->rule(
+			mode: RecurRule::MODE_RESET,
+			rrule: 'FREQ=WEEKLY',
+			nextOccurrenceAt: self::NOW + 86400,
+			occurrencesSpawned: 12,
+		);
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// One shared template instance: RESET slides its dates and the next spawn
+		// re-reads the anchor from it, so this reproduces the real anchor drift.
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->service->update(3, null, null, null, 'FREQ=WEEKLY;COUNT=4', null, null, null, null, 'alice');
+
+		self::assertSame(0, $rule->getOccurrencesSpawned());
+
+		// Replay the series from its origin and count the cards it actually makes.
+		$rule->setNextOccurrenceAt($origin);
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+		$this->cardService->method('move')->willReturn($template);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+
+		self::assertSame(4, $this->service->runDueRules());
+		self::assertSame(4, $rule->getOccurrencesSpawned());
+		// ...and only THEN does it retire itself.
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
+	}
+
+	/**
 	 * Speeding a rule up takes effect right away. If the user changes a rule from
 	 * Weekly to Daily, it should start firing daily now - not wait for the old
 	 * weekly date. The old code kept the far-off date, so "Daily" did nothing for

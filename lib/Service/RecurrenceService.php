@@ -313,6 +313,10 @@ class RecurrenceService {
 	 * no-op edit leaves the cursor exactly where it was, so editing a rule can no
 	 * longer duplicate an already-fired occurrence dated today (#65).
 	 *
+	 * A changed RRULE additionally resets the `occurrences_spawned` tally, so an
+	 * "ends after N times" edit means N MORE cards rather than N counted from the
+	 * rule's creation - see the reset below for the trade-off.
+	 *
 	 * @throws DoesNotExistException if the rule, its board, the template card or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
 	 * @throws InvalidInputException on invalid mode, policy, offset, RRULE, timezone or cross-board references
@@ -372,6 +376,20 @@ class RecurrenceService {
 		}
 		if ($enabled !== null) {
 			$rule->setEnabled($enabled);
+		}
+
+		// A new RRULE means a new series, so the "ends after N times" tally starts
+		// again from zero. `occurrences_spawned` is a LIFETIME counter, and the only
+		// thing that reads it is the COUNT guard in advanceSchedule(); leaving it
+		// alone made an edit that adds or lowers COUNT collapse to a single card -
+		// a weekly rule that had already spawned 12, edited to FREQ=WEEKLY;COUNT=4
+		// ("four more"), spawned one and then disabled itself because 13 >= 4.
+		// Trade-off, taken deliberately: lowering COUNT=10 to COUNT=3 half-way
+		// through also restarts the count instead of ending the series early. An
+		// RRULE edit is read as "this is the new schedule", not as a correction to
+		// the old one. Only an actual rule change resets - a no-op re-save does not.
+		if ($newRrule !== $originalRrule) {
+			$rule->setOccurrencesSpawned(0);
 		}
 
 		// Do we need to recalculate when this rule fires next?
