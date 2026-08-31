@@ -342,7 +342,7 @@ msgid "Add a description…"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "Add a GitHub webhook sending \"pull_request\" and \"issues\" events to the URL below. Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards."
+msgid "Add a GitHub webhook sending \"pull_request\" and \"issues\" events to the URL below, with Content type set to application/json (the form-encoded option is not supported). Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Service\GithubWebhookService;
+use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -59,6 +60,16 @@ class WebhookController extends Controller {
 			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
 			$response->throttle(['action' => 'kansoWebhook']);
 			return $response;
+		} catch (InvalidInputException $e) {
+			// A correctly-signed delivery whose body is not JSON: the webhook was
+			// created with the form-encoded content type. That is a misconfigured
+			// user, not an attacker, so this is deliberately NOT throttled - and the
+			// body carries the hint rather than a silent 200, so the mistake is
+			// visible in GitHub's delivery log. No board data is exposed (#3760).
+			return new JSONResponse([
+				'error' => 'invalid_payload',
+				'hint' => 'Set the webhook Content type to application/json',
+			], Http::STATUS_BAD_REQUEST);
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
 		}
