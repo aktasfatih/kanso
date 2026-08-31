@@ -32,10 +32,64 @@ jobs:
     runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v7
+      # The ARC runner image intermittently lacks libsodium.so.23, which the
+      # php binary setup-php installs links directly. setup-php still reports
+      # success, but php then dies with "error while loading shared libraries"
+      # and exit 127 before a single test runs — a red required check on a PR
+      # that is fine, whose only remedy is a manual re-run. Same "the lean
+      # runner image is missing X, so install X" pattern as the two Compose
+      # plugin steps below. Runs BEFORE setup-php so the lib exists for
+      # setup-php's own php invocations.
+      #
+      # Conditional on purpose: apt is reached only on a runner that lacks
+      # libsodium.so.23 — where php was going to exit 127 regardless — so a
+      # flaky apt mirror can never redden a job that would otherwise have
+      # passed. An unconditional `apt-get update` would trade one flake for
+      # another. That equivalence holds only while setup-php's php links this
+      # exact soname: if it ever links a different one, update the soname and
+      # package below, or this will run apt on every job on every runner.
+      #
+      # `grep >/dev/null`, NOT `grep -q`: under `set -o pipefail`, grep -q exits
+      # at the first match and SIGPIPEs `ldconfig -p` mid-write (its output is
+      # far larger than the 64 KiB pipe buffer), so the pipeline reports 141 and
+      # the check reads ABSENT even when the library IS present — reproduced
+      # every time on a host that has it. That would invert the conditional and
+      # run apt on every job on every runner, i.e. exactly the failure mode the
+      # conditional exists to avoid. Do not "simplify" it back to -q.
+      - name: Ensure libsodium runtime library
+        run: |
+          set -euo pipefail
+          # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
+          # dirs on PATH. Without this the assertion below would fail with
+          # "command not found" on a runner that HAS the library and would have
+          # been green — the exact false red this step exists to remove.
+          PATH="$PATH:/usr/sbin:/sbin"
+          if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
+            echo "libsodium.so.23 already present, skipping apt"
+          else
+            echo "libsodium.so.23 missing on this runner, installing it"
+            SUDO=
+            if [ "$(id -u)" -ne 0 ]; then SUDO=sudo; fi
+            # Via `env`, not an assignment prefix and not `export`: sudo scrubs
+            # the environment (so an exported value would not reach apt-get as
+            # non-root), and a bare `$SUDO VAR=x apt-get` breaks as ROOT — with
+            # $SUDO empty the shell has already parsed the command, so VAR=x is
+            # taken as the command name and the step dies with 127. `env` works
+            # identically with and without the sudo prefix. Non-interactive so
+            # a debconf prompt cannot hang the job for the 6h default timeout.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23
+          fi
+          ldconfig -p | grep 'libsodium\.so\.23'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           tools: composer
+      # Tripwire: setup-php reports success even when the php it installed
+      # cannot start, so assert it here — at a named step with an obvious
+      # meaning — rather than letting the 127 surface inside `composer install`.
+      - name: Verify the PHP binary starts
+        run: php -v
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: php-cs-fixer
@@ -45,10 +99,38 @@ jobs:
     runs-on: kanso-runners
     steps:
       - uses: actions/checkout@v7
+      # See cs-check above for why this step exists and why it is not `grep -q`.
+      - name: Ensure libsodium runtime library
+        run: |
+          set -euo pipefail
+          # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
+          # dirs on PATH. Without this the assertion below would fail with
+          # "command not found" on a runner that HAS the library and would have
+          # been green — the exact false red this step exists to remove.
+          PATH="$PATH:/usr/sbin:/sbin"
+          if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
+            echo "libsodium.so.23 already present, skipping apt"
+          else
+            echo "libsodium.so.23 missing on this runner, installing it"
+            SUDO=
+            if [ "$(id -u)" -ne 0 ]; then SUDO=sudo; fi
+            # Via `env`, not an assignment prefix and not `export`: sudo scrubs
+            # the environment (so an exported value would not reach apt-get as
+            # non-root), and a bare `$SUDO VAR=x apt-get` breaks as ROOT — with
+            # $SUDO empty the shell has already parsed the command, so VAR=x is
+            # taken as the command name and the step dies with 127. `env` works
+            # identically with and without the sudo prefix. Non-interactive so
+            # a debconf prompt cannot hang the job for the 6h default timeout.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23
+          fi
+          ldconfig -p | grep 'libsodium\.so\.23'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           tools: composer
+      - name: Verify the PHP binary starts
+        run: php -v
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Psalm static analysis
@@ -64,10 +146,38 @@ jobs:
         php-version: ['8.2', '8.3']
     steps:
       - uses: actions/checkout@v7
+      # See cs-check above for why this step exists and why it is not `grep -q`.
+      - name: Ensure libsodium runtime library
+        run: |
+          set -euo pipefail
+          # ldconfig is /usr/sbin/ldconfig, and not every image puts the sbin
+          # dirs on PATH. Without this the assertion below would fail with
+          # "command not found" on a runner that HAS the library and would have
+          # been green — the exact false red this step exists to remove.
+          PATH="$PATH:/usr/sbin:/sbin"
+          if ldconfig -p | grep 'libsodium\.so\.23' >/dev/null; then
+            echo "libsodium.so.23 already present, skipping apt"
+          else
+            echo "libsodium.so.23 missing on this runner, installing it"
+            SUDO=
+            if [ "$(id -u)" -ne 0 ]; then SUDO=sudo; fi
+            # Via `env`, not an assignment prefix and not `export`: sudo scrubs
+            # the environment (so an exported value would not reach apt-get as
+            # non-root), and a bare `$SUDO VAR=x apt-get` breaks as ROOT — with
+            # $SUDO empty the shell has already parsed the command, so VAR=x is
+            # taken as the command name and the step dies with 127. `env` works
+            # identically with and without the sudo prefix. Non-interactive so
+            # a debconf prompt cannot hang the job for the 6h default timeout.
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
+            $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libsodium23
+          fi
+          ldconfig -p | grep 'libsodium\.so\.23'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer
+      - name: Verify the PHP binary starts
+        run: php -v
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Run unit tests
