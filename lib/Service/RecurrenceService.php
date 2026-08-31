@@ -300,7 +300,8 @@ class RecurrenceService {
 	/**
 	 * Updates the given fields of a rule (null = leave unchanged). The cached
 	 * `next_occurrence_at` is re-armed only when the schedule actually changes (a
-	 * different RRULE or timezone) or the rule is re-enabled (disabled → enabled),
+	 * different RRULE, timezone or template card - the template carries the
+	 * anchor date) or the rule is re-enabled (disabled → enabled),
 	 * and even then it is never rewound onto an occurrence the cron already spawned - a
 	 * no-op edit leaves the cursor exactly where it was, so editing a rule can no
 	 * longer duplicate an already-fired occurrence dated today (#65).
@@ -343,6 +344,7 @@ class RecurrenceService {
 		// rewound onto an occurrence the cron has already spawned.
 		$originalRrule = $rule->getRrule();
 		$originalTimezone = $rule->getTimezone();
+		$originalTemplate = $rule->getTemplateCardId();
 		$wasEnabled = $rule->getEnabled();
 		// A null/empty timezone means "leave the zone alone"; there is no way to
 		// clear it (a rule always expands in SOME zone, cleared just means the
@@ -387,8 +389,15 @@ class RecurrenceService {
 		//      meaning no duplicate card (still safe for #65).
 		//
 		// A timezone change counts as a schedule change too: re-anchoring the same
-		// repeat rule in a different zone shifts every future occurrence.
-		$scheduleChanged = $newRrule !== $originalRrule || $newTimezone !== $originalTimezone;
+		// repeat rule in a different zone shifts every future occurrence. So does
+		// pointing the rule at a DIFFERENT template card: the schedule is anchored
+		// on the template's own Start/End date, so the old card's anchor is
+		// meaningless once the rule follows another card. Without this the rule
+		// would keep firing on the old card's dates while stamping copies of the
+		// new one, until some unrelated schedule edit happened to re-arm it.
+		$scheduleChanged = $newRrule !== $originalRrule
+			|| $newTimezone !== $originalTimezone
+			|| $newTemplate !== $originalTemplate;
 		$reEnabled = $rule->getEnabled() && !$wasEnabled;
 		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
 			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));

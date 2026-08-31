@@ -1721,6 +1721,71 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertTrue($rule->getEnabled());
 	}
 
+	/**
+	 * Pointing a rule at a DIFFERENT card re-anchors it on that card's dates. The
+	 * schedule is anchored on the template's own Start date, so a rule left on the
+	 * old card's anchor would keep firing on dates that have nothing to do with the
+	 * card it now stamps - silently, until some unrelated schedule edit re-armed it.
+	 */
+	public function testUpdateRepointingTheTemplateCardReArmsFromTheNewCardsAnchor(): void {
+		$newStart = self::NOW + 5 * 86400;
+		$newTemplate = $this->templateCard(11);
+		$newTemplate->setStartDate(new \DateTime('@' . $newStart));
+
+		// Cursor still sits on the OLD card's schedule (tomorrow).
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->willReturnMap([
+			[10, $this->templateCard()],
+			[11, $newTemplate],
+		]);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		// Only the template card changes - no RRULE, timezone or enabled edit.
+		$this->service->update(3, 11, null, null, null, null, null, null, null, 'alice');
+
+		self::assertSame(11, $rule->getTemplateCardId());
+		self::assertSame($newStart, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * The #65 regression guard for the re-point re-arm above: an update that changes
+	 * NOTHING must still leave the cursor exactly where it was, never rewound onto an
+	 * occurrence the cron already spawned.
+	 */
+	public function testUpdateChangingNothingLeavesTheCursorUntouched(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		$this->service->update(3, null, null, null, null, null, null, null, null, 'alice');
+
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
+	/**
+	 * Only the target stack changed - where the copies land, not when the rule
+	 * fires - so the cursor stays put. Guards the re-point re-arm from widening
+	 * into "recompute on any change".
+	 */
+	public function testUpdateChangingOnlyTheTargetStackLeavesTheCursorUntouched(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->willReturnMap([
+			[5, $this->stack()],
+			[6, $this->stack(6)],
+		]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->service->update(3, null, 6, null, null, null, null, null, null, 'alice');
+
+		self::assertSame(6, $rule->getTargetStackId());
+		self::assertSame(self::NOW + 86400, $rule->getNextOccurrenceAt());
+	}
+
 	// ---- re-arm on a card date edit ---------------------------------------
 
 	/**
