@@ -449,8 +449,11 @@ jobs:
       - name: Boot dev Nextcloud stack
         run: ./dev/setup.sh
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      # chromium runs the whole desktop suite + the mobile-chromium (Pixel 7)
+      # project; webkit runs the mobile-webkit (iPhone 14) project so the PWA is
+      # covered on the iOS-Safari engine too (no KVM/Apple hardware needed).
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
 
       # Run the suite in PARALLEL: each Playwright worker provisions its own
       # Nextcloud user (E2E_ISOLATE) so fixed board names and per-user aggregate
