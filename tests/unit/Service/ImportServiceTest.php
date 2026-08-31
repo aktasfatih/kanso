@@ -34,9 +34,11 @@ use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ExportService;
 use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\RecurrenceService;
 use OCP\IUserManager;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 class ImportServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
@@ -56,6 +58,7 @@ class ImportServiceTest extends TestCase {
 	private IUserManager&MockObject $userManager;
 	private \OCP\IDBConnection&MockObject $db;
 	private BoardAccess&MockObject $boardAccess;
+	private LoggerInterface&MockObject $logger;
 	private ImportService $service;
 
 	/** @var array<string, int> per-class monotonically-increasing id sequences */
@@ -87,6 +90,7 @@ class ImportServiceTest extends TestCase {
 		$this->boardAccess->method('contextFor')->willReturnCallback(
 			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
 		);
+		$this->logger = $this->createMock(LoggerInterface::class);
 
 		$this->service = new ImportService(
 			$this->boardService,
@@ -106,6 +110,33 @@ class ImportServiceTest extends TestCase {
 			$this->userManager,
 			$this->db,
 			$this->boardAccess,
+			$this->realRecurrenceService(),
+			$this->logger,
+		);
+	}
+
+	/**
+	 * A REAL RecurrenceService (collaborators mocked, none of them reached).
+	 * Import only calls computeNextOccurrence(), which is self-contained - so
+	 * the RRULE guard is exercised against sabre's actual parser rather than a
+	 * stub that would just agree with whatever the test asserts.
+	 */
+	private function realRecurrenceService(): RecurrenceService {
+		return new RecurrenceService(
+			$this->createMock(RecurRuleMapper::class),
+			$this->createMock(CardMapper::class),
+			$this->createMock(StackMapper::class),
+			$this->createMock(\OCA\Kanso\Db\BoardMapper::class),
+			$this->createMock(CardLabelMapper::class),
+			$this->createMock(CardAssigneeMapper::class),
+			$this->createMock(\OCA\Kanso\Service\CardService::class),
+			$this->createMock(\OCA\Kanso\Service\ChangeNotifier::class),
+			$this->createMock(\OCA\Kanso\Service\PermissionService::class),
+			$this->createMock(\OCA\Kanso\Service\CardVisibilityGuard::class),
+			$this->createMock(\OCP\AppFramework\Utility\ITimeFactory::class),
+			$this->createMock(\OCP\IDBConnection::class),
+			$this->createMock(\OCP\IConfig::class),
+			$this->createMock(LoggerInterface::class),
 		);
 	}
 
@@ -193,10 +224,10 @@ class ImportServiceTest extends TestCase {
 		// Everyone referenced exists here, except "ghost".
 		$this->userManager->method('userExists')->willReturnCallback(fn (string $u): bool => $u !== 'ghost');
 
-		$capturedRecur = null;
+		$capturedRecur = [];
 		$this->recurRuleMapper->method('insert')->willReturnCallback(function (RecurRule $r) use (&$capturedRecur): RecurRule {
-			$r->setId(41);
-			$capturedRecur = $r;
+			$r->setId(41 + count($capturedRecur));
+			$capturedRecur[] = $r;
 			return $r;
 		});
 		$capturedArchive = null;
@@ -270,10 +301,23 @@ class ImportServiceTest extends TestCase {
 					],
 				],
 				'archiveRules' => [['id' => 9, 'stackId' => 2, 'condition' => 0, 'thresholdSeconds' => 60, 'enabled' => true]],
-				'recurRules' => [[
-					'id' => 8, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
-					'rrule' => 'FREQ=DAILY', 'owner' => 'ghost', 'enabled' => true,
-				]],
+				'recurRules' => [
+					[
+						'id' => 8, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=DAILY', 'owner' => 'ghost', 'enabled' => true,
+					],
+					// Unparseable RRULE → dropped, never written (the rest of the
+					// board still imports).
+					[
+						'id' => 81, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=NONSENSE', 'owner' => 'bob', 'enabled' => true,
+					],
+					// A perfectly good rule right behind it still lands intact.
+					[
+						'id' => 82, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=WEEKLY;BYDAY=MO', 'owner' => 'bob', 'enabled' => true,
+					],
+				],
 				'automationRules' => [
 					// add_label rule: label id 5 must remap to the new id 10.
 					['id' => 70, 'trigger' => 'card_entered_role', 'action' => 'add_label',
@@ -329,9 +373,16 @@ class ImportServiceTest extends TestCase {
 
 		// Recur rule remapped its template card + target stack, and its unknown
 		// owner fell back to the importer.
-		self::assertSame(100, $capturedRecur->getTemplateCardId());
-		self::assertSame(31, $capturedRecur->getTargetStackId());
-		self::assertSame('importer', $capturedRecur->getOwner());
+		self::assertSame(100, $capturedRecur[0]->getTemplateCardId());
+		self::assertSame(31, $capturedRecur[0]->getTargetStackId());
+		self::assertSame('importer', $capturedRecur[0]->getOwner());
+
+		// The rule carrying an unparseable RRULE never reached the mapper, while
+		// the valid rule behind it imported with its RRULE intact.
+		self::assertSame(
+			['FREQ=DAILY', 'FREQ=WEEKLY;BYDAY=MO'],
+			array_map(static fn (RecurRule $r): string => $r->getRrule(), $capturedRecur),
+		);
 
 		// Archive rule remapped its stack (old 2 → new 31).
 		self::assertSame(31, $capturedArchive->getStackId());
