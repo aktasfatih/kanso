@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `kanso_search_cards` — find cards by text (title, description or a comment
+  body) across every board you can read, or within one board via `board_id`.
+  Wraps the app's existing search endpoint, so results are ACL-filtered
+  server-side to your readable boards; `board_id` only narrows that set. Until
+  now the only way to find a card by text was to pull a whole board with
+  `kanso_get_board` and match substrings client-side, which could not search
+  across boards at all.
+
 ### Changed
 
 - `kanso_get_board` no longer returns archived cards by default. The board

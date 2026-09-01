@@ -169,6 +169,41 @@ class Card(CardSummary):
     relations: Optional[Any] = None
 
 
+class SearchHit(_Base):
+    """One hit from ``GET /api/search``.
+
+    ``type`` is ``"card"`` (the term matched the card's title or description) or
+    ``"comment"`` (it matched a comment body — ``title`` is then the commented
+    card's title and ``commentId`` the matching comment). Either way ``cardId`` +
+    ``boardId`` locate the card, and ``snippet`` is a trimmed excerpt of whatever
+    text was searched. ``rank`` is the server's ordering weight (3 = title,
+    2 = description, 1 = comment) — pass-through, not something to re-sort on.
+    """
+
+    type: Optional[str] = None
+    cardId: Optional[int] = None
+    boardId: Optional[int] = None
+    commentId: Optional[int] = None
+    title: Optional[str] = None
+    snippet: Optional[str] = None
+    rank: int = 0
+
+
+class SearchResults(_Base):
+    """The ``GET /api/search`` payload: the echoed ``query``, the ``total``
+    number of hits the server found (before the limit/offset page was cut) and
+    the page of ``results`` itself.
+
+    Every hit is already ACL-filtered server-side to the boards the
+    authenticated user can read — the payload never carries a card from a board
+    they cannot see, so nothing here needs (or should get) a client-side filter.
+    """
+
+    query: str = ""
+    total: int = 0
+    results: List[SearchHit] = Field(default_factory=list)
+
+
 class RecurRule(_Base):
     """A recurring-card rule from ``/api/boards/{id}/recur-rules``.
 

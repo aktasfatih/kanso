@@ -731,6 +731,44 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         card = await client.recur_rule_create_now(rule_id)
         return {"spawned": card is not None, "card": card.model_dump() if card else None}
 
+    # ------------------------------------------------------------------ search
+    @mcp.tool(
+        title="Search Kanso cards",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_search_cards(
+        query: str, board_id: Optional[int] = None, limit: int = 25
+    ) -> dict:
+        """Find cards by text across every board you can read — the fast way to
+        locate a card when you know roughly what it says but not where it is.
+
+        Matching is a plain case-insensitive SUBSTRING of one term over card
+        titles, card descriptions and comment bodies. There is deliberately no
+        query language: no AND/OR, no quotes, no field:value, no wildcards — a
+        query of `due invoice` looks for that literal string, not two words.
+        Terms shorter than 2 characters return nothing.
+
+        Each hit carries `type` ("card" when the term matched the title or
+        description, "comment" when it matched a comment on that card),
+        `cardId`, `boardId`, the card `title`, a `snippet` of the matched text
+        and the server's `rank` (highest first: title, then description, then
+        comment). Hits are card LOCATORS, not card records — feed `cardId` to
+        `kanso_get_card` for the full card. `total` is how many hits the server
+        found in all; `results` is the first `limit` of them.
+
+        Results are ACL-filtered by the server to the boards you can read, so a
+        card on a board you have no access to can never appear here — and
+        `board_id` is only a narrowing FILTER on that set, never a way to reach
+        past it.
+
+        Args:
+            query: The text to look for (min. 2 characters).
+            board_id: Restrict the search to one board; omit to search every
+                board you can read.
+            limit: Maximum hits to return (server caps this at 50).
+        """
+        return (await client.search(query, board_id, limit)).model_dump()
+
     # ----------------------------------------------------------------- my work
     @mcp.tool(
         title="List my Kanso cards",

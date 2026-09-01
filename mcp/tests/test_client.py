@@ -744,6 +744,73 @@ async def test_recur_rule_create_now_null_card_is_none():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_search_forwards_the_query_and_parses_hits():
+    route = respx.get(f"{BASE}/search").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "query": "invoice",
+                "total": 2,
+                "results": [
+                    {
+                        "type": "card",
+                        "cardId": 100,
+                        "boardId": 7,
+                        "title": "Invoice run",
+                        "snippet": "monthly",
+                        "rank": 3,
+                    },
+                    {
+                        "type": "comment",
+                        "cardId": 101,
+                        "boardId": 8,
+                        "commentId": 55,
+                        "title": "Billing",
+                        "snippet": "the invoice bounced",
+                        "rank": 1,
+                    },
+                ],
+            },
+        )
+    )
+    async with _client() as c:
+        found = await c.search("invoice", limit=10)
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/search"
+    assert req.url.params.get("q") == "invoice"
+    assert req.url.params.get("limit") == "10"
+    assert req.url.params.get("offset") == "0"
+    # No board scope requested => the filter is not sent at all.
+    assert "boardId" not in req.url.params
+    assert found.query == "invoice"
+    assert found.total == 2
+    assert [h.cardId for h in found.results] == [100, 101]
+    assert found.results[0].type == "card"
+    assert found.results[0].boardId == 7
+    assert found.results[1].type == "comment"
+    assert found.results[1].commentId == 55
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_sends_board_id_as_the_boardId_param():
+    # The controller reads `boardId` (SearchController::index) — any other
+    # spelling is silently ignored by the app framework, which would turn the
+    # board scope into a no-op.
+    route = respx.get(f"{BASE}/search").mock(
+        return_value=httpx.Response(
+            200, json={"query": "invoice", "total": 0, "results": []}
+        )
+    )
+    async with _client() as c:
+        await c.search("invoice", board_id=7)
+    assert route.calls.last.request.url.params.get("boardId") == "7"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_error_raises_kanso_api_error():
     respx.post(f"{BASE}/boards").mock(
         return_value=httpx.Response(412, text="CSRF check failed")

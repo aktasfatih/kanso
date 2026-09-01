@@ -26,6 +26,7 @@ from kanso_mcp.models import (
     Comment,
     Label,
     RecurRule,
+    SearchResults,
     Stack,
 )
 
@@ -447,6 +448,25 @@ class KansoClient:
         data = await self._request("POST", f"/recur-rules/{rule_id}/create-now")
         card = (data or {}).get("card")
         return Card.model_validate(card) if card else None
+
+    # ------------------------------------------------------------------ search
+    async def search(
+        self,
+        q: str,
+        board_id: Optional[int] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> SearchResults:
+        # `boardId` is a FILTER, not the authorization boundary: SearchService
+        # derives the searchable board set from the authenticated user's
+        # readable boards and only ever narrows it to boardId, so an
+        # unreadable board id yields no results rather than a leak. Sent only
+        # when set, so an absent filter means "every readable board".
+        params: Dict[str, Any] = {"q": q, "limit": limit, "offset": offset}
+        if board_id is not None:
+            params["boardId"] = board_id
+        data = await self._request("GET", "/search", params=params)
+        return SearchResults.model_validate(data or {})
 
     # ----------------------------------------------------------------- my work
     async def list_my_cards(self) -> List[CardSummary]:

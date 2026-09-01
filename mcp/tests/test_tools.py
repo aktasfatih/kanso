@@ -316,3 +316,181 @@ async def test_get_board_with_no_archived_cards_is_unchanged():
 
     assert [c["id"] for c in board["cards"]] == [200]
     assert board["cards"][0]["archived"] is False
+
+
+# --------------------------------------------------------------------- search
+# A stand-in for the real server's ACL. The authenticated user can READ board 7
+# only; board 99 belongs to someone else and holds a card whose text matches the
+# same term. `_acl_search` mirrors SearchService: the searchable set is derived
+# from the readable boards, and `boardId` may only NARROW it — it can never
+# widen it to board 99. Anything the tool returns from board 99 therefore came
+# from the tool, not from the server.
+READABLE_BOARD = 7
+HIDDEN_BOARD = 99
+
+ALL_CARDS = [
+    {
+        "type": "card",
+        "cardId": 100,
+        "boardId": READABLE_BOARD,
+        "title": "Invoice run",
+        "snippet": "send the invoice on the 1st",
+        "rank": 3,
+    },
+    {
+        "type": "card",
+        "cardId": 101,
+        "boardId": READABLE_BOARD,
+        "title": "Billing follow-up",
+        "snippet": "chase the unpaid invoice",
+        "rank": 2,
+    },
+    {
+        "type": "card",
+        "cardId": 900,
+        "boardId": HIDDEN_BOARD,
+        "title": "Invoice — acquisition",
+        "snippet": "confidential invoice terms",
+        "rank": 3,
+    },
+]
+
+
+def _acl_search(request: httpx.Request) -> httpx.Response:
+    term = request.url.params.get("q", "")
+    board = request.url.params.get("boardId")
+    limit = int(request.url.params.get("limit", "25"))
+
+    hits = [c for c in ALL_CARDS if c["boardId"] == READABLE_BOARD]
+    if term:
+        hits = [
+            c
+            for c in hits
+            if term.lower() in c["title"].lower() or term.lower() in c["snippet"].lower()
+        ]
+    # boardId narrows the readable set; an unreadable id leaves it empty.
+    if board is not None:
+        hits = [c for c in hits if str(c["boardId"]) == board]
+    return httpx.Response(
+        200, json={"query": term, "total": len(hits), "results": hits[:limit]}
+    )
+
+
+def _mock_search() -> None:
+    respx.get(f"{BASE}/search").mock(side_effect=_acl_search)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_finds_title_and_description_matches():
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        found = await tools["kanso_search_cards"]("invoice")
+
+    # Card 100 matches on its TITLE (rank 3), card 101 only in its
+    # description/snippet (rank 2) — both come back, each with the locators
+    # needed to open it.
+    assert [h["cardId"] for h in found["results"]] == [100, 101]
+    assert [h["rank"] for h in found["results"]] == [3, 2]
+    assert all(h["boardId"] == READABLE_BOARD for h in found["results"])
+    assert all(h["type"] == "card" for h in found["results"])
+    assert found["results"][0]["title"] == "Invoice run"
+    assert found["results"][0]["snippet"] == "send the invoice on the 1st"
+    assert found["query"] == "invoice"
+    assert found["total"] == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_scopes_to_one_board_when_asked():
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        found = await tools["kanso_search_cards"]("invoice", board_id=READABLE_BOARD)
+
+    assert respx.calls.last.request.url.params.get("boardId") == str(READABLE_BOARD)
+    assert [h["cardId"] for h in found["results"]] == [100, 101]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_searches_every_readable_board_by_default():
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        found = await tools["kanso_search_cards"]("invoice")
+
+    # Cross-board is the DEFAULT: no board filter is sent, and it is one call to
+    # the search endpoint — not a per-board fan-out.
+    assert "boardId" not in respx.calls.last.request.url.params
+    assert len(respx.calls) == 1
+    assert respx.calls.last.request.url.path.endswith("/search")
+    assert found["total"] == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_forwards_the_limit():
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        found = await tools["kanso_search_cards"]("invoice", limit=1)
+
+    assert respx.calls.last.request.url.params.get("limit") == "1"
+    assert [h["cardId"] for h in found["results"]] == [100]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_never_returns_a_card_from_an_unreadable_board():
+    # THE boundary test. Board 99 holds a card matching "invoice" just as well as
+    # the readable ones, but the user cannot read that board, so the server never
+    # ships it. The tool must not widen that ceiling: not by fanning out over
+    # boards, not by treating board_id as a lookup key, not by assembling results
+    # from anywhere other than this one ACL-filtered response.
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        cross_board = await tools["kanso_search_cards"]("invoice")
+        scoped_to_hidden = await tools["kanso_search_cards"](
+            "invoice", board_id=HIDDEN_BOARD
+        )
+
+    # The hidden card is absent from an unscoped search...
+    hidden_ids = [h["cardId"] for h in cross_board["results"] if h["cardId"] == 900]
+    assert hidden_ids == []
+    assert all(h["boardId"] == READABLE_BOARD for h in cross_board["results"])
+
+    # ...and asking for that board by id yields nothing rather than either the
+    # hidden card or, worse, the readable boards' cards under a board scope that
+    # was silently dropped.
+    assert scoped_to_hidden["results"] == []
+    assert scoped_to_hidden["total"] == 0
+    assert respx.calls.last.request.url.params.get("boardId") == str(HIDDEN_BOARD)
+
+    # Exactly one request per search, all of them to the ACL-filtered endpoint:
+    # no board fan-out, no second source of cards.
+    assert len(respx.calls) == 2
+    assert all(c.request.url.path.endswith("/search") for c in respx.calls)
+
+
+@pytest.mark.asyncio
+async def test_search_cards_schema_only_requires_the_query():
+    # An agent must be able to search with just a term; the board scope and the
+    # limit have to stay optional or the simple call becomes an argument error.
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(
+        KansoConfig(host="http://nc.test", username="admin", password="pw")
+    )
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tools = {t.name: t for t in await server.list_tools()}
+
+    assert "kanso_search_cards" in tools
+    schema = tools["kanso_search_cards"].inputSchema
+    assert schema["required"] == ["query"]
+    assert schema["properties"]["limit"]["default"] == 25
+    assert "board_id" not in schema.get("required", [])
