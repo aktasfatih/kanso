@@ -15,6 +15,7 @@
 	<summary lang="nl">Snelle open-source kanbanborden met reviews, projecten en realtime synchronisatie</summary>
 	<summary lang="pl">Szybkie tablice kanban open source z recenzjami, projektami i synchronizacją w czasie rzeczywistym</summary>
 	<summary lang="pt-br">Quadros kanban rápidos e de código aberto, com revisões, projetos e sincronização em tempo real</summary>
+	<summary lang="ru">Быстрые канбан-доски с открытым исходным кодом: проверки, проекты и синхронизация в реальном времени</summary>
 	<summary lang="tr">İncelemeler, projeler ve gerçek zamanlı eşitleme sunan hızlı, açık kaynaklı kanban panoları</summary>
 	<description><![CDATA[
 Kanso is a kanban board app for Nextcloud, built for speed. Boards, stacks and
@@ -200,6 +201,27 @@ Cartões recorrentes com agendamentos RRULE, regras de arquivamento automático,
 limites de WIP e papéis de coluna, uma paleta de comandos com busca de texto
 completo, lixeira com restauração, links e webhook do GitHub e importação do
 Deck com um clique.
+	]]></description>
+	<description lang="ru"><![CDATA[
+Kanso — приложение канбан-досок для Nextcloud, созданное ради скорости. Доски,
+колонки и карточки с мгновенным перетаскиванием, оптимистичными обновлениями и
+объемом данных, рассчитанным на большие доски (2000+ карточек). Обновления в
+реальном времени через notify_push с запасным вариантом на опросе.
+
+Насыщенные карточки с Markdown, метками, сроками выполнения, исполнителями,
+приоритетами, чек-листами, родительскими и дочерними карточками, а также
+обсуждениями в ветках с @упоминаниями и наблюдателями. Общий доступ к доске с
+разграничением прав по пользователям и группам.
+
+Процесс проверки (запрос проверки, одобрение или запрос изменений, настраиваемые
+типы проверки и необязательный контроль готовности). Раздел «Моя работа» по всем
+доскам (мои задачи, проверки, входящие), сквозные проекты, а также аналитика по
+доскам и проектам (скорость, время цикла, пропускная способность). Виды «Доска»,
+«Список» и «Шкала времени» (диаграмма Ганта).
+
+Повторяющиеся карточки по расписанию RRULE, правила автоархивации, лимиты WIP и
+роли колонок, командная палитра с полнотекстовым поиском, корзина с
+восстановлением, ссылки и webhook GitHub, а также импорт из Deck в один клик.
 	]]></description>
 	<description lang="tr"><![CDATA[
 Kanso, Nextcloud için hız odaklı geliştirilmiş bir kanban pano uygulamasıdır.
