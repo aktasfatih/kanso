@@ -11,6 +11,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.21.0](https://github.com/aktasfatih/kanso/compare/v0.20.0...v0.21.0) (2026-09-01)
+
+
+### Bug Fixes
+
+* **l10n:** correct three mislabelled German controls ([e8114b2](https://github.com/aktasfatih/kanso/commit/e8114b235b6ad881cbf63ef07a3eafb56343ce35))
+* **l10n:** show the German interface in German again for 121 untranslated strings ([4ade32a](https://github.com/aktasfatih/kanso/commit/4ade32af7f1dea06fac9c441bf52b7f7144dc14e))
+* **l10n:** use one consistent German word for each concept ([6f5340a](https://github.com/aktasfatih/kanso/commit/6f5340a92ae10d40f79e581e3e83e385f4ea0b9b))
+
+
+### Features
+
+* **l10n:** add a complete Brazilian Portuguese translation of the Kanso interface ([5235a49](https://github.com/aktasfatih/kanso/commit/5235a498da1cd9229dedebd863a1911f86f2826e))
+* **l10n:** add a complete Dutch translation of the Kanso interface ([ea90ef7](https://github.com/aktasfatih/kanso/commit/ea90ef7a5a37cd0279e3268dd2eab2d13ef52f37))
+* **l10n:** add a complete French translation of the Kanso interface ([cce0c1b](https://github.com/aktasfatih/kanso/commit/cce0c1b1bc190eff97bbab401fc65c8db9229fbb))
+* **l10n:** add a complete Italian translation of the Kanso interface ([06ca4ac](https://github.com/aktasfatih/kanso/commit/06ca4acf35ac82ec21e43d05f5aaf2207227dd00))
+* **l10n:** add a complete Polish translation of the Kanso interface ([af09dec](https://github.com/aktasfatih/kanso/commit/af09decf36f64fd6c6241357d03d7eccdc394ffa))
+* **l10n:** add a complete Russian translation of the Kanso interface ([ca35b3c](https://github.com/aktasfatih/kanso/commit/ca35b3cb01fd924cc00d8fd6c8df1a4605c8f9c7))
+* **l10n:** add a complete Simplified Chinese translation of the Kanso interface ([dc5df5d](https://github.com/aktasfatih/kanso/commit/dc5df5dd23c0105a36da2ce67d5e57f1b0ecfaea))
+* **l10n:** add a complete Spanish translation of the Kanso interface ([012a9f4](https://github.com/aktasfatih/kanso/commit/012a9f47a76557e344ffcec49171ef4afd95f6c2))
+* **l10n:** add a complete Turkish translation of the Kanso interface ([501a36a](https://github.com/aktasfatih/kanso/commit/501a36a50a51fb32cb8b45b2e7d3b2bb668e6410))
+
 # [0.20.0](https://github.com/aktasfatih/kanso/compare/v0.19.1...v0.20.0) (2026-08-31)
 
 
