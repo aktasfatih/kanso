@@ -1762,7 +1762,7 @@ msgstr "Anzeigeoptionen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Do"
-msgstr "Offen"
+msgstr "Aktion"
 
 #: src/components/CardDetail.vue
 msgid "Does not repeat"
@@ -3096,7 +3096,7 @@ msgstr "Manuell"
 
 #: src/components/CsvImportModal.vue
 msgid "Map columns"
-msgstr "Spalten zuordnen"
+msgstr "CSV-Spalten zuordnen"
 
 #: src/components/CardDetail.vue
 msgid "Mark as template"
@@ -4317,7 +4317,7 @@ msgstr "Secret (jetzt kopieren, wird nur einmal angezeigt)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Select"
-msgstr "Auswählen"
+msgstr "Auswahlliste"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Select a card…"
