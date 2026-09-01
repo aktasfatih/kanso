@@ -8,6 +8,7 @@
  *   node scripts/l10n.mjs compile     # each translationfiles/<lang>/kanso.po → l10n/<lang>.{js,json}
  *   node scripts/l10n.mjs lint        # validate PO syntax + placeholder consistency (CI)
  *   node scripts/l10n.mjs init <lang> # scaffold translationfiles/<lang>/kanso.po from the POT
+ *   node scripts/l10n.mjs sync [lang] # merge the POT into existing .po files (no gettext)
  *
  * Why a bespoke tool instead of the Nextcloud `translationtool.phar`: it needs
  * PHP + xgettext on the machine, whereas everything here already runs on Node
@@ -35,6 +36,42 @@ const PO_DIR = path.join(ROOT, 'translationfiles')
 const L10N_DIR = path.join(ROOT, 'l10n')
 
 const PLURAL_FORM = 'nplurals=2; plural=(n != 1);'
+
+// ── plural forms per language ───────────────────────────────────────────────
+//
+// A fixed lookup table, deliberately: the alternative (parsing CLDR rules) is a
+// library, and Kanso only ever scaffolds catalogues for the handful of
+// languages it actually ships. The expressions are the standard gettext ones.
+// A language that isn't listed falls back to PLURAL_FORM (the 2-form default a
+// translator can then correct by hand) rather than erroring — `init xx` must
+// keep working for a language nobody has added here yet.
+const PLURAL_FORMS = {
+	de: 'nplurals=2; plural=(n != 1);',
+	es: 'nplurals=2; plural=(n != 1);',
+	it: 'nplurals=2; plural=(n != 1);',
+	nl: 'nplurals=2; plural=(n != 1);',
+	tr: 'nplurals=2; plural=(n != 1);',
+	// Romance languages count 0 as singular.
+	fr: 'nplurals=2; plural=(n > 1);',
+	pt_BR: 'nplurals=2; plural=(n > 1);',
+	// Chinese has no grammatical plural at all — one form for every count.
+	zh_CN: 'nplurals=1; plural=0;',
+	// Slavic: one / few / many.
+	pl: 'nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);',
+	ru: 'nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);',
+}
+
+/** The Plural-Forms header for a Nextcloud language code. */
+function pluralFormFor(lang) {
+	return PLURAL_FORMS[lang] || PLURAL_FORM
+}
+
+/** How many msgstr[n] slots a Plural-Forms string declares (2 if unreadable). */
+function npluralsOf(pluralForm) {
+	const m = /nplurals\s*=\s*(\d+)/.exec(pluralForm || '')
+	const n = m ? Number(m[1]) : 0
+	return n > 0 ? n : 2
+}
 
 // ── file walking ────────────────────────────────────────────────────────────
 
@@ -412,12 +449,17 @@ function lintCatalogText(lang, text) {
 	return { ok: problems.length === 0, problems }
 }
 
-/** Lint every translationfiles/<lang>/kanso.po. Prints `::error::` annotations. */
-function lintAll() {
-	const langs = fs.existsSync(PO_DIR)
+/** Every language with a translationfiles/<lang>/kanso.po. */
+function listLangs() {
+	return fs.existsSync(PO_DIR)
 		? fs.readdirSync(PO_DIR).filter((d) => d !== 'templates'
 			&& fs.existsSync(path.join(PO_DIR, d, 'kanso.po')))
 		: []
+}
+
+/** Lint every translationfiles/<lang>/kanso.po. Prints `::error::` annotations. */
+function lintAll() {
+	const langs = listLangs()
 	if (!langs.length) {
 		console.log('No translationfiles/<lang>/kanso.po to lint.')
 		return true
@@ -478,19 +520,221 @@ function compileLang(lang) {
 	return true
 }
 
+// ── block-level PO/POT rewriting (init + sync) ──────────────────────────────
+//
+// `parsePo`/`parsePoStrict` above decode PO *values*, which is what compile and
+// lint need. Scaffolding and merging instead need to MOVE existing lines
+// around without changing them, so this third reader keeps every value as its
+// raw source lines: an existing translation is re-emitted byte-for-byte, with
+// no unquote → re-escape round trip that could quietly rewrite a translator's
+// text.
+
+/** Split PO source into its blank-line-separated blocks of raw lines. */
+function splitBlocks(text) {
+	const blocks = []
+	let cur = []
+	for (const raw of text.split('\n')) {
+		if (raw.trim() === '') {
+			if (cur.length) blocks.push(cur)
+			cur = []
+			continue
+		}
+		cur.push(raw)
+	}
+	if (cur.length) blocks.push(cur)
+	return blocks
+}
+
+/**
+ * @typedef {{ comments: string[], msgid: string|null, msgidLines: string[],
+ *   plural: string|null, pluralLines: string[], msgstrLines: string[],
+ *   slots: Map<number, string[]> }} Block
+ */
+
+/** Parse one block into its parts, keeping every value line verbatim. */
+function parseBlockRaw(lines) {
+	/** @type {Block} */
+	const b = { comments: [], msgid: null, msgidLines: [], plural: null, pluralLines: [], msgstrLines: [], slots: new Map() }
+	let sink = null
+	let text = null
+	for (const raw of lines) {
+		const line = raw.trim()
+		if (line.startsWith('#')) { b.comments.push(raw); continue }
+		let m
+		if ((m = line.match(/^msgid "(.*)"$/))) {
+			b.msgid = unquote(m[1]); sink = b.msgidLines; text = 'msgid'
+		} else if ((m = line.match(/^msgid_plural "(.*)"$/))) {
+			b.plural = unquote(m[1]); sink = b.pluralLines; text = 'plural'
+		} else if (/^msgstr "(.*)"$/.test(line)) {
+			sink = b.msgstrLines; text = null
+		} else if ((m = line.match(/^msgstr\[(\d+)\] "(.*)"$/))) {
+			sink = []; b.slots.set(Number(m[1]), sink); text = null
+		} else if ((m = line.match(/^"(.*)"$/))) {
+			if (!sink) continue
+			if (text === 'msgid') b.msgid += unquote(m[1])
+			else if (text === 'plural') b.plural += unquote(m[1])
+		} else {
+			continue // malformed — `lint` owns reporting it; rewriting just skips it
+		}
+		sink.push(raw)
+	}
+	return b
+}
+
+/** Serialise blocks (arrays of raw lines) back into PO source. */
+function renderBlocks(blocks) {
+	return blocks.map((b) => b.join('\n')).join('\n\n') + '\n'
+}
+
+/** Re-label a msgstr value's first line (`msgstr` ⇄ `msgstr[n]`), value intact. */
+function reKey(lines, keyword) {
+	if (!lines.length) return []
+	const out = lines.slice()
+	out[0] = out[0].replace(/^(\s*)msgstr(?:\[\d+\])? /, `$1${keyword} `)
+	return out
+}
+
+/** True if a msgstr value's raw lines carry any actual text. */
+function hasText(lines) {
+	return lines.some((l) => !/^\s*(?:msgstr(?:\[\d+\])? )?""\s*$/.test(l))
+}
+
+/** Rebuild an entry block: POT msgid + refreshed refs + the given msgstr lines. */
+function entryBlock(potBlock, oldBlock, valueLines) {
+	const comments = [
+		// Translator comments / flags stay; `#:` source refs come from the POT.
+		...(oldBlock ? oldBlock.comments.filter((c) => !c.trim().startsWith('#:')) : []),
+		...potBlock.comments.filter((c) => c.trim().startsWith('#:')),
+	]
+	const lines = [...comments, ...potBlock.msgidLines]
+	if (potBlock.plural !== null) lines.push(...potBlock.pluralLines)
+	lines.push(...valueLines)
+	return lines
+}
+
+/**
+ * Scaffold a catalogue for `lang` from POT source: the language's own
+ * Plural-Forms header, and exactly that many empty `msgstr[n]` slots on every
+ * plural entry. Pure function over text so it is unit-testable.
+ */
+function scaffoldFromPot(potText, lang, pluralForm = pluralFormFor(lang)) {
+	const nplurals = npluralsOf(pluralForm)
+	const out = []
+	for (const b of splitBlocks(potText).map(parseBlockRaw)) {
+		if (b.msgid === '') {
+			const msgstr = []
+			for (const raw of b.msgstrLines) {
+				if (raw.trim().startsWith('"Plural-Forms:')) {
+					msgstr.push(`"Plural-Forms: ${pluralForm}\\n"`)
+					continue
+				}
+				msgstr.push(raw)
+				if (raw.trim() === 'msgstr ""') msgstr.push(`"Language: ${lang}\\n"`)
+			}
+			out.push([...b.comments, ...b.msgidLines, ...msgstr])
+			continue
+		}
+		if (b.msgid === null) continue
+		const value = b.plural !== null
+			? Array.from({ length: nplurals }, (_, i) => `msgstr[${i}] ""`)
+			: ['msgstr ""']
+		out.push(entryBlock(b, null, value))
+	}
+	return renderBlocks(out)
+}
+
+/**
+ * Merge POT source into an existing catalogue — the msgmerge step, without
+ * gettext. Adds new msgids empty, drops msgids the POT no longer has, refreshes
+ * `#:` source references, and re-slots plural entries to however many forms the
+ * catalogue's OWN Plural-Forms header declares. The header block itself is
+ * copied through untouched: the language's plural rule is the translator's
+ * call, not this tool's. Pure function over text, returns `{ text, stats }`.
+ */
+function mergeCatalog(potText, poText) {
+	const potBlocks = splitBlocks(potText).map(parseBlockRaw)
+	const poBlocks = splitBlocks(poText).map(parseBlockRaw)
+
+	const headerAt = poBlocks.findIndex((b) => b.msgid === '')
+	if (headerAt < 0) throw new Error('catalogue has no PO header entry (empty msgid)')
+	const header = poBlocks[headerAt]
+	const nplurals = npluralsOf(header.msgstrLines.join('\n'))
+
+	/** @type {Map<string, Block>} */
+	const existing = new Map()
+	for (const b of poBlocks) if (b.msgid) existing.set(b.msgid, b)
+
+	const out = [
+		// A comment-only block above the header (a PO editor can split the SPDX
+		// header off) is kept — dropping it would strip the file's licence.
+		...poBlocks.slice(0, headerAt).filter((b) => b.msgid === null).map((b) => b.comments),
+		[...header.comments, ...header.msgidLines, ...header.msgstrLines],
+	]
+	const stats = { total: 0, added: 0, removed: 0, translated: 0 }
+	const seen = new Set()
+
+	for (const p of potBlocks) {
+		if (!p.msgid) continue // header (or unparseable) block
+		seen.add(p.msgid)
+		const old = existing.get(p.msgid)
+		if (!old) stats.added++
+
+		let value
+		if (p.plural !== null) {
+			value = []
+			for (let i = 0; i < nplurals; i++) {
+				// An entry that used to be singular keeps its translation in slot 0.
+				const raw = old?.slots.get(i)
+					?? (i === 0 && old && old.plural === null && hasText(old.msgstrLines)
+						? reKey(old.msgstrLines, 'msgstr[0]')
+						: null)
+				value.push(...(raw && raw.length ? raw : [`msgstr[${i}] ""`]))
+			}
+		} else {
+			// …and one that used to be plural keeps slot 0 as its singular.
+			const raw = old && hasText(old.msgstrLines)
+				? old.msgstrLines
+				: (old?.slots.get(0) && hasText(old.slots.get(0)) ? reKey(old.slots.get(0), 'msgstr') : null)
+			value = raw && raw.length ? raw : ['msgstr ""']
+		}
+		if (hasText(value)) stats.translated++
+		stats.total++
+		out.push(entryBlock(p, old, value))
+	}
+
+	for (const msgid of existing.keys()) if (!seen.has(msgid)) stats.removed++
+
+	return { text: renderBlocks(out), stats }
+}
+
 // ── scaffold a new PO from the POT ──────────────────────────────────────────
 
 function initLang(lang) {
 	if (!fs.existsSync(POT)) { console.error('Run extract first — no POT.'); process.exit(1) }
 	const dest = path.join(PO_DIR, lang, 'kanso.po')
 	if (fs.existsSync(dest)) { console.error(`${path.relative(ROOT, dest)} already exists.`); process.exit(1) }
-	const pot = fs.readFileSync(POT, 'utf8').replace(
-		'msgid ""\nmsgstr ""\n',
-		`msgid ""\nmsgstr ""\n"Language: ${lang}\\n"\n`,
-	)
+	const pluralForm = pluralFormFor(lang)
 	fs.mkdirSync(path.dirname(dest), { recursive: true })
-	fs.writeFileSync(dest, pot)
-	console.log(`Scaffolded ${path.relative(ROOT, dest)} — fill in the msgstr values.`)
+	fs.writeFileSync(dest, scaffoldFromPot(fs.readFileSync(POT, 'utf8'), lang, pluralForm))
+	if (!PLURAL_FORMS[lang]) {
+		console.warn(`No plural rule known for "${lang}" — defaulted to "${PLURAL_FORM}". Correct the Plural-Forms header, then run \`sync ${lang}\`.`)
+	}
+	console.log(`Scaffolded ${path.relative(ROOT, dest)} (${pluralForm}) — fill in the msgstr values.`)
+}
+
+// ── merge the POT into existing catalogues ──────────────────────────────────
+
+function syncLang(lang) {
+	const file = path.join(PO_DIR, lang, 'kanso.po')
+	if (!fs.existsSync(file)) {
+		console.error(`${path.relative(ROOT, file)} does not exist — run \`init ${lang}\` first.`)
+		return false
+	}
+	const { text, stats } = mergeCatalog(fs.readFileSync(POT, 'utf8'), fs.readFileSync(file, 'utf8'))
+	fs.writeFileSync(file, text)
+	console.log(`Synced ${path.relative(ROOT, file)} — ${stats.total} entries `
+		+ `(+${stats.added} new, -${stats.removed} obsolete, ${stats.translated} translated kept)`)
+	return true
 }
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -508,10 +752,7 @@ if (isMain) {
 		extractBackend(map)
 		writePot(map)
 	} else if (cmd === 'compile') {
-		const langs = fs.existsSync(PO_DIR)
-			? fs.readdirSync(PO_DIR).filter((d) => d !== 'templates'
-				&& fs.existsSync(path.join(PO_DIR, d, 'kanso.po')))
-			: []
+		const langs = listLangs()
 		if (!langs.length) console.log('No translationfiles/<lang>/kanso.po to compile.')
 		langs.forEach(compileLang)
 	} else if (cmd === 'lint') {
@@ -520,10 +761,21 @@ if (isMain) {
 		const lang = process.argv[3]
 		if (!lang) { console.error('Usage: node scripts/l10n.mjs init <lang>'); process.exit(1) }
 		initLang(lang)
+	} else if (cmd === 'sync') {
+		if (!fs.existsSync(POT)) { console.error('Run extract first — no POT.'); process.exit(1) }
+		const lang = process.argv[3]
+		const langs = lang ? [lang] : listLangs()
+		if (!langs.length) console.log('No translationfiles/<lang>/kanso.po to sync.')
+		let ok = true
+		for (const l of langs) if (!syncLang(l)) ok = false
+		process.exit(ok ? 0 : 1)
 	} else {
-		console.error('Usage: node scripts/l10n.mjs <extract|compile|lint|init <lang>>')
+		console.error('Usage: node scripts/l10n.mjs <extract|compile|lint|init <lang>|sync [lang]>')
 		process.exit(1)
 	}
 }
 
-export { parsePoStrict, extractPlaceholders, diffMultisets, mergePlaceholderExpectations, lintCatalogText }
+export {
+	parsePoStrict, extractPlaceholders, diffMultisets, mergePlaceholderExpectations, lintCatalogText,
+	pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog,
+}
