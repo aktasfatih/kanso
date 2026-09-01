@@ -436,8 +436,13 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(rowLive).toHaveCount(0, { timeout: 15_000 })
 
 			// Clearing the facet restores the default: the archived card is gone again.
-			await page.locator('.board-filter-bar__back').click()
-			await page.locator('.board-filter-bar__clear').click()
+			// Reset the Archived facet itself ("Any"), NOT the panel's global "Clear
+			// filters": on a View that button also drops the View's own saved label
+			// filter — its facet is deliberately hidden here (board-scoped label ids
+			// collide across boards), so the wipe is invisible and would widen the
+			// page to the entire cross-board feed, where the virtualised list keeps
+			// both of these rows off-screen and the assertions stop meaning anything.
+			await page.locator('.board-filter-bar__opt', { hasText: /^Any$/ }).click()
 			await page.keyboard.press('Escape')
 			await expect(rowLive).toBeVisible({ timeout: 15_000 })
 			await expect(rowArchived).toHaveCount(0, { timeout: 15_000 })
