@@ -16,6 +16,8 @@ use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardAttachment;
+use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReview;
@@ -32,8 +34,14 @@ use OCA\Kanso\Db\ReviewType;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCP\Files\IAppData;
+use OCP\Files\IMimeTypeDetector;
+use OCP\Files\NotFoundException;
+use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IDBConnection;
+use OCP\ITempManager;
 use OCP\IUserManager;
+use OCP\Security\ISecureRandom;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -58,18 +66,43 @@ use Psr\Log\LoggerInterface;
  * straight through the mappers, and the board is created via
  * {@see BoardService::create} so its change log + ETag start with a single
  * clean CREATE entry.
+ *
+ * ## Attachments (the v3 archive)
+ *
+ * An export is a .zip - `board.json` plus one entry per card attachment - so
+ * import accepts that archive and closes the round trip: the document restores
+ * the graph as ever, and each manifest entry's bytes are written into Kanso's
+ * app-data under a FRESH server-generated storage key, exactly as an upload
+ * does. A bare v1/v2 JSON document (and a v3 archive carrying no attachments)
+ * still imports untouched.
+ *
+ * The archive is read through {@see ImportArchiveReader}, which owns the
+ * hardening: an entry name is only ever a lookup key into that reader's
+ * validated index, never a path. App-data writes are not covered by the DB
+ * transaction, so every object written is tracked and best-effort deleted if the
+ * import throws after it landed (mirroring {@see DeckImportService}).
  */
 class ImportService {
 	/**
-	 * Hard ceiling on the accepted document size, in bytes. A board export is
-	 * plain structured text; anything past this is rejected before parsing. The
-	 * cap exists to bound memory: unlike the CSV importer this decodes the whole
-	 * export with json_decode (the graph must be resolved as a whole to remap ids),
-	 * so the decoded structure - not just the raw bytes - has to fit. The rows are
-	 * then inserted one at a time, so 32 MiB comfortably fits tens of thousands of
-	 * cards while keeping the decode well within a normal PHP memory limit.
+	 * Hard ceiling on the accepted DOCUMENT size, in bytes - `board.json`, and
+	 * nothing else. A board export is plain structured text; anything past this
+	 * is rejected before parsing. The cap exists to bound memory: unlike the CSV
+	 * importer this decodes the whole export with json_decode (the graph must be
+	 * resolved as a whole to remap ids), so the decoded structure - not just the
+	 * raw bytes - has to fit. The rows are then inserted one at a time, so 32 MiB
+	 * comfortably fits tens of thousands of cards while keeping the decode well
+	 * within a normal PHP memory limit.
+	 *
+	 * This is deliberately far below {@see AttachmentSanitizer::MAX_SIZE} (100
+	 * MiB, one attachment) and {@see ImportArchiveReader::MAX_TOTAL_BYTES} (the
+	 * whole archive): the three cap different things. Only the document is
+	 * decoded whole into memory; attachment bytes are streamed to disk in chunks
+	 * and never buffered, so they are bounded by storage, not by the decoder.
 	 */
 	public const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
+
+	/** Per-card app-data subfolder holding that card's attachment objects. */
+	private const FOLDER_PREFIX = 'card-';
 
 	public function __construct(
 		private BoardService $boardService,
@@ -86,22 +119,123 @@ class ImportService {
 		private ArchiveRuleMapper $archiveRuleMapper,
 		private RecurRuleMapper $recurRuleMapper,
 		private AutomationRuleMapper $automationRuleMapper,
+		private CardAttachmentMapper $cardAttachmentMapper,
 		private IUserManager $userManager,
 		private IDBConnection $db,
 		private BoardAccess $boardAccess,
 		private RecurrenceService $recurrenceService,
+		private IAppData $appData,
+		private ISecureRandom $secureRandom,
+		private ITempManager $tempManager,
+		private IMimeTypeDetector $mimeTypeDetector,
 		private LoggerInterface $logger,
 	) {
 	}
 
 	/**
-	 * Imports a Kanso export document into a new board owned by the actor.
+	 * Imports an UPLOADED Kanso export into a new board owned by the actor -
+	 * the endpoint's main path, and the one that closes the round trip.
+	 *
+	 * Both shapes are accepted, decided by the file's own leading bytes rather
+	 * than by its name or its declared MIME:
+	 *  - a v3 ARCHIVE (.zip): `board.json` plus the attachment bytes,
+	 *  - a bare JSON DOCUMENT: every v1/v2 export anyone already downloaded.
+	 *
+	 * The $upload array is the `$_FILES`-shaped entry from
+	 * {@see \OCP\IRequest::getUploadedFile()}: keys name, type, size, tmp_name,
+	 * error.
+	 *
+	 * @param array{name?: string, type?: string, size?: int, tmp_name?: string, error?: int}|null $upload
+	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
+	 * @throws InvalidInputException if the upload is missing, errored, empty, oversized or not a Kanso export
+	 */
+	public function importUploadedFile(?array $upload, string $actorUid): array {
+		if ($upload === null || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+			$error = $upload['error'] ?? UPLOAD_ERR_NO_FILE;
+			if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+				throw new InvalidInputException('The export file is too large to import');
+			}
+			throw new InvalidInputException('No export file uploaded');
+		}
+
+		$tmpName = $upload['tmp_name'] ?? '';
+		if ($tmpName === '' || (!is_uploaded_file($tmpName) && !is_file($tmpName))) {
+			// In a real request PHP guarantees is_uploaded_file for a legit
+			// upload; the is_file fallback keeps this unit-testable with a plain
+			// temp file. Anything else is a forged/absent tmp_name and must be
+			// refused so an arbitrary server path is never read.
+			throw new InvalidInputException('No export file uploaded');
+		}
+
+		// The authoritative size is what is actually on disk - a client may lie
+		// about `size`.
+		$actualSize = @filesize($tmpName);
+		$size = $actualSize !== false ? $actualSize : (int)($upload['size'] ?? 0);
+		if ($size <= 0) {
+			throw new InvalidInputException('The export file is empty');
+		}
+		if ($size > ImportArchiveReader::MAX_TOTAL_BYTES) {
+			throw new InvalidInputException('The export file is too large to import');
+		}
+
+		if ($this->looksLikeArchive($tmpName)) {
+			return $this->importArchive($tmpName, $actorUid);
+		}
+
+		// A bare document is decoded whole, so it answers to the document cap,
+		// not to the (much larger) archive cap checked above.
+		if ($size > self::MAX_DOCUMENT_BYTES) {
+			throw new InvalidInputException('The export file is too large to import');
+		}
+		$raw = @file_get_contents($tmpName);
+		if ($raw === false) {
+			throw new InvalidInputException('Could not read the uploaded export file');
+		}
+		return $this->import($raw, $actorUid);
+	}
+
+	/**
+	 * Imports a v3 export ARCHIVE (the .zip {@see BoardArchiveService} writes)
+	 * into a new board owned by the actor: `board.json` restores the graph, and
+	 * every manifest entry's bytes become a real attachment on the new card.
+	 *
+	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
+	 * @throws InvalidInputException on an unreadable, hostile, oversized or unsupported archive
+	 */
+	public function importArchive(string $archivePath, string $actorUid): array {
+		$archive = ImportArchiveReader::open($archivePath);
+		try {
+			$board = $this->validateDocument($archive->readDocument(self::MAX_DOCUMENT_BYTES));
+			return $this->rebuildInTransaction($board, $actorUid, $archive);
+		} finally {
+			$archive->close();
+		}
+	}
+
+	/**
+	 * Imports a Kanso export DOCUMENT into a new board owned by the actor.
+	 *
+	 * Kept for the bare-JSON shape: every v1/v2 export already in a user's
+	 * downloads folder, and any scripted client posting the raw text. A v3
+	 * document sent this way imports its graph fine; its attachment manifest has
+	 * no bytes to go with it, so those entries are logged and skipped - the
+	 * archive is what carries files.
 	 *
 	 * @param string $rawDocument the raw uploaded/pasted JSON export
 	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
 	 * @throws InvalidInputException on an oversized, malformed or unsupported document
 	 */
 	public function import(string $rawDocument, string $actorUid): array {
+		return $this->rebuildInTransaction($this->validateDocument($rawDocument), $actorUid);
+	}
+
+	/**
+	 * Parses and version-checks an export document, returning its board node.
+	 *
+	 * @return array<string, mixed>
+	 * @throws InvalidInputException on an oversized, malformed or unsupported document
+	 */
+	private function validateDocument(string $rawDocument): array {
 		if (strlen($rawDocument) > self::MAX_DOCUMENT_BYTES) {
 			throw new InvalidInputException('The export file is too large to import');
 		}
@@ -132,8 +266,22 @@ class ImportService {
 		if (!is_array($board) || !isset($board['title']) || !is_string($board['title'])) {
 			throw new InvalidInputException('The export is missing its board');
 		}
+		return $board;
+	}
 
-		return $this->rebuildInTransaction($board, $actorUid);
+	/**
+	 * Whether the uploaded file starts with the local-file-header magic every
+	 * zip begins with. Content, not filename or declared MIME - the client
+	 * controls both of those and neither decides how the bytes are parsed.
+	 */
+	private function looksLikeArchive(string $path): bool {
+		$handle = @fopen($path, 'rb');
+		if ($handle === false) {
+			return false;
+		}
+		$magic = fread($handle, 4);
+		fclose($handle);
+		return $magic === "PK\x03\x04";
 	}
 
 	/**
@@ -194,28 +342,44 @@ class ImportService {
 
 	/**
 	 * Runs {@see rebuild} inside a single all-or-nothing transaction. Shared by
-	 * the document import path and the in-process duplicate path.
+	 * the document import path, the archive import path and the in-process
+	 * duplicate path.
+	 *
+	 * The DB half rolls back on its own. The app-data half does NOT take part in
+	 * the transaction, so every attachment object written during the rebuild is
+	 * tracked and best-effort removed when the rebuild throws - otherwise a
+	 * failed import would leave orphaned bytes behind with no row referencing
+	 * them (and so nothing to ever clean them up).
 	 *
 	 * @param array<string, mixed> $board
 	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
 	 */
-	private function rebuildInTransaction(array $board, string $actorUid): array {
+	private function rebuildInTransaction(array $board, string $actorUid, ?ImportArchiveReader $archive = null): array {
+		/** @var list<array{cardId: int, storageKey: string}> $writtenObjects */
+		$writtenObjects = [];
 		$this->db->beginTransaction();
 		try {
-			$result = $this->rebuild($board, $actorUid);
+			$result = $this->rebuild($board, $actorUid, $archive, $writtenObjects);
 			$this->db->commit();
 			return $result;
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
+			$this->cleanupWrittenObjects($writtenObjects);
 			throw $e;
 		}
 	}
 
 	/**
 	 * @param array<string, mixed> $board
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
 	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
 	 */
-	private function rebuild(array $board, string $actorUid): array {
+	private function rebuild(
+		array $board,
+		string $actorUid,
+		?ImportArchiveReader $archive,
+		array &$writtenObjects,
+	): array {
 		$color = isset($board['color']) && is_string($board['color']) ? $board['color'] : null;
 		$newBoard = $this->boardService->create((string)$board['title'], $color, $actorUid);
 		$boardId = $newBoard->getId();
@@ -234,7 +398,8 @@ class ImportService {
 		$stackIdMap = $this->importStacks($board, $boardId);
 
 		[$cardIdMap, $cardCount] = $this->importCards(
-			$board, $boardId, $stackIdMap, $labelIdMap, $reviewTypeIdMap, $actorUid, $now
+			$board, $boardId, $stackIdMap, $labelIdMap, $reviewTypeIdMap, $actorUid, $now,
+			$archive, $writtenObjects
 		);
 
 		$this->importArchiveRules($board, $boardId, $stackIdMap, $now);
@@ -322,6 +487,7 @@ class ImportService {
 	 * @param array<int, int> $stackIdMap
 	 * @param array<int, int> $labelIdMap
 	 * @param array<int, int> $reviewTypeIdMap
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
 	 * @return array{0: array<int, int>, 1: int} [old card id → new card id, card count]
 	 */
 	private function importCards(
@@ -332,6 +498,8 @@ class ImportService {
 		array $reviewTypeIdMap,
 		string $actorUid,
 		int $now,
+		?ImportArchiveReader $archive,
+		array &$writtenObjects,
 	): array {
 		$cardIdMap = [];
 		$parentOf = [];
@@ -410,6 +578,7 @@ class ImportService {
 			$this->attachChecklist($row, $new->getId(), $now);
 			$this->attachComments($row, $new->getId(), $actorUid);
 			$this->attachReviews($row, $new->getId(), $reviewTypeIdMap, $actorUid, $now);
+			$this->attachFiles($row, $new->getId(), $boardId, $actorUid, $archive, $writtenObjects);
 		}
 
 		// Pass two: remap parents now that every old→new card id is known.
@@ -554,6 +723,204 @@ class ImportService {
 			// single-stage review, mirroring CardReviewMapper::insertRequest.
 			$review->setReviewTypeId($newType ?? 0);
 			$this->cardReviewMapper->insert($review);
+		}
+	}
+
+	/**
+	 * Restores the card's ATTACHMENT BYTES out of the export archive (#10071) -
+	 * the half of a board that a document alone cannot carry.
+	 *
+	 * Nothing here trusts the archive:
+	 *  - the manifest `path` is only a LOOKUP KEY into
+	 *    {@see ImportArchiveReader}'s validated index. It never becomes a
+	 *    filesystem path: the object is written under a fresh `secureRandom`
+	 *    key in `card-<new card id>/`, exactly like an upload
+	 *    ({@see CardAttachmentService::upload()}). Both path components are
+	 *    server-generated, so an entry name cannot select where bytes land no
+	 *    matter what it says;
+	 *  - the manifest `mime` is DISCARDED and the type is re-derived from the
+	 *    bytes on disk, then run through {@see AttachmentSanitizer::mime()} - so
+	 *    an entry announcing `image/png` over HTML is stored (and later served)
+	 *    as inert `application/octet-stream`;
+	 *  - the manifest `filename` is a display label only, sanitized on the way
+	 *    in like every other store path;
+	 *  - `size` is the byte count actually written, not the declared one.
+	 *
+	 * Permission-wise there is nothing extra to gate: import always builds a
+	 * BRAND-NEW board owned by the actor ({@see rebuild()} calls
+	 * {@see BoardService::create} with the actor uid), so a restored file can
+	 * only ever land on a card of a board the importer just created and owns.
+	 * There is no board id in the document that could redirect it elsewhere.
+	 *
+	 * A manifest entry whose bytes are missing from the archive is logged and
+	 * skipped, never fatal - one absent blob must not cost a user the rest of
+	 * the restore. A bomb or a cap breach, in contrast, throws and takes the
+	 * whole import down (the transaction rolls back and
+	 * {@see cleanupWrittenObjects()} removes what already landed).
+	 *
+	 * @param array<string, mixed> $row
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
+	 */
+	private function attachFiles(
+		array $row,
+		int $newCardId,
+		int $boardId,
+		string $actorUid,
+		?ImportArchiveReader $archive,
+		array &$writtenObjects,
+	): void {
+		// A bare document carries a manifest but no bytes; there is nothing to
+		// restore and that is not an error.
+		if ($archive === null) {
+			return;
+		}
+
+		foreach ((array)($row['attachments'] ?? []) as $entry) {
+			if (!is_array($entry)) {
+				continue;
+			}
+			$path = $this->str($entry, 'path', '');
+			if ($path === '' || !$archive->has($path)) {
+				$this->logger->warning(
+					'Kanso import: an attachment listed on a card is missing from the export archive',
+					['cardId' => $newCardId],
+				);
+				continue;
+			}
+
+			$scratch = $this->tempManager->getTemporaryFile('.att');
+			if ($scratch === false) {
+				throw new \RuntimeException('No writable temp directory for the import');
+			}
+			try {
+				$size = $archive->copyEntryTo($path, $scratch);
+				if ($size === null || $size <= 0) {
+					$this->logger->warning(
+						'Kanso import: an attachment could not be read out of the export archive',
+						['cardId' => $newCardId],
+					);
+					continue;
+				}
+				$this->storeAttachment($entry, $newCardId, $boardId, $scratch, $size, $actorUid, $writtenObjects);
+			} finally {
+				@unlink($scratch);
+			}
+		}
+	}
+
+	/**
+	 * Writes one spooled attachment into app-data under a server-generated key
+	 * and inserts its `kanso_card_attachments` row, recording the object so a
+	 * later failure can undo it.
+	 *
+	 * @param array<string, mixed> $entry the manifest entry (untrusted metadata)
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
+	 */
+	private function storeAttachment(
+		array $entry,
+		int $newCardId,
+		int $boardId,
+		string $scratchPath,
+		int $size,
+		string $actorUid,
+		array &$writtenObjects,
+	): void {
+		$filename = AttachmentSanitizer::filename($this->str($entry, 'filename', ''));
+		$mime = $this->resolveMime($scratchPath, $filename);
+
+		$stream = @fopen($scratchPath, 'rb');
+		if ($stream === false) {
+			throw new \RuntimeException('Could not read a spooled attachment');
+		}
+		// SERVER-GENERATED opaque object name - the archive entry name never
+		// touches the storage path (identical to the upload path).
+		$storageKey = $this->secureRandom->generate(
+			32,
+			ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
+		);
+		try {
+			$this->cardFolder($newCardId)->newFile($storageKey, $stream);
+		} finally {
+			// newFile() may consume and close the stream itself; only close it
+			// if it is still an open resource.
+			/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
+			if (is_resource($stream)) {
+				fclose($stream);
+			}
+		}
+		$writtenObjects[] = ['cardId' => $newCardId, 'storageKey' => $storageKey];
+
+		// The recorded uploader is kept when that uid still exists here,
+		// otherwise the importer takes it (the card-owner rule).
+		$uploadedBy = $this->nullableStr($entry, 'uploadedBy');
+		if ($uploadedBy === null || !$this->userManager->userExists($uploadedBy)) {
+			$uploadedBy = $actorUid;
+		}
+		$createdAt = (int)($entry['createdAt'] ?? 0);
+
+		$attachment = new CardAttachment();
+		$attachment->setCardId($newCardId);
+		$attachment->setBoardId($boardId);
+		$attachment->setFilename($filename);
+		$attachment->setMime($mime);
+		$attachment->setSize($size);
+		$attachment->setStorageKey($storageKey);
+		$attachment->setUploadedBy($uploadedBy);
+		$attachment->setCreatedAt($createdAt > 0 ? $createdAt : time());
+		$this->cardAttachmentMapper->insert($attachment);
+	}
+
+	/**
+	 * The MIME to store for restored bytes, derived SERVER-SIDE from the bytes
+	 * themselves and from the sanitized display name - never from the manifest,
+	 * which an attacker writes.
+	 *
+	 * Both readings go through {@see AttachmentSanitizer::mime()}, whose denylist
+	 * is the one thing keeping active content (html/svg/xml/js) out of the store.
+	 * If EITHER reading trips it the stored type is the inert generic one: a
+	 * `.png` full of HTML is refused by the content sniff, and an `.html` full of
+	 * PNG bytes is refused by the name.
+	 */
+	private function resolveMime(string $path, string $filename): string {
+		$fromContent = AttachmentSanitizer::mime($this->mimeTypeDetector->detectContent($path));
+		$fromName = AttachmentSanitizer::mime($this->mimeTypeDetector->detectPath($filename));
+		if ($fromContent === 'application/octet-stream' || $fromName === 'application/octet-stream') {
+			return 'application/octet-stream';
+		}
+		return $fromContent;
+	}
+
+	/**
+	 * The per-card app-data folder, created on demand - the same `card-<id>`
+	 * layout {@see CardAttachmentService} uses. Card ids are integers freshly
+	 * assigned by this import, so the folder name is never attacker-controlled.
+	 */
+	private function cardFolder(int $cardId): ISimpleFolder {
+		$name = self::FOLDER_PREFIX . $cardId;
+		try {
+			return $this->appData->getFolder($name);
+		} catch (NotFoundException) {
+			return $this->appData->newFolder($name);
+		}
+	}
+
+	/**
+	 * Best-effort removal of the app-data objects written during a failed
+	 * import. A missing object/folder is fine - the point is that nothing the
+	 * rolled-back transaction no longer references is left occupying storage.
+	 *
+	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects
+	 */
+	private function cleanupWrittenObjects(array $writtenObjects): void {
+		foreach ($writtenObjects as $object) {
+			try {
+				$this->appData
+					->getFolder(self::FOLDER_PREFIX . $object['cardId'])
+					->getFile($object['storageKey'])
+					->delete();
+			} catch (\Throwable) {
+				// Nothing to clean up.
+			}
 		}
 	}
 

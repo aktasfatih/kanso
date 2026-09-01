@@ -195,6 +195,16 @@ starts.
 - `kanso_delete_recur_rule` — drop the schedule (template + spawned cards stay)
 - `kanso_recur_rule_create_now` — fire once now without touching the schedule
 
+**Search**
+
+- `kanso_search_cards` — find cards by text across every board you can read
+  (or one board with `board_id`). Plain case-insensitive substring matching over
+  card titles, card descriptions and comment bodies — no query language, no
+  AND/OR, no `field:value`. Each hit is a locator (`type`, `cardId`, `boardId`,
+  `title`, `snippet`, `rank`); feed `cardId` to `kanso_get_card` for the full
+  card. The server ACL-filters the results to your readable boards, and
+  `board_id` only narrows that set.
+
 **My work**
 
 - `kanso_list_my_cards` — open cards assigned to you across all boards (never

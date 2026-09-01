@@ -19,11 +19,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			{{ t('kanso', 'Failed to load tasks. Please try again.') }}
 		</div>
 
-		<!-- Empty state -->
+		<!-- Empty state — the copy says WHY it is empty: with a board filter on,
+		     "no tasks anywhere" would be a claim the view cannot make. -->
 		<NcEmptyContent
 			v-else-if="!filteredCards.length"
-			:name="t('kanso', 'No tasks assigned to you')"
-			:description="t('kanso', 'Cards assigned to you across your boards will appear here.')">
+			:name="emptyName"
+			:description="emptyDescription">
 			<template #icon>
 				<FormatListChecksIcon :size="64" />
 			</template>
@@ -49,7 +50,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						tabindex="0"
 						role="button"
 						@click="openCard(card)"
-						@keydown.enter="openCard(card)">
+						@keydown.enter="openCard(card)"
+						@keydown.space.prevent="openCard(card)">
 						<div class="my-cards-view__row-main">
 							<span class="my-cards-view__card-title">{{ card.title }}</span>
 							<span class="my-cards-view__meta">
@@ -67,16 +69,97 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</ul>
 			</section>
 		</template>
+
+		<!-- The feed is capped server-side. Say so, rather than letting a
+		     truncated window read as the whole of someone's workload. The
+		     wording is about what was LOADED, not about the rows on screen, so
+		     it stays true with the board filter applied. -->
+		<p
+			v-if="!isLoading && !isError && truncated"
+			class="my-cards-view__truncation"
+			role="status">
+			{{ t('kanso', 'Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list.', { count: limit }) }}
+		</p>
+
+		<!-- Recently done (#10061) — opt-in, and OUTSIDE the loading/empty/list
+		     chain above so it stays reachable even for someone with nothing open.
+		     Nothing is requested until this is expanded: the completed set is
+		     unbounded over a board's lifetime, so folding it into the default
+		     load is exactly the slowdown this section exists to avoid. -->
+		<section v-if="!isLoading && !isError" class="my-cards-view__done">
+			<button
+				type="button"
+				class="my-cards-view__done-toggle"
+				:aria-expanded="showDone ? 'true' : 'false'"
+				aria-controls="my-cards-done-panel"
+				@click="toggleDone">
+				<ChevronDownIcon v-if="showDone" :size="18" aria-hidden="true" />
+				<ChevronRightIcon v-else :size="18" aria-hidden="true" />
+				{{ t('kanso', 'Recently done') }}
+			</button>
+
+			<div v-show="showDone" id="my-cards-done-panel" class="my-cards-view__done-panel">
+				<div v-if="doneLoading" class="my-cards-view__loading" aria-live="polite">
+					<span class="my-cards-view__spinner" aria-hidden="true" />
+					<span>{{ t('kanso', 'Loading recently done tasks…') }}</span>
+				</div>
+
+				<div v-else-if="doneError" class="my-cards-view__error">
+					{{ t('kanso', 'Failed to load recently done tasks. Please try again.') }}
+				</div>
+
+				<p v-else-if="!filteredDoneCards.length" class="my-cards-view__done-empty">
+					{{ t('kanso', 'Nothing here yet — tasks you complete will show up in this section.') }}
+				</p>
+
+				<ul v-else class="my-cards-view__list">
+					<li
+						v-for="card in filteredDoneCards"
+						:key="card.id"
+						class="my-cards-view__row my-cards-view__row--done"
+						tabindex="0"
+						role="button"
+						@click="openCard(card)"
+						@keydown.enter="openCard(card)"
+						@keydown.space.prevent="openCard(card)">
+						<div class="my-cards-view__row-main">
+							<span class="my-cards-view__card-title">{{ card.title }}</span>
+							<span class="my-cards-view__meta">
+								<span class="my-cards-view__board">{{ card.boardTitle }}</span>
+								<span v-if="card.stackTitle" class="my-cards-view__stack">· {{ card.stackTitle }}</span>
+							</span>
+						</div>
+						<span class="my-cards-view__due">{{ formatDone(card.doneAt) }}</span>
+					</li>
+				</ul>
+
+				<!-- Both bounds are stated, for the same reason the open feed's cap
+				     is: a bounded window that does not say so reads as "this is
+				     everything I finished", which it is not. -->
+				<p
+					v-if="!doneLoading && !doneError && doneWindowDays > 0"
+					class="my-cards-view__truncation"
+					role="status">
+					{{ doneTruncated
+						? t('kanso', 'Showing the {count} most recent tasks you completed in the last {days} days.', { count: doneLimit, days: doneWindowDays })
+						: t('kanso', 'Tasks you completed in the last {days} days.', { days: doneWindowDays }) }}
+				</p>
+			</div>
+		</section>
 	</div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { useMyCards } from '../composables/useMyCards.js'
+import { useMyRecentlyDoneCards } from '../composables/useMyRecentlyDoneCards.js'
+import { myCardsFeed, recentlyDoneFeed } from '../services/myCardsFeed.js'
 
 const props = defineProps({
 	embedded: { type: Boolean, default: false },
@@ -86,13 +169,77 @@ const props = defineProps({
 const router = useRouter()
 const { data, isLoading, isError } = useMyCards()
 
-const cards = computed(() => data.value ?? [])
+/** { cards, truncated, limit } — the server caps the feed and reports the cap. */
+const feed = computed(() => myCardsFeed(data.value))
+
+const cards = computed(() => feed.value.cards)
+
+/** True when more cards are assigned than the server returned. */
+const truncated = computed(() => feed.value.truncated)
+
+/** The server-side row cap, for the truncation notice. */
+const limit = computed(() => feed.value.limit)
 
 /** Cards after applying the optional board filter from the hub. */
 const filteredCards = computed(() =>
 	props.boardFilter === null
 		? cards.value
 		: cards.value.filter((c) => c.boardId === props.boardFilter),
+)
+
+/**
+ * Empty-state copy. The block is gated on the FILTERED list, so with a board
+ * filter applied the unfiltered wording ("no tasks assigned to you") would
+ * state something false — the user may well have tasks on other boards.
+ */
+const emptyName = computed(() =>
+	props.boardFilter === null
+		? t('kanso', 'No tasks assigned to you')
+		: t('kanso', 'No tasks on this board'),
+)
+
+const emptyDescription = computed(() =>
+	props.boardFilter === null
+		? t('kanso', 'Cards assigned to you across your boards will appear here.')
+		: t('kanso', 'Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you.'),
+)
+
+/**
+ * Recently done (#10061) — opt-in.
+ *
+ * `showDone` doubles as the query's `enabled` flag, so the request is issued by
+ * the click that expands the section and by nothing else. It starts false on
+ * every mount deliberately: a remembered "expanded" would re-introduce the
+ * cost on page load, which is precisely what the section is designed to avoid.
+ */
+const showDone = ref(false)
+
+function toggleDone() {
+	showDone.value = !showDone.value
+}
+
+const {
+	data: doneData,
+	isLoading: doneLoading,
+	isError: doneError,
+} = useMyRecentlyDoneCards(showDone)
+
+const doneFeed = computed(() => recentlyDoneFeed(doneData.value))
+
+/** True when more completed cards fell inside the window than the row cap. */
+const doneTruncated = computed(() => doneFeed.value.truncated)
+
+/** The server-side row cap for the recently-done section. */
+const doneLimit = computed(() => doneFeed.value.limit)
+
+/** The server-side recency window, in days. */
+const doneWindowDays = computed(() => doneFeed.value.windowDays)
+
+/** Recently-done cards after the hub's optional board filter. */
+const filteredDoneCards = computed(() =>
+	props.boardFilter === null
+		? doneFeed.value.cards
+		: doneFeed.value.cards.filter((c) => c.boardId === props.boardFilter),
 )
 
 /** Local midnight boundaries used to bucket cards by due date. */
@@ -136,6 +283,12 @@ function formatDue(iso) {
 	} catch {
 		return iso
 	}
+}
+
+/** Completion date for a recently-done row. `doneAt` is unix SECONDS. */
+function formatDone(doneAt) {
+	if (!doneAt) return ''
+	return new Date(doneAt * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function openCard(card) {
@@ -241,7 +394,13 @@ function openCard(card) {
 .my-cards-view__row:hover,
 .my-cards-view__row:focus-visible {
 	background: var(--color-border-dark);
-	outline: none;
+}
+
+/* Rows are tabbable buttons, so keyboard focus MUST be visible (WCAG 2.4.7).
+   Same ring as the sibling Inbox rows. */
+.my-cards-view__row:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
 }
 
 .my-cards-view__row-main {
@@ -277,5 +436,60 @@ function openCard(card) {
 .my-cards-view__due--overdue {
 	color: var(--color-error);
 	font-weight: 600;
+}
+
+.my-cards-view__truncation {
+	margin: 0;
+	padding: 12px 0 0;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.my-cards-view__done {
+	margin-top: 24px;
+	border-top: 1px solid var(--color-border);
+	padding-top: 12px;
+}
+
+.my-cards-view__done-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	background: none;
+	border: none;
+	padding: 6px 0;
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--color-text-maxcontrast);
+}
+
+.my-cards-view__done-toggle:hover {
+	color: var(--color-main-text);
+}
+
+/* The toggle is a real button, so keyboard focus must be visible (WCAG 2.4.7) -
+   the same ring the rows use. */
+.my-cards-view__done-toggle:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+	border-radius: var(--border-radius, 4px);
+}
+
+.my-cards-view__done-panel {
+	padding-top: 6px;
+}
+
+.my-cards-view__done-empty {
+	margin: 0;
+	padding: 8px 0;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Completed work reads as secondary to the open list above it. */
+.my-cards-view__row--done .my-cards-view__card-title {
+	color: var(--color-text-maxcontrast);
 }
 </style>

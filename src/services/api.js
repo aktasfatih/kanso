@@ -3,6 +3,7 @@
 
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { toMyCardsFeed, toRecentlyDoneFeed } from './myCardsFeed.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
 
@@ -359,12 +360,21 @@ export const importDeckBoard = (deckBoardId) =>
 	axios.post(url(`/api/deck-import/boards/${deckBoardId}`)).then((r) => r.data)
 
 // Full-board portability (Kanso's own round-trippable JSON format)
+// The export is a .zip (board.json + the card attachments), so it comes back as
+// a Blob rather than parsed JSON. The caller saves it; the server names it via
+// Content-Disposition.
 export const exportBoard = (boardId) =>
-	axios.get(url(`/api/boards/${boardId}/export`)).then((r) => r.data)
+	axios.get(url(`/api/boards/${boardId}/export`), { responseType: 'blob' })
 
-// `document` is the raw export-file text; the server parses + validates it.
-export const importBoard = (document) =>
-	axios.post(url('/api/boards/import'), { document }).then((r) => r.data)
+// The import takes the export FILE itself, posted as multipart — the archive is
+// binary (board.json + the attachment bytes), so it is streamed server-side
+// rather than read into a string here. An older bare .json export is accepted
+// through the same part; the server decides which shape it got from the bytes.
+export const importBoardFile = (file) => {
+	const form = new FormData()
+	form.append('file', file)
+	return axios.post(url('/api/boards/import'), form).then((r) => r.data)
+}
 
 // Server-side duplicate of a board the caller can READ into a fresh board they
 // own (export→import in-process). `withCards` also clones the card graph.
@@ -475,9 +485,18 @@ export const deleteCardReminder = (cardId, reminderId) =>
 export const getInbox = () =>
 	axios.get(url('/api/inbox')).then((r) => r.data)
 
-// My tasks (open cards assigned to me, across every board I can read)
+// My tasks (open cards assigned to me, across every board I can read).
+// The list is capped server-side; the cap is reported in headers, so this
+// resolves to a { cards, truncated, limit } feed rather than a bare array.
 export const getMyCards = () =>
-	axios.get(url('/api/my-cards')).then((r) => r.data)
+	axios.get(url('/api/my-cards')).then((r) => toMyCardsFeed(r.data, r.headers))
+
+// Recently completed cards assigned to me (#10061). NEVER called on page load:
+// the completed set is unbounded over a board's lifetime, so it is bounded
+// server-side by a recency window plus a row cap and requested only when the
+// user expands the "Recently done" section.
+export const getMyRecentlyDoneCards = () =>
+	axios.get(url('/api/my-cards/recently-done')).then((r) => toRecentlyDoneFeed(r.data, r.headers))
 
 // Cross-board saved "Views" (#3815). CRUD lives in NC user-config (opaque
 // filter blob); the server stays filter-agnostic. create is upsert-by-name.

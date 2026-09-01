@@ -181,6 +181,30 @@ class BulkCardServiceTest extends TestCase {
 		self::assertSame([['id' => 12, 'reason' => 'forbidden']], $result['skipped']);
 	}
 
+	public function testBulkSetStatusCardWithUnapprovedReviewsIsSkippedNotStamped(): void {
+		// #10070. The bulk bar's "Mark done" sends done=true, which is now an
+		// alias for status='done' and therefore passes the review gate like every
+		// other route. What this layer owns is the SHAPE of the refusal: the gated
+		// card lands in `skipped` and the rest of the selection still completes -
+		// one blocked card must not abort the batch.
+		$stamped = [];
+		$this->cardService->method('update')
+			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid) use (&$stamped): Card {
+				self::assertTrue($done);
+				if ($id === 12) {
+					throw new NotPermittedException('All requested reviews must be approved before this card can be marked done');
+				}
+				$stamped[] = $id;
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12, 13], BulkCardService::ACTION_SET_STATUS, ['status' => 'done'], 'alice');
+
+		self::assertSame([11, 13], $result['ok']);
+		self::assertSame([['id' => 12, 'reason' => 'forbidden']], $result['skipped']);
+		self::assertSame([11, 13], $stamped, 'the gated card is never stamped done');
+	}
+
 	public function testBulkSetStatusWithUnsupportedStatusThrowsInvalidInput(): void {
 		$this->cardService->expects(self::never())->method('update');
 		$this->expectException(InvalidInputException::class);

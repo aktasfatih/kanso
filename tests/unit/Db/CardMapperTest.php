@@ -105,8 +105,8 @@ class CardMapperTest extends TestCase {
 		$columns = [];
 		$qb = $this->createMock(IQueryBuilder::class);
 		foreach ([
-			'select', 'selectAlias', 'addSelect', 'from', 'where', 'andWhere', 'groupBy',
-			'orderBy', 'addOrderBy', 'setMaxResults',
+			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin', 'where',
+			'andWhere', 'groupBy', 'orderBy', 'addOrderBy', 'setMaxResults',
 		] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
@@ -144,8 +144,8 @@ class CardMapperTest extends TestCase {
 	private function buildQb(array $rows): IQueryBuilder&MockObject {
 		$qb = $this->createMock(IQueryBuilder::class);
 		foreach ([
-			'select', 'selectAlias', 'addSelect', 'from', 'where', 'andWhere', 'groupBy',
-			'orderBy', 'addOrderBy', 'setMaxResults',
+			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin', 'where',
+			'andWhere', 'groupBy', 'orderBy', 'addOrderBy', 'setMaxResults',
 		] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
@@ -415,6 +415,204 @@ class CardMapperTest extends TestCase {
 	 * template. Complements the WHERE-clause assertions above (which prove the filter
 	 * is emitted) by pinning the reported figure to the live set.
 	 */
+	// ---- the two "My tasks" assigned-card feeds (#3441 / #10061) -----------
+	//
+	// The open feed and the recently-done feed are two SEPARATE queries on
+	// purpose. Relaxing `done_at = 0` on the open one would pull every task a
+	// person has ever finished into the default page load - unbounded on a
+	// long-lived board. These tests pin that separation, plus the two bounds
+	// (recency window AND row cap) that keep the opt-in query cheap.
+
+	/**
+	 * A predicate-recording expression builder: every comparison is captured as
+	 * {op, col, value}. Paired with a createNamedParameter that returns its
+	 * argument verbatim, this makes the BOUND VALUE of each WHERE assertable -
+	 * which is what a plain row-feeding mock (rows come back regardless of the
+	 * SQL) can never show.
+	 *
+	 * @param list<array{op: string, col: mixed, value: mixed}> $collector
+	 */
+	private static function predicateSpy(array &$collector): object {
+		return new class($collector) {
+			/** @param list<array{op: string, col: mixed, value: mixed}> $seen */
+			public function __construct(
+				private array &$seen,
+			) {
+			}
+
+			public function __call(string $name, array $args): string {
+				$this->seen[] = [
+					'op' => $name,
+					'col' => $args[0] ?? null,
+					'value' => $args[1] ?? null,
+				];
+				return '';
+			}
+		};
+	}
+
+	/**
+	 * Runs $call against a mapper whose query builder records every predicate
+	 * and every setMaxResults, and returns both.
+	 *
+	 * @param callable(CardMapper): mixed $call
+	 * @return array{predicates: list<array{op: string, col: mixed, value: mixed}>, maxResults: list<int>}
+	 */
+	private function recordQuery(callable $call): array {
+		$predicates = [];
+		$maxResults = [];
+
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach ([
+			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin',
+			'where', 'andWhere', 'groupBy', 'orderBy', 'addOrderBy',
+		] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('setMaxResults')->willReturnCallback(function (?int $limit) use ($qb, &$maxResults): IQueryBuilder {
+			$maxResults[] = (int)$limit;
+			return $qb;
+		});
+		$qb->method('expr')->willReturn(self::predicateSpy($predicates));
+		$qb->method('func')->willReturn(self::exprSink());
+		// Identity, so the recorded predicates carry the real bound values.
+		$qb->method('createNamedParameter')->willReturnCallback(static fn ($value) => $value);
+		$qb->method('createFunction')->willReturn('fn');
+
+		$result = $this->createMock(IResult::class);
+		$result->method('fetch')->willReturn(false);
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		$call(new CardMapper($db, new CardVisibilityScope()));
+
+		return ['predicates' => $predicates, 'maxResults' => $maxResults];
+	}
+
+	/**
+	 * @param list<array{op: string, col: mixed, value: mixed}> $predicates
+	 * @return list<mixed> the bound values of every $op comparison on $column
+	 */
+	private static function boundValues(array $predicates, string $op, string $column): array {
+		$values = [];
+		foreach ($predicates as $predicate) {
+			if ($predicate['op'] === $op && $predicate['col'] === $column) {
+				$values[] = $predicate['value'];
+			}
+		}
+		return $values;
+	}
+
+	public function testFindAssignedInBoardsStillExcludesDoneCards(): void {
+		// The DEFAULT My Tasks feed must keep its `done_at = 0` filter. Adding
+		// the recently-done section must not have widened it - that widening is
+		// exactly what the product asked NOT to happen, because it would put
+		// every completed task on every page load.
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findAssignedInBoards(['alice'], [7], 'alice', self::roles([7]))
+		);
+
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'eq', 'c.done_at'));
+		self::assertSame(
+			[],
+			self::boundValues($recorded['predicates'], 'gte', 'c.done_at'),
+			'the open feed must not have grown a recency window - it is done-free by construction'
+		);
+	}
+
+	public function testFindAssignedDoneSinceHydratesTheCompletedRows(): void {
+		// Happy path: a completed assigned card comes back in the same summary
+		// shape as the open feed (the client renders both lists), carrying the
+		// completion timestamp the section sorts and labels by.
+		$this->stubQuery([[
+			'id' => 42,
+			'board_id' => 7,
+			'board_title' => 'Roadmap',
+			'stack_title' => 'Done',
+			'title' => 'Shipped it',
+			'duedate' => null,
+			'priority' => 1,
+			'done_at' => 1_700_000_000,
+			'started_at' => 0,
+			'parent_card_id' => null,
+		]]);
+
+		$rows = $this->mapper->findAssignedDoneSinceInBoards(['alice'], [7], 'alice', self::roles([7]), 1_699_000_000, 50);
+
+		self::assertCount(1, $rows);
+		self::assertSame(42, $rows[0]['id']);
+		self::assertSame('Shipped it', $rows[0]['title']);
+		self::assertSame('Roadmap', $rows[0]['boardTitle']);
+		self::assertSame(1_700_000_000, $rows[0]['doneAt']);
+		self::assertNull($rows[0]['duedate']);
+	}
+
+	public function testFindAssignedDoneSinceIsBoundedByTheWindowAndTheRowCap(): void {
+		// Both bounds, in the SQL. The recency cutoff is what makes the query
+		// cheap - the row cap alone would still scan a lifetime of completed
+		// work - so drop either and this goes red.
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findAssignedDoneSinceInBoards(['alice'], [7], 'alice', self::roles([7]), 1_699_000_000, 50)
+		);
+
+		self::assertSame(
+			[1_699_000_000],
+			self::boundValues($recorded['predicates'], 'gte', 'c.done_at'),
+			'the recency cutoff must reach the SQL, bound verbatim'
+		);
+		self::assertSame(
+			[0],
+			self::boundValues($recorded['predicates'], 'gt', 'c.done_at'),
+			'only completed cards: done_at = 0 is the not-done sentinel'
+		);
+		self::assertSame([50], $recorded['maxResults'], 'the row cap must be applied');
+	}
+
+	public function testFindAssignedDoneSinceStillExcludesDeletedAndArchivedCards(): void {
+		// Completed is not a licence to surface trashed or archived work.
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findAssignedDoneSinceInBoards(['alice'], [7], 'alice', self::roles([7]), 1_699_000_000, 50)
+		);
+
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'eq', 'c.deleted_at'));
+		self::assertSame([false], self::boundValues($recorded['predicates'], 'eq', 'c.archived'));
+	}
+
+	public function testFindAssignedDoneSinceScopesToTheGivenBoardSet(): void {
+		// The ACL boundary at the SQL layer: the caller's readable board set is
+		// an IN filter, so a completed card on any other board cannot match.
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findAssignedDoneSinceInBoards(['alice'], [7, 9], 'alice', self::roles([7, 9]), 1_699_000_000, 50)
+		);
+
+		// Several `board_id IN (…)` bindings are emitted - the feed's own filter
+		// plus the visibility scope's per-side internal branch. EVERY one of them
+		// must stay inside the readable set the caller passed.
+		$boardFilters = self::boundValues($recorded['predicates'], 'in', 'c.board_id');
+		self::assertNotEmpty($boardFilters, 'the readable board set must be an IN filter');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+		self::assertSame([7, 9], $boardFilters[0], 'the feed itself filters on exactly the readable set');
+		self::assertSame([['alice']], self::boundValues($recorded['predicates'], 'in', 'ca.participant'));
+	}
+
+	public function testFindAssignedDoneSinceWithNoReadableBoardsNeverQueries(): void {
+		// Denial: with no readable boards there is no query at all - a done card
+		// on a board the viewer cannot read has nothing to match against, and an
+		// empty set must never become `IN ()`.
+		$this->db->expects(self::never())->method('getQueryBuilder');
+
+		self::assertSame([], $this->mapper->findAssignedDoneSinceInBoards(['alice'], [], 'alice', [], 1_699_000_000, 50));
+	}
+
+	public function testFindAssignedDoneSinceWithNoIdentityNeverQueries(): void {
+		$this->db->expects(self::never())->method('getQueryBuilder');
+
+		self::assertSame([], $this->mapper->findAssignedDoneSinceInBoards([], [7], 'alice', self::roles([7]), 1_699_000_000, 50));
+	}
+
 	public function testCountByStackReportsLiveCardsOnly(): void {
 		// The template card never reaches this result set (filtered in SQL); only the
 		// 3 live cards of stack 5 are grouped and counted.

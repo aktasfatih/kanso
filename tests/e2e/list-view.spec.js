@@ -272,7 +272,7 @@ test.describe('List view — subtask tree (#4178)', () => {
 		// Caret must be present and have an aria-label.
 		await expect(caret).toBeVisible({ timeout: 8_000 })
 		const label = await caret.getAttribute('aria-label')
-		expect(['Expand subtasks', 'Collapse subtasks']).toContain(label)
+		expect(['Expand sub-cards', 'Collapse sub-cards']).toContain(label)
 
 		// Children visible → clicking caret collapses.
 		await expect(child1Row).toBeVisible()

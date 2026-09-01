@@ -19,12 +19,12 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Scheduled instance-wide board backups (#3615). On each run - when enabled -
- * every non-deleted board is exported via {@see ExportService} to its versioned
- * JSON envelope and written as one timestamped file per board into an
- * admin-configured Nextcloud path (via the Files API, {@see IRootFolder}). The
- * admin backs that path with an S3 External Storage mount if they want off-site
- * copies: Kanso itself holds NO S3 client and NO credentials - it only writes
- * files to a folder.
+ * every non-deleted board is packed via {@see BoardArchiveService} into its
+ * versioned export archive (`board.json` plus the card attachments) and written
+ * as one timestamped .zip per board into an admin-configured Nextcloud path
+ * (via the Files API, {@see IRootFolder}). The admin backs that path with an S3
+ * External Storage mount if they want off-site copies: Kanso itself holds NO S3
+ * client and NO credentials - it only writes files to a folder.
  *
  * Each board keeps the last N backups (retention); older files for that board
  * are pruned. The sweep is bounded (all boards in one pass, but each board is a
@@ -65,7 +65,7 @@ class BackupService {
 
 	public function __construct(
 		private BoardMapper $boardMapper,
-		private ExportService $exportService,
+		private BoardArchiveService $archiveService,
 		private IRootFolder $rootFolder,
 		private IConfig $config,
 		private ITimeFactory $time,
@@ -194,34 +194,57 @@ class BackupService {
 	}
 
 	/**
-	 * Exports one board to a timestamped JSON file in the target folder and
-	 * prunes that board's older backups down to the retention count.
+	 * Packs one board into a timestamped .zip in the target folder and prunes
+	 * that board's older backups down to the retention count.
+	 *
+	 * The DECIDED policy on scope (#10060): a backup is a full-fidelity admin
+	 * artifact, so it is built at SYSTEM scope (null viewer) - it carries every
+	 * card, private and internal ones included, AND therefore every card's
+	 * ATTACHMENTS, including files on cards a normal exporter could not see.
+	 * That is deliberate, not an oversight: a backup that dropped the files of
+	 * hidden cards would not restore the instance, which is the only thing a
+	 * backup is for. What makes it safe is where it lands - an
+	 * admin-configured folder, never an HTTP response (#3743). Every
+	 * user-facing export goes through {@see BoardPortabilityController}, which
+	 * always passes a real viewer.
+	 *
+	 * The archive is a temp FILE streamed into the Files API, so a board with
+	 * large attachments never has to fit in the cron worker's memory.
 	 *
 	 * @throws \OCP\DB\Exception
 	 * @throws \OCP\Files\NotPermittedException
 	 */
 	private function backupBoard(Folder $folder, Board $board, int $retention): void {
-		// SYSTEM scope (null viewer): a backup is a full-fidelity admin
-		// artifact - it must carry hidden cards too, and it never leaves the
-		// admin-controlled backup folder (#3743).
-		$envelope = $this->exportService->export($board, null);
-		$json = json_encode($envelope, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		if ($json === false) {
-			throw new \RuntimeException('Failed to encode board ' . $board->getId() . ' to JSON');
+		$archivePath = $this->archiveService->build($board, null);
+		$handle = @fopen($archivePath, 'rb');
+		if ($handle === false) {
+			@unlink($archivePath);
+			throw new \RuntimeException('Could not read the export archive for board ' . $board->getId());
 		}
 
 		$filename = $this->fileNameFor($board->getId());
-		if ($folder->nodeExists($filename)) {
-			// Same-second re-run: overwrite in place so we never duplicate.
-			$node = $folder->get($filename);
-			if (!$node instanceof File) {
-				// A non-file already occupies the name (e.g. a folder). Fail this
-				// board rather than silently "succeeding" without writing.
-				throw new \RuntimeException('Backup path collides with a non-file node: ' . $filename);
+		try {
+			if ($folder->nodeExists($filename)) {
+				// Same-second re-run: overwrite in place so we never duplicate.
+				$node = $folder->get($filename);
+				if (!$node instanceof File) {
+					// A non-file already occupies the name (e.g. a folder). Fail this
+					// board rather than silently "succeeding" without writing.
+					throw new \RuntimeException('Backup path collides with a non-file node: ' . $filename);
+				}
+				$node->putContent($handle);
+			} else {
+				$folder->newFile($filename, $handle);
 			}
-			$node->putContent($json);
-		} else {
-			$folder->newFile($filename, $json);
+		} finally {
+			// The Files layer may consume and close the stream itself; only close
+			// it if it is still open (a double fclose raises a warning that
+			// Nextcloud escalates to an exception).
+			/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
+			if (is_resource($handle)) {
+				fclose($handle);
+			}
+			@unlink($archivePath);
 		}
 
 		$this->prune($folder, $board->getId(), $filename, $retention);
@@ -234,6 +257,10 @@ class BackupService {
 	 * the newest `retention` files survive. The just-written filename is folded
 	 * in explicitly so retention stays exact even if the fresh directory listing
 	 * is served from a cache that predates this run's write.
+	 *
+	 * Both suffixes count: backups written before #10060 are bare `.json`
+	 * documents, and they must keep ageing out of retention rather than piling
+	 * up beside the `.zip` archives forever.
 	 */
 	private function prune(Folder $folder, int $boardId, string $justWritten, int $retention): void {
 		$prefix = $this->filePrefixFor($boardId);
@@ -244,7 +271,8 @@ class BackupService {
 		$names = [$justWritten => true];
 		foreach ($folder->getDirectoryListing() as $node) {
 			$name = $node->getName();
-			if (str_starts_with($name, $prefix) && str_ends_with($name, '.json')) {
+			if (str_starts_with($name, $prefix)
+				&& (str_ends_with($name, '.zip') || str_ends_with($name, '.json'))) {
 				$names[$name] = true;
 			}
 		}
@@ -317,12 +345,12 @@ class BackupService {
 
 	/**
 	 * Timestamped backup filename for a board, e.g.
-	 * `kanso-board-14-20260802-153000.json`. The fixed-width UTC timestamp makes
+	 * `kanso-board-14-20260802-153000.zip`. The fixed-width UTC timestamp makes
 	 * lexical sort == chronological sort, which the pruner relies on.
 	 */
 	private function fileNameFor(int $boardId): string {
 		$stamp = gmdate('Ymd-His', $this->time->getTime());
-		return $this->filePrefixFor($boardId) . $stamp . '.json';
+		return $this->filePrefixFor($boardId) . $stamp . '.zip';
 	}
 
 	/**

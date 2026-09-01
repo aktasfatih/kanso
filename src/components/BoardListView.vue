@@ -155,7 +155,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="rows[vRow.index].hasChildren"
 							class="board-list-row__caret"
 							role="button"
-							:aria-label="isCardExpanded(rows[vRow.index].card.id) ? t('kanso', 'Collapse subtasks') : t('kanso', 'Expand subtasks')"
+							:aria-label="isCardExpanded(rows[vRow.index].card.id) ? t('kanso', 'Collapse sub-cards') : t('kanso', 'Expand sub-cards')"
 							:aria-expanded="isCardExpanded(rows[vRow.index].card.id)"
 							tabindex="0"
 							@click.stop="toggleCard(rows[vRow.index].card.id)"
@@ -798,8 +798,8 @@ function toggleGroup(groupKey) {
 	} catch (e) { /* localStorage unavailable - collapse is in-memory only */ }
 }
 
-// Per-card subtask expand/collapse. The key is `card:<id>`.
-// Absence from `collapsed` means expanded (subtasks visible by default).
+// Per-card sub-card expand/collapse. The key is `card:<id>`.
+// Absence from `collapsed` means expanded (sub-cards visible by default).
 function cardCollapseKey(cardId) {
 	return `card:${cardId}`
 }

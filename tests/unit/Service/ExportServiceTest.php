@@ -15,6 +15,8 @@ use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardAttachment;
+use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReview;
@@ -48,8 +50,11 @@ class ExportServiceTest extends TestCase {
 	private ReviewTypeMapper&MockObject $reviewTypeMapper;
 	private CardReviewMapper&MockObject $cardReviewMapper;
 	private AutomationRuleMapper&MockObject $automationRuleMapper;
+	private CardAttachmentMapper&MockObject $cardAttachmentMapper;
 	private ExportService $service;
 	private ViewerContext $viewer;
+	/** @var array<int, list<CardAttachment>> attachment rows the mapper hands back, per card */
+	private array $attachmentsByCard = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -65,6 +70,11 @@ class ExportServiceTest extends TestCase {
 		$this->reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->automationRuleMapper = $this->createMock(AutomationRuleMapper::class);
+		$this->cardAttachmentMapper = $this->createMock(CardAttachmentMapper::class);
+		// Most cases carry no attachments; the manifest cases fill this map.
+		$this->cardAttachmentMapper->method('findByCard')->willReturnCallback(
+			fn (int $cardId): array => $this->attachmentsByCard[$cardId] ?? [],
+		);
 		$this->service = new ExportService(
 			$this->stackMapper,
 			$this->cardMapper,
@@ -78,6 +88,7 @@ class ExportServiceTest extends TestCase {
 			$this->reviewTypeMapper,
 			$this->cardReviewMapper,
 			$this->automationRuleMapper,
+			$this->cardAttachmentMapper,
 		);
 		// The export is viewer-scoped (#3743): only cards this viewer can see ride along.
 		$this->viewer = ViewerContext::forMember('alice', 7, ViewerContext::ROLE_INTERNAL, true);
@@ -380,5 +391,119 @@ class ExportServiceTest extends TestCase {
 			[[41, 'public'], [42, 'internal'], [43, 'private']],
 			array_map(static fn (array $row): array => [$row['id'], $row['visibility']], $rows),
 		);
+	}
+
+	// ── attachment manifest (#10060) ─────────────────────────────────────────
+
+	private function attachment(int $id, int $cardId, string $filename): CardAttachment {
+		$attachment = new CardAttachment();
+		$attachment->setId($id);
+		$attachment->setCardId($cardId);
+		$attachment->setBoardId(7);
+		$attachment->setFilename($filename);
+		$attachment->setMime('application/pdf');
+		$attachment->setSize(1234);
+		$attachment->setStorageKey('n0tasecretanymoreifthisleaks00000');
+		$attachment->setUploadedBy('bob');
+		$attachment->setCreatedAt(700);
+		return $attachment;
+	}
+
+	private function cardOnBoard(int $id): Card {
+		$card = new Card();
+		$card->setId($id);
+		$card->setBoardId(7);
+		$card->setStackId(11);
+		$card->setTitle('Card ' . $id);
+		$card->setSortKey('h');
+		$card->setDoneAt(0);
+		$card->setStartedAt(0);
+		$card->setArchived(false);
+		$card->setCreatedAt(500);
+		$card->setLastModified(600);
+		$card->setPriority(0);
+		return $card;
+	}
+
+	private function singleStack(): void {
+		$stack = new Stack();
+		$stack->setId(11);
+		$stack->setBoardId(7);
+		$stack->setTitle('Doing');
+		$stack->setSortKey('m');
+		$stack->setArchived(false);
+		$this->stackMapper->method('findByBoard')->with(7)->willReturn([$stack]);
+	}
+
+	public function testCardsCarryAnAttachmentManifestWithArchiveLocalPaths(): void {
+		$this->singleStack();
+		$this->cardMapper->method('findExportableByBoard')->willReturn([$this->cardOnBoard(41)]);
+		$this->attachmentsByCard = [41 => [$this->attachment(9, 41, 'spec.pdf')]];
+
+		$doc = $this->service->export($this->board(), $this->viewer);
+
+		$manifest = $doc['board']['cards'][0]['attachments'];
+		self::assertCount(1, $manifest, 'the export must not silently drop the card\'s files');
+		self::assertSame(9, $manifest[0]['id']);
+		self::assertSame('spec.pdf', $manifest[0]['filename']);
+		self::assertSame('application/pdf', $manifest[0]['mime']);
+		self::assertSame(1234, $manifest[0]['size']);
+		self::assertSame('bob', $manifest[0]['uploadedBy']);
+		// An ARCHIVE-local path, derived from the public attachment id.
+		self::assertSame('attachments/9/spec.pdf', $manifest[0]['path']);
+	}
+
+	public function testTheManifestNeverCarriesTheStorageKey(): void {
+		// The withheld-key invariant: `storage_key` is kept out of every API
+		// response, and the export document is no different - a document that
+		// leaked it would hand a reader the server-side object name for bytes
+		// the permission checks are supposed to gate.
+		$this->singleStack();
+		$this->cardMapper->method('findExportableByBoard')->willReturn([$this->cardOnBoard(41)]);
+		$this->attachmentsByCard = [41 => [$this->attachment(9, 41, 'spec.pdf')]];
+
+		$doc = $this->service->export($this->board(), $this->viewer);
+		$json = json_encode($doc);
+
+		self::assertIsString($json);
+		self::assertStringNotContainsString('n0tasecretanymoreifthisleaks00000', $json);
+		self::assertStringNotContainsString('storageKey', $json);
+		self::assertStringNotContainsString('storage_key', $json);
+		self::assertArrayNotHasKey('storageKey', $doc['board']['cards'][0]['attachments'][0]);
+	}
+
+	public function testAnAttachmentFilenameCanNeverClimbOutOfItsArchiveDirectory(): void {
+		// The manifest path becomes a PATH to whoever extracts the archive, so a
+		// stored name of ".." (a legal basename that the store-time sanitizer
+		// leaves alone) must not survive into it.
+		self::assertSame('attachments/9/attachment', ExportService::attachmentPath(9, '..'));
+		self::assertSame('attachments/9/attachment', ExportService::attachmentPath(9, '.'));
+		self::assertSame('attachments/9/evil', ExportService::attachmentPath(9, '../../evil'));
+		self::assertSame('attachments/9/evil', ExportService::attachmentPath(9, '..\\..\\evil'));
+	}
+
+	public function testHiddenCardsContributeNoAttachmentsToAScopedExport(): void {
+		// Attachment visibility IS card visibility: the manifest is built inside
+		// the per-card walk, so a card filtered out by findExportableByBoard can
+		// contribute no manifest entry - and therefore no archive entry - even
+		// though its attachment rows still exist in the DB.
+		$this->singleStack();
+		// The viewer sees card 41 only; card 42 is hidden from them.
+		$this->cardMapper->method('findExportableByBoard')->with(7, $this->viewer)
+			->willReturn([$this->cardOnBoard(41)]);
+		$this->attachmentsByCard = [
+			41 => [$this->attachment(9, 41, 'visible.pdf')],
+			42 => [$this->attachment(10, 42, 'hidden.pdf')],
+		];
+
+		$doc = $this->service->export($this->board(), $this->viewer);
+
+		$paths = [];
+		foreach ($doc['board']['cards'] as $card) {
+			foreach ($card['attachments'] as $entry) {
+				$paths[] = $entry['path'];
+			}
+		}
+		self::assertSame(['attachments/9/visible.pdf'], $paths);
 	}
 }

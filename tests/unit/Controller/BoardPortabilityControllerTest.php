@@ -11,12 +11,14 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Controller\BoardPortabilityController;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Service\BoardArchiveService;
 use OCA\Kanso\Service\BoardService;
-use OCA\Kanso\Service\ExportService;
 use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
+use OCP\AppFramework\Http\StreamResponse;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -27,22 +29,24 @@ class BoardPortabilityControllerTest extends TestCase {
 	private IRequest&MockObject $request;
 	private IUserSession&MockObject $userSession;
 	private BoardService&MockObject $boardService;
-	private ExportService&MockObject $exportService;
+	private BoardArchiveService&MockObject $archiveService;
 	private ImportService&MockObject $importService;
 	private BoardAccess&MockObject $boardAccess;
 	/** The board side contextFor resolves for the acting user (#3744). */
 	private string $viewerRole = ViewerContext::ROLE_INTERNAL;
 	private BoardPortabilityController $controller;
+	/** Temp archives created by a test, removed afterwards. */
+	private array $archives = [];
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->request = $this->createMock(IRequest::class);
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->boardService = $this->createMock(BoardService::class);
-		$this->exportService = $this->createMock(ExportService::class);
+		$this->archiveService = $this->createMock(BoardArchiveService::class);
 		$this->importService = $this->createMock(ImportService::class);
 		// export() resolves the viewer's context after the READ gate and hands
-		// it to the viewer-scoped export (#3743). Role defaults to internal;
+		// it to the viewer-scoped archive build (#3743). Role defaults to internal;
 		// the #3744 external-denial tests flip $this->viewerRole.
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->boardAccess->method('contextFor')->willReturnCallback(
@@ -53,10 +57,18 @@ class BoardPortabilityControllerTest extends TestCase {
 			$this->request,
 			$this->userSession,
 			$this->boardService,
-			$this->exportService,
+			$this->archiveService,
 			$this->importService,
 			$this->boardAccess,
 		);
+	}
+
+	protected function tearDown(): void {
+		foreach ($this->archives as $path) {
+			@unlink($path);
+		}
+		$this->archives = [];
+		parent::tearDown();
 	}
 
 	private function loginAs(string $uid): void {
@@ -65,20 +77,52 @@ class BoardPortabilityControllerTest extends TestCase {
 		$this->userSession->method('getUser')->willReturn($user);
 	}
 
-	public function testExportGatesOnBoardReadAndReturnsEnvelope(): void {
+	public function testExportGatesOnBoardReadAndStreamsTheArchive(): void {
 		$this->loginAs('alice');
 		$board = new Board();
 		$board->setId(5);
+		$board->setTitle('Roadmap');
 		// find() is the READ gate: called with the requesting uid.
 		$this->boardService->expects(self::once())->method('find')->with(5, 'alice')->willReturn($board);
-		$this->exportService->method('export')
+		$archive = $this->tempArchive();
+		$this->archiveService->expects(self::once())->method('build')
 			->with($board, self::isInstanceOf(ViewerContext::class))
-			->willReturn(['kanso' => 1, 'exportedAt' => 1, 'board' => []]);
+			->willReturn($archive);
+		$this->archiveService->method('filenameFor')->willReturn('kanso-Roadmap.zip');
 
 		$response = $this->controller->export(5);
 
+		self::assertInstanceOf(StreamResponse::class, $response);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame(1, $response->getData()['kanso']);
+		// getHeaders() would need the NC service container (it merges in CSP and
+		// the request id), so read the response's OWN header bag directly.
+		$headers = $this->ownHeaders($response);
+		self::assertSame('application/zip', $headers['Content-Type']);
+		self::assertSame('attachment; filename="kanso-Roadmap.zip"', $headers['Content-Disposition']);
+		self::assertSame('nosniff', $headers['X-Content-Type-Options']);
+		// The temp archive is unlinked as soon as the handle is open, so a
+		// client that walks away cannot leave the bytes on disk.
+		self::assertFileDoesNotExist($archive);
+	}
+
+	/** The headers the controller itself set, without the container-backed merge. */
+	private function ownHeaders(\OCP\AppFramework\Http\Response $response): array {
+		$property = new \ReflectionProperty(\OCP\AppFramework\Http\Response::class, 'headers');
+		/** @var array<string, string> $headers */
+		$headers = $property->getValue($response);
+		return $headers;
+	}
+
+	/** A throwaway zip standing in for a built board archive. */
+	private function tempArchive(): string {
+		$path = tempnam(sys_get_temp_dir(), 'kanso-portability-test-');
+		self::assertIsString($path);
+		$this->archives[] = $path;
+		$zip = new \ZipArchive();
+		self::assertTrue($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true);
+		$zip->addFromString('board.json', '{"kanso":3}');
+		$zip->close();
+		return $path;
 	}
 
 	public function testExportDeniedWhenNoReadPermission(): void {
@@ -113,6 +157,72 @@ class BoardPortabilityControllerTest extends TestCase {
 		self::assertSame('bad version', $response->getData()['error']);
 	}
 
+	// ── the round trip: an uploaded archive is imported as a FILE (#10071) ─────
+
+	public function testImportPrefersAnUploadedFileOverTheDocumentBody(): void {
+		$this->loginAs('carol');
+		$upload = [
+			'name' => 'kanso-Roadmap.zip',
+			'type' => 'application/zip',
+			'size' => 1234,
+			'tmp_name' => '/tmp/php-upload-xyz',
+			'error' => UPLOAD_ERR_OK,
+		];
+		$this->request->expects(self::once())->method('getUploadedFile')->with('file')->willReturn($upload);
+		// The FILE path is taken (so the archive can be streamed), and the
+		// string path is not touched at all.
+		$this->importService->expects(self::once())->method('importUploadedFile')
+			->with($upload, 'carol')
+			->willReturn(['boardId' => 77, 'title' => 'Roadmap', 'stacks' => 2, 'cards' => 5, 'labels' => 1]);
+		$this->importService->expects(self::never())->method('import');
+
+		$response = $this->controller->import();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(77, $response->getData()['boardId']);
+	}
+
+	public function testImportFallsBackToTheDocumentBodyWhenNoFileWasPosted(): void {
+		$this->loginAs('carol');
+		$this->request->method('getUploadedFile')->willReturn(null);
+		$this->importService->expects(self::never())->method('importUploadedFile');
+		$this->importService->expects(self::once())->method('import')
+			->with('{"kanso":2}', 'carol')
+			->willReturn(['boardId' => 78, 'title' => 'Legacy', 'stacks' => 1, 'cards' => 0, 'labels' => 0]);
+
+		$response = $this->controller->import('{"kanso":2}');
+
+		self::assertSame(78, $response->getData()['boardId']);
+	}
+
+	public function testImportRejectionFromTheFilePathIsBadRequest(): void {
+		$this->loginAs('carol');
+		$this->request->method('getUploadedFile')->willReturn(['tmp_name' => '/tmp/x', 'error' => UPLOAD_ERR_OK]);
+		$this->importService->method('importUploadedFile')
+			->willThrowException(new InvalidInputException('The export archive is too large to import'));
+
+		$response = $this->controller->import();
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertSame('The export archive is too large to import', $response->getData()['error']);
+	}
+
+	/**
+	 * Import is the one endpoint where the caller decides how many bytes land in
+	 * the app's own app-data, which sits outside their Nextcloud quota - so it
+	 * carries a per-user rate limit. Asserted on the attribute because that is
+	 * where the app framework reads it.
+	 */
+	public function testImportCarriesAPerUserRateLimit(): void {
+		$method = new \ReflectionMethod(BoardPortabilityController::class, 'import');
+		$attributes = $method->getAttributes(UserRateLimit::class);
+
+		self::assertCount(1, $attributes, 'import() must declare a UserRateLimit');
+		$limit = $attributes[0]->newInstance();
+		self::assertGreaterThan(0, $limit->getLimit());
+		self::assertGreaterThan(0, $limit->getPeriod());
+	}
+
 	// ── whole-board egress is internal-only (#3744) ───────────────────────────
 
 	public function testExportIsForbiddenForExternalMembers(): void {
@@ -121,8 +231,9 @@ class BoardPortabilityControllerTest extends TestCase {
 		$board = new Board();
 		$board->setId(5);
 		$this->boardService->method('find')->with(5, 'client')->willReturn($board);
-		// The denial must fire BEFORE any export content is built.
-		$this->exportService->expects(self::never())->method('export');
+		// The denial must fire BEFORE any export content - or any attachment
+		// byte - is packed.
+		$this->archiveService->expects(self::never())->method('build');
 
 		$response = $this->controller->export(5);
 

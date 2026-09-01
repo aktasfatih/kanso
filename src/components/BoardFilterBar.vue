@@ -341,6 +341,7 @@ import {
 	START_OPTIONS,
 	SUBCARD_OPTIONS,
 	COMMENTS_OPTIONS,
+	ARCHIVED_OPTIONS,
 	useFilterCount,
 } from '../composables/useBoardFilters.js'
 
@@ -360,6 +361,11 @@ const props = defineProps({
 	/** Icon-only trigger (narrow header) — the label text is dropped, the menu is
 	    identical. */
 	iconOnly: { type: Boolean, default: false },
+	/** Offer the `archived` opt-in facet. Off by default because a board hides
+	    archived cards unconditionally (BoardView drops them before the predicate
+	    ever runs), so the facet would be a control that does nothing there. The
+	    View surface, which owns its own archived baseline, opts in. */
+	showArchived: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['save', 'apply-saved', 'delete-saved'])
@@ -551,6 +557,14 @@ const dimensions = computed(() => {
 			count: s.comments ? 1 : 0,
 			summary: singleSummary(s.comments, COMMENTS_OPTIONS),
 		},
+		{
+			key: 'archived',
+			label: t('kanso', 'Archived'),
+			show: props.showArchived,
+			options: ARCHIVED_OPTIONS,
+			count: s.archived ? 1 : 0,
+			summary: singleSummary(s.archived, ARCHIVED_OPTIONS),
+		},
 	]
 })
 
@@ -561,7 +575,7 @@ const activeDimMeta = computed(() =>
 
 // The current value of the drilled-in single-select dimension. All single-select
 // dimensions store their value directly under a state key matching activeDim.
-const SINGLE_SELECT_DIMS = ['due', 'done', 'waiting', 'blocked', 'checklist', 'startDate', 'subcard', 'comments']
+const SINGLE_SELECT_DIMS = ['due', 'done', 'waiting', 'blocked', 'checklist', 'startDate', 'subcard', 'comments', 'archived']
 const currentSingleValue = computed(() =>
 	SINGLE_SELECT_DIMS.includes(activeDim.value) ? props.state[activeDim.value] : null,
 )
@@ -593,6 +607,7 @@ function clearAll() {
 	props.state.startDate = null
 	props.state.subcard = null
 	props.state.comments = null
+	props.state.archived = null
 }
 
 function submitSave() {

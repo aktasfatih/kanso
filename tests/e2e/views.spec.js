@@ -357,6 +357,172 @@ test.describe('Cross-board Views (#3815)', () => {
 		}
 	})
 
+	test('archived cards are hidden from a View by default and the Archived facet opts them back in (#10052)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		const stamp = Math.floor(Date.now() / 1000)
+		// One board, two cards sharing one label, so the View narrows to exactly
+		// these two rows (the list is virtualised — an unfiltered cross-board feed
+		// would leave them off-screen).
+		const board = await api.post('/boards', { title: 'ViewsArchived ' + stamp })
+		const label = await api.post('/labels', { boardId: board.id, title: 'varch ' + stamp, color: '9900ff' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+		const liveTitle = 'ViewsArchived live ' + stamp
+		const archivedTitle = 'ViewsArchived archived ' + stamp
+		const live = await api.post('/cards', { stackId: stack.id, title: liveTitle })
+		const archived = await api.post('/cards', { stackId: stack.id, title: archivedTitle })
+		await api.put(`/cards/${live.id}/labels/${label.id}`)
+		await api.put(`/cards/${archived.id}/labels/${label.id}`)
+		await api.patch(`/cards/${archived.id}`, { archived: true })
+
+		const created = await api.put('/views', {
+			name: 'Views archived ' + stamp,
+			filter: { labels: [label.id] },
+			groupBy: 'status',
+			display: 'list',
+		})
+		const view = created.views[created.views.length - 1]
+
+		try {
+			// ── Server side: the feed drops the archived row AND stops counting it ──
+			// The count is the half a client-only fix cannot deliver: an archived row
+			// left in the payload still eats the cap budget and inflates `total`, so
+			// the "showing the first N of M" banner would count invisible cards.
+			const feed = await api.get(`/views/cards?fl=${label.id}`)
+			expect(feed.cards.map((c) => c.title)).toEqual([liveTitle])
+			expect(feed.total).toBe(1)
+
+			// The facet opts them back in, over the same short-key wire format.
+			const included = await api.get(`/views/cards?fl=${label.id}&far=include`)
+			expect(included.cards.map((c) => c.title).sort()).toEqual([liveTitle, archivedTitle].sort())
+			expect(included.total).toBe(2)
+			const onlyArchived = await api.get(`/views/cards?fl=${label.id}&far=only`)
+			expect(onlyArchived.cards.map((c) => c.title)).toEqual([archivedTitle])
+			expect(onlyArchived.total).toBe(1)
+
+			// REGRESSION GUARD: the board payload still ships archived cards. The
+			// archived-cards page and its counter are built on them, so a mapper-level
+			// exclusion would have silently emptied that page.
+			const boardPayload = await api.get(`/boards/${board.id}`)
+			const archivedRow = boardPayload.cards.find((c) => c.title === archivedTitle)
+			expect(archivedRow).toBeTruthy()
+			expect(archivedRow.archived).toBe(true)
+
+			// ── Client side: the same baseline, and the chip that lifts it ──────────
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${view.id}`)
+
+			const rowLive = page.locator('.board-list-row__title', { hasText: liveTitle })
+			const rowArchived = page.locator('.board-list-row__title', { hasText: archivedTitle })
+			await expect(rowLive).toBeVisible({ timeout: 20_000 })
+			await expect(rowArchived).toHaveCount(0)
+
+			// Selecting "Include archived" must travel to the server as `far`, not
+			// just re-filter the cached rows — otherwise the cap fix is unproven.
+			const includeFeed = page.waitForRequest(
+				(r) => r.url().includes('/api/views/cards') && r.url().includes('far=include'),
+				{ timeout: 20_000 },
+			)
+			await page.locator('.board-filter-bar__trigger').click()
+			await page.locator('.board-filter-bar__dim-row[data-dim="archived"]').click()
+			await page.locator('.board-filter-bar__opt', { hasText: /Include archived/ }).click()
+			await includeFeed
+			await expect(rowArchived).toBeVisible({ timeout: 15_000 })
+			await expect(rowLive).toBeVisible()
+
+			// "Only archived" narrows to it.
+			await page.locator('.board-filter-bar__opt', { hasText: /Only archived/ }).click()
+			await expect(rowArchived).toBeVisible({ timeout: 15_000 })
+			await expect(rowLive).toHaveCount(0, { timeout: 15_000 })
+
+			// Clearing the facet restores the default: the archived card is gone again.
+			// Reset the Archived facet itself ("Any"), NOT the panel's global "Clear
+			// filters": on a View that button also drops the View's own saved label
+			// filter — its facet is deliberately hidden here (board-scoped label ids
+			// collide across boards), so the wipe is invisible and would widen the
+			// page to the entire cross-board feed, where the virtualised list keeps
+			// both of these rows off-screen and the assertions stop meaning anything.
+			await page.locator('.board-filter-bar__opt', { hasText: /^Any$/ }).click()
+			await page.keyboard.press('Escape')
+			await expect(rowLive).toBeVisible({ timeout: 15_000 })
+			await expect(rowArchived).toHaveCount(0, { timeout: 15_000 })
+
+			// Unarchiving puts the card back in the View with no filter at all.
+			await api.patch(`/cards/${archived.id}`, { archived: false })
+			await page.reload()
+			await expect(rowLive).toBeVisible({ timeout: 20_000 })
+			await expect(rowArchived).toBeVisible({ timeout: 15_000 })
+		} finally {
+			await api.delete(`/views/${view.id}`).catch(() => {})
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+
+	test('a View drops archived rows that still arrive in the feed (the client half of #10052)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		// The server now excludes archived rows before the cap, so in normal
+		// operation none reach the browser — which would leave the client-side
+		// baseline untested (and free to rot). A feed CAN still carry one: a
+		// response cached before the server half shipped. So the feed is rewritten
+		// in flight to carry an archived row, and the View must still not show it.
+		const stamp = Math.floor(Date.now() / 1000)
+		const board = await api.post('/boards', { title: 'ViewsArchivedClient ' + stamp })
+		const label = await api.post('/labels', { boardId: board.id, title: 'varchc ' + stamp, color: '00cc99' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+		const liveTitle = 'ViewsArchivedClient live ' + stamp
+		const ghostTitle = 'ViewsArchivedClient ghost ' + stamp
+		const live = await api.post('/cards', { stackId: stack.id, title: liveTitle })
+		await api.put(`/cards/${live.id}/labels/${label.id}`)
+
+		const created = await api.put('/views', {
+			name: 'Views archived client ' + stamp,
+			filter: { labels: [label.id] },
+			groupBy: 'status',
+			display: 'list',
+		})
+		const view = created.views[created.views.length - 1]
+
+		try {
+			await ncLogin(page)
+			// Clone the live row into an archived one, so the injected card differs
+			// from a rendered one in exactly the archived flag and nothing else.
+			await page.route('**/apps/kanso/api/views/cards*', async (route) => {
+				// A request the page abandons (navigation, an in-flight refetch the
+				// router cancels) is already handled by the time we get back from
+				// fetch(), and fulfilling it then throws. Swallowing that cannot make
+				// this test pass vacuously: the "Include archived" step below requires
+				// the injected row to actually be there.
+				try {
+					const response = await route.fetch()
+					const body = await response.json()
+					const original = (body.cards || []).find((c) => c.title === liveTitle)
+					if (original) {
+						body.cards.push({ ...original, id: original.id + 1000000, title: ghostTitle, archived: true })
+						body.total = body.cards.length
+					}
+					await route.fulfill({ response, json: body })
+				} catch {
+					await route.fallback().catch(() => {})
+				}
+			})
+
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${view.id}`)
+			await expect(page.locator('.board-list-row__title', { hasText: liveTitle })).toBeVisible({ timeout: 20_000 })
+			await expect(page.locator('.board-list-row__title', { hasText: ghostTitle })).toHaveCount(0)
+
+			// …and the facet still lets it through when asked for.
+			await page.locator('.board-filter-bar__trigger').click()
+			await page.locator('.board-filter-bar__dim-row[data-dim="archived"]').click()
+			await page.locator('.board-filter-bar__opt', { hasText: /Include archived/ }).click()
+			await expect(page.locator('.board-list-row__title', { hasText: ghostTitle })).toBeVisible({ timeout: 15_000 })
+		} finally {
+			await page.unroute('**/apps/kanso/api/views/cards*').catch(() => {})
+			await api.delete(`/views/${view.id}`).catch(() => {})
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+
 	test('create a view from the nav (UI, not the API) → opens it → inline rename persists (#3891)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 		await ncLogin(page)

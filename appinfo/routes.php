@@ -157,6 +157,10 @@ return [
 		['name' => 'inbox#index', 'url' => '/api/inbox', 'verb' => 'GET'],
 
 		['name' => 'myCards#index', 'url' => '/api/my-cards', 'verb' => 'GET'],
+		// Opt-in companion to the feed above (#10061): recently COMPLETED
+		// assigned cards. Its own route so the default My Tasks load never
+		// pays for it - it is requested only when the user expands the section.
+		['name' => 'myCards#recentlyDone', 'url' => '/api/my-cards/recently-done', 'verb' => 'GET'],
 
 		// Cross-board saved "Views" (#3815): per-user named filters over ALL the
 		// boards the user can read. CRUD lives in NC user-config (opaque filter

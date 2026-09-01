@@ -124,15 +124,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="card-modal__header-main">
 						<div class="card-modal__breadcrumb">
 							<span class="card-modal__crumb">{{ boardName }}</span>
-							<!-- Copyable human-readable reference id (e.g. KAN-123) -->
-							<button
-								v-if="cardHumanId"
-								class="card-modal__ref"
-								type="button"
-								:title="t('kanso', 'Copy reference {ref}', { ref: cardHumanId })"
-								@click="copyCardRef">
-								{{ cardHumanId }}
-							</button>
+							<!-- The card's column, always readable without opening anything - on a
+							     board with no workflow roles this is the only place it shows. -->
+							<template v-if="currentColumnName">
+								<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
+								<span class="card-modal__crumb card-modal__crumb--column" :title="currentColumnName">{{ currentColumnName }}</span>
+							</template>
 							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
 							<span class="card-modal__attr card-modal__status-wrap">
 								<button
@@ -146,55 +143,66 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<ChevronDownIcon :size="12" />
 								</button>
 								<div v-if="openPicker === 'status'" class="card-modal__popover">
-									<!-- Workflow board: every column is an option (#54); pick the exact one. -->
-									<template v-if="stageMode">
-										<button
-											v-for="col in boardColumns"
-											:key="`stage-col-${col.id}`"
-											class="card-modal__popover-opt"
-											:class="{ 'card-modal__popover-opt--active': Number(col.id) === Number(cardData.stackId) }"
-											:disabled="updateCard.isPending.value || stageMoving"
-											@click="setStage(col); openPicker = null">
-											{{ stageLabel(col) }}
-										</button>
-									</template>
-									<!-- Board with no workflow roles: the three generic states. -->
-									<template v-else>
-										<button
-											v-for="opt in STATUS_OPTIONS"
-											:key="opt.key"
-											class="card-modal__popover-opt"
-											:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
-											:disabled="updateCard.isPending.value"
-											@click="setStatus(opt.key); openPicker = null">
-											{{ opt.label }}
-										</button>
-									</template>
+									<!-- Every live column is an option (#54); pick the exact one. Offered
+									     on every board, so a card can change column without changing
+									     status - and change status without leaving its column. -->
+									<span class="card-modal__popover-head">{{ t('kanso', 'Column') }}</span>
+									<button
+										v-for="col in boardColumns"
+										:key="`stage-col-${col.id}`"
+										class="card-modal__popover-opt card-modal__popover-opt--column"
+										:class="{ 'card-modal__popover-opt--active': Number(col.id) === Number(cardData.stackId) }"
+										:disabled="updateCard.isPending.value || stageMoving"
+										@click="setStage(col); openPicker = null">
+										{{ stageLabel(col) }}
+									</button>
+									<span class="card-modal__popover-head">{{ t('kanso', 'Status') }}</span>
+									<button
+										v-for="opt in STATUS_OPTIONS"
+										:key="opt.key"
+										class="card-modal__popover-opt card-modal__popover-opt--status"
+										:class="{ 'card-modal__popover-opt--active': currentStatus === opt.key }"
+										:disabled="updateCard.isPending.value"
+										@click="setStatus(opt.key); openPicker = null">
+										{{ opt.label }}
+									</button>
 								</div>
 							</span>
 							<span class="card-modal__crumb-dot">·</span>
 							<span class="card-modal__crumb">#{{ cardData.id }}</span>
 						</div>
-						<input
-							v-if="editingTitle"
-							ref="titleInputRef"
-							v-model="draftTitle"
-							class="card-modal__title-input"
-							type="text"
-							@keydown.enter.prevent="saveTitle"
-							@keydown.escape.stop="cancelTitleEdit"
-							@blur="saveTitle">
-						<h2
-							v-else
-							class="card-modal__title"
-							role="button"
-							tabindex="0"
-							:aria-label="t('kanso', 'Edit title')"
-							@click="startTitleEdit"
-							@keydown.enter.prevent="startTitleEdit"
-							@keydown.space.prevent="startTitleEdit">
-							{{ cardData.title }}
-						</h2>
+						<div class="card-modal__title-row">
+							<!-- Copyable human-readable reference id (e.g. KAN-123), alongside the
+							     title now that the breadcrumb carries the column. -->
+							<button
+								v-if="cardHumanId"
+								class="card-modal__ref"
+								type="button"
+								:title="t('kanso', 'Copy reference {ref}', { ref: cardHumanId })"
+								@click="copyCardRef">
+								{{ cardHumanId }}
+							</button>
+							<input
+								v-if="editingTitle"
+								ref="titleInputRef"
+								v-model="draftTitle"
+								class="card-modal__title-input"
+								type="text"
+								@keydown.enter.prevent="saveTitle"
+								@keydown.escape.stop="cancelTitleEdit"
+								@blur="saveTitle">
+							<h2
+								v-else
+								class="card-modal__title"
+								role="button"
+								tabindex="0"
+								:aria-label="t('kanso', 'Edit title')"
+								@click="startTitleEdit"
+								@keydown.enter.prevent="startTitleEdit"
+								@keydown.space.prevent="startTitleEdit">
+								{{ cardData.title }}
+							</h2>
+						</div>
 					</div>
 
 					<div class="card-modal__header-actions">
@@ -314,6 +322,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</span>
 
 						<NcActions class="card-modal__actions-menu" :force-menu="true">
+							<!-- The reverse of search (#10062): search finds a card by its
+							     text, this points at where the card already IS. You can land
+							     here from a search hit, My Tasks, the Inbox or a KAN-123
+							     link with no idea which column the card sits in — and
+							     closing the card drops you on the board with no clue
+							     either. Hidden for archived cards and templates, which are
+							     not on the board at all, so the action is never offered
+							     when it cannot work. Not gated on canEdit: navigating to a
+							     card is not editing it. -->
+							<NcActionButton
+								v-if="canFindOnBoard"
+								data-test="card-find-on-board"
+								:close-after-click="true"
+								@click="findOnBoard">
+								<template #icon>
+									<CrosshairsGpsIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Find the card on board') }}
+							</NcActionButton>
+							<NcActionSeparator v-if="canFindOnBoard" />
 							<NcActionButton
 								v-if="canEdit"
 								:close-after-click="true"
@@ -441,13 +469,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Remind me at a custom time…') }}
 							</NcActionButton>
 							<NcActionSeparator />
-							<NcActionButton :close-after-click="true" @click="handleArchiveToggle">
-								<template #icon>
-									<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
-									<ArchiveArrowUpIcon v-else :size="20" />
-								</template>
-								{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
-							</NcActionButton>
+							<!-- Card state flags (#10063). A checkbox, not a verb: the label is
+							     stable and the box shows what IS true. The old control flipped its
+							     own label with the state, so you had to infer the state from which
+							     action you were offered. Bound straight to cardData.archived, so a
+							     change made anywhere else (the board, the archived page, another
+							     session's delta) reflects here without reopening the card. Further
+							     flags belong in this group, one checkbox each. -->
+							<NcActionCheckbox
+								data-test="card-archived-toggle"
+								:model-value="!!cardData.archived"
+								@update:model-value="handleArchiveToggle">
+								{{ t('kanso', 'Archived') }}
+							</NcActionCheckbox>
 							<NcActionButton :close-after-click="true" @click="confirmDeleteCard">
 								<template #icon>
 									<TrashCanIcon :size="20" />
@@ -974,7 +1008,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="togglePicker('project')">
 							<FolderMultipleOutlineIcon :size="12" />
 							{{ cardProjectIds.size > 0
-								? t('kanso', '{n} project', { n: cardProjectIds.size })
+								? n('kanso', '%n project', '%n projects', cardProjectIds.size)
 								: t('kanso', 'Project') }}
 						</button>
 						<div v-if="openPicker === 'project'" class="card-modal__popover">
@@ -2274,6 +2308,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -2287,10 +2322,9 @@ import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
 import TransferIcon from 'vue-material-design-icons/Transfer.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import CrosshairsGpsIcon from 'vue-material-design-icons/CrosshairsGps.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
-import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
-import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import HistoryIcon from 'vue-material-design-icons/History.vue'
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
@@ -2568,9 +2602,15 @@ const deleteGuardButtons = [
 	{ label: t('kanso', 'Delete and stop recurrence'), type: 'error', callback: () => { handleDeleteCardAndRule() } },
 ]
 
-async function handleArchiveToggle() {
+/**
+ * Archive or unarchive the card. The ⋯ menu's "Archived" checkbox (#10063) passes
+ * its new state, so the desired value is explicit rather than inferred; anything
+ * else falls back to flipping the current one.
+ * @param {boolean} [next] the desired archived state
+ */
+async function handleArchiveToggle(next) {
 	actionError.value = ''
-	const archived = !cardData.value?.archived
+	const archived = typeof next === 'boolean' ? next : !cardData.value?.archived
 	try {
 		await setArchived.mutateAsync({ archived })
 		// On archive, close the modal so the card visually leaves the board columns.
@@ -3116,13 +3156,15 @@ async function setStatus(status) {
 }
 
 // ── Workflow stages (#54) ────────────────────────────────────────────────────
-// When a board maps any column to a workflow role, the status control turns into
-// a stage picker (Linear-style): EVERY live column is an option, so two "In
-// progress" columns both appear (disambiguated by name) and you pick the exact
-// one rather than always landing in the first. Picking a column moves the card
-// there; the server's move automation stamps started_at / done_at from the
-// column's role. A role-less column is a stage in its own right (its own name,
-// no lifecycle timestamps). A board with NO roles keeps the 3-state control.
+// The breadcrumb chip is one control on every board: it shows the card's status
+// and its picker offers BOTH the columns and the three statuses. EVERY live
+// column is an option, so two "In progress" columns both appear (disambiguated
+// by name) and you pick the exact one rather than always landing in the first.
+// Picking a column moves the card there; the server's move automation stamps
+// started_at / done_at from the column's role, and a role-less column leaves the
+// timestamps alone - moving between columns need not change the status. The
+// status options stay because on a role-less board they are the only way to
+// reach "not started" / "in progress" / "done" at all.
 const WORKFLOW_ROLE_LABELS = {
 	1: t('kanso', 'Backlog'),
 	2: t('kanso', 'To do'),
@@ -3137,11 +3179,12 @@ const boardColumns = computed(() =>
 		.slice()
 		.sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey))),
 )
-// Stage picker is active once the board uses workflow roles at all.
-const stageMode = computed(() => boardColumns.value.some((s) => Number(s.role) > 0))
 const currentColumn = computed(() =>
 	boardColumns.value.find((s) => Number(s.id) === Number(cardData.value?.stackId)) ?? null,
 )
+// The column crumb: the plain column name, shown on every board (roles or not),
+// so the card view always says where the card sits without opening the picker.
+const currentColumnName = computed(() => currentColumn.value?.title || '')
 // A column's stage label: its role (Backlog / … / Done) qualified by the column
 // name when they differ, so duplicate-role columns stay distinct; a role-less
 // column is shown by its bare name.
@@ -4725,6 +4768,43 @@ function formatCommentTime(unixTs) {
 	return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// ── Find the card on board (#10062) ───────────────────────────────────────────
+// Only offered when there is somewhere to go and something to find: an archived
+// card and a template are both absent from the board's columns, so pointing at
+// them would scroll to nothing. Works from every shell — the modal, the
+// full-page card route, and a View's controlled overlay — because it navigates
+// to the card's OWN board rather than assuming the surface behind it is one.
+const canFindOnBoard = computed(() =>
+	!!cardData.value
+	&& !cardData.value.archived
+	&& !cardData.value.isTemplate
+	&& boardId.value != null,
+)
+
+/**
+ * Leave the card and show it in place on its board. BoardView owns the actual
+ * scroll (it is the only thing that can drive the column virtualizers); the id
+ * rides along as `?reveal=` because the board may still need to mount first.
+ */
+function findOnBoard() {
+	const bId = boardId.value
+	const id = cardData.value?.id
+	if (bId == null || id == null) return
+	isOpen.value = false
+	// Keep the board's own query when this card is an overlay ON that board — the
+	// filter params live there, and dropping them would silently clear the user's
+	// filter (and hide the very case the board then has to report). Coming from
+	// anywhere else (a View, the full page, another board's card) the query
+	// belongs to that other surface, so start clean.
+	const onOwnBoard = route.name === 'card-modal' && String(route.params.id) === String(bId)
+	router.push({
+		name: 'board',
+		params: { id: String(bId) },
+		query: onOwnBoard ? { ...route.query, reveal: String(id) } : { reveal: String(id) },
+	})
+	emit('close')
+}
+
 // My Work surfaces open a card with `?from=<routeName>` so we can return there on
 // close instead of dumping the user on the board. Board-opened / deep-linked cards
 // have no `from` and still close to the board (do not regress that flow).
@@ -5731,14 +5811,10 @@ async function copyCardRef() {
 		showError(t('kanso', 'Could not copy to clipboard.'))
 	}
 }
-const statusChipLabel = computed(() => {
-	// On a workflow board the chip shows the card's current column stage.
-	if (stageMode.value) {
-		const lbl = stageLabel(currentColumn.value)
-		if (lbl) return lbl.toUpperCase()
-	}
-	return (STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase()
-})
+// The chip is the status, on every board - the column reads from the breadcrumb.
+const statusChipLabel = computed(() =>
+	(STATUS_OPTIONS.find((o) => o.key === currentStatus.value)?.label || '').toUpperCase(),
+)
 
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
@@ -6046,14 +6122,23 @@ body.theme--dark .card-modal,
 .card-modal__breadcrumb {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 8px;
+	row-gap: 4px;
 	font-size: 0.75rem;
 	color: var(--color-text-maxcontrast);
 }
 .card-modal__crumb {
 	white-space: nowrap;
 }
-/* Copyable human-id reference chip in the breadcrumb */
+/* The column crumb can be long - keep it on one line and clip it rather than
+   letting a wordy column name push the status chip off the row. */
+.card-modal__crumb--column {
+	max-width: 220px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* Copyable human-id reference chip, next to the card title */
 .card-modal__ref {
 	display: inline-flex;
 	align-items: center;
@@ -6110,6 +6195,23 @@ body.theme--dark .card-modal,
 }
 .card-modal__status-wrap {
 	align-items: center;
+}
+/* Title row: the reference chip sits ahead of the title, which takes the rest. */
+.card-modal__title-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	min-width: 0;
+}
+.card-modal__title-row .card-modal__ref {
+	flex: 0 0 auto;
+	/* Optically centre the 20px chip on the title's first line (1.5rem × 1.25). */
+	margin-top: 6px;
+}
+.card-modal__title-row .card-modal__title,
+.card-modal__title-row .card-modal__title-input {
+	flex: 1 1 auto;
+	min-width: 0;
 }
 .card-modal__title {
 	margin: 0 0 0 -4px;
@@ -6529,6 +6631,20 @@ body.theme--dark .card-modal,
 	padding: 8px;
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+/* Section heading inside a popover that groups options (Column / Status). */
+.card-modal__popover-head {
+	padding: 6px 10px 2px;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__popover-head:not(:first-child) {
+	margin-top: 4px;
+	border-top: 1px solid var(--color-border);
+	padding-top: 8px;
 }
 .card-modal__popover-opt {
 	display: flex;

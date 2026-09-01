@@ -122,8 +122,15 @@ class ProjectCardMapper extends QBMapper {
 	 * list. One query joining through `kanso_cards` and `kanso_boards`; the
 	 * caller supplies the readable board id set (see the readable-boards
 	 * discipline in {@see \OCA\Kanso\Service\ReviewService}), so a card on a
-	 * board the viewer cannot read is silently dropped. Deleted cards are
-	 * excluded. Rows are shaped exactly like {@see CardMapper::findAssignedInBoards}.
+	 * board the viewer cannot read is silently dropped. Rows are shaped exactly
+	 * like {@see CardMapper::findAssignedInBoards}.
+	 *
+	 * Scope: deleted, ARCHIVED and TEMPLATE cards are all excluded - the same
+	 * open scope every board-side card query applies
+	 * ({@see CardMapper::findSummariesByBoard()}). Project stats aggregate over
+	 * exactly this id set, so anything looser made the project's numbers disagree
+	 * with the board's over the same cards - a template counted as work, an
+	 * archived card counted as outstanding.
 	 *
 	 * Visibility (#3743): the scope runs on the joined card, so a collected
 	 * card that is hidden from the project owner (e.g. someone else's private
@@ -153,6 +160,8 @@ class ProjectCardMapper extends QBMapper {
 			->where($qb->expr()->eq('pc.project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('c.is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('board_title', 'ASC')
 			->addOrderBy('c.sort_key', 'ASC')
 			->addOrderBy('c.id', 'ASC');

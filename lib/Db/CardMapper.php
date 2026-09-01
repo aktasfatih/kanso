@@ -850,6 +850,78 @@ class CardMapper extends QBMapper {
 			->setMaxResults($limit);
 		$this->visibilityScope->apply($qb, 'c', $viewerUid, null, $rolesByBoard);
 
+		return $this->fetchAssignedRows($qb);
+	}
+
+	/**
+	 * The current user's RECENTLY COMPLETED assigned cards across a set of
+	 * boards - the opt-in second half of the "My tasks" page (#10061).
+	 *
+	 * Deliberately a SEPARATE query rather than a relaxed `done_at` filter on
+	 * {@see self::findAssignedInBoards()}: the completed set grows without
+	 * bound over a board's lifetime, so widening the default feed would make
+	 * every page load pay for every task the user has ever finished. This one
+	 * is bounded on BOTH axes - a recency cutoff (`done_at >= $doneSince`) AND
+	 * a row cap - and only runs when the user asks for it.
+	 *
+	 * Ordered most-recently-completed first: "what did I just finish" is the
+	 * question this answers, so the open feed's due-date ordering is noise here.
+	 *
+	 * Same ACL as the open feed: the caller passes only the readable board set
+	 * plus the per-board roles, and the visibility scope is applied - being
+	 * ASSIGNED to a card grants no visibility (#3743).
+	 *
+	 * @param string[] $uids the assignee identities to match (a user's uid plus any group ids they belong to)
+	 * @param int[] $boardIds the readable board set; an empty set yields no rows
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 * @param int $doneSince unix seconds; cards completed before this are out of the window
+	 * @return list<array<string, mixed>>
+	 * @throws Exception
+	 */
+	public function findAssignedDoneSinceInBoards(array $uids, array $boardIds, string $viewerUid, array $rolesByBoard, int $doneSince, int $limit = 50): array {
+		if ($uids === [] || $boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.id')
+			->addSelect('c.board_id', 'c.title', 'c.duedate', 'c.priority', 'c.done_at', 'c.started_at', 'c.parent_card_id')
+			->selectAlias('b.title', 'board_title')
+			->selectAlias('s.title', 'stack_title')
+			->from($this->getTableName(), 'c')
+			->innerJoin('c', 'kanso_card_assignees', 'ca', $qb->expr()->eq('ca.card_id', 'c.id'))
+			->innerJoin('c', 'kanso_boards', 'b', $qb->expr()->eq('c.board_id', 'b.id'))
+			->leftJoin('c', 'kanso_stacks', 's', $qb->expr()->eq('c.stack_id', 's.id'))
+			->where($qb->expr()->in('ca.participant', $qb->createNamedParameter($uids, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			// Done ONLY. Kept alongside the cutoff rather than folded into it:
+			// `done_at = 0` is the not-done sentinel, so a caller that ever
+			// passed a cutoff of 0 would otherwise turn this into "every card
+			// I am assigned to" - the unbounded read this whole query avoids.
+			->andWhere($qb->expr()->gt('c.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			// The recency window. This is what makes the query cheap; the row
+			// cap alone would still scan a lifetime of completed work.
+			->andWhere($qb->expr()->gte('c.done_at', $qb->createNamedParameter($doneSince, IQueryBuilder::PARAM_INT)))
+			->addOrderBy('c.done_at', 'DESC')
+			->addOrderBy('c.id', 'DESC')
+			->setMaxResults($limit);
+		$this->visibilityScope->apply($qb, 'c', $viewerUid, null, $rolesByBoard);
+
+		return $this->fetchAssignedRows($qb);
+	}
+
+	/**
+	 * Drains an assigned-cards query into the summary rows both "My tasks"
+	 * feeds return. One shape, one place - the open feed and the recently-done
+	 * feed must stay byte-compatible for the client that renders both.
+	 *
+	 * @return list<array<string, mixed>>
+	 * @throws Exception
+	 */
+	private function fetchAssignedRows(IQueryBuilder $qb): array {
 		$result = $qb->executeQuery();
 		$rows = [];
 		while (($row = $result->fetch()) !== false) {

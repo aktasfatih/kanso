@@ -33,7 +33,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:on-card-focus="onCardFocus"
 				:on-card-hover="onCardHover"
 				:collapsed="collapsedStacks.has(stack.id)"
-				:on-toggle-collapsed="onToggleCollapsed" />
+				:on-toggle-collapsed="onToggleCollapsed"
+				:revealed-card-id="revealedCardId" />
 		</div>
 	</section>
 </template>
@@ -102,6 +103,15 @@ const props = defineProps({
 	compact: {
 		type: Boolean,
 		default: false,
+	},
+	/**
+	 * Card id "Find the card on board" just scrolled to (#10062), or null.
+	 * Forwarded to every column: the card lives in exactly one lane, so only one
+	 * tile in the whole board can match.
+	 */
+	revealedCardId: {
+		type: [Number, String],
+		default: null,
 	},
 })
 

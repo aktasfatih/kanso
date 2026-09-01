@@ -43,6 +43,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<BoardFilterBar
 					:state="filterState"
 					:participants="participants"
+					show-archived
 					@save="onSaveFromBar" />
 
 				<!-- Group-by selector -->
@@ -374,7 +375,14 @@ const cappedHint = computed(() =>
 // summary fields only). now is read once per recompute for a stable window.
 const filteredCards = computed(() => {
 	const predicate = makePredicate(filterState, Date.now())
-	return cards.value.filter(predicate)
+	// Archived cards are hidden by DEFAULT, exactly as the board hides them
+	// (BoardView: `if (card.archived) continue`). The `archived` facet is the only
+	// way back in, and it lives outside the predicate because a predicate can only
+	// narrow — see ARCHIVED_OPTIONS. The server applies the same baseline before
+	// its cap (ViewService::findMine), so this is the client half of one rule, not
+	// a second one: a cached envelope from before that shipped still filters right.
+	const includeArchived = filterState.archived != null
+	return cards.value.filter((c) => (includeArchived || !c.archived) && predicate(c))
 })
 
 // Assignee display names + board titles for the group headers (no extra request).

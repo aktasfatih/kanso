@@ -9,20 +9,23 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Service\BoardArchiveService;
 use OCA\Kanso\Service\BoardService;
-use OCA\Kanso\Service\ExportService;
 use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\Response;
+use OCP\AppFramework\Http\StreamResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * Full board data portability in Kanso's OWN round-trippable JSON format
- * (distinct from the Deck importer): export a whole board to a single document,
- * and import such a document back into a fresh board owned by the importer.
+ * Full board data portability in Kanso's OWN round-trippable format (distinct
+ * from the Deck importer): export a whole board to a single archive, and import
+ * such a document back into a fresh board owned by the importer.
  */
 class BoardPortabilityController extends Controller {
 	use ApiErrorTrait;
@@ -32,7 +35,7 @@ class BoardPortabilityController extends Controller {
 		IRequest $request,
 		private IUserSession $userSession,
 		private BoardService $boardService,
-		private ExportService $exportService,
+		private BoardArchiveService $archiveService,
 		private ImportService $importService,
 		private BoardAccess $boardAccess,
 	) {
@@ -40,35 +43,88 @@ class BoardPortabilityController extends Controller {
 	}
 
 	/**
-	 * Exports one board as a Kanso export envelope. Gated on board READ (the
-	 * board load itself asserts it) AND on the internal role (#3744): bulk
-	 * egress of a whole board is denied to external (client-side) members -
-	 * the industry norm for guest/client roles - so an external gets a 403.
+	 * Streams one board as a Kanso export archive: a zip holding `board.json`
+	 * plus every attachment the caller may see. Gated on board READ (the board
+	 * load itself asserts it) AND on the internal role (#3744): bulk egress of
+	 * a whole board is denied to external (client-side) members - the industry
+	 * norm for guest/client roles - so an external gets a 403.
+	 *
+	 * The archive is built as a temp FILE and streamed, never assembled in
+	 * memory, so a board with large attachments cannot exhaust the worker.
 	 */
 	#[NoAdminRequired]
-	public function export(int $id): JSONResponse {
-		return $this->respond(function () use ($id): JSONResponse {
+	public function export(int $id): Response {
+		try {
 			$uid = $this->currentUserId();
 			$board = $this->boardService->find($id, $uid);
 			// The export content is scoped to the VIEWER's visible card set
-			// (#3743) - READ on the board alone must not dump hidden cards.
+			// (#3743) - READ on the board alone must not dump hidden cards,
+			// nor their files.
 			$viewer = $this->boardAccess->contextFor($board, $uid);
 			$this->assertInternal($viewer);
-			return new JSONResponse($this->exportService->export($board, $viewer));
-		});
+
+			$path = $this->archiveService->build($board, $viewer);
+			// Open the handle, then drop the directory entry immediately: the
+			// bytes stay readable through the descriptor, and the temp file
+			// cannot outlive this request even if the client aborts mid-stream.
+			$handle = @fopen($path, 'rb');
+			@unlink($path);
+			if ($handle === false) {
+				throw new \RuntimeException('Could not open the export archive');
+			}
+
+			$response = new StreamResponse($handle);
+			$response->addHeader('Content-Type', 'application/zip');
+			$response->addHeader(
+				'Content-Disposition',
+				'attachment; filename="' . $this->archiveService->filenameFor($board) . '"'
+			);
+			$response->addHeader('X-Content-Type-Options', 'nosniff');
+			return $response;
+		} catch (\Throwable $e) {
+			// Reuse the shared error mapping (403/404/400) for the failure
+			// paths; on success the stream was already returned above.
+			return $this->respond(function () use ($e): JSONResponse {
+				throw $e;
+			});
+		}
 	}
 
 	/**
-	 * Imports a pasted/uploaded Kanso export document into a brand-new board
-	 * owned by the caller. The raw document text is passed straight through so
-	 * the size cap and version/shape validation stay meaningful.
+	 * Imports a Kanso export into a brand-new board owned by the caller, closing
+	 * the round trip {@see self::export()} opens.
+	 *
+	 * Two request shapes, in that order of preference:
+	 *  - multipart with a `file` part: the .zip archive this app exports, or any
+	 *    older bare .json export. The uploaded FILE is handed to the service so
+	 *    the archive can be streamed rather than buffered, and so which shape it
+	 *    is gets decided from the bytes rather than from the client's filename;
+	 *  - a JSON body with `document`: the raw export text, for scripted clients
+	 *    (and every caller written before the format became an archive).
+	 *
+	 * Rate-limited per user, because this is the one endpoint where a SINGLE
+	 * request can write many app-data objects at once - up to
+	 * {@see \OCA\Kanso\Service\ImportArchiveReader::MAX_ENTRIES} of them, totalling
+	 * {@see \OCA\Kanso\Service\ImportArchiveReader::MAX_TOTAL_BYTES}. That per-request
+	 * ceiling is the important half; this limit bounds the amplification over
+	 * time. It is set well above any believable human use (restoring a handful of
+	 * board backups) so a legitimate restore session is never interrupted -
+	 * including a CI run that imports repeatedly - while a scripted loop is
+	 * stopped. Note that per-FILE upload
+	 * ({@see \OCA\Kanso\Controller\CardAttachmentController::create()}) carries no
+	 * limit of its own, so this endpoint is deliberately not the loosest way into
+	 * app-data.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 3600)]
 	public function import(string $document = ''): JSONResponse {
 		return $this->respond(function () use ($document): JSONResponse {
-			return new JSONResponse(
-				$this->importService->import($document, $this->currentUserId())
-			);
+			$uid = $this->currentUserId();
+			$upload = $this->request->getUploadedFile('file');
+			if (is_array($upload)) {
+				return new JSONResponse($this->importService->importUploadedFile($upload, $uid));
+			}
+			return new JSONResponse($this->importService->import($document, $uid));
 		});
 	}
 

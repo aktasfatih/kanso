@@ -275,15 +275,34 @@ jobs:
         run: npm run test:unit
       - name: Build frontend
         run: npm run build
-      # Guard: the extracted template and the compiled l10n bundles must match the
-      # source. Re-running extract+compile here catches a new t()/->t() string that
-      # was never extracted, or a .po edited without recompiling its bundles.
+      # Guard: the extracted template, the ten catalogues and the compiled l10n
+      # bundles must all match the source. Re-running extract+sync+compile here
+      # catches a new t()/->t() string that was never extracted, a string that
+      # reached the POT but never the .po files, or a .po edited without
+      # recompiling its bundles.
+      #
+      # `sync` is load-bearing and was missing until now, which made the guard
+      # silently incomplete: extract writes a new string into the POT, the author
+      # commits the POT, but only `sync` merges POT → PO. Without it the ten
+      # catalogues never learn about the string, compile reads the .po files and
+      # emits nothing new, and the diff is clean — green CI over ten catalogues
+      # that have quietly fallen behind. That is not hypothetical: eleven strings
+      # from three commits shipped untranslated in every language before this step
+      # existed. `sync` is idempotent, so on a correctly-prepared branch it is a
+      # no-op and this only goes red when something genuinely is out of sync.
+      #
+      # This is a STALENESS check, not a completeness check: `sync` adds new
+      # msgids with an empty msgstr, and an empty msgstr is a legal, documented
+      # English fallback (docs/TRANSLATING.md) — a contributor adding a string
+      # does not have to speak ten languages. Only an entry the catalogues have
+      # never heard of fails here.
+      #
+      # The command sequence lives in package.json (`l10n:check`) so contributors
+      # run locally byte-for-byte what CI runs.
       - name: Translations up to date
         run: |
-          node scripts/l10n.mjs extract
-          node scripts/l10n.mjs compile
-          git diff --exit-code translationfiles/ l10n/ || {
-            echo "::error::Translations are stale — run 'npm run l10n:extract && npm run l10n:compile' and commit the result."
+          npm run l10n:check || {
+            echo "::error::Translations are stale — run 'npm run l10n:check' and commit the result."
             exit 1
           }
       # Guard: docs/TRANSLATING.md tells contributors to keep placeholders like

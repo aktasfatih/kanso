@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, makeApi, currentAuth, API, BASE } from './helpers.js'
+import { test, expect, makeApi, currentAuth, API, BASE, exportArchive } from './helpers.js'
 
 // Sentinels for the two viewers. They are NOT auth strings themselves — the
 // client dispatch below resolves them at CALL time: ADMIN → the current user
@@ -191,7 +191,8 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 	})
 
 	test('export + duplicate: viewer-scoped for internals, denied for externals', async () => {
-		const adminExport = await api(ADMIN, 'GET', `/boards/${state.boardId}/export`)
+		// The export is a .zip since #10060; board.json is the document inside it.
+		const adminExport = (await exportArchive(state.boardId, currentAuth)).doc
 		expectTitles(adminExport.board.cards, ['PUB', 'PROV', 'PRIV'])
 		// The scoped export still round-trips visibility.
 		const privRow = adminExport.board.cards.find((c) => c.id === state.cards.PRIV.id)

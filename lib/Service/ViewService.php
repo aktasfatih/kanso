@@ -13,9 +13,11 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\LabelMapper;
 
 /**
- * The cross-board feed behind saved "Views" (#3815) - every non-deleted card
- * across all the boards the current user can read, each carrying its board id +
- * title. There is still exactly ONE readable-set path and no query language -
+ * The cross-board feed behind saved "Views" (#3815) - every non-deleted,
+ * non-archived card across all the boards the current user can read, each
+ * carrying its board id + title. Archived cards are opt-in through the
+ * `archived` filter facet, exactly as they are on a board.
+ * There is still exactly ONE readable-set path and no query language -
  * identical to how {@see MyCardsService::findMine()} and
  * {@see InboxService::findMine()} enforce ACL.
  *
@@ -98,6 +100,21 @@ class ViewService {
 	public function findMine(string $uid, string $sortMode = 'default', string $sortDir = 'asc', ?ViewFilter $filter = null): array {
 		$boards = $this->boardService->findAll($uid);
 
+		// Archived cards are excluded from the feed by DEFAULT, and only the
+		// `archived` facet ('include' / 'only') opts them back in. The exclusion
+		// happens here rather than in CardMapper::findSummariesByBoard() because
+		// BoardController::show() shares that query and DELIBERATELY ships archived
+		// rows - the board drops them client-side, and the archived-cards page plus
+		// its counter are built on them. Filtering at the mapper would break that
+		// page. It also happens here rather than inside ViewFilter::matches(), which
+		// can only ever narrow: an empty filter must stay empty (see
+		// ViewFilter::isEmpty()), so "no archived cards" cannot be a filter value.
+		//
+		// Doing it server-side matters on its own, independently of the client's
+		// mirrored guard in ViewPage.vue: archived rows would otherwise consume the
+		// MAX_CARDS budget and inflate `total` / `capped` in the envelope below.
+		$includeArchived = $filter !== null && $filter->includesArchived();
+
 		$out = [];
 		$labels = [];
 		$participants = [];
@@ -115,6 +132,13 @@ class ViewService {
 			$boardTitle = (string)$board->getTitle();
 			$boardPrefix = (string)($board->getPrefix() ?? BoardPrefix::DEFAULT);
 			foreach ($cards as $card) {
+				// Archived rows never reach the feed unless the facet asked for them
+				// - before the participant vocabulary too, so a board's archive does
+				// not repopulate the assignee/owner facets with people who no longer
+				// appear in any visible row.
+				if (!$includeArchived && !empty($card['archived'])) {
+					continue;
+				}
 				// Carry the board identity so the client can group by board and
 				// deep-link back without a per-card board lookup.
 				$card['boardId'] = $boardId;

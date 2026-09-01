@@ -52,9 +52,9 @@ for (const testCase of fixture.cases) {
 
 // The fixture is only worth what it covers: if a dimension loses its last case,
 // PHP and JS could silently diverge on it and both runners would still be green.
-test('the golden fixture exercises all 15 filter dimensions', () => {
+test('the golden fixture exercises all 16 filter dimensions', () => {
 	const allKeys = Object.keys(createFilterState())
-	assert.equal(allKeys.length, 15, 'the filter state should carry exactly 15 dimensions')
+	assert.equal(allKeys.length, 16, 'the filter state should carry exactly 16 dimensions')
 
 	const covered = new Set()
 	for (const testCase of fixture.cases) {

@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { useMyReviews } from './useMyReviews.js'
 import { useInbox } from './useInbox.js'
 import { useMyCards } from './useMyCards.js'
+import { myCardsFeed } from '../services/myCardsFeed.js'
 
 /**
  * localStorage key holding the unix-seconds timestamp of the newest inbox item
@@ -54,7 +55,10 @@ export function markInboxSeen(newestCreatedAt) {
  * keeps both these badges and the My Work pages live for other users' changes.
  *
  * - tasks:   count of open cards assigned to me (useMyCards already returns
- *            open-only, so no extra filtering is applied here).
+ *            open-only, so no extra filtering is applied here). The feed is
+ *            capped server-side, so `tasksTruncated` says whether that count
+ *            is exact or a floor - the nav renders "200+" rather than a frozen,
+ *            wrong "200".
  * - reviews: review requests awaiting my verdict (state === 'pending').
  * - inbox:   activity items newer than the last time I opened the Inbox.
  */
@@ -63,7 +67,9 @@ export function useMyWorkBadges() {
 	const { data: reviewsData } = useMyReviews()
 	const { data: inboxData } = useInbox()
 
-	const tasksCount = computed(() => (cardsData.value ?? []).length)
+	const tasksFeed = computed(() => myCardsFeed(cardsData.value))
+	const tasksCount = computed(() => tasksFeed.value.cards.length)
+	const tasksTruncated = computed(() => tasksFeed.value.truncated)
 
 	const reviewsCount = computed(() =>
 		(reviewsData.value ?? []).filter((r) => r.state === 'pending').length,
@@ -73,5 +79,5 @@ export function useMyWorkBadges() {
 		(inboxData.value ?? []).filter((item) => Number(item.createdAt) > inboxSeenAt.value).length,
 	)
 
-	return { tasksCount, reviewsCount, inboxCount }
+	return { tasksCount, tasksTruncated, reviewsCount, inboxCount }
 }

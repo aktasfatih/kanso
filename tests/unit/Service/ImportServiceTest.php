@@ -16,6 +16,8 @@ use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardAttachment;
+use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -32,10 +34,18 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\ExportService;
+use OCA\Kanso\Service\ImportArchiveReader;
 use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\RecurrenceService;
+use OCP\Files\IAppData;
+use OCP\Files\IMimeTypeDetector;
+use OCP\Files\NotFoundException;
+use OCP\Files\SimpleFS\ISimpleFile;
+use OCP\Files\SimpleFS\ISimpleFolder;
+use OCP\ITempManager;
 use OCP\IUserManager;
+use OCP\Security\ISecureRandom;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -55,9 +65,14 @@ class ImportServiceTest extends TestCase {
 	private ArchiveRuleMapper&MockObject $archiveRuleMapper;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private AutomationRuleMapper&MockObject $automationRuleMapper;
+	private CardAttachmentMapper&MockObject $cardAttachmentMapper;
 	private IUserManager&MockObject $userManager;
 	private \OCP\IDBConnection&MockObject $db;
 	private BoardAccess&MockObject $boardAccess;
+	private IAppData&MockObject $appData;
+	private ISecureRandom&MockObject $secureRandom;
+	private ITempManager&MockObject $tempManager;
+	private IMimeTypeDetector&MockObject $mimeTypeDetector;
 	private LoggerInterface&MockObject $logger;
 	private ImportService $service;
 
@@ -65,6 +80,14 @@ class ImportServiceTest extends TestCase {
 	private array $seq = [];
 	/** @var array<int, Card> new card id → inserted Card entity (for parent-remap follow-up) */
 	private array $cardsById = [];
+	/**
+	 * The fake app-data: "card-<id>/<storage key>" → the bytes newFile() got.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $appDataObjects = [];
+	/** Temp paths this test created, removed in tearDown. */
+	private array $tempPaths = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -82,6 +105,7 @@ class ImportServiceTest extends TestCase {
 		$this->archiveRuleMapper = $this->createMock(ArchiveRuleMapper::class);
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->automationRuleMapper = $this->createMock(AutomationRuleMapper::class);
+		$this->cardAttachmentMapper = $this->createMock(CardAttachmentMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(\OCP\IDBConnection::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
@@ -91,6 +115,7 @@ class ImportServiceTest extends TestCase {
 			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
 		);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->primeAppData();
 
 		$this->service = new ImportService(
 			$this->boardService,
@@ -107,12 +132,109 @@ class ImportServiceTest extends TestCase {
 			$this->archiveRuleMapper,
 			$this->recurRuleMapper,
 			$this->automationRuleMapper,
+			$this->cardAttachmentMapper,
 			$this->userManager,
 			$this->db,
 			$this->boardAccess,
 			$this->realRecurrenceService(),
+			$this->appData,
+			$this->secureRandom,
+			$this->tempManager,
+			$this->mimeTypeDetector,
 			$this->logger,
 		);
+	}
+
+	protected function tearDown(): void {
+		foreach ($this->tempPaths as $path) {
+			@unlink($path);
+		}
+		$this->tempPaths = [];
+		parent::tearDown();
+	}
+
+	/**
+	 * An in-memory stand-in for Kanso's app-data plus the temp/random/mime
+	 * collaborators the attachment restore needs, so a test can assert on the
+	 * bytes that actually landed and on what a rollback removed again.
+	 */
+	private function primeAppData(): void {
+		$this->appData = $this->createMock(IAppData::class);
+		$this->secureRandom = $this->createMock(ISecureRandom::class);
+		$this->tempManager = $this->createMock(ITempManager::class);
+		$this->mimeTypeDetector = $this->createMock(IMimeTypeDetector::class);
+
+		$keySeq = 0;
+		$this->secureRandom->method('generate')->willReturnCallback(
+			static function () use (&$keySeq): string {
+				return 'storagekey' . str_pad((string)(++$keySeq), 22, '0', STR_PAD_LEFT);
+			},
+		);
+
+		$this->tempManager->method('getTemporaryFile')->willReturnCallback(
+			function (string $suffix = ''): string {
+				$path = tempnam(sys_get_temp_dir(), 'kanso-import-test-') . $suffix;
+				$this->tempPaths[] = $path;
+				touch($path);
+				return $path;
+			},
+		);
+
+		// Default: whatever finfo would say is irrelevant here unless a test
+		// overrides it; a plain text label keeps the sanitizer happy.
+		$this->mimeTypeDetector->method('detectContent')->willReturn('text/plain');
+		$this->mimeTypeDetector->method('detectPath')->willReturn('text/plain');
+
+		$folders = [];
+		$makeFolder = function (string $name) use (&$folders): ISimpleFolder {
+			if (isset($folders[$name])) {
+				return $folders[$name];
+			}
+			$folder = $this->createMock(ISimpleFolder::class);
+			$folder->method('newFile')->willReturnCallback(
+				function (string $key, $content) use ($name): ISimpleFile {
+					$bytes = is_resource($content) ? (string)stream_get_contents($content) : (string)$content;
+					$this->appDataObjects[$name . '/' . $key] = $bytes;
+					return $this->createMock(ISimpleFile::class);
+				},
+			);
+			$folder->method('getFile')->willReturnCallback(
+				function (string $key) use ($name): ISimpleFile {
+					if (!isset($this->appDataObjects[$name . '/' . $key])) {
+						throw new NotFoundException('no such object');
+					}
+					$file = $this->createMock(ISimpleFile::class);
+					$file->method('delete')->willReturnCallback(function () use ($name, $key): void {
+						unset($this->appDataObjects[$name . '/' . $key]);
+					});
+					return $file;
+				},
+			);
+			$folders[$name] = $folder;
+			return $folder;
+		};
+		$this->appData->method('getFolder')->willReturnCallback($makeFolder);
+		$this->appData->method('newFolder')->willReturnCallback($makeFolder);
+	}
+
+	/**
+	 * Writes a v3 export ARCHIVE - `board.json` plus one entry per attachment
+	 * path - and returns its path.
+	 *
+	 * @param array<string, mixed> $document
+	 * @param array<string, string> $attachments archive path → bytes
+	 */
+	private function makeArchive(array $document, array $attachments = []): string {
+		$path = tempnam(sys_get_temp_dir(), 'kanso-import-archive-') . '.zip';
+		$this->tempPaths[] = $path;
+		$zip = new \ZipArchive();
+		self::assertTrue($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true);
+		$zip->addFromString('board.json', (string)json_encode($document));
+		foreach ($attachments as $entry => $bytes) {
+			$zip->addFromString($entry, $bytes);
+		}
+		self::assertTrue($zip->close());
+		return $path;
 	}
 
 	/**
@@ -187,6 +309,38 @@ class ImportServiceTest extends TestCase {
 	public function testRejectsMissingBoard(): void {
 		$this->expectException(InvalidInputException::class);
 		$this->service->import(json_encode(['kanso' => 1]), 'alice');
+	}
+
+	public function testStillImportsAV2DocumentAfterTheV3ArchiveBump(): void {
+		// #10060 raised FORMAT_VERSION to 3 and moved the delivered artifact from
+		// a bare .json document to a .zip. Every export anyone has already
+		// downloaded is a v1/v2 JSON document, and it must keep importing
+		// unchanged: the gate rejects only documents from a NEWER Kanso.
+		self::assertGreaterThan(2, ExportService::FORMAT_VERSION, 'this test is about importing an OLDER document');
+
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->boardService->expects(self::once())
+			->method('create')->with('Legacy board', '0082c9', 'importer')
+			->willReturn($this->newBoard('Legacy board'));
+
+		$doc = [
+			'kanso' => 2,
+			'exportedAt' => 1234,
+			'board' => [
+				'title' => 'Legacy board',
+				'color' => '0082c9',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a', 'role' => 0, 'wipLimit' => null]],
+				'cards' => [],
+			],
+		];
+
+		$result = $this->service->import((string)json_encode($doc), 'importer');
+
+		self::assertSame(900, $result['boardId']);
+		self::assertSame('Legacy board', $result['title']);
+		self::assertSame(1, $result['stacks']);
+		self::assertSame(0, $result['cards']);
 	}
 
 	// ── happy path + remapping ─────────────────────────────────────────────────
@@ -516,6 +670,475 @@ class ImportServiceTest extends TestCase {
 		$this->expectException(\RuntimeException::class);
 		$doc = ['kanso' => 1, 'board' => ['title' => 'x', 'labels' => [['id' => 1, 'title' => 'L']]]];
 		$this->service->import(json_encode($doc), 'importer');
+	}
+
+	// ── attachments ride the archive back in (#10071) ─────────────────────────
+
+	/** Wires the card/board mappers a v3 archive import needs. */
+	private function primeArchiveImport(): void {
+		$this->boardService->method('create')->willReturn($this->newBoard('Restored'));
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c): Card {
+			$this->seq['card'] ??= 100;
+			$c->setId($this->seq['card']++);
+			$this->cardsById[$c->getId()] = $c;
+			return $c;
+		});
+		$this->userManager->method('userExists')->willReturn(true);
+	}
+
+	/**
+	 * A two-card, three-attachment v3 document plus the archive carrying its
+	 * bytes.
+	 *
+	 * @return array{0: string, 1: array<string, string>} [archive path, path → bytes]
+	 */
+	private function twoCardArchive(): array {
+		$bytes = [
+			'attachments/1/notes.txt' => 'the first attached bytes',
+			'attachments/2/report.txt' => str_repeat('report ', 100),
+			'attachments/3/second-card.txt' => 'bytes belonging to the other card',
+		];
+		$document = [
+			'kanso' => 3,
+			'board' => [
+				'title' => 'Restored',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a']],
+				'cards' => [
+					[
+						'id' => 500, 'stackId' => 1, 'title' => 'Alpha', 'sortKey' => 'h',
+						'attachments' => [
+							['id' => 1, 'filename' => 'notes.txt', 'mime' => 'text/plain', 'size' => 24, 'uploadedBy' => 'alice', 'createdAt' => 1700000000, 'path' => 'attachments/1/notes.txt'],
+							['id' => 2, 'filename' => 'report.txt', 'mime' => 'text/plain', 'size' => 700, 'uploadedBy' => 'alice', 'createdAt' => 1700000001, 'path' => 'attachments/2/report.txt'],
+						],
+					],
+					[
+						'id' => 501, 'stackId' => 1, 'title' => 'Beta', 'sortKey' => 'i',
+						'attachments' => [
+							['id' => 3, 'filename' => 'second-card.txt', 'mime' => 'text/plain', 'size' => 33, 'uploadedBy' => 'alice', 'createdAt' => 1700000002, 'path' => 'attachments/3/second-card.txt'],
+						],
+					],
+				],
+			],
+		];
+		return [$this->makeArchive($document, $bytes), $bytes];
+	}
+
+	public function testImportsAttachmentBytesOntoTheRightCards(): void {
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->primeArchiveImport();
+		/** @var list<CardAttachment> $rows */
+		$rows = [];
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$rows): CardAttachment {
+				$a->setId(700 + count($rows));
+				$rows[] = $a;
+				return $a;
+			},
+		);
+
+		[$archivePath, $bytes] = $this->twoCardArchive();
+		$result = $this->service->importArchive($archivePath, 'importer');
+
+		self::assertSame(2, $result['cards']);
+		self::assertCount(3, $rows, 'every manifested attachment produced a row');
+
+		// Card association: the first two rows hang off the first new card, the
+		// third off the second - the manifest keyed each entry to its card.
+		self::assertSame(100, $rows[0]->getCardId());
+		self::assertSame(100, $rows[1]->getCardId());
+		self::assertSame(101, $rows[2]->getCardId());
+		// And every row belongs to the freshly created board, never a foreign one.
+		foreach ($rows as $row) {
+			self::assertSame(900, $row->getBoardId());
+		}
+
+		// Filenames and byte-for-byte contents survived.
+		self::assertSame(['notes.txt', 'report.txt', 'second-card.txt'], array_map(
+			static fn (CardAttachment $a): string => (string)$a->getFilename(),
+			$rows,
+		));
+		$expected = array_values($bytes);
+		foreach ($rows as $i => $row) {
+			$stored = $this->appDataObjects['card-' . $row->getCardId() . '/' . $row->getStorageKey()] ?? null;
+			self::assertNotNull($stored, 'the object was written to app-data');
+			self::assertSame($expected[$i], $stored, 'bytes round-tripped unchanged');
+			self::assertSame(hash('sha256', $expected[$i]), hash('sha256', $stored));
+			// The recorded size is what was actually written, not what the
+			// manifest claimed.
+			self::assertSame(strlen($expected[$i]), $row->getSize());
+		}
+	}
+
+	public function testTheManifestPathNeverBecomesTheStoragePath(): void {
+		// The manifest advertises `attachments/<id>/<filename>`; the object must
+		// land under card-<new id>/<server-generated key> and nothing else. This
+		// is what makes zip-slip structurally impossible rather than filtered.
+		$this->primeDb();
+		$this->primeArchiveImport();
+		/** @var list<CardAttachment> $rows */
+		$rows = [];
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$rows): CardAttachment {
+				$rows[] = $a;
+				return $a;
+			},
+		);
+
+		[$archivePath] = $this->twoCardArchive();
+		$this->service->importArchive($archivePath, 'importer');
+
+		foreach (array_keys($this->appDataObjects) as $objectPath) {
+			self::assertMatchesRegularExpression('~^card-\d+/[a-z0-9]{32}$~', $objectPath);
+		}
+		foreach ($rows as $row) {
+			// The storage key is the random one, never the manifest filename or
+			// any part of the entry path.
+			self::assertMatchesRegularExpression('~^[a-z0-9]{32}$~', (string)$row->getStorageKey());
+			self::assertStringNotContainsString('attachments', (string)$row->getStorageKey());
+			self::assertStringNotContainsString((string)$row->getFilename(), (string)$row->getStorageKey());
+		}
+	}
+
+	public function testStoredMimeIsResniffedFromTheBytesNotTakenFromTheManifest(): void {
+		// The manifest claims image/png; the bytes are HTML. The stored type must
+		// come from the content sniff and, being scriptable, be coerced to the
+		// inert generic type - the denylist is what keeps stored XSS out.
+		$this->primeDb();
+		$this->primeArchiveImport();
+		$this->mimeTypeDetector = $this->createMock(IMimeTypeDetector::class);
+		$this->mimeTypeDetector->method('detectContent')->willReturn('text/html');
+		$this->mimeTypeDetector->method('detectPath')->willReturn('image/png');
+		$this->rebuildServiceWithCurrentMimeDetector();
+		$captured = null;
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$captured): CardAttachment {
+				$captured = $a;
+				return $a;
+			},
+		);
+
+		$archivePath = $this->makeArchive([
+			'kanso' => 3,
+			'board' => [
+				'title' => 'Restored',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a']],
+				'cards' => [[
+					'id' => 500, 'stackId' => 1, 'title' => 'Alpha', 'sortKey' => 'h',
+					'attachments' => [[
+						'id' => 1, 'filename' => 'innocent.png', 'mime' => 'image/png',
+						'size' => 40, 'path' => 'attachments/1/innocent.png',
+					]],
+				]],
+			],
+		], ['attachments/1/innocent.png' => '<html><script>alert(1)</script></html>']);
+
+		$this->service->importArchive($archivePath, 'importer');
+
+		self::assertNotNull($captured);
+		self::assertSame('application/octet-stream', $captured->getMime());
+		self::assertNotSame('image/png', $captured->getMime());
+	}
+
+	public function testStoredMimeIsAlsoRefusedWhenTheDISPLAYNameIsScriptable(): void {
+		// The mirror: harmless-looking bytes under an .html label. Either reading
+		// tripping the denylist is enough to store the inert type.
+		$this->primeDb();
+		$this->primeArchiveImport();
+		$this->mimeTypeDetector = $this->createMock(IMimeTypeDetector::class);
+		$this->mimeTypeDetector->method('detectContent')->willReturn('image/png');
+		$this->mimeTypeDetector->method('detectPath')->willReturn('text/html');
+		$this->rebuildServiceWithCurrentMimeDetector();
+		$captured = null;
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$captured): CardAttachment {
+				$captured = $a;
+				return $a;
+			},
+		);
+
+		$archivePath = $this->makeArchive([
+			'kanso' => 3,
+			'board' => [
+				'title' => 'Restored',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a']],
+				'cards' => [[
+					'id' => 500, 'stackId' => 1, 'title' => 'Alpha', 'sortKey' => 'h',
+					'attachments' => [[
+						'id' => 1, 'filename' => 'evil.html', 'mime' => 'image/png',
+						'size' => 4, 'path' => 'attachments/1/evil.html',
+					]],
+				]],
+			],
+		], ['attachments/1/evil.html' => 'PNG!']);
+
+		$this->service->importArchive($archivePath, 'importer');
+
+		self::assertNotNull($captured);
+		self::assertSame('application/octet-stream', $captured->getMime());
+	}
+
+	public function testCleansUpTheObjectsItWroteWhenTheImportFailsMidway(): void {
+		// App-data writes are not covered by the DB transaction, so a failure
+		// after the first attachment landed must not leave orphaned bytes that
+		// no surviving row references.
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->primeArchiveImport();
+
+		$inserted = 0;
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$inserted): CardAttachment {
+				$inserted++;
+				// The first two land; the third blows up mid-import.
+				if ($inserted === 3) {
+					throw new \RuntimeException('boom');
+				}
+				return $a;
+			},
+		);
+
+		[$archivePath] = $this->twoCardArchive();
+		try {
+			$this->service->importArchive($archivePath, 'importer');
+			self::fail('the import was expected to fail');
+		} catch (\RuntimeException $e) {
+			self::assertSame('boom', $e->getMessage());
+		}
+
+		// Three objects were written (the third's row never landed); all three
+		// must be gone again.
+		self::assertSame([], $this->appDataObjects, 'no orphaned objects survive a failed import');
+	}
+
+	public function testAManifestEntryWithNoBytesInTheArchiveIsSkippedNotFatal(): void {
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->primeArchiveImport();
+		$rows = 0;
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$rows): CardAttachment {
+				$rows++;
+				return $a;
+			},
+		);
+
+		$archivePath = $this->makeArchive([
+			'kanso' => 3,
+			'board' => [
+				'title' => 'Restored',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a']],
+				'cards' => [[
+					'id' => 500, 'stackId' => 1, 'title' => 'Alpha', 'sortKey' => 'h',
+					'attachments' => [[
+						'id' => 9, 'filename' => 'gone.txt', 'mime' => 'text/plain',
+						'size' => 4, 'path' => 'attachments/9/gone.txt',
+					]],
+				]],
+			],
+		]);
+
+		$result = $this->service->importArchive($archivePath, 'importer');
+
+		self::assertSame(1, $result['cards'], 'the board still imported');
+		self::assertSame(0, $rows, 'the vanished attachment produced no row');
+	}
+
+	public function testImportsAV3ArchiveThatCarriesNoAttachments(): void {
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->primeArchiveImport();
+		$this->cardAttachmentMapper->expects(self::never())->method('insert');
+
+		$archivePath = $this->makeArchive([
+			'kanso' => 3,
+			'board' => [
+				'title' => 'Restored',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a']],
+				'cards' => [['id' => 500, 'stackId' => 1, 'title' => 'Alpha', 'sortKey' => 'h', 'attachments' => []]],
+			],
+		]);
+
+		$result = $this->service->importArchive($archivePath, 'importer');
+
+		self::assertSame(1, $result['cards']);
+		self::assertSame([], $this->appDataObjects);
+	}
+
+	// ── the upload entry point picks the shape from the BYTES ─────────────────
+
+	public function testUploadedArchiveIsImportedAsAnArchive(): void {
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->primeArchiveImport();
+		$rows = 0;
+		$this->cardAttachmentMapper->method('insert')->willReturnCallback(
+			function (CardAttachment $a) use (&$rows): CardAttachment {
+				$rows++;
+				return $a;
+			},
+		);
+
+		[$archivePath] = $this->twoCardArchive();
+		// A client claiming ".json" / "application/json" changes nothing: the
+		// leading bytes decide.
+		$result = $this->service->importUploadedFile([
+			'name' => 'export.json',
+			'type' => 'application/json',
+			'size' => (int)filesize($archivePath),
+			'tmp_name' => $archivePath,
+			'error' => UPLOAD_ERR_OK,
+		], 'importer');
+
+		self::assertSame(2, $result['cards']);
+		self::assertSame(3, $rows);
+	}
+
+	public function testUploadedBareV2DocumentStillImports(): void {
+		// Back-compat through the NEW entry point: every .json export already in
+		// someone's downloads folder must keep working.
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->boardService->expects(self::once())
+			->method('create')->with('Legacy board', '0082c9', 'importer')
+			->willReturn($this->newBoard('Legacy board'));
+		$this->stackMapper->method('insert')->willReturnCallback($this->autoId('stack', 30));
+		$this->cardAttachmentMapper->expects(self::never())->method('insert');
+
+		$path = tempnam(sys_get_temp_dir(), 'kanso-import-v2-');
+		self::assertIsString($path);
+		$this->tempPaths[] = $path;
+		file_put_contents($path, (string)json_encode([
+			'kanso' => 2,
+			'board' => [
+				'title' => 'Legacy board',
+				'color' => '0082c9',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a']],
+				'cards' => [],
+			],
+		]));
+
+		$result = $this->service->importUploadedFile([
+			'name' => 'kanso-legacy.json',
+			'size' => (int)filesize($path),
+			'tmp_name' => $path,
+			'error' => UPLOAD_ERR_OK,
+		], 'importer');
+
+		self::assertSame('Legacy board', $result['title']);
+		self::assertSame(1, $result['stacks']);
+	}
+
+	public function testUploadedFileOverTheArchiveCeilingIsRefused(): void {
+		// The size ceiling: nothing is opened, parsed or written for an upload
+		// bigger than one import is ever allowed to be. A sparse file stands in
+		// for the 256 MiB so the test stays cheap; it carries the zip magic so
+		// it takes the ARCHIVE branch and the ceiling is the only thing between
+		// it and ZipArchive.
+		$path = tempnam(sys_get_temp_dir(), 'kanso-import-huge-');
+		self::assertIsString($path);
+		$this->tempPaths[] = $path;
+		$handle = fopen($path, 'wb');
+		self::assertIsResource($handle);
+		fwrite($handle, "PK\x03\x04");
+		fseek($handle, ImportArchiveReader::MAX_TOTAL_BYTES);
+		fwrite($handle, 'x');
+		fclose($handle);
+		$this->db->expects(self::never())->method('beginTransaction');
+
+		// The message pins WHICH refusal fired: without the ceiling the file
+		// would be opened and refused later for being an unreadable archive.
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('The export file is too large to import');
+		$this->service->importUploadedFile([
+			'name' => 'huge.zip',
+			'size' => 1,
+			'tmp_name' => $path,
+			'error' => UPLOAD_ERR_OK,
+		], 'importer');
+	}
+
+	public function testUploadedBareDocumentOverTheDocumentCapIsRefused(): void {
+		// A NON-archive upload answers to the (much smaller) document cap - it is
+		// decoded whole, so it may not be archive-sized.
+		$path = tempnam(sys_get_temp_dir(), 'kanso-import-bigdoc-');
+		self::assertIsString($path);
+		$this->tempPaths[] = $path;
+		$handle = fopen($path, 'wb');
+		self::assertIsResource($handle);
+		fwrite($handle, '{');
+		fseek($handle, ImportService::MAX_DOCUMENT_BYTES);
+		fwrite($handle, '}');
+		fclose($handle);
+		$this->db->expects(self::never())->method('beginTransaction');
+
+		// The message pins the SIZE refusal: without the cap the oversized blob
+		// would be read and merely fail to parse, which is a different bug.
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('The export file is too large to import');
+		$this->service->importUploadedFile([
+			'name' => 'huge.json',
+			'size' => 1,
+			'tmp_name' => $path,
+			'error' => UPLOAD_ERR_OK,
+		], 'importer');
+	}
+
+	public function testMissingOrForgedUploadIsRefused(): void {
+		$this->db->expects(self::never())->method('beginTransaction');
+		try {
+			$this->service->importUploadedFile(null, 'importer');
+			self::fail('a missing upload must be refused');
+		} catch (InvalidInputException) {
+			// expected
+		}
+		// A forged tmp_name pointing at a server path we never received. The
+		// message pins that it was refused as "no upload", not stumbled over
+		// later while trying to read it.
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('No export file uploaded');
+		$this->service->importUploadedFile([
+			'name' => 'export.zip',
+			'size' => 10,
+			'tmp_name' => '/etc/passwd-not-here',
+			'error' => UPLOAD_ERR_OK,
+		], 'importer');
+	}
+
+	/**
+	 * Rebuilds the service so a test-specific {@see IMimeTypeDetector} takes
+	 * effect (the collaborator is constructor-injected).
+	 */
+	private function rebuildServiceWithCurrentMimeDetector(): void {
+		$this->service = new ImportService(
+			$this->boardService,
+			$this->exportService,
+			$this->stackMapper,
+			$this->cardMapper,
+			$this->labelMapper,
+			$this->cardLabelMapper,
+			$this->cardAssigneeMapper,
+			$this->checklistItemMapper,
+			$this->commentMapper,
+			$this->reviewTypeMapper,
+			$this->cardReviewMapper,
+			$this->archiveRuleMapper,
+			$this->recurRuleMapper,
+			$this->automationRuleMapper,
+			$this->cardAttachmentMapper,
+			$this->userManager,
+			$this->db,
+			$this->boardAccess,
+			$this->realRecurrenceService(),
+			$this->appData,
+			$this->secureRandom,
+			$this->tempManager,
+			$this->mimeTypeDetector,
+			$this->logger,
+		);
 	}
 }
 

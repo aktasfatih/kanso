@@ -54,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<template #icon>
 						<CodeJsonIcon :size="20" />
 					</template>
-					{{ t('kanso', 'Kanso export (.json)') }}
+					{{ t('kanso', 'Kanso export (.zip)') }}
 				</NcActionButton>
 				<NcActionButton close-after-click @click="triggerTrelloImport">
 					<template #icon>
@@ -73,11 +73,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcActionButton>
 			</NcActions>
 
-			<!-- Hidden file input backing the "Kanso export (.json)" import action -->
+			<!-- Hidden file input backing the "Kanso export (.zip)" import action.
+			     Older exports were bare .json documents and still import, so both
+			     extensions stay offered. -->
 			<input
 				ref="jsonImportInput"
 				type="file"
-				accept="application/json,.json"
+				accept="application/zip,.zip,application/json,.json"
 				class="board-list__hidden-file"
 				data-test="kanso-import-file"
 				@change="onJsonImportChange">
@@ -509,7 +511,7 @@ import { useBoards } from '../composables/useBoards.js'
 import { useBoardActions } from '../composables/useBoardActions.js'
 import { useBoardGroups } from '../composables/useBoardGroups.js'
 import { getSettings, updateSettings, createStack, createCard } from '../services/api.js'
-import { fetchDeckImportBoards, importDeckBoard, importBoard, importTrelloBoard } from '../services/api.js'
+import { fetchDeckImportBoards, importDeckBoard, importBoardFile, importTrelloBoard } from '../services/api.js'
 
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -688,8 +690,8 @@ async function duplicateFromTile(board, withCards) {
 }
 
 async function exportFromTile(board) {
-	const doc = await exportBoardToFile(board.id)
-	if (!doc) showError(exportError.value)
+	const saved = await exportBoardToFile(board.id)
+	if (!saved) showError(exportError.value)
 }
 
 // Delete needs an explicit confirm step (destructive, no undo toast): the menu
@@ -821,7 +823,7 @@ async function doImport(db) {
 	}
 }
 
-// ── Import from a Kanso export (.json) ────────────────────────────────────────
+// ── Import from a Kanso export (.zip archive, or an older bare .json) ─────────
 const jsonImportInput = ref(null)
 const jsonImportError = ref('')
 
@@ -837,8 +839,9 @@ async function onJsonImportChange(event) {
 	if (!file) return
 	jsonImportError.value = ''
 	try {
-		const text = await file.text()
-		const res = await importBoard(text)
+		// The file goes up as-is: an export archive is binary, and reading it
+		// into a string here would corrupt the attachment bytes.
+		const res = await importBoardFile(file)
 		await queryClient.invalidateQueries({ queryKey: ['boards'] })
 		router.push({ name: 'board', params: { id: res.boardId } })
 	} catch (err) {

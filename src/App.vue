@@ -15,7 +15,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<FormatListChecksIcon :size="20" />
 					</template>
 					<template v-if="tasksCount > 0" #counter>
-						<NcCounterBubble :count="tasksCount" />
+						<!-- `raw` because a capped feed renders "200+": the count is a
+						     floor, not an exact figure. Tasks never exceed the cap, so
+						     nothing is lost by skipping the compact formatting. `count`
+						     is typed as a number upstream but is only ever stringified
+						     under `raw`, so the "200+" label passes through intact. -->
+						<NcCounterBubble :count="tasksBadge" raw />
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
@@ -274,6 +279,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { getSettings, updateSettings } from './services/api.js'
+import { formatTaskBadge } from './services/myCardsFeed.js'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
@@ -521,7 +527,11 @@ function confirmDeleteView(view) {
 // Badge counts for the three My Work nav items. Reuses the existing feed
 // queries from the shared query cache (no new polling); mounting the nav warms
 // them once for the whole app.
-const { tasksCount, reviewsCount, inboxCount } = useMyWorkBadges()
+const { tasksCount, tasksTruncated, reviewsCount, inboxCount } = useMyWorkBadges()
+
+// "200+" when the tasks feed hit its server-side cap, so the badge never
+// presents a truncated count as an exact one.
+const tasksBadge = computed(() => formatTaskBadge(tasksCount.value, tasksTruncated.value))
 </script>
 
 <style scoped>

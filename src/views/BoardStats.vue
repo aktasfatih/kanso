@@ -300,7 +300,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { useQueryClient } from '@tanstack/vue-query'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
@@ -417,8 +417,8 @@ function trendTitle(dir) {
 }
 
 function velocityBarTitle(w) {
-	const base = `${w.week}: ${w.cards} ${t('kanso', 'cards')}`
-	return w.points !== null ? `${base}, ${w.points} ${t('kanso', 'points')}` : base
+	const base = `${w.week}: ${n('kanso', '%n card', '%n cards', w.cards)}`
+	return w.points !== null ? `${base}, ${n('kanso', '%n point', '%n points', w.points)}` : base
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

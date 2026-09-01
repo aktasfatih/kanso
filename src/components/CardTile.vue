@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<button
 			ref="el"
 			class="card-tile"
-			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact, 'card-tile--nest-target': isNestTarget }"
+			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact, 'card-tile--nest-target': isNestTarget, 'card-tile--revealed': revealed }"
 			:data-card-id="card.id"
 			@click="onTileClick"
 			@mouseenter="$emit('hover', card.id)"
@@ -307,6 +307,18 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	/**
+	 * Briefly flagged as "this is the card you asked for" (#10062) — set for a
+	 * couple of seconds after "Find the card on board" scrolls to this tile, so
+	 * the eye lands on it instead of hunting the column. Purely a ring drawn
+	 * OUTSIDE the box (outline + box-shadow, no border/padding): the tile's
+	 * measured height must not change or the virtualizer's cached row heights
+	 * would jolt.
+	 */
+	revealed: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 // Human-readable reference id (prefix + '-' + boardSeq), null when unassigned.
@@ -564,6 +576,30 @@ const extraAssigneeCount = computed(() => {
 .card-tile--selected {
 	outline: 2px solid var(--color-primary-element);
 	outline-offset: 1px;
+}
+
+/* "Here it is" ring (#10062) — drawn for a couple of seconds after "Find the
+ * card on board" scrolled this tile into view, so the eye lands on it instead
+ * of re-reading the column. Doubled class to win over `--done`'s background.
+ * Outline + box-shadow only: both paint outside the box model, so the tile's
+ * measured height is untouched and the virtualizer's cached rows don't jolt. */
+.card-tile.card-tile--revealed {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+	box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary-element) 25%, transparent);
+	animation: card-tile-reveal-pulse 1s ease-out 2;
+}
+
+@keyframes card-tile-reveal-pulse {
+	0%, 100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary-element) 25%, transparent); }
+	50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-primary-element) 10%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	/* Keep the ring (it is the whole point), drop the pulse. */
+	.card-tile.card-tile--revealed {
+		animation: none;
+	}
 }
 
 /* Selection checkbox - positioned top-right within the tile */

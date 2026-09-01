@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, exportArchive } from './helpers.js'
 
 async function openBoardsPage(page) {
 	await page.goto(`${BASE}/index.php/apps/kanso#/`)
@@ -51,7 +51,7 @@ test.describe('Boards page — tile options menu board actions', () => {
 		const copy = boards.find((b) => b.title === `${title} (copy)`)
 		expect(copy).toBeTruthy()
 		state.extraBoards.push(copy.id)
-		const doc = await api.get(`/boards/${copy.id}/export`)
+		const doc = (await exportArchive(copy.id)).doc
 		expect(doc.board.cards.map((c) => c.title)).toEqual(['Clone me'])
 	})
 

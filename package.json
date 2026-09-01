@@ -13,6 +13,7 @@
     "l10n:compile": "node scripts/l10n.mjs compile",
     "l10n:lint": "node scripts/l10n.mjs lint",
     "l10n:sync": "node scripts/l10n.mjs sync",
+    "l10n:check": "npm run l10n:extract && npm run l10n:sync && npm run l10n:compile && git diff --exit-code translationfiles/ l10n/",
     "lint:info-xml": "node scripts/validate-info-xml.mjs",
     "test:l10n": "node --test scripts/l10n.lint.test.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs",

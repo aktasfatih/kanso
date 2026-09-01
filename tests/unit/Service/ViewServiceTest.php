@@ -589,6 +589,97 @@ class ViewServiceTest extends TestCase {
 		self::assertSame(2, $result['total']);
 	}
 
+	// ── Archived cards are excluded by default (#10052) ──────────────────────────
+
+	/**
+	 * A View is a list of live work, so an archived card must not appear in it -
+	 * and must not be COUNTED either. The count half is the part a client-only fix
+	 * cannot give you: archived rows would still eat the MAX_CARDS budget and
+	 * inflate `total`/`capped`, so the "showing the first N of M" banner would lie
+	 * about cards the user can never see in the View.
+	 *
+	 * The exclusion deliberately does NOT live in CardMapper::findSummariesByBoard()
+	 * - BoardController::show() shares that query and ships archived rows on purpose
+	 * (the archived-cards page and its counter are built on them).
+	 */
+	public function testFindMineExcludesArchivedCardsFromBothTheRowsAndTheTotal(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'title' => 'live'],
+			['id' => 2, 'title' => 'archived', 'archived' => true],
+			['id' => 3, 'title' => 'also live', 'archived' => false],
+		]]]);
+
+		$result = $this->service->findMine('alice');
+
+		self::assertSame([1, 3], $this->idsOf($result));
+		self::assertSame(2, $result['total'], 'an archived card must not be counted either');
+		self::assertFalse($result['capped']);
+	}
+
+	/**
+	 * The opt-in half. `archived: include` widens the feed back to everything;
+	 * `archived: only` narrows it to the archived rows. Both are spelled with the
+	 * existing short-key wire format (`far`), no new machinery.
+	 */
+	public function testFindMineOptsArchivedCardsBackInThroughTheArchivedFacet(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'title' => 'live'],
+			['id' => 2, 'title' => 'archived', 'archived' => true],
+		]]]);
+
+		$include = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['far' => 'include']));
+		self::assertSame([1, 2], $this->idsOf($include));
+		self::assertSame(2, $include['total']);
+
+		$only = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['far' => 'only']));
+		self::assertSame([2], $this->idsOf($only));
+		self::assertSame(1, $only['total']);
+	}
+
+	/**
+	 * The exclusion runs BEFORE the cap, like the filter - otherwise a readable set
+	 * padded with archived rows would push the live ones out of the capped window
+	 * and the View would come back with nothing to show.
+	 *
+	 * Here every row inside the first MAX_CARDS of the default order is archived,
+	 * so a fix applied after the slice (or only in the browser) returns an empty
+	 * list; only excluding first surfaces the live tail.
+	 */
+	public function testFindMineExcludesArchivedRowsBeforeTheCap(): void {
+		$overCap = ViewService::MAX_CARDS + 250;
+		$live = [$overCap - 2, $overCap - 1, $overCap];
+		$rows = array_map(
+			static fn (int $i): array => ['id' => $i, 'archived' => $i <= $overCap - 3],
+			range(1, $overCap),
+		);
+		$this->seedFeed([1 => ['rows' => $rows]]);
+
+		$result = $this->service->findMine('alice');
+
+		self::assertSame($live, $this->idsOf($result));
+		self::assertFalse($result['capped'], 'the live set fits well inside the cap');
+		self::assertSame(3, $result['total'], 'archived rows must not inflate the cap budget');
+	}
+
+	/**
+	 * The facet vocabulary follows the rows: someone who only ever appears on
+	 * archived cards is not offered by the assignee/owner facets, because filtering
+	 * to them could not match a single visible row. Opting archived back in brings
+	 * them back.
+	 */
+	public function testFindMineKeepsArchivedOnlyParticipantsOutOfTheVocabulary(): void {
+		$this->seedFeed([1 => ['rows' => [
+			['id' => 1, 'owner' => 'alice', 'assigneeIds' => ['alice']],
+			['id' => 2, 'owner' => 'zoe', 'assigneeIds' => ['zoe'], 'archived' => true],
+		]]]);
+
+		self::assertSame(['alice'], $this->service->findMine('alice')['participants']);
+		self::assertSame(
+			['alice', 'zoe'],
+			$this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['far' => 'include']))['participants'],
+		);
+	}
+
 	public function testFindMineEmptyWhenNoReadableBoards(): void {
 		$this->boardService->method('findAll')->with('bob')->willReturn([]);
 		$this->boardAccess->expects(self::never())->method('contextFor');

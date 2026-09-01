@@ -10,6 +10,11 @@ import { MY_WORK_POLL_INTERVAL } from './queryKeys.js'
  * user, across every board they can read. Refetches on window focus so the
  * panel stays current without a dedicated realtime channel.
  *
+ * Data shape: { cards, truncated, limit } - the feed is capped server-side and
+ * the cap is reported, so callers can tell a complete feed from a first window
+ * (see services/myCardsFeed.js). Read it through `myCardsFeed(data)`, which
+ * also covers the undefined-while-loading case.
+ *
  * refetchOnMount 'always' (#3766): the nav badges keep this query mounted for
  * the app's lifetime, so it is often within the global staleTime when the user
  * navigates to My Tasks - a default mount refetch would be suppressed and the

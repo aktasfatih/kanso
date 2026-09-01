@@ -15,9 +15,12 @@ msgstr ""
 msgid "— none —"
 msgstr "— brak —"
 
-#: src/components/BoardSettingsModal.vue
-msgid "· {n} times"
-msgstr "· {n} razy"
+#: src/components/BoardSettingsModal.vue:3816
+msgid "· %n time"
+msgid_plural "· %n times"
+msgstr[0] "· %n raz"
+msgstr[1] "· %n razy"
+msgstr[2] "· %n razy"
 
 #: src/components/BoardSettingsModal.vue
 msgid "· until {date}"
@@ -92,6 +95,10 @@ msgid "{card} is due tomorrow"
 msgstr "{card} ma termin jutro"
 
 #: src/views/BoardView.vue
+msgid "{card} is in {stack}"
+msgstr "{card} jest w {stack}"
+
+#: src/views/BoardView.vue
 msgid "{card} is no longer a sub-card"
 msgstr "{card} nie jest już podkartą"
 
@@ -148,10 +155,6 @@ msgstr "{n} ponad limit WIP"
 #: src/components/BoardListView.vue
 msgid "{n} overdue"
 msgstr "{n} po terminie"
-
-#: src/components/CardDetail.vue
-msgid "{n} project"
-msgstr "Projekty: {n}"
 
 #: src/components/CardTile.vue
 msgid "{n}d"
@@ -246,7 +249,9 @@ msgid "%1$s shared %2$s with you"
 msgstr "%1$s udostępnił Ci %2$s"
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:211
+#: src/views/BoardList.vue:213
+#: src/views/BoardStats.vue:420
+#: src/views/ProjectStats.vue:340
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n karta"
@@ -260,21 +265,21 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4047
+#: src/components/CardDetail.vue:4090
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
 msgstr[1] "%n dni temu"
 msgstr[2] "%n dni temu"
 
-#: src/components/CardDetail.vue:4045
+#: src/components/CardDetail.vue:4088
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
 msgstr[1] "%n godziny temu"
 msgstr[2] "%n godzin temu"
 
-#: src/components/CardDetail.vue:4043
+#: src/components/CardDetail.vue:4086
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -295,6 +300,20 @@ msgstr[0] "%n po terminie"
 msgstr[1] "%n po terminie"
 msgstr[2] "%n po terminie"
 
+#: src/views/BoardStats.vue:421
+msgid "%n point"
+msgid_plural "%n points"
+msgstr[0] "%n punkt"
+msgstr[1] "%n punkty"
+msgstr[2] "%n punktów"
+
+#: src/components/CardDetail.vue:1011
+msgid "%n project"
+msgid_plural "%n projects"
+msgstr[0] "%n projekt"
+msgstr[1] "%n projekty"
+msgstr[2] "%n projektów"
+
 #: src/components/BoardTimelineView.vue:306
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
@@ -302,7 +321,7 @@ msgstr[0] "%n niezaplanowana karta"
 msgstr[1] "%n niezaplanowane karty"
 msgstr[2] "%n niezaplanowanych kart"
 
-#: src/components/CardDetail.vue:267
+#: src/components/CardDetail.vue:275
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n obserwujący"
@@ -520,7 +539,6 @@ msgid "Approved"
 msgstr "Zatwierdzone"
 
 #: src/components/BoardSettingsModal.vue
-#: src/components/CardDetail.vue
 msgid "Archive"
 msgstr "Zarchiwizuj"
 
@@ -545,6 +563,8 @@ msgstr "Zarchiwizuj teraz"
 msgid "Archive selected"
 msgstr "Zarchiwizuj zaznaczone"
 
+#: src/components/BoardFilterBar.vue
+#: src/components/CardDetail.vue
 #: src/views/BoardList.vue
 msgid "Archived"
 msgstr "Zarchiwizowane"
@@ -913,11 +933,6 @@ msgstr "Szablony kart"
 msgid "Card visibility"
 msgstr "Widoczność karty"
 
-#: src/views/BoardStats.vue
-#: src/views/ProjectStats.vue
-msgid "cards"
-msgstr "kart"
-
 #: src/components/BoardTimelineView.vue
 #: src/components/CommandPalette.vue
 msgid "Cards"
@@ -1192,7 +1207,7 @@ msgid "Collapse column"
 msgstr "Zwiń kolumnę"
 
 #: src/components/BoardListView.vue
-msgid "Collapse subtasks"
+msgid "Collapse sub-cards"
 msgstr "Zwiń podkarty"
 
 #: src/views/ProjectView.vue
@@ -1539,7 +1554,8 @@ msgstr "Strefa niebezpieczna"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/CardDetail.vue:4223
+#: src/components/BoardSettingsModal.vue:1824
+#: src/components/CardDetail.vue:4266
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -1549,10 +1565,6 @@ msgstr[2] "dni"
 #: src/components/BoardTimelineView.vue
 msgid "Day"
 msgstr "Dzień"
-
-#: src/components/BoardSettingsModal.vue
-msgid "day(s)"
-msgstr "dni"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Days"
@@ -1811,8 +1823,8 @@ msgid "Down vs previous period"
 msgstr "Spadek wzgl. poprzedniego okresu"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Download a JSON backup of this board."
-msgstr "Pobierz kopię zapasową tej tablicy w formacie JSON."
+msgid "Download a backup of this board, attachments included."
+msgstr "Pobierz kopię zapasową tej tablicy wraz z załącznikami."
 
 #: src/views/BoardList.vue
 msgid "Drag a card between columns — try it"
@@ -2025,37 +2037,33 @@ msgstr "co"
 msgid "Every"
 msgstr "Co"
 
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} days"
-msgstr "Co {n} dni"
-
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} months"
-msgstr "Co {n} mies."
-
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} weeks"
-msgstr "Co {n} tyg."
-
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} years"
-msgstr "Co {n} lat"
-
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3796
 msgid "Every day"
-msgstr "Codziennie"
+msgid_plural "Every %n days"
+msgstr[0] "Codziennie"
+msgstr[1] "Co %n dni"
+msgstr[2] "Co %n dni"
 
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3806
 msgid "Every month"
-msgstr "Co miesiąc"
+msgid_plural "Every %n months"
+msgstr[0] "Co miesiąc"
+msgstr[1] "Co %n miesiące"
+msgstr[2] "Co %n miesięcy"
 
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3798
 msgid "Every week"
-msgstr "Co tydzień"
+msgid_plural "Every %n weeks"
+msgstr[0] "Co tydzień"
+msgstr[1] "Co %n tygodnie"
+msgstr[2] "Co %n tygodni"
 
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3808
 msgid "Every year"
-msgstr "Co rok"
+msgid_plural "Every %n years"
+msgstr[0] "Co rok"
+msgstr[1] "Co %n lata"
+msgstr[2] "Co %n lat"
 
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
@@ -2074,7 +2082,7 @@ msgid "Expand column {name}"
 msgstr "Rozwiń kolumnę {name}"
 
 #: src/components/BoardListView.vue
-msgid "Expand subtasks"
+msgid "Expand sub-cards"
 msgstr "Rozwiń podkarty"
 
 #: src/components/BoardSettingsModal.vue
@@ -2290,6 +2298,10 @@ msgstr "Nie udało się wczytać kart projektu. Spróbuj ponownie."
 #: src/views/ProjectsView.vue
 msgid "Failed to load projects. Please try again."
 msgstr "Nie udało się wczytać projektów. Spróbuj ponownie."
+
+#: src/views/MyCardsView.vue
+msgid "Failed to load recently done tasks. Please try again."
+msgstr "Nie udało się wczytać ostatnio ukończonych zadań. Spróbuj ponownie."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load recur rules."
@@ -2667,6 +2679,10 @@ msgstr "Filtruj usunięte karty"
 msgid "Filter trash…"
 msgstr "Filtruj kosz…"
 
+#: src/components/CardDetail.vue
+msgid "Find the card on board"
+msgstr "Znajdź kartę na tablicy"
+
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
 msgstr "Dopasuj"
@@ -2850,6 +2866,10 @@ msgstr "W realizacji"
 msgid "Inbox"
 msgstr "Skrzynka odbiorcza"
 
+#: src/composables/useBoardFilters.js
+msgid "Include archived"
+msgstr "Uwzględnij zarchiwizowane"
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Inline code"
@@ -2918,8 +2938,8 @@ msgid "Kanso board backups"
 msgstr "Kopie zapasowe tablic Kanso"
 
 #: src/views/BoardList.vue
-msgid "Kanso export (.json)"
-msgstr "Eksport Kanso (.json)"
+msgid "Kanso export (.zip)"
+msgstr "Eksport Kanso (.zip)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."
@@ -3053,6 +3073,10 @@ msgstr "Wczytywanie projektu…"
 msgid "Loading projects…"
 msgstr "Wczytywanie projektów…"
 
+#: src/views/MyCardsView.vue
+msgid "Loading recently done tasks…"
+msgstr "Wczytywanie ostatnio ukończonych zadań…"
+
 #: src/views/MyReviewsView.vue
 msgid "Loading reviews…"
 msgstr "Wczytywanie recenzji…"
@@ -3142,7 +3166,8 @@ msgstr "Tryb"
 msgid "Mon"
 msgstr "Pn"
 
-#: src/components/CardDetail.vue:4225
+#: src/components/BoardSettingsModal.vue:1826
+#: src/components/CardDetail.vue:4268
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -3152,10 +3177,6 @@ msgstr[2] "miesięcy"
 #: src/components/BoardTimelineView.vue
 msgid "Month"
 msgstr "Miesiąc"
-
-#: src/components/BoardSettingsModal.vue
-msgid "month(s)"
-msgstr "miesięcy"
 
 #: src/components/CardDetail.vue
 msgid "Monthly"
@@ -3557,6 +3578,10 @@ msgstr "Brak daty rozpoczęcia"
 msgid "No tasks assigned to you"
 msgstr "Nie przypisano Ci żadnych zadań"
 
+#: src/views/MyCardsView.vue
+msgid "No tasks on this board"
+msgstr "Brak zadań na tej tablicy"
+
 #: src/components/ManageTemplatesModal.vue
 msgid "No templates yet"
 msgstr "Brak szablonów"
@@ -3608,6 +3633,14 @@ msgstr "Nie czeka"
 msgid "Note (optional)"
 msgstr "Notatka (opcjonalnie)"
 
+#: src/views/MyCardsView.vue
+msgid "Nothing here yet — tasks you complete will show up in this section."
+msgstr "Nic tu jeszcze nie ma — ukończone zadania pojawią się w tej sekcji."
+
+#: src/views/MyCardsView.vue
+msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
+msgstr "Na wybranej tablicy nic nie jest do Ciebie przypisane. Wybierz „Wszystkie tablice”, aby zobaczyć wszystko, co jest do Ciebie przypisane."
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "now"
@@ -3633,6 +3666,10 @@ msgstr "Przesunięcie po (dni)"
 msgid "On days"
 msgstr "W dni"
 
+#: src/composables/useBoardFilters.js
+msgid "Only archived"
+msgstr "Tylko zarchiwizowane"
+
 #: src/components/CardDetail.vue
 msgid "Only https://github.com links are supported"
 msgstr "Obsługiwane są tylko odnośniki https://github.com"
@@ -3640,6 +3677,10 @@ msgstr "Obsługiwane są tylko odnośniki https://github.com"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "Tylko zgłoszenia z etykietą"
+
+#: src/views/MyCardsView.vue
+msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
+msgstr "Wczytywanych jest tylko pierwszych {count} przypisanych kart, więc niektórych zadań brakuje na tej liście."
 
 #: src/components/CommandPalette.vue
 msgid "open"
@@ -3811,10 +3852,6 @@ msgid "Pinned"
 msgstr "Przypięte"
 
 #: src/views/BoardStats.vue
-msgid "points"
-msgstr "pkt"
-
-#: src/views/BoardStats.vue
 msgid "Points / week (avg)"
 msgstr "Punkty / tydzień (śr.)"
 
@@ -3924,6 +3961,10 @@ msgstr "Cytat"
 #: src/views/PublicBoard.vue
 msgid "Read-only"
 msgstr "Tylko do odczytu"
+
+#: src/views/MyCardsView.vue
+msgid "Recently done"
+msgstr "Ostatnio ukończone"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
@@ -4426,7 +4467,7 @@ msgstr "Pokaż pasek formatowania"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:5627
+#: src/components/CardDetail.vue:5707
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -4444,6 +4485,10 @@ msgstr "Pokazuj tę tablicę w moim kalendarzu"
 #: src/components/CardDetail.vue
 msgid "Show watchers"
 msgstr "Pokaż obserwujących"
+
+#: src/views/MyCardsView.vue
+msgid "Showing the {count} most recent tasks you completed in the last {days} days."
+msgstr "Wyświetlanych jest {count} najnowszych zadań ukończonych w ciągu ostatnich {days} dni."
 
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
@@ -4557,6 +4602,7 @@ msgid "Starts later"
 msgstr "Zaczyna się później"
 
 #: src/components/BoardFilterBar.vue
+#: src/components/CardDetail.vue
 #: src/views/ViewPage.vue
 msgid "Status"
 msgstr "Status"
@@ -4623,6 +4669,10 @@ msgstr "Kolumna docelowa"
 msgid "Task"
 msgstr "Zadanie"
 
+#: src/views/MyCardsView.vue
+msgid "Tasks you completed in the last {days} days."
+msgstr "Zadania ukończone w ciągu ostatnich {days} dni."
+
 #: src/components/CardDetail.vue
 #: src/components/StackColumn.vue
 msgid "Teal"
@@ -4639,6 +4689,10 @@ msgstr "Szablon zamieniono z powrotem w zwykłą kartę."
 #: src/components/BoardSettingsModal.vue
 msgid "Text"
 msgstr "Tekst"
+
+#: src/views/BoardView.vue
+msgid "That card is not on this board any more."
+msgstr "Tej karty nie ma już na tej tablicy."
 
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
@@ -4683,6 +4737,14 @@ msgstr "Ta tablica już nie istnieje."
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
 msgstr "Ta karta nie istnieje albo nie masz do niej dostępu."
+
+#: src/views/BoardView.vue
+msgid "This card is archived, so it is not on the board. Un-archive it to put it back."
+msgstr "Ta karta jest zarchiwizowana, więc nie ma jej na tablicy. Przywróć ją z archiwum, aby wróciła."
+
+#: src/views/BoardView.vue
+msgid "This card is hidden by the current filter. Clear the filter to see it."
+msgstr "Ta karta jest ukryta przez bieżący filtr. Wyczyść filtr, aby ją zobaczyć."
 
 #: src/components/CardDetail.vue
 msgid "This card is not visible to you"
@@ -4848,7 +4910,6 @@ msgstr "Pisz, aby przeszukać swoje kontakty."
 msgid "Type: {type}"
 msgstr "Typ: {type}"
 
-#: src/components/CardDetail.vue
 #: src/views/ArchivedView.vue
 msgid "Unarchive"
 msgstr "Przywróć z archiwum"
@@ -5044,7 +5105,8 @@ msgstr "Webhook aktywny"
 msgid "Wed"
 msgstr "Śr"
 
-#: src/components/CardDetail.vue:4224
+#: src/components/BoardSettingsModal.vue:1825
+#: src/components/CardDetail.vue:4267
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -5054,10 +5116,6 @@ msgstr[2] "tygodni"
 #: src/components/BoardTimelineView.vue
 msgid "Week"
 msgstr "Tydzień"
-
-#: src/components/BoardSettingsModal.vue
-msgid "week(s)"
-msgstr "tygodni"
 
 #: src/components/CardDetail.vue
 msgid "Weekly"
@@ -5125,16 +5183,13 @@ msgstr "Napisz odpowiedź…"
 msgid "wrote"
 msgstr "napisał"
 
-#: src/components/CardDetail.vue:4226
+#: src/components/BoardSettingsModal.vue:1827
+#: src/components/CardDetail.vue:4269
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"
 msgstr[1] "lata"
 msgstr[2] "lat"
-
-#: src/components/BoardSettingsModal.vue
-msgid "year(s)"
-msgstr "lat"
 
 #: src/components/CardDetail.vue
 msgid "Yearly"
