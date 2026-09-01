@@ -34,7 +34,7 @@ namespace OCA\Kanso\Service;
  * to hard-fail.
  *
  * WIRE FORMAT. Exactly the short keys `filterToQuery()` already emits for the
- * board's shareable filter links - `fl/fa/fp/ft/fe/fo/fr/fd/fs/fw/fb/fk/fsd/fsc/fcm`,
+ * board's shareable filter links - `fl/fa/fp/ft/fe/fo/fr/fd/fs/fw/fb/fk/fsd/fsc/fcm/far`,
  * multi-value dimensions comma-joined. No new encoding, no query language.
  *
  * The predicate reads ONLY fields already present on a serialized card summary
@@ -69,6 +69,15 @@ final class ViewFilter {
 	private const START = ['started', 'upcoming', 'none'];
 	private const SUBCARD = ['top_level', 'parent', 'child'];
 	private const COMMENTS = ['has', 'none'];
+	/**
+	 * The archived opt-in. Deliberately has NO 'not_archived' member: excluding
+	 * archived cards is the BASELINE the feed applies before this predicate runs
+	 * ({@see ViewService::findMine()}), not a filter value. Spelling the default
+	 * as a real value would make {@see self::isEmpty()} false for a fresh filter
+	 * and silently change both the feed's short-circuit and the meaning of every
+	 * View saved before this shipped.
+	 */
+	private const ARCHIVED = ['include', 'only'];
 
 	/** "This week" = now .. end of the 7th day ahead, in milliseconds (JS parity). */
 	private const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -110,6 +119,7 @@ final class ViewFilter {
 		private ?string $startDate,
 		private ?string $subcard,
 		private ?string $comments,
+		private ?string $archived,
 	) {
 	}
 
@@ -139,7 +149,22 @@ final class ViewFilter {
 			self::oneOf($query['fsd'] ?? null, self::START),
 			self::oneOf($query['fsc'] ?? null, self::SUBCARD),
 			self::oneOf($query['fcm'] ?? null, self::COMMENTS),
+			self::oneOf($query['far'] ?? null, self::ARCHIVED),
 		);
+	}
+
+	/**
+	 * Whether the caller must stop excluding archived cards for this filter -
+	 * true for BOTH 'include' and 'only'.
+	 *
+	 * The exclusion itself is not part of {@see self::matches()} on purpose (see
+	 * self::ARCHIVED): the predicate only ever narrows, so "add archived rows
+	 * back" cannot be expressed there. {@see ViewService::findMine()} asks this
+	 * before it drops archived rows from the feed, and `matches()` then applies
+	 * the 'only' half.
+	 */
+	public function includesArchived(): bool {
+		return $this->archived !== null;
 	}
 
 	/**
@@ -162,7 +187,8 @@ final class ViewFilter {
 			&& $this->checklist === null
 			&& $this->startDate === null
 			&& $this->subcard === null
-			&& $this->comments === null;
+			&& $this->comments === null
+			&& $this->archived === null;
 	}
 
 	/**
@@ -385,6 +411,14 @@ final class ViewFilter {
 			if ($this->comments === 'none' && $n !== 0) {
 				return false;
 			}
+		}
+
+		// Archived (single-select opt-in): only 'only' constrains here. 'include'
+		// WIDENS, and a predicate can only narrow - the baseline "no archived
+		// cards" exclusion therefore lives in the caller
+		// ({@see ViewService::findMine()}), gated on self::includesArchived().
+		if ($this->archived === 'only' && empty($card['archived'])) {
+			return false;
 		}
 
 		return true;

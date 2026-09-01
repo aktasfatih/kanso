@@ -535,6 +535,7 @@ msgstr ""
 msgid "Archive selected"
 msgstr ""
 
+#: src/components/BoardFilterBar.vue
 #: src/views/BoardList.vue
 msgid "Archived"
 msgstr ""
@@ -2839,6 +2840,10 @@ msgstr ""
 msgid "Inbox"
 msgstr ""
 
+#: src/composables/useBoardFilters.js
+msgid "Include archived"
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Inline code"
@@ -3619,6 +3624,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "On days"
+msgstr ""
+
+#: src/composables/useBoardFilters.js
+msgid "Only archived"
 msgstr ""
 
 #: src/components/CardDetail.vue

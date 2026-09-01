@@ -168,7 +168,7 @@ class ViewFilterTest extends TestCase {
 
 	/**
 	 * The filter's dimensions, taken from {@see ViewFilter}'s own constructor
-	 * signature rather than a literal - so a 16th dimension added to the class
+	 * signature rather than a literal - so a 17th dimension added to the class
 	 * without a golden case, a wire key, or a controller param turns this red.
 	 * The JS half already derives its list from `createFilterState()`.
 	 *
@@ -217,9 +217,9 @@ class ViewFilterTest extends TestCase {
 	 * case could drift silently while both runners stay green. The JS runner
 	 * asserts the mirror image of this.
 	 */
-	public function testTheGoldenFixtureExercisesAllFifteenDimensions(): void {
+	public function testTheGoldenFixtureExercisesAllSixteenDimensions(): void {
 		$dimensions = self::filterDimensions();
-		self::assertCount(15, $dimensions);
+		self::assertCount(16, $dimensions);
 
 		$covered = [];
 		foreach (self::$fixture['cases'] as $case) {
@@ -275,7 +275,7 @@ class ViewFilterTest extends TestCase {
 		);
 
 		// …and the map covers exactly the dimensions ViewFilter itself carries, in
-		// the same order. A 16th dimension added on one side only turns this red.
+		// the same order. A 17th dimension added on one side only turns this red.
 		self::assertSame(self::filterDimensions(), array_keys($map));
 	}
 
@@ -322,9 +322,55 @@ class ViewFilterTest extends TestCase {
 			'ft' => 'epic',           // not a filterable type
 			'fr' => 'rubber_stamped', // not a review state
 			'fsc' => 'sibling',       // not a sub-card relation
+			'far' => 'not_archived', // deliberately NOT an archived option
 		]);
 		self::assertTrue($filter->isEmpty());
 		self::assertSame(self::allCardIds(), self::survivors($filter));
+		// …and specifically: an unrecognised archived value must not read as an
+		// opt-in, or an old client's typo would un-hide every archived card.
+		self::assertFalse($filter->includesArchived());
+	}
+
+	/**
+	 * The archived dimension is the ONE inverted facet, so its contract is pinned
+	 * separately from the golden cases.
+	 *
+	 * `null` (the default) must stay EMPTY. If "hide archived" were spelled as a
+	 * filter value, a fresh filter would no longer be empty: ViewService::findMine()
+	 * would stop short-circuiting the pass, and every View saved before this shipped
+	 * would silently change meaning. So the baseline exclusion lives in the caller,
+	 * and this class only reports whether the caller must stop applying it.
+	 */
+	public function testTheArchivedFacetIsAnOptInThatLeavesAnEmptyFilterEmpty(): void {
+		$live = ['id' => 1];
+		$archived = ['id' => 2, 'archived' => true];
+
+		// Default: no constraint here at all - the predicate keeps BOTH rows, and
+		// the caller is told to keep excluding.
+		$default = ViewFilter::fromQuery([]);
+		self::assertTrue($default->isEmpty());
+		self::assertFalse($default->includesArchived());
+		self::assertTrue($default->matches($live, 0));
+		self::assertTrue($default->matches($archived, 0));
+
+		// include: opts the caller out of excluding, but constrains nothing.
+		$include = ViewFilter::fromQuery(['far' => 'include']);
+		self::assertFalse($include->isEmpty());
+		self::assertTrue($include->includesArchived());
+		self::assertTrue($include->matches($live, 0));
+		self::assertTrue($include->matches($archived, 0));
+
+		// only: opts out of excluding AND narrows to the archived rows.
+		$only = ViewFilter::fromQuery(['far' => 'only']);
+		self::assertFalse($only->isEmpty());
+		self::assertTrue($only->includesArchived());
+		self::assertFalse($only->matches($live, 0));
+		self::assertTrue($only->matches($archived, 0));
+
+		// A row with an explicitly false flag is live, and so is a sparse row with
+		// no flag at all (an older cached summary).
+		self::assertFalse($only->matches(['id' => 3, 'archived' => false], 0));
+		self::assertFalse($only->matches(['id' => 4], 0));
 	}
 
 	/**

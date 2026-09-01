@@ -27,6 +27,10 @@
  *   - done:        string|null  → 'done' | 'open' | null (tri-state).
  *   - waiting:     string|null  → 'waiting' | 'not_waiting' | null (tri-state)
  *                                 over the derived waitingOnExternal flag (#3746).
+ *   - archived:    string|null  → 'include' | 'only' | null. The odd one out: an
+ *                                 OPT-IN, because hiding archived cards is the
+ *                                 baseline every surface applies before this
+ *                                 predicate runs, not a filter value.
  *
  * Semantics: AND across dimensions, OR within a dimension — standard Linear
  * behaviour. An empty dimension imposes no constraint.
@@ -113,6 +117,28 @@ export const COMMENTS_OPTIONS = [
 ]
 
 /**
+ * Archived filter options (single-select). Deliberately INVERTED relative to
+ * every other single-select facet: there is no 'not_archived' option, because
+ * excluding archived cards is the BASELINE, not a filter value.
+ *
+ * A surface that can show archived cards (currently Views) drops them before the
+ * predicate ever runs — the same thing the board does unconditionally at
+ * BoardView's `if (card.archived) continue`. `null` therefore means "the default:
+ * no archived cards", and this facet only ever WIDENS that: 'include' adds them
+ * back alongside the live ones, 'only' narrows to them.
+ *
+ * Why it matters that the baseline lives outside the predicate: if `null` had to
+ * be spelled as a real value ('not_archived'), `filterIsEmpty()` would be false
+ * for a fresh filter, which would silently change the server's short-circuit in
+ * ViewService::findMine() and the meaning of every View saved before this
+ * shipped. So an empty filter stays empty, and this dimension is a pure opt-in.
+ */
+export const ARCHIVED_OPTIONS = [
+	{ value: 'include', label: t('kanso', 'Include archived') },
+	{ value: 'only', label: t('kanso', 'Only archived') },
+]
+
+/**
  * A fresh, empty filter state. Sets for the multi-select dimensions, scalars for
  * the single-select ones.
  */
@@ -133,6 +159,7 @@ export function createFilterState() {
 		startDate: null,
 		subcard: null,
 		comments: null,
+		archived: null,
 	})
 }
 
@@ -159,6 +186,7 @@ export function serializeFilter(s) {
 	if (s.startDate) out.startDate = s.startDate
 	if (s.subcard) out.subcard = s.subcard
 	if (s.comments) out.comments = s.comments
+	if (s.archived) out.archived = s.archived
 	return out
 }
 
@@ -185,6 +213,7 @@ export function applyFilter(state, obj) {
 	state.startDate = null
 	state.subcard = null
 	state.comments = null
+	state.archived = null
 	if (!obj || typeof obj !== 'object') return
 	if (Array.isArray(obj.labels)) {
 		for (const id of obj.labels) {
@@ -234,6 +263,7 @@ export function applyFilter(state, obj) {
 	if (START_OPTIONS.some((o) => o.value === obj.startDate)) state.startDate = obj.startDate
 	if (SUBCARD_OPTIONS.some((o) => o.value === obj.subcard)) state.subcard = obj.subcard
 	if (COMMENTS_OPTIONS.some((o) => o.value === obj.comments)) state.comments = obj.comments
+	if (ARCHIVED_OPTIONS.some((o) => o.value === obj.archived)) state.archived = obj.archived
 }
 
 /**
@@ -262,6 +292,7 @@ export function filterToQuery(ser) {
 	if (ser.startDate) q.fsd = ser.startDate
 	if (ser.subcard) q.fsc = ser.subcard
 	if (ser.comments) q.fcm = ser.comments
+	if (ser.archived) q.far = ser.archived
 	return q
 }
 
@@ -290,6 +321,7 @@ export function queryToFilter(query) {
 	if (query.fsd != null) out.startDate = String(first(query.fsd))
 	if (query.fsc != null) out.subcard = String(first(query.fsc))
 	if (query.fcm != null) out.comments = String(first(query.fcm))
+	if (query.far != null) out.archived = String(first(query.far))
 	return out
 }
 
@@ -313,6 +345,7 @@ export function filterIsEmpty(ser) {
 		&& !ser.startDate
 		&& !ser.subcard
 		&& !ser.comments
+		&& !ser.archived
 }
 
 /**
@@ -341,6 +374,7 @@ export function makePredicate(s, now = Date.now()) {
 	const startDate = s.startDate
 	const subcard = s.subcard
 	const comments = s.comments
+	const archived = s.archived
 
 	// "This week" = now .. end of the 7th day ahead (inclusive), i.e. the next
 	// seven days. Overdue = strictly before now. Both compare against duedate.
@@ -462,6 +496,11 @@ export function makePredicate(s, now = Date.now()) {
 			if (comments === 'has' && !(n > 0)) return false
 			if (comments === 'none' && !(n === 0)) return false
 		}
+		// Archived (single-select opt-in): only 'only' constrains here.
+		// 'include' WIDENS, and widening is the caller's job — the baseline
+		// "no archived cards" exclusion lives OUTSIDE this predicate (see
+		// ARCHIVED_OPTIONS), so an unset dimension must leave every row alone.
+		if (archived === 'only' && !card.archived) return false
 		return true
 	}
 }
@@ -486,6 +525,7 @@ export function useFilterCount(s) {
 		+ (s.checklist ? 1 : 0)
 		+ (s.startDate ? 1 : 0)
 		+ (s.subcard ? 1 : 0)
-		+ (s.comments ? 1 : 0),
+		+ (s.comments ? 1 : 0)
+		+ (s.archived ? 1 : 0),
 	)
 }

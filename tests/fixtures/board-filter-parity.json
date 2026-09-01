@@ -43,7 +43,17 @@
     "matching every `??`-default case (assignees __none__, estimates __none__,",
     "reviews none, priority 0, due none, done open, checklist none, startDate",
     "none, subcard top_level, comments none) and must never appear under a",
-    "positive constraint."
+    "positive constraint.",
+    "",
+    "Card 10 is card 9 field-for-field EXCEPT `archived: true`, so it matches",
+    "exactly the cases card 9 matches on every other dimension - it changes no",
+    "dimension's meaning, only the archived one. Note it survives the EMPTY",
+    "filter: excluding archived cards is the baseline a surface applies OUTSIDE",
+    "the predicate (ViewService::findMine / ViewPage's filteredCards), never a",
+    "filter value, because a value would make an empty filter non-empty. So the",
+    "`archived` dimension has no 'not_archived' member: 'include' is a no-op",
+    "here (it only tells the CALLER to stop excluding) and 'only' is the one",
+    "value this predicate acts on."
   ],
   "now": 1767225600000,
   "cards": [
@@ -210,10 +220,31 @@
       "parentCardId": null,
       "childProgress": { "total": 0, "done": 0 },
       "commentCount": 0
+    },
+    {
+      "id": 10,
+      "title": "Archived: card 9 field-for-field, but archived",
+      "labelIds": [13],
+      "assigneeIds": ["erin"],
+      "priority": 2,
+      "type": "task",
+      "estimate": "5",
+      "owner": "erin",
+      "reviewState": "pending",
+      "duedate": "2026-01-09T00:00:00+00:00",
+      "startDate": null,
+      "doneAt": 0,
+      "waitingOnExternal": false,
+      "blocked": false,
+      "checklist": { "total": 0, "done": 0 },
+      "parentCardId": null,
+      "childProgress": { "total": 0, "done": 0 },
+      "commentCount": 0,
+      "archived": true
     }
   ],
   "cases": [
-    { "name": "empty filter keeps everything", "filter": {}, "expected": [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+    { "name": "empty filter keeps everything (the archived card 10 too - exclusion lives OUTSIDE the predicate)", "filter": {}, "expected": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
 
     { "name": "labels: OR within", "filter": { "labels": [11] }, "expected": [1, 3] },
     { "name": "labels: two selected", "filter": { "labels": [10, 12] }, "expected": [1, 4] },
@@ -223,7 +254,7 @@
     { "name": "assignees: __none__ sentinel", "filter": { "assignees": ["__none__"] }, "expected": [2, 8] },
     { "name": "assignees: sentinel OR uid", "filter": { "assignees": ["__none__", "dave"] }, "expected": [2, 5, 8] },
 
-    { "name": "priorities: 0 is a real value", "filter": { "priorities": [0, 2] }, "expected": [2, 5, 6, 7, 8, 9] },
+    { "name": "priorities: 0 is a real value", "filter": { "priorities": [0, 2] }, "expected": [2, 5, 6, 7, 8, 9, 10] },
     { "name": "priorities: high only", "filter": { "priorities": [3, 4] }, "expected": [1, 3] },
 
     { "name": "types: OR within, typeless never matches", "filter": { "types": ["bug", "chore"] }, "expected": [1, 4] },
@@ -235,7 +266,7 @@
     { "name": "owners: OR within", "filter": { "owners": ["alice", "dave"] }, "expected": [1, 4, 5] },
 
     { "name": "reviews: none sentinel", "filter": { "reviews": ["none"] }, "expected": [2, 5, 8] },
-    { "name": "reviews: real states", "filter": { "reviews": ["approved", "pending"] }, "expected": [1, 3, 6, 7, 9] },
+    { "name": "reviews: real states", "filter": { "reviews": ["approved", "pending"] }, "expected": [1, 3, 6, 7, 9, 10] },
     { "name": "reviews: changes requested", "filter": { "reviews": ["changes_requested"] }, "expected": [4] },
 
     { "name": "due: overdue", "filter": { "due": "overdue" }, "expected": [1] },
@@ -243,34 +274,38 @@
     { "name": "due: none", "filter": { "due": "none" }, "expected": [2, 5, 8] },
 
     { "name": "done: done", "filter": { "done": "done" }, "expected": [2] },
-    { "name": "done: open", "filter": { "done": "open" }, "expected": [1, 3, 4, 5, 6, 7, 8, 9] },
+    { "name": "done: open", "filter": { "done": "open" }, "expected": [1, 3, 4, 5, 6, 7, 8, 9, 10] },
 
     { "name": "waiting: waiting", "filter": { "waiting": "waiting" }, "expected": [1, 4] },
-    { "name": "waiting: not waiting", "filter": { "waiting": "not_waiting" }, "expected": [2, 3, 5, 6, 7, 8, 9] },
+    { "name": "waiting: not waiting", "filter": { "waiting": "not_waiting" }, "expected": [2, 3, 5, 6, 7, 8, 9, 10] },
 
     { "name": "blocked: blocked", "filter": { "blocked": "blocked" }, "expected": [1, 5] },
-    { "name": "blocked: not blocked", "filter": { "blocked": "not_blocked" }, "expected": [2, 3, 4, 6, 7, 8, 9] },
+    { "name": "blocked: not blocked", "filter": { "blocked": "not_blocked" }, "expected": [2, 3, 4, 6, 7, 8, 9, 10] },
 
     { "name": "checklist: has", "filter": { "checklist": "has" }, "expected": [1, 3, 4] },
     { "name": "checklist: incomplete", "filter": { "checklist": "incomplete" }, "expected": [1, 4] },
     { "name": "checklist: complete", "filter": { "checklist": "complete" }, "expected": [3] },
-    { "name": "checklist: none", "filter": { "checklist": "none" }, "expected": [2, 5, 6, 7, 8, 9] },
+    { "name": "checklist: none", "filter": { "checklist": "none" }, "expected": [2, 5, 6, 7, 8, 9, 10] },
 
     { "name": "startDate: started", "filter": { "startDate": "started" }, "expected": [1, 5, 6] },
     { "name": "startDate: upcoming", "filter": { "startDate": "upcoming" }, "expected": [3] },
-    { "name": "startDate: none", "filter": { "startDate": "none" }, "expected": [2, 4, 7, 8, 9] },
+    { "name": "startDate: none", "filter": { "startDate": "none" }, "expected": [2, 4, 7, 8, 9, 10] },
 
-    { "name": "subcard: top-level", "filter": { "subcard": "top_level" }, "expected": [1, 3, 5, 6, 7, 8, 9] },
+    { "name": "subcard: top-level", "filter": { "subcard": "top_level" }, "expected": [1, 3, 5, 6, 7, 8, 9, 10] },
     { "name": "subcard: parent (a card can be both)", "filter": { "subcard": "parent" }, "expected": [1, 4] },
     { "name": "subcard: child", "filter": { "subcard": "child" }, "expected": [2, 4] },
 
     { "name": "comments: has", "filter": { "comments": "has" }, "expected": [1, 3, 5] },
-    { "name": "comments: none", "filter": { "comments": "none" }, "expected": [2, 4, 6, 7, 8, 9] },
+    { "name": "comments: none", "filter": { "comments": "none" }, "expected": [2, 4, 6, 7, 8, 9, 10] },
+
+    { "name": "archived: include is a no-op for the predicate - it only tells the caller to stop excluding", "filter": { "archived": "include" }, "expected": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
+    { "name": "archived: only narrows to the archived rows", "filter": { "archived": "only" }, "expected": [10] },
+    { "name": "archived: only AND another dimension (card 9 is card 10 unarchived, so it must drop out)", "filter": { "archived": "only", "reviews": ["pending"] }, "expected": [10] },
 
     { "name": "AND across two dimensions", "filter": { "labels": [11], "done": "open" }, "expected": [1, 3] },
     { "name": "AND narrows to one", "filter": { "labels": [11], "owners": ["alice"] }, "expected": [1] },
     { "name": "AND across three dimensions", "filter": { "assignees": ["alice"], "due": "overdue", "blocked": "blocked" }, "expected": [1] },
     { "name": "AND with no survivors", "filter": { "types": ["bug"], "done": "done" }, "expected": [] },
-    { "name": "every dimension at once", "filter": { "labels": [10, 11], "assignees": ["alice"], "priorities": [3], "types": ["bug"], "estimates": ["3"], "owners": ["alice"], "reviews": ["pending"], "due": "overdue", "done": "open", "waiting": "waiting", "blocked": "blocked", "checklist": "incomplete", "startDate": "started", "subcard": "parent", "comments": "has" }, "expected": [1] }
+    { "name": "every dimension at once", "filter": { "labels": [10, 11], "assignees": ["alice"], "priorities": [3], "types": ["bug"], "estimates": ["3"], "owners": ["alice"], "reviews": ["pending"], "due": "overdue", "done": "open", "waiting": "waiting", "blocked": "blocked", "checklist": "incomplete", "startDate": "started", "subcard": "parent", "comments": "has", "archived": "include" }, "expected": [1] }
   ]
 }

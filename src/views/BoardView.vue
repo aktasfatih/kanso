@@ -1311,7 +1311,7 @@ async function handleDeleteSavedFilter(name) {
 // edit propagates exactly one hop and then settles. Only the filter keys (one
 // per filter dimension, matching filterToQuery / FILTER_QUERY_KEYS) are owned
 // here; other query params are preserved untouched.
-const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'ft', 'fe', 'fo', 'fr', 'fd', 'fs', 'fw', 'fb', 'fk', 'fsd', 'fsc', 'fcm']
+const FILTER_QUERY_KEYS = ['fl', 'fa', 'fp', 'ft', 'fe', 'fo', 'fr', 'fd', 'fs', 'fw', 'fb', 'fk', 'fsd', 'fsc', 'fcm', 'far']
 
 // Apply the URL's filter params onto the state (shared link / back-forward).
 function applyUrlToFilter() {

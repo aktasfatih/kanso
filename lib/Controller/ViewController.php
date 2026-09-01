@@ -230,7 +230,7 @@ class ViewController extends Controller {
 	 * The caller passes the View's saved sort, which is applied server-side BEFORE
 	 * that cap so a sorted View starts at the true first row, and the View's active
 	 * filter in the SAME flat short-key form the board's shareable filter links
-	 * already use (`filterToQuery()`: fl/fa/fp/ft/fe/fo/fr/fd/fs/fw/fb/fk/fsd/fsc/fcm).
+	 * already use (`filterToQuery()`: fl/fa/fp/ft/fe/fo/fr/fd/fs/fw/fb/fk/fsd/fsc/fcm/far).
 	 * The filter runs before the cap too (#9862) - the client still re-filters the
 	 * rows it receives, so this is a superset guard whose job is to make the cap
 	 * slice the matching set.
@@ -260,11 +260,13 @@ class ViewController extends Controller {
 		mixed $fsd = null,
 		mixed $fsc = null,
 		mixed $fcm = null,
+		mixed $far = null,
 	): JSONResponse {
 		$query = [
 			'fl' => $fl, 'fa' => $fa, 'fp' => $fp, 'ft' => $ft, 'fe' => $fe,
 			'fo' => $fo, 'fr' => $fr, 'fd' => $fd, 'fs' => $fs, 'fw' => $fw,
 			'fb' => $fb, 'fk' => $fk, 'fsd' => $fsd, 'fsc' => $fsc, 'fcm' => $fcm,
+			'far' => $far,
 		];
 		return $this->respond(function () use ($sortMode, $sortDir, $query): JSONResponse {
 			$sort = $this->normalizeSort(['mode' => $sortMode, 'dir' => $sortDir]);
