@@ -10,6 +10,7 @@
 	<summary>Fast open-source kanban boards with reviews, projects and realtime sync</summary>
 	<summary lang="de">Schnelle Open-Source-Kanban-Boards mit Reviews, Projekten und Echtzeit-Synchronisierung</summary>
 	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
+	<summary lang="tr">İncelemeler, projeler ve gerçek zamanlı eşitleme sunan hızlı, açık kaynaklı kanban panoları</summary>
 	<description><![CDATA[
 Kanso is a kanban board app for Nextcloud, built for speed. Boards, stacks and
 cards with instant drag & drop, optimistic updates and payloads sized for large
@@ -75,6 +76,28 @@ Cartes récurrentes selon des règles RRULE, archivage automatique, limites de
 travail en cours et rôles de colonne, une palette de commandes avec
 recherche plein texte, corbeille avec restauration, liens GitHub et webhook,
 et import depuis Deck en un clic.
+	]]></description>
+	<description lang="tr"><![CDATA[
+Kanso, Nextcloud için hız odaklı geliştirilmiş bir kanban pano uygulamasıdır.
+Anında sürükle & bırak, iyimser güncellemeler ve büyük panolara (2.000+ kart)
+göre boyutlanmış veri yükleriyle panolar, sütunlar ve kartlar. notify_push ile
+gerçek zamanlı güncellemeler, yoklamaya geri düşme seçeneğiyle.
+
+Markdown, etiketler, bitiş tarihleri, atananlar, öncelikler, kontrol
+listeleri, üst/alt kartlar ve @bahsetme ile izleyicileri destekleyen konu
+başlıklı yorumlarla zengin kartlar. Kullanıcı ve grup bazında erişim
+denetimiyle pano paylaşımı.
+
+Bir inceleme akışı (inceleme isteme, onaylama / değişiklik isteme,
+özelleştirilebilir inceleme türleri ve isteğe bağlı bir tamamlanma kapısı).
+Panolar arası bir "İşlerim" merkezi (görevlerim, incelemeler, gelen kutusu),
+panolar arası Projeler ve pano ile proje bazında analitik (hız, döngü süresi,
+iş çıktısı). Pano, Liste ve Zaman Çizelgesi (Gantt) görünümleri.
+
+RRULE zamanlamalarına göre yinelenen kartlar, otomatik arşivleme kuralları,
+WIP sınırları ve sütun rolleri, tam metin aramalı bir komut paleti, geri
+yükleme destekli çöp kutusu, GitHub bağlantıları ve webhook ile tek tıkla
+Deck'ten içe aktarma.
 	]]></description>
 	<version>0.20.0</version>
 	<licence>agpl</licence>
