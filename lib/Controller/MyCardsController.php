@@ -31,6 +31,12 @@ class MyCardsController extends Controller {
 	/** The row cap the feed was built with. */
 	public const HEADER_LIMIT = 'X-Kanso-Limit';
 
+	/**
+	 * How many days back the recently-done feed reaches, so the section can
+	 * say what it covers instead of quietly hiding older completed work.
+	 */
+	public const HEADER_DONE_WINDOW_DAYS = 'X-Kanso-Done-Window-Days';
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -51,6 +57,26 @@ class MyCardsController extends Controller {
 			$response = new JSONResponse($feed['cards']);
 			$response->addHeader(self::HEADER_LIMIT, (string)$feed['limit']);
 			$response->addHeader(self::HEADER_TRUNCATED, $feed['truncated'] ? '1' : '0');
+			return $response;
+		});
+	}
+
+	/**
+	 * The opt-in "recently done" half of the feed (#10061).
+	 *
+	 * A SEPARATE endpoint on purpose: the default My Tasks load must issue no
+	 * extra query, so nothing here runs until the user expands the section.
+	 * Same body contract as index() - a plain card list, with the bounds
+	 * reported in headers.
+	 */
+	#[NoAdminRequired]
+	public function recentlyDone(): JSONResponse {
+		return $this->respond(function (): JSONResponse {
+			$feed = $this->myCardsService->findMineRecentlyDone($this->currentUserId());
+			$response = new JSONResponse($feed['cards']);
+			$response->addHeader(self::HEADER_LIMIT, (string)$feed['limit']);
+			$response->addHeader(self::HEADER_TRUNCATED, $feed['truncated'] ? '1' : '0');
+			$response->addHeader(self::HEADER_DONE_WINDOW_DAYS, (string)$feed['windowDays']);
 			return $response;
 		});
 	}

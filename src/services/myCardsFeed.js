@@ -74,3 +74,37 @@ export function myCardsFeed(data) {
 export function formatTaskBadge(count, truncated) {
 	return truncated ? `${count}+` : String(count)
 }
+
+/**
+ * How many days back the recently-done feed reaches. The window is a server
+ * constant, reported so the section can name what it covers instead of
+ * silently hiding older completed work.
+ */
+export const MY_CARDS_DONE_WINDOW_HEADER = 'x-kanso-done-window-days'
+
+/**
+ * The recently-done feed (#10061): the same {cards, truncated, limit} shape as
+ * the open feed, plus the recency window it was built with.
+ *
+ * @param {Array|undefined} data - the response body (the card list)
+ * @param {object|undefined} headers - the response headers
+ * @return {{cards: Array, truncated: boolean, limit: number, windowDays: number}} the feed
+ */
+export function toRecentlyDoneFeed(data, headers) {
+	return {
+		...toMyCardsFeed(data, headers),
+		windowDays: Number(headerValue(headers, MY_CARDS_DONE_WINDOW_HEADER)) || 0,
+	}
+}
+
+/**
+ * Normalise whatever the cache holds for the recently-done feed — `undefined`
+ * until the user expands the section, since nothing is fetched before that.
+ *
+ * @param {object|Array|undefined} data - cached query data
+ * @return {{cards: Array, truncated: boolean, limit: number, windowDays: number}} the feed
+ */
+export function recentlyDoneFeed(data) {
+	const feed = myCardsFeed(data)
+	return { ...feed, windowDays: Number(feed.windowDays) || 0 }
+}

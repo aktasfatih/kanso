@@ -13,8 +13,11 @@ import {
 	toMyCardsFeed,
 	myCardsFeed,
 	formatTaskBadge,
+	toRecentlyDoneFeed,
+	recentlyDoneFeed,
 	MY_CARDS_TRUNCATED_HEADER,
 	MY_CARDS_LIMIT_HEADER,
+	MY_CARDS_DONE_WINDOW_HEADER,
 } from '../../src/services/myCardsFeed.js'
 
 const cards = [{ id: 1 }, { id: 2 }]
@@ -65,4 +68,48 @@ test('the nav badge says "200+" for a capped feed, and the exact count otherwise
 	assert.equal(formatTaskBadge(200, true), '200+')
 	assert.equal(formatTaskBadge(3, false), '3')
 	assert.equal(formatTaskBadge(0, false), '0')
+})
+
+// ---- recently done: the opt-in second feed (#10061) ------------------------
+
+test('the recently-done response carries both of its bounds', () => {
+	// The section is bounded on two axes and must be able to say so: a
+	// fortnight's worth capped at 50 rows is not "everything I finished".
+	const feed = toRecentlyDoneFeed(cards, {
+		[MY_CARDS_TRUNCATED_HEADER]: '1',
+		[MY_CARDS_LIMIT_HEADER]: '50',
+		[MY_CARDS_DONE_WINDOW_HEADER]: '14',
+	})
+	assert.equal(feed.truncated, true)
+	assert.equal(feed.limit, 50)
+	assert.equal(feed.windowDays, 14)
+	assert.deepEqual(feed.cards, cards)
+})
+
+test('a complete recently-done response still reports its window', () => {
+	const feed = toRecentlyDoneFeed(cards, {
+		[MY_CARDS_TRUNCATED_HEADER]: '0',
+		[MY_CARDS_LIMIT_HEADER]: '50',
+		[MY_CARDS_DONE_WINDOW_HEADER]: '14',
+	})
+	assert.equal(feed.truncated, false)
+	assert.equal(feed.windowDays, 14)
+})
+
+test('a missing window header degrades to 0, so the caption is suppressed rather than wrong', () => {
+	// A proxy that strips unknown headers must not make the page claim a
+	// window it did not get told about.
+	const feed = toRecentlyDoneFeed(cards, {})
+	assert.equal(feed.windowDays, 0)
+	assert.equal(feed.truncated, false)
+})
+
+test('the recently-done cache reads as empty until the section is expanded', () => {
+	// Nothing is fetched before the user asks, so `undefined` is the normal
+	// state of this query — not an error state.
+	assert.deepEqual(recentlyDoneFeed(undefined), { cards: [], truncated: false, limit: 0, windowDays: 0 })
+	assert.deepEqual(
+		recentlyDoneFeed({ cards, truncated: true, limit: 50, windowDays: 14 }),
+		{ cards, truncated: true, limit: 50, windowDays: 14 },
+	)
 })

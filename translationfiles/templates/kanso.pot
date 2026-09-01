@@ -2281,6 +2281,10 @@ msgstr ""
 msgid "Failed to load projects. Please try again."
 msgstr ""
 
+#: src/views/MyCardsView.vue
+msgid "Failed to load recently done tasks. Please try again."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load recur rules."
 msgstr ""
@@ -3047,6 +3051,10 @@ msgstr ""
 msgid "Loading projects…"
 msgstr ""
 
+#: src/views/MyCardsView.vue
+msgid "Loading recently done tasks…"
+msgstr ""
+
 #: src/views/MyReviewsView.vue
 msgid "Loading reviews…"
 msgstr ""
@@ -3606,6 +3614,10 @@ msgid "Note (optional)"
 msgstr ""
 
 #: src/views/MyCardsView.vue
+msgid "Nothing here yet — tasks you complete will show up in this section."
+msgstr ""
+
+#: src/views/MyCardsView.vue
 msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
 msgstr ""
 
@@ -3932,6 +3944,10 @@ msgstr ""
 
 #: src/views/PublicBoard.vue
 msgid "Read-only"
+msgstr ""
+
+#: src/views/MyCardsView.vue
+msgid "Recently done"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4453,6 +4469,10 @@ msgstr ""
 msgid "Show watchers"
 msgstr ""
 
+#: src/views/MyCardsView.vue
+msgid "Showing the {count} most recent tasks you completed in the last {days} days."
+msgstr ""
+
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
 msgstr ""
@@ -4630,6 +4650,10 @@ msgstr ""
 
 #: src/composables/useCardType.js
 msgid "Task"
+msgstr ""
+
+#: src/views/MyCardsView.vue
+msgid "Tasks you completed in the last {days} days."
 msgstr ""
 
 #: src/components/CardDetail.vue

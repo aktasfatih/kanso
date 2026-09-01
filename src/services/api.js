@@ -3,7 +3,7 @@
 
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
-import { toMyCardsFeed } from './myCardsFeed.js'
+import { toMyCardsFeed, toRecentlyDoneFeed } from './myCardsFeed.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
 
@@ -481,6 +481,13 @@ export const getInbox = () =>
 // resolves to a { cards, truncated, limit } feed rather than a bare array.
 export const getMyCards = () =>
 	axios.get(url('/api/my-cards')).then((r) => toMyCardsFeed(r.data, r.headers))
+
+// Recently completed cards assigned to me (#10061). NEVER called on page load:
+// the completed set is unbounded over a board's lifetime, so it is bounded
+// server-side by a recency window plus a row cap and requested only when the
+// user expands the "Recently done" section.
+export const getMyRecentlyDoneCards = () =>
+	axios.get(url('/api/my-cards/recently-done')).then((r) => toRecentlyDoneFeed(r.data, r.headers))
 
 // Cross-board saved "Views" (#3815). CRUD lives in NC user-config (opaque
 // filter blob); the server stays filter-agnostic. create is upsert-by-name.

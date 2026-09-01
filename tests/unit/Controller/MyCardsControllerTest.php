@@ -96,4 +96,67 @@ class MyCardsControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
+
+	// ---- recently done: the opt-in second feed (#10061) --------------------
+
+	public function testTheDefaultFeedNeverQueriesTheRecentlyDoneOne(): void {
+		// The whole point of the second endpoint: GET /api/my-cards must issue
+		// no additional query. Have index() reach for completed work and this
+		// goes red.
+		$this->myCardsService->expects(self::never())->method('findMineRecentlyDone');
+		$this->myCardsService->method('findMine')->willReturn([
+			'cards' => [], 'truncated' => false, 'limit' => 200,
+		]);
+
+		self::assertSame(Http::STATUS_OK, $this->controller->index()->getStatus());
+	}
+
+	public function testRecentlyDoneReturnsTheCardListWithItsBoundsInHeaders(): void {
+		$cards = [['id' => 7, 'boardId' => 3, 'title' => 'Shipped it', 'doneAt' => 1_700_000_000]];
+		$this->myCardsService->expects(self::once())
+			->method('findMineRecentlyDone')
+			->with('alice')
+			->willReturn([
+				'cards' => $cards,
+				'truncated' => false,
+				'limit' => 50,
+				'windowDays' => 14,
+			]);
+
+		$response = $this->controller->recentlyDone();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		// Same body contract as the open feed: a bare list, not an envelope.
+		self::assertSame($cards, $response->getData());
+		self::assertSame('50', $this->headersOf($response)[MyCardsController::HEADER_LIMIT]);
+		self::assertSame('0', $this->headersOf($response)[MyCardsController::HEADER_TRUNCATED]);
+		self::assertSame('14', $this->headersOf($response)[MyCardsController::HEADER_DONE_WINDOW_DAYS]);
+	}
+
+	public function testRecentlyDoneReportsItsRowCapWhenHit(): void {
+		// Bounded on both axes, and neither bound is silent - otherwise a
+		// fortnight's 50-row slice reads as everything the user finished.
+		$this->myCardsService->method('findMineRecentlyDone')->willReturn([
+			'cards' => array_fill(0, 50, ['id' => 1]),
+			'truncated' => true,
+			'limit' => 50,
+			'windowDays' => 14,
+		]);
+
+		$response = $this->controller->recentlyDone();
+
+		self::assertSame('1', $this->headersOf($response)[MyCardsController::HEADER_TRUNCATED]);
+		self::assertSame('14', $this->headersOf($response)[MyCardsController::HEADER_DONE_WINDOW_DAYS]);
+	}
+
+	public function testRecentlyDoneWithNoSessionIsDeniedWithoutQuerying(): void {
+		$session = $this->createMock(IUserSession::class);
+		$session->method('getUser')->willReturn(null);
+		$service = $this->createMock(MyCardsService::class);
+		$service->expects(self::never())->method('findMineRecentlyDone');
+
+		$response = (new MyCardsController('kanso', $this->request, $session, $service))->recentlyDone();
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
 }
