@@ -42,13 +42,23 @@ locale used only for date formatting).
    node scripts/l10n.mjs init <lang>     # e.g. node scripts/l10n.mjs init fr
    ```
 
-   For an existing language, merge new template strings into the `.po` with
-   [`msgmerge`](https://www.gnu.org/software/gettext/) if you have gettext
-   installed:
+   `init` stamps the right `Plural-Forms` header for the language and writes
+   exactly that many `msgstr[n]` slots — one for Chinese, two for German or
+   French, three for Polish or Russian. A language code the tool doesn't know
+   gets the two-form default; correct its `Plural-Forms` header by hand and then
+   run the sync below to re-slot the plural entries.
+
+   For an existing language, merge new template strings into the `.po`:
 
    ```bash
-   msgmerge --update translationfiles/fr/kanso.po translationfiles/templates/kanso.pot
+   npm run l10n:sync                     # every language
+   npm run l10n:sync fr                  # just one
    ```
+
+   Sync adds new strings with an empty `msgstr`, refreshes the `#:` source
+   references, drops strings the app no longer has, and never touches an
+   existing translation or the catalogue's `Plural-Forms` header. No `gettext`
+   installation needed.
 
 3. Fill in the `msgstr` values. Edit `translationfiles/<lang>/kanso.po` in a text
    editor or a PO editor such as [Poedit](https://poedit.net/). Leave a `msgstr`
@@ -56,8 +66,10 @@ locale used only for date formatting).
 
    **Keep placeholders exactly as they are** — `{count}`, `{name}`, `{card}`,
    `%n`, `%1$s` — you may move them within a sentence but never rename or
-   translate them. Plural entries have two forms (`msgstr[0]` singular,
-   `msgstr[1]` plural).
+   translate them. Fill in every `msgstr[n]` slot a plural entry has — how many
+   there are is your language's business (`msgstr[0]` only for Chinese,
+   `msgstr[0..1]` for German or French, `msgstr[0..2]` for Polish or Russian),
+   and `init` already wrote the right number.
 
 4. Compile and check it in:
 
