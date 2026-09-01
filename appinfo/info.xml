@@ -13,6 +13,7 @@
 	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
 	<summary lang="it">Bacheche kanban veloci e open source, con revisioni, progetti e sincronizzazione in tempo reale</summary>
 	<summary lang="nl">Snelle open-source kanbanborden met reviews, projecten en realtime synchronisatie</summary>
+	<summary lang="pt-br">Quadros kanban rápidos e de código aberto, com revisões, projetos e sincronização em tempo real</summary>
 	<summary lang="tr">İncelemeler, projeler ve gerçek zamanlı eşitleme sunan hızlı, açık kaynaklı kanban panoları</summary>
 	<description><![CDATA[
 Kanso is a kanban board app for Nextcloud, built for speed. Boards, stacks and
@@ -150,6 +151,30 @@ Terugkerende kaarten volgens RRULE-schema's, regels voor automatisch
 archiveren, WIP-limieten en kolomrollen, een opdrachtenpalet met
 volledige-tekstzoeken, een prullenbak met herstel, GitHub-koppelingen en
 webhook, en importeren uit Deck met één klik.
+	]]></description>
+	<description lang="pt-br"><![CDATA[
+O Kanso é um aplicativo de quadros kanban para Nextcloud, feito para ser
+rápido. Quadros, colunas e cartões com arrastar e soltar instantâneo,
+atualizações otimistas e respostas dimensionadas para quadros grandes (mais de
+2.000 cartões). Atualizações em tempo real via notify_push, com consulta
+periódica como alternativa.
+
+Cartões completos com markdown, etiquetas, datas de vencimento, responsáveis,
+prioridades, checklists, cartões pai/filho e comentários em conversas com
+menções @ e observadores. Compartilhamento de quadros com controle de acesso
+por usuário e por grupo.
+
+Um fluxo de revisão (solicitar revisão, aprovar / solicitar alterações, tipos
+de revisão personalizáveis e uma trava opcional de conclusão). Um espaço Meu
+trabalho que abrange todos os quadros (minhas tarefas, revisões, caixa de
+entrada), Projetos entre quadros e análises por quadro e por projeto
+(velocidade, tempo de ciclo, vazão). Visualizações em quadro, lista e linha do
+tempo (Gantt).
+
+Cartões recorrentes com agendamentos RRULE, regras de arquivamento automático,
+limites de WIP e papéis de coluna, uma paleta de comandos com busca de texto
+completo, lixeira com restauração, links e webhook do GitHub e importação do
+Deck com um clique.
 	]]></description>
 	<description lang="tr"><![CDATA[
 Kanso, Nextcloud için hız odaklı geliştirilmiş bir kanban pano uygulamasıdır.
