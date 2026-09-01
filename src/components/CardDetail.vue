@@ -449,13 +449,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ t('kanso', 'Remind me at a custom time…') }}
 							</NcActionButton>
 							<NcActionSeparator />
-							<NcActionButton :close-after-click="true" @click="handleArchiveToggle">
-								<template #icon>
-									<ArchiveArrowDownIcon v-if="!cardData.archived" :size="20" />
-									<ArchiveArrowUpIcon v-else :size="20" />
-								</template>
-								{{ cardData.archived ? t('kanso', 'Unarchive') : t('kanso', 'Archive') }}
-							</NcActionButton>
+							<!-- Card state flags (#10063). A checkbox, not a verb: the label is
+							     stable and the box shows what IS true. The old control flipped its
+							     own label with the state, so you had to infer the state from which
+							     action you were offered. Bound straight to cardData.archived, so a
+							     change made anywhere else (the board, the archived page, another
+							     session's delta) reflects here without reopening the card. Further
+							     flags belong in this group, one checkbox each. -->
+							<NcActionCheckbox
+								data-test="card-archived-toggle"
+								:model-value="!!cardData.archived"
+								@update:model-value="handleArchiveToggle">
+								{{ t('kanso', 'Archived') }}
+							</NcActionCheckbox>
 							<NcActionButton :close-after-click="true" @click="confirmDeleteCard">
 								<template #icon>
 									<TrashCanIcon :size="20" />
@@ -2282,6 +2288,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -2297,8 +2304,6 @@ import TransferIcon from 'vue-material-design-icons/Transfer.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
-import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
-import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import HistoryIcon from 'vue-material-design-icons/History.vue'
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
@@ -2576,9 +2581,15 @@ const deleteGuardButtons = [
 	{ label: t('kanso', 'Delete and stop recurrence'), type: 'error', callback: () => { handleDeleteCardAndRule() } },
 ]
 
-async function handleArchiveToggle() {
+/**
+ * Archive or unarchive the card. The ⋯ menu's "Archived" checkbox (#10063) passes
+ * its new state, so the desired value is explicit rather than inferred; anything
+ * else falls back to flipping the current one.
+ * @param {boolean} [next] the desired archived state
+ */
+async function handleArchiveToggle(next) {
 	actionError.value = ''
-	const archived = !cardData.value?.archived
+	const archived = typeof next === 'boolean' ? next : !cardData.value?.archived
 	try {
 		await setArchived.mutateAsync({ archived })
 		// On archive, close the modal so the card visually leaves the board columns.
