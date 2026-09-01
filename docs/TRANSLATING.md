@@ -89,9 +89,27 @@ browser profile) picks up the new `l10n/<lang>.js`.
 ## Notes for developers
 
 - New source strings must be wrapped in `t('kanso', …)` / `$l->t(…)` to be
-  translatable, then picked up by `npm run l10n:extract`. CI fails if the
-  extracted template or the compiled bundles are stale (the `build-frontend`
-  job re-runs extract + compile and diffs), so commit the regenerated files.
+  translatable. Adding one means regenerating three things, in this order:
+
+  ```bash
+  npm run l10n:extract        # sources      → translationfiles/templates/kanso.pot
+  npm run l10n:sync           # the template → every translationfiles/<lang>/kanso.po
+  npm run l10n:compile        # the .po files → l10n/<lang>.{js,json}
+  ```
+
+  Commit all of it. `npm run l10n:check` runs exactly that sequence and then
+  `git diff --exit-code`s the result — it's the same command the `build-frontend`
+  job runs, so if it's clean locally, that CI step is green.
+
+  **Don't skip the sync step.** `extract` only refreshes the template; nothing
+  else copies a new string into the ten catalogues. Skip it and the template
+  looks current, `compile` has nothing new to emit, and the string silently falls
+  back to English in every language.
+
+  `sync` adds the new msgids with an **empty** `msgstr`, and that's a finished
+  state as far as CI is concerned — you don't have to translate your string into
+  ten languages to merge it. The check asks only that the catalogues know the
+  string exists; an empty `msgstr` renders the English source (see step 3 above).
 - CI also runs `npm run l10n:lint` on every `translationfiles/<lang>/kanso.po`:
   it rejects malformed PO syntax and a `Plural-Forms` header that doesn't match
   the `msgstr[n]` forms actually supplied, and — the main point — diffs the
