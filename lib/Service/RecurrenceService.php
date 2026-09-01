@@ -757,6 +757,10 @@ class RecurrenceService {
 		);
 
 		$card->setDoneAt(0);
+		// Clear started_at too: status is the (started_at, done_at) PAIR, so leaving
+		// started_at stamped made a freshly reset occurrence read "In progress"
+		// forever - it had never been started, only its predecessor had.
+		$card->setStartedAt(0);
 		$card->setArchived(false);
 		// Slide this card's OWN Start→End window forward to the occurrence (the reset
 		// card is its own template). $card still carries its pre-reset dates here, so

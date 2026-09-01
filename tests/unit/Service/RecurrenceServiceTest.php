@@ -811,6 +811,36 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(1, $rule->getOccurrencesSpawned());
 	}
 
+	public function testSpawnResetClearsStartedAtSoTheCardIsNotStuckInProgress(): void {
+		// A card's status is the (started_at, done_at) PAIR. The reset cleared only
+		// done_at, so the returning occurrence read "In progress" from the moment it
+		// came back - forever, and for every later occurrence - even though nobody
+		// had started it. Only its predecessor had.
+		$rule = $this->rule(mode: RecurRule::MODE_RESET, nextOccurrenceAt: self::NOW);
+		$this->cardMapper->method('findLastInStack')->with(5)->willReturn(null);
+
+		$moved = $this->templateCard();
+		$moved->setStackId(5);
+		$moved->setDoneAt(self::NOW);
+		$moved->setStartedAt(self::NOW - 7 * 86400); // started during the last cycle
+		$this->cardService->expects(self::once())
+			->method('move')
+			->with(10, 5, null, 'alice')
+			->willReturn($moved);
+
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(static function (Card $c): Card {
+				self::assertSame(0, $c->getDoneAt());
+				self::assertSame(0, $c->getStartedAt(), 'the reset occurrence has not been started');
+				return $c;
+			});
+
+		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		$this->service->spawn($rule);
+	}
+
 	// ---- skip_while_open --------------------------------------------------
 
 	public function testSpawnCloneSkipsWhenPreviousCardStillOpen(): void {

@@ -78,4 +78,42 @@ test.describe('Project analytics — cross-board', () => {
 		// Points are never summed across mixed scales.
 		expect(stats.velocity.pointsPerWeek).toBeNull()
 	})
+
+	// #10070 — the project card set is resolved by ONE query that both the card
+	// list and the stats consume, so anything it lets through shows up as a
+	// project metric. It filtered deleted cards only, while every board-side
+	// query also drops archived and template cards: an archived card counted as
+	// outstanding work, and a template counted as a card at all. Both are now
+	// excluded, so the project's numbers agree with the board's over the same
+	// cards.
+	test('archived and template cards are excluded from the project card set and its stats', async () => {
+		const board = await api.get(`/boards/${state.boardA}`)
+		const stackId = board.stacks[0].id
+
+		const archived = await api.post('/cards', { stackId, title: 'Archived stats task' })
+		const template = await api.post('/cards', { stackId, title: 'Template stats task' })
+		await api.put(`/projects/${state.projectId}/cards/${archived.id}`)
+		await api.put(`/projects/${state.projectId}/cards/${template.id}`)
+
+		// Both are collected into the project while still live: the project sees
+		// four cards, exactly as the board does.
+		expect((await api.get(`/projects/${state.projectId}/cards`)).length).toBe(4)
+		expect((await api.get(`/projects/${state.projectId}/stats`)).cardCount).toBe(4)
+
+		await api.patch(`/cards/${archived.id}`, { archived: true })
+		await api.put(`/cards/${template.id}/template`, { isTemplate: true })
+
+		// The board's own open card set drops both...
+		const after = await api.get(`/boards/${state.boardA}`)
+		const boardOpen = after.cards.filter((c) => !c.archived).map((c) => c.id)
+		expect(boardOpen).not.toContain(archived.id)
+		expect(boardOpen).not.toContain(template.id)
+
+		// ...and so does the project's, so the two counts agree again.
+		const cards = await api.get(`/projects/${state.projectId}/cards`)
+		expect(cards.map((c) => c.id)).not.toContain(archived.id)
+		expect(cards.map((c) => c.id)).not.toContain(template.id)
+		expect(cards.length).toBe(2)
+		expect((await api.get(`/projects/${state.projectId}/stats`)).cardCount).toBe(2)
+	})
 })

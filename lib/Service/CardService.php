@@ -925,8 +925,11 @@ class CardService {
 	/**
 	 * Updates the given fields (null = leave unchanged). An empty duedate
 	 * string clears the due date; an empty description string clears the
-	 * description. done=true stamps done_at only once (idempotent),
-	 * done=false clears it. Moving the due date re-arms the due-date reminders
+	 * description. $done is an INPUT ALIAS for $status (there is no done column):
+	 * true means 'done', false means 'not_started', and an explicit $status wins
+	 * when both are sent - so the bulk action bar, the `d` shortcut and API
+	 * clients all take the one column-aware, review-gated status path (#10070).
+	 * Moving the due date re-arms the due-date reminders
 	 * (#3545) by clearing their "already sent" markers; $dueReminderDayBefore
 	 * toggles the optional "1 day before" reminder. An empty $coverColor string
 	 * clears the cover colour; a non-empty one must be a bare 6-hex value (#3549).
@@ -949,7 +952,7 @@ class CardService {
 	 * it is correctly refused afterwards.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
-	 * @throws NotPermittedException if the user may not edit the board
+	 * @throws NotPermittedException if the user may not edit the board, or the review gate blocks completion while the card has unapproved reviews
 	 * @throws InvalidInputException on invalid title, duedate, cover colour or type
 	 * @throws DescriptionConflictException if the description write is based on a stale version
 	 */
@@ -1098,14 +1101,17 @@ class CardService {
 			&& $windowEnd->getTimestamp() < $windowStart->getTimestamp()) {
 			throw new InvalidInputException('The due date cannot be before the start date');
 		}
-		if ($done !== null) {
-			if ($done) {
-				if ($card->getDoneAt() === 0) {
-					$card->setDoneAt(time());
-				}
-			} else {
-				$card->setDoneAt(0);
-			}
+		// `done` is an INPUT ALIAS for `status`, resolved before anything reads
+		// either (#10070). There is no done column - "done" is just the done_at
+		// timestamp, i.e. a status like any other - so a second, parallel write
+		// path for it bought nothing but a hole: `done: true` used to stamp
+		// done_at inline here and reach the done state without ever passing the
+		// review gate or the workflow column mapping, while the identical intent
+		// expressed as `status: 'done'` did both. Collapsing them puts the bulk
+		// action bar, the `d` shortcut and every API client on the single gated,
+		// column-aware path. An explicit $status wins when a caller sends both.
+		if ($done !== null && $status === null) {
+			$status = $done ? 'done' : 'not_started';
 		}
 		if ($archived !== null) {
 			$card->setArchived($archived);
@@ -1130,8 +1136,10 @@ class CardService {
 		// Status was the ONLY thing supplied and it maps to a workflow column: hand
 		// straight off to move(), which stamps the status from the target column's
 		// role and writes a single MOVE row - no redundant status-only UPDATE row.
+		// $done is deliberately absent: it was folded into $status above, so a
+		// `done`-only save is a status-only save and takes the move() fast path.
 		$otherFieldSupplied = $title !== null || $description !== null || $duedate !== null
-			|| $done !== null || $archived !== null || $priority !== null || $startDate !== null
+			|| $archived !== null || $priority !== null || $startDate !== null
 			|| $estimate !== null || $allDay !== null || $dueReminderDayBefore !== null
 			|| $coverColor !== null || $type !== null || $visibility !== null;
 		if ($statusMoveTarget !== null && !$otherFieldSupplied) {
@@ -1331,7 +1339,7 @@ class CardService {
 	 * is surfaced rather than persisting a duplicate key.
 	 *
 	 * @throws DoesNotExistException if the card, its board or the target stack does not exist or is deleted
-	 * @throws NotPermittedException if the user may not edit the board, or the review gate blocks a review-role → done-role move with unapproved reviews
+	 * @throws NotPermittedException if the user may not edit the board, or the review gate blocks a move into a done-role stack while the card has unapproved reviews
 	 * @throws InvalidInputException if the target stack is on another board or $afterCardId is unusable
 	 * @throws \OverflowException if the new sort key would overflow (stack needs a rebalance) or keeps colliding after one retry
 	 */
@@ -1352,15 +1360,20 @@ class CardService {
 			? $targetStack
 			: $this->stackMapper->find($card->getStackId());
 
-		// Review gate: a card leaving a review-role stack for a done-role stack
-		// may not be marked done while any requested review is still unapproved.
-		// A board with no review-role stack never trips this - the gate is
-		// naturally opt-in via stack roles. Pure precondition, checked once
+		// Review gate: a card may not be stamped done while any requested review is
+		// still unapproved. The condition is the CARD's review state plus the
+		// target's role - deliberately NOT the source role (#10070). Keying it on a
+		// review→done role PAIR made the gate launderable by an extra hop: Review →
+		// any role-less column → Done, two ordinary drags, defeated it because the
+		// second hop's source carries ROLE_NONE. Role-less columns are the default
+		// on every fresh and imported board, so such a column is nearly always at
+		// hand. An already-done card is exempt: this move does not complete it, it
+		// only relocates a card that already passed the gate. Reviews are opt-in per
+		// card, so a card nobody requested a review on never trips this and a board
+		// that does not use reviews is untouched. Pure precondition, checked once
 		// before the write/retry loop so it fails fast without a DB write.
-		if ($sourceStack->getRole() === Stack::ROLE_REVIEW
-			&& $targetStack->getRole() === Stack::ROLE_DONE
-			&& $this->cardReviewMapper->hasUnapprovedReviews($id)) {
-			throw new NotPermittedException('All requested reviews must be approved before this card can be marked done');
+		if ($targetStack->getRole() === Stack::ROLE_DONE && ($card->getDoneAt() ?? 0) === 0) {
+			$this->assertReviewsApproved($id);
 		}
 
 		for ($attempt = 0; ; $attempt++) {
@@ -1643,13 +1656,20 @@ class CardService {
 	 * one place a card can be moved BACKWARD (e.g. Done → In progress), unlike
 	 * the forward-only move automation.
 	 *
+	 * This is the timestamp-only arm of a status change - it runs when the board
+	 * maps no column to the target role, so {@see self::move()} (and with it the
+	 * review gate) is never reached. Completing here therefore consults the gate
+	 * itself, or a board with no Done column would be a free bypass (#10070).
+	 *
 	 * @throws InvalidInputException on an unknown status
+	 * @throws NotPermittedException if the review gate blocks completion
 	 */
 	private function applyStatus(Card $card, string $status): void {
 		$now = time();
 		switch ($status) {
 			case 'done':
 				if ($card->getDoneAt() === 0) {
+					$this->assertReviewsApproved((int)$card->getId());
 					$card->setDoneAt($now);
 				}
 				break;
@@ -1724,6 +1744,25 @@ class CardService {
 	}
 
 	/**
+	 * The review gate, in one place: a card may not be stamped done while any
+	 * review requested on it is still unapproved. EVERY route into the done state
+	 * consults this - the move into a done-role column, the status control and its
+	 * `done` alias when the board maps no done column, and (quietly) the parent
+	 * auto-complete - so what decides is the card's review state, never the shape
+	 * of one particular transition. A card with no review rows, or one whose
+	 * reviews are all approved, passes: the gate stays opt-in per card, and a
+	 * board that does not use reviews never notices it.
+	 *
+	 * @throws NotPermittedException if any requested review is still unapproved
+	 * @throws \OCP\DB\Exception
+	 */
+	private function assertReviewsApproved(int $cardId): void {
+		if ($this->cardReviewMapper->hasUnapprovedReviews($cardId)) {
+			throw new NotPermittedException('All requested reviews must be approved before this card can be marked done');
+		}
+	}
+
+	/**
 	 * Auto-completes a parent card once ALL of its children are resolved (done
 	 * or archived) - the "all children done → parent done" workflow. Called from
 	 * a CHILD's update()/move() after it persists; a card with no parent is a
@@ -1750,6 +1789,16 @@ class CardService {
 			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
 				return; // an unresolved child remains
 			}
+		}
+
+		// The parent is about to be stamped done, so it passes the same review gate
+		// as every explicit route (#10070) - finishing the last subtask must not
+		// quietly complete a parent whose own reviews are still unapproved. This one
+		// is an automation triggered by a DIFFERENT card's write, so it declines
+		// SILENTLY rather than throwing: the child's completion stands and the
+		// parent simply stays open until its reviews are approved.
+		if ($this->cardReviewMapper->hasUnapprovedReviews($parentId)) {
+			return;
 		}
 
 		$now = time();

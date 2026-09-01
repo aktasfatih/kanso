@@ -162,6 +162,22 @@ class CardServiceTest extends TestCase {
 	}
 
 	/**
+	 * Stubs the card's own column as a real, ROLE_NONE stack, and the board as
+	 * having no workflow columns at all (findByBoardAndRole → null).
+	 *
+	 * Needed by every update() that touches the status - including `done`, which
+	 * is an alias for it (#10070): the status path resolves the card's current
+	 * column and the board's column for the target role before deciding whether
+	 * to move. A role-less current column plus no role-mapped target column is
+	 * the "board maps no workflow roles" shape, i.e. the timestamp-only arm these
+	 * tests assert on.
+	 */
+	private function stubRolelessColumns(): void {
+		$this->stackMapper->method('find')->willReturn($this->stack(5, 1, Stack::ROLE_NONE));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+	}
+
+	/**
 	 * A mocked NC-portable unique-constraint violation, as the mapper surfaces
 	 * one (see AclServiceTest/AssigneeServiceTest for the same shape).
 	 */
@@ -1507,6 +1523,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testUpdateDoneStampsDoneAt(): void {
+		$this->stubRolelessColumns();
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->method('update')->willReturnArgument(0);
@@ -1517,6 +1534,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testUpdateDoneIsIdempotent(): void {
+		$this->stubRolelessColumns();
 		$card = $this->card();
 		$card->setDoneAt(12345);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
@@ -1529,6 +1547,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testUpdateUndoneClearsDoneAt(): void {
+		$this->stubRolelessColumns();
 		$card = $this->card();
 		$card->setDoneAt(12345);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
@@ -2063,9 +2082,31 @@ class CardServiceTest extends TestCase {
 		self::assertGreaterThan(0, $moved->getDoneAt());
 	}
 
-	public function testMoveIntoDoneFromNonReviewStackIgnoresReviews(): void {
-		// The gate only fires when leaving a review-role stack - unapproved
-		// reviews do not block a move from any other role.
+	public function testMoveIntoDoneViaRolelessColumnCannotLaunderTheGate(): void {
+		// #10070, the subtle one: the gate used to key on the review→done role
+		// PAIR, so an extra hop defeated it. Review → a role-less column (the
+		// DEFAULT on every fresh and imported board) → Done: on the second hop the
+		// source carries ROLE_NONE, the pair never matched, and the card was
+		// stamped done with reviews still unapproved. Two ordinary drags, no API
+		// call. Here the card already sits in that laundering column - the gate
+		// must still refuse, because it reads the CARD's review state.
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 7, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			7 => $this->stack(7, 1, Stack::ROLE_NONE),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->db->expects(self::never())->method('beginTransaction');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	public function testMoveIntoDoneFromAnyRoleIsGatedByUnapprovedReviews(): void {
+		// The same closure from an In progress column: no role pair is privileged,
+		// only the card's review state decides.
 		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 5, 1, 'V'));
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
@@ -2073,17 +2114,150 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(true);
+		$this->db->expects(self::never())->method('beginTransaction');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->move(9, 6, null, 'alice');
+	}
+
+	public function testMoveIntoDoneViaRolelessColumnAllowedWhenAllApproved(): void {
+		// Not over-broad: the very same two-hop route completes normally once the
+		// reviews are approved.
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card(9, 7, 1, 'V'));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			7 => $this->stack(7, 1, Stack::ROLE_NONE),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(false);
 		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
 		$this->cardMapper->method('update')->willReturnArgument(0);
 		$this->changeNotifier->method('recordChange')->willReturn(new Change());
 
 		$moved = $this->service->move(9, 6, null, 'alice');
 		self::assertSame(6, $moved->getStackId());
+		self::assertGreaterThan(0, $moved->getDoneAt());
+	}
+
+	public function testMoveIntoDoneOfAnAlreadyDoneCardIsNotReGated(): void {
+		// An already-done card is only being relocated - it passed the gate when it
+		// was completed, so a later review request must not strand it.
+		$done = $this->card(9, 7, 1, 'V');
+		$done->setDoneAt(4242);
+		$this->cardMapper->method('find')->willReturn($done);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('find')->willReturnCallback(fn (int $id): Stack => match ($id) {
+			7 => $this->stack(7, 1, Stack::ROLE_NONE),
+			6 => $this->stack(6, 1, Stack::ROLE_DONE),
+		});
+		$this->cardReviewMapper->expects(self::never())->method('hasUnapprovedReviews');
+		$this->cardMapper->method('findFirstInStack')->with(6)->willReturn(null);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$moved = $this->service->move(9, 6, null, 'alice');
+		self::assertSame(4242, $moved->getDoneAt());
+	}
+
+	// ---- the `done` alias: every write path lands on the same gate ---------
+
+	public function testUpdateDoneTrueIsBlockedByUnapprovedReviews(): void {
+		// The API's `done: true` (and with it the bulk action bar and the `d`
+		// shortcut, which both send exactly this) used to stamp done_at inline,
+		// never reaching the gate. It is now an alias for status='done'.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, null, null, true, null, 'alice');
+	}
+
+	public function testUpdateStatusDoneIsBlockedByUnapprovedReviewsWithNoDoneColumn(): void {
+		// The board maps no Done column, so the status never becomes a move() -
+		// the timestamp-only arm has to carry the gate itself, or a board without
+		// a Done column would be a free bypass.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');
+	}
+
+	public function testUpdateDoneTrueCompletesNormallyWhenReviewsAreApproved(): void {
+		// Not over-broad: an approved (or review-free) card still completes.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(false);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, true, null, 'alice');
+		self::assertGreaterThan(0, $updated->getDoneAt());
+	}
+
+	public function testUpdateDoneFalseIsNeverGated(): void {
+		// Re-opening a card is not completing it - the gate must not block it.
+		$card = $this->card();
+		$card->setDoneAt(12345);
+		$card->setStartedAt(999);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(true);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(9, null, null, null, false, null, 'alice');
+		self::assertSame(0, $updated->getDoneAt());
+		self::assertSame(0, $updated->getStartedAt());
+	}
+
+	public function testParentWithUnapprovedReviewsIsNotAutoCompleted(): void {
+		// The fourth ungated writer: completing the last subtask stamped the parent
+		// done without ever consulting the gate. It now declines silently - the
+		// child's own completion stands, the parent stays open.
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$doneSibling = $this->card(11, 5, 1, 'J');
+		$doneSibling->setDoneAt(1000);
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child, $doneSibling]);
+		// The child completes (nothing unapproved on it); the PARENT is the one
+		// carrying an unapproved review.
+		$this->cardReviewMapper->method('hasUnapprovedReviews')
+			->willReturnCallback(fn (int $cardId): bool => $cardId === 100);
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertContains(9, $updated, 'the child itself still completes');
+		self::assertNotContains(100, $updated, 'the parent must not be auto-completed');
+		self::assertSame(0, $parent->getDoneAt());
 	}
 
 	// ---- auto-complete parent (all children done) -------------------------
 
 	public function testUpdatingLastChildToDoneStampsParentDone(): void {
+		$this->stubRolelessColumns();
 		$child = $this->card(9, 5, 1, 'I');
 		$child->setParentCardId(100);
 		$parent = $this->card(100, 6, 1, 'K');
@@ -2111,6 +2285,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testUpdatingChildToDoneWithOpenSiblingLeavesParent(): void {
+		$this->stubRolelessColumns();
 		$child = $this->card(9, 5, 1, 'I');
 		$child->setParentCardId(100);
 		$parent = $this->card(100, 6, 1, 'K');
@@ -2137,6 +2312,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testArchivedSiblingCountsAsResolvedForParentCompletion(): void {
+		$this->stubRolelessColumns();
 		$child = $this->card(9, 5, 1, 'I');
 		$child->setParentCardId(100);
 		$parent = $this->card(100, 6, 1, 'K');
@@ -2163,6 +2339,7 @@ class CardServiceTest extends TestCase {
 	}
 
 	public function testParentAlreadyDoneIsNotReStamped(): void {
+		$this->stubRolelessColumns();
 		$child = $this->card(9, 5, 1, 'I');
 		$child->setParentCardId(100);
 		$parent = $this->card(100, 6, 1, 'K');

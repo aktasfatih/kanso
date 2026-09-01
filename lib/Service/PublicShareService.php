@@ -262,7 +262,13 @@ class PublicShareService {
 				'allDay' => $card->getAllDay() ?? false,
 				'priority' => $card->getPriority() ?? 0,
 				'type' => $card->getType() ?? '',
-				'status' => ($card->getDoneAt() ?? 0) > 0 ? 'done' : (($card->getStartedAt() ?? 0) > 0 ? 'in_progress' : 'open'),
+				// The card-status vocabulary, spelled exactly as everywhere else:
+				// done / in_progress / not_started. It used to say 'open' for the
+				// third value, which collides head-on with the filter vocabulary,
+				// where 'open' means "not done" and so INCLUDES in-progress
+				// ({@see ViewFilter::DONE}) - the same token naming two different
+				// sets. 'not_started' is unambiguous and matches the status control.
+				'status' => ($card->getDoneAt() ?? 0) > 0 ? 'done' : (($card->getStartedAt() ?? 0) > 0 ? 'in_progress' : 'not_started'),
 				'humanId' => $seq !== null ? $prefix . '-' . $seq : null,
 				'checklist' => $checklistByCard[$cardId] ?? ['total' => 0, 'done' => 0],
 			];

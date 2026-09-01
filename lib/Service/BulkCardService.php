@@ -207,10 +207,14 @@ class BulkCardService {
 
 			case self::ACTION_SET_STATUS:
 				// Only 'done' is supported: it reuses the single-card done path
-				// (CardService::update with $done=true), which stamps done_at once
-				// (idempotent), enforces the same per-card EDIT permission, and
-				// appends its own kanso_changes row. Anything else is a whole-request
-				// 400 - the client never sends another value.
+				// (CardService::update with $done=true, which is an alias for
+				// $status='done'), so a bulk completion is the SAME write as the
+				// card-view status control - the review gate, the workflow-column
+				// move, the per-card EDIT permission and the kanso_changes row all
+				// apply identically (#10070). A card whose reviews are unapproved is
+				// refused by the gate and lands in `skipped` like any other per-card
+				// rejection, so the rest of the selection still completes. Anything
+				// else is a whole-request 400 - the client never sends another value.
 				$status = (string)($params['status'] ?? '');
 				if ($status !== 'done') {
 					throw new InvalidInputException('Unsupported status: ' . $status);

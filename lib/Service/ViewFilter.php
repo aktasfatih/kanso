@@ -62,6 +62,15 @@ final class ViewFilter {
 	private const TYPES = ['bug', 'feature', 'task', 'chore'];
 	private const REVIEWS = ['pending', 'approved', 'changes_requested', self::REVIEW_NONE];
 	private const DUE = ['overdue', 'week', 'none'];
+	/**
+	 * The done dimension. 'open' here means NOT DONE - it deliberately includes
+	 * in-progress cards, because the filter is a two-way split. That is a
+	 * different set from the card STATUS vocabulary (done / in_progress /
+	 * not_started), which never uses the word: see
+	 * {@see \OCA\Kanso\Service\PublicShareService}. These values are persisted in
+	 * saved Views, so the token stays as it is; the note is here so the next
+	 * reader does not mistake one for the other.
+	 */
 	private const DONE = ['open', 'done'];
 	private const WAITING = ['waiting', 'not_waiting'];
 	private const BLOCKED = ['blocked', 'not_blocked'];
