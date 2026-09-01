@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { createHash } from 'node:crypto'
 import { test, expect, exportArchive } from './helpers.js'
 
 const BASE = 'http://localhost:8891'
@@ -33,6 +34,31 @@ async function uploadFile(cardId, filename, content, contentType = 'text/plain')
 	return r.json()
 }
 
+// POST an export archive back to /boards/import the way the app does: the FILE
+// itself, as multipart, not a JSON string.
+async function importArchive(buffer, filename = 'kanso-export.zip') {
+	const form = new FormData()
+	form.append('file', new Blob([buffer], { type: 'application/zip' }), filename)
+	const r = await fetch(KAN + '/boards/import', {
+		method: 'POST',
+		headers: { 'OCS-APIRequest': 'true', Authorization: AUTH },
+		body: form,
+	})
+	return { status: r.status, body: r.ok ? await r.json() : await r.text() }
+}
+
+// Download one attachment's live bytes through the API (READ-gated, streamed
+// straight out of app-data) — the real proof the object landed.
+async function downloadAttachment(cardId, attachmentId) {
+	const r = await fetch(KAN + `/cards/${cardId}/attachments/${attachmentId}`, {
+		headers: { 'OCS-APIRequest': 'true', Authorization: AUTH },
+	})
+	if (!r.ok) throw new Error(`download ${attachmentId} → ${r.status}: ${await r.text()}`)
+	return Buffer.from(await r.arrayBuffer())
+}
+
+const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex')
+
 // Full-board portability (#3437, #10060): seed a populated board through the
 // Kanso API, export it to Kanso's own archive (a .zip holding board.json plus
 // the card attachments), import that document into a fresh board, and assert
@@ -41,8 +67,17 @@ async function uploadFile(cardId, filename, content, contentType = 'text/plain')
 test.describe('Board export / import', () => {
 	let srcBoardId = 0
 	let importedBoardId = 0
+	let restoredBoardId = 0
 	let alphaCardId = 0
+	let betaCardId = 0
 	const ATTACHMENT_BODY = 'the attached bytes'
+	// A real binary (a 1x1 PNG) alongside the text one: bytes that a
+	// string round-trip would silently mangle.
+	const PNG_BYTES = Buffer.from(
+		'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+		'base64',
+	)
+	const BETA_BODY = 'bytes that belong to the second card only'
 	const title = 'E2E Portability ' + Math.floor(Date.now() / 1000)
 
 	// Strip the volatile fields so two exports of the "same" board compare equal.
@@ -97,14 +132,19 @@ test.describe('Board export / import', () => {
 		await kanso('POST', `/cards/${alpha.id}/checklist`, { title: 'second step' })
 		await kanso('POST', `/cards/${alpha.id}/comments`, { body: 'a top-level comment' })
 
-		await kanso('POST', '/cards', { stackId: done.id, title: 'Beta' })
+		const beta = await kanso('POST', '/cards', { stackId: done.id, title: 'Beta' })
 
-		// A real attachment on Alpha — the thing every export used to drop.
+		// Real attachments — the thing every export used to drop, spread over
+		// two cards so the restore has to put each one back where it came from.
 		alphaCardId = alpha.id
+		betaCardId = beta.id
 		await uploadFile(alpha.id, 'notes.txt', ATTACHMENT_BODY, 'text/plain')
+		await uploadFile(alpha.id, 'pixel.png', PNG_BYTES, 'image/png')
+		await uploadFile(beta.id, 'beta-notes.txt', BETA_BODY, 'text/plain')
 	})
 
 	test.afterAll(async () => {
+		if (restoredBoardId) await kanso('DELETE', `/boards/${restoredBoardId}`).catch(() => {})
 		if (importedBoardId) await kanso('DELETE', `/boards/${importedBoardId}`).catch(() => {})
 		if (srcBoardId) await kanso('DELETE', `/boards/${srcBoardId}`).catch(() => {})
 	})
@@ -126,11 +166,10 @@ test.describe('Board export / import', () => {
 		expect(alpha.comments.length).toBe(1)
 		expect(alpha.labelIds.length).toBe(1)
 
-		// #10060: the attachment rides along — manifested on the card AND present
+		// #10060: the attachments ride along — manifested on the card AND present
 		// in the archive at exactly the path the manifest advertises.
-		expect(alpha.attachments.length).toBe(1)
-		const manifested = alpha.attachments[0]
-		expect(manifested.filename).toBe('notes.txt')
+		expect(alpha.attachments.length).toBe(2)
+		const manifested = alpha.attachments.find((a) => a.filename === 'notes.txt')
 		expect(manifested.size).toBe(ATTACHMENT_BODY.length)
 		expect(manifested.path).toBe(`attachments/${manifested.id}/notes.txt`)
 		expect(archive[manifested.path]).toBeDefined()
@@ -177,6 +216,90 @@ test.describe('Board export / import', () => {
 		expect(bad.status).toBe(400)
 	})
 
+	// #10071, THE headline: export a board with attachments, post that exact
+	// archive back, and every file has to come out the other side — same name,
+	// same bytes (compared by hash), on the same card.
+	test('re-imports its own export archive with every attachment intact', async () => {
+		const { buffer, entries: archive, doc: original } = await exportArchive(srcBoardId, AUTH)
+
+		// What went in, keyed by "<card title>/<filename>".
+		const sourceByKey = {}
+		for (const card of original.board.cards) {
+			for (const a of card.attachments || []) {
+				sourceByKey[`${card.title}/${a.filename}`] = archive[a.path]
+			}
+		}
+		expect(Object.keys(sourceByKey).sort()).toEqual([
+			'Alpha/notes.txt',
+			'Alpha/pixel.png',
+			'Beta/beta-notes.txt',
+		])
+
+		// Post the archive FILE itself (multipart), the way the app does.
+		const imported = await importArchive(buffer)
+		expect(imported.status, JSON.stringify(imported.body)).toBe(200)
+		restoredBoardId = imported.body.boardId
+		expect(restoredBoardId).not.toBe(srcBoardId)
+		expect(imported.body.cards).toBe(2)
+
+		// Re-export the restored board and line the attachments up by card.
+		const restored = (await exportArchive(restoredBoardId, AUTH)).doc
+		const restoredCards = Object.fromEntries(restored.board.cards.map((c) => [c.title, c]))
+		expect(Object.keys(restoredCards).sort()).toEqual(['Alpha', 'Beta'])
+		expect((restoredCards.Alpha.attachments || []).length).toBe(2)
+		expect((restoredCards.Beta.attachments || []).length).toBe(1)
+
+		// Every file, on the right card, byte-identical to what was uploaded.
+		for (const [cardTitle, card] of Object.entries(restoredCards)) {
+			for (const a of card.attachments) {
+				const key = `${cardTitle}/${a.filename}`
+				expect(sourceByKey[key], `${key} was not on the source board`).toBeDefined()
+				// Read the LIVE bytes back out of storage, not just the archive:
+				// this proves the object really landed in app-data under the new
+				// card, reachable through the normal READ-gated download.
+				const live = await downloadAttachment(card.id, a.id)
+				expect(sha256(live), `${key} bytes changed`).toBe(sha256(sourceByKey[key]))
+				expect(a.size).toBe(sourceByKey[key].length)
+			}
+		}
+
+		// The binary survived as binary — a text round trip would have mangled it.
+		const restoredPng = restoredCards.Alpha.attachments.find((a) => a.filename === 'pixel.png')
+		expect(sha256(await downloadAttachment(restoredCards.Alpha.id, restoredPng.id))).toBe(sha256(PNG_BYTES))
+
+		// Fresh ids and fresh objects: the restored rows point at the NEW cards,
+		// never back at the source board's.
+		expect(restoredCards.Alpha.id).not.toBe(alphaCardId)
+		expect(restoredCards.Beta.id).not.toBe(betaCardId)
+		// And the source board is untouched — an import never mutates its source.
+		const sourceAgain = (await exportArchive(srcBoardId, AUTH)).doc
+		expect(sourceAgain.board.cards.find((c) => c.title === 'Alpha').attachments.length).toBe(2)
+	})
+
+	// A v3 archive whose board simply has no files must import as cleanly as one
+	// that does — the attachment path is additive, never required.
+	test('imports a v3 archive that carries no attachments', async () => {
+		const bare = await kanso('POST', '/boards', { title: 'E2E Bare ' + Date.now() })
+		await kanso('POST', '/stacks', { boardId: bare.id, title: 'Only column' })
+		const { buffer, entries } = await exportArchive(bare.id, AUTH)
+		// Exactly one entry: the document, nothing else.
+		expect(Object.keys(entries)).toEqual(['board.json'])
+
+		const imported = await importArchive(buffer)
+		expect(imported.status, JSON.stringify(imported.body)).toBe(200)
+		expect(imported.body.stacks).toBe(1)
+
+		await kanso('DELETE', `/boards/${imported.body.boardId}`).catch(() => {})
+		await kanso('DELETE', `/boards/${bare.id}`).catch(() => {})
+	})
+
+	// Something that is not an archive at all, posted as a file, is a 400 —
+	// never a 500 and never a partial board.
+	test('refuses a file that is not a Kanso export', async () => {
+		const bad = await importArchive(Buffer.from('PK not really a zip'), 'evil.zip')
+		expect(bad.status).toBe(400)
+	})
+
 	// #10060 raised the format to v3. Every .json export anyone already
 	// downloaded is a v1/v2 document and must keep importing untouched.
 	test('still imports a pre-archive v2 JSON document', async () => {
@@ -203,5 +326,28 @@ test.describe('Board export / import', () => {
 		expect(doc.board.cards[0].attachments).toEqual([])
 
 		await kanso('DELETE', `/boards/${res.boardId}`).catch(() => {})
+	})
+
+	// #10071 moved the UI onto a file upload. An old .json export picked in that
+	// same file dialog must go through the new path unchanged — the server reads
+	// the shape off the bytes, not off the name or the declared type.
+	test('still imports a pre-archive v2 JSON document posted as a file', async () => {
+		const v2 = {
+			kanso: 2,
+			exportedAt: 1234,
+			board: {
+				title: 'E2E Legacy Upload ' + Math.floor(Date.now() / 1000),
+				color: '0082c9',
+				stacks: [{ id: 1, title: 'Todo', sortKey: 'a' }],
+				cards: [{ id: 100, stackId: 1, title: 'Legacy card', sortKey: 'h' }],
+			},
+		}
+
+		const res = await importArchive(Buffer.from(JSON.stringify(v2)), 'kanso-legacy.json')
+		expect(res.status, JSON.stringify(res.body)).toBe(200)
+		expect(res.body.stacks).toBe(1)
+		expect(res.body.cards).toBe(1)
+
+		await kanso('DELETE', `/boards/${res.body.boardId}`).catch(() => {})
 	})
 })

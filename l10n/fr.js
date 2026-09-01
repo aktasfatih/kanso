@@ -679,7 +679,7 @@ OC.L10N.register(
     "Kanso & the Guests app" : "Kanso et l'application Guests",
     "Kanso background jobs & email links" : "Tâches de fond et liens e-mail de Kanso",
     "Kanso board backups" : "Sauvegardes des tableaux Kanso",
-    "Kanso export (.json)" : "Export Kanso (.json)",
+    "Kanso export (.zip)" : "Export Kanso (.zip)",
     "Kanso opens the board list by default. Turn this on to open this board instead." : "Kanso ouvre la liste des tableaux par défaut. Activez cette option pour ouvrir ce tableau à la place.",
     "Kanso settings" : "Paramètres de Kanso",
     "Keep my version" : "Conserver ma version",

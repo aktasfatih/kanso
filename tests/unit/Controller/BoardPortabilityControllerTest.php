@@ -17,6 +17,7 @@ use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\IRequest;
 use OCP\IUser;
@@ -154,6 +155,72 @@ class BoardPortabilityControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		self::assertSame('bad version', $response->getData()['error']);
+	}
+
+	// ── the round trip: an uploaded archive is imported as a FILE (#10071) ─────
+
+	public function testImportPrefersAnUploadedFileOverTheDocumentBody(): void {
+		$this->loginAs('carol');
+		$upload = [
+			'name' => 'kanso-Roadmap.zip',
+			'type' => 'application/zip',
+			'size' => 1234,
+			'tmp_name' => '/tmp/php-upload-xyz',
+			'error' => UPLOAD_ERR_OK,
+		];
+		$this->request->expects(self::once())->method('getUploadedFile')->with('file')->willReturn($upload);
+		// The FILE path is taken (so the archive can be streamed), and the
+		// string path is not touched at all.
+		$this->importService->expects(self::once())->method('importUploadedFile')
+			->with($upload, 'carol')
+			->willReturn(['boardId' => 77, 'title' => 'Roadmap', 'stacks' => 2, 'cards' => 5, 'labels' => 1]);
+		$this->importService->expects(self::never())->method('import');
+
+		$response = $this->controller->import();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(77, $response->getData()['boardId']);
+	}
+
+	public function testImportFallsBackToTheDocumentBodyWhenNoFileWasPosted(): void {
+		$this->loginAs('carol');
+		$this->request->method('getUploadedFile')->willReturn(null);
+		$this->importService->expects(self::never())->method('importUploadedFile');
+		$this->importService->expects(self::once())->method('import')
+			->with('{"kanso":2}', 'carol')
+			->willReturn(['boardId' => 78, 'title' => 'Legacy', 'stacks' => 1, 'cards' => 0, 'labels' => 0]);
+
+		$response = $this->controller->import('{"kanso":2}');
+
+		self::assertSame(78, $response->getData()['boardId']);
+	}
+
+	public function testImportRejectionFromTheFilePathIsBadRequest(): void {
+		$this->loginAs('carol');
+		$this->request->method('getUploadedFile')->willReturn(['tmp_name' => '/tmp/x', 'error' => UPLOAD_ERR_OK]);
+		$this->importService->method('importUploadedFile')
+			->willThrowException(new InvalidInputException('The export archive is too large to import'));
+
+		$response = $this->controller->import();
+
+		self::assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertSame('The export archive is too large to import', $response->getData()['error']);
+	}
+
+	/**
+	 * Import is the one endpoint where the caller decides how many bytes land in
+	 * the app's own app-data, which sits outside their Nextcloud quota - so it
+	 * carries a per-user rate limit. Asserted on the attribute because that is
+	 * where the app framework reads it.
+	 */
+	public function testImportCarriesAPerUserRateLimit(): void {
+		$method = new \ReflectionMethod(BoardPortabilityController::class, 'import');
+		$attributes = $method->getAttributes(UserRateLimit::class);
+
+		self::assertCount(1, $attributes, 'import() must declare a UserRateLimit');
+		$limit = $attributes[0]->newInstance();
+		self::assertGreaterThan(0, $limit->getLimit());
+		self::assertGreaterThan(0, $limit->getPeriod());
 	}
 
 	// ── whole-board egress is internal-only (#3744) ───────────────────────────

@@ -679,7 +679,7 @@ OC.L10N.register(
     "Kanso & the Guests app" : "Kanso e l'app Guests",
     "Kanso background jobs & email links" : "Processi in background e collegamenti email di Kanso",
     "Kanso board backups" : "Backup delle bacheche di Kanso",
-    "Kanso export (.json)" : "Esportazione Kanso (.json)",
+    "Kanso export (.zip)" : "Esportazione Kanso (.zip)",
     "Kanso opens the board list by default. Turn this on to open this board instead." : "Kanso apre l'elenco delle bacheche in modo predefinito. Attiva questa opzione per aprire invece questa bacheca.",
     "Kanso settings" : "Impostazioni di Kanso",
     "Keep my version" : "Mantieni la mia versione",

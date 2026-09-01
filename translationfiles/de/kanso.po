@@ -248,7 +248,7 @@ msgid "%1$s shared %2$s with you"
 msgstr "%1$s hat %2$s mit dir geteilt"
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:211
+#: src/views/BoardList.vue:213
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -2921,8 +2921,8 @@ msgid "Kanso board backups"
 msgstr "Kanso-Board-Backups"
 
 #: src/views/BoardList.vue
-msgid "Kanso export (.json)"
-msgstr "Kanso-Export (.json)"
+msgid "Kanso export (.zip)"
+msgstr "Kanso-Export (.zip)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."

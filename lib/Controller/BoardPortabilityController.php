@@ -15,6 +15,7 @@ use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\StreamResponse;
@@ -90,16 +91,40 @@ class BoardPortabilityController extends Controller {
 	}
 
 	/**
-	 * Imports a pasted/uploaded Kanso export document into a brand-new board
-	 * owned by the caller. The raw document text is passed straight through so
-	 * the size cap and version/shape validation stay meaningful.
+	 * Imports a Kanso export into a brand-new board owned by the caller, closing
+	 * the round trip {@see self::export()} opens.
+	 *
+	 * Two request shapes, in that order of preference:
+	 *  - multipart with a `file` part: the .zip archive this app exports, or any
+	 *    older bare .json export. The uploaded FILE is handed to the service so
+	 *    the archive can be streamed rather than buffered, and so which shape it
+	 *    is gets decided from the bytes rather than from the client's filename;
+	 *  - a JSON body with `document`: the raw export text, for scripted clients
+	 *    (and every caller written before the format became an archive).
+	 *
+	 * Rate-limited per user, because this is the one endpoint where a SINGLE
+	 * request can write many app-data objects at once - up to
+	 * {@see \OCA\Kanso\Service\ImportArchiveReader::MAX_ENTRIES} of them, totalling
+	 * {@see \OCA\Kanso\Service\ImportArchiveReader::MAX_TOTAL_BYTES}. That per-request
+	 * ceiling is the important half; this limit bounds the amplification over
+	 * time. It is set well above any believable human use (restoring a handful of
+	 * board backups) so a legitimate restore session is never interrupted -
+	 * including a CI run that imports repeatedly - while a scripted loop is
+	 * stopped. Note that per-FILE upload
+	 * ({@see \OCA\Kanso\Controller\CardAttachmentController::create()}) carries no
+	 * limit of its own, so this endpoint is deliberately not the loosest way into
+	 * app-data.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 3600)]
 	public function import(string $document = ''): JSONResponse {
 		return $this->respond(function () use ($document): JSONResponse {
-			return new JSONResponse(
-				$this->importService->import($document, $this->currentUserId())
-			);
+			$uid = $this->currentUserId();
+			$upload = $this->request->getUploadedFile('file');
+			if (is_array($upload)) {
+				return new JSONResponse($this->importService->importUploadedFile($upload, $uid));
+			}
+			return new JSONResponse($this->importService->import($document, $uid));
 		});
 	}
 

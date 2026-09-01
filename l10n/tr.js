@@ -679,7 +679,7 @@ OC.L10N.register(
     "Kanso & the Guests app" : "Kanso ve Guests uygulaması",
     "Kanso background jobs & email links" : "Kanso arka plan görevleri ve e-posta bağlantıları",
     "Kanso board backups" : "Kanso pano yedekleri",
-    "Kanso export (.json)" : "Kanso dışa aktarımı (.json)",
+    "Kanso export (.zip)" : "Kanso dışa aktarımı (.zip)",
     "Kanso opens the board list by default. Turn this on to open this board instead." : "Kanso varsayılan olarak pano listesini açar. Bunun yerine bu panoyu açmak için bunu aç.",
     "Kanso settings" : "Kanso ayarları",
     "Keep my version" : "Benim sürümümü koru",

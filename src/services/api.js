@@ -366,9 +366,15 @@ export const importDeckBoard = (deckBoardId) =>
 export const exportBoard = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/export`), { responseType: 'blob' })
 
-// `document` is the raw export-file text; the server parses + validates it.
-export const importBoard = (document) =>
-	axios.post(url('/api/boards/import'), { document }).then((r) => r.data)
+// The import takes the export FILE itself, posted as multipart — the archive is
+// binary (board.json + the attachment bytes), so it is streamed server-side
+// rather than read into a string here. An older bare .json export is accepted
+// through the same part; the server decides which shape it got from the bytes.
+export const importBoardFile = (file) => {
+	const form = new FormData()
+	form.append('file', file)
+	return axios.post(url('/api/boards/import'), form).then((r) => r.data)
+}
 
 // Server-side duplicate of a board the caller can READ into a fresh board they
 // own (export→import in-process). `withCards` also clones the card graph.
