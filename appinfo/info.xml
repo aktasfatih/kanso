@@ -11,6 +11,7 @@
 	<summary lang="de">Schnelle Open-Source-Kanban-Boards mit Reviews, Projekten und Echtzeit-Synchronisierung</summary>
 	<summary lang="es">Tableros kanban rápidos y de código abierto, con revisiones, proyectos y sincronización en tiempo real</summary>
 	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
+	<summary lang="it">Bacheche kanban veloci e open source, con revisioni, progetti e sincronizzazione in tempo reale</summary>
 	<summary lang="tr">İncelemeler, projeler ve gerçek zamanlı eşitleme sunan hızlı, açık kaynaklı kanban panoları</summary>
 	<description><![CDATA[
 Kanso is a kanban board app for Nextcloud, built for speed. Boards, stacks and
@@ -101,6 +102,30 @@ Cartes récurrentes selon des règles RRULE, archivage automatique, limites de
 travail en cours et rôles de colonne, une palette de commandes avec
 recherche plein texte, corbeille avec restauration, liens GitHub et webhook,
 et import depuis Deck en un clic.
+	]]></description>
+	<description lang="it"><![CDATA[
+Kanso è un'app di bacheche kanban per Nextcloud, progettata per la velocità.
+Bacheche, colonne e schede con trascinamento istantaneo, aggiornamenti
+ottimistici e volumi di dati pensati per bacheche di grandi dimensioni (oltre
+2.000 schede). Aggiornamenti in tempo reale tramite notify_push, con
+l'interrogazione periodica come alternativa.
+
+Schede complete con Markdown, etichette, scadenze, assegnatari, priorità,
+liste di controllo, schede principali e sotto-schede, e commenti in
+discussioni con menzioni @ e osservatori. Condivisione delle bacheche con
+controllo degli accessi per utente e per gruppo.
+
+Un flusso di revisione (richiesta di revisione, approvazione o richiesta di
+modifiche, tipi di revisione personalizzabili e un blocco facoltativo sul
+completamento). Uno spazio «Il mio lavoro» comune a tutte le bacheche (le mie
+attività, revisioni, posta in arrivo), progetti trasversali alle bacheche e
+statistiche per bacheca e per progetto (velocità, tempo di ciclo,
+produttività). Viste Bacheca, Elenco e Linea del tempo (Gantt).
+
+Schede ricorrenti con pianificazioni RRULE, regole di archiviazione
+automatica, limiti WIP e ruoli delle colonne, una palette dei comandi con
+ricerca a testo completo, cestino con ripristino, collegamenti GitHub e
+webhook, e importazione da Deck con un solo clic.
 	]]></description>
 	<description lang="tr"><![CDATA[
 Kanso, Nextcloud için hız odaklı geliştirilmiş bir kanban pano uygulamasıdır.
