@@ -11,6 +11,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.22.0](https://github.com/aktasfatih/kanso/compare/v0.21.0...v0.22.0) (2026-09-01)
+
+
+### Bug Fixes
+
+* **card:** show whether a card is archived with a checkbox in its menu ([05a3382](https://github.com/aktasfatih/kanso/commit/05a3382a384cf7224db4ff671cc337edac36bf84))
+* **cards:** keep a card with unapproved reviews from being marked done by any route ([5685eac](https://github.com/aktasfatih/kanso/commit/5685eac07fccb6000cf4b3a8bfcede2625faa435)), closes [#10070](https://github.com/aktasfatih/kanso/issues/10070)
+* **export:** include card attachments in board exports and scheduled backups ([415e51d](https://github.com/aktasfatih/kanso/commit/415e51d206a37de940b307db9914b6276503dcd5))
+* **i18n:** show "5 projects" instead of "5 project", and count correctly in every language ([31aec89](https://github.com/aktasfatih/kanso/commit/31aec89321d373c957ba287960d6c387c6a8d53c))
+* **import:** restore an exported board with its attachments ([78a040b](https://github.com/aktasfatih/kanso/commit/78a040b3bec80f896a68cf54944a6e3c4458e100)), closes [#10071](https://github.com/aktasfatih/kanso/issues/10071)
+* **my-tasks:** make rows keyboard-usable and stop hiding the 200-task cap ([6354e3c](https://github.com/aktasfatih/kanso/commit/6354e3c95e484b2cb3d0873d4079b1fbc7d5e947))
+* **views:** hide archived cards in views, with a filter to show them again ([f68f9bc](https://github.com/aktasfatih/kanso/commit/f68f9bc3dea49615f0489ba5f3cf04f4e9964a4a))
+
+
+### Features
+
+* **card:** find where an open card sits on the board, from its ⋯ menu ([f5a4829](https://github.com/aktasfatih/kanso/commit/f5a48299b9e8dc1bd56db69d612ee5230e45cae6))
+* **card:** show the card's column in the breadcrumb, and change it from the status chip ([1cf28c0](https://github.com/aktasfatih/kanso/commit/1cf28c0d0026d12e6a6564386a38ff445b3f7321)), closes [#10064](https://github.com/aktasfatih/kanso/issues/10064)
+* **mcp:** find cards by text from an AI assistant, across every board ([876e004](https://github.com/aktasfatih/kanso/commit/876e004ad75deae3c5ea9d078c1240ebbb3ea13f))
+* **my-tasks:** show your recently completed tasks, on request ([37af7de](https://github.com/aktasfatih/kanso/commit/37af7de9ae97478908426cd9e3aedb601ec30fbf))
+
 # [0.21.0](https://github.com/aktasfatih/kanso/compare/v0.20.0...v0.21.0) (2026-09-01)
 
 
