@@ -257,19 +257,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4047
+#: src/components/CardDetail.vue:4058
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4045
+#: src/components/CardDetail.vue:4056
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4043
+#: src/components/CardDetail.vue:4054
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -293,7 +293,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:267
+#: src/components/CardDetail.vue:275
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] ""
@@ -1530,7 +1530,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/CardDetail.vue:4223
+#: src/components/CardDetail.vue:4234
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3136,7 +3136,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/CardDetail.vue:4225
+#: src/components/CardDetail.vue:4236
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4423,7 +4423,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:5627
+#: src/components/CardDetail.vue:5638
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -4553,6 +4553,7 @@ msgid "Starts later"
 msgstr ""
 
 #: src/components/BoardFilterBar.vue
+#: src/components/CardDetail.vue
 #: src/views/ViewPage.vue
 msgid "Status"
 msgstr ""
@@ -5040,7 +5041,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/CardDetail.vue:4224
+#: src/components/CardDetail.vue:4235
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5120,7 +5121,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/CardDetail.vue:4226
+#: src/components/CardDetail.vue:4237
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

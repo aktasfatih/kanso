@@ -42,9 +42,11 @@ test.describe('Card status (#3481)', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.manualCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 
-		// Set "In progress" from the card's status control (breadcrumb chip → dropdown).
+		// Set "In progress" from the card's status control (breadcrumb chip → dropdown)
+		// by picking the in-progress-role COLUMN. The popover now also lists the three
+		// generic statuses, so the column section is addressed explicitly.
 		await page.locator('.card-modal__status-chip--btn').click()
-		await page.locator('.card-modal__status-wrap .card-modal__popover-opt', { hasText: 'In progress' }).click()
+		await page.locator('.card-modal__status-wrap .card-modal__popover-opt--column', { hasText: 'In progress' }).click()
 		await expect(page.locator('.card-modal__status-chip--in_progress')).toBeVisible({ timeout: 6_000 })
 
 		// Close the modal → the board tile shows the In-progress chip.
@@ -63,9 +65,9 @@ test.describe('Card status (#3481)', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.syncCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 
-		// Mark it Done from the card's status control.
+		// Mark it Done from the card's status control, via the Done-role column.
 		await page.locator('.card-modal__status-chip--btn').click()
-		await page.locator('.card-modal__status-wrap .card-modal__popover-opt', { hasText: 'Done' }).click()
+		await page.locator('.card-modal__status-wrap .card-modal__popover-opt--column', { hasText: 'Done' }).click()
 		await expect(page.locator('.card-modal__status-chip--done')).toBeVisible({ timeout: 6_000 })
 
 		// The status change carries the card into the Done-role column (#54), and it
