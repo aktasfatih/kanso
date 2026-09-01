@@ -453,7 +453,7 @@
         "Done for ≥ N days": "Seit ≥ N Tagen fertig",
         "Done-gated columns block Done until every review is approved.": "Review-gesperrte Spalten blockieren „Fertig\", bis alle Reviews genehmigt wurden.",
         "Down vs previous period": "Rückgang gegenüber Vorperiode",
-        "Download a JSON backup of this board.": "Ein JSON-Backup dieses Boards herunterladen.",
+        "Download a backup of this board, attachments included.": "Eine Sicherung dieses Boards herunterladen, inklusive Anhänge.",
         "Drag a card between columns — try it": "Karte zwischen Spalten ziehen – probier es aus",
         "Drag one onto the track to schedule it": "Eine Karte auf die Timeline ziehen, um sie zu planen",
         "Drag to reorder": "Zum Sortieren ziehen",

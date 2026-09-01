@@ -13,6 +13,7 @@ use OCA\Kanso\Db\AutomationRuleMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
+use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
@@ -33,21 +34,32 @@ use OCA\Kanso\Db\StackMapper;
  * carrying EVERYTHING for one board: the board itself, its stacks (with role
  * + wip limit), its live cards (all fields, soft-deleted rows excluded), the
  * card↔label and card↔assignee links, labels, checklist items, comments (with
- * their threading parent, author uid and timestamps), archive rules, recur
- * rules, automation rules and review types.
+ * their threading parent, author uid and timestamps), attachment manifests,
+ * archive rules, recur rules, automation rules and review types.
  *
  * Every entity keeps its ORIGINAL numeric id so {@see ImportService} can
  * rebuild the reference graph; sort keys are emitted verbatim (they are
  * portable lexorank strings). The reader is read-only and gated on board READ
  * by the caller.
+ *
+ * This class produces the DOCUMENT only. Attachment BYTES are carried
+ * alongside it by {@see BoardArchiveService}, which packs this envelope as
+ * `board.json` plus one archive entry per manifest path.
  */
 class ExportService {
 	/**
 	 * The envelope format version this build writes and can read back.
 	 * v2 added the board's automation rules to the envelope; older (v1)
 	 * documents simply carry no automationRules key and still import.
+	 * v3 added the per-card attachment manifest and moved the delivered
+	 * artifact from a bare .json document to a .zip carrying that document
+	 * plus the attachment bytes. A v2 document is a strict subset of a v3
+	 * one, so v1/v2 archives keep importing untouched.
 	 */
-	public const FORMAT_VERSION = 2;
+	public const FORMAT_VERSION = 3;
+
+	/** Root directory inside a v3 archive holding the attachment objects. */
+	public const ATTACHMENT_DIR = 'attachments';
 
 	public function __construct(
 		private StackMapper $stackMapper,
@@ -62,6 +74,7 @@ class ExportService {
 		private ReviewTypeMapper $reviewTypeMapper,
 		private CardReviewMapper $cardReviewMapper,
 		private AutomationRuleMapper $automationRuleMapper,
+		private CardAttachmentMapper $cardAttachmentMapper,
 	) {
 	}
 
@@ -81,6 +94,13 @@ class ExportService {
 	 * folder, never in an HTTP response. Every user-facing caller MUST pass
 	 * the requesting viewer; the parameter has no default so that choice is
 	 * always explicit at the call site.
+	 *
+	 * Attachments follow that same card set with no gate of their own: the
+	 * manifest is built inside {@see self::serializeCard()}, which only ever
+	 * runs for cards that survived the filter. So a viewer-scoped export
+	 * carries only the files of cards the viewer can see, and the SYSTEM-scope
+	 * backup deliberately carries the files of hidden cards too - a backup that
+	 * silently dropped them would not restore the instance.
 	 *
 	 * @return array{kanso: int, exportedAt: int, board: array<string, mixed>}
 	 * @throws \OCP\DB\Exception
@@ -277,6 +297,65 @@ class ExportService {
 			'checklist' => $checklist,
 			'comments' => $comments,
 			'reviews' => $reviews,
+			'attachments' => $this->serializeAttachments($cardId),
 		];
+	}
+
+	/**
+	 * The card's attachment MANIFEST: what the archive carries for this card,
+	 * and WHERE - as an archive-local path, never a server path.
+	 *
+	 * `storage_key` (the server-generated random object name the bytes actually
+	 * live under) is DELIBERATELY absent, exactly as it is withheld from every
+	 * API response ({@see \OCA\Kanso\Db\CardAttachment::jsonSerialize()}). The
+	 * entry path is derived from the attachment's already-public id instead, so
+	 * a reader can find the bytes in the archive without ever learning where the
+	 * server keeps them. Nothing downstream needs the key: the archive writer
+	 * re-reads it straight from the DB.
+	 *
+	 * Visibility: this runs ONLY for cards that already survived the viewer's
+	 * card-set filter (#3743), so a card the exporter cannot see contributes no
+	 * manifest entry and therefore no archive entry. Attachment visibility IS
+	 * card visibility, by construction rather than by a second check that could
+	 * drift.
+	 *
+	 * @return list<array<string, mixed>>
+	 * @throws \OCP\DB\Exception
+	 */
+	private function serializeAttachments(int $cardId): array {
+		$attachments = [];
+		foreach ($this->cardAttachmentMapper->findByCard($cardId) as $attachment) {
+			$id = (int)$attachment->getId();
+			$attachments[] = [
+				'id' => $id,
+				'filename' => $attachment->getFilename(),
+				'mime' => $attachment->getMime(),
+				'size' => $attachment->getSize(),
+				'uploadedBy' => $attachment->getUploadedBy(),
+				'createdAt' => $attachment->getCreatedAt(),
+				'path' => self::attachmentPath($id, (string)$attachment->getFilename()),
+			];
+		}
+		return $attachments;
+	}
+
+	/**
+	 * The archive-local path of one attachment: `attachments/<id>/<filename>`.
+	 * The per-attachment directory keeps two identically-named files apart
+	 * without hashing or renaming them, and the id is the attachment's public
+	 * id - never its storage key.
+	 *
+	 * The leaf name is re-sanitized here even though it was already sanitized on
+	 * the way in: an archive entry name is a PATH to whoever extracts it, so it
+	 * must not be able to escape its directory. {@see AttachmentSanitizer} drops
+	 * every separator but leaves "." and ".." intact (they are legal basenames),
+	 * and either would climb a level in a naive extractor - so both are replaced.
+	 */
+	public static function attachmentPath(int $attachmentId, string $filename): string {
+		$name = AttachmentSanitizer::filename($filename);
+		if ($name === '.' || $name === '..') {
+			$name = 'attachment';
+		}
+		return self::ATTACHMENT_DIR . '/' . $attachmentId . '/' . $name;
 	}
 }

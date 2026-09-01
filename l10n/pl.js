@@ -415,7 +415,7 @@ OC.L10N.register(
     "Done for ≥ N days" : "Ukończone od ≥ N dni",
     "Done-gated columns block Done until every review is approved." : "Kolumny z bramką ukończenia blokują ukończenie, dopóki wszystkie recenzje nie zostaną zatwierdzone.",
     "Down vs previous period" : "Spadek wzgl. poprzedniego okresu",
-    "Download a JSON backup of this board." : "Pobierz kopię zapasową tej tablicy w formacie JSON.",
+    "Download a backup of this board, attachments included." : "Pobierz kopię zapasową tej tablicy wraz z załącznikami.",
     "Drag a card between columns — try it" : "Przeciągnij kartę między kolumnami — spróbuj",
     "Drag one onto the track to schedule it" : "Przeciągnij kartę na oś, aby ją zaplanować",
     "Drag to reorder" : "Przeciągnij, aby zmienić kolejność",

@@ -369,6 +369,33 @@ class CardAttachmentService {
 	}
 
 	/**
+	 * Opens the stored bytes of ONE attachment object as a read stream, for an
+	 * internal consumer that has ALREADY authorized the read - today only the
+	 * board archive writer ({@see BoardArchiveService}), which walks a card set
+	 * the exporting viewer was gated on before this is ever reached.
+	 *
+	 * Deliberately performs no permission or visibility check of its own, and
+	 * that is safe precisely because of the storage model: it is addressed by
+	 * `storage_key`, a server-generated random name that never leaves the server
+	 * (it is withheld from every API response and from the export manifest), so
+	 * no client-supplied value can select an object here.
+	 *
+	 * Returns null - rather than throwing - when the object is missing, so one
+	 * vanished blob cannot abort a whole board's export or scheduled backup.
+	 * The caller owns the stream and must close it.
+	 *
+	 * @return resource|null
+	 */
+	public function openStoredObject(int $cardId, string $storageKey) {
+		try {
+			$stream = $this->cardFolder($cardId)->getFile($storageKey)->read();
+		} catch (\Throwable) {
+			return null;
+		}
+		return is_resource($stream) ? $stream : null;
+	}
+
+	/**
 	 * Removes an attachment (object + row) from the card. Requires EDIT.
 	 *
 	 * @throws DoesNotExistException if the card/board/attachment does not exist, is deleted, or the attachment is on another card

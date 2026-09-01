@@ -241,7 +241,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="board-actions__row">
 								<div class="board-actions__text">
 									<span class="board-actions__label">{{ t('kanso', 'Export board') }}</span>
-									<span class="board-actions__hint">{{ t('kanso', 'Download a JSON backup of this board.') }}</span>
+									<span class="board-actions__hint">{{ t('kanso', 'Download a backup of this board, attachments included.') }}</span>
 								</div>
 								<NcButton
 									:disabled="exporting"
@@ -2981,7 +2981,7 @@ async function archiveBoard() {
 	}
 }
 
-// ── Export board to a downloadable .json file (shared composable) ─────────────
+// ── Export board to a downloadable .zip archive (shared composable) ───────────
 function exportBoardToFile() {
 	return exportBoardAction(props.boardId)
 }

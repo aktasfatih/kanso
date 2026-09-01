@@ -189,6 +189,38 @@ class ImportServiceTest extends TestCase {
 		$this->service->import(json_encode(['kanso' => 1]), 'alice');
 	}
 
+	public function testStillImportsAV2DocumentAfterTheV3ArchiveBump(): void {
+		// #10060 raised FORMAT_VERSION to 3 and moved the delivered artifact from
+		// a bare .json document to a .zip. Every export anyone has already
+		// downloaded is a v1/v2 JSON document, and it must keep importing
+		// unchanged: the gate rejects only documents from a NEWER Kanso.
+		self::assertGreaterThan(2, ExportService::FORMAT_VERSION, 'this test is about importing an OLDER document');
+
+		$this->primeDb();
+		$this->db->expects(self::once())->method('commit');
+		$this->boardService->expects(self::once())
+			->method('create')->with('Legacy board', '0082c9', 'importer')
+			->willReturn($this->newBoard('Legacy board'));
+
+		$doc = [
+			'kanso' => 2,
+			'exportedAt' => 1234,
+			'board' => [
+				'title' => 'Legacy board',
+				'color' => '0082c9',
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a', 'role' => 0, 'wipLimit' => null]],
+				'cards' => [],
+			],
+		];
+
+		$result = $this->service->import((string)json_encode($doc), 'importer');
+
+		self::assertSame(900, $result['boardId']);
+		self::assertSame('Legacy board', $result['title']);
+		self::assertSame(1, $result['stacks']);
+		self::assertSame(0, $result['cards']);
+	}
+
 	// ── happy path + remapping ─────────────────────────────────────────────────
 
 	public function testImportRemapsGraphAndSetsImporterAsOwner(): void {

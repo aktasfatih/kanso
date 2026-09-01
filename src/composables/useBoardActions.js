@@ -12,7 +12,7 @@ import { useBoards } from './useBoards.js'
 
 /**
  * Heavyweight per-board actions shared by BoardSettingsModal and the
- * boards-view tile menu (#3750): export to a downloadable .json file,
+ * boards-view tile menu (#3750): export to a downloadable .zip archive,
  * server-side duplicate, and (soft) delete.
  *
  * Each action resolves with the API result on success, or resolves falsy after
@@ -24,29 +24,55 @@ export function useBoardActions() {
 	const queryClient = useQueryClient()
 	const { deleteBoard: deleteBoardMutation } = useBoards()
 
-	// ── Export board to a downloadable .json file ────────────────────────────
+	// ── Export board to a downloadable .zip archive ──────────────────────────
+	// The archive carries board.json plus every attachment the exporter may
+	// see, so the response is opaque bytes — the server names the file in
+	// Content-Disposition and we just save it.
 	const exporting = ref(false)
 	const exportError = ref('')
+
+	/** Pulls `filename="…"` out of a Content-Disposition header, if it has one. */
+	function filenameFromDisposition(disposition) {
+		const match = /filename="([^"]+)"/.exec(disposition || '')
+		return match ? match[1] : ''
+	}
+
+	/**
+	 * A failed blob request carries the JSON error body as a Blob, so the usual
+	 * `e.response.data.error` read finds nothing. Decode it back to text first.
+	 */
+	async function errorMessageFrom(e) {
+		const data = e?.response?.data
+		try {
+			if (data instanceof Blob) {
+				return JSON.parse(await data.text())?.error || ''
+			}
+		} catch {
+			// Not a JSON error body — fall through to the generic message.
+		}
+		return data?.error || ''
+	}
+
 	async function exportBoardToFile(boardId) {
 		exporting.value = true
 		exportError.value = ''
 		try {
-			const doc = await apiExportBoard(boardId)
-			const title = (doc?.board?.title || 'board')
-				.replace(/[^\w.-]+/g, '-')
-				.replace(/^-+|-+$/g, '') || 'board'
-			const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
+			const res = await apiExportBoard(boardId)
+			const blob = res.data instanceof Blob
+				? res.data
+				: new Blob([res.data], { type: 'application/zip' })
+			const name = filenameFromDisposition(res.headers?.['content-disposition']) || 'kanso-board.zip'
 			const href = URL.createObjectURL(blob)
 			const a = document.createElement('a')
 			a.href = href
-			a.download = `kanso-${title}.json`
+			a.download = name
 			document.body.appendChild(a)
 			a.click()
 			a.remove()
 			URL.revokeObjectURL(href)
-			return doc
+			return true
 		} catch (e) {
-			exportError.value = e?.response?.data?.error || t('kanso', 'Could not export this board.')
+			exportError.value = (await errorMessageFrom(e)) || t('kanso', 'Could not export this board.')
 			return null
 		} finally {
 			exporting.value = false

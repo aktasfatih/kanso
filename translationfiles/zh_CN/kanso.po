@@ -1797,8 +1797,8 @@ msgid "Down vs previous period"
 msgstr "较上一周期下降"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Download a JSON backup of this board."
-msgstr "下载此看板的 JSON 备份。"
+msgid "Download a backup of this board, attachments included."
+msgstr "下载此看板的备份，包含附件。"
 
 #: src/views/BoardList.vue
 msgid "Drag a card between columns — try it"

@@ -453,7 +453,7 @@
         "Done for ≥ N days": "≥ N gündür tamamlanmış",
         "Done-gated columns block Done until every review is approved.": "Tamamlandı kapılı sütunlar, tüm incelemeler onaylanana kadar Tamamlandı durumunu engeller.",
         "Down vs previous period": "Önceki döneme göre düşüş",
-        "Download a JSON backup of this board.": "Bu panonun JSON yedeğini indir.",
+        "Download a backup of this board, attachments included.": "Bu panonun ekleri dahil bir yedeğini indir.",
         "Drag a card between columns — try it": "Bir kartı sütunlar arasında sürükle — dene",
         "Drag one onto the track to schedule it": "Zamanlamak için birini şeridin üzerine sürükle",
         "Drag to reorder": "Yeniden sıralamak için sürükle",

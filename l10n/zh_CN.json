@@ -440,7 +440,7 @@
         "Done for ≥ N days": "已完成达 N 天",
         "Done-gated columns block Done until every review is approved.": "启用完成门禁的列会在所有评审通过之前，阻止把卡片标记为已完成。",
         "Down vs previous period": "较上一周期下降",
-        "Download a JSON backup of this board.": "下载此看板的 JSON 备份。",
+        "Download a backup of this board, attachments included.": "下载此看板的备份，包含附件。",
         "Drag a card between columns — try it": "在列之间拖动一张卡片 — 试试看",
         "Drag one onto the track to schedule it": "把卡片拖到时间轴上即可排期",
         "Drag to reorder": "拖动以重新排序",

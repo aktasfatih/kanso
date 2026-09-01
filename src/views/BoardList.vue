@@ -688,8 +688,8 @@ async function duplicateFromTile(board, withCards) {
 }
 
 async function exportFromTile(board) {
-	const doc = await exportBoardToFile(board.id)
-	if (!doc) showError(exportError.value)
+	const saved = await exportBoardToFile(board.id)
+	if (!saved) showError(exportError.value)
 }
 
 // Delete needs an explicit confirm step (destructive, no undo toast): the menu

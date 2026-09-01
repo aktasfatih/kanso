@@ -1810,8 +1810,8 @@ msgid "Down vs previous period"
 msgstr "Önceki döneme göre düşüş"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Download a JSON backup of this board."
-msgstr "Bu panonun JSON yedeğini indir."
+msgid "Download a backup of this board, attachments included."
+msgstr "Bu panonun ekleri dahil bir yedeğini indir."
 
 #: src/views/BoardList.vue
 msgid "Drag a card between columns — try it"

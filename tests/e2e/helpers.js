@@ -20,6 +20,7 @@
  */
 import { test as base, expect } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
+import { inflateRawSync } from 'node:zlib'
 
 export { expect }
 
@@ -136,6 +137,63 @@ export async function ncLogin(page, { user = ADMIN.user, pass = ADMIN.pass } = {
 			await page.waitForTimeout(1500) // brief backoff, then retry the whole flow
 		}
 	}
+}
+
+/**
+ * A ~40-line zip reader, so the board export archive (#10060) can be verified
+ * with no new dependency: walk the central directory and inflate each entry
+ * (stored and deflate are the only methods ZipArchive emits here).
+ *
+ * @param {Buffer} buffer
+ * @return {Record<string, Buffer>} entry name → bytes
+ */
+export function unzip(buffer) {
+	let eocd = -1
+	for (let i = buffer.length - 22; i >= 0; i--) {
+		if (buffer.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+	}
+	if (eocd < 0) throw new Error('not a zip: no end-of-central-directory record')
+	const count = buffer.readUInt16LE(eocd + 10)
+	let p = buffer.readUInt32LE(eocd + 16)
+
+	const entries = {}
+	for (let n = 0; n < count; n++) {
+		if (buffer.readUInt32LE(p) !== 0x02014b50) throw new Error('corrupt central directory')
+		const method = buffer.readUInt16LE(p + 10)
+		const compressedSize = buffer.readUInt32LE(p + 20)
+		const nameLen = buffer.readUInt16LE(p + 28)
+		const extraLen = buffer.readUInt16LE(p + 30)
+		const commentLen = buffer.readUInt16LE(p + 32)
+		const localOffset = buffer.readUInt32LE(p + 42)
+		const name = buffer.toString('utf8', p + 46, p + 46 + nameLen)
+
+		// The local header repeats the name and carries its own extra field.
+		const localNameLen = buffer.readUInt16LE(localOffset + 26)
+		const localExtraLen = buffer.readUInt16LE(localOffset + 28)
+		const start = localOffset + 30 + localNameLen + localExtraLen
+		const raw = buffer.subarray(start, start + compressedSize)
+		entries[name] = method === 0 ? Buffer.from(raw) : inflateRawSync(raw)
+
+		p += 46 + nameLen + extraLen + commentLen
+	}
+	return entries
+}
+
+/**
+ * GET a board's export archive. Since #10060 the endpoint streams a .zip
+ * (board.json + the card attachments) rather than a JSON body, so specs read
+ * it through here instead of JSON.parsing the response.
+ *
+ * @return {Promise<{res: Response, buffer: Buffer, entries: Record<string, Buffer>, doc: object}>}
+ */
+export async function exportArchive(boardId, auth = undefined) {
+	const r = await fetch(API + `/boards/${boardId}/export`, {
+		headers: { 'OCS-APIRequest': 'true', Authorization: auth ?? currentAuth },
+	})
+	if (!r.ok) throw new Error(`GET /boards/${boardId}/export → ${r.status}: ${await r.text()}`)
+	const buffer = Buffer.from(await r.arrayBuffer())
+	const entries = unzip(buffer)
+	return { res: r, buffer, entries, doc: JSON.parse(entries['board.json'].toString('utf8')) }
 }
 
 /** Navigate to a board via the SPA hash route. */

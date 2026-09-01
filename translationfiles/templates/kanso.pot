@@ -1809,7 +1809,7 @@ msgid "Down vs previous period"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
-msgid "Download a JSON backup of this board."
+msgid "Download a backup of this board, attachments included."
 msgstr ""
 
 #: src/views/BoardList.vue

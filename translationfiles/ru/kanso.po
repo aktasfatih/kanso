@@ -1823,8 +1823,8 @@ msgid "Down vs previous period"
 msgstr "Снижение к прошлому периоду"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Download a JSON backup of this board."
-msgstr "Скачать резервную копию этой доски в формате JSON."
+msgid "Download a backup of this board, attachments included."
+msgstr "Скачать резервную копию этой доски вместе с вложениями."
 
 #: src/views/BoardList.vue
 msgid "Drag a card between columns — try it"

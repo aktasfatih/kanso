@@ -360,8 +360,11 @@ export const importDeckBoard = (deckBoardId) =>
 	axios.post(url(`/api/deck-import/boards/${deckBoardId}`)).then((r) => r.data)
 
 // Full-board portability (Kanso's own round-trippable JSON format)
+// The export is a .zip (board.json + the card attachments), so it comes back as
+// a Blob rather than parsed JSON. The caller saves it; the server names it via
+// Content-Disposition.
 export const exportBoard = (boardId) =>
-	axios.get(url(`/api/boards/${boardId}/export`)).then((r) => r.data)
+	axios.get(url(`/api/boards/${boardId}/export`), { responseType: 'blob' })
 
 // `document` is the raw export-file text; the server parses + validates it.
 export const importBoard = (document) =>

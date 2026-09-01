@@ -415,7 +415,7 @@ OC.L10N.register(
     "Done for ≥ N days" : "Completata da ≥ N giorni",
     "Done-gated columns block Done until every review is approved." : "Le colonne con blocco sul completamento impediscono il passaggio a Fatto finché tutte le revisioni non sono approvate.",
     "Down vs previous period" : "In calo rispetto al periodo precedente",
-    "Download a JSON backup of this board." : "Scarica un backup JSON di questa bacheca.",
+    "Download a backup of this board, attachments included." : "Scarica un backup di questa bacheca, allegati inclusi.",
     "Drag a card between columns — try it" : "Trascina una scheda tra le colonne — provaci",
     "Drag one onto the track to schedule it" : "Trascinane una sulla linea del tempo per pianificarla",
     "Drag to reorder" : "Trascina per riordinare",

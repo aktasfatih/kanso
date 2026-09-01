@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, exportArchive } from './helpers.js'
 
 // Duplicate board (#3543): a READ-authorized board is cloned server-side into a
 // FRESH board the caller owns (export→import in-process). "Copy cards too"
@@ -62,7 +62,7 @@ test.describe('Duplicate board (#3543)', () => {
 
 		// The copy carries the source stacks + cards (verified through the API,
 		// which is the source of truth the board view renders from).
-		const copy = await api.send('GET', `/boards/${state.copyBoardId}/export`)
+		const copy = (await exportArchive(state.copyBoardId)).doc
 		expect(copy.board.title).toBe(`${title} (copy)`)
 		expect(copy.board.stacks.map((s) => s.title).sort()).toEqual(['Done', 'To do'])
 		expect(copy.board.labels.map((l) => l.title)).toEqual(['Priority'])
@@ -81,7 +81,7 @@ test.describe('Duplicate board (#3543)', () => {
 			expect(res.labels).toBe(1)
 			expect(res.cards).toBe(0)
 
-			const doc = await api.send('GET', `/boards/${res.boardId}/export`)
+			const doc = (await exportArchive(res.boardId)).doc
 			expect(doc.board.cards).toHaveLength(0)
 			expect(doc.board.stacks).toHaveLength(2)
 		} finally {

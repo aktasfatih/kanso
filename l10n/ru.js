@@ -415,7 +415,7 @@ OC.L10N.register(
     "Done for ≥ N days" : "Готово ≥ N дн.",
     "Done-gated columns block Done until every review is approved." : "Колонки с контролем готовности не пропускают карточку в «Готово», пока не одобрены все проверки.",
     "Down vs previous period" : "Снижение к прошлому периоду",
-    "Download a JSON backup of this board." : "Скачать резервную копию этой доски в формате JSON.",
+    "Download a backup of this board, attachments included." : "Скачать резервную копию этой доски вместе с вложениями.",
     "Drag a card between columns — try it" : "Перетащите карточку между колонками — попробуйте",
     "Drag one onto the track to schedule it" : "Перетащите карточку на шкалу, чтобы задать ей даты",
     "Drag to reorder" : "Перетащите, чтобы изменить порядок",

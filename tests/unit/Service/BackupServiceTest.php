@@ -10,7 +10,7 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Service\BackupService;
-use OCA\Kanso\Service\ExportService;
+use OCA\Kanso\Service\BoardArchiveService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -25,17 +25,21 @@ class BackupServiceTest extends TestCase {
 	private const NOW = 1_785_857_400;
 
 	private BoardMapper&MockObject $boardMapper;
-	private ExportService&MockObject $exportService;
+	private BoardArchiveService&MockObject $archiveService;
 	private IRootFolder&MockObject $rootFolder;
 	private ITimeFactory&MockObject $time;
 	private LoggerInterface&MockObject $logger;
 	private FakeConfig $config;
 	private BackupService $service;
+	/** Temp archives handed to the service, cleaned up after each test. */
+	private array $archives = [];
+	/** The viewer scope build() was called with, per board id. */
+	private array $scopes = [];
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$this->exportService = $this->createMock(ExportService::class);
+		$this->archiveService = $this->createMock(BoardArchiveService::class);
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
@@ -43,12 +47,63 @@ class BackupServiceTest extends TestCase {
 		$this->config = new FakeConfig();
 		$this->service = new BackupService(
 			$this->boardMapper,
-			$this->exportService,
+			$this->archiveService,
 			$this->rootFolder,
 			$this->config,
 			$this->time,
 			$this->logger,
 		);
+	}
+
+	protected function tearDown(): void {
+		foreach ($this->archives as $path) {
+			@unlink($path);
+		}
+		$this->archives = [];
+		parent::tearDown();
+	}
+
+	/**
+	 * A REAL export archive on disk, as {@see BoardArchiveService::build()}
+	 * produces: board.json plus one attachment entry. The cron's job is to get
+	 * these bytes into the backup folder intact, attachments and all (#10060).
+	 */
+	private function makeArchive(string $marker): string {
+		$path = tempnam(sys_get_temp_dir(), 'kanso-backup-test-');
+		self::assertIsString($path);
+		$this->archives[] = $path;
+		$zip = new \ZipArchive();
+		self::assertTrue($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true);
+		$zip->addFromString('board.json', json_encode(['kanso' => 3, 'exportedAt' => 1, 'board' => ['title' => $marker]]));
+		$zip->addFromString('attachments/9/spec.pdf', 'BYTES-' . $marker);
+		$zip->close();
+		return $path;
+	}
+
+	/** Wires build() to hand back a real archive and record the viewer scope. */
+	private function stubArchive(): void {
+		$this->archiveService->method('build')->willReturnCallback(
+			function (Board $board, $viewer): string {
+				$this->scopes[(int)$board->getId()] = $viewer;
+				return $this->makeArchive($board->getTitle());
+			},
+		);
+	}
+
+	/** @return array<string, string> entry name => content */
+	private function readArchiveBytes(string $raw): array {
+		$path = tempnam(sys_get_temp_dir(), 'kanso-backup-read-');
+		self::assertIsString($path);
+		$this->archives[] = $path;
+		file_put_contents($path, $raw);
+		$zip = new \ZipArchive();
+		self::assertTrue($zip->open($path) === true, 'the backup file must be a readable zip');
+		$entries = [];
+		for ($i = 0; $i < $zip->numFiles; $i++) {
+			$entries[(string)$zip->getNameIndex($i)] = (string)$zip->getFromIndex($i);
+		}
+		$zip->close();
+		return $entries;
 	}
 
 	private function board(int $id): Board {
@@ -115,7 +170,9 @@ class BackupServiceTest extends TestCase {
 		$target->expects(self::exactly(2))
 			->method('newFile')
 			->willReturnCallback(function (string $name, $content) use (&$written): File {
-				$written[$name] = $content;
+				// The archive is streamed in as a handle, never a string.
+				self::assertIsResource($content);
+				$written[$name] = (string)stream_get_contents($content);
 				return $this->createMock(File::class);
 			});
 
@@ -125,9 +182,7 @@ class BackupServiceTest extends TestCase {
 		$this->rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
 
 		$this->boardMapper->method('findAll')->willReturn([$this->board(7), $this->board(14)]);
-		$this->exportService->method('export')->willReturnCallback(
-			static fn (Board $b): array => ['kanso' => 2, 'exportedAt' => 1, 'board' => ['title' => $b->getTitle()]]
-		);
+		$this->stubArchive();
 
 		$result = $this->service->run();
 
@@ -138,9 +193,18 @@ class BackupServiceTest extends TestCase {
 		$names = array_keys($written);
 		self::assertStringStartsWith('kanso-board-7-', $names[0]);
 		self::assertStringStartsWith('kanso-board-14-', $names[1]);
-		self::assertStringEndsWith('.json', $names[0]);
-		// The written content is the JSON-encoded export envelope.
-		self::assertStringContainsString('"board"', (string)$written[$names[0]]);
+		self::assertStringEndsWith('.zip', $names[0]);
+
+		// The heart of #10060: what lands in the backup folder is the ARCHIVE,
+		// attachment bytes included - not an attachment-less JSON document.
+		$entries = $this->readArchiveBytes($written[$names[0]]);
+		self::assertArrayHasKey('board.json', $entries);
+		self::assertSame('BYTES-Board 7', $entries['attachments/9/spec.pdf'] ?? null);
+
+		// And it is built at SYSTEM scope: the decided policy is that a backup
+		// carries hidden cards AND their files (#10060).
+		self::assertNull($this->scopes[7]);
+		self::assertNull($this->scopes[14]);
 		self::assertSame(BackupService::STATUS_OK, $this->config->getAppValue('kanso', BackupService::KEY_LAST_RUN_STATUS, ''));
 	}
 
@@ -174,7 +238,7 @@ class BackupServiceTest extends TestCase {
 		$files[$otherName] = $other;
 
 		// The service names the new file from the injected clock (NOW).
-		$newName = 'kanso-board-7-20260804-153000.json';
+		$newName = 'kanso-board-7-20260804-153000.zip';
 		$newFile = $mkNode($newName);
 
 		$target = $this->createMock(Folder::class);
@@ -199,12 +263,15 @@ class BackupServiceTest extends TestCase {
 		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
 
 		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
-		$this->exportService->method('export')->willReturn(['kanso' => 2, 'exportedAt' => 1, 'board' => []]);
+		$this->stubArchive();
 
 		$result = $this->service->run();
 
 		self::assertSame(BackupService::STATUS_OK, $result['status']);
-		// Exactly the single oldest board-7 file is pruned; the other board is untouched.
+		// Exactly the single oldest board-7 file is pruned; the other board is
+		// untouched. The three existing files are pre-#10060 `.json` backups, so
+		// this also pins that legacy backups keep ageing out of retention rather
+		// than piling up forever beside the new `.zip` archives.
 		self::assertSame(['kanso-board-7-20260101-000000.json'], $deleted);
 	}
 
@@ -231,13 +298,13 @@ class BackupServiceTest extends TestCase {
 		$this->boardMapper->method('findAll')->willReturn([
 			$this->board(1), $this->board(2), $this->board(3),
 		]);
-		// Board 2 blows up during export; 1 and 3 still succeed.
-		$this->exportService->method('export')->willReturnCallback(
-			static function (Board $b): array {
+		// Board 2 blows up while its archive is built; 1 and 3 still succeed.
+		$this->archiveService->method('build')->willReturnCallback(
+			function (Board $b): string {
 				if ($b->getId() === 2) {
 					throw new \RuntimeException('boom');
 				}
-				return ['kanso' => 2, 'exportedAt' => 1, 'board' => []];
+				return $this->makeArchive($b->getTitle());
 			}
 		);
 		$this->logger->expects(self::once())->method('error');
@@ -284,7 +351,7 @@ class BackupServiceTest extends TestCase {
 			->willReturn($userFolder);
 
 		$this->boardMapper->method('findAll')->willReturn([$this->board(1)]);
-		$this->exportService->method('export')->willReturn(['kanso' => 2, 'exportedAt' => 1, 'board' => []]);
+		$this->stubArchive();
 
 		$result = $this->service->run();
 		self::assertSame(BackupService::STATUS_OK, $result['status']);

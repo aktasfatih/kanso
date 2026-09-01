@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect } from './helpers.js'
+import { test, expect, exportArchive } from './helpers.js'
 
 const BASE = 'http://localhost:8891'
 const KAN = BASE + '/index.php/apps/kanso/api'
@@ -20,13 +20,29 @@ async function call(method, path, body) {
 }
 const kanso = (m, p, b) => call(m, p, b)
 
-// Full-board portability (#3437): seed a populated board through the Kanso
-// API, export it to Kanso's own JSON envelope, import that envelope into a
-// fresh board, and assert the re-export deep-equals the original modulo the
-// volatile bits (ids, owner, timestamps).
+// Upload a small in-memory file onto a card via multipart.
+async function uploadFile(cardId, filename, content, contentType = 'text/plain') {
+	const form = new FormData()
+	form.append('file', new Blob([content], { type: contentType }), filename)
+	const r = await fetch(KAN + `/cards/${cardId}/attachments`, {
+		method: 'POST',
+		headers: { 'OCS-APIRequest': 'true', Authorization: AUTH },
+		body: form,
+	})
+	if (!r.ok) throw new Error(`upload ${filename} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
+
+// Full-board portability (#3437, #10060): seed a populated board through the
+// Kanso API, export it to Kanso's own archive (a .zip holding board.json plus
+// the card attachments), import that document into a fresh board, and assert
+// the re-export deep-equals the original modulo the volatile bits (ids, owner,
+// timestamps).
 test.describe('Board export / import', () => {
 	let srcBoardId = 0
 	let importedBoardId = 0
+	let alphaCardId = 0
+	const ATTACHMENT_BODY = 'the attached bytes'
 	const title = 'E2E Portability ' + Math.floor(Date.now() / 1000)
 
 	// Strip the volatile fields so two exports of the "same" board compare equal.
@@ -82,6 +98,10 @@ test.describe('Board export / import', () => {
 		await kanso('POST', `/cards/${alpha.id}/comments`, { body: 'a top-level comment' })
 
 		await kanso('POST', '/cards', { stackId: done.id, title: 'Beta' })
+
+		// A real attachment on Alpha — the thing every export used to drop.
+		alphaCardId = alpha.id
+		await uploadFile(alpha.id, 'notes.txt', ATTACHMENT_BODY, 'text/plain')
 	})
 
 	test.afterAll(async () => {
@@ -90,9 +110,13 @@ test.describe('Board export / import', () => {
 	})
 
 	test('exports a populated board, imports it, and the re-export matches', async () => {
-		const original = await kanso('GET', `/boards/${srcBoardId}/export`)
-		// Envelope format version (bumped to 2 when automation rules joined it).
-		expect(original.kanso).toBeGreaterThanOrEqual(1)
+		const { res: download, buffer, entries: archive } = await exportArchive(srcBoardId, AUTH)
+		// The export is now a downloadable .zip, not a JSON body.
+		expect(download.headers.get('content-type')).toContain('application/zip')
+		expect(download.headers.get('content-disposition')).toContain('.zip"')
+		const original = JSON.parse(archive['board.json'].toString('utf8'))
+		// Envelope format version (3 since the archive carries attachments).
+		expect(original.kanso).toBeGreaterThanOrEqual(3)
 		expect(original.board.title).toBe(title)
 		expect(original.board.cards.length).toBe(2)
 		// The description + checklist + comment made it into the export.
@@ -101,6 +125,30 @@ test.describe('Board export / import', () => {
 		expect(alpha.checklist.length).toBe(2)
 		expect(alpha.comments.length).toBe(1)
 		expect(alpha.labelIds.length).toBe(1)
+
+		// #10060: the attachment rides along — manifested on the card AND present
+		// in the archive at exactly the path the manifest advertises.
+		expect(alpha.attachments.length).toBe(1)
+		const manifested = alpha.attachments[0]
+		expect(manifested.filename).toBe('notes.txt')
+		expect(manifested.size).toBe(ATTACHMENT_BODY.length)
+		expect(manifested.path).toBe(`attachments/${manifested.id}/notes.txt`)
+		expect(archive[manifested.path]).toBeDefined()
+		expect(archive[manifested.path].toString('utf8')).toBe(ATTACHMENT_BODY)
+
+		// The withheld-key invariant: `storage_key` is the server-generated
+		// object name and must not escape through the archive — not in the
+		// document, not in an entry name, not anywhere in the raw bytes.
+		expect(manifested.storageKey).toBeUndefined()
+		expect(manifested.storage_key).toBeUndefined()
+		const rawArchive = buffer.toString('latin1')
+		expect(rawArchive).not.toContain('storageKey')
+		expect(rawArchive).not.toContain('storage_key')
+		// And the real key of the real object, read straight from the DB-backed
+		// API surface, is likewise absent (the API withholds it, so its absence
+		// there is checked first).
+		const listed = await kanso('GET', `/cards/${alphaCardId}/attachments`)
+		expect(listed[0].storageKey).toBeUndefined()
 
 		// Import the exact document back into a fresh board.
 		const res = await kanso('POST', '/boards/import', { document: JSON.stringify(original) })
@@ -111,7 +159,7 @@ test.describe('Board export / import', () => {
 		expect(res.labels).toBe(1)
 
 		// Re-export the imported board and compare the normalized shapes.
-		const reexport = await kanso('GET', `/boards/${importedBoardId}/export`)
+		const reexport = (await exportArchive(importedBoardId, AUTH)).doc
 		expect(normalize(reexport)).toEqual(normalize(original))
 
 		// Fresh ids everywhere (the imported board owns brand-new stacks/cards).
@@ -127,5 +175,33 @@ test.describe('Board export / import', () => {
 			body: JSON.stringify({ document: JSON.stringify({ kanso: 9999, board: { title: 'x' } }) }),
 		})
 		expect(bad.status).toBe(400)
+	})
+
+	// #10060 raised the format to v3. Every .json export anyone already
+	// downloaded is a v1/v2 document and must keep importing untouched.
+	test('still imports a pre-archive v2 JSON document', async () => {
+		const v2 = {
+			kanso: 2,
+			exportedAt: 1234,
+			board: {
+				title: 'E2E Legacy v2 ' + Math.floor(Date.now() / 1000),
+				color: '0082c9',
+				stacks: [{ id: 1, title: 'Todo', sortKey: 'a' }],
+				labels: [{ id: 5, title: 'Old', color: 'e11' }],
+				cards: [{ id: 100, stackId: 1, title: 'Legacy card', sortKey: 'h', labelIds: [5] }],
+			},
+		}
+
+		const res = await kanso('POST', '/boards/import', { document: JSON.stringify(v2) })
+		expect(res.stacks).toBe(1)
+		expect(res.cards).toBe(1)
+		expect(res.labels).toBe(1)
+
+		const doc = (await exportArchive(res.boardId, AUTH)).doc
+		expect(doc.board.cards[0].title).toBe('Legacy card')
+		// A v2 document carries no attachments, so the card imports with none.
+		expect(doc.board.cards[0].attachments).toEqual([])
+
+		await kanso('DELETE', `/boards/${res.boardId}`).catch(() => {})
 	})
 })
