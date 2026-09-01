@@ -94,6 +94,10 @@ msgid "{card} is due tomorrow"
 msgstr "{card} ist morgen fällig"
 
 #: src/views/BoardView.vue
+msgid "{card} is in {stack}"
+msgstr "{card} ist in {stack}"
+
+#: src/views/BoardView.vue
 msgid "{card} is no longer a sub-card"
 msgstr "{card} ist keine Unterkarte mehr"
 
@@ -258,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:4069
+#: src/components/CardDetail.vue:4090
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
 msgstr[1] "vor %n Tagen"
 
-#: src/components/CardDetail.vue:4067
+#: src/components/CardDetail.vue:4088
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
 msgstr[1] "vor %n Stunden"
 
-#: src/components/CardDetail.vue:4065
+#: src/components/CardDetail.vue:4086
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -294,7 +298,7 @@ msgid_plural "%n points"
 msgstr[0] "%n Punkt"
 msgstr[1] "%n Punkte"
 
-#: src/components/CardDetail.vue:991
+#: src/components/CardDetail.vue:1011
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n Projekt"
@@ -1539,7 +1543,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4245
+#: src/components/CardDetail.vue:4266
 msgid "day"
 msgid_plural "days"
 msgstr[0] "Tag"
@@ -2658,6 +2662,10 @@ msgstr "Gelöschte Karten filtern"
 msgid "Filter trash…"
 msgstr "Papierkorb filtern…"
 
+#: src/components/CardDetail.vue
+msgid "Find the card on board"
+msgstr "Karte auf dem Board finden"
+
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
 msgstr "Einpassen"
@@ -3142,7 +3150,7 @@ msgid "Mon"
 msgstr "Mo"
 
 #: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4247
+#: src/components/CardDetail.vue:4268
 msgid "month"
 msgid_plural "months"
 msgstr[0] "Monat"
@@ -4441,7 +4449,7 @@ msgstr "Formatierungsleiste anzeigen"
 msgid "Show the discussion panel"
 msgstr "Diskussionsbereich anzeigen"
 
-#: src/components/CardDetail.vue:5649
+#: src/components/CardDetail.vue:5707
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
@@ -4663,6 +4671,10 @@ msgstr "Vorlage wurde wieder in eine normale Karte umgewandelt."
 msgid "Text"
 msgstr "Text"
 
+#: src/views/BoardView.vue
+msgid "That card is not on this board any more."
+msgstr "Diese Karte ist nicht mehr auf diesem Board."
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "Der Chat-Link muss eine http:// oder https:// URL sein."
@@ -4706,6 +4718,14 @@ msgstr "Dieses Board existiert nicht mehr."
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
 msgstr "Diese Karte existiert nicht oder du hast keinen Zugriff darauf."
+
+#: src/views/BoardView.vue
+msgid "This card is archived, so it is not on the board. Un-archive it to put it back."
+msgstr "Diese Karte ist archiviert und daher nicht auf dem Board. Hebe die Archivierung auf, um sie zurückzuholen."
+
+#: src/views/BoardView.vue
+msgid "This card is hidden by the current filter. Clear the filter to see it."
+msgstr "Diese Karte wird vom aktuellen Filter ausgeblendet. Setze den Filter zurück, um sie zu sehen."
 
 #: src/components/CardDetail.vue
 msgid "This card is not visible to you"
@@ -5067,7 +5087,7 @@ msgid "Wed"
 msgstr "Mi"
 
 #: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4246
+#: src/components/CardDetail.vue:4267
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "Woche"
@@ -5144,7 +5164,7 @@ msgid "wrote"
 msgstr "schrieb"
 
 #: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4248
+#: src/components/CardDetail.vue:4269
 msgid "year"
 msgid_plural "years"
 msgstr[0] "Jahr"

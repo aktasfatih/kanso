@@ -359,6 +359,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-card-select="handleCardSelect"
 					:collapsed="isStackCollapsed(stack.id)"
 					:on-toggle-collapsed="toggleStackCollapsed"
+					:revealed-card-id="revealedCardId"
 					:compact="isCompact" />
 
 				<!-- Column composer (#3413). No longer a PERSISTENT trailing input: it
@@ -412,6 +413,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:collapsed-stacks="collapsedStacks"
 					:on-toggle-collapsed="toggleStackCollapsed"
+					:revealed-card-id="revealedCardId"
 					:compact="isCompact" />
 				<p v-if="lanes.length === 0" class="board-view__swimlanes-empty">
 					{{ t('kanso', 'No cards to group.') }}
@@ -1532,6 +1534,117 @@ watch(cardsByStack, () => {
 	if (hoveredCardId.value != null && !findCardPosition(hoveredCardId.value)) {
 		hoveredCardId.value = null
 	}
+})
+
+// ── "Find the card on board" (#10062) ─────────────────────────────────────────
+// The reverse of search: you arrive at a card with no spatial context (a search
+// hit, My Tasks, the Inbox, a KAN-123 deep link) and want to know WHERE it sits.
+// The card's ⋯ menu routes here with `?reveal=<cardId>`; this side scrolls the
+// board to that card and rings it. A query param (not an event bus) because the
+// entry point may be a different route entirely — the full-page card view, or a
+// card on another board — and the board has to mount before it can scroll.
+
+/** Card id currently ringed as "here it is", or null. Threaded to every tile. */
+const revealedCardId = ref(null)
+let revealTimer = null
+
+/** The reveal asked for by the URL, held until the board payload has arrived. */
+const pendingRevealId = ref(null)
+
+watch(() => route.query.reveal, (raw) => {
+	const id = Number(raw)
+	if (Number.isInteger(id) && id > 0) pendingRevealId.value = id
+}, { immediate: true })
+
+// Runs once both the request and the board data exist. `reveal` is consumed
+// (dropped from the URL) before scrolling so a later reload — or the filter
+// watcher rewriting the query — can't fire the jump a second time.
+watch([pendingRevealId, boardData], () => {
+	const id = pendingRevealId.value
+	if (id == null || !boardData.value) return
+	pendingRevealId.value = null
+	if (route.query.reveal !== undefined) {
+		const query = { ...route.query }
+		delete query.reveal
+		router.replace({ query }).catch(() => {})
+	}
+	revealCard(id)
+}, { immediate: true })
+
+/**
+ * Scroll the board to a card and ring it for a couple of seconds.
+ *
+ * Every way this can silently do nothing is an explicit branch: an archived card
+ * is not on the board at all, a filtered-out card is not rendered, and a
+ * collapsed column has no visible list. Each of those TELLS the user rather than
+ * scrolling nowhere. The scroll itself must drive the virtualizer (the row is
+ * very likely not mounted) before any DOM element exists to scroll to.
+ * @param {number} cardId the card to locate
+ */
+async function revealCard(cardId) {
+	const card = (boardData.value?.cards ?? []).find((c) => Number(c.id) === Number(cardId))
+	if (!card) {
+		showWarning(t('kanso', 'That card is not on this board any more.'))
+		return
+	}
+	// Archived cards are dropped from cardsByStack, so there is no tile to find.
+	if (card.archived) {
+		showWarning(t('kanso', 'This card is archived, so it is not on the board. Un-archive it to put it back.'))
+		return
+	}
+	// The board is only scrollable in Board view; List and Timeline have no
+	// columns to point at. "Find on board" means the board, so switch to it.
+	if (viewMode.value !== 'board') setViewMode('board')
+	// A collapsed column renders a 48px rail with its list hidden.
+	expandStack(card.stackId)
+	await nextTick()
+
+	// With swimlanes on, the card lives in a lane (and a card with several
+	// assignees/labels is rendered in each matching lane — take the first).
+	// Column refs are registered under a composite key in that mode.
+	const lane = swimlaneMode.value === 'none'
+		? null
+		: lanes.value.find((l) => (l.cardsByStack.get(card.stackId) ?? []).some((c) => c.id === card.id))
+	const cards = lane
+		? (lane.cardsByStack.get(card.stackId) ?? [])
+		: (cardsByStack.value.get(card.stackId) ?? [])
+	const index = cards.findIndex((c) => c.id === card.id)
+	if (index === -1) {
+		// It IS on the board, just not rendered: the active filter excludes it.
+		// Saying so is the whole point — a silent no-op reads as a broken button.
+		showWarning(t('kanso', 'This card is hidden by the current filter. Clear the filter to see it.'))
+		return
+	}
+
+	const col = columnRefs.get(lane ? `${lane.key}::${card.stackId}` : card.stackId)
+	// Mount the row: at index 400 of a long column there is no DOM node yet.
+	col?.scrollToIndex(index)
+	await nextTick()
+	await new Promise((resolve) => requestAnimationFrame(resolve))
+
+	// Scoped to the column so the right lane's copy wins; scrollIntoView then
+	// handles the axes the virtualizer doesn't — the columns' horizontal scroll
+	// and, with swimlanes, the lane strip's vertical one.
+	const el = (col?.$el ?? document).querySelector(`[data-card-id="${card.id}"]`)
+		?? document.querySelector(`[data-card-id="${card.id}"]`)
+	el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+	el?.focus()
+	focusedCardId.value = card.id
+
+	revealedCardId.value = card.id
+	if (revealTimer) clearTimeout(revealTimer)
+	revealTimer = setTimeout(() => {
+		revealedCardId.value = null
+		revealTimer = null
+	}, 2400)
+	announce(t('kanso', '{card} is in {stack}', {
+		card: card.title,
+		stack: stackTitleById(card.stackId),
+	}))
+}
+
+onUnmounted(() => {
+	if (revealTimer) clearTimeout(revealTimer)
 })
 
 function handleKeydown(e) {

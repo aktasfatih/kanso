@@ -322,6 +322,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</span>
 
 						<NcActions class="card-modal__actions-menu" :force-menu="true">
+							<!-- The reverse of search (#10062): search finds a card by its
+							     text, this points at where the card already IS. You can land
+							     here from a search hit, My Tasks, the Inbox or a KAN-123
+							     link with no idea which column the card sits in — and
+							     closing the card drops you on the board with no clue
+							     either. Hidden for archived cards and templates, which are
+							     not on the board at all, so the action is never offered
+							     when it cannot work. Not gated on canEdit: navigating to a
+							     card is not editing it. -->
+							<NcActionButton
+								v-if="canFindOnBoard"
+								data-test="card-find-on-board"
+								:close-after-click="true"
+								@click="findOnBoard">
+								<template #icon>
+									<CrosshairsGpsIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Find the card on board') }}
+							</NcActionButton>
+							<NcActionSeparator v-if="canFindOnBoard" />
 							<NcActionButton
 								v-if="canEdit"
 								:close-after-click="true"
@@ -2302,6 +2322,7 @@ import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
 import TransferIcon from 'vue-material-design-icons/Transfer.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import CrosshairsGpsIcon from 'vue-material-design-icons/CrosshairsGps.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
@@ -4745,6 +4766,43 @@ function formatCommentTime(unixTs) {
 	if (diffSec < 86400) return t('kanso', '{n} hr ago', { n: Math.floor(diffSec / 3600) })
 	if (diffSec < 86400 * 7) return t('kanso', '{n} days ago', { n: Math.floor(diffSec / 86400) })
 	return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// ── Find the card on board (#10062) ───────────────────────────────────────────
+// Only offered when there is somewhere to go and something to find: an archived
+// card and a template are both absent from the board's columns, so pointing at
+// them would scroll to nothing. Works from every shell — the modal, the
+// full-page card route, and a View's controlled overlay — because it navigates
+// to the card's OWN board rather than assuming the surface behind it is one.
+const canFindOnBoard = computed(() =>
+	!!cardData.value
+	&& !cardData.value.archived
+	&& !cardData.value.isTemplate
+	&& boardId.value != null,
+)
+
+/**
+ * Leave the card and show it in place on its board. BoardView owns the actual
+ * scroll (it is the only thing that can drive the column virtualizers); the id
+ * rides along as `?reveal=` because the board may still need to mount first.
+ */
+function findOnBoard() {
+	const bId = boardId.value
+	const id = cardData.value?.id
+	if (bId == null || id == null) return
+	isOpen.value = false
+	// Keep the board's own query when this card is an overlay ON that board — the
+	// filter params live there, and dropping them would silently clear the user's
+	// filter (and hide the very case the board then has to report). Coming from
+	// anywhere else (a View, the full page, another board's card) the query
+	// belongs to that other surface, so start clean.
+	const onOwnBoard = route.name === 'card-modal' && String(route.params.id) === String(bId)
+	router.push({
+		name: 'board',
+		params: { id: String(bId) },
+		query: onOwnBoard ? { ...route.query, reveal: String(id) } : { reveal: String(id) },
+	})
+	emit('close')
 }
 
 // My Work surfaces open a card with `?from=<routeName>` so we can return there on

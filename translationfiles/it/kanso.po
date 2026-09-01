@@ -94,6 +94,10 @@ msgid "{card} is due tomorrow"
 msgstr "{card} scade domani"
 
 #: src/views/BoardView.vue
+msgid "{card} is in {stack}"
+msgstr "{card} è in {stack}"
+
+#: src/views/BoardView.vue
 msgid "{card} is no longer a sub-card"
 msgstr "{card} non è più una sotto-scheda"
 
@@ -258,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4069
+#: src/components/CardDetail.vue:4090
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
 
-#: src/components/CardDetail.vue:4067
+#: src/components/CardDetail.vue:4088
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
 
-#: src/components/CardDetail.vue:4065
+#: src/components/CardDetail.vue:4086
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -294,7 +298,7 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n punti"
 
-#: src/components/CardDetail.vue:991
+#: src/components/CardDetail.vue:1011
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n progetto"
@@ -1539,7 +1543,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4245
+#: src/components/CardDetail.vue:4266
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -2658,6 +2662,10 @@ msgstr "Filtra le schede eliminate"
 msgid "Filter trash…"
 msgstr "Filtra nel cestino…"
 
+#: src/components/CardDetail.vue
+msgid "Find the card on board"
+msgstr "Trova la scheda nella bacheca"
+
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
 msgstr "Adatta"
@@ -3142,7 +3150,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4247
+#: src/components/CardDetail.vue:4268
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -4441,7 +4449,7 @@ msgstr "Mostra la barra di formattazione"
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:5649
+#: src/components/CardDetail.vue:5707
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -4663,6 +4671,10 @@ msgstr "Il modello è tornato a essere una scheda normale."
 msgid "Text"
 msgstr "Testo"
 
+#: src/views/BoardView.vue
+msgid "That card is not on this board any more."
+msgstr "Questa scheda non è più in questa bacheca."
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "Il collegamento alla chat deve essere un URL http:// o https://."
@@ -4706,6 +4718,14 @@ msgstr "Questa bacheca non esiste più."
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
 msgstr "Questa scheda non esiste oppure non è accessibile."
+
+#: src/views/BoardView.vue
+msgid "This card is archived, so it is not on the board. Un-archive it to put it back."
+msgstr "Questa scheda è archiviata, quindi non è nella bacheca. Rimuovila dall'archivio per riportarla."
+
+#: src/views/BoardView.vue
+msgid "This card is hidden by the current filter. Clear the filter to see it."
+msgstr "Questa scheda è nascosta dal filtro attuale. Rimuovi il filtro per vederla."
 
 #: src/components/CardDetail.vue
 msgid "This card is not visible to you"
@@ -5067,7 +5087,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4246
+#: src/components/CardDetail.vue:4267
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5144,7 +5164,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4248
+#: src/components/CardDetail.vue:4269
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"

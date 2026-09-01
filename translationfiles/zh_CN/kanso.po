@@ -93,6 +93,10 @@ msgid "{card} is due tomorrow"
 msgstr "{card} 明天到期"
 
 #: src/views/BoardView.vue
+msgid "{card} is in {stack}"
+msgstr "{card} 在 {stack}"
+
+#: src/views/BoardView.vue
 msgid "{card} is no longer a sub-card"
 msgstr "{card} 不再是子卡片"
 
@@ -255,17 +259,17 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4069
+#: src/components/CardDetail.vue:4090
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4067
+#: src/components/CardDetail.vue:4088
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/components/CardDetail.vue:4065
+#: src/components/CardDetail.vue:4086
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -285,7 +289,7 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:991
+#: src/components/CardDetail.vue:1011
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
@@ -1527,7 +1531,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4245
+#: src/components/CardDetail.vue:4266
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2641,6 +2645,10 @@ msgstr "筛选已删除的卡片"
 msgid "Filter trash…"
 msgstr "筛选回收站…"
 
+#: src/components/CardDetail.vue
+msgid "Find the card on board"
+msgstr "在看板上查找此卡片"
+
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
 msgstr "适应"
@@ -3125,7 +3133,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4247
+#: src/components/CardDetail.vue:4268
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4423,7 +4431,7 @@ msgstr "显示格式工具栏"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:5649
+#: src/components/CardDetail.vue:5707
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -4644,6 +4652,10 @@ msgstr "模板已变回普通卡片。"
 msgid "Text"
 msgstr "文本"
 
+#: src/views/BoardView.vue
+msgid "That card is not on this board any more."
+msgstr "该卡片已不在此看板上。"
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "聊天链接必须是 http:// 或 https:// 开头的 URL。"
@@ -4687,6 +4699,14 @@ msgstr "此看板已不存在。"
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
 msgstr "此卡片不存在，或你无权访问。"
+
+#: src/views/BoardView.vue
+msgid "This card is archived, so it is not on the board. Un-archive it to put it back."
+msgstr "此卡片已归档，因此不在看板上。取消归档即可放回看板。"
+
+#: src/views/BoardView.vue
+msgid "This card is hidden by the current filter. Clear the filter to see it."
+msgstr "此卡片被当前筛选条件隐藏。清除筛选即可看到它。"
 
 #: src/components/CardDetail.vue
 msgid "This card is not visible to you"
@@ -5048,7 +5068,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4246
+#: src/components/CardDetail.vue:4267
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5124,7 +5144,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4248
+#: src/components/CardDetail.vue:4269
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

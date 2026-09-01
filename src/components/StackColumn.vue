@@ -310,6 +310,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:compact="compact"
 						:selection-mode="selectionMode"
 						:selected="selectedIds.has(cards[vRow.index].id)"
+						:revealed="revealedCardId === cards[vRow.index].id"
 						@click="openCard(cards[vRow.index].id)"
 						@hover="(id) => onCardHover?.(id)"
 						@select="(p) => onCardSelect?.(p)" />
@@ -528,6 +529,15 @@ const props = defineProps({
 	compact: {
 		type: Boolean,
 		default: false,
+	},
+	/**
+	 * Card id currently flagged as "found" by "Find the card on board" (#10062),
+	 * or null. BoardView owns the flag and clears it after a couple of seconds;
+	 * the matching tile draws a ring so the eye lands on it after the scroll.
+	 */
+	revealedCardId: {
+		type: [Number, String],
+		default: null,
 	},
 })
 
