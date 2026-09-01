@@ -19,11 +19,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			{{ t('kanso', 'Failed to load tasks. Please try again.') }}
 		</div>
 
-		<!-- Empty state -->
+		<!-- Empty state — the copy says WHY it is empty: with a board filter on,
+		     "no tasks anywhere" would be a claim the view cannot make. -->
 		<NcEmptyContent
 			v-else-if="!filteredCards.length"
-			:name="t('kanso', 'No tasks assigned to you')"
-			:description="t('kanso', 'Cards assigned to you across your boards will appear here.')">
+			:name="emptyName"
+			:description="emptyDescription">
 			<template #icon>
 				<FormatListChecksIcon :size="64" />
 			</template>
@@ -49,7 +50,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						tabindex="0"
 						role="button"
 						@click="openCard(card)"
-						@keydown.enter="openCard(card)">
+						@keydown.enter="openCard(card)"
+						@keydown.space.prevent="openCard(card)">
 						<div class="my-cards-view__row-main">
 							<span class="my-cards-view__card-title">{{ card.title }}</span>
 							<span class="my-cards-view__meta">
@@ -67,6 +69,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</ul>
 			</section>
 		</template>
+
+		<!-- The feed is capped server-side. Say so, rather than letting a
+		     truncated window read as the whole of someone's workload. The
+		     wording is about what was LOADED, not about the rows on screen, so
+		     it stays true with the board filter applied. -->
+		<p
+			v-if="!isLoading && !isError && truncated"
+			class="my-cards-view__truncation"
+			role="status">
+			{{ t('kanso', 'Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list.', { count: limit }) }}
+		</p>
 	</div>
 </template>
 
@@ -77,6 +90,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
 import { useMyCards } from '../composables/useMyCards.js'
+import { myCardsFeed } from '../services/myCardsFeed.js'
 
 const props = defineProps({
 	embedded: { type: Boolean, default: false },
@@ -86,13 +100,39 @@ const props = defineProps({
 const router = useRouter()
 const { data, isLoading, isError } = useMyCards()
 
-const cards = computed(() => data.value ?? [])
+/** { cards, truncated, limit } — the server caps the feed and reports the cap. */
+const feed = computed(() => myCardsFeed(data.value))
+
+const cards = computed(() => feed.value.cards)
+
+/** True when more cards are assigned than the server returned. */
+const truncated = computed(() => feed.value.truncated)
+
+/** The server-side row cap, for the truncation notice. */
+const limit = computed(() => feed.value.limit)
 
 /** Cards after applying the optional board filter from the hub. */
 const filteredCards = computed(() =>
 	props.boardFilter === null
 		? cards.value
 		: cards.value.filter((c) => c.boardId === props.boardFilter),
+)
+
+/**
+ * Empty-state copy. The block is gated on the FILTERED list, so with a board
+ * filter applied the unfiltered wording ("no tasks assigned to you") would
+ * state something false — the user may well have tasks on other boards.
+ */
+const emptyName = computed(() =>
+	props.boardFilter === null
+		? t('kanso', 'No tasks assigned to you')
+		: t('kanso', 'No tasks on this board'),
+)
+
+const emptyDescription = computed(() =>
+	props.boardFilter === null
+		? t('kanso', 'Cards assigned to you across your boards will appear here.')
+		: t('kanso', 'Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you.'),
 )
 
 /** Local midnight boundaries used to bucket cards by due date. */
@@ -241,7 +281,13 @@ function openCard(card) {
 .my-cards-view__row:hover,
 .my-cards-view__row:focus-visible {
 	background: var(--color-border-dark);
-	outline: none;
+}
+
+/* Rows are tabbable buttons, so keyboard focus MUST be visible (WCAG 2.4.7).
+   Same ring as the sibling Inbox rows. */
+.my-cards-view__row:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
 }
 
 .my-cards-view__row-main {
@@ -277,5 +323,12 @@ function openCard(card) {
 .my-cards-view__due--overdue {
 	color: var(--color-error);
 	font-weight: 600;
+}
+
+.my-cards-view__truncation {
+	margin: 0;
+	padding: 12px 0 0;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
 }
 </style>

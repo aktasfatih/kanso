@@ -30,7 +30,9 @@ import { invalidateMyWork } from '../composables/queryKeys.js'
 
 // Bump when the cached SHAPE changes (a query payload restructure) so stale
 // entries from an older client are discarded rather than hydrated.
-const CACHE_BUSTER = 'kanso-cache-v1'
+// v2: the `my-cards` payload became { cards, truncated, limit } instead of a
+// bare card array, so v1 snapshots must not be hydrated.
+const CACHE_BUSTER = 'kanso-cache-v2'
 const CACHE_KEY = 'queryClient'
 // Data older than this is treated as too stale to show even offline.
 const MAX_AGE_MS = 24 * 60 * 60 * 1000

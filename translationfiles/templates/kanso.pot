@@ -3550,6 +3550,10 @@ msgstr ""
 msgid "No tasks assigned to you"
 msgstr ""
 
+#: src/views/MyCardsView.vue
+msgid "No tasks on this board"
+msgstr ""
+
 #: src/components/ManageTemplatesModal.vue
 msgid "No templates yet"
 msgstr ""
@@ -3601,6 +3605,10 @@ msgstr ""
 msgid "Note (optional)"
 msgstr ""
 
+#: src/views/MyCardsView.vue
+msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "now"
@@ -3636,6 +3644,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
+msgstr ""
+
+#: src/views/MyCardsView.vue
+msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
 msgstr ""
 
 #: src/components/CommandPalette.vue

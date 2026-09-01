@@ -3,6 +3,7 @@
 
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { toMyCardsFeed } from './myCardsFeed.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
 
@@ -475,9 +476,11 @@ export const deleteCardReminder = (cardId, reminderId) =>
 export const getInbox = () =>
 	axios.get(url('/api/inbox')).then((r) => r.data)
 
-// My tasks (open cards assigned to me, across every board I can read)
+// My tasks (open cards assigned to me, across every board I can read).
+// The list is capped server-side; the cap is reported in headers, so this
+// resolves to a { cards, truncated, limit } feed rather than a bare array.
 export const getMyCards = () =>
-	axios.get(url('/api/my-cards')).then((r) => r.data)
+	axios.get(url('/api/my-cards')).then((r) => toMyCardsFeed(r.data, r.headers))
 
 // Cross-board saved "Views" (#3815). CRUD lives in NC user-config (opaque
 // filter blob); the server stays filter-agnostic. create is upsert-by-name.

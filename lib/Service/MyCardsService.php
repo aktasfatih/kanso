@@ -17,6 +17,15 @@ use OCA\Kanso\Db\CardMapper;
  * and SearchService); a card on a board the user cannot read is never returned.
  */
 class MyCardsService {
+	/**
+	 * Most rows the feed ever returns. The cap keeps the cross-board query
+	 * bounded; it is REPORTED rather than applied silently, so a user with
+	 * more assigned cards than this sees "showing the first N" instead of a
+	 * truncated list that looks complete (and a "N+" nav badge instead of a
+	 * frozen, wrong exact count).
+	 */
+	public const LIMIT = 200;
+
 	public function __construct(
 		private BoardService $boardService,
 		private CardMapper $cardMapper,
@@ -25,7 +34,7 @@ class MyCardsService {
 	}
 
 	/**
-	 * @return list<array<string, mixed>>
+	 * @return array{cards: list<array<string, mixed>>, truncated: bool, limit: int}
 	 */
 	public function findMine(string $uid): array {
 		$boards = $this->boardService->findAll($uid);
@@ -35,11 +44,24 @@ class MyCardsService {
 		);
 		// Visibility (#3743): assignment grants no visibility - the viewer's
 		// per-board roles scope the query like every other read path.
-		return $this->cardMapper->findAssignedInBoards(
+		//
+		// LIMIT + 1 is the truncation probe: one extra row is enough to know
+		// there IS more, without paying for a second COUNT query on a feed that
+		// every client polls.
+		$rows = $this->cardMapper->findAssignedInBoards(
 			[$uid],
 			$boardIds,
 			$uid,
 			$this->boardAccess->rolesFor($boards, $uid),
+			self::LIMIT + 1,
 		);
+
+		$truncated = count($rows) > self::LIMIT;
+
+		return [
+			'cards' => $truncated ? array_slice($rows, 0, self::LIMIT) : $rows,
+			'truncated' => $truncated,
+			'limit' => self::LIMIT,
+		];
 	}
 }

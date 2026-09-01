@@ -22,6 +22,15 @@ use OCP\IUserSession;
 class MyCardsController extends Controller {
 	use ApiErrorTrait;
 
+	/**
+	 * Signals that the feed hit {@see MyCardsService::LIMIT} and more assigned
+	 * cards exist beyond it ('1') or that it is complete ('0').
+	 */
+	public const HEADER_TRUNCATED = 'X-Kanso-Truncated';
+
+	/** The row cap the feed was built with. */
+	public const HEADER_LIMIT = 'X-Kanso-Limit';
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -34,7 +43,15 @@ class MyCardsController extends Controller {
 	#[NoAdminRequired]
 	public function index(): JSONResponse {
 		return $this->respond(function (): JSONResponse {
-			return new JSONResponse($this->myCardsService->findMine($this->currentUserId()));
+			$feed = $this->myCardsService->findMine($this->currentUserId());
+			// The body stays the plain card list this endpoint has always
+			// returned (API clients keep working); the cap is reported in
+			// headers so a client can say "showing the first 200" instead of
+			// presenting a truncated window as the whole feed.
+			$response = new JSONResponse($feed['cards']);
+			$response->addHeader(self::HEADER_LIMIT, (string)$feed['limit']);
+			$response->addHeader(self::HEADER_TRUNCATED, $feed['truncated'] ? '1' : '0');
+			return $response;
 		});
 	}
 

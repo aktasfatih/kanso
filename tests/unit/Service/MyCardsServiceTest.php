@@ -52,10 +52,12 @@ class MyCardsServiceTest extends TestCase {
 		$expected = [['id' => 1, 'boardId' => 3, 'title' => 'A task']];
 		$this->cardMapper->expects($this->once())
 			->method('findAssignedInBoards')
-			->with(['alice'], [3, 9], 'alice', $roles)
+			->with(['alice'], [3, 9], 'alice', $roles, MyCardsService::LIMIT + 1)
 			->willReturn($expected);
 
-		$this->assertSame($expected, $this->service->findMine('alice'));
+		$feed = $this->service->findMine('alice');
+		$this->assertSame($expected, $feed['cards']);
+		$this->assertFalse($feed['truncated']);
 	}
 
 	public function testFindMineWithNoReadableBoardsQueriesEmptySet(): void {
@@ -63,9 +65,57 @@ class MyCardsServiceTest extends TestCase {
 		$this->boardAccess->method('rolesFor')->willReturn([]);
 		$this->cardMapper->expects($this->once())
 			->method('findAssignedInBoards')
-			->with(['bob'], [], 'bob', [])
+			->with(['bob'], [], 'bob', [], MyCardsService::LIMIT + 1)
 			->willReturn([]);
 
-		$this->assertSame([], $this->service->findMine('bob'));
+		$feed = $this->service->findMine('bob');
+		$this->assertSame([], $feed['cards']);
+		$this->assertFalse($feed['truncated']);
+	}
+
+	/**
+	 * @return list<array<string, mixed>> $count synthetic assigned-card rows
+	 */
+	private function rows(int $count): array {
+		$rows = [];
+		for ($i = 1; $i <= $count; $i++) {
+			$rows[] = ['id' => $i, 'boardId' => 3, 'title' => 'Task ' . $i];
+		}
+		return $rows;
+	}
+
+	public function testFindMineSignalsTheCapWhenMoreCardsAreAssignedThanTheLimit(): void {
+		// 201 assigned cards: the user is over the cap. The feed must SAY it is
+		// truncated - a silent 200-row slice makes the page (and the nav badge
+		// counting the same array) claim a wrong, frozen total.
+		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
+		$this->cardMapper->expects($this->once())
+			->method('findAssignedInBoards')
+			// LIMIT + 1 is the probe that makes truncation detectable at all.
+			->with(['alice'], [3], 'alice', [3 => ViewerContext::ROLE_INTERNAL], MyCardsService::LIMIT + 1)
+			->willReturn($this->rows(MyCardsService::LIMIT + 1));
+
+		$feed = $this->service->findMine('alice');
+
+		$this->assertTrue($feed['truncated'], 'a feed over the cap must report itself truncated');
+		$this->assertSame(MyCardsService::LIMIT, $feed['limit']);
+		// The probe row is never handed to the client.
+		$this->assertCount(MyCardsService::LIMIT, $feed['cards']);
+		$this->assertSame(1, $feed['cards'][0]['id']);
+		$this->assertSame(MyCardsService::LIMIT, $feed['cards'][MyCardsService::LIMIT - 1]['id']);
+	}
+
+	public function testFindMineAtExactlyTheLimitIsNotTruncated(): void {
+		// Exactly LIMIT rows means the query found no row beyond the cap - the
+		// feed is complete and must not cry "more".
+		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
+		$this->cardMapper->method('findAssignedInBoards')->willReturn($this->rows(MyCardsService::LIMIT));
+
+		$feed = $this->service->findMine('alice');
+
+		$this->assertFalse($feed['truncated']);
+		$this->assertCount(MyCardsService::LIMIT, $feed['cards']);
 	}
 }
