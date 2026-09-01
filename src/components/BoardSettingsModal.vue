@@ -1821,10 +1821,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:id="`recur-freq-${boardId}`"
 									v-model="newRecurFreq"
 									class="workflow__select">
-									<option value="DAILY">{{ t('kanso', 'day(s)') }}</option>
-									<option value="WEEKLY">{{ t('kanso', 'week(s)') }}</option>
-									<option value="MONTHLY">{{ t('kanso', 'month(s)') }}</option>
-									<option value="YEARLY">{{ t('kanso', 'year(s)') }}</option>
+									<option value="DAILY">{{ n('kanso', 'day', 'days', newRecurUnitCount) }}</option>
+									<option value="WEEKLY">{{ n('kanso', 'week', 'weeks', newRecurUnitCount) }}</option>
+									<option value="MONTHLY">{{ n('kanso', 'month', 'months', newRecurUnitCount) }}</option>
+									<option value="YEARLY">{{ n('kanso', 'year', 'years', newRecurUnitCount) }}</option>
 								</select>
 							</div>
 						</div>
@@ -2139,7 +2139,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showConfirmation } from '@nextcloud/dialogs'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -3793,9 +3793,9 @@ function humanRrule(rrule) {
 	const DAY_MAP = { MO: t('kanso', 'Mon'), TU: t('kanso', 'Tue'), WE: t('kanso', 'Wed'), TH: t('kanso', 'Thu'), FR: t('kanso', 'Fri'), SA: t('kanso', 'Sat'), SU: t('kanso', 'Sun') }
 	let freqPhrase = ''
 	if (freq === 'DAILY') {
-		freqPhrase = interval === 1 ? t('kanso', 'Every day') : t('kanso', 'Every {n} days', { n: interval })
+		freqPhrase = n('kanso', 'Every day', 'Every %n days', interval)
 	} else if (freq === 'WEEKLY') {
-		const base = interval === 1 ? t('kanso', 'Every week') : t('kanso', 'Every {n} weeks', { n: interval })
+		const base = n('kanso', 'Every week', 'Every %n weeks', interval)
 		if (byday) {
 			const dayNames = byday.split(',').map((d) => DAY_MAP[d.trim()] ?? d).join(', ')
 			freqPhrase = t('kanso', '{base} on {days}', { base, days: dayNames })
@@ -3803,9 +3803,9 @@ function humanRrule(rrule) {
 			freqPhrase = base
 		}
 	} else if (freq === 'MONTHLY') {
-		freqPhrase = interval === 1 ? t('kanso', 'Every month') : t('kanso', 'Every {n} months', { n: interval })
+		freqPhrase = n('kanso', 'Every month', 'Every %n months', interval)
 	} else if (freq === 'YEARLY') {
-		freqPhrase = interval === 1 ? t('kanso', 'Every year') : t('kanso', 'Every {n} years', { n: interval })
+		freqPhrase = n('kanso', 'Every year', 'Every %n years', interval)
 	} else {
 		freqPhrase = rrule
 	}
@@ -3813,7 +3813,7 @@ function humanRrule(rrule) {
 	// End condition suffix
 	let endPhrase = ''
 	if (count !== null) {
-		endPhrase = t('kanso', '· {n} times', { n: count })
+		endPhrase = n('kanso', '· %n time', '· %n times', count)
 	} else if (until) {
 		// UNTIL is YYYYMMDDTHHMMSSZ - parse to a readable date
 		const y = until.slice(0, 4)
@@ -3927,6 +3927,12 @@ const newRecurDuedateOffsetDays = ref(1)
 const newRecurSkipWhileOpen = ref(false)
 const isCreatingRecurRule = ref(false)
 const createRecurRuleError = ref('')
+
+// The unit `<select>` sits next to the interval `<input>`, so its option labels
+// have to agree with whatever number is currently typed there ("Every 1 day" vs
+// "Every 3 days") — languages with more than two plural forms need the real
+// count, not a fixed "day(s)".
+const newRecurUnitCount = computed(() => Math.max(1, Number(newRecurInterval.value) || 1))
 const editingRecurRuleId = ref(null)  // null = create mode, number = edit mode
 const isEditingRecurRule = computed(() => editingRecurRuleId.value !== null)
 

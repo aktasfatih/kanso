@@ -139,6 +139,45 @@ test('a plural entry whose singular and plural English forms share one %n only r
 	assert.equal(ok, true, JSON.stringify(problems))
 })
 
+test('a whole-phrase plural may leave %n out of the form that does not count', () => {
+	// #10056 — "Every day" / "Every %n days" is the standard one/other idiom: the
+	// singular English form names no number, so msgstr[0] has nowhere to put one
+	// ("Täglich", "Codziennie"). Only tokens BOTH English forms use are required.
+	const text = po([
+		'msgid "Every day"',
+		'msgid_plural "Every %n days"',
+		'msgstr[0] "Täglich"',
+		'msgstr[1] "Alle %n Tage"',
+	])
+	const { ok, problems } = lintCatalogText('xx', text)
+	assert.equal(ok, true, JSON.stringify(problems))
+})
+
+test('a placeholder neither English form uses is still unexpected', () => {
+	// The relaxation above must not become "anything goes on a plural entry".
+	const text = po([
+		'msgid "Every day"',
+		'msgid_plural "Every %n days"',
+		'msgstr[0] "Täglich"',
+		'msgstr[1] "Alle {count} Tage"',
+	])
+	const { ok, problems } = lintCatalogText('xx', text)
+	assert.equal(ok, false)
+	assert.ok(problems.some((p) => /unexpected \{count\}/.test(p.message)), JSON.stringify(problems))
+})
+
+test('a placeholder both English forms use is still required in every msgstr[n]', () => {
+	const text = po([
+		'msgid "%n card"',
+		'msgid_plural "%n cards"',
+		'msgstr[0] "%n Karte"',
+		'msgstr[1] "viele Karten"',
+	])
+	const { ok, problems } = lintCatalogText('xx', text)
+	assert.equal(ok, false)
+	assert.ok(problems.some((p) => /missing %n/.test(p.message)), JSON.stringify(problems))
+})
+
 test('a repeated placeholder must appear the same number of times', () => {
 	const text = po([
 		'msgid "{name} {name}"',

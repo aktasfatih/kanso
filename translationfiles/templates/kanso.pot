@@ -14,9 +14,11 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue
-msgid "· {n} times"
-msgstr ""
+#: src/components/BoardSettingsModal.vue:3816
+msgid "· %n time"
+msgid_plural "· %n times"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "· until {date}"
@@ -148,10 +150,6 @@ msgstr ""
 msgid "{n} overdue"
 msgstr ""
 
-#: src/components/CardDetail.vue
-msgid "{n} project"
-msgstr ""
-
 #: src/components/CardTile.vue
 msgid "{n}d"
 msgstr ""
@@ -246,6 +244,8 @@ msgstr ""
 
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:211
+#: src/views/BoardStats.vue:420
+#: src/views/ProjectStats.vue:340
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] ""
@@ -284,6 +284,18 @@ msgstr[1] ""
 #: src/components/BoardTileContent.vue:39
 msgid "%n overdue"
 msgid_plural "%n overdue"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardStats.vue:421
+msgid "%n point"
+msgid_plural "%n points"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CardDetail.vue:991
+msgid "%n project"
+msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -904,11 +916,6 @@ msgstr ""
 msgid "Card visibility"
 msgstr ""
 
-#: src/views/BoardStats.vue
-#: src/views/ProjectStats.vue
-msgid "cards"
-msgstr ""
-
 #: src/components/BoardTimelineView.vue
 #: src/components/CommandPalette.vue
 msgid "Cards"
@@ -1183,7 +1190,7 @@ msgid "Collapse column"
 msgstr ""
 
 #: src/components/BoardListView.vue
-msgid "Collapse subtasks"
+msgid "Collapse sub-cards"
 msgstr ""
 
 #: src/views/ProjectView.vue
@@ -1530,6 +1537,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue:1824
 #: src/components/CardDetail.vue:4245
 msgid "day"
 msgid_plural "days"
@@ -1538,10 +1546,6 @@ msgstr[1] ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Day"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "day(s)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2015,37 +2019,29 @@ msgstr ""
 msgid "Every"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} days"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} months"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} weeks"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "Every {n} years"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3796
 msgid "Every day"
-msgstr ""
+msgid_plural "Every %n days"
+msgstr[0] ""
+msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3806
 msgid "Every month"
-msgstr ""
+msgid_plural "Every %n months"
+msgstr[0] ""
+msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3798
 msgid "Every week"
-msgstr ""
+msgid_plural "Every %n weeks"
+msgstr[0] ""
+msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue
+#: src/components/BoardSettingsModal.vue:3808
 msgid "Every year"
-msgstr ""
+msgid_plural "Every %n years"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
@@ -2064,7 +2060,7 @@ msgid "Expand column {name}"
 msgstr ""
 
 #: src/components/BoardListView.vue
-msgid "Expand subtasks"
+msgid "Expand sub-cards"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3144,6 +3140,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue:1826
 #: src/components/CardDetail.vue:4247
 msgid "month"
 msgid_plural "months"
@@ -3152,10 +3149,6 @@ msgstr[1] ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Month"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "month(s)"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -3829,10 +3822,6 @@ msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Pinned"
-msgstr ""
-
-#: src/views/BoardStats.vue
-msgid "points"
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -5076,6 +5065,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue:1825
 #: src/components/CardDetail.vue:4246
 msgid "week"
 msgid_plural "weeks"
@@ -5084,10 +5074,6 @@ msgstr[1] ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Week"
-msgstr ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "week(s)"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -5156,15 +5142,12 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue:1827
 #: src/components/CardDetail.vue:4248
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
 msgstr[1] ""
-
-#: src/components/BoardSettingsModal.vue
-msgid "year(s)"
-msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Yearly"

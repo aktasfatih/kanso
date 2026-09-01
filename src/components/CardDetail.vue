@@ -988,7 +988,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="togglePicker('project')">
 							<FolderMultipleOutlineIcon :size="12" />
 							{{ cardProjectIds.size > 0
-								? t('kanso', '{n} project', { n: cardProjectIds.size })
+								? n('kanso', '%n project', '%n projects', cardProjectIds.size)
 								: t('kanso', 'Project') }}
 						</button>
 						<div v-if="openPicker === 'project'" class="card-modal__popover">

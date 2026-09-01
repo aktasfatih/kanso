@@ -375,6 +375,30 @@ function mergePlaceholderExpectations(msgidTokens, pluralTokens) {
 }
 
 /**
+ * The placeholders every msgstr[n] MUST carry: per token, the MIN of its count
+ * across the two English forms.
+ *
+ * A token both forms use ("%n card" / "%n cards") is genuinely required — a
+ * translation that drops it loses the number. But a whole-phrase plural writes
+ * the singular without one ("Every day" / "Every %n days"), and there the %n
+ * belongs only to the forms that actually count something: German's "Täglich"
+ * is the right msgstr[0] and has nowhere to put a number. Requiring the union
+ * would force "Alle 1 Tage" into every catalogue. Anything a translation uses
+ * beyond this minimum is still capped by mergePlaceholderExpectations, so a
+ * genuinely invented placeholder is still reported as unexpected.
+ */
+function requiredPlaceholderExpectations(msgidTokens, pluralTokens) {
+	const a = tally(msgidTokens)
+	const b = tally(pluralTokens)
+	const out = []
+	for (const [k, n] of a) {
+		const min = Math.min(n, b.get(k) || 0)
+		for (let i = 0; i < min; i++) out.push(k)
+	}
+	return out
+}
+
+/**
  * Lint one catalogue's PO source. Pure function (no I/O, no process.exit) so
  * it can be unit-tested directly. Returns `{ ok, problems }`, where each
  * problem is `{ line, message }`.
@@ -417,11 +441,16 @@ function lintCatalogText(lang, text) {
 					}
 				}
 			}
-			const expected = mergePlaceholderExpectations(extractPlaceholders(e.msgid), extractPlaceholders(e.plural))
+			const idTokens = extractPlaceholders(e.msgid)
+			const plTokens = extractPlaceholders(e.plural)
+			const required = requiredPlaceholderExpectations(idTokens, plTokens)
+			const allowed = mergePlaceholderExpectations(idTokens, plTokens)
 			for (const idxStr of Object.keys(e.plurals).sort()) {
 				const val = e.plurals[idxStr]
 				if (!val) continue // untranslated plural form — allowed
-				const { missing, extra } = diffMultisets(expected, extractPlaceholders(val))
+				const actual = extractPlaceholders(val)
+				const { missing } = diffMultisets(required, actual)
+				const { extra } = diffMultisets(allowed, actual)
 				if (missing.length || extra.length) {
 					problems.push({
 						line: e.msgidLine,
@@ -776,6 +805,8 @@ if (isMain) {
 }
 
 export {
-	parsePoStrict, extractPlaceholders, diffMultisets, mergePlaceholderExpectations, lintCatalogText,
+	parsePoStrict, extractPlaceholders, diffMultisets, mergePlaceholderExpectations,
+	requiredPlaceholderExpectations, lintCatalogText,
 	pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog,
+	extractFrontend,
 }
