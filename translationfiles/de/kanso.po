@@ -29,7 +29,7 @@ msgstr "\"overwrite.cli.url\" ist nicht in config.php gesetzt – Links in Kanso
 
 #: src/components/CardDetail.vue
 msgid "(empty)"
-msgstr ""
+msgstr "(leer)"
 
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
@@ -77,11 +77,11 @@ msgstr "{base} an {days}"
 
 #: src/components/BoardTimelineView.vue
 msgid "{blocker} blocks {blocked}"
-msgstr ""
+msgstr "{blocker} blockiert {blocked}"
 
 #: src/components/BoardTimelineView.vue
 msgid "{blocker} blocks {blocked} — {blocked} starts before {blocker} finishes"
-msgstr ""
+msgstr "{blocker} blockiert {blocked} – {blocked} beginnt, bevor {blocker} fertig ist"
 
 #: lib/Notification/Notifier.php
 msgid "{card} is due"
@@ -93,11 +93,11 @@ msgstr "{card} ist morgen fällig"
 
 #: src/views/BoardView.vue
 msgid "{card} is no longer a sub-card"
-msgstr ""
+msgstr "{card} ist keine Unterkarte mehr"
 
 #: src/views/BoardView.vue
 msgid "{card} is now a sub-card of {parent}"
-msgstr ""
+msgstr "{card} ist jetzt eine Unterkarte von {parent}"
 
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
@@ -191,11 +191,11 @@ msgstr "{when} → Review von {name} anfordern"
 
 #: src/components/BoardSettingsModal.vue
 msgid "{when} → start the timer"
-msgstr ""
+msgstr "{when} → Timer starten"
 
 #: src/components/BoardSettingsModal.vue
 msgid "{when} → stop the timer"
-msgstr ""
+msgstr "{when} → Timer stoppen"
 
 #: lib/Notification/Notifier.php
 msgid "%1$s assigned you a step on %2$s"
@@ -314,7 +314,7 @@ msgstr "Eine Karte wurde erstellt, verschoben oder abgeschlossen, oder ein Board
 
 #: src/components/BoardSettingsModal.vue
 msgid "A fresh copy is created each time; this card stays as the source"
-msgstr ""
+msgstr "Jedes Mal wird eine neue Kopie erstellt; diese Karte bleibt die Quelle"
 
 #: src/views/BoardList.vue
 msgid "Active"
@@ -344,7 +344,7 @@ msgstr "Beschreibung hinzufügen…"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a GitHub webhook sending \"pull_request\" and \"issues\" events to the URL below, with Content type set to application/json (the form-encoded option is not supported). Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards."
-msgstr ""
+msgstr "Richte einen GitHub-Webhook ein, der „pull_request“- und „issues“-Ereignisse an die untenstehende URL sendet, mit Content type auf application/json (die formularkodierte Variante wird nicht unterstützt). Nenne die Karte im PR-Titel (eine Referenz wie {example}) oder in einem kanso-<id>-Branch: Ein geöffneter PR verschiebt diese Karte dann in deine Review-Spalte, ein zusammengeführter PR nach „Fertig“. Wird ein auf einer Karte verknüpftes Issue geschlossen, wandert die Karte nach „Fertig“; wird es wieder geöffnet, geht die Karte zurück nach „In Bearbeitung“. Die Issue-Aufnahme unten kann neu geöffnete Issues außerdem in verknüpfte Karten verwandeln."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a label"
@@ -442,7 +442,7 @@ msgstr "Label hinzugefügt"
 
 #: src/components/CardDetail.vue
 msgid "added the label {value}"
-msgstr ""
+msgstr "hat das Label {value} hinzugefügt"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -575,7 +575,7 @@ msgstr "Zuweisen…"
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
-msgstr ""
+msgstr "hat {value} zugewiesen"
 
 #: src/components/CardDetail.vue
 msgid "assigned a member"
@@ -706,7 +706,7 @@ msgstr "Von einer anderen Karte blockiert"
 
 #: src/components/MarkdownEditor.vue
 msgid "Blockquote"
-msgstr ""
+msgstr "Zitat"
 
 #: src/components/CardDetail.vue
 msgid "Blocks"
@@ -787,11 +787,11 @@ msgstr "Branch"
 
 #: src/components/CardDetail.vue
 msgid "Bring this card back"
-msgstr ""
+msgstr "Diese Karte zurückholen"
 
 #: src/components/CardDetail.vue
 msgid "Brings the card back on a schedule, counting from the card's start date, or its due date. A card dated in the future comes back on that date first, then follows the schedule. Its start and due dates slide forward together each time."
-msgstr ""
+msgstr "Holt die Karte nach einem Zeitplan zurück, gerechnet ab dem Startdatum der Karte oder ihrem Fälligkeitsdatum. Eine Karte mit einem Datum in der Zukunft kommt zuerst an diesem Datum zurück und folgt danach dem Zeitplan. Ihr Start- und Fälligkeitsdatum rücken jedes Mal gemeinsam nach vorn."
 
 #: src/composables/useCardType.js
 msgid "Bug"
@@ -799,7 +799,7 @@ msgstr "Fehler"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Built-in sections"
-msgstr ""
+msgstr "Integrierte Abschnitte"
 
 #: src/views/BoardView.vue
 msgid "Bulk action failed."
@@ -811,7 +811,7 @@ msgstr "Karten-Sammelaktionen"
 
 #: src/components/MarkdownEditor.vue
 msgid "Bullet list"
-msgstr ""
+msgstr "Aufzählungsliste"
 
 #: src/views/ProjectView.vue
 msgid "Bulleted list"
@@ -878,7 +878,7 @@ msgstr "Karte gelöscht"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Card fields"
-msgstr ""
+msgstr "Kartenfelder"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Card ID prefix"
@@ -1008,59 +1008,59 @@ msgstr "Status ändern"
 
 #: src/components/CardDetail.vue
 msgid "changed the card type"
-msgstr ""
+msgstr "hat den Kartentyp geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the card type to {value}"
-msgstr ""
+msgstr "hat den Kartentyp auf {value} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the due date"
-msgstr ""
+msgstr "hat das Fälligkeitsdatum geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the due date to {value}"
-msgstr ""
+msgstr "hat das Fälligkeitsdatum auf {value} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the estimate"
-msgstr ""
+msgstr "hat die Schätzung geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the estimate to {value}"
-msgstr ""
+msgstr "hat die Schätzung auf {value} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the priority"
-msgstr ""
+msgstr "hat die Priorität geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the priority from {from} to {to}"
-msgstr ""
+msgstr "hat die Priorität von {from} auf {to} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the priority to {value}"
-msgstr ""
+msgstr "hat die Priorität auf {value} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the start date"
-msgstr ""
+msgstr "hat das Startdatum geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the start date to {value}"
-msgstr ""
+msgstr "hat das Startdatum auf {value} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the status"
-msgstr ""
+msgstr "hat den Status geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the status from {from} to {to}"
-msgstr ""
+msgstr "hat den Status von {from} auf {to} geändert"
 
 #: src/components/CardDetail.vue
 msgid "changed the status to {value}"
-msgstr ""
+msgstr "hat den Status auf {value} geändert"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -1105,7 +1105,7 @@ msgstr "CSV-Datei auswählen"
 
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
-msgstr ""
+msgstr "Wähle aus, welche Abschnitte in der linken Seitenleiste erscheinen."
 
 #: src/composables/useCardType.js
 msgid "Chore"
@@ -1135,19 +1135,19 @@ msgstr "Schritt-Fälligkeitsdatum löschen"
 
 #: src/components/CardDetail.vue
 msgid "cleared the card type"
-msgstr ""
+msgstr "hat den Kartentyp geleert"
 
 #: src/components/CardDetail.vue
 msgid "cleared the due date"
-msgstr ""
+msgstr "hat das Fälligkeitsdatum geleert"
 
 #: src/components/CardDetail.vue
 msgid "cleared the estimate"
-msgstr ""
+msgstr "hat die Schätzung geleert"
 
 #: src/components/CardDetail.vue
 msgid "cleared the start date"
-msgstr ""
+msgstr "hat das Startdatum geleert"
 
 #: src/views/ProjectView.vue
 msgid "Click to edit the description"
@@ -1184,7 +1184,7 @@ msgstr "Spalte einklappen"
 
 #: src/components/BoardListView.vue
 msgid "Collapse subtasks"
-msgstr ""
+msgstr "Unterkarten einklappen"
 
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
@@ -1269,7 +1269,7 @@ msgstr "Bedingung"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Contacts"
-msgstr ""
+msgstr "Kontakte"
 
 #: src/components/CardDetail.vue
 msgid "Copied!"
@@ -1403,7 +1403,7 @@ msgstr "Starter-Board konnte nicht eingerichtet werden."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link options."
-msgstr ""
+msgstr "Optionen des öffentlichen Links konnten nicht aktualisiert werden."
 
 #: src/views/BoardView.vue
 msgid "Couldn't load this board. Please try again."
@@ -1415,11 +1415,11 @@ msgstr "Diese Karte konnte nicht geladen werden. Bitte erneut versuchen."
 
 #: src/views/BoardView.vue
 msgid "Couldn't make this card a sub-card."
-msgstr ""
+msgstr "Diese Karte konnte nicht zur Unterkarte gemacht werden."
 
 #: src/views/BoardView.vue
 msgid "Couldn't remove this card from its parent."
-msgstr ""
+msgstr "Diese Karte konnte nicht von ihrer übergeordneten Karte getrennt werden."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Count"
@@ -1431,7 +1431,7 @@ msgstr "Titelbild"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cover colour"
-msgstr ""
+msgstr "Titelbildfarbe"
 
 #: src/components/CardDetail.vue
 #: src/views/ProjectsView.vue
@@ -1444,7 +1444,7 @@ msgstr "Ein neues Board erstellen, das dir gehört, basierend auf diesem."
 
 #: src/components/CardDetail.vue
 msgid "Create a new card each time"
-msgstr ""
+msgstr "Jedes Mal eine neue Karte erstellen"
 
 #: src/views/BoardList.vue
 msgid "Create board"
@@ -1511,7 +1511,7 @@ msgstr "Benutzerdefinierte Felder"
 
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
-msgstr ""
+msgstr "Eigener Zeitplan – bearbeite ihn unter Board-Einstellungen → Automatisierung."
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1520,7 +1520,7 @@ msgstr "Durchlaufzeit – Erstellung bis Fertig ({days}T)"
 
 #: src/components/CardDetail.vue
 msgid "Daily"
-msgstr ""
+msgstr "Täglich"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Danger zone"
@@ -1533,8 +1533,8 @@ msgstr "Datum"
 #: src/components/CardDetail.vue:4223
 msgid "day"
 msgid_plural "days"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Tag"
+msgstr[1] "Tage"
 
 #: src/components/BoardTimelineView.vue
 msgid "Day"
@@ -1550,7 +1550,7 @@ msgstr "Tage"
 
 #: src/views/ViewPage.vue
 msgid "Default"
-msgstr ""
+msgstr "Standard"
 
 #: src/components/BoardFilterBar.vue
 msgid "Default (no filter)"
@@ -1581,7 +1581,7 @@ msgstr "\"{title}\" löschen?"
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
-msgstr ""
+msgstr "Löschen und Wiederholung beenden"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue
@@ -1591,7 +1591,7 @@ msgstr "Board löschen"
 
 #: src/components/CardDetail.vue
 msgid "Delete card only"
-msgstr ""
+msgstr "Nur die Karte löschen"
 
 #: src/components/StackColumn.vue
 msgid "Delete column"
@@ -1628,7 +1628,7 @@ msgstr "Projekt löschen"
 
 #: src/components/CardDetail.vue
 msgid "Delete recurring card"
-msgstr ""
+msgstr "Wiederkehrende Karte löschen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete review type {title}"
@@ -1689,7 +1689,7 @@ msgstr "Dichte"
 
 #: src/components/BoardTimelineView.vue
 msgid "Dependencies"
-msgstr ""
+msgstr "Abhängigkeiten"
 
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
@@ -1717,7 +1717,7 @@ msgstr "Untergeordnete Karte trennen"
 
 #: src/views/ViewPage.vue
 msgid "Direction"
-msgstr ""
+msgstr "Richtung"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Disable"
@@ -1733,11 +1733,11 @@ msgstr "Deaktiviert"
 
 #: src/components/CardDetail.vue
 msgid "Discard mine, use theirs"
-msgstr ""
+msgstr "Meine verwerfen, ihre übernehmen"
 
 #: src/components/CardDetail.vue
 msgid "Discard your unsaved description? The other version will be kept."
-msgstr ""
+msgstr "Deine ungespeicherte Beschreibung verwerfen? Die andere Version wird behalten."
 
 #: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
@@ -1766,7 +1766,7 @@ msgstr "Offen"
 
 #: src/components/CardDetail.vue
 msgid "Does not repeat"
-msgstr ""
+msgstr "Wiederholt sich nicht"
 
 #: src/views/BoardList.vue
 msgid "Doing"
@@ -1823,11 +1823,11 @@ msgstr "Karten hier ablegen · N drücken"
 #: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Drop to nest as sub-card"
-msgstr ""
+msgstr "Ablegen, um als Unterkarte einzuordnen"
 
 #: src/components/BoardListView.vue
 msgid "Drop to remove from parent"
-msgstr ""
+msgstr "Ablegen, um von der übergeordneten Karte zu lösen"
 
 #: src/views/PublicBoard.vue
 msgid "Due"
@@ -1915,7 +1915,7 @@ msgstr "Projekt bearbeiten"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Edit rule"
-msgstr ""
+msgstr "Regel bearbeiten"
 
 #: src/components/ManageTemplatesModal.vue
 msgid "Edit template"
@@ -1932,7 +1932,7 @@ msgstr "bearbeitet"
 
 #: src/App.vue
 msgid "Editor"
-msgstr ""
+msgstr "Editor"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
@@ -1976,7 +1976,7 @@ msgstr "Eingabe zum Öffnen · Esc zum Schließen"
 
 #: src/components/MarkdownEditor.vue
 msgid "Enter URL"
-msgstr ""
+msgstr "URL eingeben"
 
 #: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
@@ -2009,7 +2009,7 @@ msgstr "Aufwandsschätzung"
 
 #: src/components/CardDetail.vue
 msgid "every"
-msgstr ""
+msgstr "alle"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Every"
@@ -2065,7 +2065,7 @@ msgstr "Spalte {name} erweitern"
 
 #: src/components/BoardListView.vue
 msgid "Expand subtasks"
-msgstr ""
+msgstr "Unterkarten ausklappen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Export"
@@ -2145,7 +2145,7 @@ msgstr "Karte konnte nicht erstellt werden."
 
 #: src/components/BoardListView.vue
 msgid "Failed to create column."
-msgstr ""
+msgstr "Spalte konnte nicht erstellt werden."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to create custom field."
@@ -2535,7 +2535,7 @@ msgstr "Reaktion konnte nicht aktualisiert werden."
 
 #: src/components/CardDetail.vue
 msgid "Failed to update recurrence."
-msgstr ""
+msgstr "Wiederholung konnte nicht aktualisiert werden."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to update role."
@@ -2659,7 +2659,7 @@ msgstr "Papierkorb filtern…"
 
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
-msgstr ""
+msgstr "Einpassen"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -2684,7 +2684,7 @@ msgstr "Formatierung"
 
 #: lib/Service/PublicShareService.php
 msgid "Former user"
-msgstr ""
+msgstr "Ehemaliger Nutzer"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Frequency"
@@ -2718,7 +2718,7 @@ msgstr "GitHub-Labelname"
 
 #: src/components/BoardSettingsModal.vue
 msgid "GitHub links"
-msgstr ""
+msgstr "GitHub-Links"
 
 #: src/views/BoardList.vue
 msgid "GitHub Projects (coming soon)"
@@ -2757,11 +2757,11 @@ msgstr "Überschrift"
 
 #: src/components/MarkdownEditor.vue
 msgid "Heading 1"
-msgstr ""
+msgstr "Überschrift 1"
 
 #: src/components/MarkdownEditor.vue
 msgid "Heading 2"
-msgstr ""
+msgstr "Überschrift 2"
 
 #: src/App.vue
 msgid "Help"
@@ -2773,15 +2773,15 @@ msgstr "Ausgeblendete Karte"
 
 #: src/components/CardDetail.vue
 msgid "Hide changes"
-msgstr ""
+msgstr "Änderungen ausblenden"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there."
-msgstr ""
+msgstr "Blende die Kartenabschnitte aus, die dieses Board nicht nutzt. Es wird nichts gelöscht – wird ein Abschnitt wieder eingeschaltet, ist alles wieder da, was bereits vorhanden war."
 
 #: src/components/CardDetail.vue
 msgid "Hide the discussion panel"
-msgstr ""
+msgstr "Diskussionsbereich ausblenden"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Hide this board without deleting it. You can restore it later."
@@ -2865,7 +2865,7 @@ msgstr "Interne und externe Mitglieder sehen jeweils nur die internen Karten ihr
 
 #: src/components/BoardSettingsModal.vue
 msgid "into {column}"
-msgstr ""
+msgstr "nach {column}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Issue intake"
@@ -2917,11 +2917,11 @@ msgstr "Kanso öffnet standardmäßig die Board-Liste. Aktiviere dies, um stattd
 
 #: src/App.vue
 msgid "Kanso settings"
-msgstr ""
+msgstr "Kanso-Einstellungen"
 
 #: src/components/CardDetail.vue
 msgid "Keep my version"
-msgstr ""
+msgstr "Meine Version behalten"
 
 #: src/views/BoardView.vue
 msgid "Keyboard shortcuts"
@@ -2970,7 +2970,7 @@ msgstr "Labels sind Board-spezifisch: Es werden nur Labels übernommen, die auf 
 
 #: src/views/ViewPage.vue
 msgid "Last modified"
-msgstr ""
+msgstr "Zuletzt geändert"
 
 #: src/admin-backup.js
 msgid "Last run: {when}"
@@ -3135,8 +3135,8 @@ msgstr "Mo"
 #: src/components/CardDetail.vue:4225
 msgid "month"
 msgid_plural "months"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Monat"
+msgstr[1] "Monate"
 
 #: src/components/BoardTimelineView.vue
 msgid "Month"
@@ -3148,7 +3148,7 @@ msgstr "Monat(e)"
 
 #: src/components/CardDetail.vue
 msgid "Monthly"
-msgstr ""
+msgstr "Monatlich"
 
 #: src/views/BoardView.vue
 msgid "More"
@@ -3204,7 +3204,7 @@ msgstr "hat diese Karte verschoben"
 
 #: src/components/CardDetail.vue
 msgid "moved this card from {from} to {to}"
-msgstr ""
+msgstr "hat diese Karte von {from} nach {to} verschoben"
 
 #: src/components/CardDetail.vue
 msgid "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board."
@@ -3318,7 +3318,7 @@ msgstr "Weiter"
 
 #: src/components/BoardSettingsModal.vue
 msgid "next {date}"
-msgstr ""
+msgstr "nächstes Mal {date}"
 
 #: templates/admin-backup.php
 msgid "Nextcloud account that owns the target folder"
@@ -3670,7 +3670,7 @@ msgstr "Projekt-Chat in neuem Tab öffnen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
-msgstr ""
+msgstr "Wiederkehrende Karte öffnen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Open this board when Kanso starts"
@@ -3690,11 +3690,11 @@ msgstr "Optionale Beschreibung — Markdown unterstützt"
 
 #: src/components/CardDetail.vue
 msgid "Optional. When the card is due. It moves with the card when it repeats, and sends a reminder."
-msgstr ""
+msgstr "Optional. Wann die Karte fällig ist. Es wandert mit der Karte mit, wenn sie sich wiederholt, und sendet eine Erinnerung."
 
 #: src/components/CardDetail.vue
 msgid "Optional. When work can begin. It moves with the card when it repeats."
-msgstr ""
+msgstr "Optional. Wann die Arbeit beginnen kann. Es wandert mit der Karte mit, wenn sie sich wiederholt."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Options (one per line or comma-separated)"
@@ -3711,11 +3711,11 @@ msgstr "Orange"
 
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
-msgstr ""
+msgstr "Nummerierte Liste"
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
-msgstr ""
+msgstr "Außerhalb des sichtbaren Bereichs – auf „Einpassen“ klicken, um sie anzuzeigen"
 
 #: src/components/BoardTimelineView.vue
 #: src/composables/useBoardFilters.js
@@ -3920,7 +3920,7 @@ msgstr "Wiederkehrende Karten"
 
 #: src/components/CardTile.vue
 msgid "Recurring source"
-msgstr ""
+msgstr "Quelle der Wiederholung"
 
 #: src/components/CardDetail.vue
 #: src/components/StackColumn.vue
@@ -4037,7 +4037,7 @@ msgstr "Beobachter entfernen"
 
 #: src/components/CardDetail.vue
 msgid "removed {value}"
-msgstr ""
+msgstr "hat {value} entfernt"
 
 #: src/components/CardDetail.vue
 msgid "removed a label"
@@ -4049,7 +4049,7 @@ msgstr "hat eine zugewiesene Person entfernt"
 
 #: src/components/CardDetail.vue
 msgid "removed the label {value}"
-msgstr ""
+msgstr "hat das Label {value} entfernt"
 
 #: src/App.vue
 #: src/components/BoardSettingsModal.vue
@@ -4095,19 +4095,19 @@ msgstr "Ansicht umbenennen"
 
 #: src/components/CardDetail.vue
 msgid "renamed this card"
-msgstr ""
+msgstr "hat diese Karte umbenannt"
 
 #: src/components/CardDetail.vue
 msgid "renamed this card to {value}"
-msgstr ""
+msgstr "hat diese Karte in {value} umbenannt"
 
 #: src/components/CardDetail.vue
 msgid "Repeat"
-msgstr ""
+msgstr "Wiederholen"
 
 #: src/components/CardDetail.vue
 msgid "Repeats"
-msgstr ""
+msgstr "Wiederholt sich"
 
 #: src/components/CardDetail.vue
 #: src/views/ProjectView.vue
@@ -4243,7 +4243,7 @@ msgstr "Optionen speichern"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Save rule"
-msgstr ""
+msgstr "Regel speichern"
 
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
@@ -4373,7 +4373,7 @@ msgstr "Wird eingerichtet…"
 
 #: src/App.vue
 msgid "Settings"
-msgstr ""
+msgstr "Einstellungen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Share"
@@ -4385,7 +4385,7 @@ msgstr "Teile eine schreibgeschützte Ansicht dieses Boards mit einem öffentlic
 
 #: src/components/BoardSettingsModal.vue
 msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown."
-msgstr ""
+msgstr "Teile eine schreibgeschützte Ansicht dieses Boards mit einem öffentlichen Link. Zum Anzeigen ist keine Anmeldung erforderlich. Kommentare werden schreibgeschützt angezeigt; zugewiesene Personen, Aktivitäten und Mitglieder werden nicht angezeigt."
 
 #: src/views/PublicBoard.vue
 msgid "Shared read-only via Kanso"
@@ -4401,29 +4401,29 @@ msgstr "Tastaturkürzel-Übersicht ein-/ausblenden"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"
-msgstr ""
+msgstr "Änderungen anzeigen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Show comments (read-only)"
-msgstr ""
+msgstr "Kommentare anzeigen (schreibgeschützt)"
 
 #: src/App.vue
 msgid "Show formatting toolbar"
-msgstr ""
+msgstr "Formatierungsleiste anzeigen"
 
 #: src/components/CardDetail.vue
 msgid "Show the discussion panel"
-msgstr ""
+msgstr "Diskussionsbereich anzeigen"
 
 #: src/components/CardDetail.vue:5627
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
+msgstr[1] "Diskussionsbereich anzeigen (%n Kommentare)"
 
 #: src/components/BoardTimelineView.vue
 msgid "Show the full date range"
-msgstr ""
+msgstr "Gesamten Zeitraum anzeigen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Show this board in my calendar"
@@ -4435,7 +4435,7 @@ msgstr "Beobachter anzeigen"
 
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
-msgstr ""
+msgstr "Es werden die ersten {shown} von {total} passenden Karten angezeigt – verfeinere deinen Filter, um den Rest zu sehen."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Shown to everyone on this board as a \"Project chat\" button in the toolbar — typically a Nextcloud Talk room. Leave empty to remove the button."
@@ -4443,7 +4443,7 @@ msgstr "Wird für alle auf diesem Board als Schaltfläche „Projekt-Chat\" in d
 
 #: src/App.vue
 msgid "Sidebar"
-msgstr ""
+msgstr "Seitenleiste"
 
 #: src/components/BoardTimelineView.vue
 msgid "Single date"
@@ -4460,11 +4460,11 @@ msgstr "Schiefer"
 
 #: src/components/BoardTimelineView.vue
 msgid "Some cards extend earlier than shown"
-msgstr ""
+msgstr "Manche Karten beginnen früher als dargestellt"
 
 #: src/components/BoardTimelineView.vue
 msgid "Some cards extend later than shown"
-msgstr ""
+msgstr "Manche Karten reichen weiter als dargestellt"
 
 #: src/components/CardDetail.vue
 msgid "Someone"
@@ -4472,7 +4472,7 @@ msgstr "Jemand"
 
 #: src/components/CardDetail.vue
 msgid "Someone else changed this description while you were editing. Your text is kept in the editor above — their version is shown below."
-msgstr ""
+msgstr "Jemand anderes hat diese Beschreibung geändert, während du bearbeitet hast. Dein Text bleibt im Editor oben erhalten – die andere Version wird unten angezeigt."
 
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
@@ -4481,7 +4481,7 @@ msgstr "Sortieren"
 
 #: src/views/ViewPage.vue
 msgid "Sort by"
-msgstr ""
+msgstr "Sortieren nach"
 
 #: src/views/BoardStats.vue
 msgid "Stack {id}"
@@ -4530,7 +4530,7 @@ msgstr "Startdatum"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Start the timer"
-msgstr ""
+msgstr "Timer starten"
 
 #: src/views/BoardList.vue
 msgid "Start with a template"
@@ -4555,7 +4555,7 @@ msgstr "Fälligkeitsdatum des Schritts"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
-msgstr ""
+msgstr "Timer stoppen"
 
 #: src/components/CardDetail.vue
 msgid "Stop watching this card"
@@ -4563,7 +4563,7 @@ msgstr "Diese Karte nicht mehr beobachten"
 
 #: src/components/MarkdownEditor.vue
 msgid "Strikethrough"
-msgstr ""
+msgstr "Durchgestrichen"
 
 #: src/components/CardTile.vue
 #: src/composables/useBoardFilters.js
@@ -4678,7 +4678,7 @@ msgstr "Diese Karte ist für dich nicht sichtbar"
 
 #: src/components/CardDetail.vue
 msgid "This card needs a column before it can repeat."
-msgstr ""
+msgstr "Diese Karte braucht eine Spalte, bevor sie sich wiederholen kann."
 
 #: src/components/CardDetail.vue
 msgid "This card no longer exists — it may have been deleted."
@@ -4686,7 +4686,7 @@ msgstr "Diese Karte existiert nicht mehr – sie wurde möglicherweise gelöscht
 
 #: src/components/CardDetail.vue
 msgid "This card powers a recurring series. Delete just this card, or also stop the recurrence?"
-msgstr ""
+msgstr "Diese Karte steuert eine wiederkehrende Serie. Nur diese Karte löschen oder auch die Wiederholung beenden?"
 
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
@@ -4702,7 +4702,7 @@ msgstr "Dadurch werden das Board und alle seine Karten für alle Benutzer gelös
 
 #: src/components/BoardSettingsModal.vue
 msgid "This same card is brought back and reset each time"
-msgstr ""
+msgstr "Jedes Mal wird dieselbe Karte zurückgeholt und zurückgesetzt"
 
 #: src/views/ViewPage.vue
 msgid "This saved view no longer exists."
@@ -4744,7 +4744,7 @@ msgstr "Timeline-Zoom"
 #: src/components/CardDetail.vue
 #: src/components/CardTile.vue
 msgid "Timer running"
-msgstr ""
+msgstr "Timer läuft"
 
 #: src/views/BoardView.vue
 msgid "Tip: press ? for keyboard shortcuts"
@@ -4860,7 +4860,7 @@ msgstr "Ohne Gruppe"
 
 #: src/components/CardDetail.vue
 msgid "Unknown"
-msgstr ""
+msgstr "Unbekannt"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -4920,7 +4920,7 @@ msgstr "hat die Checkliste aktualisiert"
 
 #: src/components/CardDetail.vue
 msgid "updated the description"
-msgstr ""
+msgstr "hat die Beschreibung aktualisiert"
 
 #: src/components/CardDetail.vue
 msgid "updated this card"
@@ -5035,8 +5035,8 @@ msgstr "Mi"
 #: src/components/CardDetail.vue:4224
 msgid "week"
 msgid_plural "weeks"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Woche"
+msgstr[1] "Wochen"
 
 #: src/components/BoardTimelineView.vue
 msgid "Week"
@@ -5048,7 +5048,7 @@ msgstr "Woche(n)"
 
 #: src/components/CardDetail.vue
 msgid "Weekly"
-msgstr ""
+msgstr "Wöchentlich"
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
@@ -5110,13 +5110,13 @@ msgstr "Antwort schreiben…"
 
 #: src/components/CardDetail.vue
 msgid "wrote"
-msgstr ""
+msgstr "schrieb"
 
 #: src/components/CardDetail.vue:4226
 msgid "year"
 msgid_plural "years"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Jahr"
+msgstr[1] "Jahre"
 
 #: src/components/BoardSettingsModal.vue
 msgid "year(s)"
@@ -5124,7 +5124,7 @@ msgstr "Jahr(e)"
 
 #: src/components/CardDetail.vue
 msgid "Yearly"
-msgstr ""
+msgstr "Jährlich"
 
 #: src/components/CardDetail.vue
 #: src/components/StackColumn.vue
