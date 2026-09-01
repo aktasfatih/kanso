@@ -13,6 +13,7 @@
 	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
 	<summary lang="it">Bacheche kanban veloci e open source, con revisioni, progetti e sincronizzazione in tempo reale</summary>
 	<summary lang="nl">Snelle open-source kanbanborden met reviews, projecten en realtime synchronisatie</summary>
+	<summary lang="pl">Szybkie tablice kanban open source z recenzjami, projektami i synchronizacją w czasie rzeczywistym</summary>
 	<summary lang="pt-br">Quadros kanban rápidos e de código aberto, com revisões, projetos e sincronização em tempo real</summary>
 	<summary lang="tr">İncelemeler, projeler ve gerçek zamanlı eşitleme sunan hızlı, açık kaynaklı kanban panoları</summary>
 	<description><![CDATA[
@@ -151,6 +152,30 @@ Terugkerende kaarten volgens RRULE-schema's, regels voor automatisch
 archiveren, WIP-limieten en kolomrollen, een opdrachtenpalet met
 volledige-tekstzoeken, een prullenbak met herstel, GitHub-koppelingen en
 webhook, en importeren uit Deck met één klik.
+	]]></description>
+	<description lang="pl"><![CDATA[
+Kanso to aplikacja z tablicami kanban dla Nextcloud, zbudowana z myślą o
+szybkości. Tablice, kolumny i karty z natychmiastowym przeciąganiem i
+upuszczaniem, optymistycznymi aktualizacjami oraz odpowiedziami dobranymi pod
+duże tablice (ponad 2000 kart). Aktualizacje w czasie rzeczywistym przez
+notify_push, z odpytywaniem jako rozwiązaniem awaryjnym.
+
+Rozbudowane karty z Markdownem, etykietami, terminami, osobami przypisanymi,
+priorytetami, listami kontrolnymi, kartami nadrzędnymi i podkartami oraz
+wątkowanymi komentarzami z @wzmiankami i obserwującymi. Udostępnianie tablic z
+kontrolą dostępu dla poszczególnych użytkowników i grup.
+
+Przepływ recenzji (poproś o recenzję, zatwierdź lub poproś o zmiany,
+konfigurowalne typy recenzji i opcjonalna bramka ukończenia). Wspólne dla
+wszystkich tablic centrum „Moja praca” (moje zadania, recenzje, skrzynka
+odbiorcza), projekty zbierające karty z wielu tablic oraz statystyki tablic i
+projektów (prędkość, czas cyklu, przepustowość). Widoki: tablica, lista i oś
+czasu (Gantt).
+
+Karty cykliczne według harmonogramów RRULE, reguły autoarchiwizacji, limity WIP
+i role kolumn, paleta poleceń z wyszukiwaniem pełnotekstowym, kosz z
+przywracaniem, odnośniki do GitHuba i webhook oraz import z Deck jednym
+kliknięciem.
 	]]></description>
 	<description lang="pt-br"><![CDATA[
 O Kanso é um aplicativo de quadros kanban para Nextcloud, feito para ser
