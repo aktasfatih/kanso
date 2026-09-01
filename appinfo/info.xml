@@ -9,6 +9,7 @@
 	<name>Kanso</name>
 	<summary>Fast open-source kanban boards with reviews, projects and realtime sync</summary>
 	<summary lang="de">Schnelle Open-Source-Kanban-Boards mit Reviews, Projekten und Echtzeit-Synchronisierung</summary>
+	<summary lang="es">Tableros kanban rápidos y de código abierto, con revisiones, proyectos y sincronización en tiempo real</summary>
 	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
 	<summary lang="tr">İncelemeler, projeler ve gerçek zamanlı eşitleme sunan hızlı, açık kaynaklı kanban panoları</summary>
 	<description><![CDATA[
@@ -52,6 +53,30 @@ Wiederkehrende Karten nach RRULE-Zeitplänen, Regeln zum automatischen
 Archivieren, WIP-Limits und Spaltenrollen, eine Befehlspalette mit
 Volltextsuche, Papierkorb mit Wiederherstellung, GitHub-Verknüpfungen und
 Webhook sowie Import aus Deck mit einem Klick.
+	]]></description>
+	<description lang="es"><![CDATA[
+Kanso es una aplicación de tableros kanban para Nextcloud, creada pensando en
+la velocidad. Tableros, columnas y tarjetas con arrastrar y soltar instantáneo,
+actualizaciones optimistas y volúmenes de datos pensados para tableros grandes
+(más de 2000 tarjetas). Actualizaciones en tiempo real mediante notify_push,
+con consulta periódica como alternativa.
+
+Tarjetas completas con Markdown, etiquetas, fechas de vencimiento, personas
+asignadas, prioridades, listas de tareas, tarjetas principales y subtarjetas, y
+comentarios en hilos con menciones @ y observadores. Tableros compartidos con
+control de acceso por usuario y por grupo.
+
+Un flujo de revisión (solicitar una revisión, aprobar o solicitar cambios,
+tipos de revisión personalizables y un bloqueo opcional de la columna
+Terminado). Un espacio «Mi trabajo» común a todos los tableros (mis tareas,
+revisiones, bandeja de entrada), proyectos que abarcan varios tableros y
+estadísticas por tablero y por proyecto (velocidad, tiempo de ciclo,
+rendimiento). Vistas de tablero, lista y cronología (Gantt).
+
+Tarjetas recurrentes con reglas RRULE, reglas de archivado automático, límites
+WIP y roles de columna, una paleta de comandos con búsqueda de texto completo,
+papelera con restauración, enlaces de GitHub y webhook, e importación desde
+Deck con un solo clic.
 	]]></description>
 	<description lang="fr"><![CDATA[
 Kanso est une application de tableau kanban pour Nextcloud, conçue pour la
