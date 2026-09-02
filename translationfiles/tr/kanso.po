@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4090
+#: src/components/CardDetail.vue:4091
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
 msgstr[1] "%n gün önce"
 
-#: src/components/CardDetail.vue:4088
+#: src/components/CardDetail.vue:4089
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/components/CardDetail.vue:4086
+#: src/components/CardDetail.vue:4087
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -1543,7 +1543,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4266
+#: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -3150,7 +3150,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4268
+#: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4449,7 +4449,7 @@ msgstr "Biçimlendirme araç çubuğunu göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:5707
+#: src/components/CardDetail.vue:5830
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5087,7 +5087,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4267
+#: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5164,7 +5164,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4269
+#: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"
@@ -5198,6 +5198,10 @@ msgstr "yönetebilirsin"
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
 msgstr "O panoya kopyalayamazsın."
+
+#: src/components/CardDetail.vue
+msgid "You have unsaved changes on this card. If you leave now, they will be lost."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need edit permission to configure workflows."

@@ -3478,18 +3478,19 @@ const descriptionBaseText = ref('')
 const descriptionConflict = ref(null)
 
 // The board shell renders this component through an UNKEYED router-view, so
-// navigating card→card REUSES it. Every piece of description-editing state is
-// per-card and must be dropped on the switch - carrying the optimistic base
-// version across would compare the new card's version against the old card's
-// and silently skip the conflict guard, and a stale conflict panel would show
-// the wrong card's text. Not `immediate`: there is nothing to clear on mount.
+// navigating card→card REUSES it. Every piece of editing state is per-card and
+// must be dropped on the switch - carrying the optimistic base version across
+// would compare the new card's version against the old card's and silently skip
+// the conflict guard, and a stale conflict panel would show the wrong card's
+// text. The same reuse also leaked the COMMENT drafts (#10069): a half-typed
+// reply or new thread stayed in the composer and turned up on the next card you
+// opened, one Post away from landing on the wrong discussion. `discardDrafts()`
+// clears all of them. Not `immediate`: there is nothing to clear on mount.
 watch(() => props.cardId, () => {
-	editingDescription.value = false
-	draftDescription.value = ''
+	discardDrafts()
 	descriptionBaseVersion.value = null
-	descriptionBaseText.value = ''
-	descriptionConflict.value = null
 	saveError.value = ''
+	commentError.value = ''
 })
 
 function startDescriptionEdit() {
@@ -4449,6 +4450,10 @@ async function submitNewComment() {
 // Reply state
 const replyingToId = ref(null)
 const replyBody = ref('')
+// What the composer was PRE-FILLED with (a blockquote of the quoted comment, or
+// ''). The unsaved-work guard compares against this rather than against '', so
+// merely clicking Reply on an older comment isn't mistaken for typed work.
+const replyBaseBody = ref('')
 const replyRefs = {}
 
 function setReplyRef(id, el) {
@@ -4492,6 +4497,7 @@ async function openReplyBox(target, root) {
 	const last = thread && thread.replies.length ? thread.replies[thread.replies.length - 1] : thread?.comment
 	const quote = last && target.id !== last.id ? buildQuote(target) : ''
 	replyBody.value = quote
+	replyBaseBody.value = quote
 	await nextTick()
 	// The reply ref is now a MarkdownEditor component (exposes focus/setContent).
 	// setContent pre-fills the editor with the blockquote and moves caret to end.
@@ -4508,6 +4514,7 @@ async function openReplyBox(target, root) {
 function closeReplyBox() {
 	replyingToId.value = null
 	replyBody.value = ''
+	replyBaseBody.value = ''
 }
 
 async function submitReply(parentCommentId) {
@@ -4518,6 +4525,7 @@ async function submitReply(parentCommentId) {
 		await addComment.mutateAsync({ body, parentCommentId })
 		// Clear + close the reply box only after success (keep text on failure).
 		replyBody.value = ''
+		replyBaseBody.value = ''
 		replyingToId.value = null
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
@@ -4527,6 +4535,9 @@ async function submitReply(parentCommentId) {
 // Inline comment edit state
 const editingCommentId = ref(null)
 const editingCommentBody = ref('')
+// The comment's text as the editor opened it — an untouched inline edit must not
+// count as unsaved work (see hasUnsavedChanges).
+const editingCommentBase = ref('')
 const commentEditRefs = {}
 
 function setCommentEditRef(id, el) {
@@ -4537,6 +4548,7 @@ function setCommentEditRef(id, el) {
 async function startCommentEdit(comment) {
 	editingCommentId.value = comment.id
 	editingCommentBody.value = comment.body
+	editingCommentBase.value = comment.body
 	await nextTick()
 	commentEditRefs[comment.id]?.focus()
 }
@@ -4544,6 +4556,7 @@ async function startCommentEdit(comment) {
 function cancelCommentEdit() {
 	editingCommentId.value = null
 	editingCommentBody.value = ''
+	editingCommentBase.value = ''
 }
 
 async function saveCommentEdit(comment) {
@@ -4810,8 +4823,107 @@ function findOnBoard() {
 // have no `from` and still close to the board (do not regress that flow).
 const MY_WORK_RETURN_ROUTES = ['my-work', 'my-cards', 'my-reviews', 'inbox']
 
+// ── Unsaved-work guard (#10069) ───────────────────────────────────────────────
+// Nothing on this card autosaves: the title, the description, a new thread, a
+// reply and an inline comment edit are all explicit-save. Dismissing the card
+// used to drop every one of them silently. This is the single source of truth
+// for "there is typed work here that the server has never seen".
+//
+// Each draft is compared against the text it STARTED from, not against '' —
+// opening the description editor, or clicking Reply on an older comment (which
+// pre-fills a quote), must not read as unsaved work. Getting that wrong would
+// confirm on every single close, which is worse than the bug being fixed.
+const hasUnsavedChanges = computed(() => {
+	if (editingTitle.value && draftTitle.value.trim() !== (cardData.value?.title ?? '')) {
+		return true
+	}
+	if (editingDescription.value && draftDescription.value !== descriptionBaseText.value) {
+		return true
+	}
+	if (newCommentBody.value.trim() !== '') {
+		return true
+	}
+	if (replyingToId.value !== null && replyBody.value !== replyBaseBody.value) {
+		return true
+	}
+	if (editingCommentId.value !== null && editingCommentBody.value !== editingCommentBase.value) {
+		return true
+	}
+	return false
+})
+
+/**
+ * Drop every unsaved draft — once the user has confirmed the loss, and on a
+ * card→card switch, where the shared component would otherwise carry one card's
+ * half-typed reply into the next one.
+ */
+function discardDrafts() {
+	editingTitle.value = false
+	draftTitle.value = ''
+	editingDescription.value = false
+	draftDescription.value = ''
+	descriptionBaseText.value = ''
+	descriptionConflict.value = null
+	newCommentBody.value = ''
+	replyingToId.value = null
+	replyBody.value = ''
+	replyBaseBody.value = ''
+	editingCommentId.value = null
+	editingCommentBody.value = ''
+	editingCommentBase.value = ''
+}
+
+/**
+ * Ask before throwing typed work away. `window.confirm` is what this component
+ * already uses for the same class of question (the description-conflict discard
+ * above), and it answers synchronously — the close paths act on the result
+ * immediately.
+ *
+ * @return {boolean} true when it is safe to leave
+ */
+function confirmDiscardUnsaved() {
+	if (!hasUnsavedChanges.value) {
+		return true
+	}
+	if (!window.confirm(t('kanso', 'You have unsaved changes on this card. If you leave now, they will be lost.'))) {
+		return false
+	}
+	discardDrafts()
+	return true
+}
+
+// Tab close / reload: the browser's own generic prompt is the only thing
+// available here, and it only shows when preventDefault() is called.
+function onBeforeUnload(event) {
+	if (!hasUnsavedChanges.value) {
+		return
+	}
+	event.preventDefault()
+	// Legacy browsers still require a truthy returnValue to show the prompt.
+	event.returnValue = ''
+}
+onMounted(() => {
+	window.addEventListener('beforeunload', onBeforeUnload)
+})
+onBeforeUnmount(() => {
+	window.removeEventListener('beforeunload', onBeforeUnload)
+})
+
+// Browser Back is deliberately NOT guarded. An `onBeforeRouteLeave` hook here
+// does raise the question, but cancelling it does not put the user back on the
+// card: under hash history vue-router restores the aborted popstate in the wrong
+// direction and the browser ends up OUTSIDE the app entirely, card and draft
+// gone — strictly worse than no prompt. Measured, not assumed. The X, the
+// backdrop, Escape and a tab close/reload are all covered above; Back is left
+// alone until the router can cancel it cleanly.
+
 function closeModal() {
 	isOpen.value = false
+	// Every caller has either just asked the user (requestClose / Escape) or has
+	// removed the card outright (archive, delete, move to another board, save as
+	// template), so nothing here is still wanted. Clearing it keeps a draft from
+	// surviving on the (reused) component into whatever is opened next.
+	discardDrafts()
 	// Controlled overlay (#3950): the parent owns open/close and the surrounding
 	// URL (e.g. a View at /views/:id). Do NOT navigate — just tell the parent to
 	// tear the overlay down, leaving the user exactly where they were.
@@ -4870,6 +4982,9 @@ function onRootEscape() {
 		return
 	}
 	if (props.mode === 'modal') {
+		if (!confirmDiscardUnsaved()) {
+			return
+		}
 		closeModal()
 	}
 }
@@ -4934,9 +5049,17 @@ onBeforeUnmount(() => {
 // it first rather than closing the whole card (which would drop the picker context).
 // Exposed to the shell as requestClose() so the modal's close button obeys the same
 // popover-first precedence as Escape / the backdrop.
+// Deliberate dismissal of the whole card, so it is also where the unsaved-work
+// question belongs (#10069). closeModal() itself stays unguarded: archive,
+// delete, move-to-board and template flows call it after the card has already
+// left this surface, and asking to keep drafts for a card you just deleted would
+// be nonsense.
 function requestClose() {
 	if (openPicker.value !== null) {
 		openPicker.value = null
+		return
+	}
+	if (!confirmDiscardUnsaved()) {
 		return
 	}
 	closeModal()
