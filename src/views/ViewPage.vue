@@ -37,9 +37,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     become one chip (last board wins) while the predicate matches the
 				     bare id — picking "Bug" would return the other board's "Urgent"
 				     cards. Wrong results are worse than a missing facet; a
-				     board-qualified label identity is follow-up work.
+				     board-qualified label identity is follow-up work. Hiding the facet
+				     is also what keeps this View's saved label filter safe from the
+				     bar's "Clear filters", which only clears what it renders (#10091).
 				     `estimate-scale` is deliberately not passed either — an estimate
-				     scale is board-scoped and a cross-board View can span two of them. -->
+				     scale is board-scoped and a cross-board View can span two of them.
+				     Nor `saved-filters`: saved views are a board-surface concept, and
+				     the bar drops that whole section when it is given none. -->
 				<BoardFilterBar
 					:state="filterState"
 					:participants="participants"

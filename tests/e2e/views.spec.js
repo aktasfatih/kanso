@@ -257,10 +257,14 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(rowA).toBeVisible({ timeout: 10_000 })
 			await expect(rowB).toHaveCount(0, { timeout: 10_000 })
 
-			// Clear filters back to both cards before exercising the next dimension.
-			await page.locator('.board-filter-bar__back').click()
-			await page.locator('.board-filter-bar__clear').click()
+			// Reset the TYPE facet itself (toggle "Bug" back off) before exercising the
+			// next dimension — NOT the panel's global "Clear filters". Clearing is
+			// scoped to the facets this control renders (#10091), so on a View it no
+			// longer touches the View's own saved label filter; but resetting the one
+			// facet under test keeps this step's undo exact and independent of that.
+			await page.locator('.board-filter-bar__opt', { hasText: /^Bug$/ }).click()
 			await expect(rowB).toBeVisible({ timeout: 10_000 })
+			await page.locator('.board-filter-bar__back').click()
 
 			// ── New filter dimension #2: COMMENTS (single-select radio) ──────────────
 			await page.locator('.board-filter-bar__dim-row[data-dim="comments"]').click()
@@ -269,9 +273,9 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(rowA).toBeVisible({ timeout: 10_000 })
 			await expect(rowB).toHaveCount(0, { timeout: 10_000 })
 
-			// Clear again, close the popover.
+			// Reset the COMMENTS facet with its own "Any" radio, close the popover.
+			await page.locator('.board-filter-bar__opt', { hasText: /^Any$/ }).click()
 			await page.locator('.board-filter-bar__back').click()
-			await page.locator('.board-filter-bar__clear').click()
 			await page.keyboard.press('Escape')
 			await expect(rowB).toBeVisible({ timeout: 10_000 })
 
@@ -436,12 +440,10 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(rowLive).toHaveCount(0, { timeout: 15_000 })
 
 			// Clearing the facet restores the default: the archived card is gone again.
-			// Reset the Archived facet itself ("Any"), NOT the panel's global "Clear
-			// filters": on a View that button also drops the View's own saved label
-			// filter — its facet is deliberately hidden here (board-scoped label ids
-			// collide across boards), so the wipe is invisible and would widen the
-			// page to the entire cross-board feed, where the virtualised list keeps
-			// both of these rows off-screen and the assertions stop meaning anything.
+			// Reset the Archived facet itself ("Any") rather than the panel's global
+			// "Clear filters" — this step is about THIS facet, and the global button is
+			// covered by its own spec (#10091: it clears only rendered facets, so the
+			// View's hidden saved label filter survives it).
 			await page.locator('.board-filter-bar__opt', { hasText: /^Any$/ }).click()
 			await page.keyboard.press('Escape')
 			await expect(rowLive).toBeVisible({ timeout: 15_000 })
