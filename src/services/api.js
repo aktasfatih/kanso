@@ -524,8 +524,14 @@ export const deleteView = (id) =>
 // flat short-key object `filterToQuery()` already produces for shareable board
 // filter links - the same encoding, spread straight into the query string. The
 // client still re-filters the rows it receives, so this is a superset guard.
-export const getViewCards = ({ sortMode = 'default', sortDir = 'asc', filter = {} } = {}) =>
-	axios.get(url('/api/views/cards'), { params: { sortMode, sortDir, ...filter } }).then((r) => {
+//
+// `signal` is the caller's AbortSignal (TanStack hands one to every queryFn).
+// Aborting does NOT stop the server - the response is written in one go, so PHP
+// finishes the request either way - but it frees the browser connection slot at
+// once and skips normalising an envelope of up to `limit` enriched cards that
+// the cache is about to discard. Optional: callers may omit it.
+export const getViewCards = ({ sortMode = 'default', sortDir = 'asc', filter = {}, signal } = {}) =>
+	axios.get(url('/api/views/cards'), { params: { sortMode, sortDir, ...filter }, signal }).then((r) => {
 		const d = r.data ?? {}
 		return {
 			cards: Array.isArray(d.cards) ? d.cards : [],
