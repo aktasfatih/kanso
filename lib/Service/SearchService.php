@@ -54,7 +54,9 @@ class SearchService {
 			return ['query' => $term, 'total' => 0, 'results' => []];
 		}
 
-		$boards = $this->boardService->findAll($uid);
+		// Active boards only (#10126): an archived board is shelved, so its
+		// cards and comments are out of search entirely.
+		$boards = $this->boardService->findAllActive($uid);
 		$boardIds = $this->readableBoardIds($boards, $boardId);
 		if ($boardIds === []) {
 			return ['query' => $term, 'total' => 0, 'results' => []];

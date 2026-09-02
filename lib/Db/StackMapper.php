@@ -41,6 +41,13 @@ class StackMapper extends QBMapper {
 	/**
 	 * All non-deleted stacks of a board in display order.
 	 *
+	 * Unlike cards, stacks carry no unique index on their sort key, and
+	 * {@see \OCA\Kanso\Service\SortKeyService::between()} is deterministic, so two
+	 * concurrent moves into the same gap can derive the SAME key (documented as
+	 * accepted in StackService). `sort_key` alone therefore leaves tied rows in
+	 * whatever order the DB happens to return, which can flip between reloads.
+	 * The `id` tiebreaker makes a duplicate key harmless and stable instead.
+	 *
 	 * @return Stack[]
 	 * @throws Exception
 	 */
@@ -50,7 +57,8 @@ class StackMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->orderBy('sort_key', 'ASC');
+			->orderBy('sort_key', 'ASC')
+			->addOrderBy('id', 'ASC');
 
 		return $this->findEntities($qb);
 	}
@@ -85,7 +93,9 @@ class StackMapper extends QBMapper {
 	/**
 	 * The first non-deleted stack of a board carrying the given workflow role
 	 * (in display order), or null. Used to resolve auto-move targets (e.g. the
-	 * "In review" or "Done" column) without a separate config surface.
+	 * "In review" or "Done" column) without a separate config surface. Ordered
+	 * with the same `id` tiebreaker as {@see self::findByBoard()} so two stacks
+	 * tied on `sort_key` always resolve to the same one.
 	 *
 	 * @throws Exception
 	 */
@@ -97,6 +107,7 @@ class StackMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('role', $qb->createNamedParameter($role, IQueryBuilder::PARAM_INT)))
 			->orderBy('sort_key', 'ASC')
+			->addOrderBy('id', 'ASC')
 			->setMaxResults(1);
 
 		$stacks = $this->findEntities($qb);

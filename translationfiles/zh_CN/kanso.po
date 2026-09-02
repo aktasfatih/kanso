@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -259,17 +259,17 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4090
+#: src/components/CardDetail.vue:4091
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4088
+#: src/components/CardDetail.vue:4089
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/components/CardDetail.vue:4086
+#: src/components/CardDetail.vue:4087
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -1513,6 +1513,10 @@ msgstr "自定义字段"
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "自定义计划 — 请在“看板设置 → 自动化”中编辑。"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1530,8 +1534,8 @@ msgstr "危险区域"
 msgid "Date"
 msgstr "日期"
 
-#: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4266
+#: src/components/BoardSettingsModal.vue:1841
+#: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2011,22 +2015,22 @@ msgstr "每"
 msgid "Every"
 msgstr "每"
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -3132,8 +3136,8 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4268
+#: src/components/BoardSettingsModal.vue:1843
+#: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4121,6 +4125,7 @@ msgstr "把这张卡片重命名为 {value}"
 msgid "Repeat"
 msgstr "重复"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr "重复"
@@ -4431,7 +4436,7 @@ msgstr "显示格式工具栏"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:5707
+#: src/components/CardDetail.vue:5830
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5067,8 +5072,8 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4267
+#: src/components/BoardSettingsModal.vue:1842
+#: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5143,8 +5148,8 @@ msgstr "写下回复…"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4269
+#: src/components/BoardSettingsModal.vue:1844
+#: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"
@@ -5177,6 +5182,10 @@ msgstr "你可以管理"
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
 msgstr "你无法复制到该看板。"
+
+#: src/components/CardDetail.vue
+msgid "You have unsaved changes on this card. If you leave now, they will be lost."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need edit permission to configure workflows."

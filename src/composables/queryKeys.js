@@ -132,10 +132,12 @@ let viewFeedPendingClient = null
  * twenty call sites do. When the card overlay was opened FROM a View, ViewPage
  * stays mounted behind it, so ['view-cards'] is an ACTIVE query - the only kind
  * invalidateQueries actually refetches. Five quick edits therefore meant five
- * full cross-board reads. And TanStack does not absorb them: invalidateQueries
- * defaults to cancelRefetch:true, but getViewCards is a plain axios GET with no
- * AbortSignal, so a "cancelled" refetch's request still runs to completion
- * server-side. N ticks really were N round trips.
+ * full cross-board reads, and TanStack cannot absorb them for us: cancelling a
+ * refetch (invalidateQueries defaults to cancelRefetch:true) aborts the browser
+ * request - useViewCards forwards the query's AbortSignal to axios, see
+ * tests/e2e/view-feed-abort.spec.js - but the server response is written in one
+ * go, so PHP finishes the request anyway. N ticks really are N round trips on
+ * the server; this throttle is what makes them fewer.
  *
  * LEADING EDGE FIRES IMMEDIATELY - do not turn this into a plain debounce. The
  * first edit of a burst is the one the user is watching for, and the View tile

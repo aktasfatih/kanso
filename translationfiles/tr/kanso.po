@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4090
+#: src/components/CardDetail.vue:4091
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
 msgstr[1] "%n gün önce"
 
-#: src/components/CardDetail.vue:4088
+#: src/components/CardDetail.vue:4089
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/components/CardDetail.vue:4086
+#: src/components/CardDetail.vue:4087
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -1525,6 +1525,10 @@ msgstr "Özel alanlar"
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Özel zamanlama — Pano ayarları → Otomasyon bölümünden düzenle."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1542,8 +1546,8 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4266
+#: src/components/BoardSettingsModal.vue:1841
+#: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2024,25 +2028,25 @@ msgstr "her"
 msgid "Every"
 msgstr "Her"
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
 msgstr[1] "Her %n günde bir"
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3149,8 +3153,8 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4268
+#: src/components/BoardSettingsModal.vue:1843
+#: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4139,6 +4143,7 @@ msgstr "bu kartın adını {value} yaptı"
 msgid "Repeat"
 msgstr "Yinele"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr "Yinelenme"
@@ -4449,7 +4454,7 @@ msgstr "Biçimlendirme araç çubuğunu göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:5707
+#: src/components/CardDetail.vue:5830
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5086,8 +5091,8 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4267
+#: src/components/BoardSettingsModal.vue:1842
+#: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5163,8 +5168,8 @@ msgstr "Bir yanıt yaz…"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4269
+#: src/components/BoardSettingsModal.vue:1844
+#: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"
@@ -5198,6 +5203,10 @@ msgstr "yönetebilirsin"
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
 msgstr "O panoya kopyalayamazsın."
+
+#: src/components/CardDetail.vue
+msgid "You have unsaved changes on this card. If you leave now, they will be lost."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need edit permission to configure workflows."

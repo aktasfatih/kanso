@@ -9,9 +9,11 @@
 // ['view-cards'] is an ACTIVE query — the only kind invalidateQueries actually
 // refetches. Every settle therefore used to trigger a full read of the heaviest
 // query in the app (enriched summaries across every readable board, up to the
-// server cap), and TanStack did not absorb the duplicates: invalidateQueries
-// defaults to cancelRefetch:true, but getViewCards is a plain axios GET with no
-// AbortSignal, so a "cancelled" refetch's request still completes server-side.
+// server cap), and TanStack cannot absorb the duplicates for us: invalidateQueries
+// defaults to cancelRefetch:true, and getViewCards now honours the query's
+// AbortSignal (#10010, proven in tests/e2e/view-feed-abort.spec.js), but the
+// response is written in one go, so a "cancelled" refetch still completes
+// SERVER-side. Only this throttle removes the round trip.
 //
 // ── Why the checklist PATCH is stubbed ───────────────────────────────────────
 // The quantity under test is purely client-side: how many /api/views/cards

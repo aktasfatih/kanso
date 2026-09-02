@@ -75,7 +75,7 @@ class ViewServiceTest extends TestCase {
 		$b3 = $this->board(3, 'Alpha');
 		$b9 = $this->board(9, 'Beta');
 		$this->boardService->expects(self::once())
-			->method('findAll')->with('alice')->willReturn([$b3, $b9]);
+			->method('findAllActive')->with('alice')->willReturn([$b3, $b9]);
 
 		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
 		$ctx9 = ViewerContext::forMember('alice', 9, ViewerContext::ROLE_EXTERNAL, false);
@@ -121,7 +121,7 @@ class ViewServiceTest extends TestCase {
 		$b3 = $this->board(3, 'Alpha', 'ALP');
 		// A board with no explicit prefix falls back to the shared default.
 		$b9 = $this->board(9, 'Beta', null);
-		$this->boardService->method('findAll')->with('alice')->willReturn([$b3, $b9]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3, $b9]);
 
 		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
 		$ctx9 = ViewerContext::forMember('alice', 9, ViewerContext::ROLE_INTERNAL, true);
@@ -178,7 +178,7 @@ class ViewServiceTest extends TestCase {
 
 		// One readable board whose (viewer-gated) summary set exceeds the cap.
 		$b1 = $this->board(1, 'Huge');
-		$this->boardService->method('findAll')->with('alice')->willReturn([$b1]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b1]);
 		$ctx1 = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
 		$this->boardAccess->method('contextFor')->with($b1, 'alice')->willReturn($ctx1);
 
@@ -209,7 +209,7 @@ class ViewServiceTest extends TestCase {
 		// alice can read board 3 only; board 7 (which she cannot read) exists in
 		// the system but is absent from findAll()'s readable set.
 		$b3 = $this->board(3, 'Readable');
-		$this->boardService->method('findAll')->with('alice')->willReturn([$b3]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
 
 		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
 		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
@@ -245,7 +245,7 @@ class ViewServiceTest extends TestCase {
 			$boards[] = $board;
 			$contexts[] = [$board, 'alice', ViewerContext::forMember('alice', $boardId, ViewerContext::ROLE_INTERNAL, true)];
 		}
-		$this->boardService->method('findAll')->with('alice')->willReturn($boards);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn($boards);
 		$this->boardAccess->method('contextFor')->willReturnMap($contexts);
 		$this->cardMapper->method('findSummariesByBoard')
 			->willReturnCallback(fn (int $boardId): array => array_map(
@@ -376,7 +376,7 @@ class ViewServiceTest extends TestCase {
 	 */
 	public function testFindMineWithASortStillNeverQueriesABoardOutsideTheReadableSet(): void {
 		$b3 = $this->board(3, 'Readable');
-		$this->boardService->method('findAll')->with('alice')->willReturn([$b3]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
 		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
 		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
 
@@ -524,7 +524,7 @@ class ViewServiceTest extends TestCase {
 	public function testFindMineWithAFilterStillNeverQueriesABoardOutsideTheReadableSet(): void {
 		// alice can read board 3 only. Board 7 exists but is absent from findAll().
 		$b3 = $this->board(3, 'Readable');
-		$this->boardService->method('findAll')->with('alice')->willReturn([$b3]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
 		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
 		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
 
@@ -680,8 +680,52 @@ class ViewServiceTest extends TestCase {
 		);
 	}
 
+	/**
+	 * #10126: an ARCHIVED BOARD is out of the View entirely - including its live,
+	 * never-archived cards - and UNCONDITIONALLY: the archived-CARDS facet
+	 * ('include' / 'only') is about archived cards on boards that are still
+	 * ACTIVE, so it can never opt an archived board's rows back in.
+	 *
+	 * The wiring mirrors the real BoardService: findAll() STILL carries the
+	 * archived board (the boards page's Archived tab is built on it), only
+	 * findAllActive() drops it - and the mappers WOULD hand back a row for board
+	 * 9 if it were ever queried. So reverting the service to findAll() makes card
+	 * 22 reappear and this goes red.
+	 */
+	public function testFindMineExcludesArchivedBoardsEvenUnderTheArchivedFacet(): void {
+		$active = $this->board(3, 'Alpha');
+		$shelved = $this->board(9, 'Shelved');
+		$shelved->setArchived(true);
+		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $shelved]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
+		$this->boardAccess->method('contextFor')->willReturnMap([
+			[$active, 'alice', ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true)],
+			[$shelved, 'alice', ViewerContext::forMember('alice', 9, ViewerContext::ROLE_INTERNAL, true)],
+		]);
+		$this->cardMapper->method('findSummariesByBoard')
+			->willReturnCallback(fn (int $boardId): array => [$this->summaryCard($boardId === 3 ? 11 : 22, $boardId)]);
+		// The archived board's card is NOT itself archived - exactly the reported
+		// case: a shelved board whose cards were never archived one by one.
+		$this->cardSummaryService->method('serialize')
+			->willReturnCallback(static fn (int $boardId): array => [
+				['id' => $boardId === 3 ? 11 : 22, 'archived' => false],
+			]);
+
+		foreach (['default' => [], 'include' => ['far' => 'include'], 'only' => ['far' => 'only']] as $label => $query) {
+			$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery($query));
+			self::assertNotContains(22, $this->idsOf($result), 'archived board leaked with archived=' . $label);
+			self::assertNotContains(9, array_column($result['cards'], 'boardId'), 'archived board leaked with archived=' . $label);
+		}
+
+		// The ACTIVE board's card is still in the feed - both halves matter, or a
+		// filter that dropped everything would pass too.
+		$default = $this->service->findMine('alice');
+		self::assertSame([11], $this->idsOf($default));
+		self::assertSame(1, $default['total']);
+	}
+
 	public function testFindMineEmptyWhenNoReadableBoards(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([]);
 		$this->boardAccess->expects(self::never())->method('contextFor');
 		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
 

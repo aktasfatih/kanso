@@ -46,6 +46,13 @@ class ChecklistItemMapper extends QBMapper {
 	/**
 	 * All items of a card, in display order.
 	 *
+	 * Checklist items carry no unique index on their sort key and
+	 * {@see \OCA\Kanso\Service\SortKeyService::between()} is deterministic, so two
+	 * concurrent moves into the same gap can derive the SAME key. `sort_key` alone
+	 * would then leave the tied rows in whatever order the DB returns, which can
+	 * flip between reloads; the `id` tiebreaker (same idiom as
+	 * {@see self::findOpenAssignedInBoards()}) keeps that order stable.
+	 *
 	 * @return ChecklistItem[]
 	 * @throws Exception
 	 */
@@ -54,7 +61,8 @@ class ChecklistItemMapper extends QBMapper {
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
-			->orderBy('sort_key', 'ASC');
+			->orderBy('sort_key', 'ASC')
+			->addOrderBy('id', 'ASC');
 
 		return $this->findEntities($qb);
 	}

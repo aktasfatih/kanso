@@ -45,7 +45,7 @@ class MyCardsServiceTest extends TestCase {
 		// The ACL boundary: only the boards findAll() returns (the readable set)
 		// are ever passed to the query, and only the current user's identity.
 		$this->boardService->expects($this->once())
-			->method('findAll')
+			->method('findAllActive')
 			->with('alice')
 			->willReturn([$this->board(3), $this->board(9)]);
 
@@ -65,8 +65,50 @@ class MyCardsServiceTest extends TestCase {
 		$this->assertFalse($feed['truncated']);
 	}
 
+	public function testFindMineSkipsBoardsTheUserHasArchived(): void {
+		// #10126: a card assigned to me on an archived board leaves My tasks.
+		// The mock mirrors the real BoardService - findAll() STILL carries the
+		// archived board (the boards page's Archived tab is built on it), only
+		// findAllActive() drops it - so reverting the service to findAll() puts
+		// board 9 back in the queried set and this goes red.
+		$active = $this->board(3);
+		$archived = $this->board(9);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->willReturn([$active]);
+		$roles = [3 => ViewerContext::ROLE_INTERNAL];
+		$this->boardAccess->method('rolesFor')->willReturn($roles);
+
+		$expected = [['id' => 1, 'boardId' => 3, 'title' => 'A task']];
+		$this->cardMapper->expects($this->once())
+			->method('findAssignedInBoards')
+			->with(['alice'], [3], 'alice', $roles, MyCardsService::LIMIT + 1)
+			->willReturn($expected);
+
+		// The identical card on the ACTIVE board still arrives - both halves
+		// matter, or a filter that dropped everything would pass too.
+		$this->assertSame($expected, $this->service->findMine('alice')['cards']);
+	}
+
+	public function testFindMineRecentlyDoneSkipsBoardsTheUserHasArchived(): void {
+		// The opt-in recently-done feed shares the boundary: an archived board's
+		// completed cards are gone from it too (#10126).
+		$active = $this->board(3);
+		$archived = $this->board(9);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->willReturn([$active]);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
+
+		$done = [['id' => 2, 'boardId' => 3, 'title' => 'A finished task']];
+		[$args, $feed] = $this->captureRecentlyDone('alice', $done);
+
+		$this->assertSame([3], $args[1], 'only the ACTIVE readable board set is queried');
+		$this->assertSame($done, $feed['cards']);
+	}
+
 	public function testFindMineWithNoReadableBoardsQueriesEmptySet(): void {
-		$this->boardService->method('findAll')->willReturn([]);
+		$this->boardService->method('findAllActive')->willReturn([]);
 		$this->boardAccess->method('rolesFor')->willReturn([]);
 		$this->cardMapper->expects($this->once())
 			->method('findAssignedInBoards')
@@ -93,7 +135,7 @@ class MyCardsServiceTest extends TestCase {
 		// 201 assigned cards: the user is over the cap. The feed must SAY it is
 		// truncated - a silent 200-row slice makes the page (and the nav badge
 		// counting the same array) claim a wrong, frozen total.
-		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
 		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 		$this->cardMapper->expects($this->once())
 			->method('findAssignedInBoards')
@@ -114,7 +156,7 @@ class MyCardsServiceTest extends TestCase {
 	public function testFindMineAtExactlyTheLimitIsNotTruncated(): void {
 		// Exactly LIMIT rows means the query found no row beyond the cap - the
 		// feed is complete and must not cry "more".
-		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
 		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 		$this->cardMapper->method('findAssignedInBoards')->willReturn($this->rows(MyCardsService::LIMIT));
 
@@ -157,7 +199,7 @@ class MyCardsServiceTest extends TestCase {
 		// can never be returned, because that board id never reaches the query.
 		// Same boundary as the open feed - assignment grants no visibility.
 		$this->boardService->expects($this->once())
-			->method('findAll')
+			->method('findAllActive')
 			->with('alice')
 			->willReturn([$this->board(3), $this->board(9)]);
 
@@ -176,7 +218,7 @@ class MyCardsServiceTest extends TestCase {
 	public function testFindMineRecentlyDoneWithNoReadableBoardsQueriesTheEmptySet(): void {
 		// No readable boards → an empty board set, which the mapper
 		// short-circuits. Nothing assigned can leak through the back door.
-		$this->boardService->method('findAll')->willReturn([]);
+		$this->boardService->method('findAllActive')->willReturn([]);
 		$this->boardAccess->method('rolesFor')->willReturn([]);
 
 		[$args, $feed] = $this->captureRecentlyDone('bob', []);
@@ -191,7 +233,7 @@ class MyCardsServiceTest extends TestCase {
 		// not - so a user with years of completed work still gets a query that
 		// touches a fortnight. Widen or narrow RECENT_DONE_WINDOW_DAYS and one
 		// of these two assertions fails.
-		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
 		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 
 		$now = time();
@@ -217,7 +259,7 @@ class MyCardsServiceTest extends TestCase {
 		// The second bound. The window alone has no ceiling for someone who
 		// closes hundreds of cards a fortnight, so the row cap applies too -
 		// and, like the open feed's, it is reported rather than silent.
-		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
 		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 
 		[$args, $feed] = $this->captureRecentlyDone('alice', $this->rows(MyCardsService::RECENT_DONE_LIMIT + 1));
@@ -234,7 +276,7 @@ class MyCardsServiceTest extends TestCase {
 	}
 
 	public function testFindMineRecentlyDoneAtExactlyTheLimitIsNotTruncated(): void {
-		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
 		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 
 		[, $feed] = $this->captureRecentlyDone('alice', $this->rows(MyCardsService::RECENT_DONE_LIMIT));
@@ -246,7 +288,7 @@ class MyCardsServiceTest extends TestCase {
 	public function testFindMineRecentlyDoneDoesNotTouchTheOpenFeed(): void {
 		// The two feeds are independent queries: asking for completed work must
 		// not re-run (or replace) the open one.
-		$this->boardService->method('findAll')->willReturn([$this->board(3)]);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
 		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 		$this->cardMapper->expects($this->never())->method('findAssignedInBoards');
 

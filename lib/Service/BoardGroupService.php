@@ -251,9 +251,12 @@ class BoardGroupService {
 	}
 
 	/**
-	 * The caller's readable board-id set - the exact ACL-authorized set the
-	 * boards-list uses. Reused to filter folder membership so a folder never
-	 * surfaces a board the user has since lost access to.
+	 * The caller's readable, ACTIVE board-id set. Reused to filter folder
+	 * membership so a folder never surfaces a board the user has since lost
+	 * access to - or one they have archived (#10126): a shelved board drops out
+	 * of the folder listing (its membership row is kept, so unarchiving restores
+	 * it). The boards page keeps its own Archived tab, built from the boards-list
+	 * payload, not from here.
 	 *
 	 * @return int[]
 	 * @throws \OCP\DB\Exception
@@ -261,7 +264,7 @@ class BoardGroupService {
 	private function readableBoardIds(string $uid): array {
 		return array_map(
 			static fn ($b): int => $b->getId(),
-			$this->boardService->findAll($uid)
+			$this->boardService->findAllActive($uid)
 		);
 	}
 

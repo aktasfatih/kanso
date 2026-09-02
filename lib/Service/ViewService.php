@@ -30,8 +30,9 @@ use OCA\Kanso\Db\LabelMapper;
  * match past them. The filter still consumes only already-serialized summary
  * fields - no new query, no SQL shortcut.
  *
- * ACL is enforced by restricting to the boards {@see BoardService::findAll()}
- * returns (the readable set) and running each board's summary query under the
+ * ACL is enforced by restricting to the boards
+ * {@see BoardService::findAllActive()} returns (the readable, non-archived set)
+ * and running each board's summary query under the
  * viewer's own per-board {@see \OCA\Kanso\Access\ViewerContext} - so a card on a
  * board the user cannot read, or a card hidden from the viewer's board side
  * (#3743), is never returned. A View run by user A can never surface a card from
@@ -98,7 +99,12 @@ class ViewService {
 	 * @return array{cards: list<array<string, mixed>>, labels: list<array<string, mixed>>, participants: list<string>, capped: bool, total: int, limit: int}
 	 */
 	public function findMine(string $uid, string $sortMode = 'default', string $sortDir = 'asc', ?ViewFilter $filter = null): array {
-		$boards = $this->boardService->findAll($uid);
+		// ARCHIVED BOARDS are out of the feed entirely (#10126) - an archived
+		// board is shelved, so even its live cards must not surface here. This
+		// is unconditional and deliberately NOT wired to the `archived` facet
+		// below: that facet is about archived CARDS on boards that are still
+		// active, so "include"/"only" can never bring an archived board back.
+		$boards = $this->boardService->findAllActive($uid);
 
 		// Archived cards are excluded from the feed by DEFAULT, and only the
 		// `archived` facet ('include' / 'only') opts them back in. The exclusion
@@ -121,7 +127,7 @@ class ViewService {
 		foreach ($boards as $board) {
 			$boardId = (int)$board->getId();
 			// The viewer's resolved side on THIS board scopes every card row
-			// (#3743). findAll() already returned only member boards, so
+			// (#3743). findAllActive() already returned only member boards, so
 			// contextFor() resolves without throwing.
 			$viewer = $this->boardAccess->contextFor($board, $uid);
 			$cards = $this->cardSummaryService->serialize(

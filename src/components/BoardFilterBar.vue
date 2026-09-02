@@ -56,8 +56,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</li>
 					</ul>
 
-					<!-- Clear all (only when something is active) -->
-					<template v-if="count > 0">
+					<!-- Clear all — gated on the dimensions this control actually
+					     RENDERS, not on `count`. `count` deliberately includes hidden
+					     dimensions (under-reporting an active constraint is the worse
+					     failure), but a Clear button that clears nothing visible is a
+					     dead affordance, so it only appears when there is something on
+					     screen to clear. -->
+					<template v-if="visibleCount > 0">
 						<div class="board-filter-bar__sep" role="separator" />
 						<button
 							type="button"
@@ -68,20 +73,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</template>
 
-					<!-- ── Saved views (folded in from the old Saved dropdown) ──── -->
-					<div class="board-filter-bar__sep" role="separator" />
-					<p class="board-filter-bar__caption">{{ t('kanso', 'Views') }}</p>
-					<button
-						type="button"
-						class="board-filter-bar__action board-filter-bar__saved-item"
-						:class="{ 'board-filter-bar__saved-item--active': !activeSavedName && count === 0 }"
-						@click="clearAll">
-						<CheckIcon v-if="!activeSavedName && count === 0" :size="20" />
-						<FilterVariantRemoveIcon v-else :size="20" />
-						<span>{{ t('kanso', 'Default (no filter)') }}</span>
-					</button>
-
+					<!-- ── Saved views (folded in from the old Saved dropdown) ────
+					     Only when this surface actually has saved views to offer. A
+					     surface that passes none (the View page) would otherwise render
+					     an empty "Views" section whose one entry is a second, unlabelled
+					     clear-all button. -->
 					<template v-if="savedFilters.length">
+						<div class="board-filter-bar__sep" role="separator" />
+						<p class="board-filter-bar__caption">{{ t('kanso', 'Views') }}</p>
+						<button
+							type="button"
+							class="board-filter-bar__action board-filter-bar__saved-item"
+							:class="{ 'board-filter-bar__saved-item--active': !activeSavedName && count === 0 }"
+							@click="clearAll">
+							<CheckIcon v-if="!activeSavedName && count === 0" :size="20" />
+							<FilterVariantRemoveIcon v-else :size="20" />
+							<span>{{ t('kanso', 'Default (no filter)') }}</span>
+						</button>
+
 						<button
 							v-for="view in savedFilters"
 							:key="'v-' + view.name"
@@ -570,6 +579,12 @@ const dimensions = computed(() => {
 
 const visibleDimensions = computed(() => dimensions.value.filter((d) => d.show))
 
+// Active constraints among the dimensions this control RENDERS. Distinct from
+// `count` (which spans every dimension, hidden ones included) and used only to
+// gate the Clear button — see the template.
+const visibleCount = computed(() =>
+	visibleDimensions.value.reduce((n, d) => n + d.count, 0))
+
 const activeDimMeta = computed(() =>
 	dimensions.value.find((d) => d.key === activeDim.value) ?? {})
 
@@ -591,23 +606,21 @@ function setSingleRadio(dim, value) {
 	props.state[dim] = value || null
 }
 
+// Clear every dimension this control RENDERS — and only those. The invariant is
+// that a control may only clear what it shows (#10091): a surface can hide a
+// dimension while still holding a constraint on it, and wiping that invisibly is
+// destructive with no way back. The View page is the case that bites — it hides
+// the Labels facet on purpose (board-scoped label ids collide across boards) yet
+// seeds the View's own saved label filter into this same state, so a blanket
+// clear silently destroyed the View's identity and widened the page to the whole
+// unfiltered cross-board feed, recoverable only by reloading. Driving off
+// `visibleDimensions` also keeps this in step with the dimension list instead of
+// being a hand-maintained parallel copy of it.
 function clearAll() {
-	props.state.labels.clear()
-	props.state.assignees.clear()
-	props.state.priorities.clear()
-	props.state.types.clear()
-	props.state.estimates.clear()
-	props.state.owners.clear()
-	props.state.reviews.clear()
-	props.state.due = null
-	props.state.done = null
-	props.state.waiting = null
-	props.state.blocked = null
-	props.state.checklist = null
-	props.state.startDate = null
-	props.state.subcard = null
-	props.state.comments = null
-	props.state.archived = null
+	for (const dim of visibleDimensions.value) {
+		if (SINGLE_SELECT_DIMS.includes(dim.key)) props.state[dim.key] = null
+		else props.state[dim.key].clear()
+	}
 }
 
 function submitSave() {

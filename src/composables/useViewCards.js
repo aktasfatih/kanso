@@ -44,10 +44,15 @@ export function useViewCards(sort, filter) {
 	const filterQuery = computed(() => unref(filter) ?? {})
 	return useQuery({
 		queryKey: [...VIEW_CARDS_QUERY_KEY, sortMode, sortDir, filterQuery],
-		queryFn: () => apiGetViewCards({
+		// The query's AbortSignal is forwarded to axios: when TanStack cancels a
+		// refetch (this feed is invalidated from many mutation settle phases), the
+		// in-flight request is aborted client-side instead of being read to the end
+		// and normalised into an envelope the cache immediately discards.
+		queryFn: ({ signal }) => apiGetViewCards({
 			sortMode: sortMode.value,
 			sortDir: sortDir.value,
 			filter: filterQuery.value,
+			signal,
 		}),
 		placeholderData: (previous) => previous,
 		refetchOnWindowFocus: true,

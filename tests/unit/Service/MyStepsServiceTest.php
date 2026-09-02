@@ -41,7 +41,7 @@ class MyStepsServiceTest extends TestCase {
 		// returns are ever queried, and the viewer's per-board role map rides
 		// along so the card-visibility scope can hide steps of hidden cards.
 		$this->boardService->expects($this->once())
-			->method('findAll')
+			->method('findAllActive')
 			->with('alice')
 			->willReturn([$this->board(3), $this->board(9)]);
 
@@ -59,8 +59,33 @@ class MyStepsServiceTest extends TestCase {
 		$this->assertSame($expected, $this->service->findMine('alice'));
 	}
 
+	public function testFindMineSkipsBoardsTheUserHasArchived(): void {
+		// #10126: an archived board is shelved - its steps leave this feed even
+		// though the checklist items themselves are still open. The mock mirrors
+		// the real BoardService: findAll() STILL carries the archived board (the
+		// boards page's Archived tab is built on it), only findAllActive() drops
+		// it - so reverting the service to findAll() puts board 9 back in the
+		// queried set and this goes red.
+		$active = $this->board(3);
+		$archived = $this->board(9);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
+
+		$step = ['id' => 7, 'cardId' => 1, 'boardId' => 3, 'title' => 'Send the contract'];
+		$this->checklistItemMapper->expects($this->once())
+			->method('findOpenAssignedInBoards')
+			->with('alice', [3], [3 => ViewerContext::ROLE_INTERNAL])
+			->willReturn([$step]);
+
+		// The active board's identical step DOES come back - both halves matter,
+		// or a filter that dropped everything would pass too.
+		$this->assertSame([$step], $this->service->findMine('alice'));
+	}
+
 	public function testFindMineWithNoReadableBoardsQueriesEmptySet(): void {
-		$this->boardService->method('findAll')->willReturn([]);
+		$this->boardService->method('findAllActive')->willReturn([]);
 		$this->boardAccess->method('rolesFor')->willReturn([]);
 		$this->checklistItemMapper->expects($this->once())
 			->method('findOpenAssignedInBoards')

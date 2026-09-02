@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— brak —"
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n raz"
@@ -265,21 +265,21 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4090
+#: src/components/CardDetail.vue:4091
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
 msgstr[1] "%n dni temu"
 msgstr[2] "%n dni temu"
 
-#: src/components/CardDetail.vue:4088
+#: src/components/CardDetail.vue:4089
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
 msgstr[1] "%n godziny temu"
 msgstr[2] "%n godzin temu"
 
-#: src/components/CardDetail.vue:4086
+#: src/components/CardDetail.vue:4087
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -1537,6 +1537,10 @@ msgstr "Pola niestandardowe"
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Harmonogram niestandardowy — edytuj go w Ustawieniach tablicy → Automatyzacja."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1554,8 +1558,8 @@ msgstr "Strefa niebezpieczna"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:1824
-#: src/components/CardDetail.vue:4266
+#: src/components/BoardSettingsModal.vue:1841
+#: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -2037,28 +2041,28 @@ msgstr "co"
 msgid "Every"
 msgstr "Co"
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Codziennie"
 msgstr[1] "Co %n dni"
 msgstr[2] "Co %n dni"
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Co miesiąc"
 msgstr[1] "Co %n miesiące"
 msgstr[2] "Co %n miesięcy"
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Co tydzień"
 msgstr[1] "Co %n tygodnie"
 msgstr[2] "Co %n tygodni"
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Co rok"
@@ -3166,8 +3170,8 @@ msgstr "Tryb"
 msgid "Mon"
 msgstr "Pn"
 
-#: src/components/BoardSettingsModal.vue:1826
-#: src/components/CardDetail.vue:4268
+#: src/components/BoardSettingsModal.vue:1843
+#: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4157,6 +4161,7 @@ msgstr "zmienił nazwę tej karty na {value}"
 msgid "Repeat"
 msgstr "Powtarzanie"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr "Powtarza się"
@@ -4467,7 +4472,7 @@ msgstr "Pokaż pasek formatowania"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:5707
+#: src/components/CardDetail.vue:5830
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -5105,8 +5110,8 @@ msgstr "Webhook aktywny"
 msgid "Wed"
 msgstr "Śr"
 
-#: src/components/BoardSettingsModal.vue:1825
-#: src/components/CardDetail.vue:4267
+#: src/components/BoardSettingsModal.vue:1842
+#: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -5183,8 +5188,8 @@ msgstr "Napisz odpowiedź…"
 msgid "wrote"
 msgstr "napisał"
 
-#: src/components/BoardSettingsModal.vue:1827
-#: src/components/CardDetail.vue:4269
+#: src/components/BoardSettingsModal.vue:1844
+#: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"
@@ -5219,6 +5224,10 @@ msgstr "możesz zarządzać"
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
 msgstr "Nie możesz kopiować na tę tablicę."
+
+#: src/components/CardDetail.vue
+msgid "You have unsaved changes on this card. If you leave now, they will be lost."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need edit permission to configure workflows."

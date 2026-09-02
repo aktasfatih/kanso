@@ -63,7 +63,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testShortQueryReturnsEmptyWithoutTouchingBoards(): void {
-		$this->boardService->expects(self::never())->method('findAll');
+		$this->boardService->expects(self::never())->method('findAllActive');
 		$this->cardMapper->expects(self::never())->method('searchInBoards');
 
 		$result = $this->service->search('a', 'alice', null, 25, 0);
@@ -71,14 +71,14 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testBlankQueryReturnsEmpty(): void {
-		$this->boardService->expects(self::never())->method('findAll');
+		$this->boardService->expects(self::never())->method('findAllActive');
 		$result = $this->service->search('   ', 'alice', null, 25, 0);
 		self::assertSame(0, $result['total']);
 		self::assertSame([], $result['results']);
 	}
 
 	public function testNoReadableBoardsReturnsEmpty(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([]);
 		$this->cardMapper->expects(self::never())->method('searchInBoards');
 		$this->commentMapper->expects(self::never())->method('searchInBoards');
 
@@ -87,7 +87,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testRanksCardTitleThenDescriptionThenComment(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 		// Source order is most-recent-first; ranking must reorder to title>desc.
 		$this->cardMapper->method('searchInBoards')->willReturn([
 			$this->card(20, 1, 'Unrelated', 'contains widget in body'), // desc-only → rank 2
@@ -108,8 +108,53 @@ class SearchServiceTest extends TestCase {
 		self::assertSame(5, $result['results'][2]['commentId']);
 	}
 
+	public function testSearchSkipsBoardsTheUserHasArchived(): void {
+		// #10126: an archived board is shelved - its cards and comments leave
+		// search entirely. The mock mirrors the real BoardService: findAll()
+		// STILL carries the archived board (the boards page's Archived tab is
+		// built on it), only findAllActive() drops it - so reverting the service
+		// to findAll() puts board 7 back in the searched set and this goes red.
+		$active = $this->board(1);
+		$archived = $this->board(7);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
+		$roles = [1 => ViewerContext::ROLE_INTERNAL];
+		$this->boardAccess->method('rolesFor')->willReturn($roles);
+
+		$this->cardMapper->expects(self::once())
+			->method('searchInBoards')
+			->with([1], self::anything(), self::anything(), 'alice', $roles)
+			->willReturn([$this->card(20, 1, 'Widget master', 'nope')]);
+		$this->commentMapper->expects(self::once())
+			->method('searchInBoards')
+			->with([1], self::anything(), self::anything(), 'alice', $roles)
+			->willReturn([]);
+
+		// The identical card on the ACTIVE board still matches - both halves
+		// matter, or a filter that dropped everything would pass too.
+		$result = $this->service->search('widget', 'alice', null, 25, 0);
+		self::assertSame(1, $result['total']);
+		self::assertSame(20, $result['results'][0]['cardId']);
+	}
+
+	public function testArchivedBoardCannotBeSearchedByExplicitBoardScope(): void {
+		// The board-scope parameter is checked against the SAME active set, so
+		// naming an archived board explicitly does not reach around the filter.
+		$active = $this->board(1);
+		$archived = $this->board(7);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
+		$this->cardMapper->expects(self::never())->method('searchInBoards');
+		$this->commentMapper->expects(self::never())->method('searchInBoards');
+
+		$result = $this->service->search('widget', 'alice', 7, 25, 0);
+		self::assertSame(0, $result['total']);
+	}
+
 	public function testBoardScopeRejectsUnreadableBoard(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 		// Requesting board 99 (not readable) must yield no results and never query.
 		$this->cardMapper->expects(self::never())->method('searchInBoards');
 		$this->commentMapper->expects(self::never())->method('searchInBoards');
@@ -119,7 +164,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testBoardScopeNarrowsToRequestedReadableBoard(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1), $this->board(2)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1), $this->board(2)]);
 		$this->cardMapper->expects(self::once())
 			->method('searchInBoards')
 			->with([2], self::anything(), self::anything())
@@ -130,7 +175,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testSearchesAllReadableBoardsWhenNoBoardScope(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
 		// Both sources are scoped by the viewer's uid + per-board roles (#3743).
 		$roles = [1 => ViewerContext::ROLE_INTERNAL, 7 => ViewerContext::ROLE_EXTERNAL];
 		$this->boardAccess->expects(self::once())->method('rolesFor')->willReturn($roles);
@@ -147,7 +192,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testEscapesLikeWildcardsInTerm(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 		$this->cardMapper->expects(self::once())
 			->method('searchInBoards')
 			->willReturnCallback(function (array $ids, string $pattern): array {
@@ -163,7 +208,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testPaginationSlicesResults(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 		$cards = [];
 		for ($i = 1; $i <= 5; $i++) {
 			$cards[] = $this->card($i, 1, 'Widget ' . $i);
@@ -177,7 +222,7 @@ class SearchServiceTest extends TestCase {
 	}
 
 	public function testSnippetIsTruncated(): void {
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 		$long = str_repeat('lorem ipsum ', 40); // > 160 chars
 		$this->cardMapper->method('searchInBoards')->willReturn([$this->card(1, 1, 'Widget', $long)]);
 		$this->commentMapper->method('searchInBoards')->willReturn([]);

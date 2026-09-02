@@ -1803,6 +1803,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 						</div>
 
+						<!-- A schedule these controls can't round-trip (BYMONTHDAY, a
+						     positional BYDAY, …) is shown read-only and saved untouched;
+						     everything else on the rule stays editable. -->
+						<div v-if="isEditingCustomSchedule" class="automation__form-row automation__form-row--top">
+							<label class="automation__form-label">{{ t('kanso', 'Repeats') }}</label>
+							<div class="automation__custom-schedule">
+								<!-- The raw rule, not humanRrule(): the readable summary only
+								     knows the parts this editor models, so it would describe
+								     "FREQ=MONTHLY;BYMONTHDAY=1,15" as plain "Every month". -->
+								<code class="automation__custom-rrule">{{ editingRecurRrule }}</code>
+								<span class="automation__custom-note">
+									{{ t('kanso', 'Custom schedule — it is kept exactly as it is. The settings below can still be changed.') }}
+								</span>
+							</div>
+						</div>
+
+						<template v-else>
 						<!-- Frequency + interval -->
 						<div class="automation__form-row">
 							<label class="automation__form-label" :for="`recur-freq-${boardId}`">
@@ -1886,6 +1903,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="date"
 								class="workflow__select automation__form-select" />
 						</div>
+						</template>
 
 						<!-- Due-date policy -->
 						<div class="automation__form-row">
@@ -2178,6 +2196,7 @@ import { useBoardActions } from '../composables/useBoardActions.js'
 import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
+import { parseRecurRrule, buildRecurRrule, isCustomRrule } from '../utils/rrule.js'
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
@@ -3894,6 +3913,9 @@ async function doDeleteRecurRule(rule) {
 	try {
 		await deleteRecurRule.mutateAsync(rule.id)
 		confirmDeleteRecurRuleId.value = null
+		// Deleting the rule that is open in the editor would otherwise leave the
+		// form bound to a dead id, with "Save rule" PATCHing it.
+		if (editingRecurRuleId.value === rule.id) cancelEditRecurRule()
 	} catch (err) {
 		deleteRecurRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
 	} finally {
@@ -3922,6 +3944,7 @@ const newRecurWeekdays = ref([])         // e.g. ['MO', 'WE']
 const newRecurEndType = ref('forever')   // 'forever' | 'count' | 'until'
 const newRecurCount = ref(10)
 const newRecurUntil = ref('')            // YYYY-MM-DD input
+const newRecurUntilSuffix = ref('T000000Z') // time-of-day carried by UNTIL, preserved verbatim
 const newRecurDuedatePolicy = ref(0)     // 0=at occurrence, 1=offset after, 2=none
 const newRecurDuedateOffsetDays = ref(1)
 const newRecurSkipWhileOpen = ref(false)
@@ -3935,6 +3958,12 @@ const createRecurRuleError = ref('')
 const newRecurUnitCount = computed(() => Math.max(1, Number(newRecurInterval.value) || 1))
 const editingRecurRuleId = ref(null)  // null = create mode, number = edit mode
 const isEditingRecurRule = computed(() => editingRecurRuleId.value !== null)
+
+// The rule being edited carries a schedule these controls cannot round-trip
+// (BYMONTHDAY, a positional BYDAY, BYSETPOS …). We keep the original string to
+// show it, render the schedule read-only, and leave `rrule` out of the save.
+const editingRecurRrule = ref('')
+const isEditingCustomSchedule = ref(false)
 
 /** Close the settings modal and open the rule's template card (to edit it). */
 function openRecurTemplateCard(rule) {
@@ -3951,29 +3980,19 @@ function startEditRecurRule(rule) {
 	newRecurSkipWhileOpen.value = rule.skipWhileOpen ?? false
 	newRecurDuedatePolicy.value = rule.duedatePolicy ?? 0
 	newRecurDuedateOffsetDays.value = rule.duedateOffsetSeconds ? Math.round(rule.duedateOffsetSeconds / 86400) : 1
-	// Parse rrule back into form fields
-	const parts = {}
-	for (const seg of (rule.rrule || '').split(';')) {
-		const eq = seg.indexOf('=')
-		if (eq !== -1) parts[seg.slice(0, eq).toUpperCase()] = seg.slice(eq + 1)
-	}
-	newRecurFreq.value = parts['FREQ'] || 'WEEKLY'
-	newRecurInterval.value = parseInt(parts['INTERVAL'] || '1', 10)
-	if (parts['BYDAY']) {
-		newRecurWeekdays.value = parts['BYDAY'].split(',')
-	} else {
-		newRecurWeekdays.value = []
-	}
-	if (parts['COUNT']) {
-		newRecurEndType.value = 'count'
-		newRecurCount.value = parseInt(parts['COUNT'], 10)
-	} else if (parts['UNTIL']) {
-		newRecurEndType.value = 'until'
-		const u = parts['UNTIL'].replace(/T.*/, '')
-		newRecurUntil.value = u.length === 8 ? `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}` : ''
-	} else {
-		newRecurEndType.value = 'forever'
-	}
+	// Parse rrule back into form fields. A schedule these controls cannot
+	// represent is shown read-only instead — re-serializing it from the five
+	// fields below would silently drop the parts we never parsed.
+	editingRecurRrule.value = rule.rrule || ''
+	isEditingCustomSchedule.value = isCustomRrule(rule.rrule)
+	const parsed = parseRecurRrule(rule.rrule)
+	newRecurFreq.value = parsed.freq
+	newRecurInterval.value = parsed.interval
+	newRecurWeekdays.value = parsed.weekdays
+	newRecurEndType.value = parsed.endType
+	newRecurCount.value = parsed.count
+	newRecurUntil.value = parsed.until
+	newRecurUntilSuffix.value = parsed.untilSuffix
 }
 
 function cancelEditRecurRule() {
@@ -3987,27 +4006,26 @@ function cancelEditRecurRule() {
 	newRecurEndType.value = 'forever'
 	newRecurCount.value = 10
 	newRecurUntil.value = ''
+	newRecurUntilSuffix.value = 'T000000Z'
 	newRecurDuedatePolicy.value = 0
 	newRecurDuedateOffsetDays.value = 1
 	newRecurSkipWhileOpen.value = false
+	editingRecurRrule.value = ''
+	isEditingCustomSchedule.value = false
 	createRecurRuleError.value = ''
 }
 
 /** Build the RFC5545 RRULE string from the builder controls. */
 function buildRrule() {
-	const parts = [`FREQ=${newRecurFreq.value}`]
-	if (newRecurInterval.value > 1) parts.push(`INTERVAL=${newRecurInterval.value}`)
-	if (newRecurFreq.value === 'WEEKLY' && newRecurWeekdays.value.length > 0) {
-		parts.push(`BYDAY=${newRecurWeekdays.value.join(',')}`)
-	}
-	if (newRecurEndType.value === 'count') {
-		parts.push(`COUNT=${newRecurCount.value}`)
-	} else if (newRecurEndType.value === 'until' && newRecurUntil.value) {
-		// Convert YYYY-MM-DD → YYYYMMDDТ000000Z
-		const d = newRecurUntil.value.replace(/-/g, '')
-		parts.push(`UNTIL=${d}T000000Z`)
-	}
-	return parts.join(';')
+	return buildRecurRrule({
+		freq: newRecurFreq.value,
+		interval: newRecurInterval.value,
+		weekdays: newRecurWeekdays.value,
+		endType: newRecurEndType.value,
+		count: newRecurCount.value,
+		until: newRecurUntil.value,
+		untilSuffix: newRecurUntilSuffix.value,
+	})
 }
 
 /** Non-archived cards for the template selector. */
@@ -4023,8 +4041,21 @@ async function submitCreateRecurRule() {
 		const data = {
 			targetStackId: newRecurTargetStackId.value,
 			mode: newRecurMode.value,
-			rrule: buildRrule(),
 			duedatePolicy: newRecurDuedatePolicy.value,
+		}
+		// Only send a schedule the user actually changed. Omitting `rrule` tells
+		// the API to keep the stored string, which also spares the occurrences
+		// tally and the next-fire cursor — both of which reset on any change to
+		// the rule TEXT, even a semantically identical one (`INTERVAL=1`,
+		// reordered or lower-case parts). A custom schedule is never rebuilt at
+		// all; an untouched simple one rebuilds to the same string it parsed from.
+		if (!isEditingCustomSchedule.value) {
+			const rrule = buildRrule()
+			const unchanged = isEditingRecurRule.value
+				&& rrule === buildRecurRrule(parseRecurRrule(editingRecurRrule.value))
+			if (!unchanged) {
+				data.rrule = rrule
+			}
 		}
 		if (newRecurDuedatePolicy.value === 1) {
 			data.duedateOffsetSeconds = newRecurDuedateOffsetDays.value * 86400
@@ -4041,18 +4072,7 @@ async function submitCreateRecurRule() {
 			await createRecurRule.mutateAsync(data)
 		}
 		// Reset form
-		newRecurTemplateCardId.value = null
-		newRecurTargetStackId.value = null
-		newRecurMode.value = 0
-		newRecurFreq.value = 'WEEKLY'
-		newRecurInterval.value = 1
-		newRecurWeekdays.value = []
-		newRecurEndType.value = 'forever'
-		newRecurCount.value = 10
-		newRecurUntil.value = ''
-		newRecurDuedatePolicy.value = 0
-		newRecurDuedateOffsetDays.value = 1
-		newRecurSkipWhileOpen.value = false
+		cancelEditRecurRule()
 	} catch (err) {
 		createRecurRuleError.value = err?.response?.data?.error || t('kanso', isEditingRecurRule.value ? 'Failed to update rule.' : 'Failed to create rule.')
 	} finally {
@@ -5303,6 +5323,26 @@ async function doDeleteAutoRule(rule) {
 
 .automation__form-row--top {
 	align-items: flex-start;
+}
+
+/* Read-only schedule for a rule the builder can't round-trip. */
+.automation__custom-schedule {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.automation__custom-rrule {
+	font-family: var(--font-face-monospace, monospace);
+	font-size: 0.85em;
+	color: var(--color-text-maxcontrast);
+	overflow-wrap: anywhere;
+}
+
+.automation__custom-note {
+	font-size: 0.85em;
+	color: var(--color-text-maxcontrast);
 }
 
 /* ── GitHub webhook config ─────────────────────────────────────────────────── */
