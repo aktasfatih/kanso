@@ -172,7 +172,9 @@ class ProjectService {
 	 */
 	public function listCards(int $projectId, string $uid): array {
 		$project = $this->loadOwnedProject($projectId, $uid);
-		$boards = $this->boardService->findAll($uid);
+		// Active boards only (#10126): an archived board is shelved, so its
+		// cards leave the project's card set (and its metrics with them).
+		$boards = $this->boardService->findAllActive($uid);
 
 		return $this->projectCardMapper->findCardsInProjectAndBoards(
 			$project->getId(),
@@ -201,7 +203,9 @@ class ProjectService {
 	public function stats(int $projectId, string $uid): array {
 		$project = $this->loadOwnedProject($projectId, $uid);
 
-		$boards = $this->boardService->findAll($uid);
+		// Active boards only (#10126): an archived board is shelved, so its
+		// cards leave the project's card set (and its metrics with them).
+		$boards = $this->boardService->findAllActive($uid);
 		$cards = $this->projectCardMapper->findCardsInProjectAndBoards(
 			$project->getId(),
 			array_map(static fn (Board $board): int => $board->getId(), $boards),

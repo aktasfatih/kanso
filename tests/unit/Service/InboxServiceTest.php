@@ -56,7 +56,7 @@ class InboxServiceTest extends TestCase {
 	}
 
 	public function testFindMineReturnsCommentsOnFollowedCardsInReadableBoards(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([$this->board(1), $this->board(2)]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([$this->board(1), $this->board(2)]);
 		$this->subscriptionMapper->method('findSubscribedCardIds')->with('bob')->willReturn([9, 10]);
 		$roles = [1 => ViewerContext::ROLE_INTERNAL, 2 => ViewerContext::ROLE_EXTERNAL];
 		$this->boardAccess->expects(self::once())->method('rolesFor')->willReturn($roles);
@@ -79,7 +79,7 @@ class InboxServiceTest extends TestCase {
 	}
 
 	public function testFindMineMergesCommentsAndStatusChangesNewestFirst(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([$this->board(1)]);
 		$this->subscriptionMapper->method('findSubscribedCardIds')->with('bob')->willReturn([9]);
 		$roles = [1 => ViewerContext::ROLE_INTERNAL];
 		$this->boardAccess->method('rolesFor')->willReturn($roles);
@@ -107,8 +107,42 @@ class InboxServiceTest extends TestCase {
 		self::assertSame('comment', $result[1]['type']);
 	}
 
+	public function testFindMineSkipsBoardsTheUserHasArchived(): void {
+		// #10126: a followed card on an archived board stops feeding the Inbox.
+		// The mock mirrors the real BoardService - findAll() STILL carries the
+		// archived board (the boards page's Archived tab is built on it), only
+		// findAllActive() drops it - so reverting the service to findAll() puts
+		// board 2 back in the queried set and this goes red.
+		$active = $this->board(1);
+		$archived = $this->board(2);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->with('bob')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([$active]);
+		$this->subscriptionMapper->method('findSubscribedCardIds')->with('bob')->willReturn([9, 10]);
+		$roles = [1 => ViewerContext::ROLE_INTERNAL];
+		$this->boardAccess->method('rolesFor')->willReturn($roles);
+
+		// Only the active board is queried - the archived one is not in the set.
+		$row = [
+			'id' => 5, 'cardId' => 9, 'boardId' => 1, 'cardTitle' => 'Card', 'boardTitle' => 'Board',
+			'author' => 'alice', 'body' => 'hi', 'createdAt' => 100,
+		];
+		$this->commentMapper->expects(self::once())
+			->method('findInboxForCards')
+			->with([9, 10], [1], 'bob', 50, $roles)
+			->willReturn([$row]);
+		$this->changeMapper->method('findInboxForCards')->willReturn([]);
+		$this->userManager->method('get')->willReturn(null);
+
+		// The active board's item still arrives - both halves matter, or a filter
+		// that dropped everything would pass too.
+		$result = $this->service->findMine('bob');
+		self::assertCount(1, $result);
+		self::assertSame(1, $result[0]['boardId']);
+	}
+
 	public function testFindMineEmptyWhenNoReadableBoards(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([]);
 		$this->subscriptionMapper->expects(self::never())->method('findSubscribedCardIds');
 		$this->commentMapper->expects(self::never())->method('findInboxForCards');
 
@@ -116,7 +150,7 @@ class InboxServiceTest extends TestCase {
 	}
 
 	public function testFindMineEmptyWhenNoSubscribedCards(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([$this->board(1)]);
 		$this->subscriptionMapper->method('findSubscribedCardIds')->with('bob')->willReturn([]);
 		$this->commentMapper->expects(self::never())->method('findInboxForCards');
 

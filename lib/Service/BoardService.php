@@ -56,6 +56,32 @@ class BoardService {
 	}
 
 	/**
+	 * The user's ACTIVE visible boards: {@see self::findAll()} minus the ones
+	 * they have archived (#10126).
+	 *
+	 * This is the board set every CROSS-BOARD FEED reads from - Views, My tasks,
+	 * the Inbox, My reviews, search, My steps, Projects and board folders.
+	 * Archiving a board shelves it, so its cards must not keep surfacing in
+	 * those feeds, and the exclusion is UNCONDITIONAL: it is not wired to the
+	 * archived-CARDS facet ({@see ViewFilter::includesArchived()}), which is
+	 * about archived cards on boards that are still active. An archived board's
+	 * cards stay out even under "include archived" / "only archived".
+	 *
+	 * It is deliberately a SIBLING of findAll() and not a filter inside it: the
+	 * boards-LIST payload ({@see self::findAllWithStats()}) is what the boards
+	 * page splits into its Active / Archived tabs, so filtering at the source
+	 * would empty the Archived tab. Board-level surfaces keep using findAll().
+	 *
+	 * @return Board[]
+	 */
+	public function findAllActive(string $uid): array {
+		return array_values(array_filter(
+			$this->findAll($uid),
+			static fn (Board $board): bool => !$board->getArchived(),
+		));
+	}
+
+	/**
 	 * The boards-LIST payload: every visible board serialized to a summary, each
 	 * with a `stats` block of per-board signal for the boards page - card count,
 	 * done progress %, needs-review count and overdue count.

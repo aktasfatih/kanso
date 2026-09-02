@@ -526,6 +526,23 @@ class BoardServiceTest extends TestCase {
 		self::assertSame($boards, $this->service->findAll('alice'));
 	}
 
+	public function testFindAllActiveDropsArchivedBoardsWhileFindAllKeepsThem(): void {
+		// #10126: the cross-board FEEDS (Views, My tasks, Inbox, My reviews,
+		// search, My steps, projects, folders) read findAllActive(), so a board
+		// the user shelved stops surfacing its cards there. findAll() must keep
+		// carrying it: the boards-list payload is what the boards page splits
+		// into Active / Archived tabs, and filtering here would empty that tab.
+		$active = $this->board(1);
+		$archived = $this->board(2);
+		$archived->setArchived(true);
+		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn([]);
+		$this->boardMapper->method('findAllForUser')->with('alice', [])->willReturn([$active, $archived]);
+
+		$ids = static fn (array $boards): array => array_map(static fn (Board $b): int => $b->getId(), $boards);
+		self::assertSame([1, 2], $ids($this->service->findAll('alice')), 'the boards LIST still sees archived boards');
+		self::assertSame([1], $ids($this->service->findAllActive('alice')), 'the feeds do not');
+	}
+
 	public function testFindAllWithStatsStitchesBatchedAggregatesOntoEachBoard(): void {
 		$b1 = $this->board(1, 'alice');
 		$b2 = $this->board(2, 'alice');

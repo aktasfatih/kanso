@@ -220,7 +220,7 @@ class BoardGroupServiceTest extends TestCase {
 		$this->groupMapper->method('findByUser')->with('alice')
 			->willReturn([$this->group(1, 'alice', 'Work', 0), $this->group(2, 'alice', 'Personal', 1)]);
 		// Readable board set is derived from findAll (ACL-authorized).
-		$this->boardService->method('findAll')->with('alice')
+		$this->boardService->method('findAllActive')->with('alice')
 			->willReturn([$this->board(10), $this->board(11), $this->board(12)]);
 		// ONE batched lookup over the readable ids.
 		$this->memberMapper->expects(self::once())
@@ -237,9 +237,33 @@ class BoardGroupServiceTest extends TestCase {
 		self::assertSame([12], $out[1]['boardIds']);
 	}
 
+	public function testListGroupsSkipsBoardsTheUserHasArchived(): void {
+		// #10126: an archived board leaves its folder's listing. The mock mirrors
+		// the real BoardService - findAll() STILL carries the archived board (the
+		// boards page's Archived tab is built on it), only findAllActive() drops
+		// it - so reverting the service to findAll() puts board 11 back in the
+		// batched lookup and this goes red. The membership row itself is kept, so
+		// unarchiving restores the board to its folder.
+		$active = $this->board(10);
+		$archived = $this->board(11);
+		$archived->setArchived(true);
+		$this->groupMapper->method('findByUser')->with('alice')
+			->willReturn([$this->group(1, 'alice', 'Work', 0)]);
+		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
+		$this->memberMapper->expects(self::once())
+			->method('findGroupIdsByBoards')->with('alice', [10])
+			->willReturn([10 => 1]);
+
+		// The active board is still filed under the folder - both halves matter,
+		// or a filter that dropped everything would pass too.
+		$out = $this->service->listGroups('alice');
+		self::assertSame([10], $out[0]['boardIds']);
+	}
+
 	public function testListGroupsEmptyWhenNoFolders(): void {
 		$this->groupMapper->method('findByUser')->with('alice')->willReturn([]);
-		$this->boardService->expects(self::never())->method('findAll');
+		$this->boardService->expects(self::never())->method('findAllActive');
 		self::assertSame([], $this->service->listGroups('alice'));
 	}
 
@@ -251,7 +275,7 @@ class BoardGroupServiceTest extends TestCase {
 		$g3 = $this->group(3, 'alice', 'C', 2);
 		// findByUser is called by reorder AND by the trailing listGroups.
 		$this->groupMapper->method('findByUser')->with('alice')->willReturn([$g1, $g2, $g3]);
-		$this->boardService->method('findAll')->with('alice')->willReturn([]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([]);
 		$this->memberMapper->method('findGroupIdsByBoards')->willReturn([]);
 
 		$updated = [];

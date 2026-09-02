@@ -170,6 +170,37 @@ class ArchitectureTest extends TestCase {
 		);
 	}
 
+	/**
+	 * Archived-board ratchet (#10126). Every CROSS-BOARD feed resolves its board
+	 * set through {@see \OCA\Kanso\Service\BoardService::findAllActive()}, which
+	 * drops boards the user has archived. `findAll()` keeps them and exists for
+	 * exactly one consumer - the boards-LIST payload, which the boards page
+	 * splits into its Active / Archived tabs - so it is called only from inside
+	 * BoardService itself ({@see \OCA\Kanso\Service\BoardService::findAllWithStats()}).
+	 *
+	 * This is the cross-surface guarantee the per-service tests cannot give: a
+	 * NEW feed wired to `$this->boardService->findAll(...)` re-opens the leak on
+	 * a surface nobody wrote an archived-board test for, and fails here instead.
+	 */
+	private const BOARD_SERVICE_FIND_ALL_ALLOWLIST = [];
+
+	public function testCrossBoardFeedsResolveBoardsThroughFindAllActive(): void {
+		$actual = self::scanLib(
+			static fn (string $content): bool => str_contains($content, 'boardService->findAll('),
+		);
+
+		self::assertSame(
+			self::BOARD_SERVICE_FIND_ALL_ALLOWLIST,
+			$actual,
+			'A lib/ class resolves its board set with BoardService::findAll(), which still '
+			. 'carries boards the user has ARCHIVED (#10126). Cross-board feeds must call '
+			. 'findAllActive() instead, so a shelved board stops surfacing its cards - '
+			. 'unconditionally, independent of the archived-CARDS facet. findAll() is for '
+			. 'the boards-LIST payload only (it feeds the boards page Archived tab), and '
+			. 'BoardService reaches it internally as $this->findAll().',
+		);
+	}
+
 	public function testViewerContextIsMintedOnlyByBoardAccess(): void {
 		$expected = [
 			'Access/BoardAccess.php',

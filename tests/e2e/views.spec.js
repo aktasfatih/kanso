@@ -460,6 +460,97 @@ test.describe('Cross-board Views (#3815)', () => {
 		}
 	})
 
+	test('an archived BOARD is out of a View entirely, even with the Archived facet on (#10126)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		const stamp = Math.floor(Date.now() / 1000)
+		// Two boards, one card each, each tagged with its own label. The View
+		// filters to both labels, so it resolves to exactly these two rows and the
+		// virtualized list stays deterministic.
+		const live = await api.post('/boards', { title: 'ViewsLiveBoard ' + stamp })
+		const liveLabel = await api.post('/labels', { boardId: live.id, title: 'vlb ' + stamp, color: '3366ff' })
+		const liveStack = await api.post('/stacks', { boardId: live.id, title: 'To do' })
+		const liveTitle = 'ViewsLiveBoard card ' + stamp
+		const liveCard = await api.post('/cards', { stackId: liveStack.id, title: liveTitle })
+		await api.put(`/cards/${liveCard.id}/labels/${liveLabel.id}`)
+
+		const shelved = await api.post('/boards', { title: 'ViewsShelvedBoard ' + stamp })
+		const shelvedLabel = await api.post('/labels', { boardId: shelved.id, title: 'vsb ' + stamp, color: 'ff9900' })
+		const shelvedStack = await api.post('/stacks', { boardId: shelved.id, title: 'To do' })
+		const shelvedTitle = 'ViewsShelvedBoard card ' + stamp
+		const shelvedCard = await api.post('/cards', { stackId: shelvedStack.id, title: shelvedTitle })
+		await api.put(`/cards/${shelvedCard.id}/labels/${shelvedLabel.id}`)
+		// The CARD stays unarchived — only its BOARD is archived. That is the
+		// reported case: a shelved board whose cards were never archived one by one.
+		await api.patch(`/boards/${shelved.id}`, { archived: true })
+
+		const created = await api.put('/views', {
+			name: 'Views archived board ' + stamp,
+			filter: { labels: [liveLabel.id, shelvedLabel.id] },
+			groupBy: 'board',
+			display: 'list',
+		})
+		const view = created.views[created.views.length - 1]
+
+		try {
+			const fl = `${liveLabel.id},${shelvedLabel.id}`
+
+			// ── Server side: the archived board is not in the feed's board set ──
+			const feed = await api.get(`/views/cards?fl=${fl}`)
+			expect(feed.cards.map((c) => c.title)).toEqual([liveTitle])
+			expect(feed.total).toBe(1)
+
+			// … and the archived-CARDS facet cannot reach around it. That facet is
+			// about archived cards on boards that are still active, so neither
+			// 'include' nor 'only' may surface a row from an archived board.
+			const included = await api.get(`/views/cards?fl=${fl}&far=include`)
+			expect(included.cards.map((c) => c.title)).toEqual([liveTitle])
+			expect(included.cards.map((c) => c.boardId)).not.toContain(shelved.id)
+			const onlyArchived = await api.get(`/views/cards?fl=${fl}&far=only`)
+			expect(onlyArchived.cards.map((c) => c.title)).toEqual([])
+			expect(onlyArchived.total).toBe(0)
+
+			// REGRESSION GUARD: the boards LIST still ships the archived board — the
+			// boards page's Archived tab is built on it, so a filter applied to
+			// BoardService::findAll() would have silently emptied that page.
+			const boards = await api.get('/boards')
+			const shelvedRow = boards.find((b) => b.id === shelved.id)
+			expect(shelvedRow).toBeTruthy()
+			expect(shelvedRow.archived).toBe(true)
+
+			// ── Client side: the same, in the rendered View ─────────────────────
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${view.id}`)
+
+			const rowLive = page.locator('.board-list-row__title', { hasText: liveTitle })
+			const rowShelved = page.locator('.board-list-row__title', { hasText: shelvedTitle })
+			await expect(rowLive).toBeVisible({ timeout: 20_000 })
+			await expect(rowShelved).toHaveCount(0)
+
+			// Turning the Archived facet on still leaves the archived board out.
+			const includeFeed = page.waitForRequest(
+				(r) => r.url().includes('/api/views/cards') && r.url().includes('far=include'),
+				{ timeout: 20_000 },
+			)
+			await page.locator('.board-filter-bar__trigger').click()
+			await page.locator('.board-filter-bar__dim-row[data-dim="archived"]').click()
+			await page.locator('.board-filter-bar__opt', { hasText: /Include archived/ }).click()
+			await includeFeed
+			await expect(rowLive).toBeVisible({ timeout: 15_000 })
+			await expect(rowShelved).toHaveCount(0)
+
+			// Unarchiving the board brings its card straight back — proving the row
+			// was withheld by the board's archived flag and nothing else.
+			await api.patch(`/boards/${shelved.id}`, { archived: false })
+			const restored = await api.get(`/views/cards?fl=${fl}`)
+			expect(restored.cards.map((c) => c.title).sort()).toEqual([liveTitle, shelvedTitle].sort())
+		} finally {
+			await api.delete(`/views/${view.id}`).catch(() => {})
+			await api.delete(`/boards/${live.id}`).catch(() => {})
+			await api.delete(`/boards/${shelved.id}`).catch(() => {})
+		}
+	})
+
 	test('a View drops archived rows that still arrive in the feed (the client half of #10052)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 

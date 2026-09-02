@@ -683,7 +683,7 @@ class ReviewServiceTest extends TestCase {
 	// ---- findMine ---------------------------------------------------------
 
 	public function testFindMineQueriesTheReadableBoardSet(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([
 			$this->board(1),
 			$this->board(2),
 		]);
@@ -703,8 +703,37 @@ class ReviewServiceTest extends TestCase {
 		self::assertSame($rows, $this->service->findMine('bob'));
 	}
 
+	public function testFindMineSkipsBoardsTheUserHasArchived(): void {
+		// #10126: a review requested on an archived board leaves My reviews. The
+		// mock mirrors the real BoardService - findAll() STILL carries the
+		// archived board (the boards page's Archived tab is built on it), only
+		// findAllActive() drops it - so reverting the service to findAll() puts
+		// board 2 back in the queried set and this goes red.
+		$active = $this->board(1);
+		$archived = $this->board(2);
+		$archived->setArchived(true);
+		$this->boardService->method('findAll')->with('bob')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([$active]);
+		$roles = [1 => ViewerContext::ROLE_INTERNAL];
+		$this->boardAccess->method('rolesFor')->willReturn($roles);
+
+		$rows = [[
+			'id' => 1, 'cardId' => 9, 'cardTitle' => 'Card', 'boardId' => 1,
+			'boardTitle' => 'Board', 'state' => 'pending', 'reviewTypeId' => null,
+			'requestedBy' => 'alice', 'createdAt' => 100,
+		]];
+		$this->cardReviewMapper->expects(self::once())
+			->method('findByReviewerInBoards')
+			->with('bob', [1], $roles)
+			->willReturn($rows);
+
+		// The identical review on the ACTIVE board still arrives - both halves
+		// matter, or a filter that dropped everything would pass too.
+		self::assertSame($rows, $this->service->findMine('bob'));
+	}
+
 	public function testFindMineWithNoReadableBoardsReturnsEmpty(): void {
-		$this->boardService->method('findAll')->with('bob')->willReturn([]);
+		$this->boardService->method('findAllActive')->with('bob')->willReturn([]);
 		$this->boardAccess->method('rolesFor')->willReturn([]);
 		$this->cardReviewMapper->expects(self::once())
 			->method('findByReviewerInBoards')

@@ -165,13 +165,40 @@ class ProjectServiceTest extends TestCase {
 
 	public function testListCardsFiltersToReadableBoardSet(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
 		$this->projectCardMapper->expects(self::once())
 			->method('findCardsInProjectAndBoards')
 			->with(5, [1, 7])
 			->willReturn([['id' => 9, 'boardId' => 1]]);
 		$result = $this->service->listCards(5, 'alice');
 		self::assertSame(9, $result[0]['id']);
+	}
+
+	public function testListCardsAndStatsSkipBoardsTheOwnerHasArchived(): void {
+		// #10126: an archived board's cards drop out of the project - both from
+		// its card list and from the metrics computed over the same set. The mock
+		// mirrors the real BoardService: findAll() STILL carries the archived
+		// board (the boards page's Archived tab is built on it), only
+		// findAllActive() drops it - so reverting the service to findAll() puts
+		// board 7 back in the frame and this goes red.
+		$active = $this->board(1);
+		$archived = $this->board(7);
+		$archived->setArchived(true);
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $archived]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
+
+		$this->projectCardMapper->expects(self::exactly(2))
+			->method('findCardsInProjectAndBoards')
+			->with(5, [1])
+			->willReturn([['id' => 9, 'boardId' => 1]]);
+		$this->statsService->method('projectStats')->with([9])->willReturn(['cardCount' => 1]);
+
+		// The card on the ACTIVE board is still listed and still counted - both
+		// halves matter, or a filter that dropped everything would pass too.
+		$result = $this->service->listCards(5, 'alice');
+		self::assertSame([9], array_column($result, 'id'));
+		self::assertSame(1, $this->service->stats(5, 'alice')['cardCount']);
 	}
 
 	public function testListCardsRejectsNonOwner(): void {
@@ -183,7 +210,7 @@ class ProjectServiceTest extends TestCase {
 
 	public function testStatsResolvesReadableCardIdsAndDelegatesToStatsService(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1), $this->board(7)]);
 		// The ACL-filtered card set (already restricted to boards 1 & 7).
 		$this->projectCardMapper->expects(self::once())
 			->method('findCardsInProjectAndBoards')
@@ -218,7 +245,7 @@ class ProjectServiceTest extends TestCase {
 		// drops it - so the id set fed to projectStats holds only the readable
 		// card. This is the cross-board-leak guard for project analytics.
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
-		$this->boardService->method('findAll')->with('alice')->willReturn([$this->board(1)]);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 
 		$this->projectCardMapper->expects(self::once())
 			->method('findCardsInProjectAndBoards')
