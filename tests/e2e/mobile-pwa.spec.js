@@ -55,6 +55,32 @@ test('board is usable on a phone viewport', async ({ page }) => {
 	await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 })
 })
 
+// #10066 — the command palette used to have exactly one trigger, Ctrl/Cmd+K,
+// and the overlay documenting it opens on '?'. Neither key exists on a phone, so
+// the whole feature was unreachable on touch. This test lives HERE because only
+// tests/e2e/mobile-pwa.spec.js runs at a phone viewport (both mobile projects
+// match on this file); tests/e2e/command-palette.spec.js is keyboard-driven and
+// runs desktop-only, so it cannot cover reachability.
+//
+// Driven with tap(), not click(): a real touch sequence is the thing under test.
+test('the command palette is reachable by touch alone', async ({ page }) => {
+	await gotoBoard(page, state.boardId)
+	await expect(page.locator('.stack-column').first()).toBeVisible({ timeout: 30_000 })
+
+	// The trigger lives in the "More" overflow, which is already touch-reachable
+	// and costs the (narrow) header no width.
+	await page.getByRole('button', { name: 'More board actions' }).tap()
+	const paletteItem = page.getByRole('menuitem', { name: 'Open command palette' })
+	await expect(paletteItem).toBeVisible({ timeout: 10_000 })
+	await paletteItem.tap()
+
+	// The palette itself was already touch-usable (its results carry @click and
+	// mobile.css enforces 44px targets) — only the way in was missing.
+	const palette = page.locator('.command-palette')
+	await expect(palette).toBeVisible({ timeout: 10_000 })
+	await expect(palette.locator('.command-palette__input')).toBeVisible()
+})
+
 test('has an installable web app manifest', async ({ page }) => {
 	await gotoBoard(page, state.boardId)
 

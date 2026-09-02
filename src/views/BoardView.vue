@@ -190,6 +190,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 
 
+				<!-- Command palette - the only OTHER way in is Ctrl/Cmd+K, which a
+				     phone or tablet cannot press, so the feature was unreachable on
+				     touch entirely (#10066). It lives here rather than in the header
+				     because the overflow menu is already touch-reachable and costs the
+				     header no width (it collapses at NARROW_HEADER_PX). The shortcut
+				     keeps working unchanged. -->
+				<NcActionButton
+					class="board-view__palette-btn"
+					:close-after-click="true"
+					@click="showCommandPalette = true">
+					<template #icon>
+						<MagnifyIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Open command palette') }}
+				</NcActionButton>
+
 				<!-- Archived cards page - only offered when ≥1 archived card. The
 				     visible label already carries the count, so no separate aria-label
 				     is set (that would override the accessible name). -->
@@ -521,7 +537,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@open="openPreviewCard" />
 		</template>
 
-		<!-- Command palette (Ctrl/Cmd+K) -->
+		<!-- Command palette (Ctrl/Cmd+K, or "Open command palette" in the More
+		     menu - the touch-reachable trigger, #10066) -->
 		<CommandPalette
 			:open="showCommandPalette"
 			@close="showCommandPalette = false" />
@@ -584,6 +601,7 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
+import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import TuneVariantIcon from 'vue-material-design-icons/TuneVariant.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
