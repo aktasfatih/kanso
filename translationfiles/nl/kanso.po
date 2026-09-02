@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -1525,6 +1525,10 @@ msgstr "Aangepaste velden"
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Aangepast schema — bewerk het bij Bordinstellingen → Automatisering."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1542,7 +1546,7 @@ msgstr "Gevarenzone"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:1824
+#: src/components/BoardSettingsModal.vue:1841
 #: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
@@ -2024,25 +2028,25 @@ msgstr "elke"
 msgid "Every"
 msgstr "Elke"
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -3149,7 +3153,7 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "ma"
 
-#: src/components/BoardSettingsModal.vue:1826
+#: src/components/BoardSettingsModal.vue:1843
 #: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
@@ -4139,6 +4143,7 @@ msgstr "heeft deze kaart hernoemd naar {value}"
 msgid "Repeat"
 msgstr "Herhalen"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr "Herhaalt"
@@ -5086,7 +5091,7 @@ msgstr "Webhook actief"
 msgid "Wed"
 msgstr "wo"
 
-#: src/components/BoardSettingsModal.vue:1825
+#: src/components/BoardSettingsModal.vue:1842
 #: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
@@ -5163,7 +5168,7 @@ msgstr "Schrijf een antwoord…"
 msgid "wrote"
 msgstr "schreef"
 
-#: src/components/BoardSettingsModal.vue:1827
+#: src/components/BoardSettingsModal.vue:1844
 #: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"

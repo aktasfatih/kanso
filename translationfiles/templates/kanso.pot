@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -1524,6 +1524,10 @@ msgstr ""
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1541,7 +1545,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1824
+#: src/components/BoardSettingsModal.vue:1841
 #: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
@@ -2023,25 +2027,25 @@ msgstr ""
 msgid "Every"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3148,7 +3152,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1826
+#: src/components/BoardSettingsModal.vue:1843
 #: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
@@ -4138,6 +4142,7 @@ msgstr ""
 msgid "Repeat"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr ""
@@ -5085,7 +5090,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1825
+#: src/components/BoardSettingsModal.vue:1842
 #: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
@@ -5162,7 +5167,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1827
+#: src/components/BoardSettingsModal.vue:1844
 #: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"

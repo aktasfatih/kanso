@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -1537,6 +1537,10 @@ msgstr "Пользовательские поля"
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Особое расписание — измените его в настройках доски → Автоматизация."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1554,7 +1558,7 @@ msgstr "Опасная зона"
 msgid "Date"
 msgstr "Дата"
 
-#: src/components/BoardSettingsModal.vue:1824
+#: src/components/BoardSettingsModal.vue:1841
 #: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
@@ -2037,28 +2041,28 @@ msgstr "каждые"
 msgid "Every"
 msgstr "Каждые"
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
 msgstr[1] "Каждые %n дня"
 msgstr[2] "Каждые %n дней"
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -3166,7 +3170,7 @@ msgstr "Режим"
 msgid "Mon"
 msgstr "Пн"
 
-#: src/components/BoardSettingsModal.vue:1826
+#: src/components/BoardSettingsModal.vue:1843
 #: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
@@ -4157,6 +4161,7 @@ msgstr "переименовал эту карточку в {value}"
 msgid "Repeat"
 msgstr "Повторение"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr "Повторяется"
@@ -5105,7 +5110,7 @@ msgstr "Webhook активен"
 msgid "Wed"
 msgstr "Ср"
 
-#: src/components/BoardSettingsModal.vue:1825
+#: src/components/BoardSettingsModal.vue:1842
 #: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
@@ -5183,7 +5188,7 @@ msgstr "Напишите ответ…"
 msgid "wrote"
 msgstr "написал"
 
-#: src/components/BoardSettingsModal.vue:1827
+#: src/components/BoardSettingsModal.vue:1844
 #: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"

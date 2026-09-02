@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:3816
+#: src/components/BoardSettingsModal.vue:3835
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -1513,6 +1513,10 @@ msgstr "自定义字段"
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "自定义计划 — 请在“看板设置 → 自动化”中编辑。"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1530,7 +1534,7 @@ msgstr "危险区域"
 msgid "Date"
 msgstr "日期"
 
-#: src/components/BoardSettingsModal.vue:1824
+#: src/components/BoardSettingsModal.vue:1841
 #: src/components/CardDetail.vue:4267
 msgid "day"
 msgid_plural "days"
@@ -2011,22 +2015,22 @@ msgstr "每"
 msgid "Every"
 msgstr "每"
 
-#: src/components/BoardSettingsModal.vue:3796
+#: src/components/BoardSettingsModal.vue:3815
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
 
-#: src/components/BoardSettingsModal.vue:3806
+#: src/components/BoardSettingsModal.vue:3825
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:3798
+#: src/components/BoardSettingsModal.vue:3817
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:3808
+#: src/components/BoardSettingsModal.vue:3827
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -3132,7 +3136,7 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:1826
+#: src/components/BoardSettingsModal.vue:1843
 #: src/components/CardDetail.vue:4269
 msgid "month"
 msgid_plural "months"
@@ -4121,6 +4125,7 @@ msgstr "把这张卡片重命名为 {value}"
 msgid "Repeat"
 msgstr "重复"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Repeats"
 msgstr "重复"
@@ -5067,7 +5072,7 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:1825
+#: src/components/BoardSettingsModal.vue:1842
 #: src/components/CardDetail.vue:4268
 msgid "week"
 msgid_plural "weeks"
@@ -5143,7 +5148,7 @@ msgstr "写下回复…"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:1827
+#: src/components/BoardSettingsModal.vue:1844
 #: src/components/CardDetail.vue:4270
 msgid "year"
 msgid_plural "years"
