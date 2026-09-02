@@ -11,6 +11,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.22.1](https://github.com/aktasfatih/kanso/compare/v0.22.0...v0.22.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* ask before leaving a card with unsaved description, title or comment text ([633c991](https://github.com/aktasfatih/kanso/commit/633c991b1279aa60091234d814f4ea7b57f93601))
+* keep columns and checklist items in a stable order between reloads ([6729445](https://github.com/aktasfatih/kanso/commit/6729445cc8474083526eb94e2626caa167ab5895)), closes [#6148](https://github.com/aktasfatih/kanso/issues/6148)
+* let touch users open the command palette from the More menu ([337409c](https://github.com/aktasfatih/kanso/commit/337409c3ac7305fe86c76feeda34fd988196a8cc)), closes [#10066](https://github.com/aktasfatih/kanso/issues/10066)
+* stop archived boards from showing up in views, search and other lists ([d442d4f](https://github.com/aktasfatih/kanso/commit/d442d4f9c0194e38e3fe2d87a1eba176fa3c7ff1))
+* stop Clear filters on a View from wiping the view's own saved filter ([05e1e02](https://github.com/aktasfatih/kanso/commit/05e1e0294385870fb0ea4a8083b48e3bc0913bc2)), closes [#10091](https://github.com/aktasfatih/kanso/issues/10091)
+* stop the recurrence editor from wiping a custom repeat schedule on save ([f800a49](https://github.com/aktasfatih/kanso/commit/f800a4923d0897f41acf2d7ebeadd2e1b8888eab))
+
+
+### Performance Improvements
+
+* **views:** abort a superseded View feed refetch in the browser ([7c65a20](https://github.com/aktasfatih/kanso/commit/7c65a20f58ea4e9f00efd422b8e514358bd3482e)), closes [#10010](https://github.com/aktasfatih/kanso/issues/10010)
+
 # [0.22.0](https://github.com/aktasfatih/kanso/compare/v0.21.0...v0.22.0) (2026-09-01)
 
 
