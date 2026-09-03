@@ -281,7 +281,15 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-timeline.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-analytics.png</screenshot>
 	<dependencies>
-		<nextcloud min-version="30" max-version="34"/>
+		<!-- Floor is 32, not 30: Kanso calls two IQueryBuilder APIs that do not
+		     exist before NC 32 - PARAM_DATETIME_MUTABLE (bound by the boards-list
+		     stats, i.e. opening the app) and forUpdate() (the rebalance path). On
+		     NC 30/31 both are a fatal PHP Error, so the app never worked there
+		     even though this range claimed it did. 32 is also the oldest release
+		     Nextcloud itself still supports, so nothing on a supported server
+		     loses Kanso. dev/smoke.sh now executes both paths in the install
+		     matrix, so a future API gap fails CI instead of shipping. -->
+		<nextcloud min-version="32" max-version="34"/>
 	</dependencies>
 	<!-- Element order below is fixed by the App Store schema's xs:sequence
 	     (background-jobs before commands, etc.). scripts/validate-info-xml.mjs

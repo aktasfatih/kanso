@@ -58,6 +58,14 @@ pass — verify the app on the new version, then raise `max-version` in
 Dependabot PR auto-merges; each one runs the full CI (psalm, PHPUnit, e2e) and
 is reviewed before merge.
 
+`min-version` moves for the same reason, in the other direction: drop a major
+once Nextcloud stops supporting it, or sooner if the code uses a server API that
+major doesn't have. **Nothing but the install matrix can catch that** — the `ocp`
+pin means psalm and PHPUnit always type-check against the *newest* server's API,
+never the oldest one we claim. So `dev/smoke.sh` executes real app code (the
+boards list and `occ kanso:rebalance`) on every `(version, db)` combo; when you
+add a call to a newer server API, that is what turns red.
+
 ## Commit messages
 
 Conventional-ish messages (`fix:`, `feat:`, `docs:`, `chore:`…), one logical

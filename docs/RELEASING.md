@@ -151,7 +151,7 @@ What still matters before you press *Run workflow*:
 - [ ] The releasable commits since the last tag have **correct Conventional
       types** (`fix:`/`feat:` for user-facing; a mistyped `chore:` won't ship).
       `npm run release:dry` shows the computed version + notes.
-- [ ] `appinfo/info.xml` `<dependencies>` still `min-version="30" max-version="34"`.
+- [ ] `appinfo/info.xml` `<dependencies>` still `min-version="32" max-version="34"`.
 - [ ] `README.md` / `info.xml` copy still matches the shipped feature set.
 - [ ] `scripts/build-release.sh` runs clean and the tarball installs on a stock
       Nextcloud (see the smoke test below).

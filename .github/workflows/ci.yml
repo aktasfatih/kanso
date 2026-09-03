@@ -341,10 +341,11 @@ jobs:
         run: npm run l10n:lint
 
   # Cross-version × cross-DB install/migration matrix. This is what actually
-  # VALIDATES the info.xml claim of NC 30–34: for each (version, db) combo it
+  # VALIDATES the info.xml claim of NC 32–34: for each (version, db) combo it
   # builds the frontend, boots a throwaway Nextcloud on that DB, enables Kanso
   # (running every migration via the app-enable + `occ upgrade`), then asserts
-  # the schema was really created (dev/smoke.sh). It deliberately does NOT run
+  # the schema was really created AND that app code actually runs against that
+  # server's API (dev/smoke.sh). It deliberately does NOT run
   # Playwright — the full browser e2e is slow and stays on 34+postgres only (the
   # `e2e` job below). PHPUnit is covered separately by the `unit-php` job (across
   # PHP 8.2 and 8.3); it is NOT re-run inside these containers because the ARC
@@ -364,7 +365,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nc-version: ['30', '31', '32', '33', '34']
+        nc-version: ['32', '33', '34']
         db: ['sqlite', 'postgres']
         include:
           - nc-version: '34'

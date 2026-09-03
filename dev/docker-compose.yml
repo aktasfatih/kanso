@@ -3,7 +3,7 @@
 #
 # Throwaway development Nextcloud with this app mounted from the checkout.
 # Defaults mirror the newest supported target (nextcloud:34-apache / PHP 8.3 +
-# postgres 16). The app supports NC 30–34; CI e2e boots this same stack. No
+# postgres 16). The app supports NC 32–34; CI e2e boots this same stack. No
 # volumes are persisted: `docker compose down` resets everything.
 #
 #   cd dev && ./setup.sh          # start + enable the app
@@ -11,7 +11,7 @@
 #
 # Cross-version / cross-DB matrix (used by CI, works locally too):
 #   NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on postgres
-#   NC_VERSION=30 KANSO_DB=sqlite   ./setup.sh   # NC 30 on sqlite (no db service)
+#   NC_VERSION=32 KANSO_DB=sqlite   ./setup.sh   # NC 32 on sqlite (no db service)
 #   NC_VERSION=34 KANSO_DB=mysql    ./setup.sh   # NC 34 on mariadb
 #
 # NC_VERSION selects the nextcloud:<tag>-apache image (default 34).
