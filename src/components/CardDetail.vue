@@ -1893,7 +1893,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											{{ expandedDiffs.has(item.id) ? t('kanso', 'Hide changes') : t('kanso', 'Show changes') }}
 										</button>
 									</span>
-									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}</span>
+									<!-- #10131 — the relative label alone ("5 days ago") can't answer
+									     "when exactly?", so the precise stamp sits next to it. It is
+									     ALWAYS rendered, never hover-only: a tooltip is unreachable on
+									     touch, and this app is installed on phones. -->
+									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}<template v-if="exactTimeLabel(item.timestamp)"><span class="card-modal__activity-sep"> · </span><time
+										class="card-modal__activity-exact"
+										:datetime="isoTimestamp(item.timestamp)"
+										:title="exactTimeTitle(item.timestamp)">{{ exactTimeLabel(item.timestamp) }}</time></template></span>
 									<div v-if="hasDescriptionDiff(item) && expandedDiffs.has(item.id)" class="card-modal__activity-diff">
 										<div
 											v-for="(line, i) in diffLines(item.detail.from, item.detail.to)"
@@ -2387,7 +2394,7 @@ import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
-import { allDayInputValue, timedInputValue, formatCardDate } from '../utils/dateDisplay.js'
+import { allDayInputValue, timedInputValue, formatCardDate, exactTimeLabel, exactTimeTitle, isoTimestamp } from '../utils/dateDisplay.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
@@ -8051,6 +8058,16 @@ body.theme--dark .card-modal,
 	font-size: 0.72rem;
 	color: var(--color-text-maxcontrast);
 	white-space: nowrap;
+}
+/* #10131 — the exact stamp is supporting detail, so it stays a notch quieter
+   than the relative label it follows. The separator is a REAL text node, not a
+   ::before: generated content is dropped from a copy-paste, which would jam the
+   two labels together as "just now09:31 PM". */
+.card-modal__activity-exact {
+	opacity: 0.75;
+}
+.card-modal__activity-sep {
+	opacity: 0.5;
 }
 .card-modal__thread-scroll {
 	flex: 1;

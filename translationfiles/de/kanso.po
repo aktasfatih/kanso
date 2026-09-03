@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:4091
+#: src/components/CardDetail.vue:4098
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
 msgstr[1] "vor %n Tagen"
 
-#: src/components/CardDetail.vue:4089
+#: src/components/CardDetail.vue:4096
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
 msgstr[1] "vor %n Stunden"
 
-#: src/components/CardDetail.vue:4087
+#: src/components/CardDetail.vue:4094
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -1547,7 +1547,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4267
+#: src/components/CardDetail.vue:4274
 msgid "day"
 msgid_plural "days"
 msgstr[0] "Tag"
@@ -3154,7 +3154,7 @@ msgid "Mon"
 msgstr "Mo"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4269
+#: src/components/CardDetail.vue:4276
 msgid "month"
 msgid_plural "months"
 msgstr[0] "Monat"
@@ -4454,7 +4454,7 @@ msgstr "Formatierungsleiste anzeigen"
 msgid "Show the discussion panel"
 msgstr "Diskussionsbereich anzeigen"
 
-#: src/components/CardDetail.vue:5830
+#: src/components/CardDetail.vue:5837
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
@@ -5092,7 +5092,7 @@ msgid "Wed"
 msgstr "Mi"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4268
+#: src/components/CardDetail.vue:4275
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "Woche"
@@ -5169,7 +5169,7 @@ msgid "wrote"
 msgstr "schrieb"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4270
+#: src/components/CardDetail.vue:4277
 msgid "year"
 msgid_plural "years"
 msgstr[0] "Jahr"

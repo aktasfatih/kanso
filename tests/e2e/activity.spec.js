@@ -5,13 +5,14 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 // #3494 — per-card Activity tab.
 test.describe('Card Activity feed', () => {
-	const state = { boardId: 0, cardUrl: '' }
+	const state = { boardId: 0, cardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
 		const board = await api.send('POST', '/boards', { title: 'Activity E2E' })
 		state.boardId = board.id
 		const stack = await api.send('POST', '/stacks', { boardId: board.id, title: 'To Do' })
 		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Tracked card' })
+		state.cardId = card.id
 		// Generate a few distinct activity rows.
 		await api.send('POST', `/cards/${card.id}/comments`, { body: 'first note' })
 		await api.send('PATCH', `/cards/${card.id}`, { priority: 3 })
@@ -44,6 +45,59 @@ test.describe('Card Activity feed', () => {
 		// The granular activity log now renders it as "changed the priority to X"
 		// rather than the generic "updated this card".
 		await expect(rows.first()).toContainText('changed the priority')
+	})
+
+	// #10131 — "5 days ago" can't answer "when exactly?". Every activity row now
+	// carries the precise stamp beside the relative label, in a <time> element so
+	// it is machine-readable and copy-pasteable.
+	//
+	// The stamp is ALWAYS rendered, deliberately NOT a hover tooltip: a
+	// hover-only affordance is unreachable on touch, and this app is installed on
+	// phones. So this asserts visibility with no hover, no focus and no tap —
+	// and that the relative label survives alongside it (the change is additive).
+	test('every activity row shows the exact date and time, with no hover needed', async ({ page }) => {
+		// A time entry on the same card: the activity feed and the time-tracking
+		// list share the `.card-modal__activity-time` class, and this change must
+		// leave the time-tracking list byte-for-byte as it was.
+		const timeEntry = await api.send('POST', `/cards/${state.cardId}/time-entries`, { seconds: 5400, note: 'Pairing' })
+
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		// The time-tracking list is on the main pane, before we go near Activity.
+		const trackedRow = page.locator('.card-modal__time-entry', { hasText: 'Pairing' })
+		await expect(trackedRow).toHaveCount(1, { timeout: 8_000 })
+		// UNCHANGED: still the relative label alone — no <time>, no exact stamp.
+		await expect(trackedRow.locator('.card-modal__activity-time')).toHaveCount(1)
+		await expect(trackedRow.locator('.card-modal__activity-time time')).toHaveCount(0)
+		await expect(trackedRow.locator('.card-modal__activity-exact')).toHaveCount(0)
+
+		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
+		const rows = page.locator('.card-modal__activity-row')
+		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+
+		// One exact stamp per row — no row is left with a relative label only.
+		const stamps = page.locator('.card-modal__activity-row time.card-modal__activity-exact')
+		await expect.poll(async () => await stamps.count()).toBe(await rows.count())
+
+		const stamp = stamps.first()
+		// Visible as rendered: nothing was hovered, focused or tapped.
+		await expect(stamp).toBeVisible()
+		// Machine-readable instant on the element itself.
+		expect(await stamp.getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+		// And a human clock in the visible text.
+		await expect(stamp).toHaveText(/\d{1,2}:\d{2}/)
+		// The relative label is still there — this is additive, not a swap — and
+		// the separator is real text, so a copy-paste reads "just now · 09:31 PM"
+		// rather than running the two labels together.
+		await expect(rows.first()).toContainText(/ago|just now/)
+		expect(await rows.first().textContent()).toContain(' · ')
+		// The title spells the stamp out in full.
+		const title = await stamp.getAttribute('title')
+		expect((title || '').length).toBeGreaterThan((await stamp.textContent()).length)
+
+		await api.send('DELETE', `/cards/${state.cardId}/time-entries/${timeEntry.id}`).catch(() => {})
 	})
 
 	// #3553 — the feed must update live while the Activity tab is open, both for a

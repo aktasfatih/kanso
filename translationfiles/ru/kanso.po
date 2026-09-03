@@ -265,21 +265,21 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4091
+#: src/components/CardDetail.vue:4098
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
 msgstr[1] "%n дня назад"
 msgstr[2] "%n дней назад"
 
-#: src/components/CardDetail.vue:4089
+#: src/components/CardDetail.vue:4096
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/components/CardDetail.vue:4087
+#: src/components/CardDetail.vue:4094
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -1559,7 +1559,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4267
+#: src/components/CardDetail.vue:4274
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3171,7 +3171,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4269
+#: src/components/CardDetail.vue:4276
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4472,7 +4472,7 @@ msgstr "Показывать панель форматирования"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:5830
+#: src/components/CardDetail.vue:5837
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5111,7 +5111,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4268
+#: src/components/CardDetail.vue:4275
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -5189,7 +5189,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4270
+#: src/components/CardDetail.vue:4277
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"
