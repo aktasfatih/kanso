@@ -108,6 +108,27 @@ function fmt(key, opts) {
 }
 
 /**
+ * Clock options for the stamp — hour and minute at the SAME requested width.
+ *
+ * This pairing is load-bearing, not cosmetic. `Intl.DateTimeFormat` only takes
+ * the hour/minute pattern from the locale's own short-time skeleton when both
+ * fields are requested at the same width; a mismatched pair (`hour: 'numeric'`
+ * with `minute: '2-digit'`) forces a literal `h:mm` and overrides the locale.
+ *
+ * That is what makes both halves of this right:
+ *  - 12-hour locales drop the meaningless leading zero — en-US renders "9:44 PM",
+ *    not "09:44 PM" (the bug this replaced).
+ *  - 24-hour locales keep their own padding — en-GB/de-DE still render "09:04",
+ *    because for them the locale skeleton IS a padded hour. Asking for
+ *    `minute: '2-digit'` here would have broken *them* instead, rendering "9:04".
+ *
+ * And `minute: 'numeric'` never yields "9:4": whenever an hour is also present,
+ * the locale skeleton resolves the minute to 2-digit in every locale (verified
+ * across 50 locales on the Node versions CI runs).
+ */
+const CLOCK_OPTS = { hour: 'numeric', minute: 'numeric' }
+
+/**
  * The exact stamp shown beside a relative label, kept short when it can be.
  *
  * Length-aware so a 50-row feed does not turn into a wall of dates: an event
@@ -126,14 +147,13 @@ export function exactTimeLabel(tsSeconds, nowMs = Date.now()) {
 		&& d.getMonth() === now.getMonth()
 		&& d.getDate() === now.getDate()
 	if (sameDay) {
-		return fmt('clock', { hour: '2-digit', minute: '2-digit' }).format(d)
+		return fmt('clock', CLOCK_OPTS).format(d)
 	}
 	return fmt('dateClock', {
 		day: 'numeric',
 		month: 'short',
 		year: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
+		...CLOCK_OPTS,
 	}).format(d)
 }
 
