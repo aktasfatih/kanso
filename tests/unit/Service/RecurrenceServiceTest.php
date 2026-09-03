@@ -244,16 +244,44 @@ class RecurrenceServiceTest extends TestCase {
 
 	/**
 	 * A rule with no FREQ is the nastiest shape of malformed: sabre never checks
-	 * that FREQ is present, so the iterator CONSTRUCTS cleanly and only dies while
-	 * stepping - and it dies with an \Error, not an \Exception. Anything catching
-	 * just \Exception let that through as a fatal: a 500 on the API instead of a
-	 * 400, a board import aborted whole, a cron pass killed by one stored rule.
+	 * that FREQ is present, so the iterator CONSTRUCTS cleanly and the damage only
+	 * shows while stepping. What it looks like there depends on the sabre release,
+	 * which is why this rejection has to happen BEFORE an iterator exists:
+	 *   - on vobject 5 the frequency property is typed, so stepping raises an
+	 *     \Error a catch can turn into a 400;
+	 *   - on vobject 4 - the line Nextcloud bundles, and therefore the one this app
+	 *     runs against in production - it is untyped and simply null, so no switch
+	 *     arm matches, the cursor never advances, and fastForward() loops forever.
+	 *     There is no throw to catch: the request wedges its worker, and under the
+	 *     cron CLI (no time limit) it wedges the background job.
+	 * composer.lock pins the 4.x line precisely so this test exercises the version
+	 * that ships. Under it, a regression here does not fail politely - it HANGS,
+	 * which is the honest signal and still a red build.
+	 *
+	 * "" is the API's default for an omitted rrule parameter, so it is reachable by
+	 * simply leaving the field out of the request.
 	 *
 	 * @testWith [""]
+	 *           ["   "]
 	 *           ["COUNT=3"]
 	 *           ["INTERVAL=2"]
+	 *           ["COUNT=3;INTERVAL=2"]
 	 */
 	public function testComputeNextOccurrenceRejectsAFreqLessRule(string $rrule): void {
+		$this->expectException(InvalidInputException::class);
+		$this->service->computeNextOccurrence($rrule, self::NOW, self::NOW);
+	}
+
+	/**
+	 * The rejection must come from the FREQ check, not from the iterator: a rule
+	 * whose FREQ is present but nonsense is a DIFFERENT failure, caught by sabre's
+	 * own constructor on both versions. Asserting it still rejects keeps the guard
+	 * from being loosened into "anything with a FREQ= is fine".
+	 *
+	 * @testWith ["FREQ="]
+	 *           ["FREQ=BOGUS"]
+	 */
+	public function testComputeNextOccurrenceRejectsAPresentButInvalidFreq(string $rrule): void {
 		$this->expectException(InvalidInputException::class);
 		$this->service->computeNextOccurrence($rrule, self::NOW, self::NOW);
 	}
@@ -403,17 +431,25 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	/**
-	 * A FREQ-less rule is a 400 like any other bad input, NOT a fatal. sabre builds
-	 * the iterator for it without complaint and only blows up while stepping - as
-	 * an \Error - so validate() has to catch more than \Exception to answer this
-	 * with a rejection instead of a 500.
+	 * A FREQ-less rule is a 400 like any other bad input - not a fatal, and (on the
+	 * sabre line that ships) not a hung request either. sabre builds the iterator
+	 * for it without complaint, so validate() has to refuse the rule before one is
+	 * ever constructed.
+	 *
+	 * "" is what the controller passes when the request simply OMITS rrule, which
+	 * makes this the cheapest possible way in.
+	 *
+	 * @testWith [""]
+	 *           ["   "]
+	 *           ["COUNT=3"]
+	 *           ["INTERVAL=2"]
 	 */
-	public function testCreateRejectsAFreqLessRruleWith400(): void {
+	public function testCreateRejectsAFreqLessRruleWith400(string $rrule): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->ruleMapper->expects(self::never())->method('insert');
 
 		$this->expectException(InvalidInputException::class);
-		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'COUNT=3', 0, 0, false, 'alice');
+		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, $rrule, 0, 0, false, 'alice');
 	}
 
 	public function testCreateRejectsTemplateCardOnAnotherBoard(): void {
@@ -2073,5 +2109,58 @@ class RecurrenceServiceTest extends TestCase {
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(3, null, null, null, null, null, null, null, null, 'alice', 'Mars/Olympus_Mons');
+	}
+
+	/**
+	 * Editing an existing rule down to a FREQ-less RRULE is the same 400 as
+	 * creating one - and, crucially, the same non-hang. update() re-arms the cursor
+	 * through the same expansion path create() validates with, so the guard has to
+	 * hold on both or a live board can be edited into a wedged worker.
+	 *
+	 * @testWith [""]
+	 *           ["   "]
+	 *           ["COUNT=3"]
+	 *           ["INTERVAL=2"]
+	 */
+	public function testUpdateRejectsAFreqLessRruleWith400(string $rrule): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(3, null, null, null, $rrule, null, null, null, null, 'alice', null);
+	}
+
+	/**
+	 * A FREQ-less rule STORED before the guard landed (create/update accepted
+	 * 'COUNT=3' happily, and the API's own default for an omitted rrule was '')
+	 * must not wedge the cron pass that picks it up. runDueRules() reaches it
+	 * through advanceSchedule(), which now gets an InvalidInputException instead of
+	 * an endless walk, logs it, and retires the rule.
+	 *
+	 * This is the path with no timeout at all - occ/cron runs under the CLI SAPI,
+	 * where max_execution_time is 0 - so it is the one that matters most.
+	 *
+	 * @testWith [""]
+	 *           ["COUNT=3"]
+	 *           ["INTERVAL=2"]
+	 */
+	public function testRunDueRulesDisablesAStoredFreqLessRuleInsteadOfSpinning(string $rrule): void {
+		$rule = $this->rule(rrule: $rrule, nextOccurrenceAt: self::NOW);
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->service->runDueRules();
+
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
 	}
 }
