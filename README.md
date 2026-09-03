@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-![Nextcloud 30–34](https://img.shields.io/badge/Nextcloud-30–34-0082c9)
+![Nextcloud 32–34](https://img.shields.io/badge/Nextcloud-32–34-0082c9)
 
 Instant drag & drop, payloads sized for large boards, realtime sync: a
 from-scratch kanban board that stays out of your way.
@@ -117,7 +117,7 @@ your work, on your own Nextcloud, laid out plainly.
 
 ## Installation
 
-Kanso targets **Nextcloud 30–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
+Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
 App Store yet — until it is, install the pre-built tarball from
 [GitHub Releases](https://github.com/aktasfatih/kanso/releases) (no Node or
 Composer needed on your server):
@@ -184,7 +184,7 @@ cross-version matrix uses):
 
 ```sh
 NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on Postgres
-NC_VERSION=30 KANSO_DB=sqlite   ./setup.sh   # NC 30 on SQLite (no db container)
+NC_VERSION=32 KANSO_DB=sqlite   ./setup.sh   # NC 32 on SQLite (no db container)
 NC_VERSION=34 KANSO_DB=mysql    ./setup.sh   # NC 34 on MariaDB
 ```
 

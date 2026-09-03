@@ -14,8 +14,8 @@
 #
 # Examples:
 #   ./setup.sh                                  # NC 34 + postgres (default)
-#   NC_VERSION=30 KANSO_DB=sqlite ./setup.sh    # NC 30 + sqlite (no db service)
-#   NC_VERSION=32 KANSO_DB=mysql  ./setup.sh    # NC 32 + mariadb
+#   NC_VERSION=32 KANSO_DB=sqlite ./setup.sh    # NC 32 + sqlite (no db service)
+#   NC_VERSION=33 KANSO_DB=mysql  ./setup.sh    # NC 33 + mariadb
 set -eu
 cd "$(dirname "$0")"
 
