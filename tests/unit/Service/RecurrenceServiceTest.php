@@ -255,11 +255,12 @@ class RecurrenceServiceTest extends TestCase {
 	 *     There is no throw to catch: the request wedges its worker, and under the
 	 *     cron CLI (no time limit) it wedges the background job.
 	 * composer.lock pins the 4.x line precisely so this test exercises the version
-	 * that ships. Under it, a regression here does not fail politely - it HANGS,
-	 * which is the honest signal and still a red build.
+	 * that ships.
 	 *
 	 * "" is the API's default for an omitted rrule parameter, so it is reachable by
 	 * simply leaving the field out of the request.
+	 *
+	 * The anchoring is deliberate - see {@see self::assertRejectedWithoutStepping}.
 	 *
 	 * @testWith [""]
 	 *           ["   "]
@@ -268,22 +269,123 @@ class RecurrenceServiceTest extends TestCase {
 	 *           ["COUNT=3;INTERVAL=2"]
 	 */
 	public function testComputeNextOccurrenceRejectsAFreqLessRule(string $rrule): void {
-		$this->expectException(InvalidInputException::class);
-		$this->service->computeNextOccurrence($rrule, self::NOW, self::NOW);
+		$this->assertRejectedWithoutStepping($rrule);
 	}
 
 	/**
-	 * The rejection must come from the FREQ check, not from the iterator: a rule
-	 * whose FREQ is present but nonsense is a DIFFERENT failure, caught by sabre's
-	 * own constructor on both versions. Asserting it still rejects keeps the guard
-	 * from being loosened into "anything with a FREQ= is fine".
+	 * A FREQ that is present but not a frequency at all. Sabre's own constructor
+	 * rejects these, but the guard must reject them FIRST and on its own terms -
+	 * otherwise it is only a presence check, and a presence check is not enough
+	 * (see the SECONDLY/MINUTELY tests below).
 	 *
 	 * @testWith ["FREQ="]
 	 *           ["FREQ=BOGUS"]
+	 *           ["FREQ=DAILYISH"]
 	 */
 	public function testComputeNextOccurrenceRejectsAPresentButInvalidFreq(string $rrule): void {
+		$this->assertRejectedWithoutStepping($rrule);
+	}
+
+	/**
+	 * SECONDLY and MINUTELY are the half of the hole a presence check leaves open.
+	 * They are valid RFC 5545 and sabre's iterator CONSTRUCTOR accepts them - its
+	 * frequency whitelist carries all seven values - but its next() implements only
+	 * five. On these two it returns without touching the cursor, so fastForward()'s
+	 * unbounded `while (valid() && current < target)` spins exactly as a FREQ-less
+	 * rule does, with nothing thrown to catch. A guard that asked only "is FREQ
+	 * present?" waved both straight through to that spin.
+	 *
+	 * {@see self::testSabreCannotStepSecondlyOrMinutely} is the companion proof that
+	 * this is sabre's behaviour and not an assumption.
+	 *
+	 * The anchoring is deliberate - see {@see self::assertRejectedWithoutStepping}.
+	 *
+	 * @testWith ["FREQ=SECONDLY"]
+	 *           ["FREQ=MINUTELY"]
+	 *           ["FREQ=SECONDLY;INTERVAL=30"]
+	 *           ["FREQ=MINUTELY;COUNT=5"]
+	 *           ["freq=secondly"]
+	 */
+	public function testComputeNextOccurrenceRejectsAFrequencySabreCannotStep(string $rrule): void {
+		$this->assertRejectedWithoutStepping($rrule);
+	}
+
+	/**
+	 * Asserts computeNextOccurrence() refuses $rrule - and does it in a shape that
+	 * FAILS rather than HANGS if the guard is ever weakened.
+	 *
+	 * Every rule these tests feed in is one sabre's iterator cannot step: the cursor
+	 * stands still, so fastForward()'s `while (valid() && currentDate < $target)`
+	 * would spin forever if it were ever entered. Asking for the occurrence after
+	 * `$anchor - 1` makes the target the anchor itself, so `currentDate < $target` is
+	 * false on the very first check and the loop body never runs. A regressed guard
+	 * therefore lets the call RETURN (the anchor) instead of throwing, and the
+	 * missing-exception failure is instant.
+	 *
+	 * Do not "simplify" this to (NOW, NOW). That asks for the occurrence strictly
+	 * after the anchor, which enters the loop - and a regression then wedges the
+	 * whole suite instead of reddening it. That is precisely what stalled a test run
+	 * for an hour while this bug was being investigated.
+	 */
+	private function assertRejectedWithoutStepping(string $rrule): void {
+		$anchor = self::NOW;
 		$this->expectException(InvalidInputException::class);
-		$this->service->computeNextOccurrence($rrule, self::NOW, self::NOW);
+		$this->service->computeNextOccurrence($rrule, $anchor - 1, $anchor);
+	}
+
+	/**
+	 * The five frequencies sabre CAN step must still be accepted - the guard is an
+	 * allowlist, and an allowlist that is too narrow breaks every real rule. Each is
+	 * asserted to produce a real occurrence strictly after the anchor.
+	 *
+	 * @testWith ["FREQ=HOURLY", 3600]
+	 *           ["FREQ=DAILY", 86400]
+	 *           ["FREQ=WEEKLY", 604800]
+	 *           ["FREQ=MONTHLY", 2678400]
+	 *           ["FREQ=YEARLY", 31536000]
+	 */
+	public function testComputeNextOccurrenceAcceptsEveryIterableFrequency(string $rrule, int $expectedDelta): void {
+		$anchor = (new \DateTimeImmutable('2026-01-01T00:00:00Z'))->getTimestamp();
+		$next = $this->service->computeNextOccurrence($rrule, $anchor, $anchor, 'UTC');
+		self::assertSame($anchor + $expectedDelta, $next);
+	}
+
+	/**
+	 * Pins down WHY SECONDLY and MINUTELY have to be rejected, straight against the
+	 * sabre the suite runs (4.x, pinned in composer.json - the line Nextcloud
+	 * bundles). It is deliberately BOUNDED: it steps the iterator a fixed number of
+	 * times and asserts the cursor moved, rather than calling fastForward() on an
+	 * unguarded rule. fastForward() on these never returns, so a test written that
+	 * way would HANG the suite instead of failing it - which is exactly how this
+	 * wedged a test run for an hour while it was being investigated. Never reach for
+	 * fastForward() here.
+	 *
+	 * @testWith ["SECONDLY", false]
+	 *           ["MINUTELY", false]
+	 *           ["HOURLY", true]
+	 *           ["DAILY", true]
+	 *           ["WEEKLY", true]
+	 *           ["MONTHLY", true]
+	 *           ["YEARLY", true]
+	 */
+	public function testSabreCannotStepSecondlyOrMinutely(string $freq, bool $expectedToAdvance): void {
+		$start = new \DateTimeImmutable('2026-01-01T00:00:00', new \DateTimeZone('UTC'));
+		// The constructor accepts all seven - that is the trap.
+		$iterator = new \Sabre\VObject\Recur\RRuleIterator('FREQ=' . $freq, $start);
+		for ($i = 0; $i < 5; $i++) {
+			$iterator->next();
+		}
+		$advanced = $iterator->current() === null
+			|| $iterator->current()->getTimestamp() !== $start->getTimestamp();
+		self::assertSame(
+			$expectedToAdvance,
+			$advanced,
+			sprintf(
+				'FREQ=%s: expected the cursor %s after 5 next() calls',
+				$freq,
+				$expectedToAdvance ? 'to advance' : 'to stand still',
+			),
+		);
 	}
 
 	// ---- create -----------------------------------------------------------

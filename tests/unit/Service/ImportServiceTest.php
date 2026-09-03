@@ -485,6 +485,19 @@ class ImportServiceTest extends TestCase {
 						'id' => 85, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
 						'owner' => 'bob', 'enabled' => true,
 					],
+					// Frequencies sabre ACCEPTS but cannot step: its iterator's
+					// constructor takes all seven RFC 5545 values, next() implements
+					// only five, and on these two the cursor never moves - the same
+					// unending fastForward() as a FREQ-less rule. Import has to drop
+					// them for the same reason, and keep going.
+					[
+						'id' => 86, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=SECONDLY', 'owner' => 'bob', 'enabled' => true,
+					],
+					[
+						'id' => 87, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=MINUTELY;INTERVAL=15', 'owner' => 'bob', 'enabled' => true,
+					],
 					// A perfectly good rule right behind it still lands intact.
 					[
 						'id' => 82, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
@@ -550,8 +563,9 @@ class ImportServiceTest extends TestCase {
 		self::assertSame(31, $capturedRecur[0]->getTargetStackId());
 		self::assertSame('importer', $capturedRecur[0]->getOwner());
 
-		// None of the unparseable RRULEs reached the mapper - the outright-invalid
-		// FREQ and the three FREQ-less variants alike - while the valid rule sitting
+		// None of the rules this app cannot iterate reached the mapper - the
+		// outright-invalid FREQ, the three FREQ-less variants, and the two
+		// accepted-but-unsteppable frequencies alike - while the valid rule sitting
 		// behind all of them imported with its RRULE intact.
 		self::assertSame(
 			['FREQ=DAILY', 'FREQ=WEEKLY;BYDAY=MO'],

@@ -70,6 +70,17 @@ class RecurrenceService {
 	 */
 	public const MAX_CATCHUP = 50;
 
+	/**
+	 * The frequencies sabre's {@see RRuleIterator}::next() actually implements, and
+	 * therefore the only ones this app will store. Lowercase, because that is the
+	 * form next() switches on.
+	 *
+	 * The iterator's CONSTRUCTOR is wider than its next() is: it accepts all seven
+	 * RFC 5545 frequencies, SECONDLY and MINUTELY included, and only next() reveals
+	 * that two of them go nowhere. See {@see self::assertIterableFrequency}.
+	 */
+	private const ITERABLE_FREQUENCIES = ['hourly', 'daily', 'weekly', 'monthly', 'yearly'];
+
 	public function __construct(
 		private RecurRuleMapper $ruleMapper,
 		private CardMapper $cardMapper,
@@ -105,12 +116,14 @@ class RecurrenceService {
 	 * for rules created before the timezone column existed). We do NOT hand-roll
 	 * DST math - sabre's {@see RRuleIterator} does it when anchored in a real zone.
 	 *
-	 * @throws InvalidInputException if the RRULE cannot be parsed, or carries no
-	 *                               FREQ part ({@see self::assertHasFrequency})
+	 * @throws InvalidInputException if the RRULE cannot be parsed, or its FREQ is
+	 *                               missing or not one sabre can iterate
+	 *                               ({@see self::assertIterableFrequency})
 	 */
 	public function computeNextOccurrence(string $rrule, int $afterTs, int $dtstartTs, ?string $timezone = null): int {
-		// Reject a FREQ-less rule BEFORE any iterator exists - see the method doc.
-		$this->assertHasFrequency($rrule);
+		// Reject a rule sabre cannot step BEFORE any iterator exists - see the
+		// method doc.
+		$this->assertIterableFrequency($rrule);
 
 		$tz = $this->timezoneFor($timezone);
 		// Anchor as a floating wall-clock time in the rule's zone: take the UTC
@@ -136,10 +149,10 @@ class RecurrenceService {
 			// \Exception would let that escape as a 500: crashing a board import,
 			// turning an invalid-rule API call into a fatal instead of a 400, and
 			// killing the cron pass on a rule stored before it was validated.
-			// This no longer has to cover the FREQ-less case - assertHasFrequency()
-			// above rejects those before an iterator is ever built - but it still
-			// earns its keep for every other rule that only misbehaves while
-			// stepping.
+			// This no longer has to cover the frequencies sabre cannot step -
+			// assertIterableFrequency() above rejects those before an iterator is
+			// ever built - but it still earns its keep for every other rule that
+			// only misbehaves while stepping.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 
@@ -154,40 +167,56 @@ class RecurrenceService {
 	}
 
 	/**
-	 * Rejects an RRULE that carries no FREQ, before {@see self::computeNextOccurrence}
-	 * can hand it to an {@see RRuleIterator}.
+	 * Rejects an RRULE whose FREQ is missing, or is one sabre accepts but cannot
+	 * step, before {@see self::computeNextOccurrence} can hand it to an
+	 * {@see RRuleIterator}. Only an explicit member of
+	 * {@see self::ITERABLE_FREQUENCIES} gets through.
 	 *
-	 * FREQ is the one part RFC 5545 makes mandatory, and it is the one part sabre
-	 * never checks for. `''`, `'COUNT=3'` and `'INTERVAL=2'` all CONSTRUCT cleanly;
-	 * the damage only shows while stepping, and what it looks like depends on the
-	 * sabre release:
-	 *   - vobject 5 types the property as a string, so `switch ($this->frequency)`
-	 *     hits a typed-but-uninitialized property and raises an \Error the catch in
-	 *     computeNextOccurrence() turns into a clean 400;
-	 *   - vobject 4 - what Nextcloud bundles in 3rdparty, and therefore what this app
-	 *     actually runs against, since the release tarball ships no vendor/ (see
-	 *     scripts/build-release.sh) - declares `protected $frequency;` UNTYPED, so it
-	 *     is simply null. No switch arm matches, the cursor never advances, and there
-	 *     is nothing to throw. fastForward() is an unbounded
-	 *     `while (valid() && current < target)`, and with neither COUNT nor UNTIL to
-	 *     end it valid() stays true forever: the request wedges its worker until
-	 *     max_execution_time, and under the cron CLI (no time limit at all) it wedges
-	 *     the whole background job.
-	 * So the catch cannot be the guard for this shape - on the version that ships,
-	 * control never reaches it. Refusing the rule up front is what actually holds,
-	 * and it holds identically on both lines: Recur::stringToArray parses and
-	 * upper-cases the parts the same way in 4 and 5.
+	 * Two distinct shapes wedge the iterator, and both end the same way - a
+	 * `fastForward()` that never returns:
+	 *
+	 * 1. **No FREQ at all.** It is the one part RFC 5545 makes mandatory and the one
+	 *    part sabre never checks for. `''`, `'COUNT=3'` and `'INTERVAL=2'` all
+	 *    CONSTRUCT cleanly; the damage only shows while stepping, and what it looks
+	 *    like depends on the sabre release:
+	 *      - vobject 5 types the property as a string, so `switch ($this->frequency)`
+	 *        hits a typed-but-uninitialized property and raises an \Error the catch
+	 *        in computeNextOccurrence() turns into a clean 400;
+	 *      - vobject 4 - what Nextcloud bundles in 3rdparty, and therefore what this
+	 *        app actually runs against, since the release tarball ships no vendor/
+	 *        (see scripts/build-release.sh) - declares `protected $frequency;`
+	 *        UNTYPED, so it is simply null. No switch arm matches, the cursor never
+	 *        advances, and there is nothing to throw.
+	 * 2. **FREQ=SECONDLY / FREQ=MINUTELY.** These are valid RFC 5545 and the
+	 *    constructor's own frequency whitelist accepts all seven values - but next()
+	 *    only implements five. On the missing two it falls through without touching
+	 *    currentDate, so the cursor stands still exactly as in case 1. Nothing is
+	 *    thrown on either sabre line; a guard that merely checked "is FREQ present"
+	 *    waved these straight through.
+	 *
+	 * In both cases fastForward() is an unbounded
+	 * `while (valid() && current < target)`, and with a cursor that never moves (and
+	 * no COUNT/UNTIL to end it) valid() stays true forever: the request wedges its
+	 * worker until max_execution_time, and under the cron CLI (no time limit at all)
+	 * it wedges the whole background job. So the catch cannot be the guard here - on
+	 * the version that ships, control never reaches it. Refusing the rule up front is
+	 * what actually holds, and it holds identically on both lines:
+	 * Recur::stringToArray parses and upper-cases the parts the same way in 4 and 5.
+	 *
+	 * Rejecting SECONDLY/MINUTELY is also right on the merits: a card that respawns
+	 * every second is meaningless for a board, and sabre could not iterate it anyway.
 	 *
 	 * composer.json pins sabre/vobject to the 4.x line for exactly this reason: a
 	 * suite running 5.x agrees with a guard written against 5.x semantics and proves
 	 * nothing about what users run.
 	 *
-	 * A present-but-nonsense FREQ (`FREQ=`, `FREQ=BOGUS`) needs no handling here -
-	 * the iterator's constructor rejects those on both versions.
+	 * A present-but-nonsense FREQ (`FREQ=`, `FREQ=BOGUS`) is rejected here too, by
+	 * the same allowlist, rather than being left to the iterator's constructor.
 	 *
-	 * @throws InvalidInputException if the RRULE is empty or carries no FREQ part
+	 * @throws InvalidInputException if the RRULE is empty, unparseable, carries no
+	 *                               FREQ, or names a frequency sabre cannot step
 	 */
-	private function assertHasFrequency(string $rrule): void {
+	private function assertIterableFrequency(string $rrule): void {
 		if (trim($rrule) === '') {
 			// The API's own default for an omitted rrule parameter, so this is the
 			// likeliest way in - name it explicitly rather than leaning on the parse.
@@ -199,7 +228,8 @@ class RecurrenceService {
 			// Unparseable garbage; the iterator would reject it too, just later.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
-		if (!isset($parts['FREQ'])) {
+		$freq = $parts['FREQ'] ?? null;
+		if (!is_string($freq) || !in_array(strtolower($freq), self::ITERABLE_FREQUENCIES, true)) {
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 	}
