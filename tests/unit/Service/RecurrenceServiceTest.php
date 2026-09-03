@@ -149,6 +149,31 @@ class RecurrenceServiceTest extends TestCase {
 		return $card;
 	}
 
+	/**
+	 * A template card whose Start date sits just AFTER "now", and therefore anchors
+	 * any rule hung off it one minute in the future.
+	 *
+	 * This is the create/update/cron equivalent of
+	 * {@see self::assertRejectedWithoutStepping}'s `$anchor - 1`. firstFireFor() asks
+	 * for the occurrence after `max($anchor - 1, now)` = `$anchor - 1`, so the advance
+	 * loop's `current() < $target` is false on its very first check and the iterator
+	 * is never STEPPED.
+	 *
+	 * Every test that feeds a REJECTED rule through create(), update() or
+	 * runDueRules() must use this. Those entry points pick their own anchor, and some
+	 * of the rules under test (`FREQ=WEEKLY;BYHOUR=99`,
+	 * `FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO`) spin forever inside a SINGLE next() call -
+	 * so a regressed guard would HANG the suite rather than redden it. With the anchor
+	 * ahead of the target, a regression instead lets the call RETURN an occurrence and
+	 * the missing-exception failure is instant. This is not hypothetical: mutating the
+	 * guard hung the run at test 173 until these were anchored.
+	 */
+	private function unsteppedTemplateCard(int $id = 10, int $boardId = 1): Card {
+		$card = $this->templateCard($id, $boardId);
+		$card->setStartDate(new \DateTime('@' . (self::NOW + 60)));
+		return $card;
+	}
+
 	private function rule(
 		int $id = 3,
 		int $mode = RecurRule::MODE_CLONE,
@@ -351,6 +376,185 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	/**
+	 * A valid FREQ is necessary but nowhere near sufficient: EVERY other rule part
+	 * used to reach the iterator unvalidated, and sabre range-checks only some of
+	 * them. An out-of-range value on an unchecked part throws nothing - it just
+	 * describes an occurrence set that can never be satisfied, and sabre then spins
+	 * looking for it. The parts below are refused outright (they are not on
+	 * SUPPORTED_PARTS) because each reaches a sabre loop that cannot be bounded from
+	 * outside:
+	 *
+	 *   - `FREQ=WEEKLY;BYHOUR=99` - nextWeekly() is the only next*() with no
+	 *     year-9999 escape, and format('G') never yields 99. Verified live through
+	 *     computeNextOccurrence(): 99.8% CPU until killed. A true infinite loop.
+	 *   - `FREQ=DAILY;BYHOUR=99` - same defect, but nextDaily() DOES have the escape,
+	 *     so it "only" walks ~70 million iterations to the year 9999.
+	 *   - `FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO` - every part in range, yet nextYearly()'s
+	 *     BYYEARDAY branch is a bare `while (true)` that indexes `$this->dayMap[$byDay]`
+	 *     RAW (unlike the weekly/monthly paths, which use `substr($day, -2)` and so
+	 *     tolerate an ordinal). '2MO' is not a key, no candidate ever matches, the year
+	 *     counter climbs forever. Also verified at 99.8% CPU.
+	 *   - BYWEEKNO reaches the same raw-dayMap branch; BYMINUTE/BYSECOND/BYSETPOS are
+	 *     inert on THIS sabre release, which is exactly the kind of fact that goes
+	 *     stale between versions - so they are refused rather than trusted.
+	 *
+	 * Note where the first and third loops live: INSIDE a single next() call. That is
+	 * why the step cap ({@see self::testComputeNextOccurrenceCapsAnAncientAnchorsWalk})
+	 * cannot cover them and this allowlist is load-bearing - PHP cannot interrupt a
+	 * loop inside a library call.
+	 *
+	 * The anchoring is deliberate - see {@see self::assertRejectedWithoutStepping}.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99"]
+	 *           ["FREQ=DAILY;BYHOUR=99"]
+	 *           ["FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO"]
+	 *           ["FREQ=YEARLY;BYWEEKNO=1;BYDAY=2MO"]
+	 *           ["FREQ=WEEKLY;BYHOUR=0"]
+	 *           ["FREQ=DAILY;BYMINUTE=30"]
+	 *           ["FREQ=DAILY;BYSECOND=0"]
+	 *           ["FREQ=MONTHLY;BYSETPOS=-1;BYDAY=MO"]
+	 *           ["FREQ=MONTHLY;BYSETPOS=999"]
+	 *           ["FREQ=YEARLY;BYYEARDAY=400"]
+	 */
+	public function testComputeNextOccurrenceRejectsAnUnsupportedRulePart(string $rrule): void {
+		$this->assertRejectedWithoutStepping($rrule);
+	}
+
+	/**
+	 * The parts this app DOES store are range-checked here rather than left to
+	 * sabre, which checks BYMONTH but not BYMONTHDAY, and enforces only ">= 1" on
+	 * INTERVAL and COUNT. An out-of-range BYMONTHDAY is the cheap version of the same
+	 * bug: `FREQ=MONTHLY;BYMONTHDAY=32` describes an empty occurrence set, so
+	 * nextMonthly() walks month by month to sabre's year-9999 stop - ~95k iterations,
+	 * 0.18s measured, inside ONE next() call. It terminates only because that one
+	 * next*() happens to have an escape hatch, which is not a property to depend on.
+	 *
+	 * The anchoring is deliberate - see {@see self::assertRejectedWithoutStepping}.
+	 *
+	 * @testWith ["FREQ=MONTHLY;BYMONTHDAY=32"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=0"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=-32"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=1,32"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=NOPE"]
+	 *           ["FREQ=YEARLY;BYMONTH=13"]
+	 *           ["FREQ=YEARLY;BYMONTH=0"]
+	 *           ["FREQ=WEEKLY;BYDAY=XX"]
+	 *           ["FREQ=WEEKLY;BYDAY=MO,XX"]
+	 *           ["FREQ=WEEKLY;BYDAY="]
+	 *           ["FREQ=MONTHLY;BYDAY=9MO"]
+	 *           ["FREQ=WEEKLY;WKST=XX"]
+	 *           ["FREQ=DAILY;INTERVAL=0"]
+	 *           ["FREQ=DAILY;INTERVAL=-1"]
+	 *           ["FREQ=DAILY;INTERVAL=999999999"]
+	 *           ["FREQ=DAILY;INTERVAL=2abc"]
+	 *           ["FREQ=DAILY;COUNT=0"]
+	 *           ["FREQ=DAILY;COUNT=999999999"]
+	 *           ["FREQ=DAILY;UNTIL=NOT-A-DATE"]
+	 */
+	public function testComputeNextOccurrenceRejectsAnOutOfRangePartValue(string $rrule): void {
+		$this->assertRejectedWithoutStepping($rrule);
+	}
+
+	/**
+	 * The other half of an allowlist: it must not eat real schedules. Every rule here
+	 * is one a user can genuinely author - through the editor, the API or the MCP
+	 * server - and each has to keep producing an occurrence strictly after the anchor.
+	 * Negative values are legal and load-bearing (`BYMONTHDAY=-1` is "the last day of
+	 * the month"), as is a positional BYDAY on a monthly rule.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYDAY=MO,WE,FR"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=1,15"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=-1"]
+	 *           ["FREQ=MONTHLY;BYDAY=1MO"]
+	 *           ["FREQ=MONTHLY;BYDAY=-1FR"]
+	 *           ["FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29"]
+	 *           ["FREQ=DAILY;INTERVAL=2;COUNT=10"]
+	 *           ["FREQ=DAILY;UNTIL=20990101T000000Z"]
+	 *           ["FREQ=WEEKLY;INTERVAL=2;BYDAY=TU;WKST=SU"]
+	 *           ["FREQ=YEARLY;INTERVAL=1"]
+	 *           ["freq=weekly;byday=mo"]
+	 */
+	public function testComputeNextOccurrenceAcceptsEveryLegitimateRule(string $rrule): void {
+		$anchor = (new \DateTimeImmutable('2026-01-01T09:00:00Z'))->getTimestamp();
+		$next = $this->service->computeNextOccurrence($rrule, $anchor, $anchor, 'UTC');
+		self::assertGreaterThan($anchor, $next, $rrule . ' must still produce an occurrence');
+	}
+
+	/**
+	 * The version-independent half of the guard: a cap on how many occurrences one
+	 * call may step through.
+	 *
+	 * The lever is the ANCHOR, not the rule. A rule's DTSTART is the template card's
+	 * Start date (see anchorFor()), and DueDateParser happily accepts year 0001 - so
+	 * a card dated 0001-01-01 with a perfectly legal `FREQ=HOURLY` makes
+	 * fastForward() step roughly 17.7 MILLION entirely valid occurrences to reach
+	 * today. Nothing about that rule is malformed; no allowlist can see it coming.
+	 *
+	 * Unlike every other case in this file the walk here is bounded by construction
+	 * (each step advances an hour, so it ends), which is why this one may safely ask
+	 * for an occurrence after the anchor: the failure mode being guarded against is
+	 * minutes of pinned CPU, not an endless loop.
+	 */
+	public function testComputeNextOccurrenceCapsAnAncientAnchorsWalk(): void {
+		$anchor = (new \DateTimeImmutable('0001-01-01T00:00:00Z'))->getTimestamp();
+		$started = microtime(true);
+		try {
+			$this->service->computeNextOccurrence('FREQ=HOURLY', self::NOW, $anchor, 'UTC');
+			self::fail('An anchor two millennia back must be refused, not walked');
+		} catch (InvalidInputException $e) {
+			// The cap is worthless if reaching it is itself the expense. 50k steps
+			// measured at 0.7-3.7us each; a whole second is a very loose ceiling that
+			// still fails loudly if the cap is ever removed.
+			self::assertLessThan(1.0, microtime(true) - $started, 'the cap must be cheap to hit');
+		}
+	}
+
+	/**
+	 * The cap must not clip a realistic catch-up. An HOURLY rule anchored a year back
+	 * is 8760 steps - well inside the 50000 budget, which covers ~5.7 years at the
+	 * finest grain this app accepts (and centuries at every coarser one).
+	 */
+	public function testComputeNextOccurrenceStillWalksARealisticBacklog(): void {
+		$anchor = self::NOW - 365 * 86400;
+		$next = $this->service->computeNextOccurrence('FREQ=HOURLY', self::NOW, $anchor, 'UTC');
+		self::assertGreaterThan(self::NOW, $next);
+	}
+
+	/**
+	 * The companion proof that the unsupported parts really are unchecked by the
+	 * sabre this suite runs (4.x, pinned in composer.json - the line Nextcloud
+	 * bundles), rather than an assumption copied from a changelog.
+	 *
+	 * Deliberately BOUNDED: it only CONSTRUCTS the iterator and asserts the
+	 * constructor raised nothing. It never calls next() - on `BYHOUR=99` a single
+	 * next() never returns, so a test written that way would hang the suite instead
+	 * of failing it. Constructing is enough to make the point: sabre stores BYHOUR
+	 * and BYMONTHDAY verbatim, and only the range-checked parts (BYMONTH here) are
+	 * refused at the door.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99", true]
+	 *           ["FREQ=DAILY;BYHOUR=99", true]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=32", true]
+	 *           ["FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO", true]
+	 *           ["FREQ=DAILY;INTERVAL=999999999", true]
+	 *           ["FREQ=YEARLY;BYMONTH=13", false]
+	 */
+	public function testSabreDoesNotRangeCheckTheseRuleParts(string $rrule, bool $expectedToConstruct): void {
+		$start = new \DateTimeImmutable('2026-01-01T00:00:00', new \DateTimeZone('UTC'));
+		$constructed = true;
+		try {
+			new \Sabre\VObject\Recur\RRuleIterator($rrule, $start);
+		} catch (\Throwable $e) {
+			$constructed = false;
+		}
+		self::assertSame(
+			$expectedToConstruct,
+			$constructed,
+			sprintf('%s: expected sabre\'s constructor %s', $rrule, $expectedToConstruct ? 'to accept it' : 'to refuse it'),
+		);
+	}
+
+	/**
 	 * Pins down WHY SECONDLY and MINUTELY have to be rejected, straight against the
 	 * sabre the suite runs (4.x, pinned in composer.json - the line Nextcloud
 	 * bundles). It is deliberately BOUNDED: it steps the iterator a fixed number of
@@ -548,6 +752,10 @@ class RecurrenceServiceTest extends TestCase {
 	 */
 	public function testCreateRejectsAFreqLessRruleWith400(string $rrule): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Anchored ahead of the target so a regressed guard fails fast instead of
+		// hanging - see unsteppedTemplateCard().
+		$this->cardMapper->method('find')->with(10)->willReturn($this->unsteppedTemplateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->ruleMapper->expects(self::never())->method('insert');
 
 		$this->expectException(InvalidInputException::class);
@@ -2228,12 +2436,146 @@ class RecurrenceServiceTest extends TestCase {
 		$rule = $this->rule();
 		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		// Anchored ahead of the target so a regressed guard fails fast instead of
+		// hanging - see unsteppedTemplateCard().
+		$this->cardMapper->method('find')->with(10)->willReturn($this->unsteppedTemplateCard());
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
 		$this->ruleMapper->expects(self::never())->method('update');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->update(3, null, null, null, $rrule, null, null, null, null, 'alice', null);
+	}
+
+	/**
+	 * Rules outlive the guards that would have refused them. `FREQ=MINUTELY` was
+	 * spec-valid and accepted until it turned out to wedge the iterator;
+	 * `FREQ=WEEKLY;BYHOUR=99` passed the FREQ-only guard that replaced it; the API's
+	 * own default for an omitted rrule was once ''. All three are sitting in existing
+	 * installs, and update() re-validated the UNCHANGED stored RRULE on every edit -
+	 * so `PATCH {"enabled": false}` 400'd and the only way to stop such a rule was to
+	 * DELETE it, taking the template link and the spawn history with it.
+	 *
+	 * Turning a rule off must not depend on its schedule still being valid. It is
+	 * also the safe direction by construction: a disabled rule expands nothing.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99"]
+	 *           ["FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO"]
+	 *           ["FREQ=MINUTELY"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=32"]
+	 *           [""]
+	 */
+	public function testUpdateCanDisableARuleWhoseStoredRruleNoLongerValidates(string $rrule): void {
+		$rule = $this->rule(rrule: $rrule);
+		$this->wireUpdate($rule);
+
+		$updated = $this->service->update(3, null, null, null, null, null, null, null, false, 'alice', null);
+
+		self::assertFalse($updated->getEnabled());
+		// The stored rule is left verbatim - this is an off switch, not a repair.
+		self::assertSame($rrule, $updated->getRrule());
+	}
+
+	/**
+	 * The other side of that door: switching a rule that cannot run back ON is still
+	 * a 400. Skipping the RRULE check for a disable must not become a way to smuggle
+	 * an unrunnable rule back into the cron's queue.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99"]
+	 *           ["FREQ=MINUTELY"]
+	 */
+	public function testUpdateStillRefusesToReEnableAnUnrunnableStoredRule(string $rrule): void {
+		$rule = $this->rule(rrule: $rrule);
+		$rule->setEnabled(false);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Anchored ahead of the target: re-enabling also RE-ARMS the cursor, which is
+		// a second trip through the expansion path - see unsteppedTemplateCard().
+		$this->cardMapper->method('find')->with(10)->willReturn($this->unsteppedTemplateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(3, null, null, null, null, null, null, null, true, 'alice', null);
+	}
+
+	/**
+	 * Editing an existing rule to a poisoned rule PART is the same 400 as a FREQ-less
+	 * one. update() re-arms the cursor through the same expansion path, so a rule
+	 * that passed create() long ago must not be editable into a wedged worker either.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99"]
+	 *           ["FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=32"]
+	 *           ["FREQ=DAILY;INTERVAL=999999999"]
+	 */
+	public function testUpdateRejectsAPoisonedRulePartWith400(string $rrule): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Anchored ahead of the target so a regressed guard fails fast instead of
+		// hanging - see unsteppedTemplateCard().
+		$this->cardMapper->method('find')->with(10)->willReturn($this->unsteppedTemplateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(3, null, null, null, $rrule, null, null, null, null, 'alice', null);
+	}
+
+	/**
+	 * Creating one is refused at the same door, for the same reason.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99"]
+	 *           ["FREQ=DAILY;BYHOUR=99"]
+	 *           ["FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=32"]
+	 *           ["FREQ=DAILY;COUNT=999999999"]
+	 */
+	public function testCreateRejectsAPoisonedRulePartWith400(string $rrule): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Anchored ahead of the target so a regressed guard fails fast instead of
+		// hanging - see unsteppedTemplateCard().
+		$this->cardMapper->method('find')->with(10)->willReturn($this->unsteppedTemplateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, $rrule, 0, 0, false, 'alice');
+	}
+
+	/**
+	 * A poisoned rule STORED before this guard landed must not wedge the cron pass
+	 * that picks it up - the path with no timeout at all, since occ/cron runs under
+	 * the CLI SAPI where max_execution_time is 0. runDueRules() reaches it through
+	 * advanceSchedule(), which gets an InvalidInputException instead of an endless
+	 * walk, logs it, and retires the rule.
+	 *
+	 * @testWith ["FREQ=WEEKLY;BYHOUR=99"]
+	 *           ["FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO"]
+	 *           ["FREQ=MONTHLY;BYMONTHDAY=32"]
+	 */
+	public function testRunDueRulesDisablesAStoredPoisonedRuleInsteadOfSpinning(string $rrule): void {
+		$rule = $this->rule(rrule: $rrule, nextOccurrenceAt: self::NOW);
+		// The template's Start date is the schedule's anchor, and putting it just
+		// AFTER the occurrence being advanced past is the same trick
+		// assertRejectedWithoutStepping() uses: it makes the advance loop's
+		// `current() < target` false on the first check, so the iterator is never
+		// stepped. A regressed guard therefore RETURNS an occurrence here (and the
+		// assertions below fail in milliseconds) instead of stepping into a next()
+		// that never comes back and hanging the whole suite.
+		$template = $this->unsteppedTemplateCard();
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
+		$this->cardService->method('create')->willReturn($this->spawnedCard());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn([]);
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$this->service->runDueRules();
+
+		self::assertSame(0, $rule->getNextOccurrenceAt());
+		self::assertFalse($rule->getEnabled());
 	}
 
 	/**
@@ -2252,8 +2594,12 @@ class RecurrenceServiceTest extends TestCase {
 	 */
 	public function testRunDueRulesDisablesAStoredFreqLessRuleInsteadOfSpinning(string $rrule): void {
 		$rule = $this->rule(rrule: $rrule, nextOccurrenceAt: self::NOW);
+		// Anchor just after the occurrence being advanced past, so the advance loop
+		// is never entered and a regressed guard fails this test in milliseconds
+		// rather than hanging it - see the sibling poisoned-part test.
+		$template = $this->unsteppedTemplateCard();
 		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
-		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->cardMapper->method('find')->with(10)->willReturn($template);
 		$this->cardService->method('create')->willReturn($this->spawnedCard());
 		$this->cardMapper->method('update')->willReturnArgument(0);
 		$this->cardLabelMapper->method('findLabelIdsByCard')->willReturn([]);

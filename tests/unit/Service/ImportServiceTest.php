@@ -498,6 +498,29 @@ class ImportServiceTest extends TestCase {
 						'id' => 87, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
 						'rrule' => 'FREQ=MINUTELY;INTERVAL=15', 'owner' => 'bob', 'enabled' => true,
 					],
+					// Rules with a valid FREQ but a poisoned rule PART. These are the
+					// worst of the set: sabre's parser range-checks some parts and not
+					// others, so both of these construct cleanly and then spin inside a
+					// SINGLE next() call - `FREQ=WEEKLY;BYHOUR=99` because nextWeekly()
+					// is the one next*() with no year-9999 escape and hour 99 never
+					// arrives, `BYYEARDAY` + a positional BYDAY because nextYearly()
+					// indexes its day map with '2MO' and finds nothing, forever. Both
+					// were verified pinning a core at 99.8% CPU until killed.
+					//
+					// This is why import matters so much here: it is a single
+					// authenticated request carrying arbitrary rules, its per-rule
+					// try/catch only catches EXCEPTIONS, and an infinite loop is not an
+					// exception. One poisoned rule in an uploaded board file wedged the
+					// import worker outright, and the endpoint's UserRateLimit is no help
+					// when one request is all it takes.
+					[
+						'id' => 88, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=WEEKLY;BYHOUR=99', 'owner' => 'bob', 'enabled' => true,
+					],
+					[
+						'id' => 89, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
+						'rrule' => 'FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO', 'owner' => 'bob', 'enabled' => true,
+					],
 					// A perfectly good rule right behind it still lands intact.
 					[
 						'id' => 82, 'templateCardId' => 100, 'targetStackId' => 2, 'mode' => 0,
@@ -564,9 +587,12 @@ class ImportServiceTest extends TestCase {
 		self::assertSame('importer', $capturedRecur[0]->getOwner());
 
 		// None of the rules this app cannot iterate reached the mapper - the
-		// outright-invalid FREQ, the three FREQ-less variants, and the two
-		// accepted-but-unsteppable frequencies alike - while the valid rule sitting
-		// behind all of them imported with its RRULE intact.
+		// outright-invalid FREQ, the three FREQ-less variants, the two
+		// accepted-but-unsteppable frequencies, and the two whose FREQ is fine but
+		// whose rule PARTS wedge sabre inside a single next() call - while the valid
+		// rule sitting behind all of them imported with its RRULE intact. That the
+		// assertion runs at all is half the point: before the guard, the poisoned
+		// parts made this import never return.
 		self::assertSame(
 			['FREQ=DAILY', 'FREQ=WEEKLY;BYDAY=MO'],
 			array_map(static fn (RecurRule $r): string => $r->getRrule(), $capturedRecur),

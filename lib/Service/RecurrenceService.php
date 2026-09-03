@@ -22,6 +22,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IConfig;
 use OCP\IDBConnection;
+use Sabre\VObject\DateTimeParser;
 use Sabre\VObject\Property\ICalendar\Recur;
 use Sabre\VObject\Recur\RRuleIterator;
 
@@ -77,9 +78,64 @@ class RecurrenceService {
 	 *
 	 * The iterator's CONSTRUCTOR is wider than its next() is: it accepts all seven
 	 * RFC 5545 frequencies, SECONDLY and MINUTELY included, and only next() reveals
-	 * that two of them go nowhere. See {@see self::assertIterableFrequency}.
+	 * that two of them go nowhere. See {@see self::assertIterableRule}.
 	 */
 	private const ITERABLE_FREQUENCIES = ['hourly', 'daily', 'weekly', 'monthly', 'yearly'];
+
+	/**
+	 * The RRULE parts this app stores - an ALLOWLIST, so a part nobody here has
+	 * reasoned about cannot reach {@see RRuleIterator} at all.
+	 *
+	 * It is a superset of what the recurrence editor emits (FREQ, INTERVAL,
+	 * BYDAY, COUNT, UNTIL - see src/utils/rrule.js) widened by the parts a rule
+	 * authored through the API, the MCP server or a board import legitimately
+	 * carries: BYMONTH, BYMONTHDAY and WKST.
+	 *
+	 * The parts deliberately NOT on it - BYHOUR, BYMINUTE, BYSECOND, BYYEARDAY,
+	 * BYWEEKNO, BYSETPOS - are the ones that reach sabre code paths whose loops
+	 * cannot be bounded from the outside; see {@see self::assertIterableRule}.
+	 */
+	private const SUPPORTED_PARTS = [
+		'FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'WKST', 'BYDAY', 'BYMONTH', 'BYMONTHDAY',
+	];
+
+	/** The RFC 5545 weekday tokens, for BYDAY and WKST. */
+	private const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+
+	/**
+	 * Ceiling on INTERVAL. "Every thousandth week/month/year" is already far past
+	 * any board schedule, and an unbounded INTERVAL is arithmetic sabre hands
+	 * straight to DateTimeImmutable::modify('+N months'), which stops behaving at
+	 * absurd magnitudes.
+	 */
+	private const MAX_INTERVAL = 1000;
+
+	/**
+	 * Ceiling on COUNT. A card that respawns more than ten thousand times is not
+	 * a schedule; keeping COUNT in the same sane envelope as INTERVAL also keeps
+	 * {@see self::countLimitFor}'s durable tally meaningful.
+	 */
+	private const MAX_COUNT = 10000;
+
+	/**
+	 * The most occurrences a single {@see self::computeNextOccurrence} call may
+	 * step through before it gives up and rejects the rule.
+	 *
+	 * This is the version-INDEPENDENT half of the guard, and the one that does not
+	 * depend on anybody having correctly enumerated sabre's behaviour: whatever the
+	 * rule, whatever the sabre release, one call does a bounded amount of work.
+	 *
+	 * Sizing. The walk that actually happens is {@see self::firstFireFor}'s: from
+	 * the template card's anchor date up to now. The finest grain this app accepts
+	 * is HOURLY, so 50000 steps covers an anchor 5.7 YEARS in the past; every
+	 * coarser frequency covers far longer (DAILY ~137 years, WEEKLY ~958 years,
+	 * MONTHLY ~4166 years). No real template card is anchored further back than
+	 * that, and a rule already running spends a single step per call. Measured
+	 * against the
+	 * pinned sabre 4.x, a step costs 0.7-3.7us, so the cap bounds the worst case at
+	 * roughly 0.2s of CPU instead of the unbounded spin it replaces.
+	 */
+	private const MAX_ADVANCE_STEPS = 50000;
 
 	public function __construct(
 		private RecurRuleMapper $ruleMapper,
@@ -116,14 +172,17 @@ class RecurrenceService {
 	 * for rules created before the timezone column existed). We do NOT hand-roll
 	 * DST math - sabre's {@see RRuleIterator} does it when anchored in a real zone.
 	 *
-	 * @throws InvalidInputException if the RRULE cannot be parsed, or its FREQ is
-	 *                               missing or not one sabre can iterate
-	 *                               ({@see self::assertIterableFrequency})
+	 * @throws InvalidInputException if the RRULE cannot be parsed, carries a part or
+	 *                               value this app does not store, names a FREQ
+	 *                               sabre cannot iterate
+	 *                               ({@see self::assertIterableRule}), or needs more
+	 *                               than {@see self::MAX_ADVANCE_STEPS} steps to
+	 *                               reach the requested time
 	 */
 	public function computeNextOccurrence(string $rrule, int $afterTs, int $dtstartTs, ?string $timezone = null): int {
 		// Reject a rule sabre cannot step BEFORE any iterator exists - see the
 		// method doc.
-		$this->assertIterableFrequency($rrule);
+		$this->assertIterableRule($rrule);
 
 		$tz = $this->timezoneFor($timezone);
 		// Anchor as a floating wall-clock time in the rule's zone: take the UTC
@@ -138,11 +197,38 @@ class RecurrenceService {
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 
-		// fastForward positions at the first occurrence >= the target; asking
-		// for afterTs + 1 makes the result strictly after afterTs.
+		// Advance to the first occurrence >= the target; asking for afterTs + 1
+		// makes the result strictly after afterTs.
+		//
+		// This is sabre's own fastForward() - `while (valid() && currentDate < $dt)
+		// next()` - re-implemented here for one reason: to put a HARD CEILING on the
+		// number of steps. sabre's version is unbounded, so the cost of a single
+		// call is whatever the rule says it is: an RRULE whose occurrence set is
+		// empty walks to sabre's year-9999 stop one occurrence at a time, and an
+		// ancient DTSTART (a template card dated 0001-01-01 is accepted by
+		// DueDateParser) makes even a perfectly legal FREQ=HOURLY rule step ~17.7
+		// MILLION legal occurrences to reach today. Neither is malformed; both are
+		// remote CPU burn, reachable from card create/update, rule create/update,
+		// board import and the cron.
+		//
+		// The cap is deliberately the version-independent half of this guard. The
+		// allowlists in assertIterableRule() encode what a PARTICULAR sabre release
+		// does with particular rule parts, and that knowledge goes stale - the bug
+		// this replaces existed precisely because vobject 4 and 5 behave differently.
+		// The cap needs no such knowledge: it bounds the work whatever the library
+		// underneath decides to do between two calls to next().
 		$target = (new \DateTimeImmutable('@' . ($afterTs + 1)))->setTimezone($tz);
+		$overrun = false;
 		try {
-			$iterator->fastForward($target);
+			$steps = 0;
+			while ($iterator->valid() && $iterator->current() < $target) {
+				if ($steps >= self::MAX_ADVANCE_STEPS) {
+					$overrun = true;
+					break;
+				}
+				$steps++;
+				$iterator->next();
+			}
 		} catch (\Throwable $e) {
 			// Some malformed rules only fail while iterating, and NOT always as an
 			// \Exception - sabre can raise a bare \Error mid-walk. Catching only
@@ -150,10 +236,18 @@ class RecurrenceService {
 			// turning an invalid-rule API call into a fatal instead of a 400, and
 			// killing the cron pass on a rule stored before it was validated.
 			// This no longer has to cover the frequencies sabre cannot step -
-			// assertIterableFrequency() above rejects those before an iterator is
+			// assertIterableRule() above rejects those before an iterator is
 			// ever built - but it still earns its keep for every other rule that
 			// only misbehaves while stepping.
 			throw new InvalidInputException('Invalid recurrence rule');
+		}
+		if ($overrun) {
+			// Not "malformed" - just more work than any real board schedule needs.
+			// Same exception type as every other rejection so the controllers keep
+			// turning it into a 400, ImportService keeps dropping the rule and
+			// continuing, and advanceSchedule() keeps disabling a stored rule that
+			// has drifted into this state instead of wedging the cron.
+			throw new InvalidInputException('Recurrence rule needs too many steps to reach its next occurrence');
 		}
 
 		if (!$iterator->valid()) {
@@ -213,24 +307,163 @@ class RecurrenceService {
 	 * A present-but-nonsense FREQ (`FREQ=`, `FREQ=BOGUS`) is rejected here too, by
 	 * the same allowlist, rather than being left to the iterator's constructor.
 	 *
+	 * ---
+	 *
+	 * FREQ is necessary but NOT sufficient, and this is the second half of the
+	 * lesson. Every other rule part reached the iterator unvalidated, and sabre
+	 * range-checks only some of them (BYYEARDAY, BYWEEKNO and BYMONTH are checked;
+	 * BYHOUR, BYMINUTE, BYSECOND, BYMONTHDAY and BYSETPOS are stored verbatim). An
+	 * out-of-range value on an unchecked part does not throw - it produces an
+	 * occurrence set that can never be satisfied, and sabre's next() then spins
+	 * looking for it:
+	 *
+	 *   - `FREQ=WEEKLY;BYHOUR=99` - nextWeekly() ends in
+	 *     `while (byHour && !in_array(currentHour, recurrenceHours))`, format('G')
+	 *     only ever yields 0-23, and nextWeekly() is the ONLY next*() with no
+	 *     year-9999 escape. A true infinite loop; nothing is thrown. Verified:
+	 *     99.8% CPU until killed.
+	 *   - `FREQ=YEARLY;BYYEARDAY=1;BYDAY=2MO` - every part is in range, but
+	 *     nextYearly()'s BYYEARDAY branch is a bare `while (true)` that indexes
+	 *     `$this->dayMap[$byDay]` RAW (the weekly/monthly paths use
+	 *     `substr($day, -2)` and so tolerate the ordinal; this one does not).
+	 *     '2MO' is not a key, the offset is null, no candidate date ever matches
+	 *     and the year counter climbs forever. Also verified at 99.8% CPU.
+	 *   - `FREQ=DAILY;BYHOUR=99` and `FREQ=MONTHLY;BYMONTHDAY=32` are the same
+	 *     defect with a floor under it: those next*() DO have the year-9999 escape,
+	 *     so they terminate - after ~70M and ~95k iterations respectively.
+	 *
+	 * Note where those first two loops live: INSIDE a single next() call. That is
+	 * why {@see self::MAX_ADVANCE_STEPS}, which bounds how many times we CALL
+	 * next(), cannot save us from them and this allowlist is load-bearing rather
+	 * than cosmetic - PHP cannot interrupt a loop inside a library call. The two
+	 * guards cover different halves of the problem and neither is redundant:
+	 * this one keeps the inputs that wedge a single step out of the iterator, the
+	 * step cap bounds everything that merely takes too many steps.
+	 *
+	 * So the parts are an ALLOWLIST ({@see self::SUPPORTED_PARTS}), not a
+	 * blocklist. BYHOUR/BYMINUTE/BYSECOND/BYYEARDAY/BYWEEKNO/BYSETPOS are simply
+	 * not stored: the editor cannot author them (src/utils/rrule.js), and a rule
+	 * that arrives with one from the API, the MCP server or an import is refused.
+	 * The parts that ARE accepted cover every schedule this app offers - a weekly
+	 * BYDAY, a monthly BYMONTHDAY or positional BYDAY, a yearly BYMONTH - and each
+	 * is range-checked here, because the only reason `BYMONTHDAY=32` costs 0.18s
+	 * instead of hanging is an escape hatch in sabre we would rather not depend on.
+	 *
 	 * @throws InvalidInputException if the RRULE is empty, unparseable, carries no
-	 *                               FREQ, or names a frequency sabre cannot step
+	 *                               FREQ, names a frequency sabre cannot step, or
+	 *                               carries a part or value this app does not store
 	 */
-	private function assertIterableFrequency(string $rrule): void {
+	private function assertIterableRule(string $rrule): void {
 		if (trim($rrule) === '') {
 			// The API's own default for an omitted rrule parameter, so this is the
 			// likeliest way in - name it explicitly rather than leaning on the parse.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
 		try {
+			// stringToArray upper-cases every part name and value and splits a
+			// comma-separated value into an array. Both sabre 4 and 5 do it
+			// identically, so the guard reads the rule exactly as the iterator will.
 			$parts = Recur::stringToArray($rrule);
 		} catch (\Throwable $e) {
 			// Unparseable garbage; the iterator would reject it too, just later.
 			throw new InvalidInputException('Invalid recurrence rule');
 		}
+
 		$freq = $parts['FREQ'] ?? null;
 		if (!is_string($freq) || !in_array(strtolower($freq), self::ITERABLE_FREQUENCIES, true)) {
 			throw new InvalidInputException('Invalid recurrence rule');
+		}
+
+		foreach ($parts as $name => $value) {
+			if (!in_array($name, self::SUPPORTED_PARTS, true)) {
+				throw new InvalidInputException('Unsupported recurrence rule part: ' . $name);
+			}
+			switch ($name) {
+				case 'FREQ':
+					// Already checked above.
+					break;
+				case 'INTERVAL':
+				case 'COUNT':
+					// Single-valued parts: `COUNT=1,2` parses to an array, which sabre
+					// would cast with (int) and read as 1.
+					if (!is_string($value)) {
+						throw new InvalidInputException('Invalid ' . $name . ' in the recurrence rule');
+					}
+					$this->assertNumericPart(
+						$name,
+						$value,
+						1,
+						$name === 'INTERVAL' ? self::MAX_INTERVAL : self::MAX_COUNT,
+						false,
+					);
+					break;
+				case 'BYMONTH':
+					$this->assertNumericPart($name, $value, 1, 12, false);
+					break;
+				case 'BYMONTHDAY':
+					// Negative is legal and useful: -1 is the last day of the month.
+					$this->assertNumericPart($name, $value, 1, 31, true);
+					break;
+				case 'BYDAY':
+					// Mirrors sabre's own BYDAY regex, including its narrower 1-5
+					// ordinal (RFC 5545 allows 1-53, but there is no 6th Monday in a
+					// month and sabre refuses it anyway). Checking it here means the
+					// rejection happens before an iterator exists, with our message.
+					foreach ((array)$value as $token) {
+						if (!is_string($token)
+							|| preg_match('#^[+-]?[1-5]?(' . implode('|', self::WEEKDAYS) . ')$#', $token) !== 1) {
+							throw new InvalidInputException('Invalid BYDAY in the recurrence rule');
+						}
+					}
+					break;
+				case 'WKST':
+					// sabre range-checks nothing here and then uses the value as an
+					// array key in two places; an unknown token yields null offsets.
+					if (!is_string($value) || !in_array($value, self::WEEKDAYS, true)) {
+						throw new InvalidInputException('Invalid WKST in the recurrence rule');
+					}
+					break;
+				case 'UNTIL':
+					if (!is_string($value)) {
+						throw new InvalidInputException('Invalid UNTIL in the recurrence rule');
+					}
+					try {
+						// The same parser the iterator's constructor uses, so an UNTIL
+						// this accepts is one sabre accepts.
+						DateTimeParser::parse($value, new \DateTimeZone('UTC'));
+					} catch (\Throwable $e) {
+						throw new InvalidInputException('Invalid UNTIL in the recurrence rule');
+					}
+					break;
+			}
+		}
+	}
+
+	/**
+	 * Asserts every value of a numeric RRULE part is an integer within
+	 * [$min, $max] - or, when $signed, within that range in either direction with
+	 * 0 excluded, which is how RFC 5545 writes the "-1 means the last one" parts.
+	 *
+	 * @param string|array<int, string> $value the raw part value from Recur::stringToArray
+	 * @throws InvalidInputException on a non-numeric or out-of-range value
+	 */
+	private function assertNumericPart(string $name, $value, int $min, int $max, bool $signed): void {
+		$values = (array)$value;
+		if ($values === []) {
+			throw new InvalidInputException('Invalid ' . $name . ' in the recurrence rule');
+		}
+		foreach ($values as $raw) {
+			// Deliberately strict: sabre casts these with a plain (int), which reads
+			// "12abc" as 12. Anything that is not cleanly an optionally-signed
+			// integer is refused rather than silently reinterpreted.
+			if (!is_string($raw) || preg_match('#^[+-]?\d+$#', $raw) !== 1) {
+				throw new InvalidInputException('Invalid ' . $name . ' in the recurrence rule');
+			}
+			$int = (int)$raw;
+			$magnitude = $signed ? abs($int) : $int;
+			if ($magnitude < $min || $magnitude > $max) {
+				throw new InvalidInputException('Invalid ' . $name . ' in the recurrence rule');
+			}
 		}
 	}
 
@@ -431,7 +664,28 @@ class RecurrenceService {
 		$newRrule = $rrule ?? $rule->getRrule();
 		$newPolicy = $duedatePolicy ?? $rule->getDuedatePolicy();
 		$newOffset = $duedateOffsetSeconds ?? $rule->getDuedateOffsetSeconds();
-		$this->validate($rule->getBoardId(), $newTemplate, $newStack, $newMode, $newRrule, $newPolicy, $newOffset);
+		// Turning a rule OFF must never depend on its stored RRULE still passing
+		// validation. Rules predate their guards: a `FREQ=MINUTELY` (spec-valid, and
+		// accepted until it was found to wedge the iterator), a `FREQ=WEEKLY;BYHOUR=99`,
+		// or the empty rrule the API's own default once produced are all sitting in
+		// existing installs. Re-validating the UNCHANGED stored rule on every update
+		// made `PATCH {"enabled": false}` 400, so the only way to stop such a rule was
+		// to delete it - losing the template link and the history with it. When the
+		// caller supplies no new RRULE and is switching the rule off, skip the RRULE
+		// check; every other field is still validated, and the cron already refuses to
+		// run the rule (advanceSchedule disables it on the same exception). Re-enabling
+		// still validates - a rule that cannot run must not be switchable back on.
+		$disablingStoredRule = $enabled === false && $rrule === null;
+		$this->validate(
+			$rule->getBoardId(),
+			$newTemplate,
+			$newStack,
+			$newMode,
+			$newRrule,
+			$newPolicy,
+			$newOffset,
+			!$disablingStoredRule,
+		);
 		// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
 		$template = $this->loadCard($newTemplate);
 		$this->visibilityGuard->assertVisible($board, $template, $uid);
@@ -1158,6 +1412,7 @@ class RecurrenceService {
 		string $rrule,
 		int $duedatePolicy,
 		int $duedateOffsetSeconds,
+		bool $validateRrule = true,
 	): void {
 		if ($mode !== RecurRule::MODE_CLONE && $mode !== RecurRule::MODE_RESET) {
 			throw new InvalidInputException('Invalid recurrence mode');
@@ -1170,8 +1425,21 @@ class RecurrenceService {
 		}
 		// Parse-validate the RRULE (throws InvalidInputException on garbage).
 		// We anchor at "now" purely to construct the iterator; the result is
-		// discarded here - the point is to reject unparseable rules.
-		$this->computeNextOccurrence($rrule, $this->time->getTime(), $this->time->getTime());
+		// discarded here - the point is to reject unparseable rules. Skipped only
+		// when an update is switching an already-stored rule OFF - see update().
+		//
+		// Asking for the occurrence after `now - 1` makes the target the anchor
+		// itself, so the advance loop's `current() < target` is false on its first
+		// check and the iterator is never STEPPED - validation runs the guards,
+		// builds the iterator, and stops. That is deliberate: create/update are the
+		// two paths an anonymous-ish caller reaches most cheaply, and there is no
+		// reason for either to spend a single occurrence of iteration budget on a
+		// result it throws away. (It also means a future guard regression surfaces
+		// as a wrong return value here rather than as a wedged worker.)
+		if ($validateRrule) {
+			$now = $this->time->getTime();
+			$this->computeNextOccurrence($rrule, $now - 1, $now);
+		}
 
 		$card = $this->loadCard($templateCardId);
 		if ($card->getBoardId() !== $boardId) {
