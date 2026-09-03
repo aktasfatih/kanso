@@ -262,7 +262,7 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 按 RRULE 计划重复的卡片、自动归档规则、WIP 限制和列角色、带全文搜索的命令面板、
 可恢复的回收站、GitHub 链接与 webhook，以及一键从 Deck 导入。
 	]]></description>
-	<version>0.22.1</version>
+	<version>0.23.0</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>

@@ -11,6 +11,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.23.0](https://github.com/aktasfatih/kanso/compare/v0.22.1...v0.23.0) (2026-09-03)
+
+
+### Bug Fixes
+
+* drop the leading zero from the activity time in 12-hour locales ([9714d87](https://github.com/aktasfatih/kanso/commit/9714d8748c573bf593dbb04e81276281c40e31dd))
+* reject a per-second or per-minute repeat rule instead of hanging the request ([1a77d9a](https://github.com/aktasfatih/kanso/commit/1a77d9a6422af24c85c5765f60531083d54e6eac))
+* reject a repeat rule that would hang the server instead of running it ([29d7fe8](https://github.com/aktasfatih/kanso/commit/29d7fe85f43210bf7d6ba50bf2bb7af751cc126f))
+* reject a repeat rule with no frequency instead of hanging the request ([e5ccb39](https://github.com/aktasfatih/kanso/commit/e5ccb399731628fce0f774e094310ba063896ada))
+* require Nextcloud 32 or newer, the oldest version Kanso actually runs on ([917e31d](https://github.com/aktasfatih/kanso/commit/917e31dbbc93dabad7a2a029af29b0cf7d84024f))
+* show the exact date and time on every card activity entry ([1a2bdfb](https://github.com/aktasfatih/kanso/commit/1a2bdfba722689a672680d67e7e08d628e03bc2e)), closes [#103](https://github.com/aktasfatih/kanso/issues/103)
+
+
+### Features
+
+* **mcp:** expose the review-request API so agents can hand work to a human ([ddd2fb5](https://github.com/aktasfatih/kanso/commit/ddd2fb59f10fa49b4023c18be1463a11c6050be4))
+
 ## [0.22.1](https://github.com/aktasfatih/kanso/compare/v0.22.0...v0.22.1) (2026-09-02)
 
 
