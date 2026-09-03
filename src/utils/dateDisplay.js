@@ -2,8 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * dateDisplay - timezone-correct formatting for card due/start dates.
+ * dateDisplay - shared, timezone-correct date/time formatting for the UI.
  *
+ * Two groups of helpers live here:
+ *
+ *  1. Card due/start dates (`allDayInputValue`, `timedInputValue`,
+ *     `formatCardDate`) - see the all-day storage note below.
+ *  2. Event timestamps (`exactTimeLabel`, `exactTimeTitle`, `isoTimestamp`) -
+ *     the exact wall-clock stamp shown next to a relative label ("5 days ago")
+ *     in the card's activity feed. Those take a unix timestamp in SECONDS, the
+ *     shape the API emits (ActivityService returns the raw epoch integer).
+ *
+ * ── All-day card dates ───────────────────────────────────────────────────────
  * All-day dates are STORED at UTC midnight (`new Date("YYYY-MM-DD").toISOString()`,
  * e.g. `2026-07-22T00:00:00.000Z`) so the stored instant is a stable calendar day
  * that downstream consumers (reminders, overdue calc, the calendar feed's
@@ -61,4 +71,111 @@ export function formatCardDate(iso, allDay, opts) {
 		return d.toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' })
 	}
 	return d.toLocaleString(undefined, opts)
+}
+
+// ── Event timestamps (activity feed) ─────────────────────────────────────────
+
+/**
+ * A unix-seconds timestamp as a Date, or null when there is nothing to show.
+ *
+ * Callers render this next to user-visible rows, so an absent (`null`,
+ * `undefined`), zero ("never") or unparseable timestamp must degrade to an
+ * empty label - never to "1 Jan 1970", NaN, or a thrown error.
+ *
+ * @param {number|string|null|undefined} tsSeconds unix timestamp in seconds
+ * @returns {Date|null}
+ */
+function eventDate(tsSeconds) {
+	if (tsSeconds === null || tsSeconds === undefined || tsSeconds === '') return null
+	const secs = Number(tsSeconds)
+	if (!Number.isFinite(secs) || secs <= 0) return null
+	const d = new Date(secs * 1000)
+	return Number.isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * Lazily-built, reused `Intl.DateTimeFormat`s.
+ *
+ * A feed row asks for its stamp several times per render (the label, the
+ * `datetime`, the title), and a long feed is tens of rows — building a fresh
+ * formatter for each call is the expensive part of Intl. The locale is always
+ * the browser default and cannot change mid-session, so one instance each is
+ * enough.
+ */
+const formatters = {}
+function fmt(key, opts) {
+	return (formatters[key] ??= new Intl.DateTimeFormat(undefined, opts))
+}
+
+/**
+ * Clock options for the stamp — hour and minute at the SAME requested width.
+ *
+ * This pairing is load-bearing, not cosmetic. `Intl.DateTimeFormat` only takes
+ * the hour/minute pattern from the locale's own short-time skeleton when both
+ * fields are requested at the same width; a mismatched pair (`hour: 'numeric'`
+ * with `minute: '2-digit'`) forces a literal `h:mm` and overrides the locale.
+ *
+ * That is what makes both halves of this right:
+ *  - 12-hour locales drop the meaningless leading zero — en-US renders "9:44 PM",
+ *    not "09:44 PM" (the bug this replaced).
+ *  - 24-hour locales keep their own padding — en-GB/de-DE still render "09:04",
+ *    because for them the locale skeleton IS a padded hour. Asking for
+ *    `minute: '2-digit'` here would have broken *them* instead, rendering "9:04".
+ *
+ * And `minute: 'numeric'` never yields "9:4": whenever an hour is also present,
+ * the locale skeleton resolves the minute to 2-digit in every locale (verified
+ * across 50 locales on the Node versions CI runs).
+ */
+const CLOCK_OPTS = { hour: 'numeric', minute: 'numeric' }
+
+/**
+ * The exact stamp shown beside a relative label, kept short when it can be.
+ *
+ * Length-aware so a 50-row feed does not turn into a wall of dates: an event
+ * from today needs only the clock ("14:32"); anything older carries the date
+ * too ("28 Aug 2026, 14:32"). Formatted in the viewer's own locale and zone.
+ *
+ * @param {number|string|null|undefined} tsSeconds unix timestamp in seconds
+ * @param {number} [nowMs] reference "now" in ms, for testing
+ * @returns {string} '' when there is no usable timestamp
+ */
+export function exactTimeLabel(tsSeconds, nowMs = Date.now()) {
+	const d = eventDate(tsSeconds)
+	if (!d) return ''
+	const now = new Date(nowMs)
+	const sameDay = d.getFullYear() === now.getFullYear()
+		&& d.getMonth() === now.getMonth()
+		&& d.getDate() === now.getDate()
+	if (sameDay) {
+		return fmt('clock', CLOCK_OPTS).format(d)
+	}
+	return fmt('dateClock', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		...CLOCK_OPTS,
+	}).format(d)
+}
+
+/**
+ * The full stamp, for the element's `title` - the shortened label spelled out.
+ *
+ * @param {number|string|null|undefined} tsSeconds unix timestamp in seconds
+ * @returns {string} '' when there is no usable timestamp
+ */
+export function exactTimeTitle(tsSeconds) {
+	const d = eventDate(tsSeconds)
+	if (!d) return ''
+	return fmt('full', { dateStyle: 'full', timeStyle: 'medium' }).format(d)
+}
+
+/**
+ * The machine-readable value for a `<time datetime="...">` attribute.
+ *
+ * @param {number|string|null|undefined} tsSeconds unix timestamp in seconds
+ * @returns {string} ISO 8601 in UTC, or '' when there is no usable timestamp
+ */
+export function isoTimestamp(tsSeconds) {
+	const d = eventDate(tsSeconds)
+	return d ? d.toISOString() : ''
 }

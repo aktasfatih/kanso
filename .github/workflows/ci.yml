@@ -26,10 +26,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every job below carries a `timeout-minutes`. GitHub's default is SIX HOURS,
+  # which is not a safety net — a job that hangs instead of failing burns six
+  # hours of runner time per matrix leg before anyone finds out. That stopped
+  # being hypothetical once the test suite started pinning dependency versions
+  # to match what Nextcloud ships: a regression in that area surfaces as a
+  # request that never returns, not as a failed assertion.
+  #
+  # The values are sized off the observed maxima of recent green runs, with
+  # roughly 2-3x headroom, because these are self-hosted runners and a job that
+  # normally takes 3 minutes has been seen to take 13 under contention. They are
+  # a runaway guard, not a performance budget — a slow but healthy run must
+  # still pass. Re-measure before tightening any of them.
+
   # php-cs-fixer and psalm are PHP-version-independent (they analyse source,
   # not runtime), so pin them to the highest supported PHP (8.3) — one job each.
   cs-check:
     runs-on: kanso-runners
+    # Observed 3-11m across recent green runs.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       # The ARC runner image intermittently lacks libsodium.so.23, which the
@@ -104,6 +119,8 @@ jobs:
 
   psalm:
     runs-on: kanso-runners
+    # Observed 2-13m across recent green runs.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       # See cs-check above for why this step exists and why it is not `grep -q`.
@@ -154,6 +171,9 @@ jobs:
   # range (8.2 for NC 30–33, 8.3 for NC 34) to catch version-specific breakage.
   unit-php:
     runs-on: kanso-runners
+    # One value covers both legs, so it is sized for the slow one: 8.2 has been
+    # observed at 2-6m but 8.3 at 3-21m.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -229,6 +249,8 @@ jobs:
   # defeats the point of committing the lockfile at all.
   unit-mcp:
     runs-on: kanso-runners
+    # Observed under a minute; the cap is really for a stalled dependency fetch.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: mcp
@@ -251,6 +273,8 @@ jobs:
 
   build-frontend:
     runs-on: kanso-runners
+    # Observed 1-2m; `npm ci` against a stalled registry is the realistic hang.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

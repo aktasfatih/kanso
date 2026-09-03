@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n ligne de données détectée"
 msgstr[1] "%n lignes de données détectées"
 
-#: src/components/CardDetail.vue:4091
+#: src/components/CardDetail.vue:4098
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "il y a %n jour"
 msgstr[1] "il y a %n jours"
 
-#: src/components/CardDetail.vue:4089
+#: src/components/CardDetail.vue:4096
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "il y a %n heure"
 msgstr[1] "il y a %n heures"
 
-#: src/components/CardDetail.vue:4087
+#: src/components/CardDetail.vue:4094
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "il y a %n minute"
@@ -1547,7 +1547,7 @@ msgid "Date"
 msgstr "Date"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4267
+#: src/components/CardDetail.vue:4274
 msgid "day"
 msgid_plural "days"
 msgstr[0] "jour"
@@ -3154,7 +3154,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4269
+#: src/components/CardDetail.vue:4276
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mois"
@@ -4454,7 +4454,7 @@ msgstr "Afficher la barre de mise en forme"
 msgid "Show the discussion panel"
 msgstr "Afficher le panneau de discussion"
 
-#: src/components/CardDetail.vue:5830
+#: src/components/CardDetail.vue:5837
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Afficher le panneau de discussion (%n commentaire)"
@@ -5092,7 +5092,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4268
+#: src/components/CardDetail.vue:4275
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semaine"
@@ -5169,7 +5169,7 @@ msgid "wrote"
 msgstr "a écrit"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4270
+#: src/components/CardDetail.vue:4277
 msgid "year"
 msgid_plural "years"
 msgstr[0] "an"

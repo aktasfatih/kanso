@@ -969,7 +969,15 @@ class ImportService {
 			// the first cron pass anyway, so drop it now - silently, like the
 			// sibling drops above.
 			try {
-				$this->recurrenceService->computeNextOccurrence($rrule, $now, $now);
+				// Asking for the occurrence after `$now - 1` makes the target the
+				// anchor itself, so the expansion runs every guard and builds the
+				// iterator but never STEPS it. That matters here more than anywhere:
+				// this loop runs once per rule in an uploaded file, the result is
+				// discarded, and the catch below only catches EXCEPTIONS - a rule that
+				// spins inside the iterator instead of throwing would wedge the whole
+				// import, which is a single authenticated request an attacker fully
+				// controls. Zero steps means zero opportunity.
+				$this->recurrenceService->computeNextOccurrence($rrule, $now - 1, $now);
 			} catch (InvalidInputException) {
 				$this->logger->warning(
 					'Kanso import: dropped a repeat rule whose recurrence rule could not be parsed',
