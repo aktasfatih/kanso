@@ -15,9 +15,52 @@
  * projects (see playwright.config.js), so each test executes on both the
  * Android-Chrome and iOS-Safari engines with a real phone viewport + touch.
  */
-import { test, expect, api, gotoBoard, BASE } from './helpers.js'
+import { test, expect, api, gotoBoard, BASE, me } from './helpers.js'
 
 const state = { boardId: null }
+
+// The offline snapshot lives in IndexedDB `kanso-offline` / store `kv` / key
+// `queryClient` (src/services/offlineCache.js). These run inside the page.
+const IDB = { db: 'kanso-offline', store: 'kv', key: 'queryClient' }
+
+function readSnapshot(page) {
+	return page.evaluate(({ db, store, key }) => new Promise((resolve) => {
+		const open = indexedDB.open(db, 1)
+		open.onupgradeneeded = () => { try { open.result.createObjectStore(store) } catch {} }
+		open.onerror = () => resolve(null)
+		open.onsuccess = () => {
+			const conn = open.result
+			try {
+				const req = conn.transaction(store, 'readonly').objectStore(store).get(key)
+				req.onsuccess = () => { conn.close(); resolve(req.result ?? null) }
+				req.onerror = () => { conn.close(); resolve(null) }
+			} catch { conn.close(); resolve(null) }
+		}
+	}), IDB)
+}
+
+/** Rewrite the persisted snapshot's owner uid — i.e. "this profile's snapshot
+ * was written by somebody else", the shared-browser case. */
+function reownSnapshot(page, uid) {
+	return page.evaluate(({ db, store, key, uid }) => new Promise((resolve, reject) => {
+		const open = indexedDB.open(db, 1)
+		open.onerror = () => reject(new Error('idb open failed'))
+		open.onsuccess = () => {
+			const conn = open.result
+			const get = conn.transaction(store, 'readonly').objectStore(store).get(key)
+			get.onsuccess = () => {
+				const saved = get.result
+				if (!saved) { conn.close(); reject(new Error('no snapshot to re-own')); return }
+				saved.uid = uid
+				const tx = conn.transaction(store, 'readwrite')
+				tx.objectStore(store).put(saved, key)
+				tx.oncomplete = () => { conn.close(); resolve(true) }
+				tx.onerror = () => { conn.close(); reject(new Error('idb write failed')) }
+			}
+			get.onerror = () => { conn.close(); reject(new Error('idb read failed')) }
+		}
+	}), { ...IDB, uid })
+}
 
 test.beforeAll(async () => {
 	const board = await api.post('/boards', { title: 'Mobile PWA E2E' })
@@ -179,4 +222,134 @@ test('serves the service worker with app scope and registers it', async ({ page,
 
 	// No CSP violation must appear on either engine during the forced-PWA session.
 	expect(swErrors, swErrors.join('\n')).toEqual([])
+})
+
+// #10146 — board confidentiality on a shared browser profile.
+//
+// The offline layer is two independent stores, and BOTH used to outlive the
+// session that filled them:
+//   1. Cache Storage, written by the service worker — origin-scoped, not
+//      partitioned by user, never purged on logout.
+//   2. IndexedDB `kanso-offline`, written by src/services/offlineCache.js and
+//      hydrated BEFORE mount — so the first paint after a different user logged
+//      in rendered the PREVIOUS user's boards, while online.
+// There is deliberately no logout hook in either test: Nextcloud logout is a
+// full server navigation to /logout, so the SPA is torn down with no JS event to
+// hang one on. The fix therefore has to hold at RESTORE time, which is what
+// these assert.
+//
+// Both tests force the PWA on (main.js disables it under webdriver).
+
+test('the service worker never caches API responses', async ({ page, browserName }) => {
+	// Playwright's WebKit has no service-worker support, so there would be no
+	// worker to populate Cache Storage and every assertion here would be vacuous.
+	test.skip(browserName !== 'chromium', 'no service-worker support in Playwright WebKit')
+
+	await page.addInitScript(() => { window.__KANSO_FORCE_PWA__ = true })
+
+	// The PRETTY URL is the one inside the worker's scope (/apps/kanso/);
+	// /index.php/apps/kanso is outside it and would never be controlled.
+	await page.goto(`${BASE}/apps/kanso/`, { waitUntil: 'load' })
+	const active = await page.waitForFunction(async () => {
+		if (!('serviceWorker' in navigator)) return false
+		const reg = await navigator.serviceWorker.getRegistration()
+		return !!(reg && reg.active)
+	}, null, { timeout: 20_000 }).then(() => true).catch(() => false)
+	expect(active).toBe(true)
+
+	// The worker registers on `load`, so the FIRST document is never controlled —
+	// only a subsequent full load is. (A hash change is not a load, hence reload.)
+	let controlled = false
+	for (let i = 0; i < 3 && !controlled; i++) {
+		await page.reload({ waitUntil: 'load' })
+		controlled = await page.evaluate(() => !!navigator.serviceWorker.controller)
+	}
+	expect(controlled).toBe(true)
+
+	// Open the board on this CONTROLLED document (hash route — same document, so
+	// the worker keeps controlling it) and wait for real card content.
+	await page.goto(`${BASE}/apps/kanso/#/board/${state.boardId}`)
+	await expect(page.getByText('Mobile card one')).toBeVisible({ timeout: 30_000 })
+
+	// Non-vacuity #1 — the board's API GETs really were issued from a controlled
+	// page, in scope, so the worker's fetch handler DID see them. Without this the
+	// "no API entry" assertion could pass simply by never asking the API.
+	const apiRequests = await page.evaluate(() => performance.getEntriesByType('resource')
+		.map((e) => e.name)
+		.filter((u) => u.includes('/apps/kanso/api/')))
+	expect(apiRequests.length, 'no in-scope API request was made').toBeGreaterThan(0)
+
+	// Non-vacuity #2 — the worker still caches in-scope NON-API GETs. Probing with
+	// its own script keeps this independent of where the deployment serves the app
+	// bundles from (under the dev/CI stack they live outside the worker's scope,
+	// at /custom_apps/kanso/js/, so they never reach the cache here).
+	await page.evaluate(() => fetch(location.origin + '/apps/kanso/sw.js'))
+
+	const cached = await page.evaluate(async () => {
+		const urls = []
+		for (const name of await caches.keys()) {
+			const cache = await caches.open(name)
+			for (const req of await cache.keys()) urls.push(req.url)
+		}
+		return urls
+	})
+	expect(cached.filter((u) => /\/apps\/kanso\/sw\.js/.test(u)).length,
+		`the worker cached nothing at all:\n${cached.join('\n')}`).toBeGreaterThan(0)
+
+	// …and yet nothing under /api ever lands in Cache Storage.
+	const apiEntries = cached.filter((u) => /\/apps\/kanso\/api\//.test(u))
+	expect(apiEntries, `API responses must never be cached:\n${apiEntries.join('\n')}`).toEqual([])
+})
+
+test('the persisted offline cache is not restored for a different user', async ({ page }) => {
+	await page.addInitScript(() => { window.__KANSO_FORCE_PWA__ = true })
+	await gotoBoard(page, state.boardId)
+	await expect(page.getByText('Mobile card one')).toBeVisible({ timeout: 30_000 })
+
+	// Wait out the 1s persist debounce and confirm a snapshot exists, stamped with
+	// the current user. This is the setup AND the non-vacuity check: there really
+	// is board data on this device for the next person to find.
+	let snapshot = null
+	await expect.poll(async () => {
+		snapshot = await readSnapshot(page)
+		return snapshot?.uid ?? null
+	}, { timeout: 20_000, message: 'no uid-stamped offline snapshot was persisted' }).toBe(me)
+	expect(JSON.stringify(snapshot.state)).toContain('Mobile card one')
+
+	// Cut the API off for the rest of the test, so whatever renders can ONLY have
+	// come out of the persisted snapshot — no network fallback to mask a leak.
+	await page.route('**/apps/kanso/api/**', (route) => route.abort())
+
+	// Control: for the SAME user the offline boot still works. (The fix must not
+	// be "never restore anything" — genuine offline use is the point of the PWA.)
+	await gotoBoard(page, state.boardId)
+	await expect(page.getByText('Mobile card one')).toBeVisible({ timeout: 30_000 })
+
+	// Now the real case: the snapshot on this profile belongs to somebody else,
+	// exactly as it would after user A logged out and user B logged in.
+	//
+	// Park on a same-origin page that does NOT run Kanso first: the app's persist
+	// loop is debounced by a second and would otherwise re-stamp the snapshot with
+	// the current uid right after we rewrote it, quietly neutering the test.
+	await page.goto(`${BASE}/index.php/settings/user`, { waitUntil: 'domcontentloaded' })
+	await reownSnapshot(page, `${me}_someone_else`)
+	await gotoBoard(page, state.boardId)
+
+	// Nothing of the other user's board may reach the screen…
+	await expect(page.getByText('Mobile card one')).toHaveCount(0, { timeout: 20_000 })
+	await page.waitForTimeout(3000)
+	await expect(page.getByText('Mobile card one')).toHaveCount(0)
+
+	// …and the foreign snapshot is dropped rather than left for the next reload.
+	// (This session may write a fresh, EMPTY snapshot of its own afterwards — the
+	// persist loop keeps running — so accept "gone" or "replaced", never "kept".)
+	await expect.poll(async () => {
+		const saved = await readSnapshot(page)
+		if (!saved) return 'deleted'
+		if (saved.uid !== me) return 'still-foreign'
+		return JSON.stringify(saved.state).includes('Mobile card one') ? 'leaked' : 'replaced'
+	}, {
+		timeout: 20_000,
+		message: "a snapshot belonging to another user must be deleted, not kept",
+	}).toMatch(/^(deleted|replaced)$/)
 })

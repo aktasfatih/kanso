@@ -11,7 +11,11 @@
 // story is the persisted TanStack Query cache in the app; this worker only makes
 // the app installable and lets it boot + show its last assets while offline.
 
-const VERSION = 'kanso-pwa-v3'
+// v4: API responses are no longer cached (see the fetch handler). The bump is
+// load-bearing, not cosmetic — `activate` below deletes every cache that isn't
+// prefixed with the CURRENT version, so upgrading also purges the board payloads
+// a v3 worker already wrote into Cache Storage on existing installs.
+const VERSION = 'kanso-pwa-v4'
 const SHELL_CACHE = VERSION + '-shell'
 const RUNTIME_CACHE = VERSION + '-runtime'
 
@@ -47,6 +51,15 @@ function scopePath() {
 	} catch {
 		return '/'
 	}
+}
+
+// Is this an API request (…/apps/kanso/api/…)? Both URL shapes are covered
+// because the check is relative to the registered scope, which is whichever of
+// /apps/kanso/ or /index.php/apps/kanso/ the worker was registered under.
+function isApiRequest(pathname, scope) {
+	const prefix = scope.endsWith('/') ? scope : scope + '/'
+	const rest = pathname.slice(prefix.length)
+	return rest === 'api' || rest.startsWith('api/')
 }
 
 async function networkFirst(request, cacheName) {
@@ -111,7 +124,19 @@ self.addEventListener('fetch', (event) => {
 		return
 	}
 
-	// Everything else in scope — the app bundles (js/css/img) AND /api data — is
+	// API responses are never cached. Cache Storage is origin-scoped, ignores
+	// Cache-Control and is NOT partitioned by user, and nothing clears it when a
+	// Nextcloud session ends (logout is a full server navigation, so the app gets
+	// no chance to purge) — caching /api here would leave board titles,
+	// descriptions and comments readable on the device after the session was
+	// over. The offline-DATA story is the app's own persisted query cache (see
+	// the header comment above), which IS scoped to the user who stored it, so
+	// letting API GETs go straight to the network costs no offline capability.
+	if (isApiRequest(url.pathname, scope)) {
+		return
+	}
+
+	// Everything else in scope — the app bundles (js/css/img) — is
 	// network-first with a cache fallback. Deliberately NOT cache-first for the
 	// bundles: Vite's ENTRY files (kanso-main.mjs, kanso-public.mjs) are NOT
 	// content-hashed, so a cache-first entry would survive an app update/rebuild
