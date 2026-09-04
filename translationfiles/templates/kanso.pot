@@ -261,19 +261,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4098
+#: src/components/CardDetail.vue:4100
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4096
+#: src/components/CardDetail.vue:4098
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4094
+#: src/components/CardDetail.vue:4096
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -297,7 +297,7 @@ msgid_plural "%n points"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1011
+#: src/components/CardDetail.vue:1012
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] ""
@@ -309,7 +309,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:275
+#: src/components/CardDetail.vue:276
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] ""
@@ -1546,7 +1546,7 @@ msgid "Date"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4274
+#: src/components/CardDetail.vue:4276
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3153,7 +3153,7 @@ msgid "Mon"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4276
+#: src/components/CardDetail.vue:4278
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4453,7 +4453,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:5837
+#: src/components/CardDetail.vue:5839
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5091,7 +5091,7 @@ msgid "Wed"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4275
+#: src/components/CardDetail.vue:4277
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5168,7 +5168,7 @@ msgid "wrote"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4277
+#: src/components/CardDetail.vue:4279
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

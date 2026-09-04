@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4098
+#: src/components/CardDetail.vue:4100
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
 
-#: src/components/CardDetail.vue:4096
+#: src/components/CardDetail.vue:4098
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/components/CardDetail.vue:4094
+#: src/components/CardDetail.vue:4096
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -298,7 +298,7 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1011
+#: src/components/CardDetail.vue:1012
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
@@ -310,7 +310,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n ongeplande kaart"
 msgstr[1] "%n ongeplande kaarten"
 
-#: src/components/CardDetail.vue:275
+#: src/components/CardDetail.vue:276
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n volger"
@@ -1547,7 +1547,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4274
+#: src/components/CardDetail.vue:4276
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3154,7 +3154,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4276
+#: src/components/CardDetail.vue:4278
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4454,7 +4454,7 @@ msgstr "Opmaakbalk tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:5837
+#: src/components/CardDetail.vue:5839
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5092,7 +5092,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4275
+#: src/components/CardDetail.vue:4277
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -5169,7 +5169,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4277
+#: src/components/CardDetail.vue:4279
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

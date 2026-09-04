@@ -188,6 +188,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								v-model="draftTitle"
 								class="card-modal__title-input"
 								type="text"
+								maxlength="100"
 								@keydown.enter.prevent="saveTitle"
 								@keydown.escape.stop="cancelTitleEdit"
 								@blur="saveTitle">
@@ -1440,6 +1441,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-model="newChildTitle"
 									class="card-modal__dashed-input"
 									type="text"
+									maxlength="100"
 									:placeholder="t('kanso', 'Add a sub-card…')"
 									:disabled="addChildMutation.isPending.value"
 									@keydown.enter.prevent="handleAddChild">
