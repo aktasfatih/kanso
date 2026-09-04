@@ -86,6 +86,27 @@ abstract class AbstractForgeWebhookService {
 	 */
 	protected const MAX_TITLE_REFS = 5;
 
+	/**
+	 * Why a delivery did not move (or create) anything. A silent `handled: false`
+	 * is undiagnosable, and the forge's own delivery log - already where a repo
+	 * admin looks - is the natural place for the answer. These stay inside the
+	 * egress rule above because they describe the REQUEST, never board content:
+	 * no titles, no stack names, no card ids beyond what the rule already allows.
+	 */
+	public const REASON_MALFORMED_PAYLOAD = 'malformed_payload';
+	public const REASON_UNSUPPORTED_EVENT = 'unsupported_event';
+	/** Neither the head branch nor any title reference named a card on this board. */
+	public const REASON_NO_CARD_MATCH = 'no_card_match';
+	public const REASON_NO_LINK_MATCH = 'no_link_match';
+	public const REASON_UNKNOWN_ACTION = 'unknown_action';
+	public const REASON_NO_TARGET_STACK = 'no_target_stack';
+	public const REASON_MOVE_BLOCKED = 'move_blocked';
+	public const REASON_INTAKE_OFF = 'intake_off';
+	public const REASON_INTAKE_FILTERED = 'intake_filtered';
+	public const REASON_INTAKE_STALE_STACK = 'intake_stale_stack';
+	public const REASON_INTAKE_DUPLICATE = 'intake_duplicate';
+	public const REASON_INTAKE_CREATE_FAILED = 'intake_create_failed';
+
 	public function __construct(
 		protected BoardMapper $boardMapper,
 		protected StackMapper $stackMapper,
@@ -243,15 +264,24 @@ abstract class AbstractForgeWebhookService {
 		}
 		if (!is_array($payload)) {
 			// Valid JSON that is a bare scalar / null - accepted, nothing to do (#3477).
-			return ['handled' => false];
+			return $this->noop(self::REASON_MALFORMED_PAYLOAD);
 		}
 
 		$event = $this->normalize($payload);
 		return match ($event->kind) {
 			ForgeEvent::KIND_PR => $this->handlePullRequestEvent($board, $event),
 			ForgeEvent::KIND_ISSUE => $this->handleIssueEvent($board, $event),
-			default => ['handled' => false],
+			default => $this->noop(self::REASON_UNSUPPORTED_EVENT),
 		};
+	}
+
+	/**
+	 * The accepted no-op every business-level miss returns, carrying why.
+	 *
+	 * @return array{handled: bool, reason: string}
+	 */
+	protected function noop(string $reason): array {
+		return ['handled' => false, 'reason' => $reason];
 	}
 
 	/**
@@ -278,11 +308,12 @@ abstract class AbstractForgeWebhookService {
 			$targets[$titleCardId] ??= false;
 		}
 		if ($targets === []) {
-			return ['handled' => false];
+			return $this->noop(self::REASON_NO_CARD_MATCH);
 		}
 
 		$moved = false;
 		$namedCardId = 0;
+		$lastReason = '';
 		foreach ($targets as $cardId => $isEcho) {
 			// Record the PR as a link on the card (best-effort, idempotent) and
 			// cache its state/title straight from the delivery. The payload is
@@ -298,15 +329,24 @@ abstract class AbstractForgeWebhookService {
 					// Non-critical - a bad/duplicate URL must not fail the webhook.
 				}
 			}
-			if ($this->applyPrAutoMove($boardId, $cardId, $event, $board->getOwner())) {
+			[$cardMoved, $reason] = $this->applyPrAutoMove($boardId, $cardId, $event, $board->getOwner());
+			if ($cardMoved) {
 				$moved = true;
+			} else {
+				$lastReason = $reason;
 			}
 			if ($namedCardId === 0 && ($isEcho || $this->isPublicCard($cardId))) {
 				$namedCardId = $cardId;
 			}
 		}
 
-		return ['handled' => true, 'action' => $event->action, 'cardId' => $namedCardId, 'moved' => $moved];
+		$result = ['handled' => true, 'action' => $event->action, 'cardId' => $namedCardId, 'moved' => $moved];
+		// Only when NOTHING moved is a reason unambiguous - with a mixed batch the
+		// per-card detail would need per-card ids, which the egress rule forbids.
+		if (!$moved && $lastReason !== '') {
+			$result['reason'] = $lastReason;
+		}
+		return $result;
 	}
 
 	/**
@@ -404,7 +444,7 @@ abstract class AbstractForgeWebhookService {
 			if ($event->action === 'opened') {
 				return $this->intakeIssue($board, $event);
 			}
-			return ['handled' => false];
+			return $this->noop(self::REASON_NO_LINK_MATCH);
 		}
 
 		foreach ($links as $link) {
@@ -413,6 +453,7 @@ abstract class AbstractForgeWebhookService {
 
 		$moved = false;
 		$firstCardId = 0;
+		$lastReason = '';
 		foreach ($links as $link) {
 			$cardId = $link->getCardId();
 			// Egress rule (#3760): the response goes to an external system, so
@@ -422,12 +463,19 @@ abstract class AbstractForgeWebhookService {
 			if ($firstCardId === 0 && $this->isPublicCard($cardId)) {
 				$firstCardId = $cardId;
 			}
-			if ($this->applyIssueAutoMove($board->getId(), $cardId, $event->action, $board->getOwner())) {
+			[$cardMoved, $reason] = $this->applyIssueAutoMove($board->getId(), $cardId, $event->action, $board->getOwner());
+			if ($cardMoved) {
 				$moved = true;
+			} else {
+				$lastReason = $reason;
 			}
 		}
 
-		return ['handled' => true, 'action' => $event->action, 'cardId' => $firstCardId, 'moved' => $moved];
+		$result = ['handled' => true, 'action' => $event->action, 'cardId' => $firstCardId, 'moved' => $moved];
+		if (!$moved && $lastReason !== '') {
+			$result['reason'] = $lastReason;
+		}
+		return $result;
 	}
 
 	/**
@@ -453,18 +501,18 @@ abstract class AbstractForgeWebhookService {
 	protected function intakeIssue(Board $board, ForgeEvent $event): array {
 		$stackId = $this->readIntakeStackId($board);
 		if ($stackId === null || $stackId <= 0) {
-			return ['handled' => false];
+			return $this->noop(self::REASON_INTAKE_OFF);
 		}
 		$labelFilter = trim($this->readIntakeLabel($board) ?? '');
 		if ($labelFilter !== '' && !$event->hasLabel($labelFilter)) {
-			return ['handled' => false];
+			return $this->noop(self::REASON_INTAKE_FILTERED);
 		}
 		$stack = $this->findAliveStack($board->getId(), $stackId);
 		if ($stack === null) {
-			return ['handled' => false];
+			return $this->noop(self::REASON_INTAKE_STALE_STACK);
 		}
 		if ($this->cardLinkMapper->existsByBoardAndUrls($board->getId(), $event->urlCandidates)) {
-			return ['handled' => false];
+			return $this->noop(self::REASON_INTAKE_DUPLICATE);
 		}
 
 		$title = trim($event->title ?? '');
@@ -482,7 +530,7 @@ abstract class AbstractForgeWebhookService {
 			// e.g. a concurrent create storm exhausting the sort-key retry - the
 			// delivery is still accepted; the forge must not see a 5xx and disable
 			// the hook.
-			return ['handled' => false];
+			return $this->noop(self::REASON_INTAKE_CREATE_FAILED);
 		}
 
 		// Attach the issue as a link with its state/title cached from the payload
@@ -566,7 +614,7 @@ abstract class AbstractForgeWebhookService {
 	 * A merged PR → ROLE_DONE (stamps done); an opened/reopened/ready PR →
 	 * ROLE_REVIEW. Returns whether a move actually happened.
 	 */
-	protected function applyPrAutoMove(int $boardId, int $cardId, ForgeEvent $event, string $actorUid): bool {
+	protected function applyPrAutoMove(int $boardId, int $cardId, ForgeEvent $event, string $actorUid): array {
 		$targetRole = null;
 		if ($event->merged) {
 			$targetRole = Stack::ROLE_DONE;
@@ -574,22 +622,22 @@ abstract class AbstractForgeWebhookService {
 			$targetRole = Stack::ROLE_REVIEW;
 		}
 		if ($targetRole === null) {
-			return false;
+			return [false, self::REASON_UNKNOWN_ACTION];
 		}
 
 		try {
 			$target = $this->stackMapper->findByBoardAndRole($boardId, $targetRole);
 			if ($target === null) {
-				return false;
+				return [false, self::REASON_NO_TARGET_STACK];
 			}
 			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
-			return true;
+			return [true, ''];
 		} catch (\Throwable) {
 			// e.g. the review gate blocks a merge while reviews are unapproved -
 			// the link is still recorded; the move is simply skipped. The stack
 			// lookup is inside the try too: a title can match several cards, so a
 			// DB error here would otherwise escape as a 5xx and disable the hook.
-			return false;
+			return [false, self::REASON_MOVE_BLOCKED];
 		}
 	}
 
@@ -598,14 +646,19 @@ abstract class AbstractForgeWebhookService {
 	 * Closed → ROLE_DONE (stamps done); reopened → ROLE_IN_PROGRESS, falling
 	 * back to ROLE_TODO when the board has no in-progress stack. Purely
 	 * role-based - a board without the role stack simply doesn't move, exactly
-	 * like the PR path. Returns whether a move actually happened.
+	 * like the PR path.
+	 *
+	 * @return array{0: bool, 1: string} [moved, reason]; reason is '' when moved
 	 */
-	protected function applyIssueAutoMove(int $boardId, int $cardId, string $action, string $actorUid): bool {
+	protected function applyIssueAutoMove(int $boardId, int $cardId, string $action, string $actorUid): array {
 		$roles = [];
 		if ($action === 'closed') {
 			$roles = [Stack::ROLE_DONE];
 		} elseif ($action === 'reopened') {
 			$roles = [Stack::ROLE_IN_PROGRESS, Stack::ROLE_TODO];
+		}
+		if ($roles === []) {
+			return [false, self::REASON_UNKNOWN_ACTION];
 		}
 
 		$target = null;
@@ -616,15 +669,15 @@ abstract class AbstractForgeWebhookService {
 			}
 		}
 		if ($target === null) {
-			return false;
+			return [false, self::REASON_NO_TARGET_STACK];
 		}
 
 		try {
 			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
-			return true;
+			return [true, ''];
 		} catch (\Throwable) {
 			// Best-effort, like the PR path - the state refresh already happened.
-			return false;
+			return [false, self::REASON_MOVE_BLOCKED];
 		}
 	}
 
