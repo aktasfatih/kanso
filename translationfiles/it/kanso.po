@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nessuno —"
 
-#: src/components/BoardSettingsModal.vue:3841
+#: src/components/BoardSettingsModal.vue:4048
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n volta"
@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4237
+#: src/components/CardDetail.vue:4246
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
 
-#: src/components/CardDetail.vue:4235
+#: src/components/CardDetail.vue:4244
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
 
-#: src/components/CardDetail.vue:4233
+#: src/components/CardDetail.vue:4242
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -304,7 +304,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n progetto"
 msgstr[1] "%n progetti"
 
-#: src/components/CardDetail.vue:1962
+#: src/components/CardDetail.vue:1969
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -363,6 +363,10 @@ msgstr "Aggiungi una descrizione — supporta Markdown"
 #: src/views/ProjectView.vue
 msgid "Add a description…"
 msgstr "Aggiungi una descrizione…"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Add a Forgejo webhook sending \"pull_request\" and \"issues\" events to the URL below. A pull request opened on a kanso-<id> branch moves its card to your Review column; a merged pull request moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Gitea webhooks work too."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a GitHub webhook sending \"pull_request\" and \"issues\" events to the URL below, with Content type set to application/json (the form-encoded option is not supported). Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards."
@@ -1196,6 +1200,14 @@ msgstr "Chiudi"
 msgid "Closed"
 msgstr "Chiusa"
 
+#: src/components/CardDetail.vue
+msgid "Code"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Code links"
+msgstr ""
+
 #: src/components/StackColumn.vue
 msgid "Collapse column"
 msgstr "Comprimi colonna"
@@ -1552,8 +1564,8 @@ msgstr "Zona pericolosa"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:1847
-#: src/components/CardDetail.vue:4426
+#: src/components/BoardSettingsModal.vue:1949
+#: src/components/CardDetail.vue:4435
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -2034,25 +2046,25 @@ msgstr "ogni"
 msgid "Every"
 msgstr "Ogni"
 
-#: src/components/BoardSettingsModal.vue:3821
+#: src/components/BoardSettingsModal.vue:4028
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Ogni giorno"
 msgstr[1] "Ogni %n giorni"
 
-#: src/components/BoardSettingsModal.vue:3831
+#: src/components/BoardSettingsModal.vue:4038
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Ogni mese"
 msgstr[1] "Ogni %n mesi"
 
-#: src/components/BoardSettingsModal.vue:3823
+#: src/components/BoardSettingsModal.vue:4030
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Ogni settimana"
 msgstr[1] "Ogni %n settimane"
 
-#: src/components/BoardSettingsModal.vue:3833
+#: src/components/BoardSettingsModal.vue:4040
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Ogni anno"
@@ -2317,6 +2329,10 @@ msgstr "Impossibile caricare i modelli."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Impossibile caricare la configurazione del feed del calendario."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Failed to load the Forgejo webhook config."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the GitHub webhook config."
@@ -2705,6 +2721,14 @@ msgstr "Azioni della cartella"
 msgid "Forever"
 msgstr "Per sempre"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Forgejo"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Forgejo label name"
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "Formatting"
 msgstr "Formattazione"
@@ -2735,17 +2759,12 @@ msgid "General"
 msgstr "Generale"
 
 #: src/components/BoardSettingsModal.vue
-#: src/components/CardDetail.vue
 msgid "GitHub"
 msgstr "GitHub"
 
 #: src/components/BoardSettingsModal.vue
 msgid "GitHub label name"
 msgstr "Nome dell'etichetta GitHub"
-
-#: src/components/BoardSettingsModal.vue
-msgid "GitHub links"
-msgstr "Collegamenti GitHub"
 
 #: src/views/BoardList.vue
 msgid "GitHub Projects (coming soon)"
@@ -2945,6 +2964,10 @@ msgstr "Backup delle bacheche di Kanso"
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
 msgstr "Esportazione Kanso (.zip)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."
@@ -3171,8 +3194,8 @@ msgstr "Modalità"
 msgid "Mon"
 msgstr "Lun"
 
-#: src/components/BoardSettingsModal.vue:1849
-#: src/components/CardDetail.vue:4428
+#: src/components/BoardSettingsModal.vue:1951
+#: src/components/CardDetail.vue:4437
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -3793,8 +3816,8 @@ msgid "Parent card"
 msgstr "Scheda principale"
 
 #: src/components/CardDetail.vue
-msgid "Paste a GitHub PR or issue URL…"
-msgstr "Incolla l'URL di una pull request o di una issue GitHub…"
+msgid "Paste a pull request or issue URL…"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Payload URL"
@@ -4496,7 +4519,7 @@ msgstr "Mostra la barra di formattazione"
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6050
+#: src/components/CardDetail.vue:6059
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5137,8 +5160,8 @@ msgstr "Webhook attivo"
 msgid "Wed"
 msgstr "Mer"
 
-#: src/components/BoardSettingsModal.vue:1848
-#: src/components/CardDetail.vue:4427
+#: src/components/BoardSettingsModal.vue:1950
+#: src/components/CardDetail.vue:4436
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5167,6 +5190,10 @@ msgstr "Quando una scheda entra nel ruolo"
 #: src/views/MyReviewsView.vue
 msgid "When someone requests your review on a card it will appear here."
 msgstr "Quando viene richiesta una revisione su una scheda, appare qui."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Which Forgejo issues to take in"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Which issues to take in"
@@ -5214,8 +5241,8 @@ msgstr "Scrivi una risposta…"
 msgid "wrote"
 msgstr "ha scritto"
 
-#: src/components/BoardSettingsModal.vue:1850
-#: src/components/CardDetail.vue:4429
+#: src/components/BoardSettingsModal.vue:1952
+#: src/components/CardDetail.vue:4438
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"
@@ -5265,6 +5292,10 @@ msgstr "Per configurare le regole di automazione servono i permessi di gestione.
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the calendar feed."
 msgstr "Per configurare il feed del calendario servono i permessi di gestione."
+
+#: src/components/BoardSettingsModal.vue
+msgid "You need manage permission to configure the Forgejo webhook."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the GitHub webhook."

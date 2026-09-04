@@ -416,6 +416,21 @@ export const disableWebhook = (boardId) =>
 export const updateWebhookIntake = (boardId, stackId, label) =>
 	axios.put(url(`/api/boards/${boardId}/webhook/intake`), { stackId, label }).then((r) => r.data)
 
+// Forgejo webhook config (board-level, MANAGE). Independent of the GitHub one -
+// a board may run either, both, or neither. There is no instance URL to set:
+// deliveries are inbound only, so Kanso never calls the instance.
+export const fetchForgejoConfig = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/forgejo`)).then((r) => r.data)
+
+export const rotateForgejoSecret = (boardId) =>
+	axios.post(url(`/api/boards/${boardId}/forgejo/rotate`)).then((r) => r.data)
+
+export const disableForgejo = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/forgejo`)).then((r) => r.data)
+
+export const updateForgejoIntake = (boardId, stackId, label) =>
+	axios.put(url(`/api/boards/${boardId}/forgejo/intake`), { stackId, label }).then((r) => r.data)
+
 // Public / read-only board share link (board-level, MANAGE)
 export const fetchPublicShareConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)

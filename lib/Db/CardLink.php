@@ -18,6 +18,8 @@ use OCP\DB\Types;
  *
  * @method int getCardId()
  * @method void setCardId(int $cardId)
+ * @method string getProvider()
+ * @method void setProvider(string $provider)
  * @method string getUrl()
  * @method void setUrl(string $url)
  * @method string getKind()
@@ -36,12 +38,18 @@ class CardLink extends Entity implements \JsonSerializable {
 	public const KIND_ISSUE = 'issue';
 	public const KIND_OTHER = 'other';
 
+	/** Polled (github.com is a fixed host, so the API base can be pinned). */
+	public const PROVIDER_GITHUB = 'github';
+	/** Never polled - self-hosted, so state comes from webhook deliveries only. */
+	public const PROVIDER_FORGEJO = 'forgejo';
+
 	public const STATE_OPEN = 'open';
 	public const STATE_CLOSED = 'closed';
 	public const STATE_MERGED = 'merged';
 	public const STATE_UNKNOWN = 'unknown';
 
 	protected ?int $cardId = null;
+	protected ?string $provider = null;
 	protected ?string $url = null;
 	protected ?string $kind = null;
 	protected ?string $state = null;
@@ -51,6 +59,7 @@ class CardLink extends Entity implements \JsonSerializable {
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
+		$this->addType('provider', Types::STRING);
 		$this->addType('url', Types::STRING);
 		$this->addType('kind', Types::STRING);
 		$this->addType('state', Types::STRING);
@@ -67,6 +76,7 @@ class CardLink extends Entity implements \JsonSerializable {
 		return [
 			'id' => $this->getId(),
 			'cardId' => $this->getCardId(),
+			'provider' => $this->getProvider() ?? self::PROVIDER_GITHUB,
 			'url' => $this->getUrl(),
 			'kind' => $this->getKind(),
 			'state' => $this->getState(),
