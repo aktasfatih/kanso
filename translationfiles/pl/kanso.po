@@ -265,21 +265,21 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4155
+#: src/components/CardDetail.vue:4168
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
 msgstr[1] "%n dni temu"
 msgstr[2] "%n dni temu"
 
-#: src/components/CardDetail.vue:4153
+#: src/components/CardDetail.vue:4166
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
 msgstr[1] "%n godziny temu"
 msgstr[2] "%n godzin temu"
 
-#: src/components/CardDetail.vue:4151
+#: src/components/CardDetail.vue:4164
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -307,14 +307,14 @@ msgstr[0] "%n punkt"
 msgstr[1] "%n punkty"
 msgstr[2] "%n punktów"
 
-#: src/components/CardDetail.vue:1012
+#: src/components/CardDetail.vue:1017
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:1953
+#: src/components/CardDetail.vue:1958
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -328,7 +328,7 @@ msgstr[0] "%n niezaplanowana karta"
 msgstr[1] "%n niezaplanowane karty"
 msgstr[2] "%n niezaplanowanych kart"
 
-#: src/components/CardDetail.vue:276
+#: src/components/CardDetail.vue:281
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n obserwujący"
@@ -1566,7 +1566,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4344
+#: src/components/CardDetail.vue:4357
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -3190,7 +3190,7 @@ msgid "Mon"
 msgstr "Pn"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4346
+#: src/components/CardDetail.vue:4359
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4515,7 +4515,7 @@ msgstr "Pokaż pasek formatowania"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:5966
+#: src/components/CardDetail.vue:5981
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -5158,7 +5158,7 @@ msgid "Wed"
 msgstr "Śr"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4345
+#: src/components/CardDetail.vue:4358
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -5236,7 +5236,7 @@ msgid "wrote"
 msgstr "napisał"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4347
+#: src/components/CardDetail.vue:4360
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"

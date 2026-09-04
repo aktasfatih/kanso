@@ -204,6 +204,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ cardData.title }}
 							</h2>
 						</div>
+						<!-- A failed rename now keeps the editor open with the typed title
+						     (#10171), so say why right here: the shared saveError is
+						     otherwise only rendered inside the due-date popover and the
+						     description editor, neither of which is open at this point. -->
+						<span v-if="editingTitle && saveError" class="card-modal__save-error" data-title-error>{{ saveError }}</span>
 					</div>
 
 					<div class="card-modal__header-actions">
@@ -3506,18 +3511,24 @@ function cancelTitleEdit() {
 	editingTitle.value = false
 }
 
+// The editor closes ONLY once the save has actually landed (#10171). Closing in
+// a `finally` discarded the typed title on every failed save - a 403 after a
+// mid-edit permission change, a 409, a 5xx - and reopening runs
+// `startTitleEdit`, which overwrites the draft from the server copy, so there
+// was no way to recover the text but to retype it. On failure the editor stays
+// open with the draft intact and `saveError` is rendered beside it.
 async function saveTitle() {
 	const title = draftTitle.value.trim()
 	if (!title || title === cardData.value?.title) {
 		editingTitle.value = false
 		return
 	}
+	saveError.value = ''
 	try {
 		await updateCard.mutateAsync({ data: { title } })
+		editingTitle.value = false
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Could not save the title')
-	} finally {
-		editingTitle.value = false
 	}
 }
 
@@ -3761,10 +3772,12 @@ async function saveItemTitle(item) {
 	checklistError.value = ''
 	try {
 		await renameItem.mutateAsync({ item, title })
+		// Close only on success (#10171): `cancelItemEdit` clears the draft, so
+		// closing in a `finally` threw away the typed step title on every
+		// failed rename.
+		cancelItemEdit()
 	} catch (err) {
 		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to rename item.')
-	} finally {
-		cancelItemEdit()
 	}
 }
 
@@ -4704,10 +4717,12 @@ async function saveCommentEdit(comment) {
 	commentError.value = ''
 	try {
 		await editComment.mutateAsync({ comment, body })
+		// Close only on success (#10171). This was the worst of the three: a
+		// comment body is unbounded prose, and `cancelCommentEdit` clears it,
+		// so a failed edit silently destroyed arbitrarily much typing.
+		cancelCommentEdit()
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to edit comment.')
-	} finally {
-		cancelCommentEdit()
 	}
 }
 
