@@ -71,6 +71,29 @@ class CommentController extends Controller {
 	}
 
 	/**
+	 * Marks the comment's thread resolved. Idempotent - resolving an already
+	 * resolved thread returns it unchanged.
+	 */
+	#[NoAdminRequired]
+	public function resolve(int $commentId): JSONResponse {
+		return $this->respond(function () use ($commentId): JSONResponse {
+			$comment = $this->commentService->setResolved($commentId, true, $this->currentUserId());
+			return new JSONResponse($this->serialize($comment));
+		});
+	}
+
+	/**
+	 * Reopens a resolved thread. Idempotent, like {@see self::resolve()}.
+	 */
+	#[NoAdminRequired]
+	public function unresolve(int $commentId): JSONResponse {
+		return $this->respond(function () use ($commentId): JSONResponse {
+			$comment = $this->commentService->setResolved($commentId, false, $this->currentUserId());
+			return new JSONResponse($this->serialize($comment));
+		});
+	}
+
+	/**
 	 * @param Comment[] $comments
 	 * @return array<int, array<string, mixed>>
 	 */

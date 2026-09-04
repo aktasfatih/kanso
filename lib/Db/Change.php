@@ -74,6 +74,12 @@ class Change extends Entity {
 	public const VERB_ESTIMATE_CHANGED = 21;
 	public const VERB_TYPE_CHANGED = 22;
 
+	// Discussion-thread resolution. Distinct verbs rather than VERB_COMMENTED:
+	// reusing that would render a false "commented" in the Activity tab for an
+	// act that adds no message.
+	public const VERB_THREAD_RESOLVED = 23;
+	public const VERB_THREAD_REOPENED = 24;
+
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of
 	// ACTION_CREATE would silently drop `action` from INSERTs of create

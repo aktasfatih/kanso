@@ -32,6 +32,21 @@ class MentionService {
 	 */
 	private const MENTION_PATTERN = '/(?<![\w@])@([a-zA-Z0-9_.-]+)/';
 
+	/**
+	 * How many distinct mentions one body may act on. Each one that survives
+	 * dedup costs an uncached ACL resolution
+	 * ({@see PermissionService::getPermissions()}), so without a bound the
+	 * mention count - not the number of board members - sets the query count for
+	 * a single write. A 10,000-char comment - already at CommentService's own cap
+	 * - still holds a couple of thousand distinct `@u1`-style tokens, so this
+	 * bound is load-bearing on the comment path in its own right, not only for
+	 * the (separately length-capped) card description.
+	 * Fifty is far above any real "cc the room" body. Mentions past the bound are
+	 * ignored rather than rejected, matching how a mention of a non-member is
+	 * already silently inert.
+	 */
+	public const MAX_MENTIONS = 50;
+
 	public function __construct(
 		private PermissionService $permissionService,
 		private SubscriptionService $subscriptionService,
@@ -42,7 +57,10 @@ class MentionService {
 
 	/**
 	 * The unique candidate usernames mentioned in a raw body, in first-seen
-	 * order. Pure - no permission check, no side effects.
+	 * order, capped at {@see self::MAX_MENTIONS}. Pure - no permission check, no
+	 * side effects. The cap lives HERE, at the single extraction point, so both
+	 * mention surfaces (comment bodies and card descriptions) are bounded by one
+	 * guard.
 	 *
 	 * @return string[]
 	 */
@@ -50,7 +68,7 @@ class MentionService {
 		if (!preg_match_all(self::MENTION_PATTERN, $body, $matches)) {
 			return [];
 		}
-		return array_values(array_unique($matches[1]));
+		return array_slice(array_values(array_unique($matches[1])), 0, self::MAX_MENTIONS);
 	}
 
 	/**
@@ -63,6 +81,10 @@ class MentionService {
 	 * oracle (a bell entry + a watch row) for a card they cannot open. The
 	 * visibility check is one batched role resolution
 	 * ({@see CardVisibilityGuard::filterVisible()}), not per-mention queries.
+	 *
+	 * At most {@see self::MAX_MENTIONS} distinct mentions are acted on; the rest
+	 * are ignored, so one body can never turn into an unbounded run of ACL
+	 * lookups.
 	 */
 	public function handleMentions(Card $card, Board $board, string $body, string $actorUid): void {
 		$readable = [];

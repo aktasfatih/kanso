@@ -259,17 +259,17 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4098
+#: src/components/CardDetail.vue:4151
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4096
+#: src/components/CardDetail.vue:4149
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/components/CardDetail.vue:4094
+#: src/components/CardDetail.vue:4147
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -289,17 +289,22 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1011
+#: src/components/CardDetail.vue:1012
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
+
+#: src/components/CardDetail.vue:1949
+msgid "%n reply"
+msgid_plural "%n replies"
+msgstr[0] ""
 
 #: src/components/BoardTimelineView.vue:306
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n 张未排期的卡片"
 
-#: src/components/CardDetail.vue:275
+#: src/components/CardDetail.vue:276
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n 位关注者"
@@ -1535,7 +1540,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4274
+#: src/components/CardDetail.vue:4329
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2386,12 +2391,20 @@ msgid "Failed to rename review type."
 msgstr "重命名评审类型失败。"
 
 #: src/components/CardDetail.vue
+msgid "Failed to reopen this thread."
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Failed to reorder item."
 msgstr "重新排序清单项失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to request review."
 msgstr "请求评审失败。"
+
+#: src/components/CardDetail.vue
+msgid "Failed to resolve this thread."
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "Failed to restore card."
@@ -2768,6 +2781,10 @@ msgid "Hidden card"
 msgstr "隐藏的卡片"
 
 #: src/components/CardDetail.vue
+msgid "Hide"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Hide changes"
 msgstr "隐藏改动"
 
@@ -3137,7 +3154,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4276
+#: src/components/CardDetail.vue:4331
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4122,6 +4139,14 @@ msgid "renamed this card to {value}"
 msgstr "把这张卡片重命名为 {value}"
 
 #: src/components/CardDetail.vue
+msgid "Reopen"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "reopened a thread"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Repeat"
 msgstr "重复"
 
@@ -4163,6 +4188,18 @@ msgstr "重置"
 #: src/components/CardDetail.vue
 msgid "Resize discussion panel"
 msgstr "调整讨论面板大小"
+
+#: src/components/CardDetail.vue
+msgid "Resolve"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Resolved"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "resolved a thread"
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "Restore"
@@ -4416,6 +4453,10 @@ msgstr "通过 Kanso 以只读方式共享"
 msgid "Sharing"
 msgstr "共享"
 
+#: src/components/CardDetail.vue
+msgid "Show"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
 msgstr "显示/隐藏此快捷键浮层"
@@ -4436,7 +4477,7 @@ msgstr "显示格式工具栏"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:5837
+#: src/components/CardDetail.vue:5951
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -4448,6 +4489,10 @@ msgstr "显示完整日期范围"
 #: src/components/BoardSettingsModal.vue
 msgid "Show this board in my calendar"
 msgstr "在我的日历中显示此看板"
+
+#: src/components/CardDetail.vue
+msgid "Show this resolved thread"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Show watchers"
@@ -5073,7 +5118,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4275
+#: src/components/CardDetail.vue:4330
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5149,7 +5194,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4277
+#: src/components/CardDetail.vue:4332
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

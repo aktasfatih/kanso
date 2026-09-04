@@ -42,6 +42,30 @@ class CardService {
 	// Public: the webhook's issue intake pre-truncates external titles to it.
 	public const MAX_TITLE_LENGTH = 100;
 
+	// Cap on a card description written through update(), which is the only place
+	// a client submits NEW description TEXT (create() takes no description at
+	// all). The paths that carry an EXISTING description across - copy(),
+	// createFromTemplate(), a cross-board move(), the recurrence writer and the
+	// CSV/Deck/Trello importers - set the column directly and stay UNCAPPED on
+	// purpose, so importing a legitimately long description from another tool, or
+	// duplicating a card that predates this cap, never fails. The trade that buys:
+	// copying a grandfathered/imported over-cap card still mints new over-cap
+	// rows, so this guard bounds the description a user can TYPE, not every row in
+	// the table (the outer bound on an import stays ImportService's document-size
+	// limit).
+	//
+	// 64 KiB: 6.5x the comment cap because a card description is a document rather
+	// than a remark (~11k English words), while still bounding the two places a
+	// description is amplified - search snippets regex the full text of up to
+	// SOURCE_CAP=100 rows (SearchService::snippet()), and every `@mention` in it
+	// costs an ACL query (MentionService). The column itself is a length-less
+	// TEXT, i.e. LONGTEXT/4 GiB on MySQL, so nothing below this bounds it.
+	// Multibyte-safe (counted in characters, like the title and comment caps).
+	//
+	// Public like MAX_TITLE_LENGTH, but for a narrower reason: the unit tests pin
+	// the boundary against it rather than re-hardcoding the number.
+	public const MAX_DESCRIPTION_LENGTH = 65536;
+
 	// Max insert attempts in create(): absorbs sort-key AND board-wide board_seq
 	// unique collisions under concurrency before surfacing a retryable 409.
 	private const MAX_CREATE_ATTEMPTS = 5;
@@ -953,8 +977,8 @@ class CardService {
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board, or the review gate blocks completion while the card has unapproved reviews
-	 * @throws InvalidInputException on invalid title, duedate, cover colour or type
-	 * @throws DescriptionConflictException if the description write is based on a stale version
+	 * @throws InvalidInputException on invalid title, duedate, cover colour or type, or a description over MAX_DESCRIPTION_LENGTH
+	 * @throws DescriptionConflictException if the description write is based on a stale version - checked BEFORE the length cap, so a stale over-long write reports the conflict (the actionable error) rather than the length
 	 */
 	public function update(
 		int $id,
@@ -1058,6 +1082,21 @@ class CardService {
 		}
 		$descriptionChanged = false;
 		if ($description !== null && $description !== $card->getDescription()) {
+			// Deliberately checked only when the text actually CHANGES, not on
+			// every write that carries a description: a card stored before this
+			// cap existed stays readable, an unrelated title/date/priority save on
+			// it never trips the limit, and its author can still edit it - as long
+			// as the new text is within the cap, so an over-long row can be edited
+			// DOWN but never re-saved as-is or grown further.
+			if (mb_strlen($description) > self::MAX_DESCRIPTION_LENGTH) {
+				// The message names the number, like every other length validator
+				// here: it is surfaced verbatim by ApiErrorTrait and rendered by the
+				// card editor, and since this ships no character counter it is the
+				// only way a user learns what the limit is.
+				throw new InvalidInputException(
+					'Description must not exceed ' . self::MAX_DESCRIPTION_LENGTH . ' characters'
+				);
+			}
 			$card->setDescription($description);
 			$descriptionChanged = true;
 		}
@@ -1966,11 +2005,15 @@ class CardService {
 	 * two-character keys, restoring generous gaps so subsequent between()/after()
 	 * inserts no longer overflow.
 	 *
-	 * Concurrency: the stack's rows are read with SELECT ... FOR UPDATE inside a
-	 * single transaction (no new global lock - it matches the app's
-	 * READ-COMMITTED move posture used by {@see self::persistMove()}, just
-	 * pessimistically for this rare maintenance path), so a concurrent move
-	 * blocks on the same rows until the rebalance commits.
+	 * Concurrency: the stack's rows are read inside a single transaction, with
+	 * SELECT ... FOR UPDATE where the server and database offer it (no new global
+	 * lock - it matches the app's READ-COMMITTED move posture used by
+	 * {@see self::persistMove()}, just pessimistically for this rare maintenance
+	 * path), so a concurrent move blocks on the same rows until the rebalance
+	 * commits. SQLite and Nextcloud 32.0.0-32.0.6 have no such lock to take;
+	 * {@see \OCA\Kanso\Db\CardMapper::supportsRowLock()} documents why the
+	 * rebalance is still correct there, and why every UPDATE below is scoped to
+	 * $stackId as well as the card id.
 	 *
 	 * The (stack_id, sort_key, deleted_at) unique index forbids two live rows in
 	 * a stack sharing a key even transiently, so the rewrite runs in two passes:
@@ -2010,14 +2053,14 @@ class CardService {
 			// from every current key, so no UPDATE collides with a
 			// not-yet-rewritten row.
 			foreach ($cards as $index => $card) {
-				$this->cardMapper->updateSortKeyById($card->getId(), $tempKeys[$index]);
+				$this->cardMapper->updateSortKeyById($card->getId(), $stackId, $tempKeys[$index]);
 			}
 			// Pass 2: write the final evenly-spaced keys, order preserved. The
 			// finals are the short two-character grid and the temp band the
 			// three-character grid, so the two are disjoint and this pass never
 			// collides either.
 			foreach ($cards as $index => $card) {
-				$this->cardMapper->updateSortKeyById($card->getId(), $freshKeys[$index]);
+				$this->cardMapper->updateSortKeyById($card->getId(), $stackId, $freshKeys[$index]);
 			}
 
 			// One stack-level MOVE change row is enough for delta-sync clients to

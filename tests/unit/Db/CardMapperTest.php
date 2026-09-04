@@ -623,4 +623,93 @@ class CardMapperTest extends TestCase {
 			$this->mapper->countByStack(7, self::viewer())
 		);
 	}
+
+	// ---- the rebalance's locking read + scoped write -----------------------
+	//
+	// SCOPE NOTE, so these are not read as more than they are: IDBConnection and
+	// IQueryBuilder are mocked here, so these tests pin WHICH calls the mapper
+	// makes per database provider, not what the database does with them. Two
+	// things they structurally CANNOT prove and that are covered by the install
+	// matrix instead (dev/smoke.sh runs occ kanso:rebalance on every DB):
+	//   * that SQLite really rejects `SELECT ... FOR UPDATE` - the mock accepts it;
+	//   * the method_exists() half of the guard, which closes the NC 32.0.0-32.0.6
+	//     gap - a createMock() of IQueryBuilder is built from the vendored ocp
+	//     stub pinned to the NEWEST server, where forUpdate() always exists.
+
+	/**
+	 * Builds a mapper whose connection reports $provider, over a QB mock that also
+	 * answers forUpdate(). Returns the QB so the test can assert on it.
+	 */
+	private function mapperOnProvider(string $provider, ?IQueryBuilder &$qbOut = null): CardMapper {
+		$qb = $this->buildQb([]);
+		$qb->method('forUpdate')->willReturnSelf();
+		$qbOut = $qb;
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getDatabaseProvider')->willReturn($provider);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		return new CardMapper($db, new CardVisibilityScope());
+	}
+
+	public function testFindByStackForUpdateTakesTheRowLockOnPostgres(): void {
+		$qb = null;
+		$mapper = $this->mapperOnProvider(IDBConnection::PLATFORM_POSTGRES, $qb);
+		$qb->expects(self::once())->method('forUpdate');
+
+		self::assertSame([], $mapper->findByStackForUpdate(5));
+	}
+
+	public function testFindByStackForUpdateTakesTheRowLockOnMysql(): void {
+		$qb = null;
+		$mapper = $this->mapperOnProvider(IDBConnection::PLATFORM_MYSQL, $qb);
+		$qb->expects(self::once())->method('forUpdate');
+
+		self::assertSame([], $mapper->findByStackForUpdate(5));
+	}
+
+	/**
+	 * SQLite has no `SELECT ... FOR UPDATE`; asking for one throws
+	 * "Operation 'FOR UPDATE' is not supported by platform" and takes down
+	 * `occ kanso:rebalance`, the ONLY recovery from the sort-key wall. The read
+	 * must therefore be issued WITHOUT the lock there - see
+	 * CardMapper::supportsRowLock() for why that is still correct.
+	 */
+	public function testFindByStackForUpdateOmitsTheRowLockOnSqlite(): void {
+		$qb = null;
+		$mapper = $this->mapperOnProvider(IDBConnection::PLATFORM_SQLITE, $qb);
+		$qb->expects(self::never())->method('forUpdate');
+
+		self::assertSame([], $mapper->findByStackForUpdate(5));
+	}
+
+	/**
+	 * The rebalance's write half must match on the stack as well as the card:
+	 * without the row lock a card can be moved out of the stack between the read
+	 * and the write, and rewriting its key would then corrupt the ordering of the
+	 * stack it moved into.
+	 */
+	public function testUpdateSortKeyByIdIsScopedToTheStackNotJustTheCard(): void {
+		$columns = [];
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach (['update', 'set', 'where', 'andWhere'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('expr')->willReturn(self::spyExpr($columns));
+		$qb->method('createNamedParameter')->willReturn('?');
+		$qb->method('executeStatement')->willReturn(1);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		$mapper = new CardMapper($db, new CardVisibilityScope());
+
+		$mapper->updateSortKeyById(9, 5, 'A1');
+
+		self::assertContains('id', $columns);
+		self::assertContains(
+			'stack_id',
+			$columns,
+			'the rebalance write must be scoped to the stack it read, not the card id alone'
+		);
+	}
 }

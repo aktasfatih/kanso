@@ -82,6 +82,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:value="draftByStack[rows[vRow.index].stackId] ?? ''"
 							class="card-composer__input"
 							type="text"
+							maxlength="100"
 							:placeholder="t('kanso', 'Add card…')"
 							:disabled="isPendingByStack[rows[vRow.index].stackId] ?? false"
 							:data-stack-id="rows[vRow.index].stackId"

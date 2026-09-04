@@ -117,4 +117,40 @@ class CommentControllerTest extends TestCase {
 		$data = $this->controller->index(9)->getData();
 		self::assertSame([], $data[0]['reactions']);
 	}
+
+	public function testIndexEmitsResolvedAtSoClientsCanDeriveTheCollapse(): void {
+		$open = $this->comment(50);
+		$resolved = $this->comment(51);
+		$resolved->setResolvedAt(1700000000);
+		$this->commentService->method('listForCard')->willReturn([$open, $resolved]);
+		$this->reactionMapper->method('findByComments')->willReturn([]);
+
+		$data = $this->controller->index(9)->getData();
+		self::assertSame(0, $data[0]['resolvedAt']);
+		self::assertSame(1700000000, $data[1]['resolvedAt']);
+	}
+
+	public function testResolveDelegatesWithTrueAndReturnsTheUpdatedComment(): void {
+		$resolved = $this->comment(50);
+		$resolved->setResolvedAt(1700000000);
+		$this->commentService->expects(self::once())
+			->method('setResolved')
+			->with(50, true, 'alice')
+			->willReturn($resolved);
+
+		$response = $this->controller->resolve(50);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(1700000000, $response->getData()['resolvedAt']);
+	}
+
+	public function testUnresolveDelegatesWithFalseAndReturnsTheUpdatedComment(): void {
+		$this->commentService->expects(self::once())
+			->method('setResolved')
+			->with(50, false, 'alice')
+			->willReturn($this->comment(50));
+
+		$response = $this->controller->unresolve(50);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(0, $response->getData()['resolvedAt']);
+	}
 }

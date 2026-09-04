@@ -680,6 +680,8 @@ class ImportService {
 			$comment->setCreatedAt((int)($c['createdAt'] ?? time()));
 			$comment->setEditedAt((int)($c['editedAt'] ?? 0));
 			$comment->setDeletedAt(0);
+			// Older archives predate the field; absent means "open".
+			$comment->setResolvedAt((int)($c['resolvedAt'] ?? 0));
 
 			$oldParent = $c['parentCommentId'] ?? null;
 			$comment->setParentCommentId($oldParent !== null ? ($commentIdMap[(int)$oldParent] ?? null) : null);

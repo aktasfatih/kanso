@@ -206,6 +206,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-model="newCardTitle"
 					class="card-composer__input"
 					type="text"
+					maxlength="100"
 					:placeholder="t('kanso', 'Add card…')"
 					:disabled="isPending"
 					@paste="onComposerPaste"

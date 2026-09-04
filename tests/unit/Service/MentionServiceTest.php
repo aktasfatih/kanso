@@ -110,6 +110,48 @@ class MentionServiceTest extends TestCase {
 		self::assertSame([], $this->service->extractUsernames('no mentions here'));
 	}
 
+	// ---- mention bound ----------------------------------------------------
+	//
+	// Each distinct mention costs one uncached ACL resolution, so without a cap
+	// the mention count in a body - not the board's size - decides how many
+	// queries a single write runs. The bound lives in extractUsernames() so BOTH
+	// mention surfaces get it: a card description (separately length-capped) and
+	// a comment body, which at its own 10,000-char limit still holds ~3,300
+	// distinct `@u1` tokens.
+
+	public function testExtractCapsTheNumberOfDistinctMentions(): void {
+		$body = implode(' ', array_map(static fn (int $i): string => '@u' . $i, range(1, 5000)));
+		$extracted = $this->service->extractUsernames($body);
+
+		self::assertCount(MentionService::MAX_MENTIONS, $extracted);
+		// First-N, in document order - the ones a human actually typed first.
+		self::assertSame('u1', $extracted[0]);
+		self::assertSame('u' . MentionService::MAX_MENTIONS, $extracted[MentionService::MAX_MENTIONS - 1]);
+	}
+
+	public function testExtractCapCountsDistinctUsersNotRepeats(): void {
+		// Dedup happens before the cap, so repeating one name does not consume
+		// the budget and push a real second mention out.
+		$body = str_repeat('@alice ', 500) . '@bob';
+		self::assertSame(['alice', 'bob'], $this->service->extractUsernames($body));
+	}
+
+	public function testHandleMentionsIssuesABoundedNumberOfPermissionLookups(): void {
+		$board = $this->board();
+		$lookups = 0;
+		$this->permissionService->method('getPermissions')
+			->willReturnCallback(function (Board $b, string $uid) use (&$lookups): int {
+				$lookups++;
+				return 0; // nobody is a member: isolate the query count itself
+			});
+
+		$body = implode(' ', array_map(static fn (int $i): string => '@u' . $i, range(1, 5000)));
+		$this->service->handleMentions($this->card(), $board, $body, 'alice');
+
+		// 5,000 distinct mentions, at most MAX_MENTIONS ACL resolutions.
+		self::assertSame(MentionService::MAX_MENTIONS, $lookups);
+	}
+
 	// ---- handleMentions (authz + side effects) ---------------------------
 
 	public function testHandleMentionsSubscribesAndNotifiesReadableParticipant(): void {

@@ -277,6 +277,11 @@ return [
 		['name' => 'comment#update', 'url' => '/api/comments/{commentId}', 'verb' => 'PATCH'],
 		['name' => 'comment#destroy', 'url' => '/api/comments/{commentId}', 'verb' => 'DELETE'],
 
+		// Mark a discussion thread resolved / reopen it. Idempotent toggle on the
+		// TOP-LEVEL comment only - the thread, not the message, is the unit.
+		['name' => 'comment#resolve', 'url' => '/api/comments/{commentId}/resolve', 'verb' => 'PUT'],
+		['name' => 'comment#unresolve', 'url' => '/api/comments/{commentId}/resolve', 'verb' => 'DELETE'],
+
 		// Emoji reactions on comments (#3550): idempotent toggle. The {emoji}
 		// segment is URL-encoded by the client (a multi-byte emoji); the service
 		// validates it against a FIXED allowed set. React=PUT, unreact=DELETE.

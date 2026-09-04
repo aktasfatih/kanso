@@ -444,7 +444,7 @@ class ImportServiceTest extends TestCase {
 							'assignedAt' => 1, 'doneAt' => 2,
 						]],
 						'comments' => [
-							['id' => 200, 'parentCommentId' => null, 'author' => 'carol', 'body' => 'top'],
+							['id' => 200, 'parentCommentId' => null, 'author' => 'carol', 'body' => 'top', 'resolvedAt' => 1700000000],
 							['id' => 201, 'parentCommentId' => 200, 'author' => 'ghost', 'body' => 'reply'],
 						],
 						'reviews' => [['reviewer' => 'dave', 'state' => 'pending', 'requestedBy' => 'bob', 'reviewTypeId' => 6]],
@@ -579,6 +579,10 @@ class ImportServiceTest extends TestCase {
 		self::assertNull($capturedComments[0]->getParentCommentId());
 		self::assertSame('importer', $capturedComments[1]->getAuthor());
 		self::assertSame($capturedComments[0]->getId(), $capturedComments[1]->getParentCommentId());
+		// A resolved thread stays resolved across an export/import round-trip;
+		// an archive predating the field imports as open (the reply here).
+		self::assertSame(1700000000, $capturedComments[0]->getResolvedAt());
+		self::assertSame(0, $capturedComments[1]->getResolvedAt());
 
 		// Recur rule remapped its template card + target stack, and its unknown
 		// owner fell back to the importer.
