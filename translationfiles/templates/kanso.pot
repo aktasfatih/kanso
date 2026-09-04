@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:3835
+#: src/components/BoardSettingsModal.vue:3849
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -1526,6 +1526,10 @@ msgstr ""
 msgid "Custom fields"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom offset — it is kept exactly as it is."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr ""
@@ -2033,25 +2037,25 @@ msgstr ""
 msgid "Every"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:3815
+#: src/components/BoardSettingsModal.vue:3829
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3825
+#: src/components/BoardSettingsModal.vue:3839
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3817
+#: src/components/BoardSettingsModal.vue:3831
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3827
+#: src/components/BoardSettingsModal.vue:3841
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3655,6 +3659,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Off — do not create cards"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Offset"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

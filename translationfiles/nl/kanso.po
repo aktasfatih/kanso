@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:3835
+#: src/components/BoardSettingsModal.vue:3849
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -1527,6 +1527,10 @@ msgstr "Ctrl+Enter om te plaatsen"
 msgid "Custom fields"
 msgstr "Aangepaste velden"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom offset — it is kept exactly as it is."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Aangepast schema — bewerk het bij Bordinstellingen → Automatisering."
@@ -2034,25 +2038,25 @@ msgstr "elke"
 msgid "Every"
 msgstr "Elke"
 
-#: src/components/BoardSettingsModal.vue:3815
+#: src/components/BoardSettingsModal.vue:3829
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:3825
+#: src/components/BoardSettingsModal.vue:3839
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:3817
+#: src/components/BoardSettingsModal.vue:3831
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:3827
+#: src/components/BoardSettingsModal.vue:3841
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -3657,6 +3661,10 @@ msgstr "Getal"
 #: src/components/BoardSettingsModal.vue
 msgid "Off — do not create cards"
 msgstr "Uit — geen kaarten aanmaken"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Offset"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
