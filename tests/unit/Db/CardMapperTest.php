@@ -762,4 +762,25 @@ class CardMapperTest extends TestCase {
 			'the due-reminder candidate query must restrict board_id to the active-board set'
 		);
 	}
+
+	/**
+	 * The due-reminder candidate query must also exclude TEMPLATE cards (#10180),
+	 * like every other query in this mapper. Flagging a card as a template is a
+	 * pure flag flip ({@see \OCA\Kanso\Service\CardService::setTemplate()}), so a
+	 * dated, assigned card keeps its due date and assignees when it becomes a
+	 * blueprint - and would otherwise keep pushing bells about work nobody owes.
+	 *
+	 * Scope of this guard, stated honestly: it pins that the `is_template`
+	 * predicate is EMITTED, not that a database filters on it - the connection is
+	 * mocked, so no SQL runs here and this cannot prove the rows are actually
+	 * excluded. That half was proven end-to-end against a live instance (a
+	 * template card and a normal control card, both past due with the same
+	 * assignee; only the control one notified). This test exists so a future edit
+	 * that silently drops the predicate goes red in CI instead of shipping.
+	 */
+	public function testFindDueForReminderExcludesTemplates(): void {
+		$this->assertFiltersTemplates(
+			static fn (CardMapper $mapper): array => $mapper->findDueForReminder(1000, 500)
+		);
+	}
 }

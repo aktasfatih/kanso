@@ -31,7 +31,10 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * archived and deleted cards are excluded by the candidate query, as are cards
  * on an archived or trashed BOARD (#10127) - archiving a board is the user's
  * "I am done with this" gesture, and a reminder pushes at them out of band
- * rather than merely sitting in a list they can ignore.
+ * rather than merely sitting in a list they can ignore. Template cards are
+ * excluded on the same grounds (#10180): a template is a blueprint kept off the
+ * live board, so its due date is part of the pattern to copy, not work anybody
+ * owes yet.
  *
  * Timezone: consistent with how due dates are already stored/compared - the
  * unix instant of the stored `duedate`. "At due time" = duedate <= now; "1 day

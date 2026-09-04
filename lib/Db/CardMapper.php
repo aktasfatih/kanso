@@ -842,6 +842,15 @@ class CardMapper extends QBMapper {
 	 * is an unqualified column list, so adding a join would force requalifying
 	 * every selected column here.
 	 *
+	 * Template cards are excluded too (#10180), matching every other query in
+	 * this mapper. A template is a blueprint, not work anybody owes: it is kept
+	 * off the live board render and only copied into a real card on
+	 * instantiation. It nonetheless keeps its due date and assignees, because
+	 * {@see \OCA\Kanso\Service\CardService::setTemplate()} is a pure flag flip
+	 * that leaves the card's content untouched - so without this predicate,
+	 * flagging a dated, assigned card as a template leaves it a live reminder
+	 * candidate and its assignees get pushed a bell about work that is not real.
+	 *
 	 * A card qualifies when EITHER:
 	 *   - the at-due reminder is unsent (`due_reminder_sent = 0`) and the due
 	 *     date is at or before $now; OR
@@ -876,6 +885,7 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->createFunction('board_id IN (' . $activeBoards->getSQL() . ')'))
 			->andWhere($qb->expr()->orX(
 				// At-due reminder still owed.
