@@ -21,7 +21,9 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * replies, no deeper nesting). Reading needs READ on the card's board; posting
  * and replying need EDIT; a comment may be edited only by its author, and
  * deleted by its author or a board MANAGE-holder. Deleting a top-level comment
- * cascades a soft-delete over its replies so no reply is orphaned. Every
+ * cascades a soft-delete over its replies so no reply is orphaned. A thread can
+ * also be marked resolved (EDIT, top-level only) - a shared signal that clients
+ * render as a collapsed thread. Every
  * mutation appends a card-targeted row to the `kanso_changes` log (reusing
  * ENTITY_CARD/ACTION_UPDATE - a comment change is a card change for sync) so the
  * board ETag bumps and realtime clients refetch.
@@ -93,6 +95,7 @@ class CommentService {
 		$comment->setCreatedAt(time());
 		$comment->setEditedAt(0);
 		$comment->setDeletedAt(0);
+		$comment->setResolvedAt(0);
 		$saved = $this->commentMapper->insert($comment);
 
 		$this->notifyCard($card, $actorUid);
@@ -182,14 +185,60 @@ class CommentService {
 		$this->notifyCard($card, $actorUid);
 	}
 
-	private function notifyCard(Card $card, string $actorUid): void {
+	/**
+	 * Marks a thread resolved or reopens it. The unit is the THREAD, so only a
+	 * top-level comment carries the flag - resolving a reply is rejected, the
+	 * same way the delete cascade treats a thread as atomic.
+	 *
+	 * Any board EDIT-holder may resolve, not just the thread's author: this
+	 * hides nothing permanently and anyone may reopen it, so it sits with the
+	 * reversible, non-destructive signals (reactions) rather than with editing
+	 * someone's words. Author-only would also strand every thread whose author
+	 * has left the team.
+	 *
+	 * Idempotent: already being in the requested state writes no row and no
+	 * change-log entry.
+	 *
+	 * @throws DoesNotExistException if the comment, card or board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws InvalidInputException if the comment is a reply
+	 */
+	public function setResolved(int $commentId, bool $resolved, string $actorUid): Comment {
+		$comment = $this->loadComment($commentId);
+		$card = $this->loadCard($comment->getCardId());
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+
+		if ($comment->getParentCommentId() !== null) {
+			throw new InvalidInputException('Only a top-level comment can be resolved');
+		}
+
+		$isResolved = $comment->getResolvedAt() > 0;
+		if ($isResolved === $resolved) {
+			return $comment;
+		}
+
+		$comment->setResolvedAt($resolved ? time() : 0);
+		$saved = $this->commentMapper->update($comment);
+
+		$this->notifyCard(
+			$card,
+			$actorUid,
+			$resolved ? Change::VERB_THREAD_RESOLVED : Change::VERB_THREAD_REOPENED,
+		);
+
+		return $saved;
+	}
+
+	private function notifyCard(Card $card, string $actorUid, int $verb = Change::VERB_COMMENTED): void {
 		$this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$card->getId(),
 			Change::ACTION_UPDATE,
 			$actorUid,
-			verb: Change::VERB_COMMENTED,
+			verb: $verb,
 		);
 	}
 

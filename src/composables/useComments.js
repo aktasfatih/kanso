@@ -34,6 +34,8 @@ import {
 	deleteComment as apiDeleteComment,
 	reactToComment as apiReactToComment,
 	unreactToComment as apiUnreactToComment,
+	resolveThread as apiResolveThread,
+	unresolveThread as apiUnresolveThread,
 } from '../services/api.js'
 import { boardQueryKey } from './queryKeys.js'
 import { getCurrentUser } from '@nextcloud/auth'
@@ -373,6 +375,53 @@ export function useComments(cardId, boardId) {
 		return toggleReaction.mutateAsync({ commentId: comment.id, emoji, adding })
 	}
 
+	// ── resolveThread ───────────────────────────────────────────────────────────
+	// Mark a discussion thread resolved / reopen it. Same optimistic shape as
+	// toggleReaction: patch the ONE top-level comment's `resolvedAt` in the
+	// comments cache, roll back on error, invalidate on settle so the server's
+	// timestamp wins. The collapsed rendering is derived from `resolvedAt` in the
+	// component — nothing about collapse is cached or persisted here.
+	const resolveThread = useMutation({
+		mutationFn: ({ commentId, resolved }) =>
+			resolved ? apiResolveThread(commentId) : apiUnresolveThread(commentId),
+
+		onMutate: async ({ commentId, resolved }) => {
+			const commentsKey = getCommentsKey()
+			await queryClient.cancelQueries({ queryKey: commentsKey })
+			const previousComments = queryClient.getQueryData(commentsKey)
+			queryClient.setQueryData(commentsKey, (old) => {
+				if (!Array.isArray(old)) return old
+				return old.map((c) =>
+					c.id === commentId
+						? { ...c, resolvedAt: resolved ? Math.floor(Date.now() / 1000) : 0 }
+						: c,
+				)
+			})
+			return { previousComments }
+		},
+
+		onError: (_err, _vars, context) => {
+			if (context?.previousComments !== undefined) {
+				queryClient.setQueryData(getCommentsKey(), context.previousComments)
+			}
+		},
+
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: getCommentsKey() })
+		},
+	})
+
+	/**
+	 * Toggle the resolved state of a thread from its top-level comment.
+	 * @param {object} comment the TOP-LEVEL comment of the thread
+	 */
+	function toggleResolved(comment) {
+		return resolveThread.mutateAsync({
+			commentId: comment.id,
+			resolved: !(Number(comment.resolvedAt) > 0),
+		})
+	}
+
 	return {
 		comments,
 		addComment,
@@ -380,6 +429,8 @@ export function useComments(cardId, boardId) {
 		deleteComment,
 		toggleReaction,
 		toggleCommentReaction: toggle,
+		resolveThread,
+		toggleThreadResolved: toggleResolved,
 		currentUid,
 	}
 }

@@ -256,6 +256,10 @@ class ExportService {
 				'body' => $comment->getBody(),
 				'createdAt' => $comment->getCreatedAt(),
 				'editedAt' => $comment->getEditedAt(),
+				// Whether the thread was marked resolved. Carried so an
+				// export/import round-trip does not silently reopen every
+				// settled discussion on the board.
+				'resolvedAt' => $comment->getResolvedAt(),
 			];
 		}
 

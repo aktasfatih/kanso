@@ -33,6 +33,8 @@ use OCP\DB\Types;
  * @method void setEditedAt(int $editedAt)
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
+ * @method int getResolvedAt()
+ * @method void setResolvedAt(int $resolvedAt)
  */
 class Comment extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -45,6 +47,9 @@ class Comment extends Entity implements \JsonSerializable {
 	protected ?int $createdAt = null;
 	protected ?int $editedAt = null;
 	protected ?int $deletedAt = null;
+	// Non-zero only on a top-level comment: resolving is a thread-level act, so
+	// the service refuses to stamp it on a reply.
+	protected ?int $resolvedAt = null;
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
@@ -54,10 +59,11 @@ class Comment extends Entity implements \JsonSerializable {
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('editedAt', Types::INTEGER);
 		$this->addType('deletedAt', Types::INTEGER);
+		$this->addType('resolvedAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, cardId: ?int, parentCommentId: ?int, author: ?string, body: ?string, createdAt: int, editedAt: int}
+	 * @return array{id: int, cardId: ?int, parentCommentId: ?int, author: ?string, body: ?string, createdAt: int, editedAt: int, resolvedAt: int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -69,6 +75,9 @@ class Comment extends Entity implements \JsonSerializable {
 			'body' => $this->body,
 			'createdAt' => $this->createdAt ?? 0,
 			'editedAt' => $this->editedAt ?? 0,
+			// 0 = the thread is open. Clients derive the collapsed rendering from
+			// this alone; no collapse state is persisted anywhere.
+			'resolvedAt' => $this->resolvedAt ?? 0,
 		];
 	}
 }

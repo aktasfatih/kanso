@@ -1928,7 +1928,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:key="topComment.id"
 									:id="`comment-${topComment.id}`"
 									class="card-modal__comment-group"
-									:class="{ 'card-modal__comment-group--highlight': highlightedCommentId === topComment.id }">
+									:class="{
+										'card-modal__comment-group--highlight': highlightedCommentId === topComment.id,
+										'card-modal__comment-group--resolved': isThreadResolved(topComment),
+									}">
+									<!-- A resolved thread collapses to a single summary row: the
+									     decluttering the whole feature is for. Everything below is
+									     derived from `resolvedAt` plus the transient local peek set —
+									     no collapse state is stored anywhere. -->
+									<div v-if="isThreadCollapsed(topComment)" class="card-modal__thread-summary">
+										<button
+											type="button"
+											class="card-modal__thread-summary-toggle"
+											:aria-expanded="false"
+											:title="t('kanso', 'Show this resolved thread')"
+											@click="toggleThreadExpanded(topComment)">
+											<CheckCircleOutlineIcon :size="16" class="card-modal__thread-summary-icon" />
+											<span class="card-modal__thread-summary-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+											<span class="card-modal__thread-summary-state">{{ t('kanso', 'Resolved') }}</span>
+											<span v-if="replies.length > 0" class="card-modal__thread-summary-replies">{{ n('kanso', '%n reply', '%n replies', replies.length) }}</span>
+											<span class="card-modal__thread-summary-show">{{ t('kanso', 'Show') }}</span>
+										</button>
+										<button
+											v-if="canEdit"
+											type="button"
+											class="card-modal__comment-link-btn"
+											:disabled="resolveThread.isPending.value"
+											@click="handleToggleResolved(topComment)">
+											{{ t('kanso', 'Reopen') }}
+										</button>
+									</div>
+
+									<template v-else>
 									<div class="card-modal__comment">
 										<NcAvatar
 											:user="topComment.author"
@@ -1968,6 +1999,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													class="card-modal__comment-link-btn"
 													@click="openReplyBox(topComment, topComment)">
 													{{ t('kanso', 'Reply') }}
+												</button>
+												<!-- Resolve / Reopen — a shared signal, so any board editor may
+												     flip it, not only the thread's author. -->
+												<button
+													v-if="canEdit && editingCommentId !== topComment.id"
+													class="card-modal__comment-link-btn card-modal__comment-resolve-btn"
+													:disabled="resolveThread.isPending.value"
+													@click="handleToggleResolved(topComment)">
+													{{ isThreadResolved(topComment) ? t('kanso', 'Reopen') : t('kanso', 'Resolve') }}
+												</button>
+												<!-- Only reachable while peeking into a resolved thread. -->
+												<button
+													v-if="isThreadResolved(topComment)"
+													class="card-modal__comment-link-btn"
+													:aria-expanded="true"
+													@click="toggleThreadExpanded(topComment)">
+													{{ t('kanso', 'Hide') }}
 												</button>
 												<!-- Personal "remind me" about this comment (#3816). Any
 												     reader can set a private reminder - not gated by canEdit. -->
@@ -2155,6 +2203,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
 										</div>
 									</div>
+									</template>
 								</div>
 							</div>
 
@@ -3912,6 +3961,8 @@ const ACTIVITY_VERBS = {
 	20: () => t('kanso', 'changed the status'),
 	21: () => t('kanso', 'changed the estimate'),
 	22: () => t('kanso', 'changed the card type'),
+	23: () => t('kanso', 'resolved a thread'),
+	24: () => t('kanso', 'reopened a thread'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
@@ -4109,6 +4160,8 @@ const {
 	deleteComment,
 	toggleReaction,
 	toggleCommentReaction,
+	resolveThread,
+	toggleThreadResolved,
 } = useComments(computed(() => props.cardId), boardId)
 
 // Emoji reactions on comments (#3550). The fixed picker set + which comment has
@@ -4352,6 +4405,53 @@ async function handleVisibilityChange(visibility) {
 const flatComments = computed(() => commentsQuery.data.value ?? [])
 const commentThread = computed(() => buildCommentTree(flatComments.value))
 
+// ── Resolved threads ─────────────────────────────────────────────────────────
+// A resolved thread (server-side `resolvedAt > 0` on its top-level comment)
+// renders collapsed to a one-line summary. `expandedThreads` is a peek: a user
+// can open a resolved thread to read it without reopening it for everyone.
+// Deliberately TRANSIENT — component-local, never written to localStorage and
+// never sent to the server, so it dies with the modal. The shared, persisted
+// fact is `resolvedAt`; how one reader is currently looking at it is not.
+const expandedThreads = ref(new Set())
+
+function isThreadResolved(topComment) {
+	return Number(topComment?.resolvedAt ?? 0) > 0
+}
+
+function isThreadCollapsed(topComment) {
+	return isThreadResolved(topComment) && !expandedThreads.value.has(topComment.id)
+}
+
+function toggleThreadExpanded(topComment) {
+	const next = new Set(expandedThreads.value)
+	if (next.has(topComment.id)) {
+		next.delete(topComment.id)
+	} else {
+		next.add(topComment.id)
+	}
+	expandedThreads.value = next
+}
+
+async function handleToggleResolved(topComment) {
+	commentError.value = ''
+	const wasResolved = isThreadResolved(topComment)
+	try {
+		await toggleThreadResolved(topComment)
+		// Reopening drops the manual peek: the thread is open on its own merit
+		// now, so a stale expand entry would silently outlive what needed it.
+		if (wasResolved && expandedThreads.value.has(topComment.id)) {
+			const next = new Set(expandedThreads.value)
+			next.delete(topComment.id)
+			expandedThreads.value = next
+		}
+	} catch (err) {
+		commentError.value = err?.response?.data?.error
+			|| (wasResolved
+				? t('kanso', 'Failed to reopen this thread.')
+				: t('kanso', 'Failed to resolve this thread.'))
+	}
+}
+
 // ── Scroll-to-comment deep links (#3870) ─────────────────────────────────────
 // A reminder notification links to the card with a `#comment-<id>` fragment (see
 // Notifier::cardLink). The fragment-free deep-link boot (main.js) stashes that id
@@ -4385,6 +4485,18 @@ async function scrollToTargetComment() {
 	if (!flatComments.value.some((c) => Number(c.id) === id)) return
 	// Ensure the discussion tab (not activity) is showing so the node is rendered.
 	discussionTab.value = 'discussion'
+	// A RESOLVED thread renders collapsed, and a collapsed thread does not render
+	// its body or its replies at all — so a mention or reminder link pointing into
+	// one would scroll to a node that never appears. Force the thread open for
+	// this visit. Transient, exactly like the discussion-pane reveal below: it
+	// expands the view, it does NOT reopen the thread for anyone.
+	const target = flatComments.value.find((c) => Number(c.id) === id)
+	const rootId = Number(target?.parentCommentId ?? 0) || Number(target?.id ?? 0)
+	if (rootId && !expandedThreads.value.has(rootId)) {
+		const next = new Set(expandedThreads.value)
+		next.add(rootId)
+		expandedThreads.value = next
+	}
 	// The v-for nodes are patched asynchronously after the query data lands, so a
 	// single nextTick can run before the DOM node exists; poll a few frames for it
 	// before giving up rather than silently no-op'ing on a slow first paint.
@@ -8117,6 +8229,57 @@ body.theme--dark .card-modal,
 .card-modal__comment--highlight {
 	animation: kanso-comment-flash 3.6s ease-out 1;
 	border-radius: 8px;
+}
+/* A resolved thread recedes: muted chrome, and when collapsed it is a single
+   clickable summary row instead of the full comment + replies. */
+.card-modal__comment-group--resolved {
+	border-color: var(--color-border-dark, var(--color-border));
+	background: var(--color-background-hover);
+}
+.card-modal__thread-summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	min-width: 0;
+}
+.card-modal__thread-summary-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 1;
+	min-width: 0;
+	background: transparent;
+	border: none;
+	padding: 2px 0;
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	text-align: start;
+}
+.card-modal__thread-summary-toggle:hover,
+.card-modal__thread-summary-toggle:focus-visible {
+	color: var(--color-main-text);
+}
+.card-modal__thread-summary-icon {
+	flex-shrink: 0;
+	color: var(--color-success, var(--color-primary-element));
+}
+.card-modal__thread-summary-author {
+	font-weight: 600;
+	color: var(--color-main-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__thread-summary-state,
+.card-modal__thread-summary-replies {
+	flex-shrink: 0;
+}
+.card-modal__thread-summary-show {
+	margin-inline-start: auto;
+	flex-shrink: 0;
+	text-decoration: underline;
 }
 @keyframes kanso-comment-flash {
 	0% {

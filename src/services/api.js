@@ -283,6 +283,14 @@ export const reactToComment = (commentId, emoji) =>
 export const unreactToComment = (commentId, emoji) =>
 	axios.delete(url(`/api/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`)).then((r) => r.data)
 
+// Thread resolution — idempotent, top-level comments only. `commentId` is the
+// thread's root comment; the server rejects a reply.
+export const resolveThread = (commentId) =>
+	axios.put(url(`/api/comments/${commentId}/resolve`)).then((r) => r.data)
+
+export const unresolveThread = (commentId) =>
+	axios.delete(url(`/api/comments/${commentId}/resolve`)).then((r) => r.data)
+
 // Subscriptions (card watchers)
 export const subscribeCard = (cardId) =>
 	axios.put(url(`/api/cards/${cardId}/subscription`)).then((r) => r.data)

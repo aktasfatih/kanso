@@ -182,6 +182,7 @@ class ExportServiceTest extends TestCase {
 		$comment->setBody('looks good');
 		$comment->setCreatedAt(520);
 		$comment->setEditedAt(0);
+		$comment->setResolvedAt(1700000000);
 		$this->commentMapper->method('findByCard')->with(41)->willReturn([$comment]);
 
 		$review = new CardReview();
@@ -270,6 +271,8 @@ class ExportServiceTest extends TestCase {
 		);
 		self::assertSame('looks good', $card['comments'][0]['body']);
 		self::assertSame('carol', $card['comments'][0]['author']);
+		// Without this the importer reopens every settled thread on the board.
+		self::assertSame(1700000000, $card['comments'][0]['resolvedAt']);
 		self::assertSame('dave', $card['reviews'][0]['reviewer']);
 		self::assertSame(31, $card['reviews'][0]['reviewTypeId']);
 

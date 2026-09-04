@@ -89,6 +89,7 @@ class CommentServiceTest extends TestCase {
 		$comment->setCreatedAt(1000);
 		$comment->setEditedAt(0);
 		$comment->setDeletedAt(0);
+		$comment->setResolvedAt(0);
 		return $comment;
 	}
 
@@ -329,5 +330,130 @@ class CommentServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->deleteComment(50, 'carol');
+	}
+
+	// ---- setResolved ------------------------------------------------------
+
+	public function testResolveStampsResolvedAtAndWritesThreadResolvedChangeRow(): void {
+		$comment = $this->comment(50, 9, null, 'bob');
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->commentMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Comment $c): Comment {
+				self::assertGreaterThan(0, $c->getResolvedAt());
+				return $c;
+			});
+		// A distinct verb, NOT VERB_COMMENTED - resolving adds no message and must
+		// not render as "commented" in the activity feed.
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'carol', true, Change::VERB_THREAD_RESOLVED)
+			->willReturn(new Change());
+
+		$saved = $this->service->setResolved(50, true, 'carol');
+		self::assertGreaterThan(0, $saved->getResolvedAt());
+	}
+
+	public function testUnresolveClearsResolvedAtAndWritesThreadReopenedChangeRow(): void {
+		$comment = $this->comment(50, 9, null, 'bob');
+		$comment->setResolvedAt(1700000000);
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->commentMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Comment $c): Comment {
+				self::assertSame(0, $c->getResolvedAt());
+				return $c;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'carol', true, Change::VERB_THREAD_REOPENED)
+			->willReturn(new Change());
+
+		$this->service->setResolved(50, false, 'carol');
+	}
+
+	public function testResolveRejectsAReply(): void {
+		// The THREAD is the unit (like the delete cascade); a reply has no
+		// coherent resolved state of its own.
+		$reply = $this->comment(51, 9, 50, 'bob');
+		$this->commentMapper->method('find')->with(51)->willReturn($reply);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->setResolved(51, true, 'carol');
+	}
+
+	public function testResolvingAnAlreadyResolvedThreadIsANoOp(): void {
+		$comment = $this->comment(50, 9, null, 'bob');
+		$comment->setResolvedAt(1700000000);
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Idempotent: no write, and crucially NO change row - a repeated PUT must
+		// not churn the board ETag or spam the activity feed.
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$saved = $this->service->setResolved(50, true, 'carol');
+		self::assertSame(1700000000, $saved->getResolvedAt());
+	}
+
+	public function testUnresolvingAnOpenThreadIsANoOp(): void {
+		$comment = $this->comment(50, 9, null, 'bob');
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->service->setResolved(50, false, 'carol');
+	}
+
+	public function testResolveAssertsActorEditPermission(): void {
+		$comment = $this->comment(50, 9, null, 'bob');
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->commentMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setResolved(50, true, 'mallory');
+	}
+
+	public function testResolveOnHiddenCardReadsAsNotFound(): void {
+		// Mirrors addComment (#3743): a card the actor cannot see fails exactly
+		// like a missing id, never a 403 existence oracle.
+		$comment = $this->comment(50, 9, null, 'bob');
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('hidden'));
+		$this->commentMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->setResolved(50, true, 'bob');
+	}
+
+	public function testResolveRejectsDeletedComment(): void {
+		$comment = $this->comment(50, 9, null, 'bob');
+		$comment->setDeletedAt(1234);
+		$this->commentMapper->method('find')->with(50)->willReturn($comment);
+		$this->commentMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->setResolved(50, true, 'bob');
 	}
 }

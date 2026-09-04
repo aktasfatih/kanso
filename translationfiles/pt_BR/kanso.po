@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n linha de dados detectada"
 msgstr[1] "%n linhas de dados detectadas"
 
-#: src/components/CardDetail.vue:4100
+#: src/components/CardDetail.vue:4151
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "há %n dia"
 msgstr[1] "há %n dias"
 
-#: src/components/CardDetail.vue:4098
+#: src/components/CardDetail.vue:4149
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
 msgstr[1] "há %n horas"
 
-#: src/components/CardDetail.vue:4096
+#: src/components/CardDetail.vue:4147
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "há %n minuto"
@@ -303,6 +303,12 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projeto"
 msgstr[1] "%n projetos"
+
+#: src/components/CardDetail.vue:1949
+msgid "%n reply"
+msgid_plural "%n replies"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardTimelineView.vue:306
 msgid "%n unscheduled card"
@@ -1547,7 +1553,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4276
+#: src/components/CardDetail.vue:4329
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dia"
@@ -2403,12 +2409,20 @@ msgid "Failed to rename review type."
 msgstr "Não foi possível renomear o tipo de revisão."
 
 #: src/components/CardDetail.vue
+msgid "Failed to reopen this thread."
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Failed to reorder item."
 msgstr "Não foi possível reordenar o item."
 
 #: src/components/CardDetail.vue
 msgid "Failed to request review."
 msgstr "Não foi possível solicitar a revisão."
+
+#: src/components/CardDetail.vue
+msgid "Failed to resolve this thread."
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "Failed to restore card."
@@ -2785,6 +2799,10 @@ msgid "Hidden card"
 msgstr "Cartão oculto"
 
 #: src/components/CardDetail.vue
+msgid "Hide"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Hide changes"
 msgstr "Ocultar alterações"
 
@@ -3154,7 +3172,7 @@ msgid "Mon"
 msgstr "Seg"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4278
+#: src/components/CardDetail.vue:4331
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mês"
@@ -4140,6 +4158,14 @@ msgid "renamed this card to {value}"
 msgstr "renomeou este cartão para {value}"
 
 #: src/components/CardDetail.vue
+msgid "Reopen"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "reopened a thread"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "Repeat"
 msgstr "Repetir"
 
@@ -4181,6 +4207,18 @@ msgstr "Reiniciar"
 #: src/components/CardDetail.vue
 msgid "Resize discussion panel"
 msgstr "Redimensionar o painel de discussão"
+
+#: src/components/CardDetail.vue
+msgid "Resolve"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Resolved"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "resolved a thread"
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "Restore"
@@ -4434,6 +4472,10 @@ msgstr "Compartilhado somente para leitura pelo Kanso"
 msgid "Sharing"
 msgstr "Compartilhamento"
 
+#: src/components/CardDetail.vue
+msgid "Show"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
 msgstr "Mostrar / ocultar esta lista de atalhos"
@@ -4454,7 +4496,7 @@ msgstr "Mostrar a barra de formatação"
 msgid "Show the discussion panel"
 msgstr "Mostrar o painel de discussão"
 
-#: src/components/CardDetail.vue:5839
+#: src/components/CardDetail.vue:5951
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar o painel de discussão (%n comentário)"
@@ -4467,6 +4509,10 @@ msgstr "Mostrar todo o intervalo de datas"
 #: src/components/BoardSettingsModal.vue
 msgid "Show this board in my calendar"
 msgstr "Mostrar este quadro no meu calendário"
+
+#: src/components/CardDetail.vue
+msgid "Show this resolved thread"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Show watchers"
@@ -5092,7 +5138,7 @@ msgid "Wed"
 msgstr "Qua"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4277
+#: src/components/CardDetail.vue:4330
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -5169,7 +5215,7 @@ msgid "wrote"
 msgstr "escreveu"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4279
+#: src/components/CardDetail.vue:4332
 msgid "year"
 msgid_plural "years"
 msgstr[0] "ano"
