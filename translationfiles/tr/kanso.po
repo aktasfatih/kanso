@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4048
+#: src/components/BoardSettingsModal.vue:4062
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -1539,6 +1539,10 @@ msgstr "Göndermek için Ctrl+Enter"
 msgid "Custom fields"
 msgstr "Özel alanlar"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom offset — it is kept exactly as it is."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Özel zamanlama — Pano ayarları → Otomasyon bölümünden düzenle."
@@ -2046,25 +2050,25 @@ msgstr "her"
 msgid "Every"
 msgstr "Her"
 
-#: src/components/BoardSettingsModal.vue:4028
+#: src/components/BoardSettingsModal.vue:4042
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
 msgstr[1] "Her %n günde bir"
 
-#: src/components/BoardSettingsModal.vue:4038
+#: src/components/BoardSettingsModal.vue:4052
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4030
+#: src/components/BoardSettingsModal.vue:4044
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4040
+#: src/components/BoardSettingsModal.vue:4054
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3680,6 +3684,10 @@ msgstr "Sayı"
 #: src/components/BoardSettingsModal.vue
 msgid "Off — do not create cards"
 msgstr "Kapalı — kart oluşturma"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Offset"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
