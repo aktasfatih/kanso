@@ -272,7 +272,18 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 	<types>
 		<dav/>
 	</types>
+	<!-- An app is listed on the browse page of EVERY category it declares, so
+	     these are the store pages Kanso can be found on. Valid slugs are fixed
+	     by the App Store: the enumeration in scripts/schema/info.xsd (the
+	     vendored copy of the store's own schema) and the live category list at
+	     https://apps.nextcloud.com/api/v1/categories.json agree on the same 15,
+	     and an unknown slug is rejected at release upload. Kept deliberately
+	     short - an over-categorised app reads as spam. `tools` is valid but
+	     holds small single-purpose utilities, not full apps with their own
+	     navigation entry and data model; `workflow` (Flow) is for apps that
+	     register Flow operations/checks, which Kanso does not. -->
 	<category>organization</category>
+	<category>office</category>
 	<website>https://github.com/aktasfatih/kanso</website>
 	<bugs>https://github.com/aktasfatih/kanso/issues</bugs>
 	<repository type="git">https://github.com/aktasfatih/kanso.git</repository>
