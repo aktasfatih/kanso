@@ -1920,19 +1920,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</select>
 						</div>
 
-						<!-- Offset days (only when policy = offset after) -->
-						<div v-if="newRecurDuedatePolicy === 1" class="automation__form-row">
-							<label class="automation__form-label" :for="`recur-due-offset-${boardId}`">
-								{{ t('kanso', 'Offset (days)') }}
-							</label>
-							<input
-								:id="`recur-due-offset-${boardId}`"
-								v-model.number="newRecurDuedateOffsetDays"
-								type="number"
-								min="0"
-								step="1"
-								class="workflow__wip-input" />
-						</div>
+						<!-- Offset (only when policy = offset after) -->
+						<template v-if="newRecurDuedatePolicy === 1">
+							<!-- An offset that isn't a whole number of days (set via the
+							     API/MCP) can't be represented by the days control, so it is
+							     shown read-only and kept exactly as stored (#10130). -->
+							<div v-if="isEditingCustomOffset" class="automation__form-row automation__form-row--top">
+								<label class="automation__form-label">{{ t('kanso', 'Offset') }}</label>
+								<div class="automation__custom-schedule">
+									<code class="automation__custom-rrule">{{ editingRecurOffsetLabel }}</code>
+									<span class="automation__custom-note">
+										{{ t('kanso', 'Custom offset — it is kept exactly as it is.') }}
+									</span>
+								</div>
+							</div>
+							<div v-else class="automation__form-row">
+								<label class="automation__form-label" :for="`recur-due-offset-${boardId}`">
+									{{ t('kanso', 'Offset (days)') }}
+								</label>
+								<input
+									:id="`recur-due-offset-${boardId}`"
+									v-model.number="newRecurDuedateOffsetDays"
+									type="number"
+									min="0"
+									step="1"
+									class="workflow__wip-input" />
+							</div>
+						</template>
 
 						<!-- Skip while open (clone mode only) -->
 						<div v-if="newRecurMode === 0" class="automation__form-row">
@@ -3965,6 +3979,29 @@ const isEditingRecurRule = computed(() => editingRecurRuleId.value !== null)
 const editingRecurRrule = ref('')
 const isEditingCustomSchedule = ref(false)
 
+// Same shape one field down (#10130): the API and MCP accept an arbitrary
+// due-date offset in seconds, but this editor only models whole days. A stored
+// offset that is not a whole number of days (e.g. a 1-hour lead time) would be
+// rounded away by the days control, so it is shown read-only and left out of the
+// save — the server then keeps the exact stored seconds.
+const editingRecurDuedateOffsetSeconds = ref(0)
+const isEditingCustomOffset = ref(false)
+
+// Locale-neutral duration rendering of an offset the days control can't model,
+// e.g. 5400 → "1h 30m". The translatable explanation sits in the note beside it.
+const editingRecurOffsetLabel = computed(() => {
+	let s = Math.max(0, Number(editingRecurDuedateOffsetSeconds.value) || 0)
+	const d = Math.floor(s / 86400); s -= d * 86400
+	const h = Math.floor(s / 3600); s -= h * 3600
+	const m = Math.floor(s / 60); s -= m * 60
+	const parts = []
+	if (d) parts.push(`${d}d`)
+	if (h) parts.push(`${h}h`)
+	if (m) parts.push(`${m}m`)
+	if (s) parts.push(`${s}s`)
+	return parts.join(' ') || '0s'
+})
+
 /** Close the settings modal and open the rule's template card (to edit it). */
 function openRecurTemplateCard(rule) {
 	emit('close')
@@ -3979,7 +4016,13 @@ function startEditRecurRule(rule) {
 	newRecurMode.value = rule.mode
 	newRecurSkipWhileOpen.value = rule.skipWhileOpen ?? false
 	newRecurDuedatePolicy.value = rule.duedatePolicy ?? 0
-	newRecurDuedateOffsetDays.value = rule.duedateOffsetSeconds ? Math.round(rule.duedateOffsetSeconds / 86400) : 1
+	// A sub-day / non-day-multiple offset can't be represented by the days control,
+	// so flag it as custom and keep the raw seconds for the read-only display; the
+	// days input is only trusted (and re-sent) for whole-day offsets (#10130).
+	const offsetSeconds = rule.duedateOffsetSeconds ?? 0
+	editingRecurDuedateOffsetSeconds.value = offsetSeconds
+	isEditingCustomOffset.value = offsetSeconds > 0 && offsetSeconds % 86400 !== 0
+	newRecurDuedateOffsetDays.value = offsetSeconds ? Math.round(offsetSeconds / 86400) : 1
 	// Parse rrule back into form fields. A schedule these controls cannot
 	// represent is shown read-only instead — re-serializing it from the five
 	// fields below would silently drop the parts we never parsed.
@@ -4012,6 +4055,8 @@ function cancelEditRecurRule() {
 	newRecurSkipWhileOpen.value = false
 	editingRecurRrule.value = ''
 	isEditingCustomSchedule.value = false
+	editingRecurDuedateOffsetSeconds.value = 0
+	isEditingCustomOffset.value = false
 	createRecurRuleError.value = ''
 }
 
@@ -4057,7 +4102,12 @@ async function submitCreateRecurRule() {
 				data.rrule = rrule
 			}
 		}
-		if (newRecurDuedatePolicy.value === 1) {
+		// Only re-send the offset when the days control actually owns it. A stored
+		// offset that is not a whole number of days is left out entirely, so the
+		// server keeps the exact seconds instead of the days control rounding it to
+		// zero (or to the wrong day) on an unrelated save (#10130). update() treats
+		// an absent offset as "leave unchanged".
+		if (newRecurDuedatePolicy.value === 1 && !isEditingCustomOffset.value) {
 			data.duedateOffsetSeconds = newRecurDuedateOffsetDays.value * 86400
 		}
 		if (newRecurMode.value === 0) {

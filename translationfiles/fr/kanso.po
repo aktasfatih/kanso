@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— aucun —"
 
-#: src/components/BoardSettingsModal.vue:3835
+#: src/components/BoardSettingsModal.vue:3849
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n fois"
@@ -1527,6 +1527,10 @@ msgstr "Ctrl+Entrée pour publier"
 msgid "Custom fields"
 msgstr "Champs personnalisés"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom offset — it is kept exactly as it is."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Rythme personnalisé — modifiable dans Paramètres du tableau → Automatisation."
@@ -2034,25 +2038,25 @@ msgstr "tous les"
 msgid "Every"
 msgstr "Tous les"
 
-#: src/components/BoardSettingsModal.vue:3815
+#: src/components/BoardSettingsModal.vue:3829
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Tous les jours"
 msgstr[1] "Tous les %n jours"
 
-#: src/components/BoardSettingsModal.vue:3825
+#: src/components/BoardSettingsModal.vue:3839
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Tous les mois"
 msgstr[1] "Tous les %n mois"
 
-#: src/components/BoardSettingsModal.vue:3817
+#: src/components/BoardSettingsModal.vue:3831
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Toutes les semaines"
 msgstr[1] "Toutes les %n semaines"
 
-#: src/components/BoardSettingsModal.vue:3827
+#: src/components/BoardSettingsModal.vue:3841
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Tous les ans"
@@ -3657,6 +3661,10 @@ msgstr "Nombre"
 #: src/components/BoardSettingsModal.vue
 msgid "Off — do not create cards"
 msgstr "Désactivé — ne pas créer de cartes"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Offset"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
