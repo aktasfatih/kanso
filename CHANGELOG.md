@@ -11,6 +11,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.24.0](https://github.com/aktasfatih/kanso/compare/v0.23.0...v0.24.0) (2026-09-04)
+
+
+### Bug Fixes
+
+* **appstore:** list Kanso under Office & text as well as Organization ([90bbb16](https://github.com/aktasfatih/kanso/commit/90bbb16b5b56946985216bdec3e666e15ecd1cf4))
+* **cards:** cap how long a card description can be and how many mentions one save notifies ([c7a234f](https://github.com/aktasfatih/kanso/commit/c7a234f467f3ff0606858475b68e6212e299a5b0))
+* **cards:** stop card title fields accepting more text than a title can hold ([2f772c9](https://github.com/aktasfatih/kanso/commit/2f772c939ebc9a1d4bb2ebc02213ca14bc4d72e9))
+* **rebalance:** repair sort-key rebalance on SQLite and on Nextcloud 32.0.0-32.0.6 ([69cdd60](https://github.com/aktasfatih/kanso/commit/69cdd608f6053ec67129e8b49c2abb15cec17242)), closes [#10149](https://github.com/aktasfatih/kanso/issues/10149)
+
+
+### Features
+
+* **comments:** mark a discussion thread resolved to collapse it under the card ([2d6bbc1](https://github.com/aktasfatih/kanso/commit/2d6bbc166c11859dc5d025270bfb847cb7b83794))
+
 # [0.23.0](https://github.com/aktasfatih/kanso/compare/v0.22.1...v0.23.0) (2026-09-03)
 
 
