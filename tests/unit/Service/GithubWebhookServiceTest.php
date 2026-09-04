@@ -309,6 +309,56 @@ class GithubWebhookServiceTest extends TestCase {
 		self::assertFalse($this->service->handleWebhook(1, $this->sign($body), $body)['moved']);
 	}
 
+	// ---- diagnostic reason -------------------------------------------------
+
+	/**
+	 * A silent `handled: false` is undiagnosable in the forge's delivery log, so
+	 * every business-level miss says why. These carry no board content - they
+	 * describe the request - which is what keeps them inside the egress rule.
+	 */
+	public function testPingDeliveryReportsUnsupportedEvent(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$body = json_encode(['zen' => 'Keep it logically awesome.']);
+
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertFalse($result['handled']);
+		self::assertSame(GithubWebhookService::REASON_UNSUPPORTED_EVENT, $result['reason']);
+	}
+
+	public function testUnmatchedBranchReportsNoCardMatch(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$body = $this->prBody('opened', 'feature/unrelated');
+
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertFalse($result['handled']);
+		self::assertSame(GithubWebhookService::REASON_NO_CARD_MATCH, $result['reason']);
+	}
+
+	public function testMissingRoleStackReportsNoTargetStack(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$body = $this->prBody('opened', 'kanso-9-x');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertTrue($result['handled']);
+		self::assertFalse($result['moved']);
+		self::assertSame(GithubWebhookService::REASON_NO_TARGET_STACK, $result['reason']);
+	}
+
+	public function testIntakeOffReportsIntakeOff(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+
+		$body = json_encode([
+			'action' => 'opened',
+			'issue' => ['html_url' => 'https://github.com/octo/app/issues/7', 'state' => 'open', 'title' => 'x'],
+		]);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertFalse($result['handled']);
+		self::assertSame(GithubWebhookService::REASON_INTAKE_OFF, $result['reason']);
+	}
+
 	public function testNoTargetRoleStackDegradesToLinkOnly(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
