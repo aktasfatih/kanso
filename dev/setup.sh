@@ -11,6 +11,10 @@
 #   KANSO_SKIP_OPTIONAL_APPS=1
 #               don't side-load the optional apps two e2e specs need (deck,
 #               contacts) — see install-optional-apps.sh
+#   KANSO_APP_SRC
+#               which app tree to mount as custom_apps/kanso, relative to dev/
+#               (default `..`, this checkout). Only upgrade-check.sh sets it —
+#               see docker-compose.yml.
 #
 # Examples:
 #   ./setup.sh                                  # NC 34 + postgres (default)
