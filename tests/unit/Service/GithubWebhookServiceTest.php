@@ -24,6 +24,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\IURLGenerator;
 use OCP\Security\ISecureRandom;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -207,6 +208,84 @@ class GithubWebhookServiceTest extends TestCase {
 		self::assertTrue($result['handled']);
 		self::assertTrue($result['moved']);
 		self::assertSame(9, $result['cardId']);
+	}
+
+	/**
+	 * The merge delivery is authoritative: the PR link's state must be stamped
+	 * MERGED from the payload itself, with no read-time poll involved. Before
+	 * this, addLink() only polled on INSERT, so the second delivery for a PR
+	 * (opened -> merged) left the chip on whatever the last poll had seen.
+	 */
+	public function testMergedPrCachesLinkStateFromThePayload(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$link = new CardLink();
+		$link->setCardId(9);
+		$link->setUrl('https://github.com/octo/app/pull/3');
+		$link->setKind(CardLink::KIND_PR);
+		$link->setState(CardLink::STATE_OPEN);
+		$this->cardLinkService->method('addLink')->willReturn($link);
+
+		$this->cardLinkMapper->expects(self::once())->method('update')
+			->willReturnCallback(function (CardLink $l): CardLink {
+				self::assertSame(CardLink::STATE_MERGED, $l->getState());
+				self::assertSame('Fix the thing', $l->getTitle());
+				self::assertGreaterThan(0, $l->getLastPolled());
+				return $l;
+			});
+
+		$body = json_encode([
+			'action' => 'closed',
+			'pull_request' => [
+				'head' => ['ref' => 'kanso-9-fix'],
+				'html_url' => 'https://github.com/octo/app/pull/3',
+				'title' => 'Fix the thing',
+				'state' => 'closed',
+				'merged' => true,
+			],
+		]);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/**
+	 * A merge reaches us in three spellings across forge generations - the
+	 * `merged` boolean, a non-empty `merged_at`, or a `merged` action. All three
+	 * must read as MERGED, or a merge is indistinguishable from a plain close
+	 * (both report `state: closed`).
+	 *
+	 * @param array<string, mixed> $extra
+	 */
+	#[DataProvider('mergeSpellingProvider')]
+	public function testEveryMergeSpellingMovesToDone(string $action, array $extra): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(5, Stack::ROLE_DONE));
+		$this->cardService->expects(self::once())->method('move')
+			->with(9, 5, null, 'alice')->willReturn($this->card(9, 1));
+
+		$body = json_encode([
+			'action' => $action,
+			'pull_request' => array_merge([
+				'head' => ['ref' => 'kanso-9-fix'],
+				'html_url' => 'https://github.com/octo/app/pull/3',
+				'state' => 'closed',
+			], $extra),
+		]);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['moved']);
+	}
+
+	/**
+	 * @return array<string, array{0: string, 1: array<string, mixed>}>
+	 */
+	public static function mergeSpellingProvider(): array {
+		return [
+			'merged boolean' => ['closed', ['merged' => true]],
+			'merged_at timestamp' => ['closed', ['merged_at' => '2026-09-04T10:00:00Z']],
+			'merged action' => ['merged', []],
+		];
 	}
 
 	public function testOpenedPrMovesCardToReviewStack(): void {
