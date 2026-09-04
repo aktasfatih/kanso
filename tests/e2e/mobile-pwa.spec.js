@@ -152,6 +152,27 @@ test('has an installable web app manifest', async ({ page }) => {
 	}
 })
 
+/**
+ * Reload the page (up to `attempts` times) until the service worker controls it.
+ *
+ * The worker registers on `load`, so the FIRST document of a context is never
+ * controlled — only a subsequent full load is, or the existing one once
+ * activate's clients.claim() reaches it. Both are asynchronous, hence the wait
+ * after each reload instead of a single instantaneous read.
+ */
+async function waitForController(page, attempts = 3) {
+	for (let i = 0; i < attempts; i++) {
+		await page.reload({ waitUntil: 'load' })
+		const got = await page.waitForFunction(
+			() => !!navigator.serviceWorker.controller,
+			null,
+			{ timeout: 10_000 },
+		).then(() => true).catch(() => false)
+		if (got) return true
+	}
+	return false
+}
+
 test('serves the service worker with app scope and registers it', async ({ page, browserName }) => {
 	// The worker must carry Service-Worker-Allowed so its scope can cover the app.
 	const res = await page.request.get(`${BASE}/index.php/apps/kanso/sw.js`)
@@ -205,11 +226,15 @@ test('serves the service worker with app scope and registers it', async ({ page,
 		}, null, { timeout: 20_000 }).then(() => true).catch(() => false)
 		expect(active).toBe(true)
 
-		let controlled = false
-		for (let i = 0; i < 3 && !controlled; i++) {
-			await page.reload({ waitUntil: 'load' })
-			controlled = await page.evaluate(() => !!navigator.serviceWorker.controller)
-		}
+		// Control arrives ASYNCHRONOUSLY — either the reloaded document is created
+		// under the worker, or activate's clients.claim() reaches it a moment
+		// later — so sample it with a bounded WAIT rather than once per reload.
+		// Reading `controller` the instant `load` fires gives claim() zero grace,
+		// and on a loaded runner that is enough to miss it on all three reloads
+		// (run 33915911344 failed here twice, then passed unchanged on retry #2).
+		// This only removes an artificial deadline; a worker that never controls
+		// still fails, 10s later.
+		const controlled = await waitForController(page, 3)
 		expect(controlled).toBe(true)
 
 		// A fetch routed THROUGH the controlled worker must return an HTTP status,
@@ -259,11 +284,7 @@ test('the service worker never caches API responses', async ({ page, browserName
 
 	// The worker registers on `load`, so the FIRST document is never controlled —
 	// only a subsequent full load is. (A hash change is not a load, hence reload.)
-	let controlled = false
-	for (let i = 0; i < 3 && !controlled; i++) {
-		await page.reload({ waitUntil: 'load' })
-		controlled = await page.evaluate(() => !!navigator.serviceWorker.controller)
-	}
+	const controlled = await waitForController(page, 3)
 	expect(controlled).toBe(true)
 
 	// Open the board on this CONTROLLED document (hash route — same document, so
@@ -456,6 +477,58 @@ test.describe('the description editor on a phone', () => {
 		}, anchorSel)
 	}
 
+	/**
+	 * Resolve once the scroll container around `anchorSel` has genuinely come to
+	 * rest: unchanged for `quietMs` AND across at least `minSamples` animation
+	 * frames.
+	 *
+	 * Both conditions are load-bearing. Sampling from the test side with
+	 * expect.poll cannot tell "has come to rest" from "has not started moving
+	 * yet" — two round-trips ~100ms apart both read the pre-scroll value and the
+	 * poll declares victory, which is exactly how CI measured this editor before
+	 * the app had scrolled it (run 33915911344: editorBottom 793.625, i.e. the
+	 * scroller still at ProseMirror's own 12px focus nudge). And the frame count
+	 * is what stops a main thread blocked for longer than quietMs — Tiptap
+	 * construction under a loaded runner does exactly that — from faking
+	 * quiescence purely by producing no samples.
+	 *
+	 * Returns a string so the caller can distinguish "settled" from "gave up",
+	 * never a bare false that would read as a normal timeout.
+	 */
+	function waitForScrollerQuiet(page, anchorSel, quietMs = 600, minSamples = 20) {
+		return page.evaluate(({ sel, quiet, frames }) => new Promise((resolve) => {
+			const anchor = document.querySelector(sel)
+			if (!anchor) { resolve('no-anchor'); return }
+			// Same walk-up as probe() below — see its comment for why the scroller
+			// is resolved by overflow rather than by class name.
+			let scroller = null
+			for (let el = anchor.parentElement; el && !scroller; el = el.parentElement) {
+				const oy = getComputedStyle(el).overflowY
+				if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) scroller = el
+			}
+			if (!scroller) { resolve('no-scroller'); return }
+
+			const deadline = performance.now() + 15_000
+			let last = scroller.scrollTop
+			let lastChange = performance.now()
+			let still = 0
+			const tick = () => {
+				const now = performance.now()
+				if (scroller.scrollTop !== last) {
+					last = scroller.scrollTop
+					lastChange = now
+					still = 0
+				} else {
+					still++
+				}
+				if (still >= frames && now - lastChange >= quiet) { resolve('quiet'); return }
+				if (now > deadline) { resolve('timeout'); return }
+				requestAnimationFrame(tick)
+			}
+			requestAnimationFrame(tick)
+		}), { sel: anchorSel, quiet: quietMs, frames: minSamples })
+	}
+
 	/** Open the card, activate the description, and measure once it settles. */
 	async function openEditor(page, activate) {
 		await page.goto(desc.cardUrl)
@@ -474,18 +547,14 @@ test.describe('the description editor on a phone', () => {
 
 		// The scroll lands a couple of frames after the editor mounts (the toolbar
 		// paints only once Tiptap is constructed, and it must run AFTER Tiptap's own
-		// focus-driven scroll). Poll until the scroller stops moving instead of
+		// focus-driven scroll). Wait for the scroller to come to rest rather than
 		// sleeping a fixed interval — the self-hosted runner is several times slower
 		// than a dev box, and a fixed sleep would go red on timing alone.
-		let m = null
-		let previous = null
-		await expect.poll(async () => {
-			m = await probe(page, EDITOR)
-			if (!m) return false
-			const settled = previous !== null && Math.abs(m.scrollTop - previous) < 1
-			previous = m.scrollTop
-			return settled
-		}, { timeout: 20_000, message: 'the modal scroller never settled' }).toBe(true)
+		const quiet = await waitForScrollerQuiet(page, EDITOR)
+		expect(quiet, 'the modal scroller never settled').toBe('quiet')
+
+		const m = await probe(page, EDITOR)
+		expect(m, 'no scroll container found around the editor').not.toBeNull()
 
 		return { ...m, scrollTopBefore: before.scrollTop }
 	}
