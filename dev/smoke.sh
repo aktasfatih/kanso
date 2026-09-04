@@ -128,12 +128,16 @@ echo "schema OK — now exercising app code"
 #    of Kanso PHP runs in it, so a server API the app calls but this Nextcloud
 #    does not have is invisible to it. That blind spot is real, not theoretical:
 #    info.xml claimed NC 30 support for months while the app fataled on its very
-#    first screen, because two IQueryBuilder APIs only exist from NC 32 —
-#      * IQueryBuilder::PARAM_DATETIME_MUTABLE, bound by CardMapper's overdue
-#        aggregates and reached from BoardService::findAllWithStats(), i.e. the
-#        boards-list payload the app loads on open;
-#      * IQueryBuilder::forUpdate(), called by CardMapper::findByStackForUpdate()
-#        and reached from CardService::rebalanceStack().
+#    first screen, because two IQueryBuilder APIs are newer than that floor —
+#      * IQueryBuilder::PARAM_DATETIME_MUTABLE (@since 31.0.0), bound by
+#        CardMapper's overdue aggregates and reached from
+#        BoardService::findAllWithStats(), i.e. the boards-list payload the app
+#        loads on open;
+#      * IQueryBuilder::forUpdate() (@since 32.0.7 on stable32, 33.0.0 on
+#        stable33 — so missing on 32.0.0–32.0.6, INSIDE our supported range),
+#        called by CardMapper::findByStackForUpdate() and reached from
+#        CardService::rebalanceStack() and from the CSV import's overflow
+#        recovery. It is also unsupported by SQLite on every version.
 #    PHPUnit and psalm cannot see it either: composer.json maps OCP\ to
 #    vendor/nextcloud/ocp pinned ^34, so both type-check against the NEWEST
 #    server's API and never the oldest supported one. This matrix, on the real
@@ -208,21 +212,64 @@ grep -q '"stats"' "$API_BODY" \
 echo "  ok: boards list with stats (PARAM_DATETIME_MUTABLE)"
 
 # 4b. The rebalance — CardService::rebalanceStack() →
-#     CardMapper::findByStackForUpdate(), which calls forUpdate(). occ exits
-#     non-zero if it throws, and `set -e` turns that into a failed build.
+#     CardMapper::findByStackForUpdate(). occ exits non-zero if it throws, and
+#     `set -e` turns that into a failed build.
 #
-#     NOT on SQLite: `SELECT ... FOR UPDATE` has no SQLite equivalent, so the
-#     platform rejects it outright ("Operation 'FOR UPDATE' is not supported by
-#     platform") on EVERY Nextcloud version — a database limitation, not a
-#     version-support signal, so asserting it here would just paint the whole
-#     sqlite matrix red. Postgres runs on every NC version in the matrix, so
-#     forUpdate() is still covered on every version we claim to support.
-if [ "$KANSO_DB" = "sqlite" ]; then
-	echo "  skip: occ kanso:rebalance — SQLite has no SELECT ... FOR UPDATE"
-else
-	$OCC kanso:rebalance --board "$SMOKE_BOARD" \
-		|| fail "occ kanso:rebalance --board $SMOKE_BOARD failed (CardMapper::findByStackForUpdate / forUpdate())"
-	echo "  ok: occ kanso:rebalance (forUpdate)"
-fi
+#     Runs on EVERY database, sqlite included. It used to be skipped there
+#     because `SELECT ... FOR UPDATE` has no SQLite equivalent and the platform
+#     rejects it outright — but that skip was hiding a real, shipped bug rather
+#     than accommodating a database limitation: rebalance is the ONLY recovery
+#     from the 409 `rebalance_required` sort-key wall, so an overflowed stack was
+#     permanently stuck on every sqlite install. CardMapper::supportsRowLock()
+#     now omits the row lock where it is unavailable (sqlite; and NC 32.0.0–
+#     32.0.6, where forUpdate() does not exist yet on ANY database), so this must
+#     be green everywhere — and if the guard ever regresses, this is what catches
+#     it.
+$OCC kanso:rebalance --board "$SMOKE_BOARD" \
+	|| fail "occ kanso:rebalance --board $SMOKE_BOARD failed (CardMapper::findByStackForUpdate / forUpdate())"
+echo "  ok: occ kanso:rebalance"
+
+# 4c. The OTHER caller of the same locking read: the CSV import's overflow
+#     recovery (CsvImportService::import() → catch(\OverflowException) →
+#     rebalanceStack()). Reaching it needs the target stack's tail key to already
+#     be at SortKeyService::MAX_KEY_LENGTH (64), which no amount of API traffic
+#     produces cheaply — so park the tail key at the wall directly in the DB,
+#     then import. A broken guard here is an HTTP 500, not an occ exit code, so
+#     this covers a user-facing path the occ run above cannot.
+#     Both values below are locally derived, never external input: MAX_KEY is a
+#     fixed 64-'Z' literal (a valid key at exactly MAX_KEY_LENGTH, so after()
+#     cannot extend it) and SMOKE_STACK is the numeric id this script just
+#     created and asserted non-empty. The sqlite path still binds them as
+#     parameters, matching the table-name helpers above.
+MAX_KEY="$(printf '%064d' 0 | tr '0' 'Z')"
+
+park_tail_key_postgres() {
+	docker exec "$DB_CONTAINER" psql -U nextcloud -d nextcloud -tAc \
+		"UPDATE oc_kanso_cards SET sort_key='$MAX_KEY' WHERE stack_id=$SMOKE_STACK;"
+}
+park_tail_key_mysql() {
+	docker exec "$DB_CONTAINER" mariadb -unextcloud -pnextcloud -N -B nextcloud -e \
+		"UPDATE oc_kanso_cards SET sort_key='$MAX_KEY' WHERE stack_id=$SMOKE_STACK;"
+}
+park_tail_key_sqlite() {
+	docker exec -u www-data "$CONTAINER" php -r '
+		$db = new PDO("sqlite:/var/www/html/data/nextcloud.db");
+		$s = $db->prepare("UPDATE oc_kanso_cards SET sort_key = ? WHERE stack_id = ?");
+		$s->execute([$argv[1], (int)$argv[2]]);
+	' "$MAX_KEY" "$SMOKE_STACK"
+}
+
+case "$KANSO_DB" in
+	postgres)      park_tail_key_postgres >/dev/null ;;
+	mysql|mariadb) park_tail_key_mysql >/dev/null ;;
+	sqlite)        park_tail_key_sqlite ;;
+esac
+
+api POST /api/csv-import \
+	"{\"document\":\"imported card\",\"boardId\":${SMOKE_BOARD},\"stackId\":${SMOKE_STACK},\"mapping\":{\"title\":0},\"hasHeader\":false}"
+expect_200 'POST /api/csv-import (CsvImportService overflow → rebalanceStack)'
+grep -q '"cards":1' "$API_BODY" \
+	|| fail "CSV import did not report the imported card: $(head -c 500 "$API_BODY")"
+echo "  ok: CSV import overflow → rebalance recovery"
 
 echo "SMOKE OK: NC=${NC_VERSION:-?} DB=${KANSO_DB} — kanso enabled, migrations applied, schema present, app code runs."

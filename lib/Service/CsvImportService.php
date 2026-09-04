@@ -164,9 +164,12 @@ class CsvImportService {
 				// and attempt() has already rolled its transaction back - nothing was
 				// written and, critically, NO transaction is open at this point.
 				// That is what makes the recovery safe: rebalanceStack() opens its
-				// OWN transaction and takes SELECT ... FOR UPDATE locks on the
-				// stack's rows, so it must never be called from inside the import's
-				// transaction. Reset the stack to short keys here, between attempts,
+				// OWN transaction (and, where the server and database offer one,
+				// takes SELECT ... FOR UPDATE locks on the stack's rows), so it
+				// must never be called from inside the import's transaction. On
+				// SQLite that matters even more: it admits a single writer, so
+				// nesting would deadlock rather than merely nest.
+				// Reset the stack to short keys here, between attempts,
 				// then replay the import ONCE (still all-or-nothing). A second
 				// overflow is genuine and propagates as the 409 it always was.
 				$this->cardService->rebalanceStack($stackId);

@@ -1966,11 +1966,15 @@ class CardService {
 	 * two-character keys, restoring generous gaps so subsequent between()/after()
 	 * inserts no longer overflow.
 	 *
-	 * Concurrency: the stack's rows are read with SELECT ... FOR UPDATE inside a
-	 * single transaction (no new global lock - it matches the app's
-	 * READ-COMMITTED move posture used by {@see self::persistMove()}, just
-	 * pessimistically for this rare maintenance path), so a concurrent move
-	 * blocks on the same rows until the rebalance commits.
+	 * Concurrency: the stack's rows are read inside a single transaction, with
+	 * SELECT ... FOR UPDATE where the server and database offer it (no new global
+	 * lock - it matches the app's READ-COMMITTED move posture used by
+	 * {@see self::persistMove()}, just pessimistically for this rare maintenance
+	 * path), so a concurrent move blocks on the same rows until the rebalance
+	 * commits. SQLite and Nextcloud 32.0.0-32.0.6 have no such lock to take;
+	 * {@see \OCA\Kanso\Db\CardMapper::supportsRowLock()} documents why the
+	 * rebalance is still correct there, and why every UPDATE below is scoped to
+	 * $stackId as well as the card id.
 	 *
 	 * The (stack_id, sort_key, deleted_at) unique index forbids two live rows in
 	 * a stack sharing a key even transiently, so the rewrite runs in two passes:
@@ -2010,14 +2014,14 @@ class CardService {
 			// from every current key, so no UPDATE collides with a
 			// not-yet-rewritten row.
 			foreach ($cards as $index => $card) {
-				$this->cardMapper->updateSortKeyById($card->getId(), $tempKeys[$index]);
+				$this->cardMapper->updateSortKeyById($card->getId(), $stackId, $tempKeys[$index]);
 			}
 			// Pass 2: write the final evenly-spaced keys, order preserved. The
 			// finals are the short two-character grid and the temp band the
 			// three-character grid, so the two are disjoint and this pass never
 			// collides either.
 			foreach ($cards as $index => $card) {
-				$this->cardMapper->updateSortKeyById($card->getId(), $freshKeys[$index]);
+				$this->cardMapper->updateSortKeyById($card->getId(), $stackId, $freshKeys[$index]);
 			}
 
 			// One stack-level MOVE change row is enough for delta-sync clients to

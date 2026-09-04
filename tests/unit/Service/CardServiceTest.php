@@ -3548,9 +3548,11 @@ class CardServiceTest extends TestCase {
 
 		// Capture every sort-key write in order (pass 1 temp keys + pass 2 finals).
 		$writes = [];
+		$writtenStackIds = [];
 		$this->cardMapper->method('updateSortKeyById')
-			->willReturnCallback(static function (int $id, string $key) use (&$writes): void {
+			->willReturnCallback(static function (int $id, int $stackId, string $key) use (&$writes, &$writtenStackIds): void {
 				$writes[] = [$id, $key];
+				$writtenStackIds[] = $stackId;
 			});
 
 		$this->changeNotifier->expects(self::once())
@@ -3567,6 +3569,12 @@ class CardServiceTest extends TestCase {
 
 		// Two passes of 3 writes each.
 		self::assertCount(6, $writes);
+
+		// Every write is scoped to the stack being rebalanced. Without the row
+		// lock (sqlite, and NC 32.0.0-32.0.6) a card can be moved OUT of the stack
+		// between the read and the write; the stack id turns that into a no-match
+		// instead of a key rewrite that would corrupt its NEW stack's ordering.
+		self::assertSame([5, 5, 5, 5, 5, 5], $writtenStackIds);
 
 		// Pass 1 parks each row at a distinct three-character temporary key,
 		// disjoint from the current keys and (by length) from the finals, so no

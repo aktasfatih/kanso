@@ -361,9 +361,10 @@ class CardMapper extends QBMapper {
 
 	/**
 	 * Live cards of a stack in display order, taking a row-level write lock
-	 * (SELECT ... FOR UPDATE) on each returned row - the read half of a
+	 * (SELECT ... FOR UPDATE) on each returned row WHERE THE SERVER AND DATABASE
+	 * OFFER ONE - the read half of a
 	 * {@see \OCA\Kanso\Service\CardService::rebalanceStack()} inside a
-	 * transaction. Locking the stack's rows serialises the rebalance against a
+	 * transaction. Where the lock is taken it serialises the rebalance against a
 	 * concurrent move deriving a key from the same neighbours, without a new
 	 * global lock: it matches the app's READ-COMMITTED move posture, just
 	 * pessimistically for the (rare) rebalance path.
@@ -377,10 +378,66 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->eq('stack_id', $qb->createNamedParameter($stackId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->orderBy('sort_key', 'ASC')
-			->forUpdate();
+			->orderBy('sort_key', 'ASC');
+
+		if ($this->supportsRowLock($qb)) {
+			$qb->forUpdate();
+		}
 
 		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Whether this (server, database) pair can take the rebalance's row-level
+	 * write lock. Both halves are hard failures, not degradations, if ignored -
+	 * and the rebalance is the ONLY recovery from the 409 `rebalance_required`
+	 * wall ({@see \OCA\Kanso\Service\SortKeyService::MAX_KEY_LENGTH}), so a
+	 * fatal here leaves an overflowed stack permanently stuck:
+	 *
+	 *   1. SQLite has no `SELECT ... FOR UPDATE` at all - the platform rejects it
+	 *      outright ("Operation 'FOR UPDATE' is not supported by platform"), and
+	 *      SQLite is the default for small self-hosted installs.
+	 *   2. Nextcloud 32.0.0-32.0.6 has no IQueryBuilder::forUpdate() yet: it is
+	 *      `@since 32.0.7` on stable32 and `@since 33.0.0` on stable33. info.xml
+	 *      declares min-version="32", so on those patch releases the call is a
+	 *      fatal PHP \Error on EVERY database. Neither psalm nor PHPUnit can see
+	 *      this: composer maps OCP\ to vendor/nextcloud/ocp pinned to the NEWEST
+	 *      server, where the method always exists.
+	 *
+	 * Skipping the lock is SAFE, not merely unavoidable. A rebalance reads the
+	 * stack's live rows in sort order and rewrites every one of them by id, in
+	 * two passes, inside ONE transaction. The only thing a concurrent writer can
+	 * interleave is a single-row `sort_key`/`stack_id` UPDATE from
+	 * {@see \OCA\Kanso\Service\CardService::persistMove()}, so a stale snapshot
+	 * has exactly two hazards: a card that ARRIVED in the stack after the read
+	 * keeps its long key and could collide with a freshly issued short one, and a
+	 * card that LEFT the stack after the read would still have its key rewritten
+	 * - which is why {@see self::updateSortKeyById()} also filters on `stack_id`,
+	 * so a departed row simply no longer matches.
+	 *
+	 * On SQLite neither hazard can commit, because SQLite admits ONE writer at a
+	 * time for the whole database: a competing move either commits before the
+	 * rebalance takes its write lock, or blocks until the rebalance commits, or
+	 * (in WAL mode) invalidates the deferred read snapshot so the lock upgrade
+	 * fails SQLITE_BUSY and the entire rebalance rolls back - never a partial
+	 * rewrite. The database-level lock subsumes the row lock, so `FOR UPDATE`
+	 * there is unnecessary rather than missing.
+	 *
+	 * On a pre-32.0.7 server with an MVCC database the rebalance falls back to
+	 * the app's normal, shipped move posture: READ COMMITTED plus the
+	 * (stack_id, sort_key, deleted_at) unique index, which is already what makes
+	 * concurrent moves correct (optimistic write, unique violation, one retry -
+	 * see persistMove()). A collision aborts the rebalance's transaction and
+	 * rolls it back whole; the admin re-runs `occ kanso:rebalance`. `FOR UPDATE`
+	 * is a pessimistic extra on a rare maintenance path, not the thing that makes
+	 * moves safe - so this fallback never weakens the mysql/postgres posture on
+	 * any server that has the API.
+	 */
+	private function supportsRowLock(IQueryBuilder $qb): bool {
+		// getDatabaseProvider() is @since 28.0.0 and is the documented
+		// replacement for getDatabasePlatform(), which it deprecated in 30.0.0.
+		return $this->db->getDatabaseProvider() !== IDBConnection::PLATFORM_SQLITE
+			&& method_exists($qb, 'forUpdate');
 	}
 
 	/**
@@ -389,13 +446,20 @@ class CardMapper extends QBMapper {
 	 * only the reordering column and never clobbers fields absent from the
 	 * summary payload.
 	 *
+	 * Scoped to $stackId as well as $cardId: without the row lock (see
+	 * {@see self::supportsRowLock()}) a card can be moved OUT of the stack
+	 * between the rebalance's read and this write, and rewriting its key would
+	 * then corrupt the ordering of whichever stack it moved into. The extra
+	 * predicate makes that row simply not match.
+	 *
 	 * @throws Exception
 	 */
-	public function updateSortKeyById(int $cardId, string $sortKey): void {
+	public function updateSortKeyById(int $cardId, int $stackId, string $sortKey): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update($this->getTableName())
 			->set('sort_key', $qb->createNamedParameter($sortKey))
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('stack_id', $qb->createNamedParameter($stackId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
 

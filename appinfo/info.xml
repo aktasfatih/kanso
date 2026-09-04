@@ -281,14 +281,28 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-timeline.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-analytics.png</screenshot>
 	<dependencies>
-		<!-- Floor is 32, not 30: Kanso calls two IQueryBuilder APIs that do not
-		     exist before NC 32 - PARAM_DATETIME_MUTABLE (bound by the boards-list
-		     stats, i.e. opening the app) and forUpdate() (the rebalance path). On
-		     NC 30/31 both are a fatal PHP Error, so the app never worked there
-		     even though this range claimed it did. 32 is also the oldest release
+		<!-- Floor is 32, not 30: opening the app binds
+		     IQueryBuilder::PARAM_DATETIME_MUTABLE in the boards-list stats, and
+		     that constant is only @since 31.0.0 - so on NC 30 the very first
+		     screen is a fatal PHP Error, and the app never worked there even
+		     though this range claimed it did. 32 is also the oldest release
 		     Nextcloud itself still supports, so nothing on a supported server
-		     loses Kanso. dev/smoke.sh now executes both paths in the install
-		     matrix, so a future API gap fails CI instead of shipping. -->
+		     loses Kanso.
+
+		     The rebalance path does NOT set this floor, contrary to what this
+		     comment used to claim: IQueryBuilder::forUpdate() is @since 32.0.7 on
+		     stable32 (and @since 33.0.0 on stable33), i.e. it is missing on
+		     32.0.0-32.0.6, which are inside this very range. Raising the floor is
+		     the wrong fix for that - patch-level min-versions would strand
+		     supported servers - so CardMapper::supportsRowLock() guards the call
+		     with method_exists() instead and documents why the rebalance stays
+		     correct without the lock. Same guard covers SQLite, which has no
+		     SELECT ... FOR UPDATE on any version.
+
+		     Neither gap is visible to psalm or PHPUnit: composer maps OCP\ to
+		     vendor/nextcloud/ocp pinned to the NEWEST server. dev/smoke.sh
+		     executes both paths on every DB in the install matrix, so a future
+		     API gap fails CI instead of shipping. -->
 		<nextcloud min-version="32" max-version="34"/>
 	</dependencies>
 	<!-- Element order below is fixed by the App Store schema's xs:sequence
