@@ -407,6 +407,76 @@ jobs:
           fi
           docker compose version
 
+      # Warm the local image cache BEFORE booting the stack, retrying a failed
+      # pull, because `dev/setup.sh` cannot: it boots with `docker compose
+      # ... up -d` under `set -eu` (dev/setup.sh:19,67), where the pull is
+      # implicit and has NO retry. One transient registry hiccup therefore kills
+      # the whole job — observed on PR #101, run 33560679687, 6m46s into `e2e`
+      # (the ~1.5h required check) after five minutes of layers downloading
+      # fine: `Get "https://registry-1.docker.io/v2/": net/http: request
+      # canceled while waiting for connection (Client.Timeout exceeded while
+      # awaiting headers)`, exit 18. That red is indistinguishable from a real
+      # regression until a human opens the log and re-runs by hand.
+      #
+      # Deliberately HERE and not inside dev/setup.sh: the script is the shared
+      # local-dev entry point and stays free of CI-only retry plumbing. Please
+      # do not "tidy" this into it.
+      #
+      # Also deliberately NOT a retry around `./dev/setup.sh` itself — re-running
+      # that script after a partial boot is not a claim this makes. Only the
+      # network fetch is retried, and a fetch is safe to repeat.
+      #
+      # Best-effort by construction (`exit 0` at the end, plus
+      # continue-on-error): this warms a cache, it does not gate anything. If
+      # all three attempts fail, `up -d` still gets its own try and any honest
+      # failure surfaces there, under the step whose name says "Boot".
+      - name: Pre-pull dev stack images (with retry)
+        working-directory: dev
+        # Belt and braces with the `exit 0` below: this step must not be able to
+        # redden the job even if the script itself breaks before reaching it.
+        continue-on-error: true
+        run: |
+          set -u
+          # Load-bearing, not defensive. docker-compose.yml declares
+          # `env_file: .db.env` on the nextcloud service, and setup.sh only
+          # writes that file when IT runs. Compose v2.29.7 — the version the
+          # step above pins for runners without the plugin — refuses to load
+          # the model without it and dies
+          # with `env file .../.db.env not found`, exit 14, BEFORE pulling a
+          # single byte. So without this placeholder all three attempts below
+          # would fail instantly and this whole step would be silently vacuous.
+          # (Compose v5 tolerates a missing env_file for `pull`, so this would
+          # look fine on a newer runner and do nothing on the pinned one — the
+          # worst kind of CI bug.) setup.sh overwrites the file moments later
+          # with the real driver env.
+          [ -f .db.env ] || : > .db.env
+
+          # The profile setup.sh derives from KANSO_DB (its `case` block); unset
+          # means postgres, its default. Only the selected DB's image is pulled.
+          profile="${KANSO_DB:-postgres}"
+          if [ "$profile" = "mariadb" ]; then profile=mysql; fi
+
+          pulled=0
+          for attempt in 1 2 3; do
+            echo "Pre-pull attempt ${attempt}/3 (profile=${profile}, NC_VERSION=${NC_VERSION:-34})"
+            if docker compose --profile "$profile" pull; then
+              pulled=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Pull attempt ${attempt} failed; retrying in 15s"
+              sleep 15
+            fi
+          done
+
+          if [ "$pulled" = 1 ]; then
+            echo "Dev stack images are in the local cache."
+          else
+            echo "Pre-pull did not succeed after 3 attempts — continuing anyway;"
+            echo "dev/setup.sh's own 'docker compose up -d' will retry the pull."
+          fi
+          exit 0
+
       # Boot NC <version> on <db>, enable Kanso (runs the migrations).
       - name: Boot Nextcloud ${{ matrix.nc-version }} on ${{ matrix.db }}
         run: ./dev/setup.sh
@@ -476,6 +546,43 @@ jobs:
             chmod +x ~/.docker/cli-plugins/docker-compose
           fi
           docker compose version
+
+      # See install-matrix above for why this step exists, why the retry lives
+      # in the workflow rather than in dev/setup.sh, and why it cannot fail the
+      # job. This is the job the registry timeout actually killed. No KANSO_DB
+      # is set here, so the profile resolves to setup.sh's postgres default.
+      - name: Pre-pull dev stack images (with retry)
+        working-directory: dev
+        continue-on-error: true
+        run: |
+          set -u
+          # setup.sh writes dev/.db.env; compose won't parse the model without
+          # it, so seed a placeholder (setup.sh overwrites it). See install-matrix.
+          [ -f .db.env ] || : > .db.env
+
+          profile="${KANSO_DB:-postgres}"
+          if [ "$profile" = "mariadb" ]; then profile=mysql; fi
+
+          pulled=0
+          for attempt in 1 2 3; do
+            echo "Pre-pull attempt ${attempt}/3 (profile=${profile}, NC_VERSION=${NC_VERSION:-34})"
+            if docker compose --profile "$profile" pull; then
+              pulled=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Pull attempt ${attempt} failed; retrying in 15s"
+              sleep 15
+            fi
+          done
+
+          if [ "$pulled" = 1 ]; then
+            echo "Dev stack images are in the local cache."
+          else
+            echo "Pre-pull did not succeed after 3 attempts — continuing anyway;"
+            echo "dev/setup.sh's own 'docker compose up -d' will retry the pull."
+          fi
+          exit 0
 
       # Boot the same throwaway Nextcloud stack used locally (dev/setup.sh):
       # postgres + redis + notify_push + nextcloud:34-apache, app enabled,
