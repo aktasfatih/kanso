@@ -270,10 +270,16 @@ class GithubWebhookService {
 		$moved = false;
 		$namedCardId = 0;
 		foreach ($targets as $cardId => $isEcho) {
-			// Record the PR as a link on the card (best-effort, idempotent).
+			// Record the PR as a link on the card (best-effort, idempotent) and
+			// cache its state/title straight from the delivery. The payload is
+			// authoritative and free, so this must not be left to the read-time
+			// poll: addLink() only polls on INSERT, so the second delivery for a
+			// PR (opened -> merged) hits its unique-constraint branch and would
+			// otherwise never refresh the state.
 			if ($prUrl !== '') {
 				try {
-					$this->cardLinkService->addLink($cardId, $prUrl, $board->getOwner());
+					$link = $this->cardLinkService->addLink($cardId, $prUrl, $board->getOwner());
+					$this->refreshLinkFromPr($link, $action, $pr);
 				} catch (\Throwable) {
 					// Non-critical - a bad/duplicate URL must not fail the webhook.
 				}
@@ -579,7 +585,7 @@ class GithubWebhookService {
 	 */
 	private function applyAutoMove(int $boardId, int $cardId, string $action, array $pr, string $actorUid): bool {
 		$targetRole = null;
-		if ($action === 'closed' && ($pr['merged'] ?? false) === true) {
+		if ($this->isMerged($action, $pr)) {
 			$targetRole = Stack::ROLE_DONE;
 		} elseif (in_array($action, ['opened', 'reopened', 'ready_for_review'], true)) {
 			$targetRole = Stack::ROLE_REVIEW;
@@ -665,6 +671,60 @@ class GithubWebhookService {
 				// Non-critical - the next read-time poll will catch up.
 			}
 		}
+	}
+
+	/**
+	 * Caches a PR link's state/title straight from the delivery, mirroring what
+	 * {@see refreshLinksFromIssue} does on the issue path. Best-effort: a failed
+	 * row update must not fail the delivery.
+	 *
+	 * @param array<string, mixed> $pr
+	 */
+	private function refreshLinkFromPr(CardLink $link, string $action, array $pr): void {
+		$link->setState($this->prState($action, $pr));
+		$title = is_string($pr['title'] ?? null) ? $pr['title'] : null;
+		if ($title !== null) {
+			$link->setTitle($title);
+		}
+		$link->setLastPolled(time());
+		try {
+			$this->cardLinkMapper->update($link);
+		} catch (\Throwable) {
+			// Non-critical - the next read-time poll will catch up.
+		}
+	}
+
+	/**
+	 * The payload's PR state mapped onto the CardLink state enum. A merge is read
+	 * from any of the three spellings forges use for it - the `merged` boolean,
+	 * a non-empty `merged_at`, or a `merged` action - because a merged PR reports
+	 * `state: closed` and would otherwise be indistinguishable from a plain close.
+	 *
+	 * @param array<string, mixed> $pr
+	 */
+	private function prState(string $action, array $pr): string {
+		if ($this->isMerged($action, $pr)) {
+			return CardLink::STATE_MERGED;
+		}
+		$rawState = is_string($pr['state'] ?? null) ? $pr['state'] : '';
+		return match ($rawState) {
+			'open' => CardLink::STATE_OPEN,
+			'closed' => CardLink::STATE_CLOSED,
+			default => CardLink::STATE_UNKNOWN,
+		};
+	}
+
+	/**
+	 * Whether the delivery says the PR was merged. Read from any of the three
+	 * spellings forges use, so a merge is never mistaken for a plain close:
+	 * the `merged` boolean, a non-empty `merged_at`, or a `merged` action.
+	 *
+	 * @param array<string, mixed> $pr
+	 */
+	private function isMerged(string $action, array $pr): bool {
+		return ($pr['merged'] ?? false) === true
+			|| !empty($pr['merged_at'])
+			|| $action === 'merged';
 	}
 
 	/**
