@@ -353,3 +353,155 @@ test('the persisted offline cache is not restored for a different user', async (
 		message: "a snapshot belonging to another user must be deleted, not kept",
 	}).toMatch(/^(deleted|replaced)$/)
 })
+
+// #10183 — review rows on a phone.
+//
+// `.review-row` is a flex row whose action cluster is `flex-shrink: 0` and holds
+// two full-label buttons (~257px together), so at 390px it claimed the whole
+// line and the ellipsising title column absorbed the entire shortfall: the card
+// title rendered as ONE glyph (clientWidth 13px against scrollWidth 229px). The
+// embedded My Work → Reviews tab was worse still — 0px, with the buttons
+// overflowing the row — because MyReviewsView's page inset nested inside
+// MyWorkView's identical one.
+//
+// These tests live HERE because only tests/e2e/mobile-pwa.spec.js runs at a
+// phone viewport (playwright.config.js matches both mobile projects on this
+// file); tests/e2e/my-reviews.spec.js is desktop-only and can never see this.
+test.describe('review rows at a phone width', () => {
+	const BOARD_TITLE = 'Mobile Reviews E2E'
+	const CARD_TITLE = 'Review row title needing the whole row width'
+	const rev = { boardId: null, cardId: null }
+
+	test.beforeAll(async () => {
+		// Drop anything a previous run left behind, so exactly one row carries
+		// this title.
+		for (const b of await api.get('/boards')) {
+			if (b.title === BOARD_TITLE) await api.delete(`/boards/${b.id}`).catch(() => {})
+		}
+
+		const board = await api.post('/boards', { title: BOARD_TITLE })
+		rev.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: CARD_TITLE })
+		rev.cardId = card.id
+		// Requesting a review from yourself yields a pending row — with the two
+		// verdict buttons — on both surfaces.
+		await api.put(`/cards/${card.id}/reviews/${me}`)
+	})
+
+	test.afterAll(async () => {
+		if (rev.boardId) await api.delete(`/boards/${rev.boardId}`).catch(() => {})
+	})
+
+	/** Geometry + layout mode of our pending review row, measured in the page. */
+	async function measureRow(page) {
+		const row = page.locator('.review-row', { hasText: CARD_TITLE }).first()
+		await expect(row).toBeVisible({ timeout: 30_000 })
+		// The verdict buttons are what crushed the title, so a row measured before
+		// they render would look fine for the wrong reason.
+		await expect(row.getByRole('button', { name: 'Approve' })).toBeVisible({ timeout: 15_000 })
+
+		return row.evaluate((el) => {
+			const q = (sel) => el.querySelector(sel)
+			const cardTitle = q('.review-row__card-title')
+			const boardTitle = q('.review-row__board-title')
+			const actions = q('.review-row__actions')
+			const content = q('.review-row__content')
+			return {
+				cardTitle: { client: cardTitle.clientWidth, scroll: cardTitle.scrollWidth },
+				boardTitle: { client: boardTitle.clientWidth, scroll: boardTitle.scrollWidth },
+				rowRight: el.getBoundingClientRect().right,
+				actionsRight: actions.getBoundingClientRect().right,
+				actionsTop: actions.getBoundingClientRect().top,
+				contentBottom: content.getBoundingClientRect().bottom,
+				rowDirection: getComputedStyle(el).flexDirection,
+			}
+		})
+	}
+
+	async function expectReadable(page, where) {
+		const m = await measureRow(page)
+		const vw = page.viewportSize().width
+		// Nothing is clipped: both titles render in full.
+		expect(m.cardTitle.scroll, `${where}: card title is clipped`)
+			.toBeLessThanOrEqual(m.cardTitle.client + 1)
+		expect(m.boardTitle.scroll, `${where}: board title is clipped`)
+			.toBeLessThanOrEqual(m.boardTitle.client + 1)
+		// …and they got a real column, not a sliver that "fits" trivially.
+		expect(m.cardTitle.client, `${where}: title column is too narrow`)
+			.toBeGreaterThan(vw * 0.5)
+		// The buttons stay inside the row instead of spilling out of it.
+		expect(m.actionsRight, `${where}: actions overflow the row`)
+			.toBeLessThanOrEqual(m.rowRight + 1)
+	}
+
+	test('the review row is readable on the My Reviews page', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso#/reviews`)
+		await expectReadable(page, '#/reviews')
+	})
+
+	test('the review row is readable on the embedded My Work → Reviews tab', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso#/my-work?tab=reviews`)
+		await expect(page.locator('.my-work-view')).toBeVisible({ timeout: 30_000 })
+		await expectReadable(page, '#/my-work?tab=reviews')
+
+		// The hub already supplies the page inset, so the embedded list must not
+		// add a second one — that double inset cost the row a sixth of the
+		// viewport. It shows up as the row sitting further right than the hub's
+		// own header.
+		const inset = await page.locator('.review-row', { hasText: CARD_TITLE }).first()
+			.evaluate((row) => ({
+				row: row.getBoundingClientRect().left,
+				header: document.querySelector('.my-work-view__title').getBoundingClientRect().left,
+			}))
+		expect(inset.row - inset.header, 'the embedded review list is inset twice')
+			.toBeLessThanOrEqual(1)
+	})
+
+	// Stacking the row puts the verdict buttons on their own line, and that line
+	// is the element carrying @click.stop. If it were stretched to the full row
+	// width, the empty space beside the buttons would silently swallow taps meant
+	// to open the card — a new dead zone in place of the old one.
+	test('tapping beside the verdict buttons still opens the card', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso#/reviews`)
+		const row = page.locator('.review-row', { hasText: CARD_TITLE }).first()
+		await expect(row).toBeVisible({ timeout: 30_000 })
+		await expect(row.getByRole('button', { name: 'Approve' })).toBeVisible({ timeout: 15_000 })
+
+		const rowBox = await row.boundingBox()
+		const actionsBox = await row.locator('.review-row__actions').boundingBox()
+		// The cluster must end well short of the row's right edge (the row's own
+		// padding is 14px, so this margin only clears a genuinely narrow cluster).
+		expect(actionsBox.x + actionsBox.width, 'the action cluster spans the whole row')
+			.toBeLessThan(rowBox.x + rowBox.width - 20)
+
+		// Tap that empty space, level with the buttons.
+		await page.touchscreen.tap(rowBox.x + rowBox.width - 6, actionsBox.y + actionsBox.height / 2)
+		await expect(page).toHaveURL(
+			new RegExp(`/board/${rev.boardId}/card/${rev.cardId}`),
+			{ timeout: 15_000 },
+		)
+	})
+
+	// The phone rules must not leak upward: on a desktop width the row stays a
+	// single line with the actions BESIDE the titles.
+	test.describe('at a desktop width', () => {
+		// deviceScaleFactor 1: the phone devices default to 2.6–3×, which would
+		// rasterise this 1440×900 page at ~4300px wide for no benefit.
+		test.use({
+			viewport: { width: 1440, height: 900 },
+			isMobile: false,
+			hasTouch: false,
+			deviceScaleFactor: 1,
+		})
+
+		test('the review row keeps its single-line desktop layout', async ({ page }) => {
+			await page.goto(`${BASE}/index.php/apps/kanso#/reviews`)
+			const m = await measureRow(page)
+			expect(m.rowDirection, 'desktop row must not stack').toBe('row')
+			expect(m.actionsTop, 'desktop actions must sit beside the titles, not under them')
+				.toBeLessThan(m.contentBottom)
+			expect(m.actionsRight).toBeLessThanOrEqual(m.rowRight + 1)
+		})
+	})
+})

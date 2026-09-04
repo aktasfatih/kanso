@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="my-reviews-view">
+	<div class="my-reviews-view" :class="{ 'my-reviews-view--embedded': embedded }">
 		<div v-if="!embedded" class="my-reviews-view__header kanso-page-header">
 			<h1 class="my-reviews-view__title">{{ t('kanso', 'My Reviews') }}</h1>
 		</div>
@@ -219,5 +219,20 @@ async function setVerdict(review, state) {
 
 .my-reviews-view__row:hover {
 	background: var(--color-border-dark);
+}
+
+/* On a phone the 32px page inset is a sixth of the viewport, and when this view
+   is embedded in the My Work hub it sits INSIDE that hub's identical inset — so
+   the review rows were squeezed to ~262px and the action buttons overflowed
+   them. Trim the inset on phones, and drop it entirely when embedded since the
+   hub already supplies it. Desktop is untouched. */
+@media (max-width: 680px) {
+	.my-reviews-view {
+		padding: 16px 12px;
+	}
+
+	.my-reviews-view--embedded {
+		padding: 0;
+	}
 }
 </style>

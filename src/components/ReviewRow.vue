@@ -226,4 +226,49 @@ body.theme--dark .review-row,
 	color: var(--kanso-success-legible);
 	background: rgba(var(--kanso-success-legible-rgb), 0.1);
 }
+
+/* ── Responsive: stack the row on phones ─────────────────────────────────────
+   The action cluster is `flex-shrink: 0` and holds two full-label buttons
+   (~257px together), so on a phone-width row it claimed the whole line and the
+   ellipsising title column absorbed the entire shortfall — the card title
+   rendered as a single glyph and the meta line broke one word per line. Give
+   the titles and the actions a full-width row each, exactly as the card modal
+   header does at the same breakpoint (CardDetail.vue), and let the titles wrap
+   instead of ellipsising to nothing. */
+@media (max-width: 680px) {
+	.review-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 10px;
+	}
+
+	/* Card title above board title, each on its own full-width line. */
+	.review-row__titles {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+	}
+
+	.review-row__card-title,
+	.review-row__board-title {
+		white-space: normal;
+		/* `visible` is load-bearing — it resets the base `hidden` that made the
+		   crushed title ellipsise. */
+		overflow: visible;
+		/* A single unbroken word (a URL-ish title) still has to break rather
+		   than push the row wide. */
+		overflow-wrap: anywhere;
+		word-break: normal;
+	}
+
+	/* `align-self` keeps the cluster only as wide as its buttons: the row's own
+	   `stretch` would give this element — which carries @click.stop — a
+	   full-width strip of empty space that silently ate taps meant to open the
+	   card. It still wraps onto a second line if the labels outgrow the row
+	   (long translations, large font scaling) rather than overflowing it. */
+	.review-row__actions {
+		align-self: flex-start;
+		flex-wrap: wrap;
+	}
+}
 </style>
