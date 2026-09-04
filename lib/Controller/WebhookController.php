@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Service\ForgejoWebhookService;
 use OCA\Kanso\Service\GithubWebhookService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NonJsonWebhookBodyException;
@@ -23,8 +24,10 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * GitHub webhook: one PUBLIC ingest endpoint (HMAC-verified, no session) plus
- * MANAGE-only config endpoints to generate/rotate/disable the per-board secret.
+ * Forge webhooks: one PUBLIC ingest endpoint per provider (HMAC-verified, no
+ * session) plus MANAGE-only config endpoints to generate/rotate/disable the
+ * per-board secret. GitHub and Forgejo are independent - a board may run either,
+ * both, or neither.
  */
 class WebhookController extends Controller {
 	use ApiErrorTrait;
@@ -41,6 +44,7 @@ class WebhookController extends Controller {
 		IRequest $request,
 		private IUserSession $userSession,
 		private GithubWebhookService $webhookService,
+		private ForgejoWebhookService $forgejoService,
 	) {
 		parent::__construct($appName, $request);
 		$this->rawBody = file_get_contents('php://input') ?: '';
@@ -90,6 +94,37 @@ class WebhookController extends Controller {
 		}
 	}
 
+	/**
+	 * Forgejo/Gitea ingest. Forgejo signs with a RAW hex digest in
+	 * `X-Forgejo-Signature` / `X-Gitea-Signature` and also emits the
+	 * GitHub-compatible header - the service accepts all three. A hook saved
+	 * without a secret still sends those headers EMPTY, which must read as a
+	 * rejection, not as "no signature offered".
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'kansoWebhook')]
+	public function forgejo(int $id): JSONResponse {
+		$signature = $this->request->getHeader('X-Forgejo-Signature');
+		if ($signature === '') {
+			$signature = $this->request->getHeader('X-Gitea-Signature');
+		}
+		if ($signature === '') {
+			$signature = $this->request->getHeader('X-Hub-Signature-256');
+		}
+
+		try {
+			$result = $this->forgejoService->handleWebhook($id, $signature, $this->rawBody);
+			return new JSONResponse($result);
+		} catch (NotPermittedException $e) {
+			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
+			$response->throttle(['action' => 'kansoWebhook']);
+			return $response;
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
+		}
+	}
+
 	#[NoAdminRequired]
 	public function config(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
@@ -126,6 +161,43 @@ class WebhookController extends Controller {
 	public function disable(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
 			$this->webhookService->disable($id, $this->currentUserId());
+			return new JSONResponse([]);
+		});
+	}
+
+	// ---- Forgejo config (MANAGE, gated in the service) ---------------------
+
+	#[NoAdminRequired]
+	public function forgejoConfig(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			return new JSONResponse(
+				$this->forgejoService->getConfig($id, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function forgejoRotate(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			return new JSONResponse(
+				$this->forgejoService->rotateSecret($id, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function forgejoIntake(int $id, ?int $stackId = null, string $label = ''): JSONResponse {
+		return $this->respond(function () use ($id, $stackId, $label): JSONResponse {
+			return new JSONResponse(
+				$this->forgejoService->setIntakeConfig($id, $stackId, $label, $this->currentUserId())
+			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function forgejoDisable(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			$this->forgejoService->disable($id, $this->currentUserId());
 			return new JSONResponse([]);
 		});
 	}

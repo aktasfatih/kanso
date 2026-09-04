@@ -1352,6 +1352,108 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
+				<!-- Forgejo integration group -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.forgejo ? 'true' : 'false'"
+						aria-controls="bs-automation-forgejo"
+						@click="toggleAutomationGroup('forgejo')">
+						<SourceBranchIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Forgejo') }}</span>
+						<span v-if="forgejo.enabled" class="automation__group-badge">{{ t('kanso', 'Webhook active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.forgejo" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.forgejo" id="bs-automation-forgejo" class="automation__group-body">
+				<p v-if="!canManage" class="workflow__readonly-notice">
+					{{ t('kanso', 'You need manage permission to configure the Forgejo webhook.') }}
+				</p>
+				<template v-else>
+					<p class="github-webhook__hint">
+						{{ t('kanso', 'Add a Forgejo webhook sending "pull_request" and "issues" events to the URL below. A pull request opened on a kanso-<id> branch moves its card to your Review column; a merged pull request moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Gitea webhooks work too.') }}
+					</p>
+					<p class="github-webhook__hint">
+						{{ t('kanso', 'Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it.') }}
+					</p>
+
+					<label class="github-webhook__label">{{ t('kanso', 'Payload URL') }}</label>
+					<div class="github-webhook__row">
+						<input
+							class="github-webhook__input"
+							type="text"
+							readonly
+							:value="forgejo.payloadUrl">
+						<NcButton :disabled="!forgejo.payloadUrl" @click="copyText(forgejo.payloadUrl)">
+							{{ t('kanso', 'Copy') }}
+						</NcButton>
+					</div>
+
+					<template v-if="revealedForgejoSecret">
+						<label class="github-webhook__label">{{ t('kanso', 'Secret (copy it now, it is shown only once)') }}</label>
+						<div class="github-webhook__row">
+							<input class="github-webhook__input" type="text" readonly :value="revealedForgejoSecret">
+							<NcButton @click="copyText(revealedForgejoSecret)">{{ t('kanso', 'Copy') }}</NcButton>
+						</div>
+					</template>
+
+					<div class="github-webhook__actions">
+						<NcButton type="primary" :disabled="forgejoBusy" @click="handleRotateForgejoSecret">
+							{{ forgejo.enabled ? t('kanso', 'Regenerate secret') : t('kanso', 'Enable & generate secret') }}
+						</NcButton>
+						<NcButton v-if="forgejo.enabled" :disabled="forgejoBusy" @click="handleDisableForgejo">
+							{{ t('kanso', 'Disable') }}
+						</NcButton>
+						<span v-if="forgejo.enabled" class="github-webhook__status">{{ t('kanso', 'Enabled') }}</span>
+					</div>
+
+					<template v-if="forgejo.enabled">
+						<label class="github-webhook__label" for="bs-forgejo-intake-stack">{{ t('kanso', 'Issue intake') }}</label>
+						<p class="github-webhook__hint">
+							{{ t('kanso', 'Pick a column and every newly opened issue becomes a card there, with the issue attached as a link (title only, no body copy).') }}
+						</p>
+						<div class="github-webhook__row">
+							<select
+								id="bs-forgejo-intake-stack"
+								class="workflow__select"
+								:disabled="forgejoIntakeBusy"
+								:value="forgejo.intakeStackId == null ? '' : String(forgejo.intakeStackId)"
+								@change="onForgejoIntakeStackChange">
+								<option value="">{{ t('kanso', 'Off — do not create cards') }}</option>
+								<option v-for="s in stacks" :key="s.id" :value="String(s.id)">{{ s.title }}</option>
+							</select>
+						</div>
+						<div v-if="forgejo.intakeStackId != null" class="github-webhook__row">
+							<select
+								class="workflow__select"
+								:disabled="forgejoIntakeBusy"
+								:value="forgejoIntakeFilterMode"
+								:aria-label="t('kanso', 'Which Forgejo issues to take in')"
+								@change="onForgejoIntakeFilterModeChange">
+								<option value="all">{{ t('kanso', 'All issues') }}</option>
+								<option value="label">{{ t('kanso', 'Only issues with a label') }}</option>
+							</select>
+							<template v-if="forgejoIntakeFilterMode === 'label'">
+								<input
+									v-model="forgejoIntakeLabelInput"
+									class="github-webhook__input"
+									type="text"
+									:placeholder="t('kanso', 'Forgejo label name')"
+									:aria-label="t('kanso', 'Forgejo label name')"
+									:disabled="forgejoIntakeBusy"
+									@keyup.enter="saveForgejoIntakeLabel">
+								<NcButton :disabled="forgejoIntakeBusy || !forgejoIntakeLabelInput.trim()" @click="saveForgejoIntakeLabel">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+							</template>
+						</div>
+					</template>
+					<span v-if="forgejoError" class="label-settings__error">{{ forgejoError }}</span>
+				</template>
+					</div>
+				</div>
+
 				<!-- Calendar feed group (read-only ICS of card due dates) (#3541) -->
 				<div class="automation__group">
 					<button
@@ -2182,6 +2284,8 @@ import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
+// @mdi ships no Forgejo mark; a branch glyph is the closest neutral stand-in.
+import SourceBranchIcon from 'vue-material-design-icons/SourceBranch.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
@@ -2206,6 +2310,10 @@ import {
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
 	updateWebhookIntake as apiUpdateWebhookIntake,
+	fetchForgejoConfig,
+	rotateForgejoSecret as apiRotateForgejoSecret,
+	disableForgejo as apiDisableForgejo,
+	updateForgejoIntake as apiUpdateForgejoIntake,
 	fetchPublicShareConfig,
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
@@ -2400,6 +2508,101 @@ async function copyText(text) {
 	}
 }
 
+// ── Forgejo webhook config (MANAGE) ──────────────────────────────────────────
+// Mirrors the GitHub block above and is independent of it: a board may run
+// either webhook, both, or neither. There is no instance URL to configure -
+// Kanso only ever receives deliveries, it never calls the instance.
+const forgejo = ref({ enabled: false, payloadUrl: '', intakeStackId: null, intakeLabel: '' })
+const revealedForgejoSecret = ref('')
+const forgejoError = ref('')
+const forgejoBusy = ref(false)
+const forgejoIntakeBusy = ref(false)
+const forgejoIntakeFilterMode = ref('all')
+const forgejoIntakeLabelInput = ref('')
+
+function syncForgejoIntakeFromConfig() {
+	forgejoIntakeFilterMode.value = forgejo.value.intakeLabel ? 'label' : 'all'
+	forgejoIntakeLabelInput.value = forgejo.value.intakeLabel || ''
+}
+
+async function loadForgejoConfig() {
+	if (!canManage.value) return
+	try {
+		forgejo.value = await fetchForgejoConfig(props.boardId)
+		syncForgejoIntakeFromConfig()
+		// An active integration should be visible without a click.
+		if (forgejo.value.enabled) {
+			automationGroups.value.forgejo = true
+		}
+	} catch (e) {
+		forgejoError.value = t('kanso', 'Failed to load the Forgejo webhook config.')
+	}
+}
+
+async function saveForgejoIntake(stackId, label) {
+	forgejoError.value = ''
+	forgejoIntakeBusy.value = true
+	try {
+		forgejo.value = await apiUpdateForgejoIntake(props.boardId, stackId, label)
+		syncForgejoIntakeFromConfig()
+	} catch (e) {
+		forgejoError.value = e?.response?.data?.error || t('kanso', 'Could not save the issue-intake settings.')
+	} finally {
+		forgejoIntakeBusy.value = false
+	}
+}
+
+function onForgejoIntakeStackChange(e) {
+	const v = e.target.value
+	if (v === '') {
+		saveForgejoIntake(null, '')
+		return
+	}
+	const label = forgejoIntakeFilterMode.value === 'label' ? forgejoIntakeLabelInput.value.trim() : ''
+	saveForgejoIntake(Number(v), label)
+}
+
+function onForgejoIntakeFilterModeChange(e) {
+	forgejoIntakeFilterMode.value = e.target.value
+	if (e.target.value === 'all') {
+		saveForgejoIntake(forgejo.value.intakeStackId, '')
+	}
+}
+
+function saveForgejoIntakeLabel() {
+	const label = forgejoIntakeLabelInput.value.trim()
+	if (!label) return
+	saveForgejoIntake(forgejo.value.intakeStackId, label)
+}
+
+async function handleRotateForgejoSecret() {
+	forgejoError.value = ''
+	forgejoBusy.value = true
+	try {
+		const res = await apiRotateForgejoSecret(props.boardId)
+		revealedForgejoSecret.value = res.secret
+		forgejo.value = { ...forgejo.value, enabled: true, payloadUrl: res.payloadUrl }
+	} catch (e) {
+		forgejoError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
+	} finally {
+		forgejoBusy.value = false
+	}
+}
+
+async function handleDisableForgejo() {
+	forgejoError.value = ''
+	forgejoBusy.value = true
+	try {
+		await apiDisableForgejo(props.boardId)
+		forgejo.value = { ...forgejo.value, enabled: false }
+		revealedForgejoSecret.value = ''
+	} catch (e) {
+		forgejoError.value = e?.response?.data?.error || t('kanso', 'Could not disable the webhook.')
+	} finally {
+		forgejoBusy.value = false
+	}
+}
+
 // ── Public / read-only share link (MANAGE) ───────────────────────────────────
 const publicShare = ref({ enabled: false, url: null, commentsEnabled: false })
 const publicShareError = ref('')
@@ -2535,6 +2738,7 @@ async function disableCalendarFeed() {
 }
 
 onMounted(loadWebhookConfig)
+onMounted(loadForgejoConfig)
 onMounted(loadPublicShareConfig)
 onMounted(loadCalendarFeedConfig)
 
@@ -2610,6 +2814,7 @@ const automationGroups = ref({
 	autoArchive: false,
 	recurring: false,
 	github: false,
+	forgejo: false,
 	publicLink: false,
 	calendarFeed: false,
 })

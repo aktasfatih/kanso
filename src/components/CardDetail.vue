@@ -1511,18 +1511,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="hierarchyError" class="card-modal__save-error">{{ hierarchyError }}</span>
 						</section>
 
-						<!-- GitHub links. Hidden when the board switched GitHub off (#5894);
-						     linked issues/PRs are kept and reappear when it is switched on. -->
+						<!-- Forge links (GitHub / Forgejo). Hidden when the board switched
+						     code links off (#5894); linked issues/PRs are kept and reappear
+						     when it is switched on. The stored switch key stays `github`
+						     for existing boards - it gates the whole section, both forges. -->
 						<section v-if="cardFeatures.github" class="card-modal__section card-modal__section--tight">
 							<div class="card-modal__section-inline">
-								<GithubIcon :size="16" class="card-modal__eyebrow-icon" />
-								<span class="card-modal__eyebrow">{{ t('kanso', 'GitHub') }}</span>
+								<SourceBranchIcon :size="16" class="card-modal__eyebrow-icon" />
+								<span class="card-modal__eyebrow">{{ t('kanso', 'Code') }}</span>
 								<form v-if="canEdit" class="card-modal__inline-form" @submit.prevent="handleAddLink">
 									<input
 										v-model="newLinkUrl"
 										type="url"
 										class="card-modal__dashed-input"
-										:placeholder="t('kanso', 'Paste a GitHub PR or issue URL…')">
+										:placeholder="t('kanso', 'Paste a pull request or issue URL…')">
 									<NcButton
 										type="secondary"
 										native-type="submit"
@@ -1541,6 +1543,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<ul v-if="cardLinks.length > 0" class="card-modal__links-list">
 								<li v-for="link in cardLinks" :key="link.id" class="card-modal__link-row">
 									<a :href="link.url" target="_blank" rel="noopener noreferrer" class="card-modal__link">
+										<GithubIcon
+											v-if="link.provider !== 'forgejo'"
+											:size="14"
+											class="card-modal__link-provider" />
+										<SourceBranchIcon v-else :size="14" class="card-modal__link-provider" />
 										<span class="card-modal__link-badge" :class="`card-modal__link-badge--${link.state}`">
 											{{ linkStateLabel(link.state) }}
 										</span>
@@ -2386,6 +2393,8 @@ import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
+// @mdi ships no Forgejo mark; a branch glyph stands in for self-hosted forges.
+import SourceBranchIcon from 'vue-material-design-icons/SourceBranch.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ContentDuplicateIcon from 'vue-material-design-icons/ContentDuplicate.vue'
 import TransferIcon from 'vue-material-design-icons/Transfer.vue'
@@ -7927,6 +7936,10 @@ body.theme--dark .card-modal,
 }
 .card-modal__link-ext {
 	margin-left: auto;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__link-provider {
+	flex: 0 0 auto;
 	color: var(--color-text-maxcontrast);
 }
 .card-modal__file-input {

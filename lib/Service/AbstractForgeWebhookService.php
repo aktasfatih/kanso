@@ -140,6 +140,9 @@ abstract class AbstractForgeWebhookService {
 	/** The route name of this provider's ingest endpoint. */
 	abstract protected function routeName(): string;
 
+	/** The CardLink provider tag links created by this service carry. */
+	abstract protected function provider(): string;
+
 	abstract protected function readSecret(Board $board): ?string;
 
 	abstract protected function writeSecret(Board $board, ?string $secret): void;
@@ -243,7 +246,7 @@ abstract class AbstractForgeWebhookService {
 	 *
 	 * @param string $signatureHeader the raw signature header value
 	 * @param string $rawBody the exact request body bytes (HMAC is over these)
-	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool, reason?: string}
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the signature is missing or invalid
 	 */
@@ -288,7 +291,7 @@ abstract class AbstractForgeWebhookService {
 	 * A pull-request event: the card is named by the PR's `kanso-<id>` head
 	 * branch; the PR is recorded as a link and the card auto-moved per action.
 	 *
-	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool}
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, reason?: string}
 	 */
 	protected function handlePullRequestEvent(Board $board, ForgeEvent $event): array {
 		$boardId = $board->getId();
@@ -436,7 +439,7 @@ abstract class AbstractForgeWebhookService {
 	 * the board configured an intake stack (and the issue passes the optional
 	 * label filter), a link-only card is auto-created for it.
 	 *
-	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool, reason?: string}
 	 */
 	protected function handleIssueEvent(Board $board, ForgeEvent $event): array {
 		$links = $this->cardLinkMapper->findByBoardAndUrls($board->getId(), $event->urlCandidates);
@@ -496,7 +499,7 @@ abstract class AbstractForgeWebhookService {
 	 * redeliveries sequentially in practice, and the worst case is one extra
 	 * card a human deletes - not worth a cross-table constraint.
 	 *
-	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool}
+	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool, reason?: string}
 	 */
 	protected function intakeIssue(Board $board, ForgeEvent $event): array {
 		$stackId = $this->readIntakeStackId($board);
@@ -538,6 +541,7 @@ abstract class AbstractForgeWebhookService {
 		// leaves a plain card rather than failing the delivery.
 		$link = new CardLink();
 		$link->setCardId($card->getId());
+		$link->setProvider($this->provider());
 		$link->setUrl($event->htmlUrl);
 		$link->setKind(CardLink::KIND_ISSUE);
 		$link->setState($event->state);

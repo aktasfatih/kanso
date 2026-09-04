@@ -238,6 +238,15 @@ return [
 		['name' => 'webhook#intake', 'url' => '/api/boards/{id}/webhook/intake', 'verb' => 'PUT'],
 		['name' => 'webhook#disable', 'url' => '/api/boards/{id}/webhook', 'verb' => 'DELETE'],
 
+		// Forgejo runs alongside the GitHub webhook, with its own secret and
+		// intake config. Delivery-only: no instance URL is stored, so there is
+		// nothing here to configure a host with.
+		['name' => 'webhook#forgejo', 'url' => '/api/boards/{id}/forgejo-webhook', 'verb' => 'POST'],
+		['name' => 'webhook#forgejoConfig', 'url' => '/api/boards/{id}/forgejo', 'verb' => 'GET'],
+		['name' => 'webhook#forgejoRotate', 'url' => '/api/boards/{id}/forgejo/rotate', 'verb' => 'POST'],
+		['name' => 'webhook#forgejoIntake', 'url' => '/api/boards/{id}/forgejo/intake', 'verb' => 'PUT'],
+		['name' => 'webhook#forgejoDisable', 'url' => '/api/boards/{id}/forgejo', 'verb' => 'DELETE'],
+
 		['name' => 'cardLink#index', 'url' => '/api/cards/{cardId}/links', 'verb' => 'GET'],
 		['name' => 'cardLink#create', 'url' => '/api/cards/{cardId}/links', 'verb' => 'POST'],
 		['name' => 'cardLink#destroy', 'url' => '/api/cards/{cardId}/links/{linkId}', 'verb' => 'DELETE'],

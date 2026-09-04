@@ -32,6 +32,11 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 		return 'kanso.webhook.github';
 	}
 
+	#[\Override]
+	protected function provider(): string {
+		return CardLink::PROVIDER_GITHUB;
+	}
+
 	// ---- config columns ----------------------------------------------------
 
 	#[\Override]

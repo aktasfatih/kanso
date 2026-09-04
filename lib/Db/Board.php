@@ -36,6 +36,12 @@ use OCP\DB\Types;
  * @method void setWebhookIntakeStackId(?int $webhookIntakeStackId)
  * @method string|null getWebhookIntakeLabel()
  * @method void setWebhookIntakeLabel(?string $webhookIntakeLabel)
+ * @method string|null getForgejoWebhookSecret()
+ * @method void setForgejoWebhookSecret(?string $forgejoWebhookSecret)
+ * @method int|null getForgejoIntakeStackId()
+ * @method void setForgejoIntakeStackId(?int $forgejoIntakeStackId)
+ * @method string|null getForgejoIntakeLabel()
+ * @method void setForgejoIntakeLabel(?string $forgejoIntakeLabel)
  * @method string getEstimateScale()
  * @method void setEstimateScale(string $estimateScale)
  * @method bool|null getNewCardsOnTop()
@@ -77,6 +83,13 @@ class Board extends Entity implements \JsonSerializable {
 	// issues). Both ride the webhook config endpoint, not the board payload.
 	protected ?int $webhookIntakeStackId = null;
 	protected ?string $webhookIntakeLabel = null;
+	// The Forgejo webhook runs ALONGSIDE the GitHub one, so it carries its own
+	// secret and intake config rather than sharing the columns above. There is
+	// deliberately no instance URL: deliveries are inbound only, so Kanso never
+	// needs to know where the instance lives.
+	protected ?string $forgejoWebhookSecret = null;
+	protected ?int $forgejoIntakeStackId = null;
+	protected ?string $forgejoIntakeLabel = null;
 	protected ?string $estimateScale = null;
 	protected ?bool $newCardsOnTop = null;
 	// The per-board human-id prefix (e.g. "KAN"); a card's reference is
@@ -129,6 +142,9 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('webhookSecret', Types::STRING);
 		$this->addType('webhookIntakeStackId', Types::INTEGER);
 		$this->addType('webhookIntakeLabel', Types::STRING);
+		$this->addType('forgejoWebhookSecret', Types::STRING);
+		$this->addType('forgejoIntakeStackId', Types::INTEGER);
+		$this->addType('forgejoIntakeLabel', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);
 		$this->addType('newCardsOnTop', Types::BOOLEAN);
 		$this->addType('prefix', Types::STRING);
