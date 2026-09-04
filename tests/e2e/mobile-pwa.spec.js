@@ -354,6 +354,192 @@ test('the persisted offline cache is not restored for a different user', async (
 	}).toMatch(/^(deleted|replaced)$/)
 })
 
+// #10184 — the description editor opening below the fold on a phone.
+//
+// Reported as "the edit box disappears / is not editable", which is not what
+// happens: the editor mounts, focuses and accepts typing. It simply opens where
+// the read-view was — far down the modal's scroll container — and NOTHING scrolls
+// it into view. Measured at 390x664 that left the caret 5px above the fold, and
+// with the soft keyboard up the editor was off-screen entirely.
+//
+// Tiptap's autofocus is not a fix: ProseMirror's scrollIntoView only brings the
+// caret to the container EDGE, i.e. zero keyboard clearance.
+//
+// These tests live HERE because only tests/e2e/mobile-pwa.spec.js runs at a phone
+// viewport (playwright.config.js matches both mobile projects on this file);
+// tests/e2e/description-editor.spec.js is desktop-only and can never see this.
+test.describe('the description editor on a phone', () => {
+	const BOARD_TITLE = 'Mobile Description E2E'
+	// Roughly what a phone keyboard claims. Playwright has no soft keyboard on
+	// either engine, so this is a BUDGET the caret must clear, not a real keyboard:
+	// the caret has to end up at least this far above the scroller's bottom edge.
+	// Measured headroom with the fix in place is ~50px on the iPhone 14 (the tight
+	// one — 664px tall against the Pixel 7's 915px) and ~140px on the Pixel 7, so a
+	// future change to the editor's min-height or to where the description sits in
+	// the modal can turn this red without a real regression. Check the numbers in
+	// the failure before assuming the fix broke.
+	const KEYBOARD_PX = 260
+	const desc = { boardId: null, cardUrl: '' }
+
+	test.beforeAll(async () => {
+		for (const b of await api.get('/boards')) {
+			if (b.title === BOARD_TITLE) await api.delete(`/boards/${b.id}`).catch(() => {})
+		}
+		const board = await api.post('/boards', { title: BOARD_TITLE })
+		desc.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Card with a description' })
+		await api.patch(`/cards/${card.id}`, { description: 'Existing description text for the repro.' })
+		desc.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
+	})
+
+	test.afterAll(async () => {
+		if (desc.boardId) await api.delete(`/boards/${desc.boardId}`).catch(() => {})
+	})
+
+	const VIEW = '.card-modal__desc-view'
+	const EDITOR = '.card-modal__section .kanso-md-editor'
+
+	/**
+	 * Measure `anchorSel` against the scroll container that actually clips it,
+	 * and report how far that container is scrolled.
+	 *
+	 * The scroller is resolved by walking UP from the anchor rather than by naming
+	 * NcModal's `.modal-container__content`: on a phone that is indeed the
+	 * scroller, but at a desktop width `.card-modal__content` takes over
+	 * (max-height: 64vh; overflow: auto — the mobile media query resets it), so a
+	 * hard-coded class would silently measure the wrong box on one of the two
+	 * viewports. Both call sites below pass anchors from the same section, so both
+	 * resolve to the same element and their scrollTops are comparable.
+	 */
+	function probe(page, anchorSel) {
+		return page.evaluate((sel) => {
+			const anchor = document.querySelector(sel)
+			if (!anchor) return null
+			let scroller = null
+			for (let el = anchor.parentElement; el && !scroller; el = el.parentElement) {
+				// `overflow: auto` alone is not enough: on a phone
+				// `.card-modal__content` keeps it while the media query drops its
+				// max-height, so its box is as tall as its content and it never
+				// clips anything. The nearest ancestor that OVERFLOWS is the one
+				// that decides what is on screen.
+				const oy = getComputedStyle(el).overflowY
+				if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) scroller = el
+			}
+			if (!scroller) return null
+
+			// Tiptap autofocuses with focus('end'), so the caret is on the last line.
+			// The selection rect is authoritative where the engine gives a collapsed
+			// range a height; otherwise use that last line's box.
+			let caretBottom = null
+			const selection = window.getSelection()
+			if (selection && selection.rangeCount) {
+				const r = selection.getRangeAt(0).getBoundingClientRect()
+				if (r.height > 0) caretBottom = r.bottom
+			}
+			if (caretBottom === null) {
+				const last = anchor.querySelector('.ProseMirror')?.lastElementChild
+				if (last) caretBottom = last.getBoundingClientRect().bottom
+			}
+
+			const s = scroller.getBoundingClientRect()
+			const a = anchor.getBoundingClientRect()
+			return {
+				scrollerTop: s.top,
+				scrollerBottom: s.bottom,
+				scrollTop: scroller.scrollTop,
+				editorTop: a.top,
+				editorBottom: a.bottom,
+				caretBottom,
+				focusedInEditor: !!(document.activeElement && anchor.contains(document.activeElement)),
+			}
+		}, anchorSel)
+	}
+
+	/** Open the card, activate the description, and measure once it settles. */
+	async function openEditor(page, activate) {
+		await page.goto(desc.cardUrl)
+		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 30_000 })
+		const view = page.locator(VIEW)
+		await expect(view).toBeVisible({ timeout: 15_000 })
+
+		const before = await probe(page, VIEW)
+		expect(before, 'no scroll container found around the description').not.toBeNull()
+
+		await activate(view)
+
+		const editor = page.locator(EDITOR)
+		await expect(editor).toBeVisible({ timeout: 15_000 })
+		await expect(editor.locator('.ProseMirror')).toBeVisible({ timeout: 10_000 })
+
+		// The scroll lands a couple of frames after the editor mounts (the toolbar
+		// paints only once Tiptap is constructed, and it must run AFTER Tiptap's own
+		// focus-driven scroll). Poll until the scroller stops moving instead of
+		// sleeping a fixed interval — the self-hosted runner is several times slower
+		// than a dev box, and a fixed sleep would go red on timing alone.
+		let m = null
+		let previous = null
+		await expect.poll(async () => {
+			m = await probe(page, EDITOR)
+			if (!m) return false
+			const settled = previous !== null && Math.abs(m.scrollTop - previous) < 1
+			previous = m.scrollTop
+			return settled
+		}, { timeout: 20_000, message: 'the modal scroller never settled' }).toBe(true)
+
+		return { ...m, scrollTopBefore: before.scrollTop }
+	}
+
+	test('tapping the description scrolls the editor clear of the keyboard', async ({ page }) => {
+		const m = await openEditor(page, (view) => view.tap())
+
+		// The report's actual symptom: the editor must be wholly on screen.
+		expect(m.editorBottom, 'the editor hangs below the modal scroller')
+			.toBeLessThanOrEqual(m.scrollerBottom + 1)
+		expect(m.editorTop, 'the editor was scrolled off the top instead')
+			.toBeGreaterThanOrEqual(m.scrollerTop - 1)
+
+		// …and the caret clears a phone keyboard, which the container edge alone
+		// never did.
+		expect(m.caretBottom, 'no caret position could be measured').not.toBeNull()
+		expect(m.caretBottom, 'the caret sits inside the keyboard band')
+			.toBeLessThanOrEqual(m.scrollerBottom - KEYBOARD_PX)
+
+		// Non-vacuity: reconstruct where the caret would have been had the scroller
+		// stayed put (scrolling by Δ moves content up by exactly Δ). Without the
+		// fix that is where it sat — under the keyboard. If a future layout makes
+		// the editor fit unaided, this fails and the test gets re-derived rather
+		// than passing for free.
+		const delta = m.scrollTop - m.scrollTopBefore
+		expect(m.caretBottom + delta, 'the editor already fitted without scrolling — test is vacuous')
+			.toBeGreaterThan(m.scrollerBottom - KEYBOARD_PX)
+
+		// It is a real editing session, not just a well-placed box.
+		expect(m.focusedInEditor, 'the editor did not take focus').toBe(true)
+	})
+
+	// The phone fix must not disturb the desktop: there the editor already fits,
+	// and it must still open, focus and sit fully inside the modal scroller.
+	test.describe('at a desktop width', () => {
+		test.use({
+			viewport: { width: 1440, height: 900 },
+			isMobile: false,
+			hasTouch: false,
+			deviceScaleFactor: 1,
+		})
+
+		test('the description editor still opens fully visible and focused', async ({ page }) => {
+			const m = await openEditor(page, (view) => view.click())
+
+			expect(m.editorTop, 'desktop editor scrolled off the top')
+				.toBeGreaterThanOrEqual(m.scrollerTop - 1)
+			expect(m.editorBottom, 'desktop editor hangs below the scroller')
+				.toBeLessThanOrEqual(m.scrollerBottom + 1)
+			expect(m.focusedInEditor, 'desktop editor did not take focus').toBe(true)
+		})
+	})
+})
+
 // #10183 — review rows on a phone.
 //
 // `.review-row` is a flex row whose action cluster is `flex-shrink: 0` and holds

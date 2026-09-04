@@ -1173,6 +1173,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<template v-if="editingDescription">
 								<Suspense>
 									<MarkdownEditor
+										ref="descriptionEditorRef"
 										v-model="draftDescription"
 										:placeholder="t('kanso', 'Add a description…')"
 										:disabled="isSaving"
@@ -3566,7 +3567,60 @@ watch(() => props.cardId, () => {
 	commentError.value = ''
 })
 
-function startDescriptionEdit() {
+// The editor that replaces the read-view when you start editing. Only needed to
+// scroll it into view — see scrollDescriptionEditorIntoView().
+const descriptionEditorRef = ref(null)
+
+/**
+ * Bring the just-opened description editor onto the screen (#10184).
+ *
+ * On a phone the description usually sits well below the fold of the modal's
+ * scroll container, and swapping the read-view for the editor scrolls nothing:
+ * the editor mounts and focuses exactly where the read-view was. Measured on a
+ * 390x664 viewport that left ~5px of the caret above the fold, and once the soft
+ * keyboard opened the editor was off-screen entirely — which is what the report
+ * "the edit box disappears / is not editable" actually describes.
+ *
+ * Tiptap's own autofocus is not enough: ProseMirror's scrollIntoView only
+ * guarantees the caret reaches the container EDGE, i.e. zero keyboard clearance.
+ * Centring the editor in the scroller instead leaves roughly half the container
+ * height below it, which clears a phone keyboard.
+ *
+ * The editor is an async component behind <Suspense>, so on the first open its
+ * chunk is still being fetched when this runs. The wait is budgeted in TIME, not
+ * in frames: on the slow phone connection this is reported from, a frame count
+ * small enough to look reasonable expires before the chunk lands and the scroll
+ * silently never happens. It also stops the moment the editor is closed again
+ * (Escape, Cancel, a card switch), so it can never scroll under the user.
+ */
+async function scrollDescriptionEditorIntoView() {
+	let el = null
+	const deadline = Date.now() + 10_000
+	while (!el && editingDescription.value && Date.now() < deadline) {
+		await nextTick()
+		el = descriptionEditorRef.value?.$el ?? null
+		if (!el) await new Promise((r) => requestAnimationFrame(r))
+	}
+	// `$el` is a real element for this component (single root), but bail rather
+	// than throw if that ever changes to a fragment, whose `$el` is a text anchor.
+	if (!el || typeof el.scrollIntoView !== 'function' || !editingDescription.value) return
+	// Two frames: the toolbar renders only once Tiptap is constructed, so the
+	// element grows right after mount, and this scroll must land AFTER Tiptap's
+	// own focus-driven one.
+	await new Promise((r) => requestAnimationFrame(r))
+	await new Promise((r) => requestAnimationFrame(r))
+	if (!editingDescription.value) return
+	// Centring only helps while the editor FITS on screen. Tiptap focuses at the
+	// END of the text, so centring an editor taller than the viewport would push
+	// the caret off the bottom — worse than the container-edge alignment
+	// ProseMirror already leaves it at. Those keep today's behaviour.
+	if (el.getBoundingClientRect().height > window.innerHeight) return
+	// Instant, not smooth (unlike scrollToTargetComment): this opens an edit the
+	// user is about to type into, and a running animation would fight the caret.
+	el.scrollIntoView({ block: 'center' })
+}
+
+async function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
 	descriptionBaseText.value = draftDescription.value
 	// `descriptionRevision` rides on the DETAIL payload only (it is deliberately
@@ -3579,6 +3633,7 @@ function startDescriptionEdit() {
 	descriptionConflict.value = null
 	editingDescription.value = true
 	saveError.value = ''
+	await scrollDescriptionEditorIntoView()
 }
 
 function cancelDescriptionEdit() {
