@@ -22,6 +22,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AttachmentSanitizer;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\DeckImportService;
 use OCA\Kanso\Service\DeckReader;
 use OCA\Kanso\Service\InvalidInputException;
@@ -273,6 +274,18 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame(100, mb_strlen($card->getTitle()));
 		// No trailing blank lines when the original description was empty.
 		self::assertSame('Full title: ' . $longTitle, $card->getDescription());
+	}
+
+	public function testImportKeepsADescriptionLongerThanTheEditorCap(): void {
+		// CardService::MAX_DESCRIPTION_LENGTH caps what a user can TYPE into a card
+		// (enforced in CardService::update()). The importer must stay uncapped, or
+		// migrating a board whose cards hold long descriptions would silently lose
+		// or reject content. Pinned so the cap cannot later be pushed down into a
+		// shared writer.
+		$huge = str_repeat('d', CardService::MAX_DESCRIPTION_LENGTH + 1000);
+		$card = $this->importSingleCard('Imported spec', $huge);
+
+		self::assertSame($huge, $card->getDescription());
 	}
 
 	public function testImportEmptyCardTitleBecomesPlaceholder(): void {

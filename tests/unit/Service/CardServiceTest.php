@@ -748,6 +748,113 @@ class CardServiceTest extends TestCase {
 		self::assertGreaterThan(0, $updated->getLastModified());
 	}
 
+	// ---- description length cap -------------------------------------------
+	//
+	// update() is the ONLY client-facing description write (create() takes no
+	// description; the copy/template/recurrence writers and the CSV/Deck/Trello
+	// importers set it directly and stay uncapped so importing a long
+	// description from another tool keeps working). The cap is checked only when
+	// the text actually changes, which is what keeps a row stored before the cap
+	// existed readable, saveable on its other fields, and editable DOWN.
+
+	public function testUpdateAcceptsARealisticMultiKilobyteDescription(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// A long but ordinary card description - a spec, not an attack.
+		$long = str_repeat('Kanso card description paragraph. ', 250); // ~8 KiB
+		$updated = $this->service->update(9, null, $long, null, null, null, 'alice');
+		self::assertSame($long, $updated->getDescription());
+	}
+
+	public function testUpdateAcceptsADescriptionExactlyAtTheCap(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// Asserted by identity, not by length: a "silently truncate to the cap"
+		// implementation must not pass this.
+		$atCap = str_repeat('x', CardService::MAX_DESCRIPTION_LENGTH);
+		$updated = $this->service->update(9, null, $atCap, null, null, null, 'alice');
+		self::assertSame($atCap, $updated->getDescription());
+	}
+
+	public function testUpdateRejectsADescriptionOverTheCap(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Refused before anything is persisted or logged - a 400, not a write.
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(
+			9,
+			null,
+			str_repeat('x', CardService::MAX_DESCRIPTION_LENGTH + 1),
+			null,
+			null,
+			null,
+			'alice',
+		);
+	}
+
+	public function testUpdateCountsTheDescriptionCapInCharactersNotBytes(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// Multibyte-safe, like the title and comment caps: a description of
+		// exactly MAX characters is accepted even though it is twice that in
+		// bytes - a non-ASCII writer does not get half the room.
+		$atCap = str_repeat('é', CardService::MAX_DESCRIPTION_LENGTH);
+		self::assertGreaterThan(CardService::MAX_DESCRIPTION_LENGTH, strlen($atCap));
+		$updated = $this->service->update(9, null, $atCap, null, null, null, 'alice');
+		self::assertSame($atCap, $updated->getDescription());
+	}
+
+	public function testUpdateLeavesAGrandfatheredOverLongDescriptionSaveableAndEditableDown(): void {
+		$overLong = str_repeat('x', CardService::MAX_DESCRIPTION_LENGTH + 500);
+		// A FRESH entity per load, as a real mapper would hand back - so the three
+		// saves below are independent and reordering them cannot change what they
+		// prove.
+		$this->cardMapper->method('find')->with(9)
+			->willReturnCallback(fn (int $cardId): Card => $this->describedCard($overLong, 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		// 1. An unrelated field save on the over-long row is not blocked, and the
+		//    stored text is left untouched.
+		$renamed = $this->service->update(9, 'Renamed', null, null, null, null, 'alice');
+		self::assertSame('Renamed', $renamed->getTitle());
+		self::assertSame($overLong, $renamed->getDescription());
+
+		// 2. Re-sending the identical over-long text is a no-op, not a 400 - the
+		//    editor can round-trip the row it just loaded.
+		$resaved = $this->service->update(9, null, $overLong, null, null, null, 'alice');
+		self::assertSame($overLong, $resaved->getDescription());
+
+		// 3. And it can be edited DOWN to something within the cap.
+		$trimmed = $this->service->update(9, null, 'trimmed', null, null, null, 'alice');
+		self::assertSame('trimmed', $trimmed->getDescription());
+	}
+
+	public function testUpdateRejectsGrowingAnAlreadyOverLongDescription(): void {
+		$overLong = str_repeat('x', CardService::MAX_DESCRIPTION_LENGTH + 500);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->describedCard($overLong, 200));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::never())->method('update');
+
+		// Grandfathering is read/shrink only: appending to an over-long row is
+		// still refused, so the row cannot keep growing.
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(9, null, $overLong . 'more', null, null, null, 'alice');
+	}
+
 	// ---- description optimistic concurrency (#9845) -----------------------
 	//
 	// `baseLastModified` is OPTIONAL: omitting it keeps the historical
@@ -3103,6 +3210,35 @@ class CardServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->copy(9, 7, 'bob');
+	}
+
+	public function testCopyCarriesAnOverCapDescriptionUnchanged(): void {
+		// The MAX_DESCRIPTION_LENGTH cap deliberately lives in update() only - the
+		// boundary where a client submits NEW text. copy() carries an EXISTING
+		// description across, so a row that predates the cap (or arrived through an
+		// importer) must still be duplicable. Pinning it here so the cap cannot
+		// later be pushed down into a shared writer or into Card::setDescription().
+		$overLong = str_repeat('x', CardService::MAX_DESCRIPTION_LENGTH + 500);
+		$board = $this->board(1);
+		$source = $this->card(9, 5, 1);
+		$source->setTitle('Imported spec');
+		$source->setDescription($overLong);
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 1));
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $c): Card {
+			$c->setId(42);
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([]);
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([]);
+
+		$copy = $this->service->copy(9, 7, 'alice');
+		self::assertSame($overLong, $copy->getDescription());
 	}
 
 	// ---- moveToBoard (#3679) ----------------------------------------------
