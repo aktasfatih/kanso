@@ -265,21 +265,21 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4151
+#: src/components/CardDetail.vue:4155
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
 msgstr[1] "%n дня назад"
 msgstr[2] "%n дней назад"
 
-#: src/components/CardDetail.vue:4149
+#: src/components/CardDetail.vue:4153
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/components/CardDetail.vue:4147
+#: src/components/CardDetail.vue:4151
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -314,7 +314,7 @@ msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:1949
+#: src/components/CardDetail.vue:1953
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1566,7 +1566,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4329
+#: src/components/CardDetail.vue:4344
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3190,7 +3190,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4331
+#: src/components/CardDetail.vue:4346
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4515,7 +4515,7 @@ msgstr "Показывать панель форматирования"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:5951
+#: src/components/CardDetail.vue:5966
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5158,7 +5158,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4330
+#: src/components/CardDetail.vue:4345
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -5236,7 +5236,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4332
+#: src/components/CardDetail.vue:4347
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

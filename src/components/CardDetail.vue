@@ -1898,11 +1898,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<!-- #10131 — the relative label alone ("5 days ago") can't answer
 									     "when exactly?", so the precise stamp sits next to it. It is
 									     ALWAYS rendered, never hover-only: a tooltip is unreachable on
-									     touch, and this app is installed on phones. -->
-									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}<template v-if="exactTimeLabel(item.timestamp)"><span class="card-modal__activity-sep"> · </span><time
+									     touch, and this app is installed on phones.
+									     #10177 — the relative half is what drops out past 7 days, where
+									     it is no longer relative but an absolute date the stamp already
+									     carries. Never drop the stamp. -->
+									<span class="card-modal__activity-time"><template v-if="activityRelativeTime(item.timestamp)">{{ activityRelativeTime(item.timestamp) }}<span v-if="exactTimeLabel(item.timestamp)" class="card-modal__activity-sep"> · </span></template><time
+										v-if="exactTimeLabel(item.timestamp)"
 										class="card-modal__activity-exact"
 										:datetime="isoTimestamp(item.timestamp)"
-										:title="exactTimeTitle(item.timestamp)">{{ exactTimeLabel(item.timestamp) }}</time></template></span>
+										:title="exactTimeTitle(item.timestamp)">{{ exactTimeLabel(item.timestamp) }}</time></span>
 									<div v-if="hasDescriptionDiff(item) && expandedDiffs.has(item.id)" class="card-modal__activity-diff">
 										<div
 											v-for="(line, i) in diffLines(item.detail.from, item.detail.to)"
@@ -2445,7 +2449,7 @@ import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
-import { allDayInputValue, timedInputValue, formatCardDate, exactTimeLabel, exactTimeTitle, isoTimestamp } from '../utils/dateDisplay.js'
+import { allDayInputValue, timedInputValue, formatCardDate, exactTimeLabel, exactTimeTitle, hasRelativeLabel, isoTimestamp, RELATIVE_LABEL_MAX_DAYS } from '../utils/dateDisplay.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
@@ -4148,8 +4152,19 @@ function relativeTime(tsSeconds) {
 	const hours = Math.floor(mins / 60)
 	if (hours < 24) return n('kanso', '%n hour ago', '%n hours ago', hours)
 	const days = Math.floor(hours / 24)
-	if (days < 7) return n('kanso', '%n day ago', '%n days ago', days)
+	if (days < RELATIVE_LABEL_MAX_DAYS) return n('kanso', '%n day ago', '%n days ago', days)
 	return new Date(Number(tsSeconds) * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// #10177 — the relative label for an ACTIVITY row, which renders it beside the
+// exact stamp. Past 7 days `relativeTime()` above stops being relative and falls
+// back to an absolute date — the very date the stamp beside it already carries,
+// so the row printed it twice ("26 Aug 2026 · 26 Aug 2026, 06:21"). Beyond that
+// boundary the row shows the stamp alone; it carries the date AND the time, so
+// nothing is lost. The time-tracking list keeps calling `relativeTime()` direct:
+// it has no stamp next to it, so the fallback is all it has.
+function activityRelativeTime(tsSeconds) {
+	return hasRelativeLabel(tsSeconds) ? relativeTime(tsSeconds) : ''
 }
 
 // ── Comments / Discussion ────────────────────────────────────────────────────

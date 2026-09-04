@@ -23,7 +23,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { exactTimeLabel, exactTimeTitle, isoTimestamp } from '../../src/utils/dateDisplay.js'
+import { exactTimeLabel, exactTimeTitle, hasRelativeLabel, isoTimestamp } from '../../src/utils/dateDisplay.js'
 
 // Local Fri 28 Aug 2026, 14:32 — the reference "now" for every case below.
 const NOW = new Date(2026, 7, 28, 14, 32, 0)
@@ -59,6 +59,30 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 function labelIn(posixLocale, tsSeconds, nowMs = NOW_MS) {
 	const src = `import { exactTimeLabel } from ${JSON.stringify(MODULE_URL)}\n`
 		+ `process.stdout.write(exactTimeLabel(${tsSeconds}, ${nowMs}))`
+	return execFileSync(process.execPath, ['--input-type=module', '--eval', src], {
+		encoding: 'utf8',
+		env: { ...process.env, LANG: posixLocale, LC_ALL: posixLocale, TZ },
+	})
+}
+
+/**
+ * The activity row's time text for an entry PAST the 7-day mark, rendered under
+ * a forced default locale — the case where `relativeTime()` has already fallen
+ * back to an absolute date, so the row has a date on both sides to reconcile.
+ *
+ * @param {string} posixLocale e.g. 'de_DE.UTF-8'
+ * @param {number} tsSeconds unix timestamp in seconds (must be ≥7 days old)
+ * @param {number} nowMs reference "now"
+ * @returns {string} the row's visible time text in that locale
+ */
+function oldRowIn(posixLocale, tsSeconds, nowMs = NOW_MS) {
+	const src = `import { exactTimeLabel, hasRelativeLabel } from ${JSON.stringify(MODULE_URL)}\n`
+		+ `const ts = ${tsSeconds}, now = ${nowMs}\n`
+		// What relativeTime() renders for an entry this old.
+		+ 'const fallback = new Date(ts * 1000).toLocaleDateString(undefined, { day: \'numeric\', month: \'short\', year: \'numeric\' })\n'
+		+ 'const relative = hasRelativeLabel(ts, now) ? fallback : \'\'\n'
+		+ 'const exact = exactTimeLabel(ts, now)\n'
+		+ 'process.stdout.write(relative && exact ? `${relative} · ${exact}` : (relative || exact))'
 	return execFileSync(process.execPath, ['--input-type=module', '--eval', src], {
 		encoding: 'utf8',
 		env: { ...process.env, LANG: posixLocale, LC_ALL: posixLocale, TZ },
@@ -136,11 +160,104 @@ test('yesterday counts as older even when it is well under 24h ago', () => {
 	assert.ok(label.length > exactTimeLabel(secs(2026, 7, 28, 23, 59, 0), NOW_MS).length)
 })
 
+// ── The activity row's PAIR of labels (#10177) ───────────────────────────────
+//
+// The row renders the relative label and the exact stamp side by side. That is
+// only safe while the relative label is actually relative: `relativeTime()` in
+// CardDetail.vue counts minutes/hours/days and then, past 7 days, falls back to
+// an absolute date — the very date the exact stamp already carries. Shipped in
+// v0.23.0, that printed the date twice: "26. Aug. 2026 · 26. Aug. 2026, 06:21"
+// (issue #108). The cases below cover both sides of the 7-day boundary.
+//
+// The earlier suite passed straight through this bug because every case it had
+// was a recent timestamp. So each case here composes the row exactly as the
+// template composes it, rather than checking a helper in isolation.
+
+/** What `relativeTime()` renders past 7 days: its absolute-date fallback. */
+const relativeFallback = (tsSeconds) => new Date(tsSeconds * 1000)
+	.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+
+/**
+ * The `.card-modal__activity-time` text, composed as the template composes it.
+ *
+ * `relativeLabel` stands in for `relativeTime()`, which lives in the component
+ * because it needs the l10n runtime — pass what it would render for that age.
+ *
+ * @param {number} tsSeconds unix timestamp in seconds
+ * @param {string} relativeLabel what `relativeTime()` renders for this entry
+ * @param {number} nowMs reference "now"
+ * @returns {string} the row's visible time text
+ */
+function activityTimeText(tsSeconds, relativeLabel, nowMs = NOW_MS) {
+	const exact = exactTimeLabel(tsSeconds, nowMs)
+	const relative = hasRelativeLabel(tsSeconds, nowMs) ? relativeLabel : ''
+	if (relative && exact) return `${relative} · ${exact}`
+	return relative || exact
+}
+
+/** How many times a year/date token appears in a rendered row. */
+const occurrences = (haystack, needle) => haystack.split(needle).length - 1
+
+test('an entry older than a week shows its date once, not twice (#108)', () => {
+	// 7 days + 8h before NOW, so relativeTime() is past its fallback.
+	const ts = secs(2026, 7, 21, 6, 21, 0)
+	assert.equal(hasRelativeLabel(ts, NOW_MS), false, 'a >7-day entry has no relative label left')
+
+	const text = activityTimeText(ts, relativeFallback(ts))
+	assert.equal(occurrences(text, '2026'), 1, `the date must appear once, got "${text}"`)
+	assert.ok(!text.includes(' · '), `nothing left to pair the stamp with, got "${text}"`)
+	// Still an exact stamp, and still the full one: date AND time.
+	assert.equal(text, exactTimeLabel(ts, NOW_MS))
+	assert.match(text, /6[:.]21/, `the row must still carry a clock, got "${text}"`)
+})
+
+test('the reporter\'s own example reads right in German', () => {
+	// de-DE is the locale in issue #108, and 06:21 is the reporter's own time —
+	// which doubles as a guard on the padded-hour trap 9714d87 fixed: a de-DE
+	// clock is "06:21", never "6:21".
+	const ts = secs(2026, 7, 21, 6, 21, 0)
+	const text = oldRowIn('de_DE.UTF-8', ts)
+	assert.equal(occurrences(text, '2026'), 1, `de-DE must print the year once, got "${text}"`)
+	assert.ok(!text.includes(' · '), `de-DE must not pair a date with a date, got "${text}"`)
+	assert.match(text, /(^|\s)06[:.]21$/, `de-DE keeps its padded "06:21", got "${text}"`)
+	assert.ok(text.includes('21'), `the day must survive, got "${text}"`)
+})
+
+test('the boundary sits at exactly 7 days, asserted from both sides', () => {
+	const SEVEN_DAYS = 7 * 86400
+	const nowSecs = Math.floor(NOW_MS / 1000)
+	// One second under: still counting days, so the pair is still correct.
+	const under = nowSecs - SEVEN_DAYS + 1
+	assert.equal(hasRelativeLabel(under, NOW_MS), true, 'just under 7 days keeps "6 days ago"')
+	// Exactly 7 days: relativeTime() has switched to a date, so the row must not
+	// keep it. This is the instant the regression started printing it twice.
+	const exact = nowSecs - SEVEN_DAYS
+	assert.equal(hasRelativeLabel(exact, NOW_MS), false, 'exactly 7 days is already the fallback')
+	assert.equal(occurrences(activityTimeText(exact, relativeFallback(exact)), '2026'), 1)
+})
+
+test('every age still shows an exact time — under a day, days, and weeks', () => {
+	const cases = [
+		['2 hours ago', secs(2026, 7, 28, 12, 32, 0)],
+		['3 days ago', secs(2026, 7, 25, 9, 15, 0)],
+		[relativeFallback(secs(2026, 7, 14, 9, 15, 0)), secs(2026, 7, 14, 9, 15, 0)],
+	]
+	for (const [relative, ts] of cases) {
+		const text = activityTimeText(ts, relative)
+		assert.match(text, /\d{1,2}[:.]\d{2}/, `every row keeps a clock, got "${text}"`)
+	}
+	// And under 7 days the pair itself survives — this fix is a narrowing, not a
+	// removal of the stamp or of the relative label.
+	const recent = activityTimeText(secs(2026, 7, 25, 9, 15, 0), '3 days ago')
+	assert.ok(recent.startsWith('3 days ago · '), `the pair must survive, got "${recent}"`)
+})
+
 test('a missing, zero or unparseable timestamp renders nothing and never throws', () => {
 	for (const bad of [0, '0', null, undefined, '', NaN, 'not-a-time', -1, false]) {
 		assert.equal(exactTimeLabel(bad, NOW_MS), '', `exactTimeLabel(${String(bad)})`)
 		assert.equal(exactTimeTitle(bad), '', `exactTimeTitle(${String(bad)})`)
 		assert.equal(isoTimestamp(bad), '', `isoTimestamp(${String(bad)})`)
+		assert.equal(hasRelativeLabel(bad, NOW_MS), false, `hasRelativeLabel(${String(bad)})`)
 	}
 })
 
