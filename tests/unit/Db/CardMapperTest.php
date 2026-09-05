@@ -795,4 +795,93 @@ class CardMapperTest extends TestCase {
 			static fn (CardMapper $mapper): array => $mapper->findDueForReminder(1000, 500)
 		);
 	}
+
+	/**
+	 * Search must not hydrate whole descriptions (#10173). A description is
+	 * deliberately UNCAPPED on the import/copy paths
+	 * ({@see \OCA\Kanso\Service\CardService::MAX_DESCRIPTION_LENGTH}), and
+	 * SearchService fetches up to 100 matching rows per request, so a `SELECT *`
+	 * here makes one search cost as much as the longest description on the
+	 * instance - bounded only by the importer's document-size limit. The clip is
+	 * pushed into SQL so the rows never leave the database at full size.
+	 *
+	 * Scope of this guard, stated honestly: the connection is mocked, so this
+	 * pins the SHAPE of the query - a summary column list plus a
+	 * `SUBSTR(description, 1, N) AS description` alias, and no `*` - not that a
+	 * database returns clipped text. The end-to-end half (an over-cap imported
+	 * description still reads back in full from the card detail endpoint, while
+	 * a search over it returns a short snippet) is covered by
+	 * `tests/e2e/search-long-description.spec.js` against a live instance.
+	 */
+	public function testSearchInBoardsTruncatesTheDescriptionInSql(): void {
+		$selected = [];
+		$aliases = [];
+		$substrings = [];
+
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach (['from', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'setMaxResults'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('select')->willReturnCallback(function ($columns) use ($qb, &$selected): IQueryBuilder {
+			$selected[] = $columns;
+			return $qb;
+		});
+		$qb->method('selectAlias')->willReturnCallback(
+			function ($select, $alias) use ($qb, &$aliases): IQueryBuilder {
+				$aliases[$alias] = $select;
+				return $qb;
+			}
+		);
+		$qb->method('expr')->willReturn(self::exprSink());
+		// A func() sink that records substring() with its real arguments; every
+		// other function call keeps returning a harmless string.
+		$qb->method('func')->willReturn(new class($substrings) {
+			/** @param list<array{0: mixed, 1: mixed, 2: mixed}> $seen */
+			public function __construct(
+				private array &$seen,
+			) {
+			}
+
+			public function substring($input, $start, $length = null): string {
+				$this->seen[] = [$input, $start, $length];
+				return 'SUBSTR(' . $input . ', ' . $start . ', ' . $length . ')';
+			}
+
+			public function __call(string $name, array $args): string {
+				return '';
+			}
+		});
+		// Identity, so the recorded substring bounds are the real values.
+		$qb->method('createNamedParameter')->willReturnCallback(static fn ($value) => $value);
+		$qb->method('createFunction')->willReturn('fn');
+
+		$result = $this->createMock(IResult::class);
+		$result->method('fetch')->willReturn(false);
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		$mapper = new CardMapper($db, new CardVisibilityScope());
+
+		self::assertSame([], $mapper->searchInBoards([1, 2], '%spec%', 100, 'alice', self::roles([1, 2])));
+
+		// No `SELECT *`, and the plain column list carries no description.
+		foreach ($selected as $columns) {
+			self::assertNotSame('*', $columns, 'search must not select every column');
+			self::assertIsArray($columns);
+			self::assertNotContains('description', $columns, 'the raw description column must not be selected');
+			self::assertContains('title', $columns, 'the summary columns are still selected');
+		}
+
+		// The description comes back only through a truncating alias.
+		self::assertArrayHasKey('description', $aliases, 'search must alias a truncated description');
+		self::assertCount(1, $substrings, 'exactly one SUBSTR() belongs in this query');
+		[$input, $start, $length] = $substrings[0];
+		self::assertSame('description', $input);
+		self::assertSame(1, $start, 'SQL substring offsets are 1-based on every supported dialect');
+		self::assertIsInt($length);
+		self::assertGreaterThanOrEqual(160, $length, 'the clip must still fill a 160-character snippet');
+		self::assertLessThanOrEqual(1024, $length, 'but must stay a small multiple of it, not a whole document');
+		self::assertSame($aliases['description'], 'SUBSTR(description, 1, ' . $length . ')');
+	}
 }

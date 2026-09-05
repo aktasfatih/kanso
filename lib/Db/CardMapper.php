@@ -69,6 +69,15 @@ class CardMapper extends QBMapper {
 		'visibility',
 	];
 
+	/**
+	 * Characters of `description` that {@see self::searchInBoards()} hydrates
+	 * per row. Twice SearchService's 160-character snippet: enough headroom that
+	 * collapsing runs of whitespace inside the prefix still leaves a full
+	 * snippet, small enough that a search page costs a few tens of KiB of
+	 * transfer instead of up to SOURCE_CAP (100) whole documents.
+	 */
+	private const SEARCH_DESCRIPTION_CHARS = 320;
+
 	public function __construct(
 		IDBConnection $db,
 		private CardVisibilityScope $visibilityScope,
@@ -605,11 +614,24 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Cards (with description) matching a LIKE pattern in their title or
-	 * description, restricted to the given readable boards and non-deleted.
+	 * Cards matching a LIKE pattern in their title or description, restricted
+	 * to the given readable boards and non-deleted.
 	 * Portable case-insensitive LIKE (no per-dialect full-text) - the pattern is
 	 * pre-escaped and wrapped by the caller. Title matches sort first, then most
 	 * recent. $boardIds must be non-empty (the caller returns early otherwise).
+	 *
+	 * The `description` this returns is TRUNCATED IN SQL to
+	 * {@see self::SEARCH_DESCRIPTION_CHARS} characters: the only consumer is
+	 * {@see \OCA\Kanso\Service\SearchService}, which turns it straight into a
+	 * snippet an order of magnitude shorter, so shipping the whole column would
+	 * be pure waste - and unbounded waste, because a description that arrived
+	 * through an importer or a copy is deliberately not capped
+	 * ({@see \OCA\Kanso\Service\CardService::MAX_DESCRIPTION_LENGTH}). Bounding
+	 * the READ here is what keeps one search request cheap, whatever any single
+	 * row holds; it is NOT a cap on what the column may store, and the card
+	 * detail read ({@see self::find()}) still returns the description in full.
+	 * The LIKE still runs against the whole column, so a match deep inside a
+	 * long description is still found - only the returned text is clipped.
 	 *
 	 * Visibility (#3743): cross-board scope over the viewer's per-board roles,
 	 * applied in SQL - a hidden card can never match, not even by title.
@@ -617,12 +639,26 @@ class CardMapper extends QBMapper {
 	 * @param int[] $boardIds
 	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 *                                         ({@see \OCA\Kanso\Access\BoardAccess::rolesFor()})
-	 * @return Card[]
+	 * @return Card[] with a truncated description - search results only, never a payload
 	 * @throws Exception
 	 */
 	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')
+		$qb->select(self::SUMMARY_COLUMNS)
+			// SUBSTR(description, 1, N) AS description - IFunctionBuilder emits it
+			// for every supported dialect (MySQL/MariaDB SUBSTR is a synonym of
+			// SUBSTRING; SQLite and Postgres both have substr/3), and all three
+			// count CHARACTERS on a text column, so the clip can never split a
+			// multibyte character. Aliasing it back to `description` keeps
+			// findEntities() hydrating the entity exactly as before.
+			->selectAlias(
+				$qb->func()->substring(
+					'description',
+					$qb->createNamedParameter(1, IQueryBuilder::PARAM_INT),
+					$qb->createNamedParameter(self::SEARCH_DESCRIPTION_CHARS, IQueryBuilder::PARAM_INT),
+				),
+				'description',
+			)
 			->from($this->getTableName())
 			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
