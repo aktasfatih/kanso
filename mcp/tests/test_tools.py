@@ -217,6 +217,47 @@ async def test_recur_rule_create_now_tool_unwraps_the_card():
     assert result["card"]["id"] == 500
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_move_card_to_board_tool_returns_the_new_card():
+    route = respx.post(f"{BASE}/cards/100/move-to-board").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": 777,
+                "title": "Moved",
+                "stackId": 12,
+                "boardId": 8,
+                "boardSeq": 4,
+                "description": "body",
+            },
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_move_card_to_board"](100, 12)
+
+    # A SEPARATE endpoint from kanso_move_card's in-board /move.
+    assert route.calls.last.request.url.path.endswith("/cards/100/move-to-board")
+    assert json.loads(route.calls.last.request.content) == {"targetStackId": 12}
+    # The caller must get the card's NEW identity back — the id it passed in is
+    # soft-deleted on the source board.
+    assert result["moved"] is True
+    assert result["card"]["id"] == 777
+    assert result["card"]["boardId"] == 8
+    assert result["card"]["boardSeq"] == 4
+
+
+def test_move_card_to_board_docstring_warns_about_what_is_left_behind():
+    # The docstring is the only thing telling a model these semantics are lossy;
+    # if it stops saying so, the tool starts silently dropping people's comments.
+    tools, _ = _tools()
+    doc = tools["kanso_move_card_to_board"].__doc__ or ""
+    assert "NEW id" in doc
+    for warned in ("comments", "attachments", "relations", "kanso_move_card"):
+        assert warned in doc
+
+
 @pytest.mark.asyncio
 async def test_create_recur_rule_schema_only_requires_the_essentials():
     # An agent must be able to set up a repeat with just the anchor + schedule;

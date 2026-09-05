@@ -413,6 +413,52 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         result = await client.move_card(card_id, target_stack_id, after_card_id)
         return {"moved": True, "result": result}
 
+    @mcp.tool(
+        title="Move a Kanso card to another board",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_move_card_to_board(card_id: int, target_stack_id: int) -> dict:
+        """Move a card to a stack on a DIFFERENT board. Use `kanso_move_card`
+        for a stack on the card's own board — this tool rejects a same-board
+        target, and that one rejects a cross-board one.
+
+        Requires edit permission on BOTH boards. The move is atomic, but it is
+        implemented as re-create-on-target + delete-on-source, so the semantics
+        are lossy and are probably not what you assume:
+
+        - The card gets a NEW id and a NEW per-board number (e.g. KAN-12
+          becomes KAN-87 on the target). Read the returned card for both; any
+          id you were holding is dead. Links elsewhere to the old card break.
+        - LEFT BEHIND on the deleted source card: comments, attachments,
+          custom-field values, time entries, review requests, reminders, and
+          all relations (blocks / blocked-by / duplicates / relates). Subtasks
+          are detached from the card rather than moved with it.
+        - CARRIED OVER: title, description, checklist items (unassigned, but
+          keeping their done state and due dates), due/start dates, priority,
+          type, done state, cover colour and visibility.
+        - REMAPPED: labels match a target-board label with the same name and
+          colour, and drop when the target has no twin — they are never
+          auto-created. Assignees and watchers are kept only for people who can
+          read the target board, and silently dropped otherwise. An estimate
+          the target board's scale does not allow is dropped too.
+
+        Prefer this over recreating the card yourself and deleting the
+        original — it is a single atomic operation and it at least remaps
+        labels and assignees, which a manual recreate would not.
+
+        Before calling, check the card with `kanso_get_card`: if it has
+        comments or attachments (`commentCount` / `attachmentCount` above 0),
+        TELL THE USER those will stay behind on the source board and let them
+        confirm before you move it.
+
+        Args:
+            card_id: The card to move.
+            target_stack_id: The stack (column) on the OTHER board to move the
+                card into. The card lands at the bottom of that stack.
+        """
+        card = await client.move_card_to_board(card_id, target_stack_id)
+        return {"moved": True, "card": card.model_dump()}
+
     # -------------------------------------------------- card labels / assignees
     @mcp.tool(title="Assign a label to a Kanso card")
     async def kanso_assign_label(card_id: int, label_id: int) -> dict:

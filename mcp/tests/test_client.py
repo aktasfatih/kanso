@@ -222,6 +222,28 @@ async def test_move_card_body_uses_targetStackId():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_move_card_to_board_posts_to_its_own_endpoint():
+    # Cross-board moves go to /move-to-board, NOT the in-board /move (which
+    # rejects a stack on another board with HTTP 400).
+    route = respx.post(f"{BASE}/cards/100/move-to-board").mock(
+        return_value=httpx.Response(
+            200, json={"id": 777, "title": "Moved", "stackId": 12, "boardSeq": 4}
+        )
+    )
+    async with _client() as c:
+        card = await c.move_card_to_board(100, target_stack_id=12)
+    import json as _json
+
+    assert route.calls.last.request.url.path.endswith("/cards/100/move-to-board")
+    assert _json.loads(route.calls.last.request.content) == {"targetStackId": 12}
+    # The response is the card as it now exists on the TARGET board — a new id
+    # and a new per-board number, not the id that was passed in.
+    assert card.id == 777
+    assert card.boardSeq == 4
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_assign_label_put_path():
     route = respx.put(f"{BASE}/cards/100/labels/5").mock(
         return_value=httpx.Response(200, json=[])

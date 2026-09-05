@@ -259,6 +259,18 @@ class KansoClient:
             json={"targetStackId": target_stack_id, "afterCardId": after_card_id},
         )
 
+    async def move_card_to_board(self, card_id: int, target_stack_id: int) -> Card:
+        # A DIFFERENT endpoint from move(): the in-board /move rejects a stack on
+        # another board with HTTP 400 on purpose. This one re-creates the card on
+        # the target board and soft-deletes the source in one transaction, so the
+        # returned Card carries a NEW id and a new per-board number.
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/move-to-board",
+            json={"targetStackId": target_stack_id},
+        )
+        return Card.model_validate(data)
+
     # -------------------------------------------------- card labels / assignees
     async def assign_label(self, card_id: int, label_id: int) -> Any:
         return await self._request("PUT", f"/cards/{card_id}/labels/{label_id}")

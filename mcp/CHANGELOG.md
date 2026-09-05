@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `kanso_move_card_to_board` — move a card to a column on a different board.
+  Until now an agent could only move a card within its own board, so the only
+  way across was to recreate it by hand on the target and delete the original.
+  A separate tool from `kanso_move_card` on purpose: it is a different
+  operation with different rules, and the two reject each other's targets.
+  Needs edit permission on both boards. It is atomic but lossy, and the tool
+  says so plainly so an assistant can warn you first: the card is re-created on
+  the target and removed from the source, so it comes back with a new id and a
+  new card number, and its comments, attachments, custom-field values, time
+  entries, review requests, reminders and relations stay behind. The title,
+  description, checklist, dates and priority come along; labels remap to a
+  target label of the same name and colour or drop; assignees and watchers are
+  kept only for people who can read the target board.
 - `kanso_list_views` and `kanso_get_view_cards` — read your saved cross-board
   Views over MCP: list them, then fetch the cards one resolves to, with the
   View's own filter and sort applied server-side. Rows keep the board identity
