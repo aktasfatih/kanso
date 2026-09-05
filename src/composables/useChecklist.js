@@ -11,6 +11,9 @@
  *      (checklistItems + checklist summary counts).
  *   4. ALSO patch the board cache's per-card checklist summary so the tile badge
  *      updates immediately without waiting for the settle invalidation.
+ *   4b. For `addItem` only: on success, swap the optimistic placeholder (which
+ *      carries a negative temp id) for the server row, so the item is
+ *      addressable by its real id without waiting for the settle refetch.
  *   5. On settled: invalidate the card detail query AND the board query so server
  *      truth eventually wins — plus, for the three mutations that move the
  *      {total,done} summary (add / toggle / delete), the cross-board feeds —
@@ -179,7 +182,22 @@ export function useChecklist(cardId, boardId) {
 			patchCardDetailSummary(nextItems)
 			patchBoardCardSummary(summarise(nextItems))
 
-			return { previousChecklist, previousCard, previousBoard }
+			return { previousChecklist, previousCard, previousBoard, tempId }
+		},
+
+		// Swap the placeholder for the server row the instant the POST resolves, so
+		// the new item carries its REAL id right away. Leaving that to the settle
+		// invalidation below kept the row on its negative placeholder id for a whole
+		// extra GET round-trip; ticking its checkbox in that window sent
+		// `PATCH /api/checklist/-1788…`, which cannot match a row, so the toggle was
+		// rolled back and silently lost.
+		onSuccess: (created, _vars, context) => {
+			if (!created?.id || context?.tempId === undefined) return
+			const current = queryClient.getQueryData(getChecklistKey())
+			if (!Array.isArray(current)) return
+			const nextItems = current.map((i) => (i.id === context.tempId ? { ...i, ...created } : i))
+			queryClient.setQueryData(getChecklistKey(), nextItems)
+			patchCardDetailSummary(nextItems)
 		},
 
 		onError: (_err, _vars, context) => {
