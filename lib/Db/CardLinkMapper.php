@@ -18,6 +18,14 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<CardLink>
  */
 class CardLinkMapper extends QBMapper {
+	/**
+	 * Hard cap on the links one card may carry. Enforced on the write side by
+	 * {@see \OCA\Kanso\Service\CardLinkService::addLink()} and, independently, as
+	 * the read bound of {@see self::findByCard()} - so a card that somehow holds
+	 * more rows (legacy data) still cannot make a card read do unbounded work.
+	 */
+	public const MAX_PER_CARD = 20;
+
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'kanso_card_links', CardLink::class);
 	}
@@ -39,7 +47,9 @@ class CardLinkMapper extends QBMapper {
 	}
 
 	/**
-	 * A card's links, oldest first.
+	 * A card's links, oldest first, bounded to {@see self::MAX_PER_CARD}. The
+	 * bound matters: the caller refreshes each returned link with a blocking
+	 * outbound GET, so an unbounded row count would be an unbounded card read.
 	 *
 	 * @return CardLink[]
 	 * @throws Exception
@@ -49,9 +59,29 @@ class CardLinkMapper extends QBMapper {
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
-			->orderBy('id', 'ASC');
+			->orderBy('id', 'ASC')
+			->setMaxResults(self::MAX_PER_CARD);
 
 		return $this->findEntities($qb);
+	}
+
+	/**
+	 * How many links a card carries. Unbounded on purpose - it is the cap check,
+	 * so it must see rows beyond {@see self::MAX_PER_CARD} too.
+	 *
+	 * @throws Exception
+	 */
+	public function countByCard(int $cardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'link_count'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$count = $result->fetchOne();
+		$result->closeCursor();
+
+		return (int)$count;
 	}
 
 	/**

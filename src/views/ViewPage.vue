@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				ref="titleInput"
 				v-model="titleDraft"
 				class="view-page__title-input"
+				maxlength="100"
 				:aria-label="t('kanso', 'View name')"
 				@keyup.enter="commitTitle"
 				@keyup.escape="cancelTitle"
@@ -39,14 +40,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     cards. Wrong results are worse than a missing facet; a
 				     board-qualified label identity is follow-up work. Hiding the facet
 				     is also what keeps this View's saved label filter safe from the
-				     bar's "Clear filters", which only clears what it renders (#10091).
+				     bar's "Clear filters", which only clears what it renders (#10091)
+				     — hence `locked-dimensions`: the bar now re-surfaces a facet it
+				     has nothing to offer for WHILE it is actively constraining the
+				     surface (otherwise the constraint is unclearable), and the facets
+				     withheld here must be exempt, because such a constraint IS the
+				     View rather than something the user applied.
 				     `estimate-scale` is deliberately not passed either — an estimate
-				     scale is board-scoped and a cross-board View can span two of them.
+				     scale is board-scoped and a cross-board View can span two of them;
+				     it is locked for the same reason labels is.
 				     Nor `saved-filters`: saved views are a board-surface concept, and
 				     the bar drops that whole section when it is given none. -->
 				<BoardFilterBar
 					:state="filterState"
 					:participants="participants"
+					:locked-dimensions="LOCKED_DIMENSIONS"
 					show-archived
 					@save="onSaveFromBar" />
 
@@ -296,6 +304,16 @@ const sortMenuName = computed(() => (sortMode.value === 'default'
 // It is seeded from the saved View's blob by the `view` watch further down.
 const filterState = createFilterState()
 const filterQuery = computed(() => filterToQuery(serializeFilter(filterState)))
+
+// Dimensions this surface OWNS: hidden even while active, and never cleared by
+// the bar's "Clear filters" (#10091). Exactly the two facets this page withholds
+// because they are board-scoped (see the filter-bar comment in the template):
+// labels and estimates. This page has no URL↔filter sync — the ONLY thing that
+// can seed a constraint on a facet it does not render is the saved View's own
+// blob (the `view` watch below), i.e. the View's identity, so the elsewhere-right
+// "re-surface it so it can be cleared" rule must not apply here.
+// Hoisted out of the template so the prop keeps a stable identity across renders.
+const LOCKED_DIMENSIONS = ['labels', 'estimates']
 
 const { data: viewsData, save, rename } = useViews()
 const { data: cardsData, isLoading, isError } = useViewCards(sort, filterQuery)

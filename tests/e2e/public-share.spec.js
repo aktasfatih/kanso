@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, currentAuth, me } from './helpers.js'
+// BASE/API come from helpers.js so this spec honours E2E_BASE_URL like every
+// other spec; it used to hardcode http://localhost:8891 and silently ignore it.
+import { test, expect, currentAuth, me, BASE, API } from './helpers.js'
 
-const BASE = 'http://localhost:8891'
-const API = BASE + '/index.php/apps/kanso/api'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 
 // Authenticated API call as the CURRENT user (the board owner/MANAGE user).
@@ -21,11 +21,33 @@ async function api(method, path, body) {
 }
 
 // UNAUTHENTICATED fetch of the public JSON payload (no session, no OCS header).
+//
+// The endpoint is #[BruteForceProtection(action: 'kansoPublicShare')]
+// (lib/Controller/PublicShareController.php:107,126), and this spec deliberately
+// hits it with four rejected tokens per run (rotated, disabled, made-up). The
+// throttle is per source IP and OUTLIVES the run, so a few repeated local runs
+// against a long-lived dev instance start answering 429 with an HTML page for
+// every request — which used to surface as `SyntaxError: Unexpected token '<'`
+// from the JSON parse below and looked like a product failure. CI never sees it
+// (fresh instance per run). dev/setup.sh now turns brute-force protection off in
+// the dev stack; this guard is the backstop that names the cause if it is ever
+// on again, instead of failing as an unreadable parse error.
 async function fetchPublic(token) {
 	const r = await fetch(`${API}/public/${encodeURIComponent(token)}`, {
 		headers: { 'Content-Type': 'application/json' },
 	})
 	const text = await r.text()
+	if (text && !(r.headers.get('content-type') || '').includes('json')) {
+		throw new Error(
+			`Public endpoint answered ${r.status} with a non-JSON body — this is an environment `
+			+ 'problem, not a payload assertion. A 429 here means Nextcloud is brute-force '
+			+ 'throttling this IP for the `kansoPublicShare` action. Clear it with '
+			+ '`occ security:bruteforce:reset <ip>` — note that command silently no-ops while '
+			+ '`auth.bruteforce.protection.enabled` is false (Throttler::resetDelayForIP returns '
+			+ 'early), so set it true, reset, then set it back to false. '
+			+ `First 200 chars: ${text.slice(0, 200)}`,
+		)
+	}
 	return { status: r.status, body: text ? JSON.parse(text) : null }
 }
 
@@ -49,8 +71,30 @@ test.describe('Public read-only board share', () => {
 		cardId = (await api('POST', '/cards', { stackId: todoStackId, title: 'Public visible card' })).body.id
 		// Add people/comments that MUST NOT surface on the public view.
 		await api('PUT', `/cards/${cardId}/assignees/${me}`)
-		await api('POST', `/cards/${cardId}/comments`, { message: 'internal comment SHOULD NOT LEAK' })
+		// The field is `body` — CommentController::create() takes `string $body`.
+		// This said `message`, so $body defaulted to '' and CommentService rejected
+		// it as empty: NO comment was ever created, and the "no comments leak"
+		// assertion below was vacuous. Assert the comment exists so a future rename
+		// breaks loudly instead of silently disarming the leak guard.
+		const comment = await api('POST', `/cards/${cardId}/comments`, { body: 'internal comment SHOULD NOT LEAK' })
+		expect(comment.status).toBe(200)
+		expect(comment.body.body).toContain('SHOULD NOT LEAK')
 	})
+
+	// The token is minted by the 'MANAGE enables a link' test below, so every
+	// later test used to depend on that one having run in the same worker. It
+	// doesn't survive a retry (Playwright discards the worker after a failure and
+	// re-runs beforeAll, leaving token='') or a single-test `-g` run — the empty
+	// token then 404s into an HTML error page and the JSON parse blows up, which
+	// reads like a product failure but is only test wiring. Mint on demand
+	// instead, and never let an empty token reach an assertion.
+	async function ensureToken() {
+		if (!token) {
+			token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		}
+		expect(token).toBeTruthy()
+		return token
+	}
 
 	test.afterAll(async () => {
 		if (boardId) await api('DELETE', `/boards/${boardId}`)
@@ -73,7 +117,7 @@ test.describe('Public read-only board share', () => {
 	})
 
 	test('unauthenticated fetch returns the STRIPPED read-only payload', async () => {
-		const res = await fetchPublic(token)
+		const res = await fetchPublic(await ensureToken())
 		expect(res.status).toBe(200)
 		expect(res.body.board.title).toBe('Public Share E2E')
 
@@ -101,7 +145,7 @@ test.describe('Public read-only board share', () => {
 	})
 
 	test('the public page renders read-only with no edit affordances or people', async ({ page }) => {
-		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${await ensureToken()}`)
 		await expect(page.locator('.public-board__title')).toHaveText('Public Share E2E')
 		await expect(page.locator('.public-board__badge')).toContainText('Read-only')
 		// The board CSS must actually load (it ships in public.php, since the build
@@ -130,7 +174,7 @@ test.describe('Public read-only board share', () => {
 	})
 
 	test('rotating the link invalidates the previous token', async () => {
-		const old = token
+		const old = await ensureToken()
 		const res = await api('POST', `/boards/${boardId}/public-share`)
 		expect(res.body.token).toBeTruthy()
 		expect(res.body.token).not.toBe(old)
@@ -143,8 +187,9 @@ test.describe('Public read-only board share', () => {
 	})
 
 	test('disabling the link makes it 404', async () => {
+		const live = await ensureToken()
 		expect((await api('DELETE', `/boards/${boardId}/public-share`)).status).toBe(200)
-		expect((await fetchPublic(token)).status).toBe(404)
+		expect((await fetchPublic(live)).status).toBe(404)
 
 		const cfg = (await api('GET', `/boards/${boardId}/public-share`)).body
 		expect(cfg.enabled).toBe(false)

@@ -25,10 +25,12 @@ import { readFileSync } from 'node:fs'
 import {
 	createFilterState,
 	applyFilter,
+	filterIsEmpty,
 	filterToQuery,
 	queryToFilter,
 	makePredicate,
 	serializeFilter,
+	useFilterCount,
 } from '../../src/composables/useBoardFilters.js'
 
 const fixture = JSON.parse(
@@ -70,5 +72,70 @@ test('the short-key wire encoding round-trips every dimension', () => {
 	for (const testCase of fixture.cases) {
 		const back = serializeFilter(stateFor(testCase.filter))
 		assert.deepEqual(back, testCase.filter, `lost data round-tripping "${testCase.name}"`)
+	}
+})
+
+// #10012 — `filterIsEmpty()` and `useFilterCount()` are the two per-dimension
+// lists in useBoardFilters.js that NOTHING else pins: the golden fixture above
+// covers createFilterState / serializeFilter / applyFilter / filterToQuery /
+// queryToFilter / makePredicate (and, through the shared fixture,
+// ViewFilter.php), but these two are read only by BoardView.vue and
+// BoardFilterBar.vue.
+//
+// A dimension missing from `filterIsEmpty` is not a cosmetic bug: a filter that
+// constrains ONLY that dimension then looks empty, which trips the server-side
+// short-circuit documented at lib/Service/ViewFilter.php and returns UNFILTERED
+// rows. So assert both, per dimension, off a state that carries exactly one
+// dimension — reusing the fixture's single-dimension cases so the values stay
+// the ones both runners already agree on.
+//
+// The dimension list is DERIVED from createFilterState(), so a 17th dimension is
+// covered the moment it is added (and fails loudly if it has no single-dimension
+// golden case to build from).
+const singleDimensionCases = new Map()
+for (const testCase of fixture.cases) {
+	const keys = Object.keys(testCase.filter)
+	if (keys.length === 1 && !singleDimensionCases.has(keys[0])) {
+		singleDimensionCases.set(keys[0], testCase)
+	}
+}
+
+/** How many constraints `useFilterCount` should report for a serialised filter. */
+function expectedCount(serialized) {
+	return Object.values(serialized)
+		.reduce((n, v) => n + (Array.isArray(v) ? v.length : 1), 0)
+}
+
+test('every dimension has a single-dimension golden case to pin it with', () => {
+	const missing = Object.keys(createFilterState())
+		.filter((key) => !singleDimensionCases.has(key))
+	assert.deepEqual(missing, [], `dimensions with no single-dimension golden case: ${missing.join(', ')}`)
+})
+
+test('filterIsEmpty() sees a constraint on every dimension', () => {
+	// Control: a fresh state really is empty, so the assertions below cannot
+	// pass just because filterIsEmpty always returns false.
+	assert.equal(filterIsEmpty(serializeFilter(createFilterState())), true,
+		'a fresh filter state should be empty')
+
+	for (const key of Object.keys(createFilterState())) {
+		const testCase = singleDimensionCases.get(key)
+		const serialized = serializeFilter(stateFor(testCase.filter))
+		assert.equal(filterIsEmpty(serialized), false,
+			`filterIsEmpty() ignores the "${key}" dimension — a filter constraining only `
+			+ 'it would look empty and the server would return unfiltered rows')
+	}
+})
+
+test('useFilterCount() counts every dimension', () => {
+	// Control: nothing set counts as nothing.
+	assert.equal(useFilterCount(createFilterState()).value, 0,
+		'a fresh filter state should count zero constraints')
+
+	for (const key of Object.keys(createFilterState())) {
+		const testCase = singleDimensionCases.get(key)
+		const state = stateFor(testCase.filter)
+		assert.equal(useFilterCount(state).value, expectedCount(testCase.filter),
+			`useFilterCount() does not count the "${key}" dimension`)
 	}
 })

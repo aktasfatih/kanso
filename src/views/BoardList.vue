@@ -123,6 +123,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-model="newFolderName"
 				class="new-board-form__input"
 				type="text"
+				maxlength="100"
 				:placeholder="t('kanso', 'New folder name…')"
 				:disabled="createGroup.isPending.value"
 				data-test="new-folder-input"
@@ -143,6 +144,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				v-model="newBoardTitle"
 				class="new-board-form__input"
 				type="text"
+				maxlength="100"
 				:placeholder="t('kanso', 'New board name…')"
 				:disabled="createBoard.isPending.value"
 				@keydown.enter.prevent="submitNewBoard">
@@ -388,6 +390,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								v-model="renameName"
 								class="new-board-form__input"
 								type="text"
+								maxlength="100"
 								:data-test="'rename-folder-input-' + folder.id"
 								@keydown.enter.prevent="submitRenameFolder(folder)"
 								@keydown.esc="renamingId = null">

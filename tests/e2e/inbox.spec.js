@@ -1,13 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Inbox e2e: admin creates a board+stack+card, shares with tester (READ|EDIT),
-// admin subscribes to the card, tester posts a comment.  Admin visits #/inbox
-// and should see a feed item with the card title + comment snippet.  Clicking
-// the item navigates to the card modal.
+// Inbox e2e: the acting user creates a board+stack+card, shares it with the peer
+// identity (READ|EDIT), subscribes to the card, and the peer posts a comment and
+// requests a review.  The owner visits #/inbox and should see feed items for
+// both.  Clicking an item navigates to the card modal.
 //
-// If the two-user share setup is unavailable the test falls back to asserting
-// the page at least renders without crashing (either a feed item or empty state).
+// Setup is DELIBERATELY unguarded. It used to be wrapped in swallowing
+// try/catch blocks behind a `state.setupOk` flag, with a vacuous "the page at
+// least rendered" fallback and four conditional test.skip()s — so a real ACL,
+// subscription or comment regression degraded to a silent pass. The peer
+// identity is always available (the `peer` fixture provisions a per-worker user
+// under E2E_ISOLATE, and resolves to the dev stack's `tester` otherwise), so a
+// setup failure IS a product failure and must abort the suite loudly.
 
 import { test, expect, api, me, ncLogin, BASE } from './helpers.js'
 
@@ -22,7 +27,6 @@ test.describe('Inbox feed', () => {
 		cardId: 0,
 		commentBody: '',
 		inboxUrl: `${BASE}/index.php/apps/kanso#/inbox`,
-		setupOk: false,
 	}
 
 	test.beforeAll(async ({ peer }) => {
@@ -34,7 +38,7 @@ test.describe('Inbox feed', () => {
 			}
 		}
 
-		// Create board + stack + card as admin
+		// Create board + stack + card
 		const board = await api.post('/boards', { title: 'Inbox E2E Board' })
 		state.boardId = board.id
 
@@ -44,46 +48,26 @@ test.describe('Inbox feed', () => {
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Inbox Test Card' })
 		state.cardId = card.id
 
-		// Share board with tester (READ|EDIT = permission 3)
-		// If tester user doesn't exist this will fail gracefully - we fall back
-		let shareOk = false
-		try {
-			await api.post(`/boards/${board.id}/acl`, {
-				participant: peer.user,
-				participantType: 'user',
-				permission: 3,
-			})
-			shareOk = true
-		} catch {
-			// tester user not present in this environment - fall back mode
-		}
+		// Share the board with the peer (READ|EDIT = permission 3).
+		await api.post(`/boards/${board.id}/acl`, {
+			participant: peer.user,
+			participantType: 'user',
+			permission: 3,
+		})
 
-		// Admin subscribes to the card
-		try {
-			await api.put(`/cards/${card.id}/subscription`)
-		} catch {
-			// subscription endpoint may not be available outside dev stack
-		}
+		// Follow the card, so the peer's activity on it reaches our inbox.
+		await api.put(`/cards/${card.id}/subscription`)
 
-		// Tester posts a comment (only if share succeeded)
-		if (shareOk) {
-			try {
-				state.commentBody = 'Hello from tester - inbox smoke test'
-				await peer.api.post(`/cards/${card.id}/comments`, { body: state.commentBody })
-				state.setupOk = true
-			} catch {
-				// tester auth failed - still run fallback assertion
-			}
+		// The peer comments on it.
+		state.commentBody = 'Hello from the peer - inbox smoke test'
+		await peer.api.post(`/cards/${card.id}/comments`, { body: state.commentBody })
 
-			// Tester requests a review from admin - a card-status event (#3457)
-			// on a card admin follows, by an actor other than admin, so it should
-			// surface in admin's inbox feed alongside the comment.
-			try {
-				const r = await peer.api.raw('PUT', `/cards/${card.id}/reviews/${me}`)
-				state.reviewEventOk = r.ok
-			} catch {
-				// review request unavailable - the status-change test skips
-			}
+		// …and requests a review from us — a card-status event (#3457) on a card we
+		// follow, by an actor other than us, so it should surface in the inbox feed
+		// alongside the comment.
+		const review = await peer.api.raw('PUT', `/cards/${card.id}/reviews/${me}`)
+		if (!review.ok) {
+			throw new Error(`peer review request → ${review.status}: ${await review.text()}`)
 		}
 	})
 
@@ -93,7 +77,7 @@ test.describe('Inbox feed', () => {
 		}
 	})
 
-	test('inbox page loads and shows feed item or empty state', async ({ page }) => {
+	test('inbox page loads and shows the peer comment as a feed item', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
 		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
@@ -105,31 +89,19 @@ test.describe('Inbox feed', () => {
 		const errorEl = page.locator('.inbox-view__error')
 		await expect(errorEl).toBeHidden({ timeout: 5000 })
 
-		if (state.setupOk) {
-			// Full path: a feed item with the card title should appear
-			const itemList = page.locator('.inbox-view__list')
-			await expect(itemList).toBeVisible({ timeout: 10_000 })
+		const itemList = page.locator('.inbox-view__list')
+		await expect(itemList).toBeVisible({ timeout: 10_000 })
 
-			// At least one item referencing the card title
-			const cardTitleEl = itemList.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }).first()
-			await expect(cardTitleEl).toBeVisible({ timeout: 8000 })
+		// At least one item referencing the card title
+		const cardTitleEl = itemList.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }).first()
+		await expect(cardTitleEl).toBeVisible({ timeout: 8000 })
 
-			// Comment snippet must appear somewhere in the item
-			const bodyEl = itemList.locator('.inbox-view__item-body', { hasText: state.commentBody.slice(0, 20) }).first()
-			await expect(bodyEl).toBeVisible({ timeout: 5000 })
-		} else {
-			// Fallback: either the list exists (if there were pre-existing inbox items)
-			// or the empty state is shown
-			const listVisible = await page.locator('.inbox-view__list').isVisible({ timeout: 5000 }).catch(() => false)
-			const emptyVisible = await page.locator('.empty-content').isVisible({ timeout: 5000 }).catch(() => false)
-			expect(listVisible || emptyVisible).toBe(true)
-		}
+		// Comment snippet must appear somewhere in the item
+		const bodyEl = itemList.locator('.inbox-view__item-body', { hasText: state.commentBody.slice(0, 20) }).first()
+		await expect(bodyEl).toBeVisible({ timeout: 5000 })
 	})
 
 	test('clicking an inbox item navigates to the card modal', async ({ page }) => {
-		// Only run the click-through test when we have a real feed item
-		test.skip(!state.setupOk, 'skipping click-through: tester setup was not available')
-
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
@@ -150,8 +122,6 @@ test.describe('Inbox feed', () => {
 	})
 
 	test('pressing Enter on a focused inbox item opens the card (#3511)', async ({ page }) => {
-		test.skip(!state.setupOk, 'skipping keyboard test: tester setup was not available')
-
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
@@ -172,8 +142,6 @@ test.describe('Inbox feed', () => {
 	})
 
 	test('the feed surfaces card-status events, not only comments (#3457)', async ({ page }) => {
-		test.skip(!state.reviewEventOk, 'skipping status-event test: review request setup was not available')
-
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
@@ -188,25 +156,18 @@ test.describe('Inbox feed', () => {
 		await expect(statusItem).toBeVisible({ timeout: 8000 })
 	})
 
-	test('empty state renders when inbox is empty', async ({ page }) => {
-		// Create a fresh board+card without sharing/subscribing so the inbox is
-		// guaranteed empty for this user, then navigate directly to #/inbox.
-		// We only run this when the full setup already succeeded (meaning the
-		// environment is up) to avoid double-fallback noise.
-		test.skip(!state.setupOk, 'skipping empty-state test: environment not available')
-
-		// Create a separate session as a second admin context isn't easy here,
-		// so we just navigate to #/inbox and verify the structure is correct.
-		// The feed may or may not be empty depending on prior data - we simply
-		// assert the page renders consistently (no crash, correct DOM present).
+	test('the feed and the empty state are mutually exclusive', async ({ page }) => {
+		// Setup guarantees this user's inbox is NOT empty, so the list must be the
+		// branch that renders and the empty state must be absent. (This used to
+		// accept "list OR empty-content" behind a swallowed isVisible(), which no
+		// inbox state could fail. `.empty-content` is also a shared @nextcloud/vue
+		// class — Nextcloud's own header widgets render it — so it must be scoped
+		// to the inbox view or it matches chrome that has nothing to do with us.)
 		await ncLogin(page)
 		await page.goto(state.inboxUrl)
 		await page.waitForSelector('.inbox-view', { timeout: 15_000 })
 
-		// Either the list or the empty-content must be visible - never both
-		const listVisible = await page.locator('.inbox-view__list').isVisible({ timeout: 3000 }).catch(() => false)
-		const emptyVisible = await page.locator('.empty-content').isVisible({ timeout: 3000 }).catch(() => false)
-		expect(listVisible || emptyVisible).toBe(true)
-		expect(listVisible && emptyVisible).toBe(false)
+		await expect(page.locator('.inbox-view__list')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.inbox-view .empty-content')).toHaveCount(0, { timeout: 5000 })
 	})
 })

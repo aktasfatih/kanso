@@ -64,6 +64,47 @@ test.describe('Description formatting toolbar', () => {
 		await expect(page.locator('.card-modal__desc-view')).toBeVisible({ timeout: 5000 })
 	})
 
+	// Regression guard: the editor root's opening tag must be syntactically closed.
+	// It once ended without its `>`, so the following `<!-- Formatting toolbar -->`
+	// comment was swallowed into the tag and Vue compiled its fragments into four
+	// static props — the live root carried `<!--`, `formatting`, `toolbar` and `--`
+	// attributes in every engine. Nothing visibly broke, which is exactly why it
+	// went unnoticed; assert on the root's attribute list so the next stray comment
+	// near that tag cannot reintroduce it silently.
+	test('the editor root carries no attributes swallowed from a template comment', async ({ page }) => {
+		const stack = await api.post('/stacks', { boardId: state.boardId, title: 'Attrs' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Attr card' })
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+
+		await ncLogin(page)
+		await page.goto(cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-placeholder, .card-modal__desc-view', { timeout: 10_000 })
+
+		await page.locator('.card-modal__desc-placeholder').click()
+		const editor = page.locator('.card-modal__section .kanso-md-editor')
+		await expect(editor).toBeVisible({ timeout: 6000 })
+
+		// Read the real attribute list off the root rather than eyeballing the markup.
+		// The DOM lower-cases attribute names, so compare case-insensitively.
+		const attrs = await editor.evaluate(el => el.getAttributeNames())
+		const garbage = attrs.filter(a => ['<!--', '--', 'formatting', 'toolbar'].includes(a.toLowerCase()))
+		expect(garbage, `editor root has comment-fragment attributes: ${JSON.stringify(attrs)}`).toEqual([])
+
+		// No attribute may contain comment-delimiter characters at all — catches any
+		// other malformed-tag fallout, not just the four names seen with this bug.
+		const malformed = attrs.filter(a => a.includes('<') || a.includes('>') || a.includes('--'))
+		expect(malformed, `editor root has malformed attribute names: ${JSON.stringify(attrs)}`).toEqual([])
+
+		// And the binding that shares that tag still works: Escape cancels the edit.
+		const prose = editor.locator('.ProseMirror')
+		await expect(prose).toBeVisible({ timeout: 4000 })
+		await prose.click()
+		await prose.press('Escape')
+		await expect(editor).toBeHidden({ timeout: 2000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
+	})
+
 	test('Escape closes only the @mention dropdown, not the whole modal (keeps the edit)', async ({ page }) => {
 		// Dedicated card so this test is independent of the others' saved state.
 		const stack = await api.post('/stacks', { boardId: state.boardId, title: 'Esc' })

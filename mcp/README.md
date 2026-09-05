@@ -147,7 +147,13 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_get_card` — full card incl. description
 - `kanso_create_card` / `kanso_update_card` / `kanso_delete_card`
-- `kanso_move_card` — move a card into a stack (optionally after a card)
+- `kanso_move_card` — move a card into a stack on its own board (optionally after a card)
+- `kanso_move_card_to_board` — move a card to a stack on **another** board. Needs edit
+  permission on both. Atomic, but lossy: the card is re-created on the target and deleted
+  from the source, so it gets a new id and a new per-board number, and its comments,
+  attachments, custom-field values, time entries, reviews, reminders and relations stay
+  behind. Labels remap to a same-name-and-colour twin (or drop); assignees and watchers
+  are kept only for people who can read the target board.
 
 **Relations & subtasks**
 
@@ -220,6 +226,26 @@ starts.
 
 - `kanso_list_my_cards` — open cards assigned to you across all boards (never
   archived or done cards)
+
+**Views** (read-only)
+
+A View is a *saved cross-board filter*, not a board: it holds no cards of its
+own, it selects them from every board you can read. These two tools let an agent
+see exactly what you see when you open one.
+
+- `kanso_list_views` — your saved Views (`id`, `name`, `filter`, `groupBy`,
+  `display`, `sort`). Views are personal — only the authenticated user's own.
+- `kanso_get_view_cards` — the cards a View resolves to, with its own filter and
+  sort applied server-side. Rows are enriched summaries carrying `boardId` /
+  `boardTitle` / `boardPrefix`, plus the union of the readable boards' `labels`
+  so `labelIds` can be resolved to titles and colours. `total` is how many cards
+  matched, `returned` how many came back after your `limit` (default 50), and
+  `capped` says the *server* truncated the feed at `serverCap` matches (the
+  app's own cap — currently 5000 — reported in the result rather than assumed).
+
+Views are deliberately **read-only** here. There is no create/update/delete tool:
+a write surface would let an agent silently reshape what you see on your own
+board, and reading is what "show me my View" actually needs.
 
 ## Development
 

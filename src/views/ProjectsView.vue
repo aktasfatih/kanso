@@ -74,6 +74,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-model="newTitle"
 					class="projects-view__form-input"
 					type="text"
+					maxlength="255"
 					:placeholder="t('kanso', 'Project title')"
 					:disabled="create.isPending.value"
 					@keydown.enter.prevent="submitCreate">

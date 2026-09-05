@@ -332,7 +332,8 @@ class DeckImportService {
 	 * exceeds {@see AttachmentSanitizer::MAX_SIZE} - is skipped and NOT counted,
 	 * never failing the whole import. The copied filename/MIME run through
 	 * {@see AttachmentSanitizer} for the same hardening as the upload path (an
-	 * imported `.html`/`.svg` can never become stored XSS). Every object we do
+	 * imported `.html`/`.svg` can never become stored XSS), and the filename is
+	 * sanitized BEFORE it is used to look the source object up. Every object we do
 	 * write is appended to $writtenObjects so the caller can clean it up if a
 	 * later step throws (app-data writes are not covered by the DB transaction).
 	 *
@@ -355,6 +356,12 @@ class DeckImportService {
 				continue;
 			}
 
+			// Deck's filename is the ONLY non-server-generated name that reaches a
+			// storage lookup anywhere in Kanso, so sanitize it BEFORE the lookup,
+			// not just for the stored label: basename() keeps a traversal-shaped
+			// name from ever selecting an object outside the card's own folder.
+			$sourceName = AttachmentSanitizer::filename($att['data']);
+
 			// Resolve the source object from Deck's app-data. Deck stores the bytes
 			// under `file-card-<cardId>` (its FileService::getFolder()), NOT under
 			// the bare card id. A missing source object (row present but file gone,
@@ -362,7 +369,7 @@ class DeckImportService {
 			try {
 				$sourceFile = $deckAppData
 					->getFolder('file-card-' . $att['cardId'])
-					->getFile($att['data']);
+					->getFile($sourceName);
 			} catch (NotFoundException) {
 				$this->logger->warning(
 					'Kanso Deck import: skipping deck_file attachment with missing source object',
@@ -398,7 +405,7 @@ class DeckImportService {
 			$this->storeAttachment(
 				$newCardId,
 				$bytes,
-				AttachmentSanitizer::filename($att['data']),
+				$sourceName,
 				AttachmentSanitizer::mime($sourceFile->getMimeType()),
 				(int)$sourceFile->getSize(),
 				$att['createdBy'],
