@@ -11,6 +11,11 @@
 #   KANSO_SKIP_OPTIONAL_APPS=1
 #               don't side-load the optional apps two e2e specs need (deck,
 #               contacts) — see install-optional-apps.sh
+#   KANSO_SKIP_BUILD=1
+#               don't build the frontend first — js/ and css/ are gitignored
+#               build outputs, so without a build the app (and the public share
+#               page) serve no JS at all. Set this only when you have already
+#               built, as both CI jobs have.
 #   KANSO_APP_SRC
 #               which app tree to mount as custom_apps/kanso, relative to dev/
 #               (default `..`, this checkout). Only upgrade-check.sh sets it —
@@ -65,6 +70,27 @@ case "$KANSO_DB" in
 		;;
 esac
 
+# --- frontend build ----------------------------------------------------------
+# js/ and css/ are gitignored BUILD OUTPUTS, and the container mounts this
+# checkout straight into custom_apps/kanso. Nothing here used to compile them,
+# so a fresh clone or a new git worktree served no app JS at all: the board and
+# the public share page render blank, and the e2e suite fails on assertions that
+# read like product bugs. That is exactly how `tests/e2e/public-share.spec.js`
+# came to be "red locally, green in CI" — CI builds in its own workflow step
+# (.github/workflows/ci.yml), this script did not. Build before the stack boots.
+#
+#   KANSO_SKIP_BUILD=1  skip it — for callers that already built (both CI jobs
+#                       do) or that mount a prebuilt tree. Also skipped
+#                       automatically when KANSO_APP_SRC points somewhere other
+#                       than this checkout (upgrade-check.sh mounts an unpacked
+#                       release tarball, which ships js/ already built).
+if [ "${KANSO_SKIP_BUILD:-0}" = "1" ] || [ "${KANSO_APP_SRC:-..}" != ".." ]; then
+	echo "Skipping frontend build (KANSO_SKIP_BUILD=${KANSO_SKIP_BUILD:-0}, app src=${KANSO_APP_SRC:-..})"
+else
+	echo "Building the frontend (js/, css/)..."
+	( cd .. && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build )
+fi
+
 echo "Booting Nextcloud ${NC_VERSION} on ${KANSO_DB}..."
 # --profile selects which db service (if any) starts; the sqlite profile has no
 # db service so only redis + nextcloud come up.
@@ -90,6 +116,26 @@ docker exec kanso-dev chown www-data:www-data /var/www/html/custom_apps
 
 $OCC app:enable kanso
 $OCC background:cron
+# Brute-force throttling OFF in the throwaway dev stack. Kanso's public-share
+# endpoints are #[BruteForceProtection], and tests/e2e/public-share.spec.js
+# deliberately presents four rejected tokens per run (rotated, disabled,
+# made-up). The throttle is per source IP and survives the run, so after a few
+# consecutive local runs Nextcloud answers 429 + an HTML error page to EVERY
+# request from the dev box and the whole spec collapses on `Unexpected token
+# '<'` — a failure that reads like a product bug and that CI, booting a fresh
+# instance per run, never reproduces. Nothing in the suite asserts throttling.
+#
+# Order matters: `security:bruteforce:reset` returns early while protection is
+# already false (Throttler::resetDelayForIP), so clear any attempts an earlier
+# boot recorded BEFORE switching it off, or a stack that is already throttled
+# stays throttled forever.
+# The host's requests arrive from the compose bridge gateway, i.e. the
+# container's default route.
+DEV_GATEWAY_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}' kanso-dev 2>/dev/null || true)"
+if [ -n "$DEV_GATEWAY_IP" ]; then
+	$OCC security:bruteforce:reset "$DEV_GATEWAY_IP" >/dev/null 2>&1 || true
+fi
+$OCC config:system:set auth.bruteforce.protection.enabled --value=false --type=boolean
 # The welcome wizard overlays the page and blocks automated UI tests
 $OCC app:disable firstrunwizard
 
