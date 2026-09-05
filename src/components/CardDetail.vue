@@ -988,6 +988,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-model="newLabelTitle"
 									class="card-modal__label-create-input"
 									type="text"
+									maxlength="100"
 									:placeholder="t('kanso', 'New label…')"
 									:disabled="isCreatingLabel"
 									:aria-label="t('kanso', 'New label name')"
@@ -1286,6 +1287,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										v-model="editingItemTitle"
 										class="card-modal__checklist-item-input"
 										type="text"
+										maxlength="255"
 										@keydown.enter.prevent="saveItemTitle(item)"
 										@keydown.escape.stop="cancelItemEdit"
 										@blur="saveItemTitle(item)">
@@ -1407,6 +1409,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-model="newItemTitle"
 									class="card-modal__checklist-add-input"
 									type="text"
+									maxlength="255"
 									:placeholder="t('kanso', 'Add an item…')"
 									:disabled="addItem.isPending.value"
 									@keydown.enter.prevent="handleAddItem">

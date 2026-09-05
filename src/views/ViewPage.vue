@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				ref="titleInput"
 				v-model="titleDraft"
 				class="view-page__title-input"
+				maxlength="100"
 				:aria-label="t('kanso', 'View name')"
 				@keyup.enter="commitTitle"
 				@keyup.escape="cancelTitle"

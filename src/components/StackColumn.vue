@@ -58,6 +58,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					ref="titleInputRef"
 					v-model="titleDraft"
 					class="stack-column__title-input"
+					maxlength="100"
 					:aria-label="t('kanso', 'Column name')"
 					@keydown.enter.prevent="saveTitle"
 					@keydown.esc.prevent="cancelEditTitle"

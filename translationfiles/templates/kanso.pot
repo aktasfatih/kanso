@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:3835
+#: src/components/BoardSettingsModal.vue:3841
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -247,7 +247,7 @@ msgid "%1$s shared %2$s with you"
 msgstr ""
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:215
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -261,19 +261,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4234
+#: src/components/CardDetail.vue:4237
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4232
+#: src/components/CardDetail.vue:4235
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4230
+#: src/components/CardDetail.vue:4233
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -297,13 +297,13 @@ msgid_plural "%n points"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1017
+#: src/components/CardDetail.vue:1018
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1959
+#: src/components/CardDetail.vue:1962
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1551,8 +1551,8 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4423
+#: src/components/BoardSettingsModal.vue:1847
+#: src/components/CardDetail.vue:4426
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2033,25 +2033,25 @@ msgstr ""
 msgid "Every"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:3815
+#: src/components/BoardSettingsModal.vue:3821
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3825
+#: src/components/BoardSettingsModal.vue:3831
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3817
+#: src/components/BoardSettingsModal.vue:3823
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:3827
+#: src/components/BoardSettingsModal.vue:3833
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3170,8 +3170,8 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4425
+#: src/components/BoardSettingsModal.vue:1849
+#: src/components/CardDetail.vue:4428
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4495,7 +4495,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:6047
+#: src/components/CardDetail.vue:6050
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5136,8 +5136,8 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4424
+#: src/components/BoardSettingsModal.vue:1848
+#: src/components/CardDetail.vue:4427
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5213,8 +5213,8 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4426
+#: src/components/BoardSettingsModal.vue:1850
+#: src/components/CardDetail.vue:4429
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

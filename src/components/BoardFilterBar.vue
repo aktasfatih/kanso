@@ -120,6 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<NcTextField
 							v-model="saveName"
 							class="board-filter-bar__save-input"
+							maxlength="100"
 							:disabled="count === 0"
 							:label="t('kanso', 'View name')"
 							:placeholder="t('kanso', 'View name')"
