@@ -756,6 +756,51 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame('evil.txt', $captured->getFilename());
 	}
 
+	public function testImportResolvesTheSourceObjectByBasenameOnly(): void {
+		// Deck's filename is the only non-server-generated name Kanso ever hands
+		// to a storage lookup, so it is sanitized BEFORE the lookup: a
+		// traversal-shaped name resolves to its basename inside the card's own
+		// folder, never to an object above it.
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readFileReferenceAttachments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => '../../../secrets/appdata.json', 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+		$this->secureRandom->method('generate')->willReturn('objkey123');
+
+		$sourceFile = $this->createMock(ISimpleFile::class);
+		$sourceFile->method('getContent')->willReturn('DATA');
+		$sourceFile->method('getMimeType')->willReturn('application/json');
+		$sourceFile->method('getSize')->willReturn(4);
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		// The lookup name itself must already be the basename.
+		$deckFolder->expects(self::once())->method('getFile')
+			->with('appdata.json')
+			->willReturn($sourceFile);
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('file-card-21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		$kansoFolder = $this->createMock(ISimpleFolder::class);
+		$this->appData->method('getFolder')->with('card-500')->willReturn($kansoFolder);
+
+		$captured = null;
+		$this->cardAttachmentMapper->expects(self::once())->method('insert')
+			->willReturnCallback(function (CardAttachment $a) use (&$captured): CardAttachment {
+				$captured = $a;
+				$a->setId(1);
+				return $a;
+			});
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame(1, $result['attachments']);
+		self::assertNotNull($captured);
+		self::assertSame('appdata.json', $captured->getFilename());
+	}
+
 	public function testImportSkipsOversizedAttachmentButFinishesImport(): void {
 		// An oversized source (getSize() > MAX_SIZE) is skipped-and-not-counted,
 		// never read, and never fatal - the rest of the import still succeeds.
