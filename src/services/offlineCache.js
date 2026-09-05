@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { dehydrate, hydrate, onlineManager } from '@tanstack/vue-query'
+import { getCurrentUser } from '@nextcloud/auth'
 import { dropAllCursors } from '../composables/useBoardDelta.js'
 import { invalidateMyWork } from '../composables/queryKeys.js'
 
@@ -114,6 +115,31 @@ async function idbDel(key) {
 	}
 }
 
+/**
+ * The uid the snapshot belongs to. IndexedDB is origin-scoped, NOT per-user, and
+ * a Nextcloud logout is a full server navigation (`/logout`) that tears the SPA
+ * down without emitting any JS event — so the app can never purge the snapshot
+ * on the way out. Every snapshot is therefore STAMPED with its owner and only
+ * ever restored for that same owner; otherwise the next person to log in on a
+ * shared browser profile would see the previous user's boards on first paint.
+ *
+ * Bound by what a client can know: the uid comes from the page Nextcloud served,
+ * so this closes the ONLINE cross-user case (a logged-out or different user is
+ * served a page that says so) but not the case of an OFFLINE device booting from
+ * the worker's cached app shell, where there is no fresh page to disagree with
+ * the snapshot. No offline-capable client can verify a session it cannot reach;
+ * the trade is deliberate, and it is the same one every offline-first app makes.
+ *
+ * @return {string|null} the current uid, or null when there is no session.
+ */
+function currentUid() {
+	try {
+		return getCurrentUser()?.uid ?? null
+	} catch {
+		return null
+	}
+}
+
 function shouldPersistQuery(query) {
 	return query.state.status === 'success'
 		&& Array.isArray(query.queryKey)
@@ -122,9 +148,9 @@ function shouldPersistQuery(query) {
 
 /**
  * Restore the persisted query cache into the client. Best-effort: any failure
- * (no IndexedDB, corrupt/stale/expired snapshot) leaves the client empty and the
- * app fetches fresh, exactly as before. Call this BEFORE mounting so the first
- * paint can render cached data.
+ * (no IndexedDB, corrupt/stale/expired snapshot, a snapshot belonging to someone
+ * else) leaves the client empty and the app fetches fresh, exactly as before.
+ * Call this BEFORE mounting so the first paint can render cached data.
  *
  * @param {import('@tanstack/vue-query').QueryClient} queryClient
  * @return {Promise<void>}
@@ -134,8 +160,13 @@ export async function restoreQueryCache(queryClient) {
 		return
 	}
 	try {
+		const uid = currentUid()
 		const saved = await idbGet(CACHE_KEY)
-		if (!saved || saved.buster !== CACHE_BUSTER || (Date.now() - saved.timestamp) > MAX_AGE_MS) {
+		// A snapshot is only ever restored for the user who wrote it. `saved.uid`
+		// is undefined on snapshots written by an older client, which never equals
+		// a real uid — so those are dropped too rather than trusted.
+		const mine = !!uid && saved?.uid === uid
+		if (!saved || !mine || saved.buster !== CACHE_BUSTER || (Date.now() - saved.timestamp) > MAX_AGE_MS) {
 			if (saved) {
 				await idbDel(CACHE_KEY)
 			}
@@ -158,8 +189,15 @@ export function startPersistingQueryCache(queryClient) {
 	}
 	let timer = null
 	const persist = () => {
+		const uid = currentUid()
+		if (!uid) {
+			// No session to attribute the data to — writing it would produce a
+			// snapshot nobody may read anyway. Skip.
+			return
+		}
 		const snapshot = {
 			buster: CACHE_BUSTER,
+			uid,
 			timestamp: Date.now(),
 			state: dehydrate(queryClient, {
 				shouldDehydrateQuery: shouldPersistQuery,

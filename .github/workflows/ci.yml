@@ -500,6 +500,112 @@ jobs:
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
 
+  # THE UPDATE PATH. Every job above installs this branch's own tree onto an
+  # empty Nextcloud, so every migration meets an EMPTY database — and the
+  # standard ways a migration breaks are all invisible there: a NOT NULL column
+  # with no default, a backfill that trips over real values, a unique index that
+  # meets existing duplicates, a rewrite that is instant on 0 rows. Kanso is on
+  # the App Store, so the update path is the one every existing user takes, and
+  # until this job nothing exercised it.
+  #
+  # It installs the LAST RELEASED tarball, seeds real data through the API,
+  # replaces the tree with this branch's build, and runs `occ upgrade` — then
+  # asserts the seeded data still reads back. The whole flow lives in
+  # dev/upgrade-check.sh so it can be run by hand exactly as CI runs it; see that
+  # script's header for the mechanics (including why the staged copy's info.xml
+  # version is stamped, without which the migrator would not run at all and this
+  # job would be green and vacuous).
+  #
+  # ONE Nextcloud version and ONE database on purpose (34 + postgres, the
+  # production/dev default). This class of bug is caught by one leg; spreading it
+  # over install-matrix's ten combos would multiply CI cost for nothing. Widen
+  # only if a defect ever slips through this leg.
+  #
+  # Proven non-vacuous before merge: a temporary migration adding a NOT NULL
+  # column with no default to kanso_comments made this job fail with
+  # `SQLSTATE[23502]: Not null violation: ... column "probe_notnull" of relation
+  # "oc_kanso_comments" contains null values`, while dev/setup.sh + dev/smoke.sh
+  # — i.e. the whole existing install-matrix — stayed GREEN on the same commit.
+  #
+  # Runtime: ~1 minute of actual work on a warm host; the cost is the Nextcloud
+  # first-boot install, same as one install-matrix leg. The cap below matches
+  # install-matrix, not the ~1.5h e2e job.
+  #
+  # NOT yet in the required-checks list (that is a repo setting, not a file):
+  # add `upgrade` there once it has a few green runs.
+  upgrade:
+    runs-on: kanso-runners
+    timeout-minutes: 30
+    name: upgrade (last release → this branch, with data)
+    env:
+      NC_VERSION: '34'
+      KANSO_DB: postgres
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # js/ is gitignored and scripts/build-release.sh refuses to stage without
+      # it, so the branch's frontend must exist before the swap.
+      - name: Build frontend
+        run: npm run build
+
+      - name: Ensure docker compose plugin
+        run: |
+          if ! docker compose version >/dev/null 2>&1; then
+            mkdir -p ~/.docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o ~/.docker/cli-plugins/docker-compose
+            chmod +x ~/.docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
+      # See install-matrix above for why this step exists, why the retry lives
+      # here rather than in dev/setup.sh, and why it cannot fail the job.
+      - name: Pre-pull dev stack images (with retry)
+        working-directory: dev
+        continue-on-error: true
+        run: |
+          set -u
+          [ -f .db.env ] || : > .db.env
+
+          profile="${KANSO_DB:-postgres}"
+          if [ "$profile" = "mariadb" ]; then profile=mysql; fi
+
+          pulled=0
+          for attempt in 1 2 3; do
+            echo "Pre-pull attempt ${attempt}/3 (profile=${profile}, NC_VERSION=${NC_VERSION:-34})"
+            if docker compose --profile "$profile" pull; then
+              pulled=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Pull attempt ${attempt} failed; retrying in 15s"
+              sleep 15
+            fi
+          done
+
+          if [ "$pulled" = 1 ]; then
+            echo "Dev stack images are in the local cache."
+          else
+            echo "Pre-pull did not succeed after 3 attempts — continuing anyway;"
+            echo "dev/setup.sh's own 'docker compose up -d' will retry the pull."
+          fi
+          exit 0
+
+      - name: Install the last release, seed it, upgrade to this branch
+        run: ./dev/upgrade-check.sh
+
+      - name: Dump Nextcloud logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs kanso-dev --tail 200 || true
+          docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
+
   e2e:
     runs-on: kanso-runners
     # Boots a full Nextcloud + runs the serial spec suite (workers:1, retries:1).

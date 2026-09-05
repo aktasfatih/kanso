@@ -40,6 +40,35 @@ list, so a red `unit-mcp` will not block a merge. Adding it there is a
 maintainer action in the repository settings that has not happened yet. Please
 treat it as required anyway: don't merge on a red `unit-mcp`.
 
+The same applies to `upgrade` — see below. It is new, and not in the required
+list yet.
+
+## Writing a migration
+
+Every other CI job installs the branch's own tree onto an empty Nextcloud, so a
+migration there only ever meets an **empty** database. Kanso is on the App
+Store, and the update path — old data, new code — is the one every existing user
+takes. A `NOT NULL` column with no default, a backfill that trips over real
+values, a unique index that meets existing duplicates: all of those pass a fresh
+install and break a real one.
+
+The `upgrade` CI job is what covers that. It installs the last released tarball,
+seeds real data through the API, swaps in this branch's build and runs
+`occ upgrade`, then asserts the seeded data still reads back. Run it yourself
+exactly as CI does — it takes about a minute once the images are cached:
+
+```sh
+npm run build          # the job's own first step; js/ is gitignored
+./dev/upgrade-check.sh # DESTRUCTIVE: recreates the dev stack from scratch
+```
+
+The seeding lives in `dev/seed.sh`, which lists **exactly which tables it
+covers** in its header. If your migration touches a table that is not on that
+list, the job cannot protect it: extend the seeder and the list together.
+Everything is seeded through the HTTP API so it works on any database; the one
+value no API can set (a backdated timestamp) goes through a single helper with a
+per-driver branch, the pattern `dev/smoke.sh` already uses.
+
 ## Translations
 
 Kanso follows each user's Nextcloud language. Adding or improving a translation

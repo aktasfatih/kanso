@@ -8,7 +8,8 @@
  *
  *  1. Card due/start dates (`allDayInputValue`, `timedInputValue`,
  *     `formatCardDate`) - see the all-day storage note below.
- *  2. Event timestamps (`exactTimeLabel`, `exactTimeTitle`, `isoTimestamp`) -
+ *  2. Event timestamps (`exactTimeLabel`, `exactTimeTitle`, `isoTimestamp`,
+ *     `hasRelativeLabel`) -
  *     the exact wall-clock stamp shown next to a relative label ("5 days ago")
  *     in the card's activity feed. Those take a unix timestamp in SECONDS, the
  *     shape the API emits (ActivityService returns the raw epoch integer).
@@ -155,6 +156,42 @@ export function exactTimeLabel(tsSeconds, nowMs = Date.now()) {
 		year: 'numeric',
 		...CLOCK_OPTS,
 	}).format(d)
+}
+
+/**
+ * How long a relative label stays genuinely relative, in days.
+ *
+ * `relativeTime()` in `CardDetail.vue` counts up in minutes, hours and days and
+ * then gives up: past this many days it returns an absolute date instead. This
+ * constant IS that boundary, kept here so the activity row can ask about it
+ * without duplicating the ladder.
+ */
+export const RELATIVE_LABEL_MAX_DAYS = 7
+
+/**
+ * Whether an event is recent enough that its relative label is still relative.
+ *
+ * #10177: the activity row renders the relative label AND the exact stamp side
+ * by side. Past the boundary above, the "relative" label is no longer "5 days
+ * ago" - it degrades to an absolute date, which is precisely what the exact
+ * stamp beside it already carries, so the pair printed the date twice
+ * ("26 Aug 2026 · 26 Aug 2026, 06:21"). The row asks this and drops the
+ * relative half once the answer is false; the exact stamp alone still carries
+ * the date AND the time, so nothing is lost.
+ *
+ * The arithmetic mirrors `relativeTime()` (whole seconds, floored days) so the
+ * two agree on the boundary instant instead of disagreeing by a fraction of a
+ * second around it.
+ *
+ * @param {number|string|null|undefined} tsSeconds unix timestamp in seconds
+ * @param {number} [nowMs] reference "now" in ms, for testing
+ * @returns {boolean} false when there is no usable timestamp
+ */
+export function hasRelativeLabel(tsSeconds, nowMs = Date.now()) {
+	const d = eventDate(tsSeconds)
+	if (!d) return false
+	const secs = Math.max(0, Math.floor(nowMs / 1000) - Math.floor(d.getTime() / 1000))
+	return Math.floor(secs / 86400) < RELATIVE_LABEL_MAX_DAYS
 }
 
 /**

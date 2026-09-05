@@ -204,6 +204,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ cardData.title }}
 							</h2>
 						</div>
+						<!-- A failed rename now keeps the editor open with the typed title
+						     (#10171), so say why right here: the shared saveError is
+						     otherwise only rendered inside the due-date popover and the
+						     description editor, neither of which is open at this point. -->
+						<span v-if="editingTitle && saveError" class="card-modal__save-error" data-title-error>{{ saveError }}</span>
 					</div>
 
 					<div class="card-modal__header-actions">
@@ -1168,6 +1173,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<template v-if="editingDescription">
 								<Suspense>
 									<MarkdownEditor
+										ref="descriptionEditorRef"
 										v-model="draftDescription"
 										:placeholder="t('kanso', 'Add a description…')"
 										:disabled="isSaving"
@@ -1898,11 +1904,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<!-- #10131 — the relative label alone ("5 days ago") can't answer
 									     "when exactly?", so the precise stamp sits next to it. It is
 									     ALWAYS rendered, never hover-only: a tooltip is unreachable on
-									     touch, and this app is installed on phones. -->
-									<span class="card-modal__activity-time">{{ relativeTime(item.timestamp) }}<template v-if="exactTimeLabel(item.timestamp)"><span class="card-modal__activity-sep"> · </span><time
+									     touch, and this app is installed on phones.
+									     #10177 — the relative half is what drops out past 7 days, where
+									     it is no longer relative but an absolute date the stamp already
+									     carries. Never drop the stamp. -->
+									<span class="card-modal__activity-time"><template v-if="activityRelativeTime(item.timestamp)">{{ activityRelativeTime(item.timestamp) }}<span v-if="exactTimeLabel(item.timestamp)" class="card-modal__activity-sep"> · </span></template><time
+										v-if="exactTimeLabel(item.timestamp)"
 										class="card-modal__activity-exact"
 										:datetime="isoTimestamp(item.timestamp)"
-										:title="exactTimeTitle(item.timestamp)">{{ exactTimeLabel(item.timestamp) }}</time></template></span>
+										:title="exactTimeTitle(item.timestamp)">{{ exactTimeLabel(item.timestamp) }}</time></span>
 									<div v-if="hasDescriptionDiff(item) && expandedDiffs.has(item.id)" class="card-modal__activity-diff">
 										<div
 											v-for="(line, i) in diffLines(item.detail.from, item.detail.to)"
@@ -2445,7 +2455,7 @@ import { useCardActions } from '../composables/useCardActions.js'
 import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
-import { allDayInputValue, timedInputValue, formatCardDate, exactTimeLabel, exactTimeTitle, isoTimestamp } from '../utils/dateDisplay.js'
+import { allDayInputValue, timedInputValue, formatCardDate, exactTimeLabel, exactTimeTitle, hasRelativeLabel, isoTimestamp, RELATIVE_LABEL_MAX_DAYS } from '../utils/dateDisplay.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
@@ -3502,18 +3512,24 @@ function cancelTitleEdit() {
 	editingTitle.value = false
 }
 
+// The editor closes ONLY once the save has actually landed (#10171). Closing in
+// a `finally` discarded the typed title on every failed save - a 403 after a
+// mid-edit permission change, a 409, a 5xx - and reopening runs
+// `startTitleEdit`, which overwrites the draft from the server copy, so there
+// was no way to recover the text but to retype it. On failure the editor stays
+// open with the draft intact and `saveError` is rendered beside it.
 async function saveTitle() {
 	const title = draftTitle.value.trim()
 	if (!title || title === cardData.value?.title) {
 		editingTitle.value = false
 		return
 	}
+	saveError.value = ''
 	try {
 		await updateCard.mutateAsync({ data: { title } })
+		editingTitle.value = false
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Could not save the title')
-	} finally {
-		editingTitle.value = false
 	}
 }
 
@@ -3551,7 +3567,60 @@ watch(() => props.cardId, () => {
 	commentError.value = ''
 })
 
-function startDescriptionEdit() {
+// The editor that replaces the read-view when you start editing. Only needed to
+// scroll it into view — see scrollDescriptionEditorIntoView().
+const descriptionEditorRef = ref(null)
+
+/**
+ * Bring the just-opened description editor onto the screen (#10184).
+ *
+ * On a phone the description usually sits well below the fold of the modal's
+ * scroll container, and swapping the read-view for the editor scrolls nothing:
+ * the editor mounts and focuses exactly where the read-view was. Measured on a
+ * 390x664 viewport that left ~5px of the caret above the fold, and once the soft
+ * keyboard opened the editor was off-screen entirely — which is what the report
+ * "the edit box disappears / is not editable" actually describes.
+ *
+ * Tiptap's own autofocus is not enough: ProseMirror's scrollIntoView only
+ * guarantees the caret reaches the container EDGE, i.e. zero keyboard clearance.
+ * Centring the editor in the scroller instead leaves roughly half the container
+ * height below it, which clears a phone keyboard.
+ *
+ * The editor is an async component behind <Suspense>, so on the first open its
+ * chunk is still being fetched when this runs. The wait is budgeted in TIME, not
+ * in frames: on the slow phone connection this is reported from, a frame count
+ * small enough to look reasonable expires before the chunk lands and the scroll
+ * silently never happens. It also stops the moment the editor is closed again
+ * (Escape, Cancel, a card switch), so it can never scroll under the user.
+ */
+async function scrollDescriptionEditorIntoView() {
+	let el = null
+	const deadline = Date.now() + 10_000
+	while (!el && editingDescription.value && Date.now() < deadline) {
+		await nextTick()
+		el = descriptionEditorRef.value?.$el ?? null
+		if (!el) await new Promise((r) => requestAnimationFrame(r))
+	}
+	// `$el` is a real element for this component (single root), but bail rather
+	// than throw if that ever changes to a fragment, whose `$el` is a text anchor.
+	if (!el || typeof el.scrollIntoView !== 'function' || !editingDescription.value) return
+	// Two frames: the toolbar renders only once Tiptap is constructed, so the
+	// element grows right after mount, and this scroll must land AFTER Tiptap's
+	// own focus-driven one.
+	await new Promise((r) => requestAnimationFrame(r))
+	await new Promise((r) => requestAnimationFrame(r))
+	if (!editingDescription.value) return
+	// Centring only helps while the editor FITS on screen. Tiptap focuses at the
+	// END of the text, so centring an editor taller than the viewport would push
+	// the caret off the bottom — worse than the container-edge alignment
+	// ProseMirror already leaves it at. Those keep today's behaviour.
+	if (el.getBoundingClientRect().height > window.innerHeight) return
+	// Instant, not smooth (unlike scrollToTargetComment): this opens an edit the
+	// user is about to type into, and a running animation would fight the caret.
+	el.scrollIntoView({ block: 'center' })
+}
+
+async function startDescriptionEdit() {
 	draftDescription.value = cardData.value?.description || ''
 	descriptionBaseText.value = draftDescription.value
 	// `descriptionRevision` rides on the DETAIL payload only (it is deliberately
@@ -3564,6 +3633,7 @@ function startDescriptionEdit() {
 	descriptionConflict.value = null
 	editingDescription.value = true
 	saveError.value = ''
+	await scrollDescriptionEditorIntoView()
 }
 
 function cancelDescriptionEdit() {
@@ -3757,10 +3827,12 @@ async function saveItemTitle(item) {
 	checklistError.value = ''
 	try {
 		await renameItem.mutateAsync({ item, title })
+		// Close only on success (#10171): `cancelItemEdit` clears the draft, so
+		// closing in a `finally` threw away the typed step title on every
+		// failed rename.
+		cancelItemEdit()
 	} catch (err) {
 		checklistError.value = err?.response?.data?.error || t('kanso', 'Failed to rename item.')
-	} finally {
-		cancelItemEdit()
 	}
 }
 
@@ -4148,8 +4220,19 @@ function relativeTime(tsSeconds) {
 	const hours = Math.floor(mins / 60)
 	if (hours < 24) return n('kanso', '%n hour ago', '%n hours ago', hours)
 	const days = Math.floor(hours / 24)
-	if (days < 7) return n('kanso', '%n day ago', '%n days ago', days)
+	if (days < RELATIVE_LABEL_MAX_DAYS) return n('kanso', '%n day ago', '%n days ago', days)
 	return new Date(Number(tsSeconds) * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// #10177 — the relative label for an ACTIVITY row, which renders it beside the
+// exact stamp. Past 7 days `relativeTime()` above stops being relative and falls
+// back to an absolute date — the very date the stamp beside it already carries,
+// so the row printed it twice ("26 Aug 2026 · 26 Aug 2026, 06:21"). Beyond that
+// boundary the row shows the stamp alone; it carries the date AND the time, so
+// nothing is lost. The time-tracking list keeps calling `relativeTime()` direct:
+// it has no stamp next to it, so the fallback is all it has.
+function activityRelativeTime(tsSeconds) {
+	return hasRelativeLabel(tsSeconds) ? relativeTime(tsSeconds) : ''
 }
 
 // ── Comments / Discussion ────────────────────────────────────────────────────
@@ -4689,10 +4772,12 @@ async function saveCommentEdit(comment) {
 	commentError.value = ''
 	try {
 		await editComment.mutateAsync({ comment, body })
+		// Close only on success (#10171). This was the worst of the three: a
+		// comment body is unbounded prose, and `cancelCommentEdit` clears it,
+		// so a failed edit silently destroyed arbitrarily much typing.
+		cancelCommentEdit()
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to edit comment.')
-	} finally {
-		cancelCommentEdit()
 	}
 }
 

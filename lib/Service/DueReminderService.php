@@ -28,7 +28,13 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * so a second cron tick over the same card is a no-op. The markers are reset to
  * 0 in {@see CardService::update} whenever the due date CHANGES, which re-arms
  * both reminders for the new date. A card with no due date is ignored; done,
- * archived and deleted cards are excluded by the candidate query.
+ * archived and deleted cards are excluded by the candidate query, as are cards
+ * on an archived or trashed BOARD (#10127) - archiving a board is the user's
+ * "I am done with this" gesture, and a reminder pushes at them out of band
+ * rather than merely sitting in a list they can ignore. Template cards are
+ * excluded on the same grounds (#10180): a template is a blueprint kept off the
+ * live board, so its due date is part of the pattern to copy, not work anybody
+ * owes yet.
  *
  * Timezone: consistent with how due dates are already stored/compared - the
  * unix instant of the stored `duedate`. "At due time" = duedate <= now; "1 day

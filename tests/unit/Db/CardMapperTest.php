@@ -712,4 +712,75 @@ class CardMapperTest extends TestCase {
 			'the rebalance write must be scoped to the stack it read, not the card id alone'
 		);
 	}
+
+	/**
+	 * The due-reminder candidate query must be scoped to ACTIVE BOARDS (#10127):
+	 * a card on a board the user archived or trashed must not push a reminder,
+	 * and cards are NOT cascade-archived/trashed with their board, so the
+	 * card-level flags cannot stand in for it.
+	 *
+	 * Scope of this guard, stated honestly: it pins that the board predicate is
+	 * EMITTED, not that a database filters on it - the connection is mocked, so
+	 * no SQL runs here and this cannot prove the rows are actually excluded.
+	 * That half was proven end-to-end against a live instance (seeded due cards
+	 * on an archived, a trashed and an active board; only the active one
+	 * notified). This test exists so a future edit that silently drops the
+	 * predicate goes red in CI instead of shipping.
+	 */
+	public function testFindDueForReminderScopesToActiveBoards(): void {
+		$functions = [];
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach (['select', 'from', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'setMaxResults'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('expr')->willReturn(self::exprSink());
+		$qb->method('createNamedParameter')->willReturn('?');
+		$qb->method('createFunction')->willReturnCallback(
+			static function (string $sql) use (&$functions): string {
+				$functions[] = $sql;
+				return $sql;
+			}
+		);
+
+		$result = $this->createMock(IResult::class);
+		$result->method('fetch')->willReturn(false);
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		$mapper = new CardMapper($db, new CardVisibilityScope());
+
+		self::assertSame([], $mapper->findDueForReminder(1000, 500));
+
+		$boardScoped = array_filter(
+			$functions,
+			static fn (string $sql): bool => str_starts_with($sql, 'board_id IN ('),
+		);
+		self::assertNotSame(
+			[],
+			$boardScoped,
+			'the due-reminder candidate query must restrict board_id to the active-board set'
+		);
+	}
+
+	/**
+	 * The due-reminder candidate query must also exclude TEMPLATE cards (#10180),
+	 * like every other query in this mapper. Flagging a card as a template is a
+	 * pure flag flip ({@see \OCA\Kanso\Service\CardService::setTemplate()}), so a
+	 * dated, assigned card keeps its due date and assignees when it becomes a
+	 * blueprint - and would otherwise keep pushing bells about work nobody owes.
+	 *
+	 * Scope of this guard, stated honestly: it pins that the `is_template`
+	 * predicate is EMITTED, not that a database filters on it - the connection is
+	 * mocked, so no SQL runs here and this cannot prove the rows are actually
+	 * excluded. That half was proven end-to-end against a live instance (a
+	 * template card and a normal control card, both past due with the same
+	 * assignee; only the control one notified). This test exists so a future edit
+	 * that silently drops the predicate goes red in CI instead of shipping.
+	 */
+	public function testFindDueForReminderExcludesTemplates(): void {
+		$this->assertFiltersTemplates(
+			static fn (CardMapper $mapper): array => $mapper->findDueForReminder(1000, 500)
+		);
+	}
 }

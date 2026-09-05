@@ -111,7 +111,13 @@ services:
       NEXTCLOUD_TRUSTED_DOMAINS: localhost
       REDIS_HOST: redis
     volumes:
-      - ..:/var/www/html/custom_apps/kanso
+      # The app tree Nextcloud runs. Defaults to this checkout, which is what
+      # every local run and every other CI job wants. dev/upgrade-check.sh points
+      # it at a staging directory instead so it can boot the last RELEASED
+      # version, seed it, and then replace the tree in place with the branch's
+      # build before running `occ upgrade` — the update path a real user takes.
+      # Relative paths resolve against this file's directory (dev/).
+      - ${KANSO_APP_SRC:-..}:/var/www/html/custom_apps/kanso
       # Ensure the bundled apps dir is writable at install time; older NC majors
       # (30/31) abort the first-boot install otherwise. Runs as root pre-install.
       - ./hooks/pre-installation:/docker-entrypoint-hooks.d/pre-installation:ro

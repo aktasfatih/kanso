@@ -820,6 +820,37 @@ class CardMapper extends QBMapper {
 	 * ({@see \OCA\Kanso\Service\DueReminderService}). Excludes done, archived and
 	 * deleted cards, and any card without a due date (`duedate IS NULL`).
 	 *
+	 * Also scoped to ACTIVE BOARDS (#10127): archiving or trashing a board is the
+	 * user's "I am done with this" gesture, and a reminder is pushed out of band
+	 * (bell, push, mail digest) rather than merely listed, so it must respect it.
+	 * The card-level flags above cannot stand in for that - cards are NOT
+	 * cascade-archived when their board is ({@see \OCA\Kanso\Service\BoardService::update()}
+	 * writes the archived flag to the board row only) and NOT cascade-trashed
+	 * either ({@see \OCA\Kanso\Service\BoardService::delete()} stamps only the
+	 * board's `deleted_at`), so those cards still read as active at card level.
+	 *
+	 * Consequence worth knowing: because a skipped card is never stamped, the
+	 * reminders it missed are still owed. Un-archiving or restoring the board
+	 * therefore fires that whole backlog on the next tick rather than silently
+	 * dropping it - deliberate, since the user asked for the board back.
+	 *
+	 * Deliberately SQL, not a PHP skip after the fact: an unqualified card that
+	 * is never stamped would occupy a slot in the $limit candidate cap on every
+	 * single run, permanently starving real reminders behind it. And deliberately
+	 * an uncorrelated subquery rather than a join (same idiom as
+	 * {@see CardAssigneeMapper::deleteByBoardAndUser()}): {@see self::SUMMARY_COLUMNS}
+	 * is an unqualified column list, so adding a join would force requalifying
+	 * every selected column here.
+	 *
+	 * Template cards are excluded too (#10180), matching every other query in
+	 * this mapper. A template is a blueprint, not work anybody owes: it is kept
+	 * off the live board render and only copied into a real card on
+	 * instantiation. It nonetheless keeps its due date and assignees, because
+	 * {@see \OCA\Kanso\Service\CardService::setTemplate()} is a pure flag flip
+	 * that leaves the card's content untouched - so without this predicate,
+	 * flagging a dated, assigned card as a template leaves it a live reminder
+	 * candidate and its assignees get pushed a bell about work that is not real.
+	 *
 	 * A card qualifies when EITHER:
 	 *   - the at-due reminder is unsent (`due_reminder_sent = 0`) and the due
 	 *     date is at or before $now; OR
@@ -839,12 +870,23 @@ class CardMapper extends QBMapper {
 		$dayAheadDt = new \DateTime('@' . ($now + 86400));
 
 		$qb = $this->db->getQueryBuilder();
+
+		// The active-board set. Its parameters are registered on the OUTER
+		// builder, which is the one that executes.
+		$activeBoards = $this->db->getQueryBuilder();
+		$activeBoards->select('id')
+			->from('kanso_boards')
+			->where($activeBoards->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($activeBoards->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
 			->where($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->createFunction('board_id IN (' . $activeBoards->getSQL() . ')'))
 			->andWhere($qb->expr()->orX(
 				// At-due reminder still owed.
 				$qb->expr()->andX(
