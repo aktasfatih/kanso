@@ -18,14 +18,25 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Http\Client\IClientService;
 
 /**
- * GitHub PR/issue links attached to a card. A link is manual (paste a URL) and
- * its state (open/closed/merged) is refreshed best-effort by an UNAUTHENTICATED
- * GitHub API poll, throttled per link. No credentials are stored or sent.
+ * Forge PR/issue links attached to a card. A link is manual (paste a URL); how
+ * its state (open/closed/merged) stays fresh depends on the provider:
  *
- * SSRF posture: the only accepted host is github.com, and the poll always hits
- * a URL RECONSTRUCTED from validated path segments against the fixed
- * api.github.com host - user input never selects the request host. Private or
- * rate-limited repos simply stay `unknown`; the chip still renders.
+ *  - `github`: refreshed best-effort by an UNAUTHENTICATED GitHub API poll,
+ *    throttled per link. No credentials are stored or sent.
+ *  - `forgejo`: NEVER polled. The instance is self-hosted, so there is no host
+ *    to pin and no stored token (a private repo would 404 anyway); state comes
+ *    from the board's webhook deliveries instead. A link pasted for something
+ *    that never changes again therefore stays `unknown`.
+ *
+ * A non-github.com URL is accepted only when the board has its Forgejo webhook
+ * enabled - that opt-in is the sole signal that the board talks to a forge at
+ * all, since Kanso stores no instance URL.
+ *
+ * SSRF posture: the only host ever contacted is api.github.com, and the poll
+ * always hits a URL RECONSTRUCTED from validated path segments against that
+ * fixed host - user input never selects the request host, and the forgejo
+ * provider makes no request at all. Private or rate-limited repos simply stay
+ * `unknown`; the chip still renders.
  *
  * A link add/remove reuses the card's ENTITY_CARD / ACTION_UPDATE change row so
  * the existing realtime/delta-sync path reflects it with no new Change type.
@@ -71,12 +82,12 @@ class CardLinkService {
 	}
 
 	/**
-	 * Attaches a GitHub URL to the card and polls its state once. Idempotent on
-	 * (card, url). Requires EDIT.
+	 * Attaches a forge URL to the card, polling its state once when the provider
+	 * supports it. Idempotent on (card, url). Requires EDIT.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the URL is not an acceptable GitHub URL
+	 * @throws InvalidInputException if the URL is not acceptable for this board
 	 */
 	public function addLink(int $cardId, string $url, string $actorUid): CardLink {
 		$card = $this->loadCard($cardId);
@@ -84,11 +95,12 @@ class CardLinkService {
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		[$kind] = self::parseGitHubUrl($url);
+		[$kind, $provider] = $this->resolveLink($url, $board);
 
 		$now = time();
 		$link = new CardLink();
 		$link->setCardId($cardId);
+		$link->setProvider($provider);
 		$link->setUrl($url);
 		$link->setKind($kind);
 		$link->setState(CardLink::STATE_UNKNOWN);
@@ -112,7 +124,8 @@ class CardLinkService {
 		}
 
 		// Best-effort immediate poll so the chip shows a real state right away.
-		if ($kind !== CardLink::KIND_OTHER) {
+		// Only github.com is ever polled - see shouldPoll().
+		if ($this->shouldPoll($link, $now, true)) {
 			$this->refreshState($link, $now);
 		}
 
@@ -195,9 +208,73 @@ class CardLinkService {
 		return [CardLink::KIND_OTHER, '', '', 0];
 	}
 
-	private function shouldPoll(CardLink $link, int $now): bool {
-		return $link->getKind() !== CardLink::KIND_OTHER
-			&& ($now - $link->getLastPolled()) > self::POLL_THROTTLE;
+	/**
+	 * Whether this link's state may be refreshed by an outbound poll.
+	 *
+	 * Only github.com is ever polled: its host is fixed, so the API base can be
+	 * pinned. A Forgejo link is never polled - the instance is self-hosted (no
+	 * host to pin, and no stored token, so a private repo would 404 anyway), and
+	 * its state arrives with the webhook deliveries instead.
+	 *
+	 * @param bool $ignoreThrottle true right after an insert, where the throttle
+	 *                             has nothing to throttle yet
+	 */
+	private function shouldPoll(CardLink $link, int $now, bool $ignoreThrottle = false): bool {
+		if (($link->getProvider() ?? CardLink::PROVIDER_GITHUB) !== CardLink::PROVIDER_GITHUB) {
+			return false;
+		}
+		if ($link->getKind() === CardLink::KIND_OTHER) {
+			return false;
+		}
+		return $ignoreThrottle || ($now - $link->getLastPolled()) > self::POLL_THROTTLE;
+	}
+
+	/**
+	 * Resolves a pasted URL to [kind, provider].
+	 *
+	 * github.com is always accepted. Any other host is accepted ONLY when the
+	 * board has its Forgejo webhook enabled - that opt-in is what tells us the
+	 * board actually talks to a forge at that address, and it keeps the strict
+	 * github.com-only rejection for every board that has not opted in. Kanso
+	 * stores no instance URL, so the board's own webhook is the only signal
+	 * available, and a Forgejo link would be stuck on `unknown` without the
+	 * deliveries anyway.
+	 *
+	 * @return array{0: string, 1: string} [kind, provider]
+	 * @throws InvalidInputException if the URL is not acceptable for this board
+	 */
+	private function resolveLink(string $url, Board $board): array {
+		try {
+			[$kind] = self::parseGitHubUrl($url);
+			return [$kind, CardLink::PROVIDER_GITHUB];
+		} catch (InvalidInputException $e) {
+			if (($board->getForgejoWebhookSecret() ?? '') === '') {
+				throw $e;
+			}
+		}
+		return [self::forgeKindFromUrl($url), CardLink::PROVIDER_FORGEJO];
+	}
+
+	/**
+	 * The kind of a self-hosted forge URL, read purely from its path shape - no
+	 * host trust, no network call. Forgejo spells a pull request `/pulls/{n}`.
+	 *
+	 * @throws InvalidInputException if the URL is not an https URL
+	 */
+	public static function forgeKindFromUrl(string $url): string {
+		$url = trim($url);
+		$parts = parse_url($url);
+		if ($parts === false || ($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') === '') {
+			throw new InvalidInputException('Only https links are supported');
+		}
+		$path = $parts['path'] ?? '';
+		if (preg_match('#/pulls?/(\d+)/?$#', $path) === 1) {
+			return CardLink::KIND_PR;
+		}
+		if (preg_match('#/issues/(\d+)/?$#', $path) === 1) {
+			return CardLink::KIND_ISSUE;
+		}
+		return CardLink::KIND_OTHER;
 	}
 
 	/**

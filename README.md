@@ -65,16 +65,19 @@ your work, on your own Nextcloud, laid out plainly.
 ### 🔗 Integrations & migration
 - **Import from Deck**: one click copies a Deck board (stacks, cards, labels,
   assignees) into a new Kanso board you own. Your Deck boards are left untouched.
-- **GitHub links**: attach PRs/issues to a card with live open/merged/closed
-  badges, and copy a ready-made `kanso-<id>` branch name.
-- **GitHub webhook**: an HMAC-verified webhook (send it `pull_request` and
-  `issues` events, content type `application/json`) moves a card to your Review
-  column when its PR opens and to Done when it merges. Closing an issue linked
-  on a card moves that card to Done; reopening it moves the card back to In
-  progress. Opt-in **issue
-  intake**: pick a column in the board's webhook settings and every newly
-  opened issue (optionally filtered to one GitHub label) becomes a linked card
-  there — title plus issue link only, no body copy. No credentials, no OAuth.
+- **Code links**: attach pull requests/issues to a card with live
+  open/merged/closed badges, and copy a ready-made `kanso-<id>` branch name.
+- **GitHub & Forgejo webhooks**: an HMAC-verified webhook (send it
+  `pull_request` and `issues` events, content type `application/json`) moves a
+  card to your Review column when its PR opens and to Done when it merges.
+  Closing an issue linked on a card moves that card to Done; reopening it moves
+  the card back to In progress. Opt-in **issue intake**: pick a column in the
+  board's webhook settings and every newly opened issue (optionally filtered to
+  one label) becomes a linked card there — title plus issue link only, no body
+  copy. No credentials, no OAuth. A board can run both webhooks at once; Gitea
+  webhooks work with the Forgejo endpoint. For self-hosted forges Kanso is
+  **receive-only** — it never calls your instance, so link badges come from the
+  deliveries themselves.
 - **MCP server (AI access)**: an optional
   [Model Context Protocol](https://modelcontextprotocol.io) server (under
   [`mcp/`](mcp/README.md)) lets Claude and other MCP clients read and manage

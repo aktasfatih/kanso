@@ -196,6 +196,69 @@ class CardLinkServiceTest extends TestCase {
 		self::assertSame(CardLink::STATE_UNKNOWN, $link->getState());
 	}
 
+	// ---- self-hosted forge links (Forgejo) --------------------------------
+
+	/**
+	 * Kanso stores no Forgejo instance URL, so the board's own Forgejo webhook
+	 * is the only signal that it talks to a forge at all. Without that opt-in,
+	 * the strict github.com-only rejection stands.
+	 */
+	public function testAddLinkRejectsForeignHostWhenForgejoWebhookDisabled(): void {
+		$this->expectCardLoaded();
+		$this->cardLinkMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->addLink(9, 'https://git.example.org/octo/app/pulls/1', 'bob');
+	}
+
+	public function testAddLinkAcceptsForgeUrlOnceForgejoWebhookIsEnabled(): void {
+		$board = $this->expectCardLoaded();
+		$board->setForgejoWebhookSecret('enabled');
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+
+		$link = $this->service->addLink(9, 'https://git.example.org/octo/app/pulls/1', 'bob');
+
+		self::assertSame(CardLink::PROVIDER_FORGEJO, $link->getProvider());
+		self::assertSame(CardLink::KIND_PR, $link->getKind());
+	}
+
+	public function testForgejoIssueUrlIsRecognizedLexically(): void {
+		$board = $this->expectCardLoaded();
+		$board->setForgejoWebhookSecret('enabled');
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+
+		$link = $this->service->addLink(9, 'https://git.example.org/octo/app/issues/7', 'bob');
+		self::assertSame(CardLink::KIND_ISSUE, $link->getKind());
+	}
+
+	/**
+	 * The whole point of the delivery-only design: a self-hosted instance is
+	 * never contacted. No base URL is stored and no token exists, so a poll
+	 * could only guess a host - it must not happen at all.
+	 */
+	public function testForgejoLinkIsNeverPolled(): void {
+		$board = $this->expectCardLoaded();
+		$board->setForgejoWebhookSecret('enabled');
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+		$this->client->expects(self::never())->method('get');
+
+		$link = $this->service->addLink(9, 'https://git.example.org/octo/app/pulls/1', 'bob');
+		self::assertSame(CardLink::STATE_UNKNOWN, $link->getState());
+	}
+
+	/** A github.com link on a Forgejo-enabled board still polls as before. */
+	public function testGithubLinkStillPollsOnAForgejoEnabledBoard(): void {
+		$board = $this->expectCardLoaded();
+		$board->setForgejoWebhookSecret('enabled');
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+		$this->githubResponse('{"title":"Fix login","state":"open","merged_at":null}');
+
+		$link = $this->service->addLink(9, 'https://github.com/octo/app/pull/42', 'bob');
+
+		self::assertSame(CardLink::PROVIDER_GITHUB, $link->getProvider());
+		self::assertSame(CardLink::STATE_OPEN, $link->getState());
+	}
+
 	public function testPollDisablesRedirects(): void {
 		$this->expectCardLoaded();
 		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
