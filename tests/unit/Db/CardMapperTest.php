@@ -504,6 +504,18 @@ class CardMapperTest extends TestCase {
 		return $values;
 	}
 
+	public function testFindWithDuedateByBoardAppliesTheCallersRowCap(): void {
+		// The ICS feed is the app's only ANONYMOUS card read and its caller
+		// serialises every row it gets, so the cap has to reach the SQL - not just
+		// sit in a constant. Drop the setMaxResults and this goes red.
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findWithDuedateByBoard(7, 2000)
+		);
+
+		self::assertSame([2000], $recorded['maxResults'], 'the feed query must be bounded by the caller cap');
+		self::assertSame([7], self::boundValues($recorded['predicates'], 'eq', 'board_id'), 'and stay board-scoped');
+	}
+
 	public function testFindAssignedInBoardsStillExcludesDoneCards(): void {
 		// The DEFAULT My Tasks feed must keep its `done_at = 0` filter. Adding
 		// the recently-done section must not have widened it - that widening is

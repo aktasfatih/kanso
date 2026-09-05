@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\CalendarFeedService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
@@ -25,6 +26,7 @@ class CalendarFeedServiceTest extends TestCase {
 
 	private BoardMapper&MockObject $boardMapper;
 	private CardMapper&MockObject $cardMapper;
+	private ChangeMapper&MockObject $changeMapper;
 	private PermissionService&MockObject $permissionService;
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
@@ -34,12 +36,14 @@ class CalendarFeedServiceTest extends TestCase {
 		parent::setUp();
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->changeMapper = $this->createMock(ChangeMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
 		$this->service = new CalendarFeedService(
 			$this->boardMapper,
 			$this->cardMapper,
+			$this->changeMapper,
 			$this->permissionService,
 			$this->secureRandom,
 			$this->urlGenerator,
@@ -161,7 +165,10 @@ class CalendarFeedServiceTest extends TestCase {
 	private function primeFeed(array $cards): void {
 		$this->boardMapper->method('findByIcalFeedToken')->with(self::TOKEN)
 			->willReturn($this->board(1, self::TOKEN));
-		$this->cardMapper->method('findWithDuedateByBoard')->with(1)->willReturn($cards);
+		// The feed's card read is HARD-CAPPED: an anonymous fetch may never turn
+		// into an unbounded scan, so the cap is asserted right here in the priming.
+		$this->cardMapper->method('findWithDuedateByBoard')
+			->with(1, CalendarFeedService::MAX_EVENTS)->willReturn($cards);
 		// Event links use the fragment-free deep-link server route (#3744).
 		$this->urlGenerator->method('linkToRouteAbsolute')->willReturnCallback(
 			static fn (string $route, array $args = []): string => $route === 'kanso.deepLink.card'
@@ -280,5 +287,53 @@ class CalendarFeedServiceTest extends TestCase {
 
 		$this->expectException(DoesNotExistException::class);
 		$this->service->renderFeed(self::TOKEN);
+	}
+
+	public function testFeedIsCappedSoAnAnonymousFetchCannotScanAWholeBoard(): void {
+		// The whole point of the cap: the row count a single unauthenticated GET
+		// can pull is a CONSTANT, never a function of board size.
+		$this->boardMapper->method('findByIcalFeedToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN));
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/apps/kanso/card/1');
+		$seenLimit = null;
+		$this->cardMapper->expects(self::once())->method('findWithDuedateByBoard')
+			->willReturnCallback(function (int $boardId, int $limit) use (&$seenLimit): array {
+				$seenLimit = $limit;
+				return [];
+			});
+
+		$this->service->renderFeed(self::TOKEN);
+
+		self::assertSame(CalendarFeedService::MAX_EVENTS, $seenLimit, 'the feed must pass its cap down to the query');
+		self::assertGreaterThan(0, CalendarFeedService::MAX_EVENTS);
+	}
+
+	// ── conditional feed (ETag / If-None-Match) ────────────────────────────
+
+	public function testFeedEtagIsTheBoardsLatestChangeId(): void {
+		$this->boardMapper->method('findByIcalFeedToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN));
+		$this->changeMapper->expects(self::once())->method('getLatestChangeId')
+			->with(1)->willReturn(4711);
+		// Never touches the cards: the validator is what makes the poll cheap.
+		$this->cardMapper->expects(self::never())->method('findWithDuedateByBoard');
+
+		self::assertSame('4711', $this->service->feedEtag(self::TOKEN));
+	}
+
+	public function testFeedEtagRejectsAnUnknownTokenLikeTheFeedItself(): void {
+		// The conditional probe must be no more of an oracle than the plain fetch.
+		$this->boardMapper->method('findByIcalFeedToken')
+			->willThrowException(new DoesNotExistException('no such token'));
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->feedEtag('does-not-exist');
+	}
+
+	public function testFeedEtagRejectsADisabledToken(): void {
+		$this->boardMapper->method('findByIcalFeedToken')->willReturn($this->board(1, null));
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->feedEtag(self::TOKEN);
 	}
 }

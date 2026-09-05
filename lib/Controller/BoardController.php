@@ -33,6 +33,7 @@ use OCP\IUserSession;
 
 class BoardController extends Controller {
 	use ApiErrorTrait;
+	use ConditionalReadTrait;
 
 	public function __construct(
 		string $appName,
@@ -315,21 +316,6 @@ class BoardController extends Controller {
 				$this->boardService->delete($id, $this->currentUserId())
 			);
 		});
-	}
-
-	/**
-	 * Compares the normalized If-None-Match request header (surrounding
-	 * quotes and weak-validator prefix stripped) against the current ETag.
-	 */
-	private function matchesIfNoneMatch(string $etag): bool {
-		$header = trim($this->request->getHeader('If-None-Match'));
-		if ($header === '') {
-			return false;
-		}
-		if (str_starts_with($header, 'W/')) {
-			$header = substr($header, 2);
-		}
-		return trim($header, '"') === $etag;
 	}
 
 	/**

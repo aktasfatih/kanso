@@ -262,10 +262,18 @@ class CardMapper extends QBMapper {
 	 * chronologically. Board-scoped like every board query, so the feed can only
 	 * ever expose one board's due cards.
 	 *
+	 * HARD-CAPPED at $limit rows: this is the app's only anonymous card read, and
+	 * its caller loops the whole result into a VObject serialise, so the row count
+	 * must never be a function of how big a board grew. The cap keeps the earliest
+	 * due dates (the query's own chronological order); see
+	 * {@see \OCA\Kanso\Service\CalendarFeedService::MAX_EVENTS} for the value and
+	 * why it sits far above any real board.
+	 *
+	 * @param int $limit maximum VEVENT-bearing rows to return
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findWithDuedateByBoard(int $boardId): array {
+	public function findWithDuedateByBoard(int $boardId, int $limit): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -275,7 +283,8 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->orderBy('duedate', 'ASC')
-			->addOrderBy('id', 'ASC');
+			->addOrderBy('id', 'ASC')
+			->setMaxResults($limit);
 		// The feed token authenticates a BOARD, not a person: the reader is
 		// anonymous, so only 'public' cards may ever reach the calendar (#3743).
 		$this->visibilityScope->applyPublicOnly($qb, '');
