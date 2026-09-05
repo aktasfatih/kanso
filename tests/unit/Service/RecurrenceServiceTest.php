@@ -783,6 +783,193 @@ class RecurrenceServiceTest extends TestCase {
 		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', 0, 0, false, 'alice');
 	}
 
+	/**
+	 * A template card whose Start date is $date - which every caller below keeps in
+	 * the FUTURE (NOW is 15 January 2027), so create() arms the rule without ever
+	 * STEPPING the iterator. See unsteppedTemplateCard().
+	 */
+	private function anchoredTemplate(string $date): Card {
+		$card = $this->templateCard();
+		$anchor = (new \DateTimeImmutable($date))->getTimestamp();
+		self::assertGreaterThan(self::NOW, $anchor, 'the anchor must be in the future for this case');
+		$card->setStartDate(new \DateTime('@' . $anchor));
+		return $card;
+	}
+
+	/**
+	 * A BYMONTH rule with no BYMONTHDAY inherits its day-of-month from the anchor
+	 * and applies it with setDate(), which overflows instead of clamping: anchored
+	 * on 31 January, `FREQ=YEARLY;BYMONTH=2` asks for "February 31" and fires on
+	 * 3 March - the wrong month once, then the wrong DAY (3 February) forever. The
+	 * overflow lives in the host Nextcloud's own Sabre\VObject, not in code this app
+	 * ships, so the rule is refused at the door instead of being clamped around.
+	 */
+	public function testCreateRejectsAByMonthRuleWhoseMonthIsTooShortForTheAnchorDay(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->anchoredTemplate('2027-01-31T09:00:00Z'));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		// The message is echoed verbatim to the caller (ApiErrorTrait), so it has to
+		// name the day that is wrong and the month it cannot fit into.
+		$this->expectExceptionMessageMatches('/\b31\b.*February|February.*\b31\b/s');
+		$this->service->create(
+			1, 10, 5,
+			RecurRule::MODE_CLONE,
+			'FREQ=YEARLY;BYMONTH=2',
+			RecurRule::POLICY_AT_OCCURRENCE,
+			0,
+			false,
+			'alice',
+			'UTC',
+		);
+	}
+
+	/**
+	 * An EXPLICIT BYMONTHDAY is exempt: sabre skips an out-of-range explicit day
+	 * rather than shifting it, so the caller who spells out which day it means gets
+	 * the schedule it asked for and the guard stays out of the way.
+	 */
+	public function testCreateAcceptsAByMonthRuleWithAnExplicitByMonthDay(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->anchoredTemplate('2027-01-31T09:00:00Z'));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r): RecurRule {
+				$r->setId(7);
+				return $r;
+			});
+
+		$rule = $this->service->create(
+			1, 10, 5,
+			RecurRule::MODE_CLONE,
+			'FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28',
+			RecurRule::POLICY_AT_OCCURRENCE,
+			0,
+			false,
+			'alice',
+			'UTC',
+		);
+		self::assertSame(7, $rule->getId());
+	}
+
+	/**
+	 * An anchor day every month has is untouched by the guard - the overflow needs a
+	 * day that does not exist in the target month.
+	 */
+	public function testCreateAcceptsAByMonthRuleAnchoredOnADayEveryMonthHas(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->anchoredTemplate('2027-01-28T09:00:00Z'));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r): RecurRule {
+				$r->setId(7);
+				return $r;
+			});
+
+		$rule = $this->service->create(
+			1, 10, 5,
+			RecurRule::MODE_CLONE,
+			'FREQ=YEARLY;BYMONTH=2',
+			RecurRule::POLICY_AT_OCCURRENCE,
+			0,
+			false,
+			'alice',
+			'UTC',
+		);
+		self::assertSame(7, $rule->getId());
+	}
+
+	/**
+	 * The guard checks the anchor day against the months the rule actually NAMES,
+	 * not against the shortest month there is. `FREQ=YEARLY;BYMONTH=1` anchored on
+	 * 31 January is a perfectly ordinary "every 31 January" schedule - January has a
+	 * 31st, nothing overflows - and refusing it would be a 400 on correct input.
+	 */
+	public function testCreateAcceptsAByMonthRuleWhoseMonthIsLongEnoughForTheAnchorDay(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->anchoredTemplate('2027-01-31T09:00:00Z'));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(static function (RecurRule $r): RecurRule {
+				$r->setId(7);
+				return $r;
+			});
+
+		$rule = $this->service->create(
+			1, 10, 5,
+			RecurRule::MODE_CLONE,
+			'FREQ=YEARLY;BYMONTH=1',
+			RecurRule::POLICY_AT_OCCURRENCE,
+			0,
+			false,
+			'alice',
+			'UTC',
+		);
+		self::assertSame(7, $rule->getId());
+	}
+
+	/**
+	 * A BYMONTH LIST is only as safe as its shortest month: `BYMONTH=1,2` anchored
+	 * on the 31st expands correctly in January and overflows in February, so the
+	 * rule as a whole is refused - and the message names February, the month that
+	 * does not fit, rather than the whole list.
+	 */
+	public function testCreateRejectsAByMonthListWhereOneMonthIsTooShort(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->anchoredTemplate('2027-01-31T09:00:00Z'));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		try {
+			$this->service->create(
+				1, 10, 5,
+				RecurRule::MODE_CLONE,
+				'FREQ=YEARLY;BYMONTH=1,2',
+				RecurRule::POLICY_AT_OCCURRENCE,
+				0,
+				false,
+				'alice',
+				'UTC',
+			);
+			self::fail('expected the rule to be refused');
+		} catch (InvalidInputException $e) {
+			self::assertStringContainsString('February', $e->getMessage());
+			self::assertStringNotContainsString('January', $e->getMessage());
+		}
+	}
+
+	/**
+	 * A 29 February anchor is refused even though February really does have a 29th
+	 * in the year the card is anchored: the guard runs once, when the schedule is
+	 * saved, against a series that outlives the leap year, so February is measured
+	 * at 28 days rather than at whichever length the rule happens to meet first.
+	 */
+	public function testCreateRejectsALeapDayAnchorInFebruary(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// 2028 is a leap year, so this date exists - and is still in the future.
+		$this->cardMapper->method('find')->with(10)->willReturn($this->anchoredTemplate('2028-02-29T09:00:00Z'));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessageMatches('/\b29\b.*February|February.*\b29\b/s');
+		$this->service->create(
+			1, 10, 5,
+			RecurRule::MODE_CLONE,
+			'FREQ=YEARLY;BYMONTH=2',
+			RecurRule::POLICY_AT_OCCURRENCE,
+			0,
+			false,
+			'alice',
+			'UTC',
+		);
+	}
+
 	public function testCreateRejectsInvalidMode(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->ruleMapper->expects(self::never())->method('insert');
