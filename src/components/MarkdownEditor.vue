@@ -33,7 +33,7 @@ Emits:
 		class="kanso-md-editor"
 		:class="{ 'kanso-md-editor--disabled': disabled, 'kanso-md-editor--focused': isFocused }"
 		:style="editorStyle"
-		@keydown.escape.stop="() => {}"
+		@keydown.escape.stop="() => {}">
 		<!-- Formatting toolbar -->
 		<div
 			v-if="showToolbar && editor"
