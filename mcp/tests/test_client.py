@@ -884,3 +884,111 @@ async def test_list_my_reviews_empty_body_is_a_list():
     respx.get(f"{BASE}/reviews/mine").mock(return_value=httpx.Response(204))
     async with _client() as c:
         assert await c.list_my_reviews() == []
+
+
+# ------------------------------------------------------------------ views
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_views_unwraps_the_views_key():
+    # ViewController::index answers {"views": [...]}, not a bare list.
+    route = respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "views": [
+                    {
+                        "id": "abc123",
+                        "name": "My week",
+                        "filter": {"due": "week"},
+                        "groupBy": "board",
+                        "display": "list",
+                        "sort": {"mode": "due", "dir": "asc"},
+                    }
+                ]
+            },
+        )
+    )
+    async with _client() as c:
+        views = await c.list_views()
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/views"
+    assert views[0]["id"] == "abc123"
+    # The opaque filter blob is passed through untouched, long keys and all.
+    assert views[0]["filter"] == {"due": "week"}
+    assert views[0]["sort"] == {"mode": "due", "dir": "asc"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_views_tolerates_a_missing_views_key():
+    # A 204 (or any payload without `views`) must read as "no views", not blow
+    # up on a None subscript.
+    respx.get(f"{BASE}/views").mock(return_value=httpx.Response(204))
+    async with _client() as c:
+        assert await c.list_views() == []
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_view_cards_sends_the_sort_and_the_short_key_filter():
+    route = respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "cards": [
+                    {
+                        "id": 100,
+                        "title": "Cross-board card",
+                        "stackId": 10,
+                        "boardId": 7,
+                        "boardTitle": "Ops",
+                        "boardPrefix": "OPS",
+                        "boardSeq": 12,
+                    }
+                ],
+                "labels": [{"id": 5, "boardId": 7, "title": "bug", "color": "e11"}],
+                "participants": ["alice"],
+                "capped": False,
+                "total": 1,
+                "limit": 5000,
+            },
+        )
+    )
+    async with _client() as c:
+        feed = await c.view_cards(
+            sort_mode="due", sort_dir="desc", params={"fl": "5,6", "fd": "week"}
+        )
+    assert route.called
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert req.url.path == "/index.php/apps/kanso/api/views/cards"
+    # The feed is stateless: no view id is sent, only the sort + flat filter.
+    assert req.url.params.get("sortMode") == "due"
+    assert req.url.params.get("sortDir") == "desc"
+    assert req.url.params.get("fl") == "5,6"
+    assert req.url.params.get("fd") == "week"
+    # The envelope comes back whole, and — because it is NOT squeezed through
+    # CardSummary (extra="ignore") — each row keeps the board identity that is
+    # the entire point of a cross-board feed.
+    assert feed["cards"][0]["boardTitle"] == "Ops"
+    assert feed["cards"][0]["boardPrefix"] == "OPS"
+    assert feed["total"] == 1
+    assert feed["limit"] == 5000
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_view_cards_defaults_the_sort_and_sends_no_filter():
+    route = respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(200, json={"cards": [], "total": 0})
+    )
+    async with _client() as c:
+        await c.view_cards()
+    params = route.calls.last.request.url.params
+    assert params.get("sortMode") == "default"
+    assert params.get("sortDir") == "asc"
+    # An unfiltered View sends no filter keys at all.
+    assert [k for k in params.keys() if k.startswith("f")] == []

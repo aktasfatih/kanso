@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `kanso_list_views` and `kanso_get_view_cards` — read your saved cross-board
+  Views over MCP: list them, then fetch the cards one resolves to, with the
+  View's own filter and sort applied server-side. Rows keep the board identity
+  (`boardId` / `boardTitle` / `boardPrefix`) a cross-board feed needs, and the
+  result separates how many cards matched (`total`) from how many came back
+  (`returned`) and from a server-side truncation (`capped` / `serverCap`).
+  Until now an agent had no way to see a View at all — it could only pull whole
+  boards and re-filter them itself. Read-only on purpose: there is no tool to
+  create, rename or delete a View, so an agent cannot reshape what you see.
 - `kanso_search_cards` — find cards by text (title, description or a comment
   body) across every board you can read, or within one board via `board_id`.
   Wraps the app's existing search endpoint, so results are ACL-filtered

@@ -221,6 +221,26 @@ starts.
 - `kanso_list_my_cards` — open cards assigned to you across all boards (never
   archived or done cards)
 
+**Views** (read-only)
+
+A View is a *saved cross-board filter*, not a board: it holds no cards of its
+own, it selects them from every board you can read. These two tools let an agent
+see exactly what you see when you open one.
+
+- `kanso_list_views` — your saved Views (`id`, `name`, `filter`, `groupBy`,
+  `display`, `sort`). Views are personal — only the authenticated user's own.
+- `kanso_get_view_cards` — the cards a View resolves to, with its own filter and
+  sort applied server-side. Rows are enriched summaries carrying `boardId` /
+  `boardTitle` / `boardPrefix`, plus the union of the readable boards' `labels`
+  so `labelIds` can be resolved to titles and colours. `total` is how many cards
+  matched, `returned` how many came back after your `limit` (default 50), and
+  `capped` says the *server* truncated the feed at `serverCap` matches (the
+  app's own cap — currently 5000 — reported in the result rather than assumed).
+
+Views are deliberately **read-only** here. There is no create/update/delete tool:
+a write surface would let an agent silently reshape what you see on your own
+board, and reading is what "show me my View" actually needs.
+
 ## Development
 
 ```sh

@@ -10,11 +10,93 @@ payload is JSON-serializable for the MCP transport.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from kanso_mcp.client import KansoClient
+
+# The View filter's long serialised keys -> the flat short query keys the feed
+# decodes (ViewFilter::fromQuery, lib/Service/ViewFilter.php). This is a port of
+# `filterToQuery()` in src/composables/useBoardFilters.js — the SAME encoding the
+# board's shareable filter links use — split into the multi-value dimensions
+# (comma-joined) and the single-value ones. Order mirrors the JS source, and
+# tests/test_tools.py pins both the pairs and their order against that file and
+# against the shared parity fixture, so a dimension added on one side cannot
+# silently go missing here.
+_FILTER_MULTI = (
+    ("labels", "fl"),
+    ("assignees", "fa"),
+    ("priorities", "fp"),
+    ("types", "ft"),
+    ("estimates", "fe"),
+    ("owners", "fo"),
+    ("reviews", "fr"),
+)
+_FILTER_SINGLE = (
+    ("due", "fd"),
+    ("done", "fs"),
+    ("waiting", "fw"),
+    ("blocked", "fb"),
+    ("checklist", "fk"),
+    ("startDate", "fsd"),
+    ("subcard", "fsc"),
+    ("comments", "fcm"),
+    ("archived", "far"),
+)
+
+
+def _filter_to_query(blob: Any) -> Dict[str, str]:
+    """Encode a saved View's opaque ``filter`` blob into the feed's query params.
+
+    A View stores its filter with LONG keys (`labels`, `startDate`, …) but
+    `GET /api/views/cards` reads the flat SHORT ones (`fl`, `fsd`, …), so the
+    blob has to be translated before it is sent — an untranslated blob is not
+    an error, it is silently *no filter at all*, and the feed then answers with
+    every readable card instead of the View's.
+
+    Empty dimensions are omitted (as in the JS original), so an empty filter
+    encodes to no params. The blob is user data read back from config, so
+    anything of an unexpected shape is SKIPPED rather than raised on: a
+    non-dict blob encodes to nothing, a single-value dimension must be a
+    non-empty string, and a multi-value one keeps only its string/number
+    members (a nested list or a null is dropped, and a dimension left with no
+    members at all is omitted, imposing no constraint). Unrecognised VALUES are
+    passed through untouched — `ViewFilter` ignores those server-side, so a
+    hand-edited or newer record still loads instead of failing.
+    """
+    q: Dict[str, str] = {}
+    if not isinstance(blob, dict):
+        return q
+    for long_key, short_key in _FILTER_MULTI:
+        values = blob.get(long_key)
+        if not isinstance(values, list):
+            continue
+        # bool is an int subclass in Python, and "fp=True" is not a priority.
+        members = [
+            str(v)
+            for v in values
+            if (isinstance(v, str) and v) or (isinstance(v, int) and not isinstance(v, bool))
+        ]
+        if members:
+            q[short_key] = ",".join(members)
+    for long_key, short_key in _FILTER_SINGLE:
+        value = blob.get(long_key)
+        if isinstance(value, str) and value:
+            q[short_key] = value
+    return q
+
+
+def _as_list(value: Any) -> List[Any]:
+    """A wire value that should be a list, or an empty one — never a TypeError."""
+    return value if isinstance(value, list) else []
+
+
+def _as_int(value: Any, fallback: int) -> int:
+    """A wire value that should be an int, or the fallback. `null` counts as
+    absent: a JSON null would otherwise propagate into a count field an LLM
+    reads as a number."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else fallback
 
 
 def _without_archived_cards(board: dict) -> dict:
@@ -847,3 +929,107 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """
         cards = await client.list_my_cards()
         return [c.model_dump() for c in cards]
+
+    # ------------------------------------------------------------------- views
+    @mcp.tool(
+        title="List my Kanso views",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_views() -> List[dict]:
+        """List the current user's saved Views — their named cross-board
+        filters, in the order they appear in the app's left nav.
+
+        A View is not a board and holds no cards of its own: it is a saved
+        filter over EVERY board the user can read. Each record carries its `id`
+        (an opaque string — pass it to `kanso_get_view_cards`), `name`, the
+        opaque `filter` blob, the `groupBy` field and `display` mode the surface
+        renders with, and its saved `sort` (`{mode, dir}`).
+
+        Views are personal: this returns the authenticated user's own Views, and
+        there is no way to read anyone else's.
+        """
+        return await client.list_views()
+
+    @mcp.tool(
+        title="Get the cards in a Kanso view",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_get_view_cards(view_id: str, limit: int = 50) -> dict:
+        """Read the cards a saved View resolves to — what the user actually sees
+        when they open that View, across every board they can read.
+
+        The View's own filter and sort are applied SERVER-side, so the rows come
+        back in the View's order, already narrowed to its filter. Each card is an
+        enriched summary (no description — open one with `kanso_get_card`) that
+        also carries `boardId`, `boardTitle` and `boardPrefix`, so you can tell
+        which board a card belongs to and render its reference (e.g. "KAN-123"
+        from `boardPrefix` + `boardSeq`). `labels` is the union of the readable
+        boards' label records, for resolving each card's `labelIds` to titles and
+        colours.
+
+        Three counts come back, and they are NOT interchangeable:
+          - `total` — how many cards matched the View's filter in all;
+          - `returned` — how many are in `cards` after your `limit`;
+          - `capped` — true when the SERVER truncated the feed at `serverCap`
+            matching cards, before your `limit` applied.
+
+        Two things the View does NOT do here: `groupBy` is reported but nothing
+        is grouped (grouping is a client-side rendering choice — the rows arrive
+        flat, in the View's sort order), and archived work stays out unless the
+        View's own filter asks for it — an archived BOARD's cards never appear
+        at all.
+
+        Args:
+            view_id: The View's `id` from `kanso_list_views` (an opaque string —
+                not a board id, and not the View's name).
+            limit: Maximum cards to return (default 50). The View may match far
+                more; `total` always reports the full count.
+        """
+        views = await client.list_views()
+        view = next((v for v in views if str(v.get("id")) == view_id), None)
+        if view is None:
+            known = ", ".join(f"{v.get('id')} ({v.get('name')})" for v in views)
+            raise ValueError(
+                f"No saved view with id {view_id!r}. "
+                f"Available views: {known or 'none'}."
+            )
+
+        # The feed takes no view id, so the View's saved sort and filter are what
+        # make this "that View" rather than every readable card. Both are applied
+        # server-side before the feed's cap, so a narrow View reaches matches
+        # anywhere in the readable set instead of only within the first window.
+        saved_sort = view.get("sort")
+        saved_sort = saved_sort if isinstance(saved_sort, dict) else {}
+        # A record written before the sort control shipped has no `sort`, so
+        # report the sort that was actually SENT rather than an empty object a
+        # caller would have to guess the meaning of.
+        sort = {
+            "mode": str(saved_sort.get("mode") or "default"),
+            "dir": str(saved_sort.get("dir") or "asc"),
+        }
+        feed = await client.view_cards(
+            sort_mode=sort["mode"],
+            sort_dir=sort["dir"],
+            params=_filter_to_query(view.get("filter")),
+        )
+
+        # Every envelope key is shape-guarded: this is a wire payload, and a
+        # missing or null `cards` must read as "no cards", never a TypeError.
+        cards = _as_list(feed.get("cards"))
+        page = cards[: max(limit, 0)]
+        return {
+            "view": {
+                "id": view.get("id"),
+                "name": view.get("name"),
+                "groupBy": view.get("groupBy"),
+                "display": view.get("display"),
+                "sort": sort,
+            },
+            "cards": page,
+            "labels": _as_list(feed.get("labels")),
+            "participants": _as_list(feed.get("participants")),
+            "returned": len(page),
+            "total": _as_int(feed.get("total"), len(cards)),
+            "capped": bool(feed.get("capped")),
+            "serverCap": _as_int(feed.get("limit"), 0),
+        }

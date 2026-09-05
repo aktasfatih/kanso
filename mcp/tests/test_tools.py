@@ -10,6 +10,9 @@ functions and call them directly.
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from typing import Any, Callable, Dict, Tuple
 
 import httpx
@@ -19,7 +22,20 @@ import respx
 from kanso_mcp.client import KansoClient
 from kanso_mcp.config import KansoConfig
 from kanso_mcp.models import CardSummary
-from kanso_mcp.tools import _without_archived_cards, register_tools
+from kanso_mcp.tools import (
+    _FILTER_MULTI,
+    _FILTER_SINGLE,
+    _filter_to_query,
+    _without_archived_cards,
+    register_tools,
+)
+
+# The MCP server lives inside the app repo, so both halves of the filter
+# contract it ports are right here: the JS original and the parity fixture the
+# PHP + JS runners already assert.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BOARD_FILTERS_JS = REPO_ROOT / "src" / "composables" / "useBoardFilters.js"
+PARITY_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "board-filter-parity.json"
 
 BASE = "http://nc.test/index.php/apps/kanso/api"
 
@@ -494,3 +510,307 @@ async def test_search_cards_schema_only_requires_the_query():
     assert schema["required"] == ["query"]
     assert schema["properties"]["limit"]["default"] == 25
     assert "board_id" not in schema.get("required", [])
+
+
+# ------------------------------------------------------------------- views
+
+# One saved View as ViewController::index returns it: the filter blob uses the
+# LONG serialised keys, and the sort is the View's own.
+VIEW = {
+    "id": "abc123",
+    "name": "My week",
+    "filter": {"labels": [5, 6], "assignees": ["alice"], "due": "week", "done": "open"},
+    "groupBy": "board",
+    "display": "list",
+    "sort": {"mode": "due", "dir": "desc"},
+}
+
+# Feed rows carry board identity + enrichment fields on top of a card summary.
+VIEW_FEED = {
+    "cards": [
+        {
+            "id": 100,
+            "title": "First",
+            "stackId": 10,
+            "boardId": 7,
+            "boardTitle": "Ops",
+            "boardPrefix": "OPS",
+            "boardSeq": 12,
+            "commentCount": 3,
+        },
+        {
+            "id": 101,
+            "title": "Second",
+            "stackId": 20,
+            "boardId": 8,
+            "boardTitle": "Sales",
+            "boardPrefix": "SAL",
+            "boardSeq": 4,
+            "commentCount": 0,
+        },
+    ],
+    "labels": [{"id": 5, "boardId": 7, "title": "bug", "color": "e11"}],
+    "participants": ["alice", "bob"],
+    "capped": False,
+    "total": 2,
+    "limit": 5000,
+}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_views_returns_the_saved_views():
+    respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(200, json={"views": [VIEW]})
+    )
+    tools, client = _tools()
+    async with client:
+        views = await tools["kanso_list_views"]()
+    assert [v["id"] for v in views] == ["abc123"]
+    assert views[0]["name"] == "My week"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_view_cards_sends_the_views_own_sort_and_translated_filter():
+    respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(200, json={"views": [VIEW]})
+    )
+    feed_route = respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(200, json=VIEW_FEED)
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_get_view_cards"]("abc123")
+
+    params = feed_route.calls.last.request.url.params
+    # The stored blob's LONG keys must reach the feed as its SHORT ones — an
+    # untranslated blob is not an error, it is silently no filter at all, and
+    # the View would answer with every readable card instead of its own.
+    assert params.get("fl") == "5,6"
+    assert params.get("fa") == "alice"
+    assert params.get("fd") == "week"
+    assert params.get("fs") == "open"
+    # ...and the View's saved sort, not the default one.
+    assert params.get("sortMode") == "due"
+    assert params.get("sortDir") == "desc"
+
+    assert result["view"]["name"] == "My week"
+    assert result["view"]["sort"] == {"mode": "due", "dir": "desc"}
+    assert result["returned"] == 2
+    assert result["total"] == 2
+    assert result["capped"] is False
+    assert result["serverCap"] == 5000
+    assert result["labels"][0]["title"] == "bug"
+    assert result["participants"] == ["alice", "bob"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_view_cards_keeps_the_board_identity_a_card_model_would_drop():
+    respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(200, json={"views": [VIEW]})
+    )
+    respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(200, json=VIEW_FEED)
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_get_view_cards"]("abc123")
+
+    # A cross-board feed whose rows cannot say which board they came from is
+    # useless, so the rows are passed through as raw dicts...
+    assert [c["boardTitle"] for c in result["cards"]] == ["Ops", "Sales"]
+    assert result["cards"][0]["boardPrefix"] == "OPS"
+    assert result["cards"][0]["commentCount"] == 3
+    # ...precisely because CardSummary is extra="ignore" and would silently
+    # drop every one of those fields. Pinning that here means a later "let's
+    # type this properly" refactor fails loudly instead of quietly gutting it.
+    typed = CardSummary.model_validate(VIEW_FEED["cards"][0]).model_dump()
+    assert "boardTitle" not in typed
+    assert "boardPrefix" not in typed
+    assert "commentCount" not in typed
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_view_cards_limit_slices_the_page_but_not_the_total():
+    respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(200, json={"views": [VIEW]})
+    )
+    respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(200, json={**VIEW_FEED, "total": 4200, "capped": True})
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_get_view_cards"]("abc123", limit=1)
+
+    assert result["returned"] == 1
+    assert [c["id"] for c in result["cards"]] == [100]
+    # `total` stays the server's full matching count and `capped` stays the
+    # SERVER's truncation flag — neither is about the caller's own limit.
+    assert result["total"] == 4200
+    assert result["capped"] is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_view_cards_rejects_an_unknown_id_without_fetching_the_feed():
+    respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(200, json={"views": [VIEW]})
+    )
+    feed_route = respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(200, json=VIEW_FEED)
+    )
+    tools, client = _tools()
+    async with client:
+        with pytest.raises(ValueError) as err:
+            await tools["kanso_get_view_cards"]("nope")
+
+    # An unknown id must NOT fall through to an unfiltered feed — that would
+    # answer a "show me this View" question with every readable card.
+    assert not feed_route.called
+    # The error names the ids that do exist, so the caller can self-correct.
+    assert "abc123" in str(err.value)
+    assert "My week" in str(err.value)
+
+
+@pytest.mark.asyncio
+async def test_view_tools_are_read_only_and_only_require_the_view_id():
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(
+        KansoConfig(host="http://nc.test", username="admin", password="pw")
+    )
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tools = {t.name: t for t in await server.list_tools()}
+
+    assert tools["kanso_list_views"].inputSchema.get("required", []) == []
+    schema = tools["kanso_get_view_cards"].inputSchema
+    assert schema["required"] == ["view_id"]
+    assert schema["properties"]["limit"]["default"] == 50
+    # The human answered "read-only" for a reason: an agent must not be able to
+    # reshape what the user sees on their own board. Guarding by NAME alone
+    # would miss the API's actual write verbs (upsert / rename / destroy), so
+    # this asserts the property instead: every view tool, whatever it ends up
+    # being called, has to be read-only.
+    # (?<!re) so the REVIEW tools, which are legitimately write tools, are not
+    # swept up by a substring match on "view".
+    view_tools = {name for name in tools if re.search(r"(?<!re)view", name)}
+    assert view_tools == {"kanso_list_views", "kanso_get_view_cards"}
+    for name in view_tools:
+        assert tools[name].annotations.readOnlyHint is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_view_cards_survives_a_sortless_view_and_a_sparse_envelope():
+    # A View saved before the sort control shipped, and a feed answering with
+    # neither counts nor rows: both are shapes this has to read, not fail on.
+    respx.get(f"{BASE}/views").mock(
+        return_value=httpx.Response(
+            200, json={"views": [{"id": "old", "name": "Legacy", "filter": {}}]}
+        )
+    )
+    feed_route = respx.get(f"{BASE}/views/cards").mock(
+        return_value=httpx.Response(200, json={"cards": None, "total": None})
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_get_view_cards"]("old")
+
+    params = feed_route.calls.last.request.url.params
+    assert params.get("sortMode") == "default"
+    assert params.get("sortDir") == "asc"
+    # The sort REPORTED back is the one actually sent, not an empty object the
+    # caller would have to guess at.
+    assert result["view"]["sort"] == {"mode": "default", "dir": "asc"}
+    assert result["cards"] == []
+    assert result["returned"] == 0
+    # A null count must not propagate into a field read as a number.
+    assert result["total"] == 0
+    assert result["serverCap"] == 0
+
+
+def test_filter_to_query_encodes_each_kind_of_dimension():
+    q = _filter_to_query(
+        {
+            "labels": [5, 6],
+            "assignees": ["alice", "bob"],
+            "priorities": [3],
+            "due": "week",
+            "archived": "only",
+        }
+    )
+    assert q == {
+        "fl": "5,6",
+        "fa": "alice,bob",
+        "fp": "3",
+        "fd": "week",
+        "far": "only",
+    }
+    # Empty dimensions drop out entirely (as in the JS original), so an empty
+    # View filter sends no params rather than params that match nothing.
+    assert _filter_to_query({"labels": [], "due": "", "types": None}) == {}
+    # The blob is user data read back from config: a garbage value is ignored,
+    # never raised, exactly as the server ignores unknown values.
+    assert _filter_to_query(None) == {}
+    assert _filter_to_query("not a filter") == {}
+    assert _filter_to_query({"due": ["week"]}) == {}
+    # Members of an unexpected shape are dropped, and a dimension left with no
+    # usable member is omitted entirely (imposing no constraint) rather than
+    # sent as a value that matches nothing.
+    assert _filter_to_query({"assignees": ["alice", None, ["nested"]]}) == {"fa": "alice"}
+    assert _filter_to_query({"labels": [None]}) == {}
+    assert _filter_to_query({"priorities": [True]}) == {}
+    # A numeric uid (routine with LDAP employee-number provisioning) is a real
+    # value, not a malformed one.
+    assert _filter_to_query({"owners": [12345]}) == {"fo": "12345"}
+
+
+def test_filter_to_query_matches_the_js_original_key_for_key():
+    # The Python port and src/composables/useBoardFilters.js are two encoders of
+    # one wire format; two encoders that must agree are two encoders that WILL
+    # drift. Parse the pairs straight out of the JS source so a renamed or added
+    # dimension there turns this red.
+    source = BOARD_FILTERS_JS.read_text(encoding="utf-8")
+    body = source.split("export function filterToQuery(ser) {", 1)[1].split("\n}", 1)[0]
+    js_pairs = re.findall(r"q\.(\w+) = ser\.(\w+)", body)
+    js_multi = [
+        (long_key, short_key)
+        for short_key, long_key in js_pairs
+        if f"ser.{long_key}.join(" in body
+    ]
+    js_single = [
+        (long_key, short_key)
+        for short_key, long_key in js_pairs
+        if f"ser.{long_key}.join(" not in body
+    ]
+
+    assert js_multi == list(_FILTER_MULTI)
+    assert js_single == list(_FILTER_SINGLE)
+
+
+def test_filter_to_query_covers_every_dimension_the_parity_fixture_exercises():
+    # tests/fixtures/board-filter-parity.json is the golden filter contract the
+    # PHP (ViewFilterTest) and JS (boardFilters.test.mjs) runners both assert,
+    # and it is where a new facet gets its case. Asserting the port against the
+    # dimensions it names means a facet added to the filter cannot reach the
+    # View feed as a silently dropped key.
+    fixture = json.loads(PARITY_FIXTURE.read_text(encoding="utf-8"))
+    known = {long_key for long_key, _ in (*_FILTER_MULTI, *_FILTER_SINGLE)}
+    exercised = {key for case in fixture["cases"] for key in case["filter"]}
+    assert exercised == known
+
+    for case in fixture["cases"]:
+        q = _filter_to_query(case["filter"])
+        for long_key, value in case["filter"].items():
+            short_key = dict((*_FILTER_MULTI, *_FILTER_SINGLE))[long_key]
+            if value:
+                assert short_key in q, f"{case['name']}: {long_key} was dropped"
+                if isinstance(value, list):
+                    assert q[short_key] == ",".join(str(v) for v in value)
+                else:
+                    assert q[short_key] == value
