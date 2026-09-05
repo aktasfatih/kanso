@@ -11,6 +11,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.24.1](https://github.com/aktasfatih/kanso/compare/v0.24.0...v0.24.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **activity:** stop repeating the date on activity entries older than a week ([e712672](https://github.com/aktasfatih/kanso/commit/e7126722bb53300730d2334f19a50becc3599fbc)), closes [#108](https://github.com/aktasfatih/kanso/issues/108)
+* **card:** keep the editor open with your text when a title, step or comment edit fails ([475d366](https://github.com/aktasfatih/kanso/commit/475d3664b0cd8c6bf883ff5063a1e604b0807b0e))
+* **card:** scroll the description editor into view on a phone so the keyboard cannot hide it ([a711559](https://github.com/aktasfatih/kanso/commit/a7115590b1a6e41837956089a0fb9a887c801d05)), closes [#10184](https://github.com/aktasfatih/kanso/issues/10184)
+* **pwa:** stop offline board data from being shown to a different user on a shared device ([70a5456](https://github.com/aktasfatih/kanso/commit/70a54562aeb898de36473d965d93991d2d8257ba))
+* **reminders:** stop due-date reminders for cards on archived or trashed boards ([ead8cb0](https://github.com/aktasfatih/kanso/commit/ead8cb057531b8a591fbd4601c11a204b7cbc0ba)), closes [#10127](https://github.com/aktasfatih/kanso/issues/10127)
+* **reminders:** stop due-date reminders for cards saved as templates ([48ea27f](https://github.com/aktasfatih/kanso/commit/48ea27f4f1255bf9bf8cd747567f933046567977)), closes [#10180](https://github.com/aktasfatih/kanso/issues/10180)
+* **reviews:** make review rows readable on a phone instead of crushing the title to one letter ([28292c3](https://github.com/aktasfatih/kanso/commit/28292c33d2142a34a8ae32ff20daa8eca520d930)), closes [#10183](https://github.com/aktasfatih/kanso/issues/10183)
+
 # [0.24.0](https://github.com/aktasfatih/kanso/compare/v0.23.0...v0.24.0) (2026-09-04)
 
 
