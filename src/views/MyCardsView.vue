@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="my-cards-view">
+	<div class="my-cards-view" :class="{ 'my-cards-view--embedded': embedded }">
 		<div v-if="!embedded" class="my-cards-view__header kanso-page-header">
 			<h1 class="my-cards-view__title">{{ t('kanso', 'My tasks') }}</h1>
 		</div>
@@ -491,5 +491,16 @@ function openCard(card) {
 /* Completed work reads as secondary to the open list above it. */
 .my-cards-view__row--done .my-cards-view__card-title {
 	color: var(--color-text-maxcontrast);
+}
+
+/* Embedded in the My Work hub, the hub already supplies the page box — this view
+   sits INSIDE it, so repeating the box nests a second 32px inset (content 64px
+   from the edge, misaligned with the hub's own header) and a max-width inside an
+   identical max-width, which can only ever narrow content the hub already
+   constrained. Drop both when embedded; the standalone /my-tasks route keeps the
+   box. Kept last in the file so it wins over any later width-scoped rule. */
+.my-cards-view--embedded {
+	padding: 0;
+	max-width: none;
 }
 </style>

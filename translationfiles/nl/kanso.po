@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:3835
+#: src/components/BoardSettingsModal.vue:3841
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -248,7 +248,7 @@ msgid "%1$s shared %2$s with you"
 msgstr "%1$s heeft %2$s met je gedeeld"
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:215
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4223
+#: src/components/CardDetail.vue:4237
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
 
-#: src/components/CardDetail.vue:4221
+#: src/components/CardDetail.vue:4235
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/components/CardDetail.vue:4219
+#: src/components/CardDetail.vue:4233
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -298,13 +298,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1017
+#: src/components/CardDetail.vue:1018
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
 msgstr[1] "%n projecten"
 
-#: src/components/CardDetail.vue:1959
+#: src/components/CardDetail.vue:1962
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1552,8 +1552,8 @@ msgstr "Gevarenzone"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4412
+#: src/components/BoardSettingsModal.vue:1847
+#: src/components/CardDetail.vue:4426
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -2034,25 +2034,25 @@ msgstr "elke"
 msgid "Every"
 msgstr "Elke"
 
-#: src/components/BoardSettingsModal.vue:3815
+#: src/components/BoardSettingsModal.vue:3821
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:3825
+#: src/components/BoardSettingsModal.vue:3831
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:3817
+#: src/components/BoardSettingsModal.vue:3823
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:3827
+#: src/components/BoardSettingsModal.vue:3833
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -3171,8 +3171,8 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "ma"
 
-#: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4414
+#: src/components/BoardSettingsModal.vue:1849
+#: src/components/CardDetail.vue:4428
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4496,7 +4496,7 @@ msgstr "Opmaakbalk tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:6036
+#: src/components/CardDetail.vue:6050
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5137,8 +5137,8 @@ msgstr "Webhook actief"
 msgid "Wed"
 msgstr "wo"
 
-#: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4413
+#: src/components/BoardSettingsModal.vue:1848
+#: src/components/CardDetail.vue:4427
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -5214,8 +5214,8 @@ msgstr "Schrijf een antwoord…"
 msgid "wrote"
 msgstr "schreef"
 
-#: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4415
+#: src/components/BoardSettingsModal.vue:1850
+#: src/components/CardDetail.vue:4429
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

@@ -259,6 +259,18 @@ class KansoClient:
             json={"targetStackId": target_stack_id, "afterCardId": after_card_id},
         )
 
+    async def move_card_to_board(self, card_id: int, target_stack_id: int) -> Card:
+        # A DIFFERENT endpoint from move(): the in-board /move rejects a stack on
+        # another board with HTTP 400 on purpose. This one re-creates the card on
+        # the target board and soft-deletes the source in one transaction, so the
+        # returned Card carries a NEW id and a new per-board number.
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/move-to-board",
+            json={"targetStackId": target_stack_id},
+        )
+        return Card.model_validate(data)
+
     # -------------------------------------------------- card labels / assignees
     async def assign_label(self, card_id: int, label_id: int) -> Any:
         return await self._request("PUT", f"/cards/{card_id}/labels/{label_id}")
@@ -500,3 +512,42 @@ class KansoClient:
     async def list_my_cards(self) -> List[CardSummary]:
         data = await self._request("GET", "/my-cards")
         return [CardSummary.model_validate(c) for c in (data or [])]
+
+    # ------------------------------------------------------------------- views
+    async def list_views(self) -> List[Dict[str, Any]]:
+        # A View is a per-user saved cross-board filter, stored in Nextcloud
+        # user-config (no table) and returned under a `views` key. The records
+        # are passed through UNTYPED on purpose: `filter` is an opaque blob the
+        # server never interprets (ViewController's docblock), so modelling it
+        # here would only invent a schema the server does not enforce.
+        data = await self._request("GET", "/views")
+        views = data.get("views") if isinstance(data, dict) else None
+        return list(views) if isinstance(views, list) else []
+
+    async def view_cards(
+        self,
+        sort_mode: str = "default",
+        sort_dir: str = "asc",
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        # The feed takes NO view id: it is stateless, and the caller passes the
+        # View's saved sort plus its filter as the same flat short-key params
+        # the web client's shareable filter links use (fl/fa/fp/…/far, decoded
+        # by ViewFilter::fromQuery). ACL is enforced server-side in
+        # ViewService::findMine() over the readable board set, which nothing
+        # sent here addresses: there is no board id in this request, so no
+        # filter value can reach a board the caller cannot read. Within that
+        # set the predicate only narrows, with one deliberate exception — the
+        # `far` facet ('include'/'only') stops archived CARDS being excluded
+        # (ViewFilter::includesArchived()); archived BOARDS stay out either way.
+        #
+        # The envelope {cards, labels, participants, capped, total, limit} comes
+        # back as a raw dict rather than typed models: the rows are enriched
+        # summaries carrying board identity (boardId / boardTitle / boardPrefix)
+        # and view-surface fields (checklist, childProgress, commentCount, …)
+        # that CardSummary — being `extra="ignore"` — would silently drop, which
+        # is exactly the identity a cross-board feed exists to provide.
+        query: Dict[str, Any] = {"sortMode": sort_mode, "sortDir": sort_dir}
+        query.update(params or {})
+        data = await self._request("GET", "/views/cards", params=query)
+        return data if isinstance(data, dict) else {}

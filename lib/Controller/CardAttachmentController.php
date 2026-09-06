@@ -12,6 +12,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
@@ -44,7 +45,19 @@ class CardAttachmentController extends Controller {
 		});
 	}
 
+	/**
+	 * Uploads one file onto a card (EDIT, multipart). Per-user rate limited: every
+	 * accepted upload writes up to
+	 * {@see \OCA\Kanso\Service\AttachmentSanitizer::MAX_SIZE} bytes into the app's
+	 * own app-data, and the only other bound on that is the per-file cap. The limit
+	 * is deliberately looser than board import's - bulk-attaching a few dozen
+	 * screenshots in one sitting is ordinary use, and the e2e suite uploads as one
+	 * shared admin across parallel workers - while still bounding a scripted loop.
+	 * It bounds request COUNT, not bytes; the aggregate storage question is its own
+	 * card.
+	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 120, period: 3600)]
 	public function create(int $cardId): JSONResponse {
 		return $this->respond(function () use ($cardId): JSONResponse {
 			$upload = $this->request->getUploadedFile('file');
@@ -59,8 +72,13 @@ class CardAttachmentController extends Controller {
 	 * Files by COPYING its bytes into the card. Body: {fileId}. EDIT-gated; the
 	 * node is resolved only through the actor's own userfolder (never a
 	 * client-supplied path), size-capped before streaming.
+	 *
+	 * Carries the SAME per-user rate limit as {@see self::create()}: it copies the
+	 * same bytes into the same app-data, so leaving it unlimited would just be the
+	 * open door next to the closed one.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 120, period: 3600)]
 	public function createFromFile(int $cardId, int $fileId = 0): JSONResponse {
 		return $this->respond(function () use ($cardId, $fileId): JSONResponse {
 			return new JSONResponse(

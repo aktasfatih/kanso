@@ -988,6 +988,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-model="newLabelTitle"
 									class="card-modal__label-create-input"
 									type="text"
+									maxlength="100"
 									:placeholder="t('kanso', 'New label…')"
 									:disabled="isCreatingLabel"
 									:aria-label="t('kanso', 'New label name')"
@@ -1277,7 +1278,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										type="checkbox"
 										class="card-modal__checklist-checkbox"
 										:checked="item.done"
-										:disabled="toggleItem.isPending.value"
+										:disabled="toggleItem.isPending.value || isUnsavedItem(item)"
 										:aria-label="t('kanso', 'Toggle item done')"
 										@change="handleToggleItem(item)">
 									<input
@@ -1286,6 +1287,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										v-model="editingItemTitle"
 										class="card-modal__checklist-item-input"
 										type="text"
+										maxlength="255"
 										@keydown.enter.prevent="saveItemTitle(item)"
 										@keydown.escape.stop="cancelItemEdit"
 										@blur="saveItemTitle(item)">
@@ -1407,6 +1409,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									v-model="newItemTitle"
 									class="card-modal__checklist-add-input"
 									type="text"
+									maxlength="255"
 									:placeholder="t('kanso', 'Add an item…')"
 									:disabled="addItem.isPending.value"
 									@keydown.enter.prevent="handleAddItem">
@@ -3774,7 +3777,18 @@ async function handleAddItem() {
 	addItemInputRef.value?.focus()
 }
 
+// A checklist row rendered from the optimistic create still carries the negative
+// placeholder id `useChecklist` assigns it, and is not addressable on the server
+// yet. Its checkbox is disabled until the create resolves and swaps in the real
+// row, so a click in that window waits instead of firing
+// `PATCH /api/checklist/-1788…` — which can never match and used to drop the
+// toggle silently after rolling the optimistic tick back.
+function isUnsavedItem(item) {
+	return Number(item?.id) < 0
+}
+
 async function handleToggleItem(item) {
+	if (isUnsavedItem(item)) return
 	checklistError.value = ''
 	try {
 		await toggleItem.mutateAsync({ item })

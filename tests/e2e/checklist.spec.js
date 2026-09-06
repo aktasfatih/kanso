@@ -16,21 +16,24 @@ function waitForChecklistPatch(page) {
 	)
 }
 
-// Toggle a checklist item to done defensively for slow cold-start CI: wait for
-// the row and its native checkbox to be visible and enabled, then drive the
-// toggle while awaiting the PATCH response so the following assertions have
-// server truth.
+// Toggle a checklist item to done, exactly once.
 //
-// The checkbox is a controlled Vue input (:checked="item.done", toggled via a
-// @change handler that fires the PATCH). On a slow runner the first .check()
-// occasionally lands before the item is fully hydrated and the @change doesn't
-// propagate, so no PATCH fires and progress stays at its old value. We therefore
-// verify the PATCH actually fired and, if it didn't, click the checkbox again
-// until it does (idempotent: we always toggle toward done, guarding on the
-// checkbox's checked state so we never toggle it back off).
+// This used to click up to 4× to "absorb a cold-start race where the first
+// @change is dropped". The @change was never dropped: a just-added row renders
+// from the optimistic create and carried a NEGATIVE placeholder id until the
+// settle refetch landed, so the first click fired
+// `PATCH /api/checklist/-1788…`, which matched no row, rolled the tick back and
+// lost it. The app now swaps in the server row as soon as the create resolves
+// and disables the checkbox until it has (see useChecklist.addItem.onSuccess),
+// so the deterministic precondition is simply "the row carries its real id".
+// Waiting on that, then clicking once, is the whole story — if the toggle does
+// not land, that is a regression and this must fail.
 async function toggleChecklistItem(page, itemText) {
 	const item = page.locator('.card-modal__checklist-item').filter({ hasText: itemText })
 	await expect(item).toBeVisible({ timeout: 15_000 })
+	// Real, server-assigned id — never the optimistic `-<timestamp>` placeholder.
+	await expect(item).toHaveAttribute('data-item-id', /^\d+$/, { timeout: 15_000 })
+
 	const checkbox = item.locator('.card-modal__checklist-checkbox')
 	await expect(checkbox).toBeVisible({ timeout: 15_000 })
 
@@ -38,23 +41,12 @@ async function toggleChecklistItem(page, itemText) {
 	// to do — the item is already done.
 	if (await checkbox.isChecked()) return
 
-	// Retry the click until the toggle PATCH fires and the box is checked. This
-	// absorbs the cold-start race where the first @change is dropped.
-	for (let attempt = 0; attempt < 4; attempt++) {
-		// Wait until the item is hydrated and actionable (disabled while a
-		// previous toggle PATCH is pending).
-		await expect(checkbox).toBeEnabled({ timeout: 15_000 })
-		if (await checkbox.isChecked()) return
+	// Disabled while a previous toggle PATCH is still pending.
+	await expect(checkbox).toBeEnabled({ timeout: 15_000 })
 
-		const patch = waitForChecklistPatch(page)
-		await checkbox.click()
-		const landed = await patch.then(() => true).catch(() => false)
-		if (landed) {
-			await expect(checkbox).toBeChecked({ timeout: 15_000 })
-			return
-		}
-	}
-	// Final assertion so a genuine failure still fails loudly.
+	const patch = waitForChecklistPatch(page)
+	await checkbox.click()
+	await patch
 	await expect(checkbox).toBeChecked({ timeout: 15_000 })
 }
 

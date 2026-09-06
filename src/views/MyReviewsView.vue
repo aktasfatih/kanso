@@ -221,18 +221,23 @@ async function setVerdict(review, state) {
 	background: var(--color-border-dark);
 }
 
-/* On a phone the 32px page inset is a sixth of the viewport, and when this view
-   is embedded in the My Work hub it sits INSIDE that hub's identical inset — so
-   the review rows were squeezed to ~262px and the action buttons overflowed
-   them. Trim the inset on phones, and drop it entirely when embedded since the
-   hub already supplies it. Desktop is untouched. */
+/* On a phone the 32px page inset is a sixth of the viewport, so the review rows
+   were squeezed to ~262px and the action buttons overflowed them. Trim the inset
+   on phones. */
 @media (max-width: 680px) {
 	.my-reviews-view {
 		padding: 16px 12px;
 	}
+}
 
-	.my-reviews-view--embedded {
-		padding: 0;
-	}
+/* Embedded in the My Work hub, the hub already supplies the page box — this view
+   sits INSIDE it, so repeating the box nests a second 32px inset (content 64px
+   from the edge, misaligned with the hub's own header) and a max-width inside an
+   identical max-width, which can only ever narrow content the hub already
+   constrained. Drop both when embedded. Deliberately placed AFTER the media
+   query so it wins at every viewport, not just the phone one. */
+.my-reviews-view--embedded {
+	padding: 0;
+	max-width: none;
 }
 </style>

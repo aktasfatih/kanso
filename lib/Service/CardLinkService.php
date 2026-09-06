@@ -49,6 +49,9 @@ class CardLinkService {
 
 	/**
 	 * A card's links, refreshing any stale PR/issue states first. Requires READ.
+	 * The refresh loop is blocking, so it is bounded twice over: each link is
+	 * re-polled at most once per {@see self::POLL_THROTTLE} seconds, and the
+	 * mapper returns at most {@see CardLinkMapper::MAX_PER_CARD} links.
 	 *
 	 * @return CardLink[]
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
@@ -76,7 +79,7 @@ class CardLinkService {
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the URL is not an acceptable GitHub URL
+	 * @throws InvalidInputException if the URL is not an acceptable GitHub URL, or the card is already at its link cap
 	 */
 	public function addLink(int $cardId, string $url, string $actorUid): CardLink {
 		$card = $this->loadCard($cardId);
@@ -85,6 +88,15 @@ class CardLinkService {
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		[$kind] = self::parseGitHubUrl($url);
+
+		// Cap the links per card BEFORE inserting. Reading a card refreshes each
+		// of its stale links with a blocking outbound GET, so an uncapped card
+		// would let one editor make every later reader of that card wait.
+		if ($this->cardLinkMapper->countByCard($cardId) >= CardLinkMapper::MAX_PER_CARD) {
+			throw new InvalidInputException(
+				'A card may have at most ' . CardLinkMapper::MAX_PER_CARD . ' links'
+			);
+		}
 
 		$now = time();
 		$link = new CardLink();

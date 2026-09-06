@@ -196,6 +196,55 @@ class CardLinkServiceTest extends TestCase {
 		self::assertSame(CardLink::STATE_UNKNOWN, $link->getState());
 	}
 
+	public function testAddLinkRejectsBeyondPerCardCap(): void {
+		// Reading a card blocks on one outbound GET per stale link, so the number
+		// of links a card may hold is capped: the 21st is refused before it is
+		// inserted, and it never reaches the GitHub poll.
+		$this->expectCardLoaded();
+		$this->cardLinkMapper->method('countByCard')->with(9)
+			->willReturn(CardLinkMapper::MAX_PER_CARD);
+		$this->cardLinkMapper->expects(self::never())->method('insert');
+		$this->client->expects(self::never())->method('get');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->addLink(9, 'https://github.com/octo/app/pull/21', 'bob');
+	}
+
+	public function testAddLinkAcceptsTheLastLinkUnderTheCap(): void {
+		// The cap is not off by one: with MAX_PER_CARD - 1 links attached, the
+		// next one still goes in.
+		$this->expectCardLoaded();
+		$this->cardLinkMapper->method('countByCard')->with(9)
+			->willReturn(CardLinkMapper::MAX_PER_CARD - 1);
+		$this->cardLinkMapper->expects(self::once())->method('insert')
+			->willReturnCallback(fn (CardLink $l): CardLink => $l);
+		$this->githubResponse('{"title":"WIP","state":"open","merged_at":null}');
+
+		$link = $this->service->addLink(9, 'https://github.com/octo/app/pull/20', 'bob');
+		self::assertSame(CardLink::STATE_OPEN, $link->getState());
+	}
+
+	public function testListForCardStillReturnsAFullCardOfLinks(): void {
+		// A card sitting exactly at the cap still lists every one of its links -
+		// the cap bounds the work, it does not hide existing data.
+		$this->expectCardLoaded();
+		$links = [];
+		for ($i = 1; $i <= CardLinkMapper::MAX_PER_CARD; $i++) {
+			$link = new CardLink();
+			$link->setId($i);
+			$link->setCardId(9);
+			$link->setUrl('https://github.com/octo/app/pull/' . $i);
+			$link->setKind(CardLink::KIND_PR);
+			$link->setState(CardLink::STATE_OPEN);
+			$link->setLastPolled(time());
+			$links[] = $link;
+		}
+		$this->cardLinkMapper->method('findByCard')->with(9)->willReturn($links);
+
+		self::assertCount(CardLinkMapper::MAX_PER_CARD, $this->service->listForCard(9, 'bob'));
+	}
+
 	public function testPollDisablesRedirects(): void {
 		$this->expectCardLoaded();
 		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);

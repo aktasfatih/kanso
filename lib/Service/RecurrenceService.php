@@ -103,6 +103,31 @@ class RecurrenceService {
 	private const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
 	/**
+	 * Month names for BYMONTH numbers, so the rejection in
+	 * {@see self::assertAnchorDayFitsByMonth} can name the month that does not fit
+	 * rather than echo a bare number back at the caller.
+	 */
+	private const MONTH_NAMES = [
+		1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+		5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+		9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
+	];
+
+	/**
+	 * How many days a BYMONTH month is guaranteed to have, for
+	 * {@see self::assertAnchorDayFitsByMonth}.
+	 *
+	 * February is 28 deliberately - the guard runs once, when the schedule is saved,
+	 * against a series that runs for years, so it takes the short view of February
+	 * rather than letting a 29th through on the strength of the leap years the rule
+	 * might happen to reach.
+	 */
+	private const MONTH_LENGTHS = [
+		1 => 31, 2 => 28, 3 => 31, 4 => 30, 5 => 31, 6 => 30,
+		7 => 31, 8 => 31, 9 => 30, 10 => 31, 11 => 30, 12 => 31,
+	];
+
+	/**
 	 * Ceiling on INTERVAL. "Every thousandth week/month/year" is already far past
 	 * any board schedule, and an unbounded INTERVAL is arithmetic sabre hands
 	 * straight to DateTimeImmutable::modify('+N months'), which stops behaving at
@@ -1423,6 +1448,20 @@ class RecurrenceService {
 		if ($duedateOffsetSeconds < 0 || $duedateOffsetSeconds > self::MAX_OFFSET_SECONDS) {
 			throw new InvalidInputException('Invalid due-date offset');
 		}
+		// The template card and target stack are resolved BEFORE the RRULE is
+		// parsed, because the card carries the schedule's anchor date and
+		// assertAnchorDayFitsByMonth() below needs it. Neither check depends on the
+		// other, so this is a pure reorder: the only observable difference is which
+		// 400 a request that is wrong in BOTH ways gets back.
+		$card = $this->loadCard($templateCardId);
+		if ($card->getBoardId() !== $boardId) {
+			throw new InvalidInputException('The template card does not belong to the board');
+		}
+		$stack = $this->loadStack($targetStackId);
+		if ($stack->getBoardId() !== $boardId) {
+			throw new InvalidInputException('The target stack does not belong to the board');
+		}
+
 		// Parse-validate the RRULE (throws InvalidInputException on garbage).
 		// We anchor at "now" purely to construct the iterator; the result is
 		// discarded here - the point is to reject unparseable rules. Skipped only
@@ -1439,16 +1478,109 @@ class RecurrenceService {
 		if ($validateRrule) {
 			$now = $this->time->getTime();
 			$this->computeNextOccurrence($rrule, $now - 1, $now);
+			// Runs after the parse, so the rule is already known to be well-formed
+			// and its BYMONTH values already range-checked.
+			$this->assertAnchorDayFitsByMonth($rrule, $card);
+		}
+	}
+
+	/**
+	 * Refuses a BYMONTH rule anchored on a day-of-month that one of the months it
+	 * names is too short to hold - the one rule shape whose occurrences this app
+	 * cannot compute correctly.
+	 *
+	 * Without an explicit BYMONTHDAY, {@see RRuleIterator} takes the day-of-month
+	 * from the date it is standing on and applies it to the target month with
+	 * DateTime::setDate(), which OVERFLOWS instead of clamping. A card anchored on
+	 * 31 January with `FREQ=YEARLY;BYMONTH=2` asks for "February 31" and gets
+	 * 3 March: the wrong MONTH on the first fire, and then - because the iterator
+	 * re-reads the day from that shifted date - permanently the wrong DAY
+	 * (3 February) on every fire after it.
+	 *
+	 * This REJECTS rather than clamping, deliberately, because the overflow is not
+	 * Kanso's code and not Kanso's version to pin: sabre/vobject is a require-dev
+	 * dependency and scripts/build-release.sh keeps vendor/ out of the release
+	 * tarball, so at runtime `Sabre\VObject` resolves from the HOST Nextcloud's own
+	 * tree and behaves however the server's release behaves. Clamping would mean
+	 * re-deriving the occurrence sequence around a library we do not control, in the
+	 * cron hot path, and it carries a re-fire trap: {@see self::advanceSchedule}
+	 * re-enters with the FIRED timestamp as a `>` threshold, so a clamped 28 Feb
+	 * would compute 3 Mar again next run and the same occurrence would fire forever.
+	 * A 400 at the door is the honest, cheap answer; silently accepting input we
+	 * know we will mishandle is the worse failure.
+	 *
+	 * Only the rules that actually misfire are refused: the anchor day is checked
+	 * against the length of each month the rule NAMES, and a list rejects if ANY of
+	 * its months is too short (`BYMONTH=1,2` anchored on the 31st still overflows in
+	 * February). A rule whose months can all hold the day - `BYMONTH=1` on 31
+	 * January - is left alone, because it never overflows.
+	 *
+	 * Two details of that check:
+	 *   - February counts as 28 days, so a 29 February anchor is refused rather than
+	 *     depending on which years the series happens to reach.
+	 *   - The anchor's day is read in UTC. The rule's own timezone is not known at
+	 *     validation time, so an anchor within hours of midnight is judged by its
+	 *     UTC calendar day.
+	 *
+	 * An explicit BYMONTHDAY is exempt throughout: sabre SKIPS an out-of-range
+	 * explicit day rather than shifting it, so a caller that spells out the day it
+	 * means gets the schedule it asked for.
+	 *
+	 * Scope: this guards the AUTHORING path (create/update - i.e. the REST API and
+	 * the MCP server, the only surfaces that can express BYMONTH at all; the
+	 * recurrence editor cannot). Imports gate their rules through
+	 * {@see self::computeNextOccurrence} directly and so bypass it, and the anchor is
+	 * late-bound - moving the template card's Start date to the 31st AFTER the rule
+	 * exists re-arms through {@see self::rearmForTemplateCard} without re-validating.
+	 *
+	 * @throws InvalidInputException if a month the rule names cannot hold the anchor day
+	 */
+	private function assertAnchorDayFitsByMonth(string $rrule, Card $template): void {
+		try {
+			// Same read as countLimitFor(): sabre's own splitter, so the parts seen
+			// here are exactly the parts the iterator will act on.
+			$parts = Recur::stringToArray($rrule);
+		} catch (\Exception $e) {
+			// Unparseable - already rejected by the parse above; nothing to add.
+			return;
+		}
+		if (!array_key_exists('BYMONTH', $parts) || array_key_exists('BYMONTHDAY', $parts)) {
+			return;
 		}
 
-		$card = $this->loadCard($templateCardId);
-		if ($card->getBoardId() !== $boardId) {
-			throw new InvalidInputException('The template card does not belong to the board');
+		// The schedule's DTSTART, mirroring anchorFor()'s precedence. anchorFor()
+		// itself cannot be reused: it takes a RecurRule, which does not exist yet on
+		// the create path.
+		$anchorTs = $template->getStartDate()?->getTimestamp()
+			?? $template->getDuedate()?->getTimestamp()
+			?? $this->time->getTime();
+		$day = (int)(new \DateTimeImmutable('@' . $anchorTs))->format('j');
+		// No month is shorter than the shortest month, so nothing below the 29th can
+		// overflow anywhere - the common case leaves before touching the month list.
+		if ($day <= self::MONTH_LENGTHS[2]) {
+			return;
 		}
-		$stack = $this->loadStack($targetStackId);
-		if ($stack->getBoardId() !== $boardId) {
-			throw new InvalidInputException('The target stack does not belong to the board');
+
+		// The months this rule names that cannot hold that day. Everything else is a
+		// schedule that expands correctly and is none of this guard's business.
+		$tooShort = [];
+		foreach ((array)$parts['BYMONTH'] as $month) {
+			$number = (int)$month;
+			if ((self::MONTH_LENGTHS[$number] ?? 31) < $day) {
+				$tooShort[] = self::MONTH_NAMES[$number] ?? (string)$number;
+			}
 		}
+		if ($tooShort === []) {
+			return;
+		}
+
+		throw new InvalidInputException(sprintf(
+			'This repeat starts on day %d, which %s %s not have. Start it on a day every '
+				. 'month it repeats in has, or say which day it means with BYMONTHDAY in the rule.',
+			$day,
+			implode(', ', $tooShort),
+			count($tooShort) === 1 ? 'does' : 'do',
+		));
 	}
 
 	/**

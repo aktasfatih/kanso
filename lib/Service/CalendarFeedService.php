@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\ChangeMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IURLGenerator;
 use OCP\Security\ISecureRandom;
@@ -46,9 +47,21 @@ class CalendarFeedService {
 	private const TOKEN_LENGTH = 64;
 	private const PRODID = '-//Kanso//Card due dates//EN';
 
+	/**
+	 * Hard ceiling on the VEVENTs one feed fetch may build. The feed is the app's
+	 * only ANONYMOUS card read and it serialises every row it gets, so the work
+	 * per fetch must be bounded by a constant rather than by however large a board
+	 * grew. 2000 due cards is already far past any board a human curates (and past
+	 * what a calendar client renders usefully), so in practice this never clips -
+	 * it only stops a pathological board from turning one unauthenticated GET into
+	 * an unbounded scan plus serialise.
+	 */
+	public const MAX_EVENTS = 2000;
+
 	public function __construct(
 		private BoardMapper $boardMapper,
 		private CardMapper $cardMapper,
+		private ChangeMapper $changeMapper,
 		private PermissionService $permissionService,
 		private ISecureRandom $secureRandom,
 		private IURLGenerator $urlGenerator,
@@ -121,14 +134,7 @@ class CalendarFeedService {
 	 *  can't see; the RecurrenceService uses the same library the same way.
 	 */
 	public function renderFeed(string $token): string {
-		$board = $this->boardMapper->findByIcalFeedToken($token);
-
-		// Defence in depth: findByIcalFeedToken already excludes deleted boards and
-		// empty tokens, but re-assert the token is really set (never serve a board
-		// whose token was concurrently cleared).
-		if (($board->getIcalFeedToken() ?? '') === '') {
-			throw new DoesNotExistException('Calendar feed is disabled');
-		}
+		$board = $this->resolveFeedBoard($token);
 
 		$boardId = (int)$board->getId();
 		$boardTitle = $board->getTitle() ?? 'Kanso board';
@@ -138,7 +144,7 @@ class CalendarFeedService {
 		// A calendar-subscription client shows this as the calendar name.
 		$calendar->add('X-WR-CALNAME', $boardTitle);
 
-		foreach ($this->cardMapper->findWithDuedateByBoard($boardId) as $card) {
+		foreach ($this->cardMapper->findWithDuedateByBoard($boardId, self::MAX_EVENTS) as $card) {
 			/** @var Card $card */
 			$due = $card->getDuedate();
 			if ($due === null) {
@@ -148,6 +154,47 @@ class CalendarFeedService {
 		}
 
 		return $calendar->serialize();
+	}
+
+	/**
+	 * The feed's validator for a token: the board's latest `kanso_changes` id, the
+	 * SAME value the board read uses as its ETag (perf bet #4). Every mutation that
+	 * could change a VEVENT - a card's title, due date, visibility, archival or
+	 * deletion - writes a change row, so the id moves whenever the ICS body could.
+	 *
+	 * Calendar clients poll on a fixed schedule (Thunderbird ~30 min, iOS ~15 min,
+	 * DAVx5 configurable) and send back `If-None-Match`, so answering the
+	 * unchanged-board case with a 304 turns the routine poll into two indexed
+	 * lookups instead of a card scan plus a VObject serialise. That is what makes
+	 * this endpoint cheap under a fleet of subscribers - a per-IP rate limit could
+	 * not, since a whole NAT'd office shares one address.
+	 *
+	 * @throws DoesNotExistException if the token is unknown or disabled - same
+	 *                               failure shape as {@see self::renderFeed()}, so the conditional request
+	 *                               leaks no more than the plain one
+	 */
+	public function feedEtag(string $token): string {
+		$board = $this->resolveFeedBoard($token);
+		return (string)$this->changeMapper->getLatestChangeId((int)$board->getId());
+	}
+
+	/**
+	 * Resolves a feed token to its board, or throws. Shared by the ETag probe and
+	 * the render so both accept and reject exactly the same tokens.
+	 *
+	 * @throws DoesNotExistException if the token is unknown or disabled
+	 */
+	private function resolveFeedBoard(string $token): Board {
+		$board = $this->boardMapper->findByIcalFeedToken($token);
+
+		// Defence in depth: findByIcalFeedToken already excludes deleted boards and
+		// empty tokens, but re-assert the token is really set (never serve a board
+		// whose token was concurrently cleared).
+		if (($board->getIcalFeedToken() ?? '') === '') {
+			throw new DoesNotExistException('Calendar feed is disabled');
+		}
+
+		return $board;
 	}
 
 	/**

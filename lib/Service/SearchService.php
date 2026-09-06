@@ -70,6 +70,10 @@ class SearchService {
 		$lowerTerm = mb_strtolower($term);
 
 		$results = [];
+		// The cards come back with a description already truncated in SQL to a
+		// small multiple of SNIPPET_LENGTH ({@see CardMapper::searchInBoards()}),
+		// so neither the fetch nor snippet()'s regex below scales with how long
+		// an individual description happens to be.
 		foreach ($this->cardMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard) as $card) {
 			$results[] = $this->cardResult($card, $lowerTerm);
 		}

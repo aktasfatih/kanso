@@ -110,10 +110,9 @@ class BoardPortabilityController extends Controller {
 	 * time. It is set well above any believable human use (restoring a handful of
 	 * board backups) so a legitimate restore session is never interrupted -
 	 * including a CI run that imports repeatedly - while a scripted loop is
-	 * stopped. Note that per-FILE upload
-	 * ({@see \OCA\Kanso\Controller\CardAttachmentController::create()}) carries no
-	 * limit of its own, so this endpoint is deliberately not the loosest way into
-	 * app-data.
+	 * stopped. Per-FILE upload
+	 * ({@see \OCA\Kanso\Controller\CardAttachmentController::create()}) now carries
+	 * its own, looser limit, so neither way into app-data is the unguarded one.
 	 */
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: 60, period: 3600)]

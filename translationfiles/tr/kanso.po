@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:3835
+#: src/components/BoardSettingsModal.vue:3841
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -248,7 +248,7 @@ msgid "%1$s shared %2$s with you"
 msgstr "%1$s, %2$s öğesini seninle paylaştı"
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:215
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -262,19 +262,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4223
+#: src/components/CardDetail.vue:4237
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
 msgstr[1] "%n gün önce"
 
-#: src/components/CardDetail.vue:4221
+#: src/components/CardDetail.vue:4235
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/components/CardDetail.vue:4219
+#: src/components/CardDetail.vue:4233
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -298,13 +298,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1017
+#: src/components/CardDetail.vue:1018
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:1959
+#: src/components/CardDetail.vue:1962
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1552,8 +1552,8 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:1841
-#: src/components/CardDetail.vue:4412
+#: src/components/BoardSettingsModal.vue:1847
+#: src/components/CardDetail.vue:4426
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2034,25 +2034,25 @@ msgstr "her"
 msgid "Every"
 msgstr "Her"
 
-#: src/components/BoardSettingsModal.vue:3815
+#: src/components/BoardSettingsModal.vue:3821
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
 msgstr[1] "Her %n günde bir"
 
-#: src/components/BoardSettingsModal.vue:3825
+#: src/components/BoardSettingsModal.vue:3831
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:3817
+#: src/components/BoardSettingsModal.vue:3823
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:3827
+#: src/components/BoardSettingsModal.vue:3833
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3171,8 +3171,8 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:1843
-#: src/components/CardDetail.vue:4414
+#: src/components/BoardSettingsModal.vue:1849
+#: src/components/CardDetail.vue:4428
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4496,7 +4496,7 @@ msgstr "Biçimlendirme araç çubuğunu göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6036
+#: src/components/CardDetail.vue:6050
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5137,8 +5137,8 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:1842
-#: src/components/CardDetail.vue:4413
+#: src/components/BoardSettingsModal.vue:1848
+#: src/components/CardDetail.vue:4427
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5214,8 +5214,8 @@ msgstr "Bir yanıt yaz…"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:1844
-#: src/components/CardDetail.vue:4415
+#: src/components/BoardSettingsModal.vue:1850
+#: src/components/CardDetail.vue:4429
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

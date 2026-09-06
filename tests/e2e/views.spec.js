@@ -11,10 +11,13 @@ test.describe('Cross-board Views (#3815)', () => {
 		state.cardA = 'ViewsA ' + stamp
 		state.cardB = 'ViewsB ' + stamp
 
-		// Two boards, one card each, each tagged with a per-board label. The saved
-		// View filters to those two labels so it narrows to EXACTLY these two cards
-		// regardless of how much other data lives in the dev DB - the list stays
-		// small and deterministic (no virtualization off-screen flake).
+		// Two boards, one card each, each tagged with a per-board label. Every read
+		// below - the saved Views AND the raw feed request - filters to those two
+		// labels, so each one narrows to EXACTLY these two cards regardless of how
+		// much other data lives in the dev DB: the list stays small and
+		// deterministic (no virtualization off-screen flake) and, because the
+		// server filters BEFORE the MAX_CARDS cap (#9862), the fixtures can never
+		// be sliced out of the window on an instance holding more than that.
 		const a = await api.post('/boards', { title: 'ViewsBoardA ' + stamp })
 		state.boardA = a.id
 		state.labelA = (await api.post('/labels', { boardId: a.id, title: 'vlabelA ' + stamp, color: 'ff0000' })).id
@@ -39,8 +42,17 @@ test.describe('Cross-board Views (#3815)', () => {
 	test('the cross-board feed returns a capped envelope of cards from every readable board', async () => {
 		// The feed is a bounded envelope { cards, capped, total, limit } (#3892) -
 		// not a bare array - so a huge readable set can never ship one unbounded
-		// payload. With only a handful of test cards it is well under the cap.
-		const feed = await api.get('/views/cards')
+		// payload.
+		//
+		// The request is scoped to the two per-board labels, like every other read
+		// in this file. That is not cosmetic: the cap keeps the FIRST MAX_CARDS
+		// rows of the default (boardId, id) ASC order, so on an instance holding
+		// more than that, the newest rows - these fixtures - are exactly what gets
+		// sliced off, and an unscoped read here would fail for a reason that has
+		// nothing to do with what it asserts. Filtering runs before the cap
+		// (#9862), so a scoped read still sees its own cards. The envelope is
+		// asserted the same way either way.
+		const feed = await api.get(`/views/cards?fl=${state.labelA},${state.labelB}`)
 		expect(Array.isArray(feed.cards)).toBe(true)
 		expect(typeof feed.capped).toBe('boolean')
 		expect(feed.limit).toBeGreaterThan(0)

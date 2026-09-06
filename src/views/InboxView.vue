@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="inbox-view">
+	<div class="inbox-view" :class="{ 'inbox-view--embedded': embedded }">
 		<div v-if="!embedded" class="inbox-view__header kanso-page-header">
 			<h1 class="inbox-view__title">{{ t('kanso', 'Inbox') }}</h1>
 		</div>
@@ -296,5 +296,16 @@ function relativeTime(createdAt) {
 	flex-shrink: 0;
 	color: var(--color-text-maxcontrast);
 	opacity: 0.5;
+}
+
+/* Embedded in the My Work hub, the hub already supplies the page box — this view
+   sits INSIDE it, so repeating the box nests a second 32px inset (content 64px
+   from the edge, misaligned with the hub's own header) and a max-width inside an
+   identical max-width, which can only ever narrow content the hub already
+   constrained. Drop both when embedded; the standalone /inbox route keeps the
+   box. Kept last in the file so it wins over any later width-scoped rule. */
+.inbox-view--embedded {
+	padding: 0;
+	max-width: none;
 }
 </style>

@@ -120,6 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<NcTextField
 							v-model="saveName"
 							class="board-filter-bar__save-input"
+							maxlength="100"
 							:disabled="count === 0"
 							:label="t('kanso', 'View name')"
 							:placeholder="t('kanso', 'View name')"
@@ -375,6 +376,14 @@ const props = defineProps({
 	    ever runs), so the facet would be a control that does nothing there. The
 	    View surface, which owns its own archived baseline, opts in. */
 	showArchived: { type: Boolean, default: false },
+	/** Dimension keys this surface OWNS and must keep hidden even while they
+	    carry an active constraint — the View page's seeded label filter is the
+	    one case (it IS the View's identity, so surfacing it would also make
+	    "Clear filters" destroy the View). Distinct from a facet that is merely
+	    unavailable here (no labels on the board, no estimation scale, no
+	    participants): those DO come back while active, so the user can clear
+	    them. See the `dimensions` computed. */
+	lockedDimensions: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['save', 'apply-saved', 'delete-saved'])
@@ -438,22 +447,32 @@ function singleSummary(value, options) {
 }
 
 // The dimension metadata driving both the root list and each drill-in panel.
-// `count`/`summary` are computed live off the state. `options` is only set for
-// the single-select radio dimensions (due/done/waiting).
+// `count`/`summary` are computed live off the state. `options` is set for the
+// single-select radio dimensions (the nine in SINGLE_SELECT_DIMS below).
+//
+// This list must enumerate EVERY key in createFilterState(): the trigger badge
+// counts the state, this list is what the panel can show and clear, and a
+// dimension present in one but not the other is exactly the dead end the `show`
+// rule below exists to prevent.
+//
+// `available` is "this surface has something to offer here" (the board has
+// labels, an estimation scale, participants…). `show` — derived below — is what
+// the panel actually renders.
 const dimensions = computed(() => {
 	const s = props.state
-	return [
+	const locked = new Set(props.lockedDimensions)
+	const dims = [
 		{
 			key: 'labels',
 			label: t('kanso', 'Labels'),
-			show: props.labels.length > 0,
+			available: props.labels.length > 0,
 			count: s.labels.size,
 			summary: setSummary(s.labels, (id) => labelTitleById.value.get(id)),
 		},
 		{
 			key: 'assignees',
 			label: t('kanso', 'Assignees'),
-			show: props.participants.length > 0,
+			available: props.participants.length > 0,
 			count: s.assignees.size,
 			summary: setSummary(s.assignees, (uid) =>
 				uid === UNASSIGNED ? t('kanso', 'Unassigned') : participantNameByUid.value.get(uid) || uid),
@@ -461,7 +480,7 @@ const dimensions = computed(() => {
 		{
 			key: 'priorities',
 			label: t('kanso', 'Priority'),
-			show: true,
+			available: true,
 			count: s.priorities.size,
 			summary: setSummary(s.priorities, (v) => {
 				const lvl = PRIORITY_LEVELS.find((l) => l.value === v)
@@ -471,7 +490,7 @@ const dimensions = computed(() => {
 		{
 			key: 'types',
 			label: t('kanso', 'Type'),
-			show: true,
+			available: true,
 			count: s.types.size,
 			summary: setSummary(s.types, (v) => {
 				const tp = CARD_TYPES.find((c) => c.value === v)
@@ -481,21 +500,21 @@ const dimensions = computed(() => {
 		{
 			key: 'estimates',
 			label: t('kanso', 'Estimate'),
-			show: estimateTokens.value.length > 0,
+			available: estimateTokens.value.length > 0,
 			count: s.estimates.size,
 			summary: setSummary(s.estimates, (tok) => tok === UNESTIMATED ? t('kanso', 'Unestimated') : tok),
 		},
 		{
 			key: 'owners',
 			label: t('kanso', 'Owner'),
-			show: props.participants.length > 0,
+			available: props.participants.length > 0,
 			count: s.owners.size,
 			summary: setSummary(s.owners, (uid) => participantNameByUid.value.get(uid) || uid),
 		},
 		{
 			key: 'reviews',
 			label: t('kanso', 'Review'),
-			show: true,
+			available: true,
 			count: s.reviews.size,
 			summary: setSummary(s.reviews, (v) => {
 				const rv = reviewOptions.find((o) => o.value === v)
@@ -505,7 +524,7 @@ const dimensions = computed(() => {
 		{
 			key: 'due',
 			label: t('kanso', 'Due date'),
-			show: true,
+			available: true,
 			options: DUE_OPTIONS,
 			count: s.due ? 1 : 0,
 			summary: singleSummary(s.due, DUE_OPTIONS),
@@ -513,7 +532,7 @@ const dimensions = computed(() => {
 		{
 			key: 'done',
 			label: t('kanso', 'Status'),
-			show: true,
+			available: true,
 			options: DONE_OPTIONS,
 			count: s.done ? 1 : 0,
 			summary: singleSummary(s.done, DONE_OPTIONS),
@@ -521,7 +540,7 @@ const dimensions = computed(() => {
 		{
 			key: 'waiting',
 			label: t('kanso', 'Client status'),
-			show: true,
+			available: true,
 			options: WAITING_OPTIONS,
 			count: s.waiting ? 1 : 0,
 			summary: singleSummary(s.waiting, WAITING_OPTIONS),
@@ -529,7 +548,7 @@ const dimensions = computed(() => {
 		{
 			key: 'blocked',
 			label: t('kanso', 'Blocked'),
-			show: true,
+			available: true,
 			options: BLOCKED_OPTIONS,
 			count: s.blocked ? 1 : 0,
 			summary: singleSummary(s.blocked, BLOCKED_OPTIONS),
@@ -537,7 +556,7 @@ const dimensions = computed(() => {
 		{
 			key: 'checklist',
 			label: t('kanso', 'Checklist'),
-			show: true,
+			available: true,
 			options: CHECKLIST_OPTIONS,
 			count: s.checklist ? 1 : 0,
 			summary: singleSummary(s.checklist, CHECKLIST_OPTIONS),
@@ -545,7 +564,7 @@ const dimensions = computed(() => {
 		{
 			key: 'startDate',
 			label: t('kanso', 'Start date'),
-			show: true,
+			available: true,
 			options: START_OPTIONS,
 			count: s.startDate ? 1 : 0,
 			summary: singleSummary(s.startDate, START_OPTIONS),
@@ -553,7 +572,7 @@ const dimensions = computed(() => {
 		{
 			key: 'subcard',
 			label: t('kanso', 'Sub-cards'),
-			show: true,
+			available: true,
 			options: SUBCARD_OPTIONS,
 			count: s.subcard ? 1 : 0,
 			summary: singleSummary(s.subcard, SUBCARD_OPTIONS),
@@ -561,7 +580,7 @@ const dimensions = computed(() => {
 		{
 			key: 'comments',
 			label: t('kanso', 'Comments'),
-			show: true,
+			available: true,
 			options: COMMENTS_OPTIONS,
 			count: s.comments ? 1 : 0,
 			summary: singleSummary(s.comments, COMMENTS_OPTIONS),
@@ -569,12 +588,38 @@ const dimensions = computed(() => {
 		{
 			key: 'archived',
 			label: t('kanso', 'Archived'),
-			show: props.showArchived,
+			available: props.showArchived,
 			options: ARCHIVED_OPTIONS,
 			count: s.archived ? 1 : 0,
 			summary: singleSummary(s.archived, ARCHIVED_OPTIONS),
 		},
 	]
+
+	// A dimension is rendered when this surface has something to offer for it —
+	// OR when it is currently constraining what the user sees. The second half is
+	// what keeps an unavailable facet from becoming a dead end: a URL can carry
+	// `far`/`fe`/`fl`, and an ordinary board-settings change (deleting the last
+	// label, switching the estimation scale to "none") retroactively makes an
+	// active facet unavailable. Without this the board renders filtered — or
+	// empty — with a `Filter · N` badge, no row to open and no Clear button.
+	// LOCKED dimensions are the exception: a surface that OWNS a dimension (the
+	// View page seeds its saved label filter into this same state) keeps it
+	// hidden even while active, because there it is the surface's identity rather
+	// than a filter the user applied — see `lockedDimensions` and #10091.
+	//
+	// The lock is checked OUTSIDE the disjunction on purpose: a locked dimension
+	// is never rendered, so "locked ⇒ never cleared" holds unconditionally rather
+	// than by the coincidence that today's locking surface also happens not to
+	// pass that facet's vocabulary.
+	//
+	// Residual, accepted: drilling into a re-surfaced multi-select whose
+	// vocabulary is gone (Labels after the last label was deleted) opens an empty
+	// value list — the active id has no row to untick. "Clear filters" is the
+	// escape hatch that matters, and it is back.
+	return dims.map((d) => ({
+		...d,
+		show: !locked.has(d.key) && (d.available || d.count > 0),
+	}))
 })
 
 const visibleDimensions = computed(() => dimensions.value.filter((d) => d.show))
@@ -613,7 +658,10 @@ function setSingleRadio(dim, value) {
 // the Labels facet on purpose (board-scoped label ids collide across boards) yet
 // seeds the View's own saved label filter into this same state, so a blanket
 // clear silently destroyed the View's identity and widened the page to the whole
-// unfiltered cross-board feed, recoverable only by reloading. Driving off
+// unfiltered cross-board feed, recoverable only by reloading. That case is now
+// expressed as a LOCKED dimension, so it stays hidden (and uncleared) while a
+// merely-unavailable facet that is actively constraining the surface renders and
+// therefore clears — the invariant holds either way. Driving off
 // `visibleDimensions` also keeps this in step with the dimension list instead of
 // being a hand-maintained parallel copy of it.
 function clearAll() {

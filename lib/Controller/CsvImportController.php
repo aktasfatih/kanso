@@ -12,6 +12,7 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -40,8 +41,17 @@ class CsvImportController extends Controller {
 	 * @param string $document raw CSV text (uploaded file or pasted)
 	 * @param array<string, mixed> $mapping field name → 0-based source column index
 	 * @param bool $hasHeader whether the first row is a header row to skip
+	 *
+	 * Per-user rate limited, matching the board-import endpoint next door
+	 * ({@see \OCA\Kanso\Controller\BoardPortabilityController::import()}): one
+	 * request may create up to {@see \OCA\Kanso\Service\CsvImportService::MAX_ROWS}
+	 * cards, each costing an INSERT plus a change-log row inside a single
+	 * transaction, so the per-request ceiling wants a companion bound over time.
+	 * 60/hour sits far above any human import session - nobody re-imports a
+	 * spreadsheet a minute apart for an hour - while stopping a scripted loop.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 3600)]
 	public function import(
 		string $document = '',
 		int $boardId = 0,

@@ -181,27 +181,20 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		// Give the optimistic patch + server round-trip generous room on slow CI.
 		await page.waitForTimeout(1500)
 
-		// Primary (UI) assertion: the card left the unscheduled footer and now shows
-		// up on the track. A newly single-dated card renders as a milestone diamond;
-		// accept a bar too in case the drop math produced a range, so the check is
-		// tolerant to layout specifics rather than a brittle pixel position.
+		// Primary (UI) assertion — unconditional, because "the marker never renders"
+		// has to be able to FAIL this test. It used to be gated behind an `if`, with
+		// an else-branch that fell back to the very API duedate poll the lines below
+		// already assert, so a timeline that drew nothing still passed.
+		// A newly single-dated card renders as a milestone diamond; accept a bar too
+		// in case the drop math produced a range, so the check is tolerant to layout
+		// specifics rather than a brittle pixel position.
 		const scheduledMarker = page.locator(
 			`.timeline__milestone:has-text("${dragTitle}"), .timeline__bar:has-text("${dragTitle}")`,
 		)
-		const scheduledUi = await scheduledMarker.first().isVisible({ timeout: 6_000 }).catch(() => false)
-		const leftFooter = !(await page.locator('.timeline__unscheduled-row', { hasText: dragTitle })
-			.isVisible({ timeout: 2_000 }).catch(() => false))
-
-		if (scheduledUi && leftFooter) {
-			await expect(scheduledMarker.first()).toBeVisible()
-		} else {
-			// Fallback: Pragmatic DnD can be flaky to drive from Playwright on a slow
-			// runner. Rather than fail on a visual-position race, confirm the drop set
-			// a duedate via the API — that's the behaviour under test.
-			await expect
-				.poll(async () => (await api.get(`/cards/${card.id}`)).duedate, { timeout: 8_000 })
-				.not.toBeNull()
-		}
+		await expect(scheduledMarker.first()).toBeVisible({ timeout: 10_000 })
+		// …and it left the unscheduled footer.
+		await expect(page.locator('.timeline__unscheduled-row', { hasText: dragTitle }))
+			.toHaveCount(0, { timeout: 10_000 })
 
 		// Persistence: after a reload the card still carries a due date (it stays
 		// scheduled and does not fall back into the unscheduled footer).
