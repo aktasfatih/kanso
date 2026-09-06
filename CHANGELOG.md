@@ -11,6 +11,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.25.0](https://github.com/aktasfatih/kanso/compare/v0.24.1...v0.25.0) (2026-09-06)
+
+
+### Bug Fixes
+
+* **checklist:** stop dropping the tick on an item you just added ([52c63d4](https://github.com/aktasfatih/kanso/commit/52c63d40c6b0b72a66e8ddc28f9a3d587bc7da70)), closes [#6175](https://github.com/aktasfatih/kanso/issues/6175)
+* **editor:** remove the stray attributes the description editor put on its root element ([65cc721](https://github.com/aktasfatih/kanso/commit/65cc7218d963acd5c8d60a735e004e0d4f0fe768)), closes [#10186](https://github.com/aktasfatih/kanso/issues/10186)
+* **recurrence:** reject a repeat whose months are too short for the day it starts on ([99ab925](https://github.com/aktasfatih/kanso/commit/99ab925b80d6201b5908e0666aaede49896e8522))
+* **security:** cap a card's GitHub links and resolve Deck attachments by name only ([aaf4551](https://github.com/aktasfatih/kanso/commit/aaf45515041f8e0d4d7342c2740515d8eb73032e))
+* **security:** rate-limit CSV import and file attachment uploads per user ([480c504](https://github.com/aktasfatih/kanso/commit/480c504e4538af4eb44dd5efb3cd2e300cbad3f6)), closes [#10145](https://github.com/aktasfatih/kanso/issues/10145)
+* **ui:** a filter on a facet the board no longer offers can be cleared again ([f039f80](https://github.com/aktasfatih/kanso/commit/f039f805dffccf8d68edb8f34ae86fd854df375f)), closes [#10091](https://github.com/aktasfatih/kanso/issues/10091) [#10128](https://github.com/aktasfatih/kanso/issues/10128)
+* **ui:** line the My Work pages up with the hub header instead of insetting them twice ([40005a4](https://github.com/aktasfatih/kanso/commit/40005a4812d4f988422fe8f39c5d938ad4aa7091))
+* **ui:** stop long names being silently cut or rejected when you rename a view, project or column ([d5a1391](https://github.com/aktasfatih/kanso/commit/d5a139132d3a47324710ee5a2b98aba332e8ac1b))
+
+
+### Features
+
+* **mcp:** move a card to another board from an AI assistant ([f06c4da](https://github.com/aktasfatih/kanso/commit/f06c4da116c556ae89b900260d25af8836d27561))
+* **mcp:** see your saved cross-board Views from an AI assistant ([a619606](https://github.com/aktasfatih/kanso/commit/a619606d588c6c499edc7e2c1284089e84839475))
+
+
+### Performance Improvements
+
+* **ics:** answer unchanged calendar-feed polls with a 304 instead of rebuilding the whole feed ([d1abaa2](https://github.com/aktasfatih/kanso/commit/d1abaa2bd7f20a86ca4cb2c7f51271bd83132cb2)), closes [#10145](https://github.com/aktasfatih/kanso/issues/10145)
+* **search:** bound how much of a card description a search reads ([00446cf](https://github.com/aktasfatih/kanso/commit/00446cfebf82c1f6f40fdd428bc5c8e568f2a6d4))
+
 ## [0.24.1](https://github.com/aktasfatih/kanso/compare/v0.24.0...v0.24.1) (2026-09-05)
 
 
