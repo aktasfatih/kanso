@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Tests\Unit\Controller;
 
 use OCA\Kanso\Controller\WebhookController;
+use OCA\Kanso\Service\ForgejoWebhookService;
 use OCA\Kanso\Service\GithubWebhookService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NonJsonWebhookBodyException;
@@ -30,6 +31,7 @@ class WebhookControllerTest extends TestCase {
 	private IRequest&MockObject $request;
 	private IUserSession&MockObject $userSession;
 	private GithubWebhookService&MockObject $webhookService;
+	private ForgejoWebhookService&MockObject $forgejoService;
 	private WebhookController $controller;
 
 	protected function setUp(): void {
@@ -38,11 +40,13 @@ class WebhookControllerTest extends TestCase {
 		$this->request->method('getHeader')->willReturn('sha256=abc');
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->webhookService = $this->createMock(GithubWebhookService::class);
+		$this->forgejoService = $this->createMock(ForgejoWebhookService::class);
 		$this->controller = new WebhookController(
 			'kanso',
 			$this->request,
 			$this->userSession,
 			$this->webhookService,
+			$this->forgejoService,
 		);
 	}
 

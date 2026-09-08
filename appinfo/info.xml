@@ -33,8 +33,8 @@ reviews, inbox), cross-board Projects, and per-board and per-project analytics
 (velocity, cycle time, throughput). Board, List and Timeline (Gantt) views.
 
 Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
-roles, a command palette with full-text search, trash with restore, GitHub
-links and webhook, and one-click Import from Deck.
+roles, a command palette with full-text search, trash with restore, GitHub and
+Forgejo links and webhooks, and one-click Import from Deck.
 	]]></description>
 	<description lang="de"><![CDATA[
 Kanso ist eine Kanban-Board-App für Nextcloud, entwickelt für Geschwindigkeit.

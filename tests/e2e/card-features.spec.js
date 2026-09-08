@@ -158,7 +158,7 @@ test.describe('Built-in card sections (#5894)', () => {
 		await openCardFieldsPane(page, state.boardId)
 		await featureLabel(page, 'Cover colour').click()
 		await expect(featureInput(page, 'coverColor')).not.toBeChecked({ timeout: 8_000 })
-		await featureLabel(page, 'GitHub links').click()
+		await featureLabel(page, 'Code links').click()
 		await expect(featureInput(page, 'github')).not.toBeChecked({ timeout: 8_000 })
 		await featureLabel(page, 'Contacts').click()
 		await expect(featureInput(page, 'contacts')).not.toBeChecked({ timeout: 8_000 })
@@ -170,7 +170,7 @@ test.describe('Built-in card sections (#5894)', () => {
 		await tile.click()
 		await expect(modal).toBeVisible({ timeout: 10_000 })
 		await expect(modal.getByText('Cover', { exact: true })).toHaveCount(0)
-		await expect(modal.getByText('GitHub', { exact: true })).toHaveCount(0)
+		await expect(modal.getByText('Code', { exact: true })).toHaveCount(0)
 		await expect(modal.getByText('Link contact', { exact: true })).toHaveCount(0)
 		await page.keyboard.press('Escape')
 		await expect(modal).toBeHidden({ timeout: 8_000 })
@@ -184,7 +184,7 @@ test.describe('Built-in card sections (#5894)', () => {
 			['attachments', 'Attachments'],
 			['timeTracking', 'Time tracking'],
 			['coverColor', 'Cover colour'],
-			['github', 'GitHub links'],
+			['github', 'Code links'],
 			['contacts', 'Contacts'],
 		]) {
 			await featureLabel(page, label).click()
@@ -198,7 +198,7 @@ test.describe('Built-in card sections (#5894)', () => {
 		await expect(modal).toBeVisible({ timeout: 10_000 })
 		await expect(modal.getByText('Attachments', { exact: true })).toBeVisible({ timeout: 8_000 })
 		await expect(modal.getByText('Time tracking', { exact: true })).toBeVisible()
-		await expect(modal.getByText('GitHub', { exact: true })).toBeVisible()
+		await expect(modal.getByText('Code', { exact: true })).toBeVisible()
 		// The file that was uploaded before anything was switched off is still listed.
 		await expect(modal.getByText(FILE_NAME)).toBeVisible()
 	})
