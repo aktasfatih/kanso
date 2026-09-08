@@ -105,7 +105,7 @@ class ForgejoWebhookServiceTest extends TestCase {
 		return hash_hmac('sha256', $body, self::SECRET);
 	}
 
-	private function prBody(string $action, string $branch, bool $merged = false): string {
+	private function prBody(string $action, string $branch, bool $merged = false, string $title = ''): string {
 		return json_encode([
 			'action' => $action,
 			'pull_request' => [
@@ -113,8 +113,15 @@ class ForgejoWebhookServiceTest extends TestCase {
 				'html_url' => self::BASE . '/pulls/3',
 				'state' => $merged ? 'closed' : 'open',
 				'merged' => $merged,
+				'title' => $title,
 			],
 		]);
+	}
+
+	private function prefixBoard(string $prefix = 'KANSO'): Board {
+		$b = $this->board();
+		$b->setPrefix($prefix);
+		return $b;
 	}
 
 	private function issueBody(string $action, string $url, string $state = 'closed', string $title = 'A bug'): string {
@@ -274,6 +281,85 @@ class ForgejoWebhookServiceTest extends TestCase {
 		$this->cardService->expects(self::never())->method('move');
 
 		$body = $this->prBody('opened', 'feature/unrelated');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertFalse($result['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_NO_CARD_MATCH, $result['reason']);
+	}
+
+	// ---- PR title references (#9855), inherited by every forge -------------
+
+	/**
+	 * `PREFIX-<seq>` title matching lives in AbstractForgeWebhookService, so
+	 * Forgejo gets it for free - the reference rides the PR title, which every
+	 * provider's payload carries. Pinned here so a change to the shared matcher
+	 * cannot quietly regress the Forgejo half.
+	 */
+	public function testOpenedPrWithTitleReferenceLinksAndMovesThatCard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->expects(self::once())->method('findByRef')
+			->with(1, 'KANSO-14', 'alice')->willReturn($this->card(77, 1));
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_REVIEW)
+			->willReturn($this->stack(4, Stack::ROLE_REVIEW));
+		$this->cardLinkService->expects(self::once())->method('addLink')
+			->with(77, self::BASE . '/pulls/3', 'alice');
+		$this->cardService->expects(self::once())->method('move')
+			->with(77, 4, null, 'alice')->willReturn($this->card(77, 1));
+
+		$body = $this->prBody('opened', 'my-random-branch', title: 'Fix the crash (KANSO-14)');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertTrue($result['moved']);
+		self::assertSame(77, $result['cardId']);
+	}
+
+	/** The branch and title matches are unioned, deduped, and both are moved. */
+	public function testBranchAndTitleMatchesAreBothHandled(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->cardService->method('findByRef')->with(1, 'KANSO-14', 'alice')
+			->willReturn($this->card(77, 1));
+		$this->stackMapper->method('findByBoardAndRole')->with(1, Stack::ROLE_DONE)
+			->willReturn($this->stack(5, Stack::ROLE_DONE));
+
+		$moved = [];
+		$this->cardService->expects(self::exactly(2))->method('move')
+			->willReturnCallback(function (int $cardId) use (&$moved): Card {
+				$moved[] = $cardId;
+				return $this->card($cardId, 1);
+			});
+
+		$body = $this->prBody('closed', 'kanso-9-fix', true, 'Also closes KANSO-14');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['moved']);
+		self::assertSame([9, 77], $moved);
+		// The branch id is an echo of what the sender supplied, so it may be named.
+		self::assertSame(9, $result['cardId']);
+	}
+
+	/**
+	 * Case-sensitivity is a correctness rule, not pedantry: a board titled
+	 * "Kanso" derives prefix KANSO, which case-insensitively collides with the
+	 * lowercase `kanso-<id>` BRANCH spelling a title may quote.
+	 */
+	public function testQuotedLowercaseBranchInTitleIsNotReadAsAReference(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->cardService->expects(self::never())->method('findByRef');
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$body = $this->prBody('opened', 'kanso-9-fix', false, 'Merge kanso-42 into main');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/** An unknown / trashed / hidden reference resolves to null and is no match. */
+	public function testUnresolvableTitleReferenceIsAcceptedNoOp(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->prefixBoard('KANSO'));
+		$this->cardService->method('findByRef')->willReturn(null);
+		$this->cardService->expects(self::never())->method('move');
+
+		$body = $this->prBody('opened', 'no-convention', false, 'Fixes KANSO-99');
 		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
 		self::assertFalse($result['handled']);
 		self::assertSame(ForgejoWebhookService::REASON_NO_CARD_MATCH, $result['reason']);
