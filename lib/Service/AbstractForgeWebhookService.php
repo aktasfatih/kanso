@@ -324,14 +324,7 @@ abstract class AbstractForgeWebhookService {
 			// poll: addLink() only polls on INSERT, so the second delivery for a
 			// PR (opened -> merged) hits its unique-constraint branch and would
 			// otherwise never refresh the state.
-			if ($event->htmlUrl !== '') {
-				try {
-					$link = $this->cardLinkService->addLink($cardId, $event->htmlUrl, $board->getOwner());
-					$this->cacheLinkState($link, $event);
-				} catch (\Throwable) {
-					// Non-critical - a bad/duplicate URL must not fail the webhook.
-				}
-			}
+			$this->attachOrRefreshPrLink($cardId, $event, $board->getOwner());
 			[$cardMoved, $reason] = $this->applyPrAutoMove($boardId, $cardId, $event, $board->getOwner());
 			if ($cardMoved) {
 				$moved = true;
@@ -565,6 +558,48 @@ abstract class AbstractForgeWebhookService {
 	}
 
 	// ---- shared helpers ----------------------------------------------------
+
+	/**
+	 * Records the PR as a link on the card and caches its state/title straight
+	 * from the delivery.
+	 *
+	 * If the card ALREADY carries a link to this pull request under a different
+	 * URL spelling, that row is refreshed instead of a second one being attached.
+	 * Forges share one number sequence between issues and pull requests and
+	 * redirect the spellings to each other, so someone can legitimately paste
+	 * `/issues/5` for a pull request; matching only the delivered spelling used to
+	 * leave that link stuck on `unknown` forever with a duplicate beside it.
+	 *
+	 * The payload is authoritative and free, so state must not be left to the
+	 * read-time poll: addLink() only polls on INSERT, so the second delivery for
+	 * a PR (opened -> merged) hits its unique-constraint branch and would
+	 * otherwise never refresh the state.
+	 *
+	 * Best-effort throughout - a bad or duplicate URL must not fail the delivery.
+	 */
+	protected function attachOrRefreshPrLink(int $cardId, ForgeEvent $event, string $actorUid): void {
+		if ($event->htmlUrl === '') {
+			return;
+		}
+		try {
+			// An exact-URL match is handled by addLink's idempotency, so only the
+			// ALTERNATE spellings are worth a lookup - and only when the event
+			// carries a candidate set at all.
+			$alternates = array_diff($event->urlCandidates, [$event->htmlUrl]);
+			if ($alternates !== []) {
+				foreach ($this->cardLinkMapper->findByCard($cardId) as $existing) {
+					if (in_array($existing->getUrl(), $alternates, true)) {
+						$this->cacheLinkState($existing, $event);
+						return;
+					}
+				}
+			}
+			$link = $this->cardLinkService->addLink($cardId, $event->htmlUrl, $actorUid);
+			$this->cacheLinkState($link, $event);
+		} catch (\Throwable) {
+			// Non-critical - a bad/duplicate URL must not fail the webhook.
+		}
+	}
 
 	/**
 	 * Caches a link's state/title straight from the delivery and stamps

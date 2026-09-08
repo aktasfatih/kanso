@@ -119,14 +119,17 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 				|| !empty($pr['merged_at'])
 				|| $action === 'merged';
 
+			$htmlUrl = is_string($pr['html_url'] ?? null) ? $pr['html_url'] : '';
+
 			return new ForgeEvent(
 				kind: ForgeEvent::KIND_PR,
 				action: $action,
 				branch: $branch,
-				htmlUrl: is_string($pr['html_url'] ?? null) ? $pr['html_url'] : '',
+				htmlUrl: $htmlUrl,
 				title: is_string($pr['title'] ?? null) ? $pr['title'] : null,
 				state: $merged ? CardLink::STATE_MERGED : $this->mapState($pr['state'] ?? null),
 				merged: $merged,
+				urlCandidates: $this->urlCandidatesFor($htmlUrl),
 			);
 		}
 
@@ -152,7 +155,7 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 				title: is_string($issue['title'] ?? null) ? $issue['title'] : null,
 				state: $this->mapState($issue['state'] ?? null),
 				labels: $this->labelNames($issue['labels'] ?? null),
-				urlCandidates: $this->issueUrlCandidates($owner, $repo, $number),
+				urlCandidates: $this->urlCandidates($owner, $repo, $number),
 			);
 		}
 
@@ -188,20 +191,49 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 	}
 
 	/**
-	 * The URL spellings under which a github.com issue may have been attached
-	 * as a link (host www or not, trailing slash or not). Matching by candidate
-	 * set keeps the reverse lookup a plain indexed `url IN (...)` while still
-	 * being repo + issue-number based.
+	 * The URL spellings under which a github.com issue OR pull request may have
+	 * been attached as a link.
+	 *
+	 * BOTH `/issues/{n}` and `/pull/{n}` are candidates, because github.com
+	 * shares one number sequence between them and redirects each spelling to the
+	 * other: someone can legitimately paste `/issues/5` for a pull request, and
+	 * matching only the delivered spelling would leave that link stuck on
+	 * `unknown` forever while a second link was attached beside it. Host `www`
+	 * or not, trailing slash or not, as before. Matching by candidate set keeps
+	 * the reverse lookup a plain indexed `url IN (...)`.
 	 *
 	 * @return string[]
 	 */
-	private function issueUrlCandidates(string $owner, string $repo, int $number): array {
-		$path = '/' . $owner . '/' . $repo . '/issues/' . $number;
-		return [
-			'https://github.com' . $path,
-			'https://github.com' . $path . '/',
-			'https://www.github.com' . $path,
-			'https://www.github.com' . $path . '/',
-		];
+	private function urlCandidates(string $owner, string $repo, int $number): array {
+		$candidates = [];
+		foreach (['issues', 'pull'] as $segment) {
+			$path = '/' . $owner . '/' . $repo . '/' . $segment . '/' . $number;
+			foreach (['https://github.com', 'https://www.github.com'] as $host) {
+				$candidates[] = $host . $path;
+				$candidates[] = $host . $path . '/';
+			}
+		}
+		return $candidates;
+	}
+
+	/**
+	 * {@see urlCandidates} for an already-formed github.com issue/PR URL. An
+	 * unparseable URL yields no candidates, which simply means "match nothing".
+	 *
+	 * @return string[]
+	 */
+	private function urlCandidatesFor(string $url): array {
+		if ($url === '') {
+			return [];
+		}
+		try {
+			[$kind, $owner, $repo, $number] = CardLinkService::parseGitHubUrl($url);
+		} catch (InvalidInputException) {
+			return [];
+		}
+		if ($kind === CardLink::KIND_OTHER) {
+			return [];
+		}
+		return $this->urlCandidates($owner, $repo, $number);
 	}
 }

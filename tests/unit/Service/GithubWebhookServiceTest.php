@@ -906,6 +906,73 @@ class GithubWebhookServiceTest extends TestCase {
 		self::assertSame(9, $result['cardId']);
 	}
 
+	// ---- issue/PR URL spelling --------------------------------------------
+
+	/**
+	 * github.com shares one number sequence between issues and pull requests and
+	 * redirects the spellings to each other, so someone can legitimately paste
+	 * `/issues/5` for a pull request. The PR delivery carries `/pull/5`: without
+	 * matching both spellings it attached a SECOND link and left the pasted one
+	 * on `unknown` forever.
+	 */
+	public function testPrDeliveryRefreshesALinkPastedWithTheIssueSpelling(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$pasted = new CardLink();
+		$pasted->setId(3);
+		$pasted->setCardId(9);
+		$pasted->setUrl('https://github.com/octo/app/issues/3');
+		$pasted->setKind(CardLink::KIND_ISSUE);
+		$pasted->setState(CardLink::STATE_UNKNOWN);
+		$this->cardLinkMapper->method('findByCard')->with(9)->willReturn([$pasted]);
+
+		// No duplicate is attached...
+		$this->cardLinkService->expects(self::never())->method('addLink');
+		// ...and the pasted row is the one that gets the merged state.
+		$this->cardLinkMapper->expects(self::once())->method('update')
+			->willReturnCallback(function (CardLink $l): CardLink {
+				self::assertSame(3, $l->getId());
+				self::assertSame(CardLink::STATE_MERGED, $l->getState());
+				return $l;
+			});
+
+		$body = $this->prBody('closed', 'kanso-9-fix', true);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/** With no pre-existing link under either spelling, the PR is attached as usual. */
+	public function testPrDeliveryStillAttachesWhenNoLinkExists(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$this->cardLinkMapper->method('findByCard')->with(9)->willReturn([]);
+
+		$this->cardLinkService->expects(self::once())->method('addLink')
+			->with(9, 'https://github.com/octo/app/pull/3', 'alice');
+
+		$body = $this->prBody('closed', 'kanso-9-fix', true);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/** A link stored with the /pull/ spelling is matched by an issues delivery. */
+	public function testIssueDeliveryMatchesALinkStoredWithThePullSpelling(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$seen = [];
+		$this->cardLinkMapper->method('findByBoardAndUrls')
+			->willReturnCallback(function (int $b, array $urls) use (&$seen): array {
+				$seen = $urls;
+				return [];
+			});
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertContains('https://github.com/octo/app/issues/7', $seen);
+		self::assertContains('https://github.com/octo/app/pull/7', $seen);
+	}
+
 	// ---- PR title references (#9855) --------------------------------------
 
 	private function prefixBoard(string $prefix = 'KAN'): Board {
