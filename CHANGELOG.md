@@ -11,6 +11,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.26.0](https://github.com/aktasfatih/kanso/compare/v0.25.0...v0.26.0) (2026-09-08)
+
+
+### Bug Fixes
+
+* keep a pull request link fresh when it was pasted as an issue URL ([f0184c3](https://github.com/aktasfatih/kanso/commit/f0184c3ba44903515ebe8cd06551270f8240b230))
+* show a pull request's merged state as soon as the webhook reports it ([b9967ac](https://github.com/aktasfatih/kanso/commit/b9967ac17753c7ed9ca61360eeef3bdf6b8ddeca))
+
+
+### Features
+
+* explain in the webhook response why a delivery did not move a card ([e6f47b6](https://github.com/aktasfatih/kanso/commit/e6f47b6b3b68ca2b787ec4f012270bbd3746fa94)), closes [#3760](https://github.com/aktasfatih/kanso/issues/3760)
+* move cards automatically from Forgejo pull request and issue events ([5300069](https://github.com/aktasfatih/kanso/commit/530006967b06193bb7b5d682a46f78cc2f06dbab))
+
 # [0.25.0](https://github.com/aktasfatih/kanso/compare/v0.24.1...v0.25.0) (2026-09-06)
 
 
