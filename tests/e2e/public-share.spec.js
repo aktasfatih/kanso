@@ -51,6 +51,26 @@ async function fetchPublic(token) {
 	return { status: r.status, body: text ? JSON.parse(text) : null }
 }
 
+// The EXHAUSTIVE key set of one anonymous card object, mirrored from the closed
+// literal at lib/Service/PublicShareService.php:247-274. `comments` is the ONE
+// conditional addition, and only when a MANAGE user opts in (:276-278).
+//
+// Asserting the whole KEY SET — not just the absence of a few known-bad VALUES —
+// is what makes the leak guard hold. A raw-string check over the payload can only
+// catch a leak whose text happens to match a fixture string, so a future
+// person-bearing field on $cardPayload (an owner uid, an author, an email) slips
+// past it whenever its value doesn't collide with one. An exact key set fails on
+// the drift itself, whatever the value turns out to be.
+const PUBLIC_CARD_KEYS = [
+	'allDay', 'checklist', 'coverColor', 'description', 'duedate', 'estimate',
+	'humanId', 'id', 'labels', 'priority', 'stackId', 'startDate', 'status',
+	'title', 'type',
+].sort()
+
+// Likewise for one stack (PublicShareService.php:218-222): presentational only,
+// and never the internal board id.
+const PUBLIC_STACK_KEYS = ['color', 'id', 'title'].sort()
+
 // Public / read-only board share links (#3531). A MANAGE user mints a token; an
 // unauthenticated reader gets a STRIPPED read-only board; disabling 404s it.
 test.describe('Public read-only board share', () => {
@@ -130,10 +150,26 @@ test.describe('Public read-only board share', () => {
 		const card = res.body.cards.find((c) => c.title === 'Public visible card')
 		expect(card).toBeTruthy()
 
-		// No people, no comments, no internal metadata anywhere in the payload.
+		// The card and stack objects carry EXACTLY the public field lists — the same
+		// exhaustive treatment the board envelope gets above. This is the assertion
+		// that catches drift: a person-bearing field added to the payload fails here
+		// on its KEY, whatever its value happens to be.
+		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
+		expect(res.body.stacks.length).toBe(1) // so the loop below can't pass by being empty
+		for (const stack of res.body.stacks) {
+			expect(Object.keys(stack).sort()).toEqual(PUBLIC_STACK_KEYS)
+		}
+
+		// Raw-string SUPPLEMENTS to the key-set assertions above — deliberately not
+		// identity checks. `me` is both the acting uid AND its display name in the
+		// e2e env (helpers.js:269 provisions displayName === username), so a trip on
+		// the line below cannot tell a leaked uid from a leaked display name; it is a
+		// substring match over the whole serialized payload for two exact fixture
+		// strings, nothing more. Their value is coverage BREADTH (board and stack
+		// envelopes too, not just the card keys), not precision.
 		const json = JSON.stringify(res.body)
-		expect(json).not.toContain(me) // no assignee / owner uid
-		expect(json).not.toContain('SHOULD NOT LEAK') // no comments
+		expect(json).not.toContain(me)
+		expect(json).not.toContain('SHOULD NOT LEAK') // no comment bodies while the opt-in is off
 		expect(card.assignees).toBeUndefined()
 		expect(card.assigneeIds).toBeUndefined()
 		expect(card.comments).toBeUndefined()
@@ -345,6 +381,12 @@ test.describe('Public board comments opt-in', () => {
 		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
 		expect(Array.isArray(card.comments)).toBe(true)
 		expect(card.comments.length).toBe(2)
+		// Opting in adds EXACTLY one key to the card — `comments` — and the comment
+		// object carries exactly {id, parentCommentId, author, body, timestamps}.
+		// This is the one place a person-data regression can actually land (an
+		// `authorUid` alongside the display name), so pin both key sets here too.
+		expect(Object.keys(card).sort()).toEqual([...PUBLIC_CARD_KEYS, 'comments'].sort())
+		expect(Object.keys(card.comments[0]).sort()).toEqual(['author', 'body', 'createdAt', 'editedAt', 'id', 'parentCommentId'])
 		// The comment carries the author's DISPLAY NAME (resolved from the uid, like
 		// the authenticated endpoint) - a non-empty string - and its markdown body,
 		// timestamps and one-level parent link. (In this dev instance the admin's
@@ -382,5 +424,51 @@ test.describe('Public board comments opt-in', () => {
 		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
 		expect(card.comments).toBeUndefined()
 		expect(JSON.stringify(res.body)).not.toContain('PUBLIC_TOP')
+	})
+})
+
+// A card title may legitimately CONTAIN the acting user's uid inside a longer word
+// ("administrator notes" contains "admin"), and such a card must still be served
+// VERBATIM on the public link — the fix for a person-data leak is a narrower
+// payload, never scrubbing uid-shaped text out of board content. Nothing else in
+// the suite covers that: every other fixture title is uid-free, so an over-eager
+// redaction would pass unnoticed. The board is its own because the raw-string
+// supplement in the leak test above would read this title as a leak — the two
+// cannot share a payload, which is itself the point.
+test.describe('Public payload key sets are substring-immune', () => {
+	// Match the sibling describes and keep the shared admin storageState out of it.
+	// (Nothing here drives a browser — fetchPublic is cookieless and the local api()
+	// carries its own Authorization — so this is consistency, not load-bearing.)
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	let boardId = 0
+	let token = ''
+	let title = ''
+
+	test.beforeAll(async () => {
+		// Built here, not at module scope: `me` is rebound by the worker fixture
+		// (helpers.js:269), and a describe body runs at collection time — before the
+		// rebind — so a top-level snapshot would embed 'admin' instead of the worker.
+		title = `${me}istrator notes`
+		boardId = (await api('POST', '/boards', { title: 'Public Substring E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		await api('POST', '/cards', { stackId, title })
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('a card title that embeds the uid in a longer word is not a leak', async () => {
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		// The title is served verbatim, uid substring and all — no redaction of
+		// legitimate board content. This is the assertion that can fail here.
+		const card = res.body.cards.find((c) => c.title === title)
+		expect(card).toBeTruthy()
+		// And no false red from the structural guard: keys are value-blind, so the
+		// key set is still exactly the public field list.
+		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
 	})
 })
