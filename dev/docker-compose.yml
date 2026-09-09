@@ -81,7 +81,25 @@ services:
   # for postgres (its DATABASE_URL is postgres-specific and realtime push is
   # not exercised by the cross-version install matrix).
   notify_push:
-    image: icewind1991/notify_push
+    # Pinned deliberately, and it needs a MANUAL bump — in lockstep with
+    # NOTIFY_PUSH_VERSION/NOTIFY_PUSH_URL in setup.sh, which side-loads the
+    # Nextcloud-side notify_push *app* at this same version. The two halves are
+    # one pin; never move one without the other.
+    #
+    # Why: setup.sh's boot check `occ notify_push:self-test` compares the
+    # daemon's version against the app's and fails when the major.minor differ.
+    # Leaving either side floating (untagged here means :latest — whatever
+    # upstream tagged last, or a months-old cached layer compose never re-pulls)
+    # eventually reddens that check on a stack where nothing is wrong, and a
+    # boot warning that is usually wrong gets ignored on the day it is right.
+    #
+    # When the two DO drift, the warning is CORRECT: bump this tag and setup.sh's
+    # NOTIFY_PUSH_VERSION together, then re-run ./setup.sh. Do NOT silence, skip
+    # or filter the version check to quiet it — a major/minor skew is a real
+    # protocol mismatch (upstream already tolerates patch drift), and muting it
+    # is how the stack goes back to lying about push. See setup.sh for the app
+    # half and for what the failure actually looks like on a boot.
+    image: icewind1991/notify_push:1.4.0
     container_name: kanso-dev-push
     profiles: ["postgres"]
     environment:

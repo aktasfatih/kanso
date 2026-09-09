@@ -34,11 +34,14 @@ afterwards. The pins support Nextcloud **34** only, so on a stack booted with
 that's expected, not a regression.
 
 One more spec depends on an optional app: [`realtime.spec.js`](./realtime.spec.js)'s
-push test needs `notify_push`, which `dev/setup.sh` installs from the appstore.
-That install is best-effort — if it printed a `WARNING: could not install
-notify_push`, push is unavailable and the test **fails rather than skips**. Run
-the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and exercise only the
-delta-poll fallback.
+push test needs `notify_push`, which `dev/setup.sh` side-loads from a pinned
+release tarball (falling back to the appstore only when that download fails).
+The pin has to match the `icewind1991/notify_push` image tag in
+`dev/docker-compose.yml` — `notify_push:self-test` compares the two versions and
+fails on a skew. The install is best-effort — if the boot printed a
+`WARNING: could not set up notify_push`, push is unavailable and the test **fails
+rather than skips**. Run the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and
+exercise only the delta-poll fallback.
 
 ## Shared helpers — use these, don't re-roll them
 
