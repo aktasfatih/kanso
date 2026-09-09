@@ -68,13 +68,32 @@ export function useBoard(id) {
 	// (5s), a slow secondary safety net when push covers realtime (30s, since the
 	// push handler in main.js already delta-syncs on each mutation). Guarded to
 	// never run mid-drag inside syncBoardDelta.
-	const deltaTimer = setInterval(() => {
-		if (isBoardMovePending(id)) {
-			return
-		}
-		syncBoardDelta(queryClient, id)
-	}, pushActive() ? 30_000 : 5_000)
-	onScopeDispose(() => clearInterval(deltaTimer))
+	//
+	// A self-rescheduling timeout, not setInterval, on purpose (#10225):
+	// pushActive() is false until the first push frame proves the socket is
+	// really live, so the cadence has to be re-read on every tick. setInterval
+	// captures its delay once at setup and would pin the board to whatever push
+	// looked like the instant the view mounted - the flag flipping later would
+	// change nothing.
+	let deltaTimer = null
+	const scheduleDelta = () => {
+		deltaTimer = setTimeout(() => {
+			// The re-arm is in a `finally` because this loop IS the poll: unlike
+			// setInterval - which fires again regardless of what its callback did -
+			// a single throw here would end the chain for the lifetime of the page
+			// and leave only the 60s refetch. Same reason the mid-drag skip below
+			// is a condition and not an early return.
+			try {
+				if (!isBoardMovePending(id)) {
+					syncBoardDelta(queryClient, id)
+				}
+			} finally {
+				scheduleDelta()
+			}
+		}, pushActive() ? 30_000 : 5_000)
+	}
+	scheduleDelta()
+	onScopeDispose(() => clearTimeout(deltaTimer))
 
 	const createStack = useMutation({
 		mutationFn: (data) => apiCreateStack(data),
