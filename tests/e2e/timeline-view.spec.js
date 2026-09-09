@@ -334,16 +334,43 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 	// GEOMETRY and HIT-TESTING at the bottom of a board that overflows the
 	// viewport: the bar for the last row must actually be painted there.
 	test('a board taller than the viewport paints track, grid and bars down to the last row (#9858)', async ({ page }) => {
+		// Explicit budget, measured rather than guessed. The 30-row fixture below
+		// makes this the slowest test in the suite: 72s in two healthy CI runs
+		// against the plain 120s default, i.e. only 1.67x headroom — so a runner
+		// merely 1.8x slower than usual times it out deterministically, which is
+		// what happened (all three attempts) in the run investigated in #10332.
+		// Seeding the fixture is the cost (see below), not the browser work, and
+		// halving it is not enough margin on its own, so state the budget too —
+		// same idiom as my-work-live.spec.js. The 30 rows ARE the regression
+		// (#9858), so the fixture is never the thing to shrink here.
+		test.setTimeout(180_000)
+
 		// A dedicated board: the shared 3-card fixture is far too short to overflow.
 		const board = await api.post('/boards', { title: 'Timeline tall ' + Math.floor(Date.now() / 1000) })
 		try {
 			const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
 			const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString()
 			// 30 dated rows ≈ 1080px of lanes — comfortably past the ~500px body at 720p.
+			//
+			// The creates stay SEQUENTIAL on purpose: concurrent creates into one
+			// stack contend on the (stack_id, sort_key) and (board_id, board_seq)
+			// unique indexes and re-derive only MAX_CREATE_ATTEMPTS=5 times before
+			// surfacing a retryable 409 (CardService::create, lib/Service/CardService.php),
+			// so firing 30 at once would trade a slow test for a flaky one.
+			// The date PATCHes have no such contention — separate rows, no shared
+			// unique key — so each one is dispatched WITHOUT awaiting it and the
+			// whole set is settled below. That overlaps every PATCH round-trip with
+			// the following creates and roughly halves the seeding wall-clock.
+			// Nothing about the fixture changes: the same 30 cards are created in
+			// the same order with the same dates, and no assertion depends on the
+			// order the dates land in (only on all of them being set before the
+			// board is opened, which the await below guarantees).
+			const dated = []
 			for (let i = 0; i < 30; i++) {
 				const c = await api.post('/cards', { stackId: stack.id, title: `Row ${String(i).padStart(2, '0')}` })
-				await api.patch(`/cards/${c.id}`, { startDate: day(i % 20), duedate: day((i % 20) + 4) })
+				dated.push(api.patch(`/cards/${c.id}`, { startDate: day(i % 20), duedate: day((i % 20) + 4) }))
 			}
+			await Promise.all(dated)
 
 			await ncLogin(page)
 			await page.setViewportSize({ width: 1280, height: 720 })
