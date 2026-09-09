@@ -1265,12 +1265,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:class="{ 'card-modal__checklist-item--done': item.done }"
 									:data-item-id="item.id"
 									:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
+									:aria-busy="isUnsavedItem(item) ? 'true' : undefined"
 									@dragover.prevent="onItemDragOver($event, item)"
 									@dragleave="onItemDragLeave($event, item)"
 									@drop.prevent="onItemDrop($event, item)">
 									<span
 										class="card-modal__checklist-drag"
-										:draggable="true"
+										:draggable="!isUnsavedItem(item)"
 										:title="t('kanso', 'Drag to reorder')"
 										@dragstart="onItemDragStart($event, item)"
 										@dragend="onItemDragEnd">
@@ -1299,6 +1300,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:class="{ 'card-modal__checklist-item-title--done': item.done }"
 										role="button"
 										tabindex="0"
+										:aria-disabled="isUnsavedItem(item) ? 'true' : undefined"
 										:aria-label="t('kanso', 'Edit item')"
 										@click="startItemEdit(item)"
 										@keydown.enter.prevent="startItemEdit(item)"
@@ -1358,7 +1360,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<button
 										class="card-modal__checklist-item-delete"
 										:title="t('kanso', 'Delete item')"
-										:disabled="deleteItem.isPending.value"
+										:disabled="deleteItem.isPending.value || isUnsavedItem(item)"
 										@click="handleDeleteItem(item)">
 										<CloseIcon :size="14" />
 									</button>
@@ -3792,11 +3794,16 @@ async function handleAddItem() {
 
 // A checklist row rendered from the optimistic create still carries the negative
 // placeholder id `useChecklist` assigns it, and is not addressable on the server
-// yet. Its checkbox and its step pickers (assign / due date) are disabled until
-// the create resolves and swaps in the real row, so a click in that window waits
-// instead of firing `PATCH|POST /api/checklist/-1788…` — which can never match
-// and used to drop the toggle, or the assignment, silently after rolling the
-// optimistic change back with a bare "Not found".
+// yet. Every ENTRY POINT into a row — the checkbox, the step pickers (assign /
+// due date), delete, inline rename and drag-reorder — is guarded here, so an
+// action in that window waits instead of firing
+// `PATCH|POST|DELETE /api/checklist/-1788…`, which can never match a row and used
+// to roll the change back with a bare "Not found": the toggle and the assignment
+// were dropped silently, and a delete was worse still — the row vanished and then
+// came BACK when the in-flight create landed. The mutation helpers behind the step
+// popover (assign / unassign / due / clear-due) carry no guard of their own: they
+// are reachable only through a popover that `toggleStepMenu` refuses to open on an
+// unsaved row.
 function isUnsavedItem(item) {
 	return Number(item?.id) < 0
 }
@@ -3812,6 +3819,11 @@ async function handleToggleItem(item) {
 }
 
 async function handleDeleteItem(item) {
+	// Backs up the `:disabled` on the delete button. Deleting an unsaved row sent
+	// `DELETE /api/checklist/-1788…` → 404, which rolled the optimistic removal
+	// back WHILE the create was still in flight, so the step the user just deleted
+	// reappeared a moment later.
+	if (isUnsavedItem(item)) return
 	checklistError.value = ''
 	try {
 		await deleteItem.mutateAsync({ item })
@@ -3834,6 +3846,13 @@ function setItemInputRef(id, el) {
 }
 
 async function startItemEdit(item) {
+	// The editor is keyed by the row id (`editingItemId === item.id`, and the row
+	// itself by `:key="item.id"`), so opening it on an unsaved row was doubly
+	// broken: saving sent `PATCH /api/checklist/-1788…` → 404 "Failed to rename
+	// item.", and if the create resolved mid-edit the id swap tore the input down
+	// without a blur and threw the typed title away. Editing waits for the real id
+	// instead — the same window the row's other controls already wait out.
+	if (isUnsavedItem(item)) return
 	editingItemId.value = item.id
 	editingItemTitle.value = item.title
 	await nextTick()
@@ -3963,6 +3982,15 @@ const draggingItem = ref(null)
 const dragOverItemId = ref(null)
 
 function onItemDragStart(event, item) {
+	// Backs up `:draggable="!isUnsavedItem(item)"` on the handle: a row still on its
+	// placeholder id cannot be reordered, in either role. Dragging it sent
+	// `POST /api/checklist/-1788…/move` → 404; dropping onto it sent a real row's
+	// move with `afterItemId: -1788…` → 400 "afterItemId is not an item of this
+	// card" (see onItemDragOver / onItemDrop for the drop-target half).
+	if (isUnsavedItem(item)) {
+		event.preventDefault()
+		return
+	}
 	draggingItem.value = item
 	event.dataTransfer.effectAllowed = 'move'
 	event.dataTransfer.setData('text/plain', String(item.id))
@@ -3974,7 +4002,8 @@ function onItemDragEnd() {
 }
 
 function onItemDragOver(event, item) {
-	if (!draggingItem.value || draggingItem.value.id === item.id) return
+	// No drop indicator on an unsaved row — the drop it advertises can't be sent.
+	if (!draggingItem.value || draggingItem.value.id === item.id || isUnsavedItem(item)) return
 	event.dataTransfer.dropEffect = 'move'
 	dragOverItemId.value = item.id
 }
@@ -3986,7 +4015,10 @@ function onItemDragLeave(_event, item) {
 }
 
 async function onItemDrop(event, targetItem) {
-	if (!draggingItem.value || draggingItem.value.id === targetItem.id) {
+	// `isUnsavedItem(targetItem)`: the drop-target half of the guard in
+	// onItemDragStart — the move would carry `afterItemId: -1788…`, which is not a
+	// row of this card, so the server rejects it with a 400.
+	if (!draggingItem.value || draggingItem.value.id === targetItem.id || isUnsavedItem(targetItem)) {
 		dragOverItemId.value = null
 		return
 	}
@@ -4006,6 +4038,13 @@ async function onItemDrop(event, targetItem) {
 		// Insert before the target → sit after the target's predecessor,
 		// skipping the item being moved (so dragging item #2 onto item #1's top
 		// half lands it at the top, not back where it was).
+		//
+		// The predecessor cannot be an unsaved row, so `afterItemId` cannot carry a
+		// placeholder id: an optimistic row is appended LAST (useChecklist.addItem),
+		// and there is only ever one of them, because the add input is disabled
+		// while `addItem.isPending`. If concurrent creates ever become possible, a
+		// placeholder could sit ahead of a real row and this scan would need the
+		// same isUnsavedItem check the drop target above gets.
 		const ordered = checklistItems.value
 		const targetIdx = ordered.findIndex((i) => i.id === targetItem.id)
 		let predecessor = null
@@ -7648,10 +7687,21 @@ body.theme--dark .card-modal,
 .card-modal__checklist-item[data-drag-over='true'] {
 	box-shadow: inset 0 2px 0 var(--color-primary-element);
 }
+/* Still on its optimistic placeholder id: every control that addresses the row
+   by id is inert for this window, so the row reads as pending rather than
+   leaving the user clicking a title that silently does nothing. */
+.card-modal__checklist-item[aria-busy='true'] {
+	opacity: 0.65;
+}
 .card-modal__checklist-drag {
 	display: inline-flex;
 	color: var(--color-border-dark);
 	cursor: grab;
+}
+/* A row still on its optimistic placeholder id can't be reordered yet. */
+.card-modal__checklist-drag[draggable='false'] {
+	cursor: default;
+	opacity: 0.5;
 }
 .card-modal__checklist-checkbox {
 	width: 16px;
@@ -7666,6 +7716,9 @@ body.theme--dark .card-modal,
 	color: var(--color-main-text);
 	cursor: text;
 	word-break: break-word;
+}
+.card-modal__checklist-item-title[aria-disabled='true'] {
+	cursor: default;
 }
 .card-modal__checklist-item-title--done {
 	color: var(--color-text-maxcontrast);
@@ -7762,9 +7815,13 @@ body.theme--dark .card-modal,
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
-.card-modal__checklist-item-delete:hover {
+.card-modal__checklist-item-delete:hover:not(:disabled) {
 	background: var(--color-error);
 	color: #fff;
+}
+.card-modal__checklist-item-delete:disabled {
+	cursor: default;
+	opacity: 0.5;
 }
 .card-modal__checklist-add {
 	display: flex;

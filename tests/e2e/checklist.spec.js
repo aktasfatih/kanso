@@ -326,22 +326,32 @@ test.describe('Checklist steps', () => {
 	})
 
 	// A just-added step renders from the optimistic create carrying a NEGATIVE
-	// placeholder id and is not addressable on the server yet. Assigning it in that
-	// window used to fire `POST /api/checklist/-1788…/assign` → 404 → a bare
-	// "Not found" under the checklist, and the assignment was silently dropped —
-	// on a slow connection the window is wide enough for a real user to hit. The
+	// placeholder id and is not addressable on the server yet. Acting on it in that
+	// window used to fire requests at that placeholder — `POST /api/checklist/
+	// -1788…/assign` → 404 → a bare "Not found" under the checklist and a silently
+	// dropped assignment; `DELETE /api/checklist/-1788…` → 404 → the optimistic
+	// removal rolled back WHILE the create was still in flight, so the step the user
+	// just deleted CAME BACK; `PATCH /api/checklist/-1788…` → 404 "Failed to rename
+	// item.", and an id swap landing mid-edit tore the input down without a blur and
+	// threw the typed title away; `POST /api/checklist/-1788…/move` → 404 dragging
+	// the row, or 400 "afterItemId is not an item of this card" dropping onto it.
+	// On a slow connection the window is wide enough for a real user to hit. The
 	// create POST is delayed here so the window is a deterministic 3s to act in.
-	test('the step pickers stay inert until the just-added step has its server id', async ({ page }) => {
-		await page.route('**/api/cards/*/checklist', async (route) => {
-			if (route.request().method() === 'POST') {
-				await new Promise((resolve) => setTimeout(resolve, 3000))
-			}
-			await route.continue()
-		})
+	//
+	// EVERY assertion below is on the control's DISABLED STATE, never on "driving
+	// the UI works out". Playwright's actionability wait absorbs the latency: a
+	// spec that simply clicks passes whether or not the guard exists, because the
+	// click lands after the real id arrives. Removing any one guard must turn this
+	// test red — the forced clicks and the dispatched drag are what prove that.
+	test('the step controls stay inert until the just-added step has its server id', async ({ page }) => {
 		// Anything addressed to a negative id can only 404 — nothing may be sent.
+		// A move addressed to a real id may still carry a placeholder `afterItemId`,
+		// which the server rejects with a 400, so reorders are tracked too.
 		const placeholderCalls = []
+		const moveCalls = []
 		page.on('request', (req) => {
 			if (/\/api\/checklist\/-\d+/.test(req.url())) placeholderCalls.push(`${req.method()} ${req.url()}`)
+			if (/\/api\/checklist\/-?\d+\/move/.test(req.url())) moveCalls.push(`${req.method()} ${req.url()}`)
 		})
 
 		await ncLogin(page)
@@ -350,28 +360,140 @@ test.describe('Checklist steps', () => {
 		await page.locator('.card-tile').filter({ hasText: 'Card With Steps' }).click()
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
+		// A settled row to drag against — added BEFORE the latency is injected.
 		const addInput = page.locator('.card-modal__checklist-add-input')
+		await addInput.fill('Anchor step')
+		await addInput.press('Enter')
+		// `.last()`: a retry re-adds the row on the same card, and the newest row is
+		// always appended last, so the locator still resolves to exactly one row.
+		const anchor = page.locator('.card-modal__checklist-item').filter({ hasText: 'Anchor step' }).last()
+		await expect(anchor).toHaveAttribute('data-item-id', /^\d+$/, { timeout: 15_000 })
+		const anchorId = await anchor.getAttribute('data-item-id')
+
+		// The create is held on a GATE, not a timer: the window has to stay open
+		// across every control below, and a fixed delay races the CI runner (~4-5×
+		// slower than a dev box, see playwright.config.js) — a control exercised
+		// after the id landed proves nothing. The test decides when it closes.
+		let releaseCreate
+		const createGate = new Promise((resolve) => { releaseCreate = resolve })
+		await page.route('**/api/cards/*/checklist', async (route) => {
+			if (route.request().method() === 'POST') await createGate
+			await route.continue()
+		})
+
 		await addInput.fill('Deferred step')
 		await addInput.press('Enter')
 
-		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Deferred step' })
+		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Deferred step' }).last()
 		await expect(item).toBeVisible({ timeout: 10_000 })
 		await expect(item).toHaveAttribute('data-item-id', /^-\d+$/)
+		const placeholderId = await item.getAttribute('data-item-id')
 
 		const assignBtn = item.locator('.card-modal__step-btn[title="Assign step"]')
 		const dueBtn = item.locator('.card-modal__step-btn[title="Set step due date"]')
+		const deleteBtn = item.locator('.card-modal__checklist-item-delete')
+		const itemTitle = item.locator('.card-modal__checklist-item-title')
+		const dragHandle = item.locator('.card-modal__checklist-drag')
+
 		await expect(assignBtn).toBeDisabled()
 		await expect(dueBtn).toBeDisabled()
+		await expect(deleteBtn).toBeDisabled()
+		// The title is a role=button span, so it carries aria-disabled rather than
+		// the disabled property — toBeDisabled() honours both.
+		await expect(itemTitle).toBeDisabled()
+		await expect(dragHandle).toHaveAttribute('draggable', 'false')
+		// …and the row says so, rather than just going quietly dead under the cursor.
+		await expect(item).toHaveAttribute('aria-busy', 'true')
+
+		// Every forced interaction below is followed by this. It is the assertion
+		// that actually bites: the *symptoms* are unreliable detectors here — a
+		// local server 404s the placeholder in milliseconds, so the rolled-back
+		// optimistic delete puts the row back before any DOM assertion can see it
+		// gone. What is deterministic is that the request was sent at all.
+		const assertNoPlaceholderTraffic = async (label) => {
+			await page.waitForTimeout(300)
+			const sent = [...placeholderCalls, ...moveCalls]
+			if (sent.length > 0) {
+				throw new Error(`${label}: request(s) addressed the optimistic placeholder id: ${sent.join(', ')}`)
+			}
+		}
+
+		// Chromium never delivers a click to a NATIVELY disabled button, so
+		// `click({ force: true })` on one exercises nothing — it would leave the
+		// handler-side guard (and this assertion) unfalsifiable. A programmatically
+		// dispatched click IS delivered to the listener, so both are used: the
+		// forced click for the elements that carry aria-disabled (where the click
+		// does land), the dispatch for the ones with the disabled property.
+		const dispatchClick = (selector) => page.evaluate(([rowId, sel]) => {
+			const el = document.querySelector(`li[data-item-id="${rowId}"] ${sel}`)
+			if (!el) throw new Error(`no element for ${sel}`)
+			el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+		}, [placeholderId, selector])
 
 		// Forced past the disabled state, the picker still must not open — no
 		// popover means no request can be addressed to the placeholder id.
 		await assignBtn.click({ force: true })
+		await dispatchClick('.card-modal__step-btn[title="Assign step"]')
+		await assertNoPlaceholderTraffic('assign')
 		await expect(item.locator('.card-modal__step-popover')).toHaveCount(0)
 
-		// Once the create resolves and the real row swaps in, both pickers work.
+		// Forced past it, delete must not fire — a 404'd delete rolls its optimistic
+		// removal back while the create is still in flight, so the step the user
+		// deleted comes back. The row-still-present check backs the traffic check up
+		// for a slow server, where the gap is actually visible.
+		await deleteBtn.click({ force: true })
+		await dispatchClick('.card-modal__checklist-item-delete')
+		await assertNoPlaceholderTraffic('delete')
+		await expect(item).toHaveCount(1, { timeout: 1500 })
+
+		// Forced past it, the inline title editor must not open — an editor here
+		// both PATCHes the placeholder id and loses the typed draft when the id
+		// swaps out from under it. Scoped to the page, not to `item`: an open editor
+		// replaces the row's title text, so the hasText filter would stop matching
+		// and a row-scoped locator would be vacuously empty.
+		await itemTitle.click({ force: true })
+		await assertNoPlaceholderTraffic('rename')
+		await expect(page.locator('.card-modal__checklist-item-input')).toHaveCount(0)
+
+		// Reorder, both roles. Playwright's dragTo drives mouse events, which native
+		// HTML5 DnD ignores, so the drag events are dispatched directly — that also
+		// forces the handle's draggable=false, exactly like the forced clicks above.
+		const dispatchDrag = (fromId, toId) => page.evaluate(([from, to]) => {
+			const dt = new DataTransfer()
+			const fromRow = document.querySelector(`li[data-item-id="${from}"]`)
+			const toRow = document.querySelector(`li[data-item-id="${to}"]`)
+			if (!fromRow || !toRow) throw new Error(`drag rows missing: ${from} → ${to}`)
+			fromRow.querySelector('.card-modal__checklist-drag')
+				.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true, cancelable: true }))
+			const rect = toRow.getBoundingClientRect()
+			const opts = {
+				dataTransfer: dt,
+				bubbles: true,
+				cancelable: true,
+				clientX: rect.left + 5,
+				// Bottom half → "insert after the target", i.e. afterItemId = target id.
+				clientY: rect.top + rect.height * 0.75,
+			}
+			toRow.dispatchEvent(new DragEvent('dragover', opts))
+			toRow.dispatchEvent(new DragEvent('drop', opts))
+		}, [fromId, toId])
+
+		await dispatchDrag(placeholderId, anchorId) // unsaved row dragged
+		await assertNoPlaceholderTraffic('reorder (unsaved row dragged)')
+		await dispatchDrag(anchorId, placeholderId) // unsaved row as the drop target
+		await assertNoPlaceholderTraffic('reorder (unsaved row as drop target)')
+		// …and it never advertised a drop it could not send.
+		await expect(item).toHaveAttribute('data-drag-over', 'false')
+
+		// Once the create resolves and the real row swaps in, every control works.
+		releaseCreate()
 		await expect(item).toHaveAttribute('data-item-id', /^\d+$/, { timeout: 15_000 })
 		await expect(assignBtn).toBeEnabled()
 		await expect(dueBtn).toBeEnabled()
+		await expect(deleteBtn).toBeEnabled()
+		await expect(itemTitle).toBeEnabled()
+		await expect(dragHandle).toHaveAttribute('draggable', 'true')
+		await expect(item).not.toHaveAttribute('aria-busy', 'true')
 		await assignBtn.click()
 		await expect(item.locator('.card-modal__step-popover')).toBeVisible({ timeout: 5000 })
 
