@@ -156,6 +156,12 @@ fi
 # block (no appstore reachable there anyway); when it isn't set, a failed
 # install only warns — see the guard below. Only wired for postgres (the
 # notify_push service only runs under the postgres profile).
+#
+# Do NOT make skipping the default to line local timings up with CI: this block
+# is the only place the push path is exercised anywhere, so a skipping default
+# would mean tests/e2e/realtime.spec.js's push-positive test never runs (locally
+# it would skip, in CI it already does). Whoever wants the quiet already has
+# KANSO_SKIP_NOTIFY_PUSH=1 ./setup.sh.
 if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ] || [ "$KANSO_DB" != "postgres" ]; then
 	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=${KANSO_SKIP_NOTIFY_PUSH:-0}, db=${KANSO_DB})"
 else
@@ -170,14 +176,22 @@ ProxyPass /push/ http://notify_push:7867/
 ProxyPassReverse /push/ http://notify_push:7867/
 CONF
 	grep -q "Listen 8891" /etc/apache2/ports.conf || echo "Listen 8891" >> /etc/apache2/ports.conf
+	# `graceful` on purpose; do NOT "fix" this to `apache2ctl -k restart`. Both
+	# halves were measured on this image (Apache/2.4.68, Debian): a graceful
+	# reload DOES bind a freshly appended `Listen` (append `Listen 8892` here and
+	# :8892 answers straight after), and `-k restart` run in this exec breaks the
+	# boot — the exec came back 129 (128+SIGHUP) and `set -eu` aborted setup.sh on
+	# this very line, with the stderr that would have explained it swallowed by
+	# the `2>/dev/null` below. If push is ever unreachable at :8891 on a first
+	# boot, the reproducible cause is the app store, just below — not this line.
 	apache2ctl graceful
 ' 2>/dev/null
 
 # Best-effort install: `occ app:install` needs the container to reach
-# apps.nextcloud.com, which it often can't (no egress, a stale appstore cache,
-# or appstoreenabled=false) — the same wall install-optional-apps.sh side-steps
-# with tarballs. Under `set -eu` a failure here would kill the whole boot, so
-# it only downgrades realtime instead.
+# apps.nextcloud.com, which it can't everywhere (no egress, a stale appstore
+# cache) — the same wall install-optional-apps.sh side-steps with tarballs.
+# Under `set -eu` a failure here would kill the whole boot, so it only
+# downgrades realtime instead.
 #
 # EVERY step below can flip the flag off, not just the install. `occ app:list`
 # prints DISABLED apps too, so matching notify_push there does not mean it is
@@ -187,6 +201,21 @@ CONF
 # So gate on the commands actually WORKING, and warn once at the end.
 notify_push_ready=1
 if ! $OCC app:list | grep -q notify_push; then
+	# `app:install` also needs an ENABLED app store, and this stack boots with it
+	# off: hooks/pre-installation/00-apps-writable.sh writes
+	# config/kanso-appstore.config.php with appstoreenabled => false, which it only
+	# needs for the duration of maintenance:install. Nextcloud merges
+	# config/*.config.php OVER config.php, so that partial outlives the install,
+	# and `config:system:set appstoreenabled --value=true` then reports success
+	# while `config:system:get` keeps answering false. The install fails with
+	# "Could not download app notify_push, it was not found on the appstore",
+	# which reads like a delisted app or a blocked network and is neither — this
+	# container reaches the store fine. Drop the partial, then set the real value.
+	# Only an actual install pays for this, and only on a postgres stack booted
+	# without KANSO_SKIP_NOTIFY_PUSH — which both CI jobs and upgrade-check.sh
+	# set, so nothing that has no egress ever turns the store on.
+	docker exec kanso-dev rm -f /var/www/html/config/kanso-appstore.config.php || notify_push_ready=0
+	$OCC config:system:set appstoreenabled --value=true --type=boolean >/dev/null || notify_push_ready=0
 	$OCC app:install notify_push || notify_push_ready=0
 fi
 
@@ -202,6 +231,34 @@ if [ "$notify_push_ready" = "1" ]; then
 	$OCC config:system:set trusted_domains 1 --value nextcloud
 	# The gate that actually matters: whether the command runs at all.
 	$OCC notify_push:setup http://localhost:8891/push || notify_push_ready=0
+fi
+
+# `notify_push:setup` exiting 0 only proves the command RAN. Once it has
+# succeeded once, Nextcloud advertises the notify_push capability from then on,
+# so every client takes the push path even if the daemon later goes dark — a
+# stack that lies about push is worse than one that has none, because the lie is
+# invisible until an e2e assertion with a sub-30s budget goes red. self-test is
+# the only check that walks the whole path (redis → daemon → Nextcloud → trusted
+# proxy → version match), so run it and print it. It exits non-zero on a real
+# break (measured: 1 for an unreachable daemon, 2 for an untrusted proxy) and 0
+# on the two http/localhost notes this stack always prints.
+if [ "$notify_push_ready" = "1" ]; then
+	echo
+	echo "Verifying the push path (occ notify_push:self-test)."
+	echo "The unencrypted-http and localhost notes are expected in the dev stack:"
+	if ! $OCC notify_push:self-test; then
+		echo >&2
+		echo "WARNING: notify_push is installed and ADVERTISED, but self-test FAILED." >&2
+		echo "  * The capability stays advertised, so clients take the push path" >&2
+		echo "    and may never receive a frame." >&2
+		echo "  * tests/e2e/realtime.spec.js's push test will FAIL (it only skips on" >&2
+		echo "    KANSO_SKIP_NOTIFY_PUSH=1), and so may any spec with a short budget." >&2
+		echo "  * Check the daemon: docker logs kanso-dev-push" >&2
+		echo "  * Check the proxy:  docker exec kanso-dev curl -si http://localhost:8891/push/test/cookie | head -1" >&2
+		echo "    A 400 there is healthy (the daemon answers); a connection failure" >&2
+		echo "    means apache never bound :8891 inside the container." >&2
+		echo >&2
+	fi
 fi
 
 if [ "$notify_push_ready" != "1" ]; then

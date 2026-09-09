@@ -21,9 +21,11 @@
 //
 // Asserted here rather than in Playwright deliberately, for the same reason
 // spelled out in queryKeys.test.mjs: the trigger is a notify_push frame, and
-// push is unavailable in the dev stack and explicitly disabled in CI
-// (KANSO_SKIP_NOTIFY_PUSH=1) — a browser test would pass vacuously, with
-// pushActive() false for the wrong reason (nothing advertised at all).
+// push is explicitly disabled in CI (KANSO_SKIP_NOTIFY_PUSH=1 — the runner has
+// no egress to install the app) — so a browser test would pass vacuously there,
+// with pushActive() false for the wrong reason (nothing advertised at all). The
+// dev stack does run a real push daemon, but a guard that only holds on one
+// developer's machine is not a guard.
 //
 // Rig follows cardMoveQueue.test.mjs: a `window` stub before any @nextcloud
 // import, dynamic imports in that order, the real composable under
