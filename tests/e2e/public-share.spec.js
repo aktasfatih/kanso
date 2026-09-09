@@ -143,8 +143,9 @@ test.describe('Public read-only board share', () => {
 
 		// The board object carries no owner / acl / token / webhook - only the
 		// presentational fields, the comments opt-in flag (#3949) and the
-		// built-in-section switches (#5894, five booleans about the BOARD, never
-		// about a person) so the public link honours what the manager hid.
+		// built-in-section switches (#5894, six booleans about the BOARD, never
+		// about a person — CardFeatures::ALL) so the public link honours what the
+		// manager hid.
 		expect(Object.keys(res.body.board).sort()).toEqual(['cardFeatures', 'color', 'commentsEnabled', 'prefix', 'title'])
 
 		const card = res.body.cards.find((c) => c.title === 'Public visible card')
@@ -470,5 +471,178 @@ test.describe('Public payload key sets are substring-immune', () => {
 		// And no false red from the structural guard: keys are value-blind, so the
 		// key set is still exactly the public field list.
 		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
+	})
+})
+
+// The built-in card sections a manager can switch off (#5894) are a BOARD-level
+// setting, and the public link is the same board — so the anonymous view follows
+// the same switches. tests/e2e/card-features.spec.js asserts the checklist switch
+// on the authenticated tile and card modal, plus attachments and time tracking;
+// the public share was uncovered, and it is the only surface whose audience is
+// anonymous. (For `coverColor`, this is the only place in the suite that asserts
+// the switch changes anything ON SCREEN at all — card-features.spec.js checks its
+// settings checkbox and its payload flag, never a rendered cover band.)
+//
+// Two keys are exercised, because it is one test shape used twice: `checklist`
+// (src/views/PublicBoard.vue:55, :118 and the `hasMeta` computed at :213) and
+// `coverColor` (:84). Deleting any of those guards must turn this test red.
+//
+// SCOPE, stated so nobody later reads this as more than it is: hiding a section
+// is PRESENTATION-ONLY by design (lib/Db/CardFeatures.php:28-38 — "Enforcement:
+// CLIENT-SIDE ONLY (deliberate)"). The payload assertions at the end pin exactly
+// that: the anonymous JSON still carries the checklist counts and the cover
+// colour while both sections are hidden. This is a RENDERING contract, not a
+// confidentiality one; making it one would be a server change, not a test change.
+test.describe('Public board honours the hidden card sections', () => {
+	// True anonymous reader (opt out of the shared admin storageState). This is
+	// load-bearing here, not decoration: under the admin session the page would
+	// still render and every "…is hidden" assertion would pass for the wrong
+	// reason. The test asserts its own anonymity below rather than trusting this.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	const CARD_TITLE = 'Card with a cover and a checklist'
+	const DATED_TITLE = 'Card with a due date and a checklist'
+	const COVER = 'cc3311'
+
+	let boardId = 0
+	let token = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Card Features E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		const cardId = (await api('POST', '/cards', { stackId, title: CARD_TITLE })).body.id
+		await api('PATCH', `/cards/${cardId}`, { coverColor: COVER })
+		// One step of two ticked, so every surface has a 1/2 to show. This card
+		// deliberately carries NO other meta (no priority, due/start date or
+		// estimate): that makes the checklist the only thing keeping the detail's
+		// meta ROW alive, which is what pins the `hasMeta` guard.
+		const step = (await api('POST', `/cards/${cardId}/checklist`, { title: 'Step one' })).body
+		await api('PATCH', `/checklist/${step.id}`, { done: true })
+		await api('POST', `/cards/${cardId}/checklist`, { title: 'Step two' })
+
+		// A SECOND card whose meta row survives the checklist being hidden, because
+		// it also has a due date. Without it the FIELD guard inside the meta row is
+		// untestable: `hasMeta` already removes the whole row for the card above, so
+		// the two guards could only ever be proven together. Here the row stays and
+		// only the 0/1 must go.
+		const datedId = (await api('POST', '/cards', { stackId, title: DATED_TITLE })).body.id
+		await api('PATCH', `/cards/${datedId}`, { duedate: '2026-05-06T12:00:00+00:00' })
+		await api('POST', `/cards/${datedId}/checklist`, { title: 'Only step' })
+
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('both sections render while they are on, and vanish once the board hides them', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Card Features E2E')
+
+		// This browser context really is anonymous — asserted, not assumed. An
+		// authenticated Kanso call from the page's own origin is refused, which it
+		// would not be if the shared admin storageState had leaked in: a live session
+		// answers 200, or 412 (CSRF, no requesttoken on a bare fetch). Neither is in
+		// the accepted set, so the guard catches a leak either way. Without it the
+		// "hidden" assertions below could all be vacuous.
+		//
+		// `Accept: application/json` is load-bearing, not decoration: NC's
+		// SecurityMiddleware answers an unauthenticated request with a JSON 401 only
+		// for a JSON-ish Accept, and with a 303 to the login page for `text/html`
+		// (which fetch would follow into a 200). The path comes from `API` rather
+		// than a literal so this honours E2E_BASE_URL under a webroot subdirectory,
+		// the same reason the header of this file gives for not hardcoding a host.
+		const apiPath = new URL(API).pathname
+		const authedStatus = await page.evaluate(async (p) => {
+			const r = await fetch(p + '/boards', {
+				headers: { Accept: 'application/json', 'OCS-APIREQUEST': 'true' },
+			})
+			return r.status
+		}, apiPath)
+		expect([401, 403]).toContain(authedStatus)
+
+		const tile = page.locator('.public-card').filter({ hasText: CARD_TITLE })
+		const datedTile = page.locator('.public-card').filter({ hasText: DATED_TITLE })
+		const detail = page.locator('.public-detail')
+		const meta = detail.locator('.public-detail__meta')
+
+		// --- Both features ON (the default): the badge, the cover band and the
+		//     checklist meta field are all there.
+		await expect(tile.locator('.public-card__check')).toHaveText('1/2')
+		await tile.click()
+		await expect(detail).toBeVisible()
+		await expect(detail.locator('.public-detail__cover')).toBeVisible()
+		// The checklist is this card's ONLY meta, so the whole row reads '1/2'.
+		await expect(meta).toHaveText('1/2')
+		await detail.locator('.public-detail__close').click()
+		await expect(detail).toHaveCount(0)
+
+		// The dated card shows its progress alongside the due date.
+		await expect(datedTile.locator('.public-card__check')).toHaveText('0/1')
+		await datedTile.click()
+		await expect(detail).toBeVisible()
+		await expect(meta).toContainText('Due')
+		await expect(meta).toContainText('0/1')
+		await detail.locator('.public-detail__close').click()
+		await expect(detail).toHaveCount(0)
+
+		// --- The manager hides both sections on the board.
+		const patched = await api('PATCH', `/boards/${boardId}`, {
+			cardFeatures: { checklist: false, coverColor: false },
+		})
+		expect(patched.status).toBe(200)
+		// Read it back before touching the page, so a switch that never landed fails
+		// here with a clear cause instead of as a confusing "still visible" below.
+		const stored = (await api('GET', `/boards/${boardId}`)).body.board.cardFeatures
+		expect(stored.checklist).toBe(false)
+		expect(stored.coverColor).toBe(false)
+
+		// --- Both features OFF: the anonymous view drops them. The card itself is
+		//     still listed — hiding a section is not hiding the card.
+		await page.reload()
+		await expect(page.locator('.public-board__title')).toHaveText('Public Card Features E2E')
+		await expect(tile).toBeVisible()
+		// The badge is GONE, not merely emptied.
+		await expect(tile.locator('.public-card__check')).toHaveCount(0)
+		await expect(tile).not.toContainText('1/2')
+
+		await tile.click()
+		await expect(detail).toBeVisible()
+		await expect(detail.locator('.public-detail__cover')).toHaveCount(0)
+		// The checklist was this card's only meta, so the row goes with it — the
+		// `hasMeta` guard.
+		await expect(meta).toHaveCount(0)
+		await expect(detail).not.toContainText('1/2')
+		// Still the same read-only detail otherwise.
+		await expect(detail.locator('.public-detail__title')).toHaveText(CARD_TITLE)
+		await detail.locator('.public-detail__close').click()
+		await expect(detail).toHaveCount(0)
+
+		// The dated card's meta row SURVIVES (it still has a due date) — and the
+		// progress is gone from inside it. This is the field guard on its own, the
+		// one `hasMeta` would otherwise mask.
+		// Assert the tile is there BEFORE counting what it must not contain, so the
+		// count-0 can't pass by the tile itself having gone missing.
+		await expect(datedTile).toBeVisible()
+		await expect(datedTile.locator('.public-card__check')).toHaveCount(0)
+		await datedTile.click()
+		await expect(detail).toBeVisible()
+		await expect(meta).toBeVisible()
+		await expect(meta).toContainText('Due')
+		await expect(meta).not.toContainText('0/1')
+
+		// --- Presentation-only, exactly as documented: the anonymous PAYLOAD is
+		//     unchanged by the switches. The counts and the colour are still served;
+		//     only the rendering above respects the flags.
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		const payloadCard = res.body.cards.find((c) => c.title === CARD_TITLE)
+		expect(payloadCard).toBeTruthy()
+		expect(payloadCard.checklist).toEqual({ total: 2, done: 1 })
+		expect(payloadCard.coverColor).toBe(COVER)
+		expect(res.body.board.cardFeatures.checklist).toBe(false)
+		expect(res.body.board.cardFeatures.coverColor).toBe(false)
 	})
 })
