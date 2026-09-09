@@ -22,9 +22,17 @@ interface ImapTransport {
 	 * (port 993); a STARTTLS upgrade is a separate {@see enableCrypto} call
 	 * after the greeting.
 	 *
+	 * `$address` and `$peerName` are separate on purpose. The socket goes to the
+	 * IP {@see MailHostGuard} already resolved and vetted, so the name cannot be
+	 * re-resolved to somewhere else between the check and the connection (DNS
+	 * rebinding); `$peerName` carries the original hostname so SNI and
+	 * certificate validation still happen against the name the user configured.
+	 *
+	 * @param string $address the vetted IP literal to connect to
+	 * @param string $peerName the hostname TLS must validate against
 	 * @throws ImapException if the connection cannot be established
 	 */
-	public function open(string $host, int $port, bool $implicitTls, int $timeoutSeconds): void;
+	public function open(string $address, string $peerName, int $port, bool $implicitTls, int $timeoutSeconds): void;
 
 	/**
 	 * Upgrades an already-open cleartext connection to TLS (the STARTTLS half of

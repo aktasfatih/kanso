@@ -28,7 +28,7 @@ class StreamImapTransport implements ImapTransport {
 	private int $timeoutSeconds = 30;
 
 	#[\Override]
-	public function open(string $host, int $port, bool $implicitTls, int $timeoutSeconds): void {
+	public function open(string $address, string $peerName, int $port, bool $implicitTls, int $timeoutSeconds): void {
 		$this->timeoutSeconds = $timeoutSeconds;
 
 		$context = stream_context_create([
@@ -37,17 +37,23 @@ class StreamImapTransport implements ImapTransport {
 				'verify_peer_name' => true,
 				'allow_self_signed' => false,
 				'SNI_enabled' => true,
-				'peer_name' => $host,
+				// Validated against the NAME the user configured, even though the
+				// socket dials the vetted IP - otherwise pinning the address would
+				// have cost us certificate validation, trading one hole for another.
+				'peer_name' => $peerName,
+				'SNI_server_name' => $peerName,
 			],
 		]);
 
 		// The scheme carries implicit TLS; STARTTLS connects in the clear and is
 		// upgraded by enableCrypto() once the server has agreed.
 		$scheme = $implicitTls ? 'ssl://' : 'tcp://';
+		// An IPv6 literal has to be bracketed in a host:port string.
+		$hostPart = str_contains($address, ':') ? '[' . $address . ']' : $address;
 		$errno = 0;
 		$errstr = '';
 		$stream = @stream_socket_client(
-			$scheme . $host . ':' . $port,
+			$scheme . $hostPart . ':' . $port,
 			$errno,
 			$errstr,
 			$timeoutSeconds,
@@ -57,7 +63,7 @@ class StreamImapTransport implements ImapTransport {
 
 		if ($stream === false) {
 			// $errstr can carry the host but never a credential - safe to surface.
-			throw new ImapException('Cannot connect to ' . $host . ':' . $port . ' (' . trim($errstr) . ')');
+			throw new ImapException('Cannot connect to ' . $peerName . ':' . $port . ' (' . trim($errstr) . ')');
 		}
 
 		stream_set_timeout($stream, $timeoutSeconds);

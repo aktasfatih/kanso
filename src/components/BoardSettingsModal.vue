@@ -1460,6 +1460,167 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
+				<!-- Email intake group (#117): poll an IMAP mailbox into a column -->
+				<div class="automation__group">
+					<button
+						class="automation__group-header"
+						type="button"
+						:aria-expanded="automationGroups.mailIntake ? 'true' : 'false'"
+						aria-controls="bs-automation-mail-intake"
+						@click="toggleAutomationGroup('mailIntake')">
+						<EmailIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'Email intake') }}</span>
+						<span v-if="mailIntake.enabled" class="automation__group-badge">{{ t('kanso', 'Active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.mailIntake" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.mailIntake" id="bs-automation-mail-intake" class="automation__group-body">
+						<p v-if="!canManage" class="workflow__readonly-notice">
+							{{ t('kanso', 'You need manage permission to configure email intake.') }}
+						</p>
+						<template v-else>
+							<p class="github-webhook__hint">
+								{{ t('kanso', 'Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board.') }}
+							</p>
+							<p class="github-webhook__hint github-webhook__hint--warning">
+								{{ t('kanso', 'Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on "Require verified senders" if your mail server checks DMARC.') }}
+							</p>
+
+							<label class="github-webhook__label" for="bs-mail-host">{{ t('kanso', 'IMAP server') }}</label>
+							<div class="github-webhook__row">
+								<input
+									id="bs-mail-host"
+									v-model="mailIntakeForm.host"
+									class="github-webhook__input"
+									type="text"
+									placeholder="imap.example.com"
+									:disabled="mailIntakeBusy">
+								<input
+									v-model.number="mailIntakeForm.port"
+									class="github-webhook__input github-webhook__input--narrow"
+									type="number"
+									min="1"
+									max="65535"
+									:aria-label="t('kanso', 'Port')"
+									:disabled="mailIntakeBusy">
+								<select
+									v-model="mailIntakeForm.encryption"
+									class="workflow__select"
+									:aria-label="t('kanso', 'Encryption')"
+									:disabled="mailIntakeBusy"
+									@change="onMailEncryptionChange">
+									<option value="ssl">{{ t('kanso', 'SSL/TLS (993)') }}</option>
+									<option value="tls">{{ t('kanso', 'STARTTLS (143)') }}</option>
+								</select>
+							</div>
+
+							<label class="github-webhook__label" for="bs-mail-username">{{ t('kanso', 'Mailbox account') }}</label>
+							<div class="github-webhook__row">
+								<input
+									id="bs-mail-username"
+									v-model="mailIntakeForm.username"
+									class="github-webhook__input"
+									type="text"
+									autocomplete="off"
+									placeholder="cards@example.com"
+									:disabled="mailIntakeBusy">
+								<input
+									v-model="mailIntakeForm.password"
+									class="github-webhook__input"
+									type="password"
+									autocomplete="new-password"
+									:placeholder="mailIntake.hasPassword ? t('kanso', 'Password stored — leave blank to keep it') : t('kanso', 'Password')"
+									:disabled="mailIntakeBusy">
+							</div>
+
+							<label class="github-webhook__label" for="bs-mail-folder">{{ t('kanso', 'Folder and target column') }}</label>
+							<div class="github-webhook__row">
+								<input
+									id="bs-mail-folder"
+									v-model="mailIntakeForm.mailbox"
+									class="github-webhook__input"
+									type="text"
+									placeholder="INBOX"
+									:disabled="mailIntakeBusy">
+								<select
+									v-model="mailIntakeForm.stackId"
+									class="workflow__select"
+									:aria-label="t('kanso', 'Column new cards land in')"
+									:disabled="mailIntakeBusy">
+									<option value="">{{ t('kanso', 'Choose a column…') }}</option>
+									<option v-for="s in stacks" :key="s.id" :value="String(s.id)">{{ s.title }}</option>
+								</select>
+							</div>
+
+							<label class="github-webhook__label" for="bs-mail-allowlist">{{ t('kanso', 'Accept mail from (one address or @domain per line — leave empty to accept anyone)') }}</label>
+							<textarea
+								id="bs-mail-allowlist"
+								v-model="mailIntakeForm.senderAllowlist"
+								class="github-webhook__input github-webhook__textarea"
+								rows="3"
+								placeholder="jacek@example.com&#10;@example.com"
+								:disabled="mailIntakeBusy" />
+
+							<div class="github-webhook__row github-webhook__row--wrap">
+								<NcCheckboxRadioSwitch
+									:model-value="mailIntakeForm.requireAuth"
+									:disabled="mailIntakeBusy"
+									@update:model-value="mailIntakeForm.requireAuth = $event">
+									{{ t('kanso', 'Require verified senders (DMARC)') }}
+								</NcCheckboxRadioSwitch>
+								<NcCheckboxRadioSwitch
+									:model-value="mailIntakeForm.enabled"
+									:disabled="mailIntakeBusy"
+									@update:model-value="mailIntakeForm.enabled = $event">
+									{{ t('kanso', 'Check this mailbox automatically') }}
+								</NcCheckboxRadioSwitch>
+							</div>
+
+							<label class="github-webhook__label" for="bs-mail-daily-limit">{{ t('kanso', 'Daily card limits (0 uses the default)') }}</label>
+							<div class="github-webhook__row">
+								<input
+									id="bs-mail-daily-limit"
+									v-model.number="mailIntakeForm.dailyLimit"
+									class="github-webhook__input github-webhook__input--narrow"
+									type="number"
+									min="0"
+									:aria-label="t('kanso', 'Cards per day from this mailbox')"
+									:disabled="mailIntakeBusy">
+								<span class="github-webhook__hint">{{ t('kanso', 'per mailbox') }}</span>
+								<input
+									v-model.number="mailIntakeForm.perSenderDailyLimit"
+									class="github-webhook__input github-webhook__input--narrow"
+									type="number"
+									min="0"
+									:aria-label="t('kanso', 'Cards per day from one sender')"
+									:disabled="mailIntakeBusy">
+								<span class="github-webhook__hint">{{ t('kanso', 'per sender') }}</span>
+							</div>
+
+							<div class="github-webhook__actions">
+								<NcButton type="primary" :disabled="mailIntakeBusy || !mailIntakeCanSave" @click="handleSaveMailIntake">
+									{{ t('kanso', 'Save') }}
+								</NcButton>
+								<NcButton :disabled="mailIntakeBusy || !mailIntake.id" @click="handleTestMailIntake">
+									{{ t('kanso', 'Test connection') }}
+								</NcButton>
+								<NcButton v-if="mailIntake.id" :disabled="mailIntakeBusy" @click="handleDeleteMailIntake">
+									{{ t('kanso', 'Remove mailbox') }}
+								</NcButton>
+							</div>
+
+							<p v-if="mailIntakeStatus" class="github-webhook__status">{{ mailIntakeStatus }}</p>
+							<p v-if="mailIntake.lastRun" class="github-webhook__hint">
+								{{ t('kanso', 'Last checked: {when}', { when: formatMailIntakeLastRun }) }}
+							</p>
+							<!-- lastError doubles as the "nothing happened" explainer: it
+							     carries the count of messages a healthy run declined. -->
+							<p v-if="mailIntake.lastError" class="label-settings__error">{{ mailIntake.lastError }}</p>
+							<span v-if="mailIntakeError" class="label-settings__error">{{ mailIntakeError }}</span>
+						</template>
+					</div>
+				</div>
+
 				<!-- Calendar feed group (read-only ICS of card due dates) (#3541) -->
 				<div class="automation__group">
 					<button
@@ -2271,6 +2432,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
+import EmailIcon from 'vue-material-design-icons/Email.vue'
 import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue'
 import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -2313,6 +2475,10 @@ import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { getScaleOptions, scaleTokens } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
+	fetchMailIntakeConfig,
+	saveMailIntakeConfig,
+	testMailIntakeConnection,
+	deleteMailIntakeConfig,
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
 	updateWebhookIntake as apiUpdateWebhookIntake,
@@ -2437,6 +2603,157 @@ async function loadWebhookConfig() {
 		}
 	} catch (e) {
 		webhookError.value = t('kanso', 'Failed to load the GitHub webhook config.')
+	}
+}
+
+// ── Email intake (#117) ──────────────────────────────────────────────────────
+// The mailbox password is WRITE-ONLY: the server reports `hasPassword` and never
+// the credential, so the form field starts empty on every load and an empty
+// field means "keep what is stored" rather than "clear it".
+const mailIntake = ref({ id: 0, enabled: false, hasPassword: false, lastRun: 0, lastError: null })
+const mailIntakeForm = ref(emptyMailIntakeForm())
+const mailIntakeBusy = ref(false)
+const mailIntakeError = ref('')
+const mailIntakeStatus = ref('')
+
+function emptyMailIntakeForm() {
+	return {
+		host: '',
+		port: 993,
+		encryption: 'ssl',
+		username: '',
+		password: '',
+		mailbox: 'INBOX',
+		stackId: '',
+		senderAllowlist: '',
+		enabled: false,
+		requireAuth: false,
+		dailyLimit: 0,
+		perSenderDailyLimit: 0,
+	}
+}
+
+const mailIntakeCanSave = computed(() => {
+	const f = mailIntakeForm.value
+	// A first save needs a password; later saves may reuse the stored one.
+	const hasCredential = f.password.trim() !== '' || mailIntake.value.hasPassword
+	return f.host.trim() !== '' && f.username.trim() !== '' && f.stackId !== '' && hasCredential
+})
+
+const formatMailIntakeLastRun = computed(() => {
+	if (!mailIntake.value.lastRun) return ''
+	return new Date(mailIntake.value.lastRun * 1000).toLocaleString()
+})
+
+function syncMailIntakeFromConfig(config) {
+	mailIntake.value = config || { id: 0, enabled: false, hasPassword: false, lastRun: 0, lastError: null }
+	if (!config) {
+		mailIntakeForm.value = emptyMailIntakeForm()
+		return
+	}
+	mailIntakeForm.value = {
+		host: config.host || '',
+		port: config.port || 993,
+		encryption: config.encryption || 'ssl',
+		username: config.username || '',
+		// Never seeded from the server - there is nothing to seed it with.
+		password: '',
+		mailbox: config.mailbox || 'INBOX',
+		stackId: config.stackId ? String(config.stackId) : '',
+		senderAllowlist: config.senderAllowlist || '',
+		enabled: !!config.enabled,
+		requireAuth: !!config.requireAuth,
+		dailyLimit: config.dailyLimit || 0,
+		perSenderDailyLimit: config.perSenderDailyLimit || 0,
+	}
+}
+
+async function loadMailIntakeConfig() {
+	if (!canManage.value) return
+	try {
+		const config = await fetchMailIntakeConfig(props.boardId)
+		syncMailIntakeFromConfig(config)
+		// An active mailbox should be visible without a click.
+		if (mailIntake.value.enabled) {
+			automationGroups.value.mailIntake = true
+		}
+	} catch (e) {
+		mailIntakeError.value = t('kanso', 'Failed to load the email intake settings.')
+	}
+}
+
+// The conventional port follows the encryption choice, but only while the port
+// is still the other mode's default - a deliberately custom port is left alone.
+function onMailEncryptionChange() {
+	const f = mailIntakeForm.value
+	if (f.encryption === 'ssl' && f.port === 143) f.port = 993
+	else if (f.encryption === 'tls' && f.port === 993) f.port = 143
+}
+
+async function handleSaveMailIntake() {
+	mailIntakeError.value = ''
+	mailIntakeStatus.value = ''
+	mailIntakeBusy.value = true
+	try {
+		const f = mailIntakeForm.value
+		const config = await saveMailIntakeConfig(props.boardId, {
+			stackId: Number(f.stackId),
+			host: f.host.trim(),
+			port: Number(f.port) || 993,
+			encryption: f.encryption,
+			username: f.username.trim(),
+			// null, not '', so the server can tell "unchanged" from "cleared".
+			password: f.password.trim() === '' ? null : f.password,
+			mailbox: f.mailbox.trim() || 'INBOX',
+			senderAllowlist: f.senderAllowlist,
+			enabled: f.enabled,
+			requireAuth: f.requireAuth,
+			dailyLimit: Number(f.dailyLimit) || 0,
+			perSenderDailyLimit: Number(f.perSenderDailyLimit) || 0,
+		})
+		syncMailIntakeFromConfig(config)
+		mailIntakeStatus.value = t('kanso', 'Saved.')
+	} catch (e) {
+		mailIntakeError.value = e?.response?.data?.message
+			|| e?.response?.data?.error
+			|| t('kanso', 'Could not save the email intake settings.')
+	} finally {
+		mailIntakeBusy.value = false
+	}
+}
+
+async function handleTestMailIntake() {
+	mailIntakeError.value = ''
+	mailIntakeStatus.value = ''
+	mailIntakeBusy.value = true
+	try {
+		// Worth its own button: the alternative is saving and waiting up to five
+		// minutes for cron to reveal a typo in the password.
+		const res = await testMailIntakeConnection(props.boardId)
+		if (res.ok) {
+			mailIntakeStatus.value = t('kanso', 'Connected to the mailbox successfully.')
+		} else {
+			mailIntakeError.value = res.error || t('kanso', 'Could not connect to the mailbox.')
+		}
+	} catch (e) {
+		mailIntakeError.value = e?.response?.data?.error || t('kanso', 'Could not connect to the mailbox.')
+	} finally {
+		mailIntakeBusy.value = false
+	}
+}
+
+async function handleDeleteMailIntake() {
+	mailIntakeError.value = ''
+	mailIntakeStatus.value = ''
+	mailIntakeBusy.value = true
+	try {
+		await deleteMailIntakeConfig(props.boardId)
+		syncMailIntakeFromConfig(null)
+		mailIntakeStatus.value = t('kanso', 'Mailbox removed.')
+	} catch (e) {
+		mailIntakeError.value = e?.response?.data?.error || t('kanso', 'Could not remove the mailbox.')
+	} finally {
+		mailIntakeBusy.value = false
 	}
 }
 
@@ -2745,6 +3062,7 @@ async function disableCalendarFeed() {
 
 onMounted(loadWebhookConfig)
 onMounted(loadForgejoConfig)
+onMounted(loadMailIntakeConfig)
 onMounted(loadPublicShareConfig)
 onMounted(loadCalendarFeedConfig)
 
@@ -2821,6 +3139,7 @@ const automationGroups = ref({
 	recurring: false,
 	github: false,
 	forgejo: false,
+	mailIntake: false,
 	publicLink: false,
 	calendarFeed: false,
 })
@@ -5593,6 +5912,36 @@ async function doDeleteAutoRule(rule) {
 .github-webhook__status {
 	color: var(--kanso-success-legible);
 	font-weight: 600;
+}
+
+/* Email intake (#117) additions to the shared webhook form styles. */
+
+/* Ports and per-day limits: numeric fields that should not stretch like a
+   hostname does. */
+.github-webhook__input--narrow {
+	flex: 0 0 auto;
+	width: 8ch;
+}
+
+/* The intake form has more controls per row than the webhook panes, so its rows
+   have to be allowed to wrap on a narrow modal instead of overflowing. */
+.github-webhook__row--wrap {
+	flex-wrap: wrap;
+}
+
+.github-webhook__textarea {
+	width: 100%;
+	resize: vertical;
+	margin-bottom: 8px;
+}
+
+/* The "anyone who knows the address can create cards" caveat. It is a standing
+   property of the feature, not an error, so it is warning-coloured rather than
+   red - but it must not read as ordinary muted hint text either. */
+.github-webhook__hint--warning {
+	color: var(--color-warning-text, var(--color-text-maxcontrast));
+	border-inline-start: 3px solid var(--color-warning, var(--color-border));
+	padding-inline-start: 8px;
 }
 
 /* Muted descriptive hint under the share/feed rotate actions — NOT a status

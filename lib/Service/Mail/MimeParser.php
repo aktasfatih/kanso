@@ -41,6 +41,23 @@ class MimeParser {
 	/** Bounds the attachment list a single card description can carry. */
 	private const MAX_ATTACHMENT_NAMES = 50;
 
+	/**
+	 * Longest header value kept, in bytes. A single header is otherwise bounded
+	 * only by the 5 MiB message ceiling, and the address pattern in
+	 * {@see parseFrom} backtracks superlinearly - a multi-megabyte `From:` is a
+	 * cheap way to burn cron CPU. No legitimate header comes close to 2 KB.
+	 */
+	private const MAX_HEADER_VALUE_BYTES = 2048;
+
+	/**
+	 * Bidi controls and other invisible formatting characters. A subject can use
+	 * these to render as something other than what it contains - the classic
+	 * "invoice\u{202E}fdp.exe" trick - and a card title is read by people
+	 * deciding whether to trust it. Stripped from every header-derived string.
+	 * U+200B..U+200F, U+202A..U+202E, U+2066..U+2069, U+FEFF, plus C0/C1.
+	 */
+	private const INVISIBLE_CHARS = '/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{007F}-\x{009F}]/u';
+
 	private int $partsSeen = 0;
 
 	public function parse(string $raw): MimeMessage {
@@ -78,9 +95,113 @@ class MimeParser {
 			$from['address'],
 			$from['name'],
 			$this->normaliseWhitespace($subject),
-			trim($text),
+			$this->stripInvisible(trim($text)),
 			$attachmentNames,
+			$this->parseMessageId($this->headerValue($headers, 'message-id')),
+			$this->looksAutomated($headers),
+			$this->looksLikeSpam($headers),
+			// ONLY the topmost Authentication-Results is read - see the class
+			// docblock on AuthenticationResults for why the rest are the sender's
+			// to forge.
+			AuthenticationResults::fromHeader($this->headerValue($headers, 'authentication-results')),
 		);
+	}
+
+	/**
+	 * Whether the message is machine-generated and must not become a card.
+	 *
+	 * This is the loop breaker. A card created by intake can raise a Nextcloud
+	 * notification email; an out-of-office or a bounce answers it; that answer
+	 * lands back in the intake mailbox as a new card, and the cycle runs until
+	 * someone notices. The header set below is the standard one senders use to
+	 * say "do not reply to this automatically", and honouring it is how every
+	 * other ticket-by-mail system avoids the same loop.
+	 *
+	 * @param array<string, list<string>> $headers
+	 */
+	private function looksAutomated(array $headers): bool {
+		// RFC 3834. Anything but 'no' means automatic; the header exists solely
+		// to mark auto-replies, auto-forwards and system notifications.
+		$autoSubmitted = strtolower(trim($this->headerValue($headers, 'auto-submitted')));
+		if ($autoSubmitted !== '' && !str_starts_with($autoSubmitted, 'no')) {
+			return true;
+		}
+
+		// Bulk/list traffic: newsletters and mailing-list posts.
+		$precedence = strtolower(trim($this->headerValue($headers, 'precedence')));
+		if (in_array($precedence, ['bulk', 'list', 'junk', 'auto_reply'], true)) {
+			return true;
+		}
+
+		// Mailing lists identify themselves with these regardless of Precedence.
+		foreach (['list-id', 'list-unsubscribe', 'list-post'] as $listHeader) {
+			if ($this->headerValue($headers, $listHeader) !== '') {
+				return true;
+			}
+		}
+
+		// Microsoft's equivalent of Auto-Submitted, and the older X-Autoreply /
+		// X-Autorespond pair.
+		foreach (['x-auto-response-suppress', 'x-autoreply', 'x-autorespond', 'x-autoresponder'] as $msHeader) {
+			if ($this->headerValue($headers, $msHeader) !== '') {
+				return true;
+			}
+		}
+
+		// A null return path is the signature of a BOUNCE (RFC 5321 requires
+		// delivery-status notifications to use an empty envelope sender, exactly
+		// so that replying to them cannot loop).
+		$returnPath = trim($this->headerValue($headers, 'return-path'));
+		if ($returnPath === '<>' || $returnPath === '') {
+			// '' only counts when the header is present but empty, not when it is
+			// absent - plenty of ordinary mail has no Return-Path by the time it
+			// reaches IMAP.
+			if (isset($headers['return-path'])) {
+				return true;
+			}
+		}
+
+		// The content type a bounce carries.
+		$contentType = strtolower($this->headerValue($headers, 'content-type'));
+		if (str_contains($contentType, 'multipart/report') || str_contains($contentType, 'delivery-status')) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether an upstream filter already judged this spam. Kanso does not
+	 * re-implement spam detection - it honours the verdict of whatever did,
+	 * which on a normal mail host is SpamAssassin or Rspamd.
+	 *
+	 * @param array<string, list<string>> $headers
+	 */
+	private function looksLikeSpam(array $headers): bool {
+		if (str_starts_with(strtolower(trim($this->headerValue($headers, 'x-spam-flag'))), 'yes')) {
+			return true;
+		}
+		// 'Yes, score=8.1 required=5.0 ...'
+		if (str_starts_with(strtolower(trim($this->headerValue($headers, 'x-spam-status'))), 'yes')) {
+			return true;
+		}
+		// Rspamd's verdict header.
+		$action = strtolower(trim($this->headerValue($headers, 'x-spamd-result')));
+		if (str_contains($action, 'reject') || str_contains($action, 'add header')) {
+			return true;
+		}
+		return false;
+	}
+
+	/** The Message-ID with its angle brackets removed. */
+	private function parseMessageId(string $raw): string {
+		$raw = trim($this->stripInvisible($raw));
+		if (preg_match('/<([^<>]{1,512})>/', $raw, $m) === 1) {
+			return trim($m[1]);
+		}
+		// Some senders omit the brackets. Keep it only if it looks like an id
+		// rather than a sentence.
+		return preg_match('/^\S{1,512}$/', $raw) === 1 ? $raw : '';
 	}
 
 	/**
@@ -141,9 +262,35 @@ class MimeParser {
 		return $headers;
 	}
 
-	/** @param array<string, list<string>> $headers */
+	/**
+	 * The FIRST occurrence of a header, clamped to a sane length.
+	 *
+	 * "First" is load-bearing for `Authentication-Results`: hops prepend, so the
+	 * first is the one our own MTA wrote and every later one is the sender's to
+	 * forge. {@see parseHeaders} preserves arrival order to make this true.
+	 *
+	 * @param array<string, list<string>> $headers
+	 */
 	private function headerValue(array $headers, string $name): string {
-		return $headers[$name][0] ?? '';
+		$value = $headers[$name][0] ?? '';
+		if (strlen($value) > self::MAX_HEADER_VALUE_BYTES) {
+			$value = substr($value, 0, self::MAX_HEADER_VALUE_BYTES);
+		}
+		return $value;
+	}
+
+	/**
+	 * Removes zero-width and bidi-override characters.
+	 *
+	 * A card title is something a person reads to decide whether to trust a
+	 * card, and these characters let a subject display as something other than
+	 * what it says. Applied to headers and to the body.
+	 */
+	private function stripInvisible(string $value): string {
+		$stripped = preg_replace(self::INVISIBLE_CHARS, '', $value);
+		// preg_replace returns null on a UTF-8 failure; the /u pattern above can
+		// hit that on a body that survived scrubbing but is still odd.
+		return $stripped ?? $value;
 	}
 
 	/**
@@ -494,8 +641,12 @@ class MimeParser {
 		return trim($text);
 	}
 
-	/** Collapses all whitespace to single spaces - for one-line values. */
+	/**
+	 * Collapses all whitespace to single spaces and drops invisible characters -
+	 * for one-line values such as the subject and attachment names.
+	 */
 	private function normaliseWhitespace(string $value): string {
+		$value = $this->stripInvisible($value);
 		return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
 	}
 }

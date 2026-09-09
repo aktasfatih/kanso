@@ -62,8 +62,11 @@ class MailIntakeController extends Controller {
 		string $mailbox = 'INBOX',
 		string $senderAllowlist = '',
 		bool $enabled = false,
+		bool $requireAuth = false,
+		int $dailyLimit = 0,
+		int $perSenderDailyLimit = 0,
 	): JSONResponse {
-		return $this->respond(function () use ($id, $stackId, $host, $port, $encryption, $username, $password, $mailbox, $senderAllowlist, $enabled): JSONResponse {
+		return $this->respond(function () use ($id, $stackId, $host, $port, $encryption, $username, $password, $mailbox, $senderAllowlist, $enabled, $requireAuth, $dailyLimit, $perSenderDailyLimit): JSONResponse {
 			$config = $this->mailIntakeService->saveConfig(
 				$id,
 				$stackId,
@@ -76,6 +79,9 @@ class MailIntakeController extends Controller {
 				$senderAllowlist,
 				$enabled,
 				$this->currentUserId(),
+				$requireAuth,
+				$dailyLimit,
+				$perSenderDailyLimit,
 			);
 			return new JSONResponse($config->jsonSerialize());
 		});

@@ -348,6 +348,176 @@ class MimeParserTest extends TestCase {
 		self::assertSame('Body with LF', $message->body);
 	}
 
+	// ---- classification ----------------------------------------------------
+
+	/**
+	 * @return array<string, array{0: string}>
+	 */
+	public static function automatedHeaders(): array {
+		return [
+			'auto-replied' => ['Auto-Submitted: auto-replied'],
+			'auto-generated' => ['Auto-Submitted: auto-generated'],
+			'precedence bulk' => ['Precedence: bulk'],
+			'precedence list' => ['Precedence: list'],
+			'precedence junk' => ['Precedence: junk'],
+			'list-id' => ['List-Id: <announce.example.com>'],
+			'list-unsubscribe' => ['List-Unsubscribe: <mailto:x@example.com>'],
+			'ms suppress' => ['X-Auto-Response-Suppress: OOF'],
+			'x-autoreply' => ['X-Autoreply: yes'],
+			'null return path' => ['Return-Path: <>'],
+		];
+	}
+
+	/**
+	 * @dataProvider automatedHeaders
+	 */
+	public function testDetectsAutomatedMail(string $header): void {
+		$raw = $this->message("From: a@example.com\nSubject: s\n{$header}\n\nbody");
+
+		self::assertTrue($this->parser->parse($raw)->isAutomated);
+	}
+
+	public function testOrdinaryMailIsNotFlaggedAsAutomated(): void {
+		// The loop breaker must not swallow real mail.
+		$raw = $this->message("From: a@example.com\nSubject: s\nReturn-Path: <a@example.com>\n\nbody");
+
+		self::assertFalse($this->parser->parse($raw)->isAutomated);
+	}
+
+	public function testAutoSubmittedNoIsNotAutomated(): void {
+		// RFC 3834: 'no' is the explicit "this is a human" value.
+		$raw = $this->message("From: a@example.com\nSubject: s\nAuto-Submitted: no\n\nbody");
+
+		self::assertFalse($this->parser->parse($raw)->isAutomated);
+	}
+
+	public function testAbsentReturnPathIsNotABounce(): void {
+		// Plenty of ordinary mail has no Return-Path by the time it reaches IMAP;
+		// only a PRESENT-but-empty one is the bounce signature.
+		$raw = $this->message("From: a@example.com\nSubject: s\n\nbody");
+
+		self::assertFalse($this->parser->parse($raw)->isAutomated);
+	}
+
+	public function testDetectsADeliveryReport(): void {
+		$raw = $this->message("From: mailer@example.com\nSubject: Undelivered\nContent-Type: multipart/report; boundary=\"b\"\n\n--b--");
+
+		self::assertTrue($this->parser->parse($raw)->isAutomated);
+	}
+
+	public function testDetectsSpamFlags(): void {
+		$flag = $this->message("From: a@example.com\nSubject: s\nX-Spam-Flag: YES\n\nbody");
+		$status = $this->message("From: a@example.com\nSubject: s\nX-Spam-Status: Yes, score=9.4 required=5.0\n\nbody");
+		$clean = $this->message("From: a@example.com\nSubject: s\nX-Spam-Status: No, score=-1.2\n\nbody");
+
+		self::assertTrue($this->parser->parse($flag)->isSpam);
+		self::assertTrue($this->parser->parse($status)->isSpam);
+		self::assertFalse($this->parser->parse($clean)->isSpam);
+	}
+
+	public function testReadsOnlyTheTopmostAuthenticationResults(): void {
+		// Hops PREPEND, so the first is our own MTA's and everything below it is
+		// the sender's to forge.
+		$raw = $this->message(<<<EOM
+			From: liar@example.com
+			Subject: s
+			Authentication-Results: mx.ours.test; dmarc=fail header.from=example.com
+			Authentication-Results: attacker-supplied; dmarc=pass header.from=example.com
+
+			body
+			EOM);
+
+		self::assertFalse($this->parser->parse($raw)->isAuthenticated());
+	}
+
+	public function testHonoursAGenuineTopmostPass(): void {
+		$raw = $this->message(<<<EOM
+			From: real@example.com
+			Subject: s
+			Authentication-Results: mx.ours.test; dmarc=pass header.from=example.com
+
+			body
+			EOM);
+
+		self::assertTrue($this->parser->parse($raw)->isAuthenticated());
+	}
+
+	// ---- dedupe key --------------------------------------------------------
+
+	public function testExtractsTheMessageId(): void {
+		$raw = $this->message("From: a@example.com\nSubject: s\nMessage-ID: <abc123@example.com>\n\nbody");
+
+		self::assertSame('abc123@example.com', $this->parser->parse($raw)->messageId);
+	}
+
+	public function testTheSameMessageIdYieldsTheSameDedupeKey(): void {
+		$one = $this->message("From: a@example.com\nSubject: First\nMessage-ID: <same@example.com>\n\nbody");
+		// Same id, different everything else - a re-delivery of one message.
+		$two = $this->message("From: b@example.com\nSubject: Second\nMessage-ID: <same@example.com>\n\nother");
+
+		self::assertSame(
+			$this->parser->parse($one)->dedupeKey(),
+			$this->parser->parse($two)->dedupeKey(),
+		);
+	}
+
+	public function testMessagesWithoutAnIdStillDedupeOnTheirContent(): void {
+		// Message-ID is optional in practice, and a mailbox re-delivering such a
+		// message would otherwise card it twice.
+		$raw = "From: a@example.com\r\nSubject: s\r\n\r\nidentical body";
+
+		self::assertSame(
+			$this->parser->parse($raw)->dedupeKey(),
+			$this->parser->parse($raw)->dedupeKey(),
+		);
+	}
+
+	public function testDifferentMessagesGetDifferentDedupeKeys(): void {
+		$one = $this->message("From: a@example.com\nSubject: One\n\nbody one");
+		$two = $this->message("From: a@example.com\nSubject: Two\n\nbody two");
+
+		self::assertNotSame(
+			$this->parser->parse($one)->dedupeKey(),
+			$this->parser->parse($two)->dedupeKey(),
+		);
+	}
+
+	// ---- hardening ---------------------------------------------------------
+
+	public function testStripsBidiOverridesFromTheSubject(): void {
+		// The "invoice<RLO>fdp.exe" trick: the title renders as something other
+		// than what it contains, and a card title is what a person judges.
+		$raw = $this->message("From: a@example.com\nSubject: invoice\u{202E}gnp.exe\n\nbody");
+
+		$subject = $this->parser->parse($raw)->subject;
+
+		self::assertStringNotContainsString("\u{202E}", $subject);
+		self::assertStringContainsString('invoice', $subject);
+	}
+
+	public function testStripsZeroWidthCharacters(): void {
+		// Zero-width joiners let two visually identical subjects differ, which
+		// defeats a reader comparing a card against what they expected.
+		$raw = $this->message("From: a@example.com\nSubject: pay\u{200B}ment\n\nbody");
+
+		self::assertSame('payment', $this->parser->parse($raw)->subject);
+	}
+
+	public function testAnAbsurdlyLongHeaderIsClampedRatherThanParsedWhole(): void {
+		// A single header is otherwise bounded only by the 5 MiB message ceiling,
+		// and the address pattern backtracks superlinearly - a cheap way to burn
+		// cron CPU. Should be fast and must not hang.
+		$long = str_repeat('<', 200000);
+		$raw = "From: {$long}\r\nSubject: s\r\n\r\nbody";
+
+		$start = microtime(true);
+		$message = $this->parser->parse($raw);
+		$elapsed = microtime(true) - $start;
+
+		self::assertLessThan(2.0, $elapsed, 'header parsing should not blow up on a pathological value');
+		self::assertSame('s', $message->subject);
+	}
+
 	public function testPartWithNoContentTypeIsTreatedAsPlainText(): void {
 		// RFC 2045: an absent Content-Type means text/plain.
 		$raw = $this->message("From: a@example.com\nSubject: s\n\nImplicitly plain");

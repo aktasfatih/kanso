@@ -975,6 +975,13 @@ class CardService {
 	 * write still advances the revision, so a guarded editor that seeded before
 	 * it is correctly refused afterwards.
 	 *
+	 * $notifyMentions is the ONE switch an untrusted writer must turn off (#117).
+	 * A description write normally re-parses `@name` and sends real notifications
+	 * + auto-subscriptions attributed to $uid. Email intake writes a body that an
+	 * unauthenticated stranger composed, as the board OWNER - so leaving this on
+	 * would let anyone who knows an intake address ping arbitrary members with
+	 * the owner's name on it. Every human-originated caller leaves it true.
+	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board, or the review gate blocks completion while the card has unapproved reviews
 	 * @throws InvalidInputException on invalid title, duedate, cover colour or type, or a description over MAX_DESCRIPTION_LENGTH
@@ -999,6 +1006,7 @@ class CardService {
 		?string $visibility = null,
 		?int $baseLastModified = null,
 		?int $baseDescriptionRevision = null,
+		bool $notifyMentions = true,
 	): Card {
 		$card = $this->loadCard($id);
 		$board = $this->loadBoard($card->getBoardId());
@@ -1306,8 +1314,9 @@ class CardService {
 		}
 
 		// A new @mention in the description pings + auto-subscribes readable-board
-		// participants (only when the description actually changed).
-		if ($descriptionChanged) {
+		// participants (only when the description actually changed). Suppressed
+		// when the text did not come from $uid - see $notifyMentions above.
+		if ($descriptionChanged && $notifyMentions) {
 			$this->mentionService->handleMentions($card, $board, (string)$description, $uid);
 		}
 

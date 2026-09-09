@@ -50,6 +50,14 @@ use OCP\DB\Types;
  * @method void setLastError(?string $lastError)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method bool getRequireAuth()
+ * @method void setRequireAuth(bool $requireAuth)
+ * @method string|null getDailyState()
+ * @method void setDailyState(?string $dailyState)
+ * @method int getDailyLimit()
+ * @method void setDailyLimit(int $dailyLimit)
+ * @method int getPerSenderDailyLimit()
+ * @method void setPerSenderDailyLimit(int $perSenderDailyLimit)
  */
 class MailIntake extends Entity implements \JsonSerializable {
 	/** Implicit TLS from the first byte (the 993 default). */
@@ -75,6 +83,10 @@ class MailIntake extends Entity implements \JsonSerializable {
 	protected ?int $lastRun = null;
 	protected ?string $lastError = null;
 	protected ?int $createdAt = null;
+	protected ?bool $requireAuth = null;
+	protected ?string $dailyState = null;
+	protected ?int $dailyLimit = null;
+	protected ?int $perSenderDailyLimit = null;
 
 	public function __construct() {
 		$this->addType('boardId', Types::INTEGER);
@@ -92,6 +104,10 @@ class MailIntake extends Entity implements \JsonSerializable {
 		$this->addType('lastRun', Types::INTEGER);
 		$this->addType('lastError', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
+		$this->addType('requireAuth', Types::BOOLEAN);
+		$this->addType('dailyState', Types::STRING);
+		$this->addType('dailyLimit', Types::INTEGER);
+		$this->addType('perSenderDailyLimit', Types::INTEGER);
 	}
 
 	/**
@@ -119,7 +135,75 @@ class MailIntake extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * @return array{id: int, boardId: int, stackId: int, host: string, port: int, encryption: string, username: string, hasPassword: bool, mailbox: string, senderAllowlist: string, enabled: bool, lastRun: int, lastError: string|null}
+	 * How many distinct senders the per-sender counter tracks in a day. When the
+	 * map is full it is pruned to the HIGHEST counts, which keeps precisely the
+	 * senders a per-sender limit exists to catch; a sender that drops out starts
+	 * again from zero but is still bounded by the whole-mailbox daily cap.
+	 */
+	private const MAX_TRACKED_SENDERS = 500;
+
+	/**
+	 * Today's counters, resetting automatically when the day rolls over.
+	 *
+	 * @param int $day the current day as YYYYMMDD
+	 * @return array{day: int, total: int, senders: array<string, int>}
+	 */
+	public function dailyCounters(int $day): array {
+		$empty = ['day' => $day, 'total' => 0, 'senders' => []];
+
+		$raw = $this->dailyState ?? '';
+		if (trim($raw) === '') {
+			return $empty;
+		}
+
+		$decoded = json_decode($raw, true);
+		// Corrupt or hand-edited state must not stall intake - start the day over.
+		if (!is_array($decoded) || (int)($decoded['day'] ?? 0) !== $day) {
+			return $empty;
+		}
+
+		$senders = [];
+		if (isset($decoded['senders']) && is_array($decoded['senders'])) {
+			foreach ($decoded['senders'] as $sender => $count) {
+				if (is_string($sender) && is_int($count)) {
+					$senders[$sender] = $count;
+				}
+			}
+		}
+
+		return [
+			'day' => $day,
+			'total' => max(0, (int)($decoded['total'] ?? 0)),
+			'senders' => $senders,
+		];
+	}
+
+	public function cardedToday(int $day): int {
+		return $this->dailyCounters($day)['total'];
+	}
+
+	public function cardedTodayBy(string $sender, int $day): int {
+		return $this->dailyCounters($day)['senders'][$sender] ?? 0;
+	}
+
+	/** Counts one carded message against today's totals. */
+	public function recordCarded(string $sender, int $day): void {
+		$counters = $this->dailyCounters($day);
+		$counters['total']++;
+		if ($sender !== '') {
+			$counters['senders'][$sender] = ($counters['senders'][$sender] ?? 0) + 1;
+		}
+
+		if (count($counters['senders']) > self::MAX_TRACKED_SENDERS) {
+			arsort($counters['senders']);
+			$counters['senders'] = array_slice($counters['senders'], 0, self::MAX_TRACKED_SENDERS, true);
+		}
+
+		$this->setDailyState((string)json_encode($counters));
+	}
+
+	/**
+	 * @return array{id: int, boardId: int, stackId: int, host: string, port: int, encryption: string, username: string, hasPassword: bool, mailbox: string, senderAllowlist: string, enabled: bool, requireAuth: bool, dailyLimit: int, perSenderDailyLimit: int, lastRun: int, lastError: string|null}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -136,8 +220,12 @@ class MailIntake extends Entity implements \JsonSerializable {
 			'mailbox' => (string)$this->mailbox,
 			'senderAllowlist' => $this->senderAllowlist ?? '',
 			'enabled' => (bool)$this->enabled,
+			'requireAuth' => (bool)$this->requireAuth,
+			'dailyLimit' => (int)$this->dailyLimit,
+			'perSenderDailyLimit' => (int)$this->perSenderDailyLimit,
 			'lastRun' => (int)$this->lastRun,
 			'lastError' => $this->lastError,
+			// dailyState is operational detail, not config - deliberately absent.
 		];
 	}
 }

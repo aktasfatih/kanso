@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4048
+#: src/components/BoardSettingsModal.vue:4367
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -338,6 +338,11 @@ msgstr "Bir kart oluşturuldu, taşındı ya da tamamlandı veya seninle bir pan
 msgid "A fresh copy is created each time; this card stays as the source"
 msgstr "Her seferinde yeni bir kopya oluşturulur; bu kart kaynak olarak kalır"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
 msgid "Active"
 msgstr "Aktif"
@@ -514,6 +519,10 @@ msgstr "Herhangi"
 #: src/components/ManageTemplatesModal.vue
 msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu."
 msgstr "Her kart, ⋯ menüsünden şablon olarak kaydedilebilir (\"Şablon olarak işaretle\"). Şablonlar panoda görünmez ve bir sütunun \"＋ Şablondan\" menüsünden yeniden kullanılır."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone with the link can subscribe to this board's due dates."
@@ -993,6 +1002,14 @@ msgid "Cards measured"
 msgstr "Ölçülen kartlar"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Cards per day from one sender"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Cards per day from this mailbox"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
 msgstr "Bitiş tarihi olan kartlar takvimine ve telefonuna (CalDAV/DAVx5 ile) görev olarak eşitlenir. Bu panoyu kendi takviminin dışında tutmak için bunu kapat. Yalnızca seni etkiler."
 
@@ -1091,6 +1108,10 @@ msgstr "durumu {value} yaptı"
 msgid "Changes requested"
 msgstr "Değişiklik istendi"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Check this mailbox automatically"
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 msgid "Checklist"
@@ -1117,6 +1138,7 @@ msgstr "Kontrol listesi ilerlemesi"
 msgid "Choose a board…"
 msgstr "Bir pano seç…"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
 msgid "Choose a column…"
 msgstr "Bir sütun seç…"
@@ -1249,6 +1271,10 @@ msgstr "Sütun silindi"
 msgid "Column name"
 msgstr "Sütun adı"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Column new cards land in"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Comfortable"
 msgstr "Rahat"
@@ -1298,6 +1324,10 @@ msgid "Condition"
 msgstr "Koşul"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Connected to the mailbox successfully."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Contacts"
 msgstr "Kişiler"
 
@@ -1345,6 +1375,10 @@ msgstr "Dosya iliştirilemedi."
 #: src/components/CardDetail.vue
 msgid "Could not change the card visibility"
 msgstr "Kart görünürlüğü değiştirilemedi"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not connect to the mailbox."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Could not copy to clipboard"
@@ -1415,9 +1449,17 @@ msgstr "Panoların yüklenemedi."
 msgid "Could not load your Deck boards."
 msgstr "Deck panoların yüklenemedi."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Could not remove the mailbox."
+msgstr ""
+
 #: src/admin-backup.js
 msgid "Could not save backup settings"
 msgstr "Yedekleme ayarları kaydedilemedi"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not save the email intake settings."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the issue-intake settings."
@@ -1557,6 +1599,10 @@ msgid "Daily"
 msgstr "Günlük"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Daily card limits (0 uses the default)"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Danger zone"
 msgstr "Tehlikeli bölge"
 
@@ -1564,7 +1610,7 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:1949
+#: src/components/BoardSettingsModal.vue:2110
 #: src/components/CardDetail.vue:4435
 msgid "day"
 msgid_plural "days"
@@ -1966,6 +2012,10 @@ msgid "Editor"
 msgstr "Düzenleyici"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Email intake"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
 msgstr "Etkinleştir ve gizli anahtar oluştur"
 
@@ -1988,6 +2038,10 @@ msgstr "Zamanlanmış yedeklemeleri etkinleştir"
 #: src/components/BoardSettingsModal.vue
 msgid "Enabled"
 msgstr "Etkin"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Encryption"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Ends"
@@ -2046,25 +2100,25 @@ msgstr "her"
 msgid "Every"
 msgstr "Her"
 
-#: src/components/BoardSettingsModal.vue:4028
+#: src/components/BoardSettingsModal.vue:4347
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
 msgstr[1] "Her %n günde bir"
 
-#: src/components/BoardSettingsModal.vue:4038
+#: src/components/BoardSettingsModal.vue:4357
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4030
+#: src/components/BoardSettingsModal.vue:4349
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4040
+#: src/components/BoardSettingsModal.vue:4359
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -2329,6 +2383,10 @@ msgstr "Şablonlar yüklenemedi."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Takvim akışı yapılandırması yüklenemedi."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Failed to load the email intake settings."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the Forgejo webhook config."
@@ -2718,6 +2776,10 @@ msgid "Folder actions"
 msgstr "Klasör işlemleri"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Folder and target column"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Forever"
 msgstr "Süresiz"
 
@@ -2849,6 +2911,10 @@ msgstr "Saat"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: src/components/BoardSettingsModal.vue
+msgid "IMAP server"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Import"
 msgstr "İçe aktar"
@@ -2961,6 +3027,10 @@ msgstr "Kanso arka plan görevleri ve e-posta bağlantıları"
 msgid "Kanso board backups"
 msgstr "Kanso pano yedekleri"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board."
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
 msgstr "Kanso dışa aktarımı (.zip)"
@@ -3025,6 +3095,10 @@ msgstr "Etiketler (virgülle ayrılmış)"
 #: src/components/CardDetail.vue
 msgid "Labels are board-specific: only labels that also exist (same name and color) on the target board are kept."
 msgstr "Etiketler panoya özeldir: yalnızca hedef panoda da bulunan (aynı ad ve renkte) etiketler korunur."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Last checked: {when}"
+msgstr ""
 
 #: src/views/ViewPage.vue
 msgid "Last modified"
@@ -3136,6 +3210,14 @@ msgstr "Yükleniyor…"
 msgid "Low"
 msgstr "Düşük"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Mailbox account"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Mailbox removed."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Make this a sub-card of…"
 msgstr "Şunun alt kartı yap…"
@@ -3194,7 +3276,7 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:1951
+#: src/components/BoardSettingsModal.vue:2112
 #: src/components/CardDetail.vue:4437
 msgid "month"
 msgid_plural "months"
@@ -3815,6 +3897,14 @@ msgstr "Sahip"
 msgid "Parent card"
 msgstr "Üst kart"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Password"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Password stored — leave blank to keep it"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Paste a pull request or issue URL…"
 msgstr ""
@@ -3826,6 +3916,14 @@ msgstr "Payload URL'si"
 #: src/components/CardDetail.vue
 msgid "Pending"
 msgstr "Bekliyor"
+
+#: src/components/BoardSettingsModal.vue
+msgid "per mailbox"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "per sender"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
@@ -3881,6 +3979,10 @@ msgstr "Sabitlendi"
 #: src/views/BoardStats.vue
 msgid "Points / week (avg)"
 msgstr "Puan / hafta (ort.)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Port"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Position"
@@ -4102,6 +4204,10 @@ msgstr "Etiketi kaldır…"
 msgid "Remove link"
 msgstr "Bağlantıyı kaldır"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Remove mailbox"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Remove relation"
 msgstr "İlişkiyi kaldır"
@@ -4222,6 +4328,10 @@ msgstr "bir inceleme istedi"
 #: src/views/InboxView.vue
 msgid "requested a review on"
 msgstr "inceleme istedi:"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Require verified senders (DMARC)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Reset"
@@ -4348,6 +4458,10 @@ msgstr "Kuralı kaydet"
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
 msgstr "Şablon olarak kaydedildi. Herhangi bir sütundaki \"+ Şablondan\" düğmesiyle ondan kart ekle."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Saved."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Saving…"
@@ -4595,6 +4709,10 @@ msgstr "Sırala"
 msgid "Sort by"
 msgstr "Sıralama ölçütü"
 
+#: src/components/BoardSettingsModal.vue
+msgid "SSL/TLS (993)"
+msgstr ""
+
 #: src/views/BoardStats.vue
 msgid "Stack {id}"
 msgstr "Sütun {id}"
@@ -4655,6 +4773,10 @@ msgstr "Başladı"
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
 msgstr "Sonra başlıyor"
+
+#: src/components/BoardSettingsModal.vue
+msgid "STARTTLS (143)"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -4740,6 +4862,10 @@ msgstr "Şablon kartı"
 #: src/components/CardDetail.vue
 msgid "Template turned back into a normal card."
 msgstr "Şablon yeniden normal karta dönüştürüldü."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Test connection"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Text"
@@ -5160,7 +5286,7 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:1950
+#: src/components/BoardSettingsModal.vue:2111
 #: src/components/CardDetail.vue:4436
 msgid "week"
 msgid_plural "weeks"
@@ -5241,7 +5367,7 @@ msgstr "Bir yanıt yaz…"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:1952
+#: src/components/BoardSettingsModal.vue:2113
 #: src/components/CardDetail.vue:4438
 msgid "year"
 msgid_plural "years"
@@ -5288,6 +5414,10 @@ msgstr "İş akışlarını yapılandırmak için düzenleme iznine ihtiyacın v
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure automation rules."
 msgstr "Otomasyon kurallarını yapılandırmak için yönetme iznine ihtiyacın var."
+
+#: src/components/BoardSettingsModal.vue
+msgid "You need manage permission to configure email intake."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the calendar feed."

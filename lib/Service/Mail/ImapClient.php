@@ -50,6 +50,7 @@ class ImapClient {
 
 	public function __construct(
 		private ImapTransport $transport,
+		private MailHostGuard $hostGuard,
 	) {
 	}
 
@@ -64,8 +65,13 @@ class ImapClient {
 	public function connect(string $host, int $port, string $encryption): void {
 		$this->assertArgumentSafe($host, 'host');
 
+		// Resolved and vetted BEFORE the socket opens, and the vetted address is
+		// what we dial - see MailHostGuard for why validating the name alone is
+		// not enough.
+		$address = $this->hostGuard->resolve($host);
+
 		$implicitTls = $encryption === MailIntake::ENCRYPTION_SSL;
-		$this->transport->open($host, $port, $implicitTls, self::TIMEOUT_SECONDS);
+		$this->transport->open($address, $host, $port, $implicitTls, self::TIMEOUT_SECONDS);
 		$this->connected = true;
 
 		// The greeting arrives unprompted, before any command. PREAUTH means the

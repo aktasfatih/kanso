@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:4048
+#: src/components/BoardSettingsModal.vue:4367
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -338,6 +338,11 @@ msgstr "Er is een kaart aangemaakt, verplaatst of afgerond, of er is een bord me
 msgid "A fresh copy is created each time; this card stays as the source"
 msgstr "Er wordt elke keer een verse kopie gemaakt; deze kaart blijft de bron"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
 msgid "Active"
 msgstr "Actief"
@@ -514,6 +519,10 @@ msgstr "Alle"
 #: src/components/ManageTemplatesModal.vue
 msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu."
 msgstr "Elke kaart kun je via het ⋯-menu als sjabloon opslaan (\"Markeren als sjabloon\"). Sjablonen zijn verborgen op het bord en gebruik je opnieuw via het menu \"＋ Van sjabloon\" van een kolom."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone with the link can subscribe to this board's due dates."
@@ -993,6 +1002,14 @@ msgid "Cards measured"
 msgstr "Gemeten kaarten"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Cards per day from one sender"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Cards per day from this mailbox"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
 msgstr "Kaarten met een einddatum worden als taken gesynchroniseerd met je agenda en je telefoon (via CalDAV/DAVx5). Zet dit uit om dit bord buiten je eigen agenda te houden. Dit geldt alleen voor jou."
 
@@ -1091,6 +1108,10 @@ msgstr "heeft de status gewijzigd in {value}"
 msgid "Changes requested"
 msgstr "Wijzigingen gevraagd"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Check this mailbox automatically"
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 msgid "Checklist"
@@ -1117,6 +1138,7 @@ msgstr "Voortgang van de checklist"
 msgid "Choose a board…"
 msgstr "Kies een bord…"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
 msgid "Choose a column…"
 msgstr "Kies een kolom…"
@@ -1249,6 +1271,10 @@ msgstr "Kolom verwijderd"
 msgid "Column name"
 msgstr "Kolomnaam"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Column new cards land in"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Comfortable"
 msgstr "Ruim"
@@ -1298,6 +1324,10 @@ msgid "Condition"
 msgstr "Voorwaarde"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Connected to the mailbox successfully."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Contacts"
 msgstr "Contacten"
 
@@ -1345,6 +1375,10 @@ msgstr "Kan het bestand niet bijvoegen."
 #: src/components/CardDetail.vue
 msgid "Could not change the card visibility"
 msgstr "Kan de zichtbaarheid van de kaart niet wijzigen"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not connect to the mailbox."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Could not copy to clipboard"
@@ -1415,9 +1449,17 @@ msgstr "Kan je borden niet laden."
 msgid "Could not load your Deck boards."
 msgstr "Kan je Deck-borden niet laden."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Could not remove the mailbox."
+msgstr ""
+
 #: src/admin-backup.js
 msgid "Could not save backup settings"
 msgstr "Kan de back-upinstellingen niet opslaan"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not save the email intake settings."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the issue-intake settings."
@@ -1557,6 +1599,10 @@ msgid "Daily"
 msgstr "Dagelijks"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Daily card limits (0 uses the default)"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Danger zone"
 msgstr "Gevarenzone"
 
@@ -1564,7 +1610,7 @@ msgstr "Gevarenzone"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:1949
+#: src/components/BoardSettingsModal.vue:2110
 #: src/components/CardDetail.vue:4435
 msgid "day"
 msgid_plural "days"
@@ -1966,6 +2012,10 @@ msgid "Editor"
 msgstr "Editor"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Email intake"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
 msgstr "Inschakelen en geheim genereren"
 
@@ -1988,6 +2038,10 @@ msgstr "Geplande back-ups inschakelen"
 #: src/components/BoardSettingsModal.vue
 msgid "Enabled"
 msgstr "Ingeschakeld"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Encryption"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Ends"
@@ -2046,25 +2100,25 @@ msgstr "elke"
 msgid "Every"
 msgstr "Elke"
 
-#: src/components/BoardSettingsModal.vue:4028
+#: src/components/BoardSettingsModal.vue:4347
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:4038
+#: src/components/BoardSettingsModal.vue:4357
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:4030
+#: src/components/BoardSettingsModal.vue:4349
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:4040
+#: src/components/BoardSettingsModal.vue:4359
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -2329,6 +2383,10 @@ msgstr "Kan de sjablonen niet laden."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Kan de configuratie van de agendafeed niet laden."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Failed to load the email intake settings."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the Forgejo webhook config."
@@ -2718,6 +2776,10 @@ msgid "Folder actions"
 msgstr "Mapacties"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Folder and target column"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Forever"
 msgstr "Voor altijd"
 
@@ -2849,6 +2911,10 @@ msgstr "Uren"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: src/components/BoardSettingsModal.vue
+msgid "IMAP server"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Import"
 msgstr "Importeren"
@@ -2961,6 +3027,10 @@ msgstr "Achtergrondtaken en e-maillinks van Kanso"
 msgid "Kanso board backups"
 msgstr "Back-ups van Kanso-borden"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board."
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
 msgstr "Kanso-export (.zip)"
@@ -3025,6 +3095,10 @@ msgstr "Labels (komma-gescheiden)"
 #: src/components/CardDetail.vue
 msgid "Labels are board-specific: only labels that also exist (same name and color) on the target board are kept."
 msgstr "Labels horen bij één bord: alleen labels die ook op het doelbord bestaan (zelfde naam en kleur) blijven behouden."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Last checked: {when}"
+msgstr ""
 
 #: src/views/ViewPage.vue
 msgid "Last modified"
@@ -3136,6 +3210,14 @@ msgstr "Laden…"
 msgid "Low"
 msgstr "Laag"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Mailbox account"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Mailbox removed."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Make this a sub-card of…"
 msgstr "Hier een subkaart van maken…"
@@ -3194,7 +3276,7 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "ma"
 
-#: src/components/BoardSettingsModal.vue:1951
+#: src/components/BoardSettingsModal.vue:2112
 #: src/components/CardDetail.vue:4437
 msgid "month"
 msgid_plural "months"
@@ -3815,6 +3897,14 @@ msgstr "Eigenaar"
 msgid "Parent card"
 msgstr "Hoofdkaart"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Password"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Password stored — leave blank to keep it"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Paste a pull request or issue URL…"
 msgstr ""
@@ -3826,6 +3916,14 @@ msgstr "Payload-URL"
 #: src/components/CardDetail.vue
 msgid "Pending"
 msgstr "In afwachting"
+
+#: src/components/BoardSettingsModal.vue
+msgid "per mailbox"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "per sender"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
@@ -3881,6 +3979,10 @@ msgstr "Vastgezet"
 #: src/views/BoardStats.vue
 msgid "Points / week (avg)"
 msgstr "Punten / week (gem.)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Port"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Position"
@@ -4102,6 +4204,10 @@ msgstr "Label verwijderen…"
 msgid "Remove link"
 msgstr "Link verwijderen"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Remove mailbox"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Remove relation"
 msgstr "Relatie verwijderen"
@@ -4222,6 +4328,10 @@ msgstr "heeft een review aangevraagd"
 #: src/views/InboxView.vue
 msgid "requested a review on"
 msgstr "vroeg een review aan op"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Require verified senders (DMARC)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Reset"
@@ -4348,6 +4458,10 @@ msgstr "Regel opslaan"
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
 msgstr "Opgeslagen als sjabloon. Voeg er een kaart mee toe via de knop \"+ Van sjabloon\" op elke kolom."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Saved."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Saving…"
@@ -4595,6 +4709,10 @@ msgstr "Sorteren"
 msgid "Sort by"
 msgstr "Sorteren op"
 
+#: src/components/BoardSettingsModal.vue
+msgid "SSL/TLS (993)"
+msgstr ""
+
 #: src/views/BoardStats.vue
 msgid "Stack {id}"
 msgstr "Kolom {id}"
@@ -4655,6 +4773,10 @@ msgstr "Gestart"
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
 msgstr "Start later"
+
+#: src/components/BoardSettingsModal.vue
+msgid "STARTTLS (143)"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -4740,6 +4862,10 @@ msgstr "Sjabloonkaart"
 #: src/components/CardDetail.vue
 msgid "Template turned back into a normal card."
 msgstr "Sjabloon weer omgezet naar een gewone kaart."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Test connection"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Text"
@@ -5160,7 +5286,7 @@ msgstr "Webhook actief"
 msgid "Wed"
 msgstr "wo"
 
-#: src/components/BoardSettingsModal.vue:1950
+#: src/components/BoardSettingsModal.vue:2111
 #: src/components/CardDetail.vue:4436
 msgid "week"
 msgid_plural "weeks"
@@ -5241,7 +5367,7 @@ msgstr "Schrijf een antwoord…"
 msgid "wrote"
 msgstr "schreef"
 
-#: src/components/BoardSettingsModal.vue:1952
+#: src/components/BoardSettingsModal.vue:2113
 #: src/components/CardDetail.vue:4438
 msgid "year"
 msgid_plural "years"
@@ -5288,6 +5414,10 @@ msgstr "Je hebt bewerkrechten nodig om workflows in te stellen."
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure automation rules."
 msgstr "Je hebt beheerrechten nodig om automatiseringsregels in te stellen."
+
+#: src/components/BoardSettingsModal.vue
+msgid "You need manage permission to configure email intake."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the calendar feed."

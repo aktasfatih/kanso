@@ -431,6 +431,22 @@ export const disableForgejo = (boardId) =>
 export const updateForgejoIntake = (boardId, stackId, label) =>
 	axios.put(url(`/api/boards/${boardId}/forgejo/intake`), { stackId, label }).then((r) => r.data)
 
+// Email intake (board-level, MANAGE) (#117). Unlike the webhooks above, mail is
+// PULLED from IMAP by cron, so there is no ingest URL to hand out - just the
+// mailbox to poll. The password is write-only: `show` reports `hasPassword`
+// rather than the credential, and `save` with password null keeps the stored one.
+export const fetchMailIntakeConfig = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/mail-intake`)).then((r) => r.data)
+
+export const saveMailIntakeConfig = (boardId, config) =>
+	axios.put(url(`/api/boards/${boardId}/mail-intake`), config).then((r) => r.data)
+
+export const testMailIntakeConnection = (boardId) =>
+	axios.post(url(`/api/boards/${boardId}/mail-intake/test`)).then((r) => r.data)
+
+export const deleteMailIntakeConfig = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/mail-intake`)).then((r) => r.data)
+
 // Public / read-only board share link (board-level, MANAGE)
 export const fetchPublicShareConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/public-share`)).then((r) => r.data)

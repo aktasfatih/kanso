@@ -16,7 +16,12 @@ namespace OCA\Kanso\Service\Mail;
  * tests replace to drive a scripted server without a network.
  */
 class ImapClientFactory {
+	public function __construct(
+		private MailHostGuard $hostGuard,
+	) {
+	}
+
 	public function create(): ImapClient {
-		return new ImapClient(new StreamImapTransport());
+		return new ImapClient(new StreamImapTransport(), $this->hostGuard);
 	}
 }

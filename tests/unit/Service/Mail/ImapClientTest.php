@@ -11,16 +11,22 @@ use OCA\Kanso\Db\MailIntake;
 use OCA\Kanso\Service\Mail\ImapClient;
 use OCA\Kanso\Service\Mail\ImapException;
 use OCA\Kanso\Service\Mail\ImapTransport;
+use OCA\Kanso\Service\Mail\MailHostGuard;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 class ImapClientTest extends TestCase {
 	private FakeImapTransport $transport;
+	private MailHostGuard&MockObject $hostGuard;
 	private ImapClient $client;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->transport = new FakeImapTransport();
-		$this->client = new ImapClient($this->transport);
+		$this->hostGuard = $this->createMock(MailHostGuard::class);
+		// Stands in for a public A record.
+		$this->hostGuard->method('resolve')->willReturn('198.51.100.7');
+		$this->client = new ImapClient($this->transport, $this->hostGuard);
 	}
 
 	/** Queues the greeting plus whatever the scripted server answers next. */
@@ -36,11 +42,41 @@ class ImapClientTest extends TestCase {
 	public function testConnectReadsTheGreeting(): void {
 		$this->connect();
 
-		self::assertSame('mail.example.com', $this->transport->host);
 		self::assertSame(993, $this->transport->port);
 		self::assertTrue($this->transport->implicitTls);
 		// Implicit TLS needs no in-band upgrade.
 		self::assertFalse($this->transport->cryptoEnabled);
+	}
+
+	public function testConnectDialsTheVettedAddressButValidatesTheCertificateAgainstTheHostname(): void {
+		$this->connect();
+
+		// Dialling the already-resolved IP is what closes the DNS-rebinding
+		// window: the name cannot resolve somewhere else between the guard's
+		// check and the connection.
+		self::assertSame('198.51.100.7', $this->transport->address);
+		// ...and the hostname still has to travel separately, or pinning the
+		// address would have silently cost us TLS certificate validation.
+		self::assertSame('mail.example.com', $this->transport->peerName);
+	}
+
+	public function testConnectIsRefusedWhenTheHostGuardRejectsTheTarget(): void {
+		$transport = new FakeImapTransport();
+		$guard = $this->createMock(MailHostGuard::class);
+		$guard->method('resolve')
+			->willThrowException(new ImapException('Mail server host resolves to a private or reserved address'));
+		$client = new ImapClient($transport, $guard);
+
+		try {
+			$client->connect('internal.corp', 993, MailIntake::ENCRYPTION_SSL);
+			self::fail('Expected an ImapException');
+		} catch (ImapException $e) {
+			self::assertStringContainsString('private or reserved', $e->getMessage());
+		}
+
+		// No socket may be opened at all - the point is that the server never
+		// makes the connection, not that it hangs up afterwards.
+		self::assertSame('', $transport->address);
 	}
 
 	public function testStartTlsUpgradesTheConnectionBeforeAnyCredentialIsSent(): void {
@@ -255,7 +291,8 @@ class ImapClientTest extends TestCase {
  * be tested without a network.
  */
 class FakeImapTransport implements ImapTransport {
-	public string $host = '';
+	public string $address = '';
+	public string $peerName = '';
 	public int $port = 0;
 	public bool $implicitTls = false;
 	public bool $cryptoEnabled = false;
@@ -272,8 +309,9 @@ class FakeImapTransport implements ImapTransport {
 	}
 
 	#[\Override]
-	public function open(string $host, int $port, bool $implicitTls, int $timeoutSeconds): void {
-		$this->host = $host;
+	public function open(string $address, string $peerName, int $port, bool $implicitTls, int $timeoutSeconds): void {
+		$this->address = $address;
+		$this->peerName = $peerName;
 		$this->port = $port;
 		$this->implicitTls = $implicitTls;
 	}
