@@ -19,6 +19,7 @@ use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\MentionService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\PublicShareService;
@@ -456,6 +457,329 @@ class PublicShareServiceTest extends TestCase {
 		// The raw uid must appear NOWHERE in the serialized public payload.
 		$json = json_encode($payload);
 		self::assertStringNotContainsString('ghostuid', $json, 'deleted author uid leaked into the public payload');
+	}
+
+	// ── @mention redaction in free text ───────────────────────────────────
+	//
+	// A mention has NO entity table: it is the literal string `@uid` inside a card
+	// description or a comment body, and those two fields are the only place a real
+	// LOGIN uid can ride the anonymous payload as "board content". The description
+	// case holds in the DEFAULT configuration (comments opt-in off), so these pin
+	// the same "uid never leaves" invariant the author byline already has.
+
+	/**
+	 * One public card with the given description, and optionally an opted-in
+	 * comment thread. Deliberately separate from primePublicBoard() so each test
+	 * owns its fixture text.
+	 *
+	 * @param Comment[] $comments
+	 */
+	private function primeCardWithText(string $description, array $comments = []): void {
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, $comments !== []));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$card = $this->card(100, 10, 'Live card');
+		$card->setDescription($description);
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn([$card]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		if ($comments !== []) {
+			$this->commentMapper->method('findByBoardPublicOnly')->with(1)->willReturn([100 => $comments]);
+		}
+	}
+
+	private function liveUser(string $displayName): IUser&MockObject {
+		$user = $this->createMock(IUser::class);
+		$user->method('getDisplayName')->willReturn($displayName);
+		return $user;
+	}
+
+	public function testDescriptionMentionShipsDisplayNameNotUid(): void {
+		// The default configuration: comments opt-in OFF, description still public.
+		$this->primeCardWithText('@jsmith please review before Friday');
+		$this->userManager->method('get')->willReturnMap([['jsmith', $this->liveUser('Jane Smith')]]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertFalse($payload['board']['commentsEnabled']);
+		self::assertSame('Jane Smith please review before Friday', $payload['cards'][0]['description']);
+		// The uid must appear NOWHERE in the serialized anonymous payload.
+		self::assertStringNotContainsString('jsmith', json_encode($payload), 'mentioned uid leaked into the public payload');
+	}
+
+	public function testCommentBodyMentionShipsDisplayNameNotUid(): void {
+		$this->primeCardWithText('no mentions here', [
+			$this->comment(1, 100, 'bob', 'cc @jsmith on this one'),
+		]);
+		$this->userManager->method('get')->willReturnMap([
+			['bob', $this->liveUser('Bob Builder')],
+			['jsmith', $this->liveUser('Jane Smith')],
+		]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		$comments = $payload['cards'][0]['comments'];
+		self::assertSame('Bob Builder', $comments[0]['author']);
+		self::assertSame('cc Jane Smith on this one', $comments[0]['body']);
+		// Neither the author's uid nor the MENTIONED uid survives.
+		$json = json_encode($payload);
+		self::assertStringNotContainsString('jsmith', $json, 'mentioned uid leaked out of a public comment body');
+		self::assertStringNotContainsString('"bob"', $json);
+	}
+
+	public function testNonResolvableAtStringsAreLeftByteIdentical(): void {
+		// `@`-shaped text that is NOT an account: an email address (which the shared
+		// MENTION_PATTERN never matches at all), a plain handle, a time, a hyphenated
+		// token. Over-eager substitution here would corrupt real board content, so
+		// this is as load-bearing as the redaction itself.
+		$text = 'mail foo@bar.com, follow @nextcloud, standup @9.30, ping @nosuchuser-42 later';
+		$this->primeCardWithText($text);
+		// Every lookup misses: none of these tokens is an account.
+		$this->userManager->method('get')->willReturn(null);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame($text, $payload['cards'][0]['description']);
+	}
+
+	public function testMentionThatSwallowsTrailingPunctuationIsStillRedacted(): void {
+		// `.`, `-` and `_` are legal uid characters, so a mention ending a sentence
+		// captures the punctuation: the token is `jsmith.`, not `jsmith`. Without the
+		// trailing-punctuation retry the lookup misses and the uid ships verbatim -
+		// a bypass reachable by writing an ordinary English sentence.
+		// (`_@jsmith_` is deliberately absent: the shared pattern's negative
+		// lookbehind treats a `@` preceded by a word char as not-a-mention at all, so
+		// the server would not notify for it and the client would not chip it either.
+		// Widening that is a change to MentionService's semantics, not to this
+		// redaction.)
+		$this->primeCardWithText('ping @jsmith. dash @jsmith- under @jsmith_ done');
+		$this->userManager->method('get')->willReturnMap([['jsmith', $this->liveUser('Jane Smith')]]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame(
+			'ping Jane Smith. dash Jane Smith- under Jane Smith_ done',
+			$payload['cards'][0]['description']
+		);
+		self::assertStringNotContainsString('jsmith', json_encode($payload));
+	}
+
+	public function testATokenNotEndingInPunctuationIsNeverSplit(): void {
+		// The other side of that retry: `@bob.smith` is NOT a mention of `bob` (the
+		// server would not notify bob either), so it must be looked up whole and left
+		// alone - never rewritten to "Bob Builder.smith".
+		$this->primeCardWithText('ask @bob.smith about it');
+		$this->userManager->method('get')->willReturnMap([
+			['bob.smith', null],
+			['bob', $this->liveUser('Bob Builder')],
+		]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame('ask @bob.smith about it', $payload['cards'][0]['description']);
+	}
+
+	public function testMentionOfDeletedAccountKeepsItsLiteralTextWhileTheBylineDoesNot(): void {
+		// A DELETED account: the comment AUTHOR field is known to be a uid, so it
+		// still becomes the generic label. A bare `@token` in free text is NOT known
+		// to be a uid - it is indistinguishable from prose - so it is left alone
+		// rather than rewritten, which is the deliberate asymmetry between the two.
+		$this->primeCardWithText('@ghostuid used to own this', [
+			$this->comment(1, 100, 'ghostuid', 'and @ghostuid said so'),
+		]);
+		$this->userManager->method('get')->with('ghostuid')->willReturn(null);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame('Former user', $payload['cards'][0]['comments'][0]['author']);
+		self::assertSame('@ghostuid used to own this', $payload['cards'][0]['description']);
+		self::assertSame('and @ghostuid said so', $payload['cards'][0]['comments'][0]['body']);
+	}
+
+	public function testOrdinaryNamesAreSubstitutedWithoutEscapeNoise(): void {
+		// The description is served BOTH as markdown (the card detail renders it with
+		// v-html) and as raw source printed verbatim (the board tile interpolates it as
+		// text - src/views/PublicBoard.vue:51). So escaping punctuation unconditionally
+		// would show "Anne\-Marie Dubois" to every anonymous visitor, and hyphens,
+		// apostrophes, parentheses and sentence dots are what real names are made of.
+		// None of them can open a markdown construct, so none of them is escaped.
+		$this->primeCardWithText('@a and @b and @c and @d');
+		$this->userManager->method('get')->willReturnMap([
+			['a', $this->liveUser('Anne-Marie Dubois')],
+			['b', $this->liveUser("Sinead O'Brien")],
+			['c', $this->liveUser('Dana Smith (Acme)')],
+			['d', $this->liveUser('Zoe Ünicode Jr.')],
+		]);
+
+		self::assertSame(
+			"Anne-Marie Dubois and Sinead O'Brien and Dana Smith (Acme) and Zoe Ünicode Jr.",
+			$this->service->getPublicBoard(self::TOKEN)['cards'][0]['description']
+		);
+	}
+
+	public function testADisplayNameCannotInjectMarkdownIntoSomebodyElsesText(): void {
+		// The name is spliced into ANOTHER author's text, so a mentioned user who
+		// renames themselves must not thereby inject a link or formatting into it. The
+		// escaped form renders as the literal characters (CommonMark), and the
+		// domain-shaped name must not survive `linkify: true` as a live link either.
+		$this->primeCardWithText('ask @trickster or @domainy about it');
+		$this->userManager->method('get')->willReturnMap([
+			['trickster', $this->liveUser('[click](https://evil.example)')],
+			['domainy', $this->liveUser('www.evil.example')],
+		]);
+
+		self::assertSame(
+			'ask \[click\]\(https\:\/\/evil\.example\) or www\.evil\.example about it',
+			$this->service->getPublicBoard(self::TOKEN)['cards'][0]['description']
+		);
+	}
+
+	public function testAnAccountWithNothingToShowFallsBackToTheGenericLabel(): void {
+		// The account EXISTS (so the token really is a uid) but has no displayable
+		// name. The one thing that must not happen is answering with the raw uid.
+		$this->primeCardWithText('ping @blankname now');
+		$this->userManager->method('get')->willReturnMap([['blankname', $this->liveUser('   ')]]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame('ping Former user now', $payload['cards'][0]['description']);
+		self::assertStringNotContainsString('blankname', json_encode($payload));
+	}
+
+	public function testAResolvingUidIsRedactedInEveryContextItAppearsIn(): void {
+		// Pins the deliberate decision, so nobody has to re-derive it: a token that IS
+		// a real uid is substituted even inside a URL path or a code span, because the
+		// uid is what must not leave - the link breaking is the lesser cost, and the
+		// authenticated renderer already chips the URL case. The non-account tokens in
+		// the same fixture make this a MIXED case: greedy over-substitution fails here
+		// just as a missed substitution does.
+		$this->primeCardWithText('see https://forge.example/@jsmith and `@jsmith` but not @nobody or foo@bar.com');
+		$this->userManager->method('get')->willReturnCallback(
+			fn (string $uid): ?IUser => $uid === 'jsmith' ? $this->liveUser('Jane Smith') : null
+		);
+
+		self::assertSame(
+			'see https://forge.example/Jane Smith and `Jane Smith` but not @nobody or foo@bar.com',
+			$this->service->getPublicBoard(self::TOKEN)['cards'][0]['description']
+		);
+	}
+
+	public function testOneUserLookupPerDistinctUidAcrossTheWholeBoard(): void {
+		// The board-read hot path: a uid named by many cards (and by a comment
+		// author) must cost ONE IUserManager::get(), not one per mention. The cache
+		// is shared across cards and across both free-text fields.
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, true));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$cards = [];
+		foreach ([100, 101, 102] as $id) {
+			$card = $this->card($id, 10, 'Card ' . $id);
+			$card->setDescription('@jsmith and @jsmith again');
+			$cards[] = $card;
+		}
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn($cards);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->commentMapper->method('findByBoardPublicOnly')->with(1)->willReturn([
+			100 => [$this->comment(1, 100, 'jsmith', 'mine, and @jsmith again')],
+		]);
+		// SIX mentions plus one author byline, all naming the same uid: exactly one
+		// lookup.
+		$this->userManager->expects(self::once())->method('get')->with('jsmith')
+			->willReturn($this->liveUser('Jane Smith'));
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame('Jane Smith and Jane Smith again', $payload['cards'][0]['description']);
+		self::assertSame('Jane Smith', $payload['cards'][0]['comments'][0]['author']);
+	}
+
+	public function testDistinctMentionLookupsAreBoundedPerField(): void {
+		// The bound exists so the amount of TEXT in a field cannot set the number of
+		// user-backend lookups one anonymous request makes. 250 DISTINCT tokens, all
+		// of them real accounts: only MentionService::MAX_MENTIONS are resolved, which
+		// is exactly the set the WRITE path acts on - a mention past that count never
+		// notified anybody either. The rest are left verbatim rather than mangled.
+		$tokens = [];
+		for ($i = 1; $i <= 250; $i++) {
+			$tokens[] = '@user' . $i;
+		}
+		$this->primeCardWithText(implode(' ', $tokens));
+		$this->userManager->expects(self::exactly(MentionService::MAX_MENTIONS))->method('get')
+			->willReturnCallback(fn (string $uid): IUser => $this->liveUser('Name of ' . $uid));
+
+		$description = (string)$this->service->getPublicBoard(self::TOKEN)['cards'][0]['description'];
+
+		self::assertStringContainsString('Name of user1', $description);
+		self::assertStringContainsString('Name of user' . MentionService::MAX_MENTIONS, $description);
+		// Past the bound the raw token survives - documented, and only reachable by
+		// content an EDIT user deliberately stuffed with hundreds of distinct tokens.
+		self::assertStringContainsString('@user250', $description);
+	}
+
+	public function testOneCardsJunkTokensCannotDeRedactAnotherCard(): void {
+		// The bound is per FIELD for this reason: a shared, board-wide budget would
+		// let ONE card padded with non-account `@tokens` (a pasted log, a CSV, an
+		// address dump - no attacker needed) spend it, and every LATER card's real
+		// mention would then ship its uid verbatim.
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$junk = [];
+		for ($i = 1; $i <= MentionService::MAX_MENTIONS * 2; $i++) {
+			$junk[] = '@notauser' . $i;
+		}
+		$padded = $this->card(100, 10, 'Pasted log');
+		$padded->setDescription(implode(' ', $junk));
+		$real = $this->card(101, 10, 'Real work');
+		$real->setDescription('@jsmith please review');
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn([$padded, $real]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->userManager->method('get')->willReturnCallback(
+			fn (string $uid): ?IUser => $uid === 'jsmith' ? $this->liveUser('Jane Smith') : null
+		);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame('Jane Smith please review', $payload['cards'][1]['description']);
+		self::assertStringNotContainsString('jsmith', json_encode($payload));
+	}
+
+	public function testCommentAuthorLookupsDoNotSpendTheMentionBudget(): void {
+		// The bound counts only the lookups the REDACTION starts, and it is local to
+		// one field. Author bylines have to resolve either way, so a busy board - 250
+		// distinct commenters, far past the bound - must not leave the description's
+		// own mention unredacted.
+		$comments = [];
+		for ($i = 1; $i <= 250; $i++) {
+			$comments[] = $this->comment($i, 100, 'commenter' . $i, 'nothing to redact here');
+		}
+		$this->primeCardWithText('@jsmith please review', $comments);
+		$this->userManager->method('get')->willReturnCallback(
+			fn (string $uid): IUser => $this->liveUser($uid === 'jsmith' ? 'Jane Smith' : 'Commenter ' . $uid)
+		);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertCount(250, $payload['cards'][0]['comments']);
+		self::assertSame('Jane Smith please review', $payload['cards'][0]['description']);
+	}
+
+	public function testStoredRowsAreNeverRewritten(): void {
+		// Payload-only: the mention must keep working for authenticated viewers, so
+		// nothing in the public read may write back through a mapper.
+		$this->primeCardWithText('@jsmith please review');
+		$this->userManager->method('get')->willReturnMap([['jsmith', $this->liveUser('Jane Smith')]]);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->service->getPublicBoard(self::TOKEN);
+		$this->addToAssertionCount(1);
 	}
 
 	public function testSetCommentsRequiresManageAndPersists(): void {

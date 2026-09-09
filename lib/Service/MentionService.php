@@ -29,8 +29,22 @@ class MentionService {
 	/**
 	 * A `@` that is not preceded by a word char or another `@` (so `foo@bar`
 	 * email-style text does not match), followed by a conservative uid charset.
+	 *
+	 * PUBLIC because {@see PublicShareService::redactMentions()} reuses this exact
+	 * pattern to rewrite mentions out of the anonymous payload. A second, private
+	 * copy of the regex would drift from this one, and only one of the two would be
+	 * covered by the tests - so "what counts as a mention" is defined here once,
+	 * for both the extraction that acts on mentions and the redaction that hides
+	 * the uid behind them.
+	 *
+	 * The CLIENT keeps a third, hand-synced copy (src/services/markdown.js) for the
+	 * cosmetic chip. It cannot be shared with PHP, and the two do disagree in one
+	 * place worth knowing: markdown-it registers the chip as an INLINE rule, so a
+	 * mention inside a code span is not chipped for an authenticated reader, while
+	 * the server-side redaction still substitutes there (it must - the uid is the
+	 * uid wherever it sits).
 	 */
-	private const MENTION_PATTERN = '/(?<![\w@])@([a-zA-Z0-9_.-]+)/';
+	public const MENTION_PATTERN = '/(?<![\w@])@([a-zA-Z0-9_.-]+)/';
 
 	/**
 	 * How many distinct mentions one body may act on. Each one that survives

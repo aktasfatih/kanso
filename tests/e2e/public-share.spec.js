@@ -3,7 +3,7 @@
 
 // BASE/API come from helpers.js so this spec honours E2E_BASE_URL like every
 // other spec; it used to hardcode http://localhost:8891 and silently ignore it.
-import { test, expect, currentAuth, me, BASE, API } from './helpers.js'
+import { test, expect, currentAuth, me, BASE, API, OCS, adminAuth, provisionUser, deleteUser } from './helpers.js'
 
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 
@@ -664,5 +664,140 @@ test.describe('Public board honours the hidden card sections', () => {
 		expect(payloadCard.coverColor).toBe(COVER)
 		expect(res.body.board.cardFeatures.checklist).toBe(false)
 		expect(res.body.board.cardFeatures.coverColor).toBe(false)
+	})
+})
+
+// A `@mention` is the one way a real LOGIN uid rides the anonymous payload as
+// "board content": mentions have no entity table, so they are stored as the
+// literal string `@uid` inside a card description and a comment body, and the
+// public page renders them as chips. The key-set assertions above cannot catch
+// this — the uid arrives inside the VALUE of a permitted key — so it needs its
+// own board and its own fixture.
+//
+// This is the DEFAULT configuration, not an opt-in: the description case holds
+// with the comments toggle off, which is why the first test does not touch it.
+//
+// Why a dedicated provisioned account instead of `me`: helpers.js:269 provisions
+// the worker's own user with displayName === username, so substituting a display
+// name for that uid changes nothing and every assertion here would pass
+// vacuously. This account's display name deliberately differs from its uid, and
+// beforeAll asserts that it really does.
+test.describe('Public payload redacts @mention uids', () => {
+	// Nothing here drives a browser, but keep the shared admin storageState out of
+	// it like every sibling describe — fetchPublic must stay cookieless.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	// SCOPE, so the whole-payload assertion below is not over-trusted: only the two
+	// FREE-TEXT fields are redacted. A `@name` typed into a card/stack/board title or
+	// a label name still ships verbatim by design — those are not mention surfaces
+	// and the sibling 'substring-immune' describe pins them as byte-exact. The
+	// `not.toContain(mentioned)` checks hold here because this board's titles are
+	// mention-free, not because the payload redacts everything.
+	//
+	// The three tests share one fixture and run in declaration order (the config is
+	// serial per file: workers default to 1 and fullyParallel is off), which the
+	// second one relies on — it flips the comments toggle the first asserts is off.
+
+	const DISPLAY_NAME = 'Mona Mentioned'
+	const PASS = 'Public#Mention2026'
+	const CARD_TITLE = 'Card that mentions a board member'
+	// `@`-shaped text that is NOT an account and must survive byte-identical: an
+	// email address, a social handle, a time, an unknown uid. Over-eager
+	// substitution here would corrupt real board content, so these are asserted as
+	// explicitly as the redaction itself.
+	const DECOYS = ['foo@bar.com', '@nextcloud', '@9.30', '@nosuchuser-42']
+
+	let mentioned = ''
+	let description = ''
+	let boardId = 0
+	let cardId = 0
+	let token = ''
+
+	test.beforeAll(async ({}, workerInfo) => {
+		// Per-worker unique, so parallel workers never fight over the account.
+		mentioned = `kanso_pubmention_w${workerInfo.workerIndex}`
+		// Delete-then-create: the shared provisionUser is idempotent, so a leftover
+		// account from an earlier run would keep its OLD display name and the
+		// assertions below would be comparing against the wrong string.
+		await deleteUser(mentioned)
+		await provisionUser(mentioned, PASS, { displayName: DISPLAY_NAME })
+		// Assert the display name actually landed AND that it differs from the uid.
+		// Without this the whole describe can pass vacuously: if the display name
+		// were the uid (Nextcloud's fallback when none is set), substituting one for
+		// the other is a no-op and "the uid is gone" could never fail.
+		const info = await fetch(`${OCS}/users/${encodeURIComponent(mentioned)}`, {
+			headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json', Authorization: adminAuth },
+		})
+		const stored = (await info.json()).ocs.data.displayname
+		expect(stored).toBe(DISPLAY_NAME)
+		expect(stored).not.toContain(mentioned)
+
+		boardId = (await api('POST', '/boards', { title: 'Public Mention E2E' })).body.id
+		// A real board member — this is a member's login uid, not a stranger's.
+		expect((await api('POST', `/boards/${boardId}/acl`, {
+			participant: mentioned, participantType: 'user', permission: 3,
+		})).status).toBe(200)
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		cardId = (await api('POST', '/cards', { stackId, title: CARD_TITLE })).body.id
+		// Two shapes of the same mention: one followed by a space, and one ENDING a
+		// sentence — `.` is a legal uid character, so the second token is `<uid>.` and
+		// only resolves after the trailing punctuation is trimmed. Writing an ordinary
+		// English sentence was the bypass.
+		description = `Assigned to @${mentioned} for review. Also ping @${mentioned}. Decoys: ${DECOYS.join(' ')}`
+		expect((await api('PATCH', `/cards/${cardId}`, { description })).status).toBe(200)
+		expect((await api('POST', `/cards/${cardId}/comments`, {
+			body: `cc @${mentioned} — please look`,
+		})).status).toBe(200)
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+		await deleteUser(mentioned)
+	})
+
+	test('the default payload serves the description with display names, never uids', async () => {
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		// Comments opt-in untouched: this is the out-of-the-box configuration.
+		expect(res.body.board.commentsEnabled).toBe(false)
+
+		const card = res.body.cards.find((c) => c.title === CARD_TITLE)
+		expect(card).toBeTruthy()
+		expect(card.description).toContain(DISPLAY_NAME)
+		// THE assertion: no board member's uid anywhere in what the token serves.
+		expect(card.description).not.toContain(mentioned)
+		expect(JSON.stringify(res.body)).not.toContain(mentioned)
+		// …and nothing else was mangled on the way.
+		for (const decoy of DECOYS) {
+			expect(card.description).toContain(decoy)
+		}
+		// Redaction is a VALUE change, so the field list must be untouched.
+		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
+	})
+
+	test('the opted-in comment body is redacted too', async () => {
+		expect((await api('PUT', `/boards/${boardId}/public-share/comments`, { enabled: true })).body.commentsEnabled).toBe(true)
+
+		const res = await fetchPublic(token)
+		const card = res.body.cards.find((c) => c.title === CARD_TITLE)
+		expect(card.comments.length).toBe(1)
+		expect(card.comments[0].body).toContain(DISPLAY_NAME)
+		expect(card.comments[0].body).not.toContain(mentioned)
+		// Widening the link with comments must not widen it to uids: the whole
+		// payload — description, comment body and author byline together — is uid-free.
+		expect(JSON.stringify(res.body)).not.toContain(mentioned)
+	})
+
+	test('the stored row keeps its raw @mention for authenticated viewers', async () => {
+		// Redaction is payload-only. If it ever became a write-back, the mention would
+		// stop notifying and stop rendering as a chip for members — and no migration
+		// may rewrite user content.
+		const stored = (await api('GET', `/cards/${cardId}`)).body
+		expect(stored.description).toBe(description)
+		expect(stored.description).toContain(`@${mentioned}`)
+		const comments = (await api('GET', `/cards/${cardId}/comments`)).body
+		expect(JSON.stringify(comments)).toContain(`@${mentioned}`)
 	})
 })
