@@ -178,7 +178,7 @@ class ReviewService {
 	 * subscribers are notified and it lands in the discussion.
 	 *
 	 * @throws DoesNotExistException if the card, its board, or the review does not exist
-	 * @throws NotPermittedException if the actor is not the reviewer or cannot read the board
+	 * @throws NotPermittedException if the actor cannot read the board or is not the reviewer (checked in that order)
 	 * @throws InvalidInputException if $state is not a settable verdict
 	 */
 	public function setState(int $cardId, int $reviewId, string $state, string $actorUid, ?string $reason = null): void {
@@ -188,6 +188,14 @@ class ReviewService {
 
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
+		// Membership FIRST, then visibility - the ordering the siblings above use
+		// and {@see CardVisibilityGuard} documents. A reviewer needs READ to act,
+		// and asserting it before the guard (and before the review lookup) stops a
+		// non-member telling 403 from 404 and so probing whether review R exists
+		// on card N.
+		if (($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_READ) === 0) {
+			throw new NotPermittedException('User has no access to this board');
+		}
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$review = $this->cardReviewMapper->findById($reviewId);
@@ -196,10 +204,6 @@ class ReviewService {
 		}
 		if ($actorUid !== $review->getReviewer()) {
 			throw new NotPermittedException('Only the reviewer may set their review state');
-		}
-		// The reviewer must still be able to read the board to act on the review.
-		if (($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_READ) === 0) {
-			throw new NotPermittedException('User has no access to this board');
 		}
 
 		$reason = $reason !== null ? trim($reason) : null;
