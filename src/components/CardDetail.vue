@@ -1340,6 +1340,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											v-if="!item.assignedUser"
 											class="card-modal__step-btn"
 											:title="t('kanso', 'Assign step')"
+											:disabled="isUnsavedItem(item)"
 											:aria-expanded="isStepMenuOpen(item, 'assign')"
 											@click="toggleStepMenu(item, 'assign')">
 											<AccountPlusIcon :size="14" />
@@ -1348,6 +1349,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											v-if="!item.dueDate"
 											class="card-modal__step-btn"
 											:title="t('kanso', 'Set step due date')"
+											:disabled="isUnsavedItem(item)"
 											:aria-expanded="isStepMenuOpen(item, 'due')"
 											@click="toggleStepMenu(item, 'due')">
 											<CalendarIcon :size="14" />
@@ -3790,10 +3792,11 @@ async function handleAddItem() {
 
 // A checklist row rendered from the optimistic create still carries the negative
 // placeholder id `useChecklist` assigns it, and is not addressable on the server
-// yet. Its checkbox is disabled until the create resolves and swaps in the real
-// row, so a click in that window waits instead of firing
-// `PATCH /api/checklist/-1788…` — which can never match and used to drop the
-// toggle silently after rolling the optimistic tick back.
+// yet. Its checkbox and its step pickers (assign / due date) are disabled until
+// the create resolves and swaps in the real row, so a click in that window waits
+// instead of firing `PATCH|POST /api/checklist/-1788…` — which can never match
+// and used to drop the toggle, or the assignment, silently after rolling the
+// optimistic change back with a bare "Not found".
 function isUnsavedItem(item) {
 	return Number(item?.id) < 0
 }
@@ -3868,6 +3871,11 @@ function isStepMenuOpen(item, type) {
 	return openStepMenu.value === `${type}:${item.id}`
 }
 function toggleStepMenu(item, type) {
+	// Belt and braces with the `:disabled` on the two picker buttons, exactly as
+	// `handleToggleItem` backs up the checkbox: an unsaved row has no server id to
+	// address, and the popover key is `${type}:${item.id}`, so a menu opened on the
+	// placeholder id would also vanish the moment the create swaps the real one in.
+	if (isUnsavedItem(item)) return
 	const key = `${type}:${item.id}`
 	openStepMenu.value = openStepMenu.value === key ? null : key
 }
@@ -7728,9 +7736,13 @@ body.theme--dark .card-modal,
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
-.card-modal__step-btn:hover {
+.card-modal__step-btn:hover:not(:disabled) {
 	background: var(--color-background-dark);
 	color: var(--color-main-text);
+}
+.card-modal__step-btn:disabled {
+	cursor: default;
+	opacity: 0.5;
 }
 .card-modal__step-popover {
 	top: calc(100% - 4px);

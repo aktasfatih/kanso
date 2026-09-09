@@ -254,6 +254,13 @@ test.describe('Checklist steps', () => {
 		await addInput.press('Enter')
 		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Send contract' })
 		await expect(item).toBeVisible({ timeout: 10_000 })
+		// The row renders from the optimistic create with a NEGATIVE placeholder id
+		// and is not addressable on the server until the POST resolves — the app
+		// keeps the step pickers disabled for that window (asserted by the test
+		// below). Wait for the real id so a slow create surfaces here as a legible
+		// failure instead of a 30s actionability timeout on the click at :270 —
+		// same precondition toggleChecklistItem() uses.
+		await expect(item).toHaveAttribute('data-item-id', /^\d+$/, { timeout: 15_000 })
 
 		// Assign it to the current user via the row's assign picker.
 		await item.hover()
@@ -316,5 +323,61 @@ test.describe('Checklist steps', () => {
 		const reopened = (await api.get(`/cards/${state.cardId}/checklist`)).find((i) => i.title === 'Send contract')
 		if (reopened.doneAt !== null) throw new Error('un-done did not clear done_at')
 		if (reopened.assignedUser !== me) throw new Error('un-done must not touch the assignee')
+	})
+
+	// A just-added step renders from the optimistic create carrying a NEGATIVE
+	// placeholder id and is not addressable on the server yet. Assigning it in that
+	// window used to fire `POST /api/checklist/-1788…/assign` → 404 → a bare
+	// "Not found" under the checklist, and the assignment was silently dropped —
+	// on a slow connection the window is wide enough for a real user to hit. The
+	// create POST is delayed here so the window is a deterministic 3s to act in.
+	test('the step pickers stay inert until the just-added step has its server id', async ({ page }) => {
+		await page.route('**/api/cards/*/checklist', async (route) => {
+			if (route.request().method() === 'POST') {
+				await new Promise((resolve) => setTimeout(resolve, 3000))
+			}
+			await route.continue()
+		})
+		// Anything addressed to a negative id can only 404 — nothing may be sent.
+		const placeholderCalls = []
+		page.on('request', (req) => {
+			if (/\/api\/checklist\/-\d+/.test(req.url())) placeholderCalls.push(`${req.method()} ${req.url()}`)
+		})
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.locator('.card-tile').filter({ hasText: 'Card With Steps' }).click()
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		const addInput = page.locator('.card-modal__checklist-add-input')
+		await addInput.fill('Deferred step')
+		await addInput.press('Enter')
+
+		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Deferred step' })
+		await expect(item).toBeVisible({ timeout: 10_000 })
+		await expect(item).toHaveAttribute('data-item-id', /^-\d+$/)
+
+		const assignBtn = item.locator('.card-modal__step-btn[title="Assign step"]')
+		const dueBtn = item.locator('.card-modal__step-btn[title="Set step due date"]')
+		await expect(assignBtn).toBeDisabled()
+		await expect(dueBtn).toBeDisabled()
+
+		// Forced past the disabled state, the picker still must not open — no
+		// popover means no request can be addressed to the placeholder id.
+		await assignBtn.click({ force: true })
+		await expect(item.locator('.card-modal__step-popover')).toHaveCount(0)
+
+		// Once the create resolves and the real row swaps in, both pickers work.
+		await expect(item).toHaveAttribute('data-item-id', /^\d+$/, { timeout: 15_000 })
+		await expect(assignBtn).toBeEnabled()
+		await expect(dueBtn).toBeEnabled()
+		await assignBtn.click()
+		await expect(item.locator('.card-modal__step-popover')).toBeVisible({ timeout: 5000 })
+
+		await expect(page.locator('.card-modal__save-error')).toHaveCount(0)
+		if (placeholderCalls.length > 0) {
+			throw new Error(`request(s) sent against the optimistic placeholder id: ${placeholderCalls.join(', ')}`)
+		}
 	})
 })
