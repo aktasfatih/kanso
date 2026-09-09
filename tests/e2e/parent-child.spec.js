@@ -3,6 +3,12 @@
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
+// Every 20s budget below covers a server round-trip: creating a sub-card, then
+// the parent's progress recomputing from it. They were 8s, which is inside the
+// range a saturated CI runner reaches for a create (#10332 saw this test fail on
+// the create at :41 with the board already loaded — a budget problem, not a
+// missing wait), and 8s buys nothing that 20s does not: an auto-retrying
+// assertion only spends its budget when it is already failing.
 test.describe('Parent / Child cards', () => {
 	// Unique board title to avoid collisions with parallel test runs
 	const BOARD_TITLE = 'Parent Child Test Board ' + Date.now()
@@ -60,14 +66,14 @@ test.describe('Parent / Child cards', () => {
 
 		// Wait for the child to appear in the list
 		await expect(page.locator('.card-modal__child').filter({ hasText: 'Sub-task Alpha' }))
-			.toBeVisible({ timeout: 8000 })
+			.toBeVisible({ timeout: 20_000 })
 
 		// Add second sub-card "Sub-task Beta"
 		await addChildInput.fill('Sub-task Beta')
 		await addChildInput.press('Enter')
 
 		await expect(page.locator('.card-modal__child').filter({ hasText: 'Sub-task Beta' }))
-			.toBeVisible({ timeout: 8000 })
+			.toBeVisible({ timeout: 20_000 })
 
 		// Assert Children section shows 2 items
 		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
@@ -100,7 +106,7 @@ test.describe('Parent / Child cards', () => {
 
 		// Progress should now show 1 / 2
 		await expect(page.locator('.card-modal__section-count'))
-			.toHaveText('1 / 2', { timeout: 8000 })
+			.toHaveText('1 / 2', { timeout: 20_000 })
 
 		// The done child should have its done indicator active
 		const doneChildItem = page.locator('.card-modal__child').filter({ hasText: firstChild.title })
@@ -115,7 +121,7 @@ test.describe('Parent / Child cards', () => {
 		await expect(
 			page.locator('.card-tile').filter({ hasText: 'Parent Card' })
 				.locator('.card-tile__children'),
-		).toHaveText(/1\/2/, { timeout: 8000 })
+		).toHaveText(/1\/2/, { timeout: 20_000 })
 	})
 
 	test('reload board and assert parent tile persists child badge 1/2', async ({ page }) => {
@@ -126,13 +132,13 @@ test.describe('Parent / Child cards', () => {
 		// Tile badge should show 1/2 after fresh load
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
 		await expect(parentTile.locator('.card-tile__children'))
-			.toHaveText(/1\/2/, { timeout: 8000 })
+			.toHaveText(/1\/2/, { timeout: 20_000 })
 
 		// Open and re-verify modal progress
 		await parentTile.click()
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 		await expect(page.locator('.card-modal__section-count'))
-			.toHaveText('1 / 2', { timeout: 8000 })
+			.toHaveText('1 / 2', { timeout: 20_000 })
 		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
 	})
 
@@ -154,14 +160,14 @@ test.describe('Parent / Child cards', () => {
 		// Wait for the child card modal to open (URL changes to child cardId)
 		await page.waitForFunction(
 			() => window.location.hash.includes('/card/'),
-			{ timeout: 8000 },
+			{ timeout: 20_000 },
 		)
 
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The child card modal should show the "Parent card" section (not Sub-cards)
 		const parentSection = page.locator('.card-modal__parent-link')
-		await expect(parentSection).toBeVisible({ timeout: 8000 })
+		await expect(parentSection).toBeVisible({ timeout: 20_000 })
 		await expect(parentSection).toHaveText('Parent Card', { timeout: 5000 })
 
 		// The "Add sub-card" input should NOT be present (one-level rule: a card
@@ -191,13 +197,13 @@ test.describe('Parent / Child cards', () => {
 		const undoneChildItem = page.locator('.card-modal__child').filter({ hasText: undoneChild.title })
 		await undoneChildItem.hover()
 		const removeBtn = undoneChildItem.locator('.card-modal__child-remove')
-		await expect(removeBtn).toBeVisible({ timeout: 3000 })
+		await expect(removeBtn).toBeVisible()
 		await removeBtn.click()
 
 		// Progress should now be 1 / 1 (only the done child remains). Since we
 		// detached the undone one, 1 done out of 1 total → progress text "1 / 1".
 		await expect(page.locator('.card-modal__section-count'))
-			.toHaveText('1 / 1', { timeout: 8000 })
+			.toHaveText('1 / 1', { timeout: 20_000 })
 
 		// The list should now have 1 item
 		await expect(page.locator('.card-modal__child')).toHaveCount(1, { timeout: 5000 })

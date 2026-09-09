@@ -343,7 +343,11 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		// halving it is not enough margin on its own, so state the budget too —
 		// same idiom as my-work-live.spec.js. The 30 rows ARE the regression
 		// (#9858), so the fixture is never the thing to shrink here.
-		test.setTimeout(180_000)
+		// 240s: measured 72s on two healthy CI runs and 78s on a saturated one, so
+		// this is ~3x the worst observed. (Also: an explicit setTimeout OVERRIDES the
+		// config default in both directions, so leaving this at 180s would now cap
+		// this test BELOW the suite-wide 240s.)
+		test.setTimeout(240_000)
 
 		// A dedicated board: the shared 3-card fixture is far too short to overflow.
 		const board = await api.post('/boards', { title: 'Timeline tall ' + Math.floor(Date.now() / 1000) })

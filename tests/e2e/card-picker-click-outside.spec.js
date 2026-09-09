@@ -57,13 +57,13 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 
 		// Popover is open.
 		const popover = page.locator('.card-modal__popover')
-		await expect(popover.first()).toBeVisible({ timeout: 3000 })
+		await expect(popover.first()).toBeVisible()
 
 		// Click a neutral area of the modal (the header) — outside popover + trigger.
 		await page.locator('.card-modal__header').click()
 
 		// Popover closes; the card modal stays open.
-		await expect(page.locator('.card-modal__popover')).toHaveCount(0, { timeout: 3000 })
+		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
 		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 
@@ -79,7 +79,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 		// Selection applied…
 		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible({ timeout: 5000 })
 		// …and the popover closed as part of the same click.
-		await expect(page.locator('.card-modal__popover')).toHaveCount(0, { timeout: 3000 })
+		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
 	})
 
 	test('open due → click inside the date input → stays open', async ({ page }) => {
@@ -91,7 +91,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 		await duePill.click()
 
 		const dateInput = page.locator('.card-modal__popover .card-modal__date-input').first()
-		await expect(dateInput).toBeVisible({ timeout: 3000 })
+		await expect(dateInput).toBeVisible()
 
 		// Clicking inside the popover's own input must NOT dismiss it.
 		await dateInput.click()
@@ -105,12 +105,12 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 
 		const priorityPill = page.locator('.card-modal__attrbar button.card-modal__pill').first()
 		await priorityPill.click()
-		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 3000 })
+		await expect(page.locator('.card-modal__popover').first()).toBeVisible()
 
 		await page.keyboard.press('Escape')
 
 		// Picker-first precedence: picker gone, card still open.
-		await expect(page.locator('.card-modal__popover')).toHaveCount(0, { timeout: 3000 })
+		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
 		await expect(page.locator('.card-modal')).toBeVisible()
 
 		// A second Escape now closes the card.
@@ -125,7 +125,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 
 		const priorityPill = page.locator('.card-modal__attrbar button.card-modal__pill').first()
 		await priorityPill.click()
-		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 3000 })
+		await expect(page.locator('.card-modal__popover').first()).toBeVisible()
 
 		// The dismiss handler is a document-level mousedown (capture) that keys on
 		// event.target being the dark backdrop (.modal-wrapper). Dispatch that exact
@@ -139,7 +139,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 
 		// Picker-first precedence: the backdrop mousedown clears the picker only.
 		await fireWrapperMousedown()
-		await expect(page.locator('.card-modal__popover')).toHaveCount(0, { timeout: 3000 })
+		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
 		await expect(page.locator('.card-modal')).toBeVisible()
 
 		// With no picker open, a second backdrop mousedown now closes the card.

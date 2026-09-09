@@ -60,7 +60,7 @@ test.describe('Command Palette', () => {
 
 		// Input should be auto-focused
 		const input = palette.locator('.command-palette__input')
-		await expect(input).toBeFocused({ timeout: 3000 })
+		await expect(input).toBeFocused()
 	})
 
 	test('empty query shows recent boards section', async ({ page }) => {
@@ -157,7 +157,7 @@ test.describe('Command Palette', () => {
 
 		await page.keyboard.press('Escape')
 
-		await expect(palette).not.toBeVisible({ timeout: 3000 })
+		await expect(palette).not.toBeVisible()
 	})
 
 	test('Ctrl+K does NOT open palette when typing in a text input', async ({ page }) => {

@@ -12,7 +12,7 @@
  * the targeted comment is scrolled into view and carries the highlight class.
  */
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, collectConsoleErrors } from './helpers.js'
 
 test.describe('Scroll-to-comment deep links (#3870)', () => {
 	const state = { boardId: 0, cardId: 0, comments: [], replyId: 0 }
@@ -49,14 +49,19 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 	})
 
 	test('full-page card route with ?comment=<id> scrolls to + highlights the target', async ({ page }) => {
-		const errors = []
-		page.on('console', (msg) => {
-			if (msg.type() === 'error') errors.push(msg.text())
-		})
-
 		// The 6th comment - far enough down the thread to require a scroll.
 		const targetId = state.comments[5]
 		await ncLogin(page)
+
+		// Collect AFTER logging in, and filter by the message's source bundle. The
+		// old `favicon|manifest|ResizeObserver` allowlist was a string allowlist,
+		// and it rotted exactly as one does: CI failed here on "could not load
+		// recommendation preview Event" + a 404, both from
+		// /apps/recommendations/js/ — another app's code, logged on the Nextcloud
+		// DASHBOARD that ncLogin redirects through, not on the card page this test
+		// asserts about. collectConsoleErrors() keys on the source URL instead, so
+		// it does not need a new entry every time an unrelated app changes wording.
+		const errors = collectConsoleErrors(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}?comment=${targetId}`)
 
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
@@ -73,9 +78,8 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		// The highlight is transient: it clears after the fade (~4s).
 		await expect(target).not.toHaveClass(/card-modal__comment-group--highlight/, { timeout: 8000 })
 
-		// No console errors from the scroll-to-comment path.
-		const relevant = errors.filter((e) => !/favicon|manifest|ResizeObserver/i.test(e))
-		expect(relevant, `console errors: ${relevant.join('\n')}`).toEqual([])
+		// No console errors from Kanso's own code on the scroll-to-comment path.
+		expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 	})
 
 	test('raw #comment-<id> fragment on the full-page route also scrolls + highlights', async ({ page }) => {

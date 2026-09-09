@@ -106,7 +106,7 @@ test.describe('Checklist', () => {
 
 		// Assert progress shows 0/2 initially
 		await expect(page.locator('.card-modal__checklist-count'))
-			.toHaveText('0 / 2', { timeout: 3000 })
+			.toHaveText('0 / 2')
 
 		// Toggle "Buy groceries" done by clicking its checkbox. This waits for the
 		// item + checkbox to be visible/enabled and awaits the PATCH response so

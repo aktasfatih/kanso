@@ -86,14 +86,14 @@ test.describe('Card Subscriptions / Watchers', () => {
 		await expect(watchBtn).toBeVisible({ timeout: 5000 })
 
 		// Should NOT have the active class (not watching)
-		await expect(watchBtn).not.toHaveClass(/card-modal__watch-btn--active/, { timeout: 3000 })
+		await expect(watchBtn).not.toHaveClass(/card-modal__watch-btn--active/)
 
 		// aria-pressed should be false
-		await expect(watchBtn).toHaveAttribute('aria-pressed', 'false', { timeout: 3000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'false')
 
 		// Label should say "Watch" (not "Watching")
 		const label = watchBtn.locator('.card-modal__watch-label')
-		await expect(label).toHaveText('Watch', { timeout: 3000 })
+		await expect(label).toHaveText('Watch')
 	})
 
 	test('clicking Watch subscribes the user and shows count 1', async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('Card Subscriptions / Watchers', () => {
 		// Should become active. The compact button swaps the "Watch" label for a
 		// count badge once there is at least one watcher (no "Watching" text).
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
-		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 3000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
 
 		// Count badge should show 1
 		const countBadge = watchBtn.locator('.card-modal__watch-count')
@@ -130,7 +130,7 @@ test.describe('Card Subscriptions / Watchers', () => {
 		// After prior test subscribed, this should still be active on fresh load,
 		// with the count badge (not the "Watch" label) shown.
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
-		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 3000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
 		await expect(watchBtn.locator('.card-modal__watch-count')).toBeVisible({ timeout: 4000 })
 	})
 
@@ -150,10 +150,10 @@ test.describe('Card Subscriptions / Watchers', () => {
 
 		// Should revert to "Watch" (unsubscribed)
 		await expect(watchBtn).not.toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
-		await expect(watchBtn).toHaveAttribute('aria-pressed', 'false', { timeout: 3000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'false')
 
 		const label = watchBtn.locator('.card-modal__watch-label')
-		await expect(label).toHaveText('Watch', { timeout: 3000 })
+		await expect(label).toHaveText('Watch')
 
 		// Count badge should be gone or show 0
 		const countBadge = watchBtn.locator('.card-modal__watch-count')
@@ -183,7 +183,7 @@ test.describe('Card Subscriptions / Watchers', () => {
 
 		// Admin should now be auto-subscribed - Watching state expected
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 8000 })
-		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 3000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
 
 		// Count should be ≥ 1 (at least admin is watching)
 		const countBadge = watchBtn.locator('.card-modal__watch-count')
@@ -228,7 +228,7 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
 		// The old "Add watcher" pill lived in the attribute bar; it must be gone.
-		await expect(page.locator('.card-modal__attrbar')).not.toContainText('Add watcher', { timeout: 3000 })
+		await expect(page.locator('.card-modal__attrbar')).not.toContainText('Add watcher')
 		// The dropdown panel is closed until the caret is clicked.
 		await expect(page.locator('.card-modal__watch-panel')).toHaveCount(0)
 	})
@@ -240,13 +240,13 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 
 		const caret = page.locator('.card-modal__watch-caret')
 		await expect(caret).toBeVisible({ timeout: 5000 })
-		await expect(caret).toHaveAttribute('aria-expanded', 'false', { timeout: 3000 })
+		await expect(caret).toHaveAttribute('aria-expanded', 'false')
 
 		// Open the dropdown.
 		await caret.click()
 		const panel = page.locator('.card-modal__watch-panel')
 		await expect(panel).toBeVisible({ timeout: 4000 })
-		await expect(caret).toHaveAttribute('aria-expanded', 'true', { timeout: 3000 })
+		await expect(caret).toHaveAttribute('aria-expanded', 'true')
 
 		// Add BOB via the "Add watcher" picker inside the panel.
 		const addOption = panel.locator('.card-modal__assign-option', { hasText: BOB })
@@ -278,8 +278,8 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 
 		// First Escape dismisses the panel but keeps the card open.
 		await page.keyboard.press('Escape')
-		await expect(page.locator('.card-modal__watch-panel')).toHaveCount(0, { timeout: 3000 })
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 3000 })
+		await expect(page.locator('.card-modal__watch-panel')).toHaveCount(0)
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 })
 
