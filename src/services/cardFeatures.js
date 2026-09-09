@@ -11,15 +11,15 @@ import { computed, inject } from 'vue'
  * board that predates the feature reads as all-enabled.
  *
  * Switching a feature off HIDES its UI and nothing else. Attachments, contact
- * links, GitHub links, time entries and cover colours are never deleted, a
- * running timer is not stopped, and old activity entries stay readable — so
- * re-enabling brings everything back exactly as it was.
+ * links, GitHub links, time entries, cover colours and checklist items are
+ * never deleted, a running timer is not stopped, and old activity entries stay
+ * readable — so re-enabling brings everything back exactly as it was.
  *
  * Enforcement is CLIENT-SIDE ONLY and deliberately so: the API still accepts an
  * upload or a timer start on a board whose switch is off. See the class
  * docblock on `lib/Db/CardFeatures.php` for why.
  */
-export const CARD_FEATURE_KEYS = ['contacts', 'attachments', 'github', 'timeTracking', 'coverColor']
+export const CARD_FEATURE_KEYS = ['contacts', 'attachments', 'github', 'timeTracking', 'coverColor', 'checklist']
 
 /** Every feature on — the shape used whenever a board hasn't said otherwise. */
 export const ALL_CARD_FEATURES_ENABLED = Object.freeze(

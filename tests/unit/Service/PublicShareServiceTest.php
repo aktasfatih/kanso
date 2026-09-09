@@ -273,7 +273,7 @@ class PublicShareServiceTest extends TestCase {
 		// `commentsEnabled` flag is a public-safe boolean gate (#3949) - it says
 		// WHETHER comments are shown, never who; with the opt-in OFF here it is
 		// false and no comment data is present. `cardFeatures` (#5894) is the same
-		// shape: five booleans saying which built-in card sections this board
+		// shape: one boolean per built-in card section saying which ones this board
 		// renders, so the public link honours the manager's switches. No PII, no
 		// internal identifier, nothing about a person.
 		$boardKeys = array_keys($payload['board']);
@@ -283,7 +283,7 @@ class PublicShareServiceTest extends TestCase {
 		// A board that never touched the switches reads as all-enabled - the public
 		// link looks exactly as it did before the feature landed.
 		self::assertSame(
-			['contacts' => true, 'attachments' => true, 'github' => true, 'timeTracking' => true, 'coverColor' => true],
+			['contacts' => true, 'attachments' => true, 'github' => true, 'timeTracking' => true, 'coverColor' => true, 'checklist' => true],
 			$payload['board']['cardFeatures']
 		);
 

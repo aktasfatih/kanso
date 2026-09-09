@@ -3030,9 +3030,9 @@ async function onEstimateScaleChange(newScale) {
 // A board that never links a contact or attaches a file shouldn't have to look
 // at those controls. Each switch hides ONE built-in card section board-wide.
 // Hiding is not deleting: attachments, contact links, GitHub links, time
-// entries and cover colours stay in the database and reappear untouched when
-// the switch goes back on, and a running timer is never stopped. Enforcement is
-// client-side only — see lib/Db/CardFeatures.php for why.
+// entries, cover colours and checklist items stay in the database and reappear
+// untouched when the switch goes back on, and a running timer is never stopped.
+// Enforcement is client-side only — see lib/Db/CardFeatures.php for why.
 const builtinCardFeatures = [
 	{ key: 'contacts', label: t('kanso', 'Contacts') },
 	{ key: 'attachments', label: t('kanso', 'Attachments') },
@@ -3041,6 +3041,7 @@ const builtinCardFeatures = [
 	{ key: 'github', label: t('kanso', 'Code links') },
 	{ key: 'timeTracking', label: t('kanso', 'Time tracking') },
 	{ key: 'coverColor', label: t('kanso', 'Cover colour') },
+	{ key: 'checklist', label: t('kanso', 'Checklist') },
 ]
 // Reads straight off the board payload, so a change another manager makes
 // arrives through the normal delta/realtime path with no reload.

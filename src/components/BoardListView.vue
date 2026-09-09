@@ -985,7 +985,10 @@ function cardHumanId(card) {
 
 // Per-card progress: prefer the checklist, fall back to child-card progress.
 function cardProgress(card) {
-	if (card.checklist && card.checklist.total > 0) return card.checklist
+	// A board that switched checklists off (#5894) shows no checklist progress —
+	// but sub-card progress is a different feature and still counts, so this falls
+	// through to it rather than dropping the badge.
+	if (cardFeatures.value.checklist && card.checklist && card.checklist.total > 0) return card.checklist
 	if (card.childProgress && card.childProgress.total > 0) return card.childProgress
 	return null
 }

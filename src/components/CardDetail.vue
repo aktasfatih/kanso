@@ -1241,8 +1241,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 						</section>
 
-						<!-- Checklist - promoted next to the description -->
-						<section v-if="checklistTotal > 0 || canEdit" class="card-modal__checklist">
+						<!-- Checklist - promoted next to the description. Hidden entirely
+						     when the board switched checklists off (#5894); the items stay
+						     in the database and come back on re-enable. -->
+						<section v-if="cardFeatures.checklist && (checklistTotal > 0 || canEdit)" class="card-modal__checklist">
 							<div class="card-modal__checklist-head">
 								<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-head-icon" />
 								<span class="card-modal__checklist-title">{{ t('kanso', 'Checklist') }}</span>

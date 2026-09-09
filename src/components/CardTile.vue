@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="card.parentCardId || isInProgress || card.blocked || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="card.parentCardId || isInProgress || card.blocked || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- Sub-card marker: this card hangs under another one. The board draws
 				     no indent (columns are flat), so without this a sub-card is
@@ -160,9 +160,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:title="t('kanso', 'Timer running')">
 					<TimerOutlineIcon :size="14" />
 				</span>
-				<!-- Checklist progress badge - only when the card has checklist items -->
+				<!-- Checklist progress badge - only when the card has checklist items
+				     and the board still shows checklists (#5894). -->
 				<span
-					v-if="card.checklist && card.checklist.total > 0"
+					v-if="cardFeatures.checklist && card.checklist && card.checklist.total > 0"
 					class="card-tile__checklist"
 					:class="{ 'card-tile__checklist--complete': card.checklist.done === card.checklist.total }"
 					:aria-label="t('kanso', 'Checklist progress')">

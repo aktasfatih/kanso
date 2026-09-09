@@ -60,9 +60,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ dueLabel }}
 			</span>
 
-			<!-- Checklist progress -->
+			<!-- Checklist progress - hidden when the board switched checklists off (#5894) -->
 			<span
-				v-if="card.checklist && card.checklist.total > 0"
+				v-if="cardFeatures.checklist && card.checklist && card.checklist.total > 0"
 				class="card-preview__checklist"
 				:class="{ 'card-preview__checklist--complete': card.checklist.done === card.checklist.total }">
 				<CheckboxMarkedOutlineIcon :size="12" />
@@ -122,6 +122,7 @@ import { cssColor, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { formatCardDate } from '../utils/dateDisplay.js'
+import { useCardFeatures } from '../services/cardFeatures.js'
 
 const props = defineProps({
 	/** Board summary card (title, boardSeq, labelIds, assigneeIds, priority, duedate, checklist). */
@@ -167,6 +168,10 @@ const renderedDescription = computed(() =>
 )
 
 // ── Cache-first meta (all from the board summary card) ────────────────────────
+// Built-in card sections the board switched off (#5894). Provided by BoardView,
+// which is where the preview is rendered from.
+const cardFeatures = useCardFeatures()
+
 const cardHumanId = computed(() => humanId(props.boardPrefix, props.card.boardSeq))
 
 const cardLabels = computed(() => {
@@ -182,7 +187,7 @@ const hasMeta = computed(() =>
 	cardLabels.value.length > 0
 		|| props.card.priority > 0
 		|| !!props.card.duedate
-		|| (props.card.checklist && props.card.checklist.total > 0)
+		|| (cardFeatures.value.checklist && props.card.checklist && props.card.checklist.total > 0)
 		|| assigneeIds.value.length > 0,
 )
 
