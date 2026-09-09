@@ -23,6 +23,11 @@
 // the hidden→visible resume assertion below is the one that fails if the skip
 // ever regresses into a `return`.
 //
+// The file also owns the loop's TEARDOWN, because both halves of useBoard's
+// `onScopeDispose` are the same claim as the skip above - "a board nobody is
+// looking at makes no requests" - just for a board that is gone rather than
+// hidden. The listener half and the timer half get one test each.
+//
 // Rig is pushLiveness.test.mjs's: a `window` stub before any @nextcloud import,
 // dynamic imports in that order, the real composable under app.runWithContext,
 // transport stubbed at the axios ADAPTER, so the real timer loop, the real
@@ -130,7 +135,7 @@ async function flush() {
  *
  * @param {import('node:test').TestContext} t
  * @param {number} boardId - distinct per test; the cursor registry is module-scoped
- * @return {{deltaReads: () => number}}
+ * @return {{deltaReads: () => number, scope: import('vue').EffectScope}}
  */
 function harness(t, boardId) {
 	const app = createApp({})
@@ -163,7 +168,11 @@ function harness(t, boardId) {
 	t.after(() => scope.stop())
 	app.runWithContext(() => scope.run(() => useBoard(boardId)))
 
-	return { deltaReads: () => changes }
+	// The scope is handed back so a test can dispose the board MID-TEST. Timer
+	// leaks are only observable that way: MockTimers is per-test and drops every
+	// pending timer when it restores, so a timer leaked by a test that disposes in
+	// its `after` hook can never fire anywhere. See the two teardown tests below.
+	return { deltaReads: () => changes, scope }
 }
 
 test('a hidden tab makes no delta requests, and the poll resumes when the tab comes back', async (t) => {
@@ -268,4 +277,46 @@ test('the visibility listener is removed when the board scope is disposed', asyn
 		+ 'and BoardSettingsModal each compose useBoard per open: without this, '
 		+ 'opening and closing fifty cards leaves fifty listeners, every one of '
 		+ 'them firing a /changes read on every single tab focus')
+})
+
+test('the delta poll timer is cleared when the board scope is disposed', async (t) => {
+	// The other half of the same dispose callback, and the half with no coverage
+	// until #10292: deleting `clearTimeout(deltaTimer)` left the whole
+	// realtime suite green. Same lifecycle as the listener above, same
+	// fifty-open-cards argument, and a worse failure mode - a leaked LISTENER
+	// costs one read per tab focus, a leaked POLL costs one read every 5s forever,
+	// on an endpoint with no 304 path.
+	//
+	// It has to be asserted INSIDE one test. MockTimers is per-test and discards
+	// pending timers on restore, so a timer leaked by a board disposed in a
+	// `t.after` hook is thrown away before the next test could ever observe it -
+	// which is exactly why the existing tests could not catch this.
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+	const tick = (ms) => t.mock.timers.tick(ms)
+	setVisibility(false)
+
+	const { deltaReads, scope } = harness(t, 204)
+
+	// Anchor, same as everywhere else in this file: the loop really is running, so
+	// the silence asserted after the dispose means "stopped", not "never started".
+	tick(CADENCE)
+	await flush()
+	assert.equal(deltaReads(), 1, 'the poll must be live before the dispose is meaningful')
+
+	scope.stop()
+
+	// The chain re-arms from inside its own callback, so at this moment exactly one
+	// timeout is outstanding - the one the tick above scheduled. If dispose does
+	// not clear it, it fires here, does a full /changes read for a board nobody is
+	// looking at, and re-arms itself again: an immortal loop, one per closed card
+	// modal.
+	for (let window = 0; window < 3; window++) {
+		tick(CADENCE)
+		await flush()
+		assert.equal(deltaReads(), 1,
+			'a disposed board must stop polling: CardDetail and BoardSettingsModal '
+			+ 'compose useBoard per open, so a poll that outlives its scope means '
+			+ 'fifty opened-and-closed cards leave fifty 5s /changes loops running '
+			+ 'for the rest of the session')
+	}
 })

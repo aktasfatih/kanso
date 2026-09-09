@@ -458,7 +458,15 @@ test.describe('Checklist steps', () => {
 		// Reorder, both roles. Playwright's dragTo drives mouse events, which native
 		// HTML5 DnD ignores, so the drag events are dispatched directly — that also
 		// forces the handle's draggable=false, exactly like the forced clicks above.
-		const dispatchDrag = (fromId, toId) => page.evaluate(([from, to]) => {
+		//
+		// `dragover` and `drop` are TWO calls on purpose (#10292). onItemDrop clears
+		// `dragOverItemId` on its early-return branch as well as its success branch,
+		// so a `data-drag-over` assertion taken after the drop reads 'false' whether
+		// onItemDragOver's guard exists or not — the previous single-shot helper made
+		// that assertion unfalsifiable. The drop indicator is only observable in the
+		// window BETWEEN the two events, so the DataTransfer (and the pointer offsets
+		// derived from the target row) are parked on `window` to survive the gap.
+		const dispatchDragOver = (fromId, toId) => page.evaluate(([from, to]) => {
 			const dt = new DataTransfer()
 			const fromRow = document.querySelector(`li[data-item-id="${from}"]`)
 			const toRow = document.querySelector(`li[data-item-id="${to}"]`)
@@ -474,16 +482,43 @@ test.describe('Checklist steps', () => {
 				// Bottom half → "insert after the target", i.e. afterItemId = target id.
 				clientY: rect.top + rect.height * 0.75,
 			}
+			// `opts` already carries the DataTransfer, so the drop below needs nothing
+			// but this object — see the note there about why it has to be reused.
+			window.__kansoDrag = opts
 			toRow.dispatchEvent(new DragEvent('dragover', opts))
-			toRow.dispatchEvent(new DragEvent('drop', opts))
 		}, [fromId, toId])
 
-		await dispatchDrag(placeholderId, anchorId) // unsaved row dragged
+		// No wait between the two halves on purpose. Nothing clears the indicator in
+		// the gap, so the assertion there has all of its own timeout to observe a
+		// missing guard — Playwright's toHaveAttribute retries. A requestAnimationFrame
+		// await here would buy nothing and could hang the evaluate if the renderer is
+		// ever throttled.
+		const dispatchDrop = (toId) => page.evaluate((to) => {
+			const toRow = document.querySelector(`li[data-item-id="${to}"]`)
+			if (!toRow) throw new Error(`drop row missing: ${to}`)
+			// The SAME DragEvent init as the dragover, DataTransfer included: a drop
+			// carrying a fresh DataTransfer is a different drag as far as the handler is
+			// concerned, and the clientY is what selects the closest-edge branch.
+			const opts = window.__kansoDrag
+			if (!opts) throw new Error('dispatchDrop called without a preceding dispatchDragOver')
+			toRow.dispatchEvent(new DragEvent('drop', opts))
+		}, toId)
+
+		// The unsaved row DRAGGED: dragstart is preventDefault()ed, so nothing is ever
+		// dragging — asserted, not just claimed, in the same gap: with no drag in
+		// progress the ANCHOR must not light up as a drop target either.
+		await dispatchDragOver(placeholderId, anchorId)
+		await expect(anchor).toHaveAttribute('data-drag-over', 'false')
+		await dispatchDrop(anchorId)
 		await assertNoPlaceholderTraffic('reorder (unsaved row dragged)')
-		await dispatchDrag(anchorId, placeholderId) // unsaved row as the drop target
-		await assertNoPlaceholderTraffic('reorder (unsaved row as drop target)')
-		// …and it never advertised a drop it could not send.
+
+		// The unsaved row as the DROP TARGET — a real row is dragging, so this is the
+		// case where onItemDragOver actually has to refuse. Asserted in the gap: it
+		// must never advertise a drop it could not send.
+		await dispatchDragOver(anchorId, placeholderId)
 		await expect(item).toHaveAttribute('data-drag-over', 'false')
+		await dispatchDrop(placeholderId)
+		await assertNoPlaceholderTraffic('reorder (unsaved row as drop target)')
 
 		// Once the create resolves and the real row swaps in, every control works.
 		releaseCreate()

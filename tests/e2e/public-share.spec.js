@@ -71,6 +71,14 @@ const PUBLIC_CARD_KEYS = [
 // and never the internal board id.
 const PUBLIC_STACK_KEYS = ['color', 'id', 'title'].sort()
 
+// And likewise for one entry of the card's nested `labels` array, built at
+// PublicShareService.php:242. The card/stack/comment key sets above are pinned
+// but this one was not (#10292), and it is the other nested object on the public
+// payload — so the same drift a flat key set catches (a label gaining a
+// createdBy, an owner, a lastEditedBy) would have slipped through here. Note the
+// internal label `id` is deliberately NOT exposed.
+const PUBLIC_LABEL_KEYS = ['color', 'name'].sort()
+
 // Public / read-only board share links (#3531). A MANAGE user mints a token; an
 // unauthenticated reader gets a STRIPPED read-only board; disabling 404s it.
 test.describe('Public read-only board share', () => {
@@ -99,6 +107,11 @@ test.describe('Public read-only board share', () => {
 		const comment = await api('POST', `/cards/${cardId}/comments`, { body: 'internal comment SHOULD NOT LEAK' })
 		expect(comment.status).toBe(200)
 		expect(comment.body.body).toContain('SHOULD NOT LEAK')
+		// A label on the public card, so the nested-labels key assertion below runs
+		// against a real entry instead of passing vacuously over an empty array.
+		const label = await api('POST', '/labels', { boardId, title: 'Public label', color: '31CC7C' })
+		expect(label.status).toBe(200)
+		expect((await api('PUT', `/cards/${cardId}/labels/${label.body.id}`)).status).toBe(200)
 	})
 
 	// The token is minted by the 'MANAGE enables a link' test below, so every
@@ -159,6 +172,13 @@ test.describe('Public read-only board share', () => {
 		expect(res.body.stacks.length).toBe(1) // so the loop below can't pass by being empty
 		for (const stack of res.body.stacks) {
 			expect(Object.keys(stack).sort()).toEqual(PUBLIC_STACK_KEYS)
+		}
+		// The nested `labels` entries get the same exhaustive treatment. The length
+		// check is what stops it passing over an empty array — beforeAll assigns
+		// exactly one label to this card.
+		expect(card.labels.length).toBe(1)
+		for (const label of card.labels) {
+			expect(Object.keys(label).sort()).toEqual(PUBLIC_LABEL_KEYS)
 		}
 
 		// Raw-string SUPPLEMENTS to the key-set assertions above — deliberately not
