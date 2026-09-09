@@ -3,11 +3,30 @@
 #
 # Throwaway development Nextcloud with this app mounted from the checkout.
 # Defaults mirror the newest supported target (nextcloud:34-apache / PHP 8.3 +
-# postgres 16). The app supports NC 32–34; CI e2e boots this same stack. No
-# volumes are persisted: `docker compose down` resets everything.
+# postgres 16). The app supports NC 32–34; CI e2e boots this same stack.
 #
 #   cd dev && ./setup.sh          # start + enable the app
 #   http://localhost:8891         # login: admin / admin
+#
+# Restart vs. reset — they are DIFFERENT commands, and picking the wrong one
+# used to brick the stack:
+#
+#   docker compose down && ./setup.sh                    # restart: install + data survive
+#   docker compose --profile '*' down -v && ./setup.sh   # reset: destroys everything
+#
+# The `--profile '*'` on the reset is not decoration. `-v` only removes the
+# volumes of services in ACTIVE profiles, so a bare `docker compose down -v`
+# deletes the webroot while leaving the (profiled) database container running
+# with all its data — which is the exact half-wiped state that bricks the next
+# boot. The wildcard selects every profile, so one command clears whichever
+# driver was last used. Verified on compose v5.1.1; `--remove-orphans` does NOT
+# do this. See the `volumes:` block at the bottom of this file.
+#
+# Neither command re-runs Kanso's migrations: setup.sh only re-enables the app,
+# and Nextcloud runs an app's migrations only when info.xml's <version> is newer
+# than the installed one (feature branches never bump it — see CLAUDE.md). So
+# after ADDING a migration, reset rather than restart, or you get new PHP code
+# against the previous schema. `./smoke.sh` says so out loud when that happens.
 #
 # Cross-version / cross-DB matrix (used by CI, works locally too):
 #   NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on postgres
@@ -42,6 +61,8 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+    volumes:
+      - db_postgres:/var/lib/postgresql/data
 
   # MariaDB is Nextcloud's MySQL-compatible target. Same logical hostname alias
   # ("db") as postgres so the nextcloud service's *_HOST wiring is uniform; only
@@ -66,6 +87,8 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+    volumes:
+      - db_mysql:/var/lib/mysql
     networks:
       default:
         aliases:
@@ -129,6 +152,11 @@ services:
       NEXTCLOUD_TRUSTED_DOMAINS: localhost
       REDIS_HOST: redis
     volumes:
+      # The Nextcloud webroot: its code, config/config.php, data/ and the
+      # side-loaded custom_apps (notify_push, deck, contacts). NAMED so that
+      # `docker compose down` && `up` reattaches the SAME install — see the
+      # `volumes:` block at the bottom of this file.
+      - nextcloud_html:/var/www/html
       # The app tree Nextcloud runs. Defaults to this checkout, which is what
       # every local run and every other CI job wants. dev/upgrade-check.sh points
       # it at a staging directory instead so it can boot the last RELEASED
@@ -152,3 +180,56 @@ services:
       db-mysql:
         condition: service_healthy
         required: false
+
+# Every bit of stack state lives in one of these, and they are NAMED on purpose.
+#
+# The nextcloud and postgres/mariadb images all declare their data directory as
+# a Dockerfile `VOLUME`, so leaving them out of this file does not mean "no
+# state" — it means an ANONYMOUS volume per container, and anonymous volumes
+# have a lifecycle nothing reattaches to:
+#
+#   docker compose down        # container gone, its anonymous volume orphaned
+#   docker compose up -d       # fresh container, BLANK anonymous volume
+#
+# For the webroot that was a booby trap. `down` (without `--profile`) does not
+# touch the profiled `db` service, so postgres kept running with a fully
+# populated database while the new nextcloud container came up with an empty
+# /var/www/html. The entrypoint sees no config.php, concludes "not installed",
+# and re-runs `maintenance:install` against that live database:
+#
+#   PDOException: SQLSTATE[42501]: Insufficient privilege: 7
+#     ERROR: permission denied for table oc_migrations
+#   Retrying install...
+#   Installing of nextcloud failed!            (container Exited (1))
+#
+# — which reads like a database-permissions bug and is really a volume-lifecycle
+# one. `down -v` was the only reliable recovery, i.e. the only way to restart the
+# stack was to destroy the database too.
+#
+# Named, the webroot and the database data reattach together on the next `up`,
+# so `down` is a restart. Nothing else in the tree depends on the old behaviour:
+# dev/upgrade-check.sh already opens with an explicit `--profile <db> down -v`
+# (it must install the released version onto a pristine database), and CI boots
+# each job on a docker daemon that has never run this stack — which is why the
+# parallel install-matrix legs can all claim host port 8891 and the container
+# name `kanso-dev` without colliding.
+#
+# The reset is `--profile '*' down -v`, NOT a bare `down -v`, for the reason in
+# the header: volume removal follows the active profiles. Two consequences worth
+# knowing:
+#   * `--profile postgres down -v` never removes `db_mysql` (and vice versa), so
+#     a machine that has used both drivers keeps a stale data dir for the other
+#     one until a wildcard reset.
+#   * there is no service with `profiles: ["sqlite"]`, so a sqlite reset only
+#     needs the profile-less services — but for sqlite the database IS the
+#     webroot (data/nextcloud.db), so removing `nextcloud_html` is a full reset.
+#
+# The other cost of persistence is that a webroot installed against a DIFFERENT
+# KANSO_DB or a different NC major also survives, and Nextcloud would happily
+# boot it and report itself healthy while running something nobody asked for.
+# dev/setup.sh asserts against both after the boot rather than letting it pass
+# quietly.
+volumes:
+  nextcloud_html:
+  db_postgres:
+  db_mysql:

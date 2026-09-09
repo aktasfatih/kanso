@@ -42,6 +42,9 @@ OCC="docker exec -u www-data kanso-dev php occ"
 case "$KANSO_DB" in
 	postgres)
 		COMPOSE_PROFILE=postgres
+		# What Nextcloud records in config.php's `dbtype` for this driver — used
+		# by the webroot check further down.
+		EXPECTED_DBTYPE=pgsql
 		cat > .db.env <<-'ENV'
 			POSTGRES_HOST=db
 			POSTGRES_DB=nextcloud
@@ -51,6 +54,7 @@ case "$KANSO_DB" in
 		;;
 	mysql|mariadb)
 		COMPOSE_PROFILE=mysql
+		EXPECTED_DBTYPE=mysql
 		cat > .db.env <<-'ENV'
 			MYSQL_HOST=db
 			MYSQL_DATABASE=nextcloud
@@ -60,6 +64,7 @@ case "$KANSO_DB" in
 		;;
 	sqlite)
 		COMPOSE_PROFILE=sqlite
+		EXPECTED_DBTYPE=sqlite3
 		cat > .db.env <<-'ENV'
 			SQLITE_DATABASE=nextcloud
 		ENV
@@ -96,20 +101,96 @@ echo "Booting Nextcloud ${NC_VERSION} on ${KANSO_DB}..."
 # db service so only redis + nextcloud come up.
 docker compose --profile "$COMPOSE_PROFILE" up -d
 
+# The reset every message below points at. NOT a bare `down -v`: compose only
+# removes the volumes of services whose profile is active, so `down -v` without
+# a profile deletes the webroot and leaves the (profiled) database container up
+# with all its data — the half-wiped state that bricks the next boot. `'*'`
+# selects every profile, so it clears whichever driver was last used.
+RESET_CMD="docker compose --profile '*' down -v && NC_VERSION=${NC_VERSION} KANSO_DB=${KANSO_DB} ./setup.sh"
+
 echo "Waiting for Nextcloud to finish installing..."
 # Generous budget: on a cold, slow CI runner the older NC images pull fresh and
 # their first-boot install (Postgres especially) can take well over 7 minutes.
 # 180 * 5s = 15 min, comfortably inside the install-matrix job's 30-min cap.
+#
+# The budget is for a SLOW boot, not a dead one. When the entrypoint's install
+# fails it exits the container, and every remaining second of that 15 minutes is
+# spent polling a port nothing is listening on — so stop as soon as the
+# container is gone and let the diagnosis below print. (That wait is how the
+# blank-webroot brick used to present: a quarter of an hour of silence, then a
+# generic "did not come up".)
 for i in $(seq 1 180); do
 	if curl -sf http://localhost:8891/status.php 2>/dev/null | grep -q '"installed":true'; then
 		break
 	fi
+	case "$(docker inspect -f '{{.State.Status}}' kanso-dev 2>/dev/null || echo missing)" in
+		running|created|restarting) ;;
+		*) echo "The kanso-dev container is no longer running — not waiting out the rest." >&2
+		   break ;;
+	esac
 	sleep 5
 done
 curl -sf http://localhost:8891/status.php | grep -q '"installed":true' || {
 	echo "Nextcloud did not come up; check: docker logs kanso-dev" >&2
+	echo >&2
+	echo "If the log ends in 'Installing of nextcloud failed!' (typically with" >&2
+	echo "'permission denied for table oc_migrations'), the entrypoint found an" >&2
+	echo "EMPTY webroot next to a populated database and tried to install over it." >&2
+	echo "That means the two were reset separately — usually a bare 'down -v',"  >&2
+	echo "which only removes the volumes of the active profiles. Reset both:" >&2
+	echo "  ${RESET_CMD}" >&2
+	echo "That destroys the dev database too — dev/seed.sh reseeds it." >&2
 	exit 1
 }
+
+# --- is this the stack that was asked for? -----------------------------------
+# The webroot is a NAMED volume (see docker-compose.yml), so it deliberately
+# outlives `docker compose down`. That is what makes `down` a restart instead of
+# the trap it used to be — but it also means a webroot installed against another
+# driver, or another NC major, survives, and Nextcloud will boot it without
+# complaint. Everything downstream — smoke.sh, the install matrix, the e2e suite
+# — would then pass against a stack nobody asked for. Assert, don't trust.
+
+# 1. The database driver. `KANSO_DB=sqlite ./setup.sh` over a postgres install:
+#    the entrypoint sees a config.php, skips the install, keeps the old dbtype,
+#    and the stack comes up "healthy" while still talking to postgres.
+#    No `|| true` and no swallowed stderr: on an install that answered
+#    status.php `"installed":true`, dbtype is always set, so failing to read it
+#    means something is wrong with occ — and a guard that quietly stops guarding
+#    is worse than no guard.
+ACTUAL_DBTYPE="$($OCC config:system:get dbtype | tr -d '\r\n ')"
+if [ "$ACTUAL_DBTYPE" != "$EXPECTED_DBTYPE" ]; then
+	echo >&2
+	echo "This Nextcloud is installed on '${ACTUAL_DBTYPE}', but KANSO_DB=${KANSO_DB}" >&2
+	echo "asked for '${EXPECTED_DBTYPE}'. The webroot volume is left over from an" >&2
+	echo "earlier boot on the other driver; switching drivers needs a reset, not a" >&2
+	echo "restart:" >&2
+	echo "  ${RESET_CMD}" >&2
+	echo "That destroys the dev database too — dev/seed.sh reseeds it." >&2
+	exit 1
+fi
+
+# 2. The Nextcloud major. This one is asymmetric, and only one half is loud:
+#    a webroot NEWER than the image makes the entrypoint refuse to start (caught
+#    by the boot check above), but a webroot one major OLDER is silently rsynced
+#    and `occ upgrade`d — so `NC_VERSION=33 ./setup.sh` over an NC 32 webroot
+#    yields a healthy, correct-looking NC 33 whose Kanso migrations never ran on
+#    NC 33 at all. That is exactly what the install matrix exists to check, so it
+#    is exactly the run that must not pass quietly. The entrypoint says so in its
+#    log; a same-major patch bump (34.0.3 → 34.0.4) is a legitimate upgrade and
+#    deliberately does NOT trip this.
+CARRIED_FROM="$(docker logs kanso-dev 2>&1 \
+	| sed -n 's/.*Upgrading nextcloud from \([0-9][0-9]*\)\..*/\1/p' | tail -1)"
+if [ -n "$CARRIED_FROM" ] && [ "$CARRIED_FROM" != "$NC_VERSION" ]; then
+	echo >&2
+	echo "This webroot was installed on Nextcloud ${CARRIED_FROM} and the entrypoint just" >&2
+	echo "upgraded it in place to ${NC_VERSION}. An upgraded instance is not a fresh" >&2
+	echo "install: Kanso's migrations ran on ${CARRIED_FROM}, not on ${NC_VERSION}, so anything" >&2
+	echo "this stack proves about NC ${NC_VERSION} is worth nothing. Reset:" >&2
+	echo "  ${RESET_CMD}" >&2
+	echo "(dev/upgrade-check.sh is the script that tests upgrades on purpose.)" >&2
+	exit 1
+fi
 
 # Docker pre-creates the mountpoint parent as root; hand it to the web user
 docker exec kanso-dev chown www-data:www-data /var/www/html/custom_apps
