@@ -158,6 +158,16 @@ test.describe('Estimate sorting & filtering', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
+		// `.board-view__header` is part of the SHELL: it renders (alongside skeleton
+		// columns) before the board read resolves. `allTextContents()` below is a
+		// one-shot read with no auto-retry, so taking it at that moment returns an
+		// EMPTY list on a slow runner and both indexOf() calls come back -1 — which
+		// is exactly how this failed in CI (`Expected: < -1 / Received: -1`). Wait
+		// for all three fixture tiles to actually be on the board first; the
+		// ordering assertions below are then about the ORDER, which is the claim
+		// this test makes, and not about whether the fetch had landed.
+		await expect(page.locator('.card-tile__title')).toHaveCount(3, { timeout: 20_000 })
+
 		// Manual (persisted) order first: None, Small, Big.
 		const titlesManual = (await page.locator('.card-tile__title').allTextContents()).map((s) => s.trim())
 		expect(titlesManual.indexOf('EstNone')).toBeLessThan(titlesManual.indexOf('EstSmall'))
