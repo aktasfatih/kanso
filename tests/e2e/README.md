@@ -15,7 +15,7 @@ npx playwright test labels       # a single spec
 
 ## Optional Nextcloud apps some specs need
 
-Two specs exercise integrations with other Nextcloud apps, and fail with a
+A few specs exercise integrations with other Nextcloud apps, and fail with a
 confusing "button is missing" / "board not found" error if that app isn't
 installed rather than saying so:
 
@@ -23,6 +23,7 @@ installed rather than saying so:
 | --- | --- |
 | [`card-contacts.spec.js`](./card-contacts.spec.js) | `contacts` — `ContactService::isAvailable()` is false without the app, so the picker's search returns an empty list and the spec times out waiting for its option |
 | [`deck-import.spec.js`](./deck-import.spec.js) | `deck` — its `beforeAll` seeds a source board through the real Deck API, so the whole describe errors out |
+| [`deck-import-ui.spec.js`](./deck-import-ui.spec.js) | `deck` — same reason: it seeds a source board, then drives the import modal to assert the result summary |
 
 `dev/setup.sh` side-loads both (pinned release tarballs) through
 [`dev/install-optional-apps.sh`](../../dev/install-optional-apps.sh), and the CI

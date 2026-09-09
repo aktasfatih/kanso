@@ -46,6 +46,36 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</template>
 
+			<!-- Step 3: report what landed. Navigating straight to the board hid
+			     the skipped rows and the labels that were never created — a
+			     partial import must not look like a complete one. -->
+			<template v-else-if="step === 'summary'">
+				<ul class="csv-import__summary" role="status" data-test="csv-import-summary">
+					<li>{{ n('kanso', '%n card created', '%n cards created', summary.cards) }}</li>
+					<li v-if="summary.labelsCreated > 0">
+						{{ n('kanso', '%n label created', '%n labels created', summary.labelsCreated) }}
+					</li>
+				</ul>
+				<p v-if="summary.skipped > 0" class="csv-import__warning" role="status" data-test="csv-import-skipped-rows">
+					{{ n('kanso',
+						'%n row was skipped because it had no title.',
+						'%n rows were skipped because they had no title.',
+						summary.skipped) }}
+				</p>
+				<p v-if="summary.labelsSkipped > 0" class="csv-import__warning" role="status" data-test="csv-import-labels-skipped">
+					{{ n('kanso',
+						'%n label was not created and is missing from the imported cards: only board managers can add new labels. Ask a manager to add it, then set it on the cards.',
+						'%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards.',
+						summary.labelsSkipped) }}
+				</p>
+				<div class="csv-import__actions">
+					<NcButton type="primary" data-test="csv-import-open" @click="$emit('open-board', summary)">
+						{{ t('kanso', 'Open board') }}
+					</NcButton>
+					<NcButton @click="$emit('close')">{{ t('kanso', 'Close') }}</NcButton>
+				</div>
+			</template>
+
 			<!-- Step 2: choose board + stack, map columns, confirm. -->
 			<template v-else>
 				<div class="csv-import__grid">
@@ -104,9 +134,12 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import { fetchBoards, fetchBoard, importCsvCards } from '../services/api.js'
 
-const emit = defineEmits(['close', 'imported'])
+const emit = defineEmits(['close', 'imported', 'open-board'])
 
+// 'source' → 'mapping' → 'summary'.
 const step = ref('source')
+// The import result, rendered on the summary step.
+const summary = ref(null)
 const rawText = ref('')
 const parseError = ref('')
 const fileInput = ref(null)
@@ -257,7 +290,11 @@ async function doImport() {
 	}
 	try {
 		const res = await importCsvCards(targetBoardId.value, targetStackId.value, rawText.value, sent, true)
-		emit('imported', { boardId: targetBoardId.value, ...res })
+		summary.value = { boardId: targetBoardId.value, ...res }
+		// The parent refreshes the board list; the modal stays open and reports
+		// the counts (including anything skipped) before the user moves on.
+		emit('imported', summary.value)
+		step.value = 'summary'
 	} catch (err) {
 		parseError.value = err?.response?.data?.error || t('kanso', 'Could not import that CSV.')
 	} finally {
@@ -349,6 +386,19 @@ async function doImport() {
 .csv-import__error {
 	color: var(--color-error);
 	font-size: 0.85rem;
+	margin: 0;
+}
+
+.csv-import__summary {
+	list-style: disc;
+	padding-left: 20px;
+	margin: 0;
+	color: var(--color-main-text);
+}
+
+.csv-import__warning {
+	color: var(--color-warning-text, var(--color-error));
+	font-weight: 600;
 	margin: 0;
 }
 

@@ -43,8 +43,10 @@ use Psr\Log\LoggerInterface;
  * kinds of card attachment: `deck_file` uploads (bytes copied out of Deck's
  * app-data into Kanso's own) AND `file` user-Files references (Deck stores these
  * as shares; the referenced file's bytes are read from the owner's Files and
- * copied in the same way). A reference whose source file is gone/unreadable is
- * logged and skipped (counted in `skippedFileAttachments`), never fatal. Board
+ * copied in the same way). An attachment of EITHER kind whose source is
+ * gone/oversized/unreadable is logged and skipped - counted in
+ * `skippedAttachments`, one honest total across both paths, so a degraded
+ * import can never look like a complete one - but never fatal. Board
  * SHARING/ACL is still out of scope for v1 (it needs participant remapping).
  */
 class DeckImportService {
@@ -100,7 +102,7 @@ class DeckImportService {
 	/**
 	 * Imports one Deck board into a new Kanso board owned by the actor.
 	 *
-	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int, comments: int, attachments: int, skippedFileAttachments: int}
+	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int, comments: int, attachments: int, skippedAttachments: int}
 	 * @throws InvalidInputException if Deck is not available
 	 * @throws NotPermittedException if the actor cannot read the Deck board
 	 * @throws DoesNotExistException if the Deck board does not exist
@@ -214,8 +216,8 @@ class DeckImportService {
 			$this->importLabelAssignments($deckCardIds, $cardIdMap, $labelIdMap);
 			$this->importUserAssignees($deckCardIds, $cardIdMap);
 			$commentCount = $this->importComments($deckCardIds, $cardIdMap, $actorUid);
-			$attachmentCount = $this->importAttachments($deckCardIds, $cardIdMap, $actorUid, $writtenObjects);
-			[$fileRefCount, $skippedFileAttachments] = $this->importFileReferenceAttachments($deckCardIds, $cardIdMap, $actorUid, $writtenObjects);
+			[$attachmentCount, $skippedDeckFiles] = $this->importAttachments($deckCardIds, $cardIdMap, $actorUid, $writtenObjects);
+			[$fileRefCount, $skippedFileRefs] = $this->importFileReferenceAttachments($deckCardIds, $cardIdMap, $actorUid, $writtenObjects);
 
 			$result = [
 				'boardId' => $boardId,
@@ -225,7 +227,10 @@ class DeckImportService {
 				'labels' => count($labelIdMap),
 				'comments' => $commentCount,
 				'attachments' => $attachmentCount + $fileRefCount,
-				'skippedFileAttachments' => $skippedFileAttachments,
+				// ONE honest total across both attachment paths. Reported even when
+				// zero, so the UI can always say "nothing was lost" rather than
+				// leaving the user to infer it from a count they cannot check.
+				'skippedAttachments' => $skippedDeckFiles + $skippedFileRefs,
 			];
 			$this->db->commit();
 			return $result;
@@ -329,8 +334,9 @@ class DeckImportService {
 	 * {@see self::importFileReferenceAttachments()} (Deck stores it as a share).
 	 *
 	 * A `deck_attachment` row whose source object is MISSING - or whose source
-	 * exceeds {@see AttachmentSanitizer::MAX_SIZE} - is skipped and NOT counted,
-	 * never failing the whole import. The copied filename/MIME run through
+	 * exceeds {@see AttachmentSanitizer::MAX_SIZE}, or whose bytes cannot be read
+	 * - is logged and skipped (counted as skipped, exactly like the file-reference
+	 * path), never failing the whole import. The copied filename/MIME run through
 	 * {@see AttachmentSanitizer} for the same hardening as the upload path (an
 	 * imported `.html`/`.svg` can never become stored XSS), and the filename is
 	 * sanitized BEFORE it is used to look the source object up. Every object we do
@@ -340,17 +346,23 @@ class DeckImportService {
 	 * @param int[] $deckCardIds
 	 * @param array<int, int> $cardIdMap deck card id → kanso card id
 	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
-	 * @return int the number of attachments copied + linked
+	 * @return array{0: int, 1: int} [imported count, skipped count]
 	 */
-	private function importAttachments(array $deckCardIds, array $cardIdMap, string $actorUid, array &$writtenObjects): int {
+	private function importAttachments(array $deckCardIds, array $cardIdMap, string $actorUid, array &$writtenObjects): array {
 		$attachments = $this->deckReader->readAttachments($deckCardIds);
 		if ($attachments === []) {
-			return 0;
+			return [0, 0];
 		}
 		$deckAppData = $this->appDataFactory->get('deck');
 
 		$count = 0;
+		$skipped = 0;
 		foreach ($attachments as $att) {
+			// NOT counted as skipped: the attachments were read for exactly the
+			// $deckCardIds that were just inserted into $cardIdMap, so a miss here
+			// means "not part of this import", not "lost". If card insertion ever
+			// becomes conditional, this has to start counting (same for the
+			// identical guard in importFileReferenceAttachments()).
 			$newCardId = $cardIdMap[$att['cardId']] ?? null;
 			if ($newCardId === null) {
 				continue;
@@ -375,6 +387,7 @@ class DeckImportService {
 					'Kanso Deck import: skipping deck_file attachment with missing source object',
 					['deckCardId' => $att['cardId'], 'data' => $att['data']]
 				);
+				$skipped++;
 				continue;
 			}
 
@@ -386,6 +399,7 @@ class DeckImportService {
 					'Kanso Deck import: skipping oversized deck_file attachment',
 					['deckCardId' => $att['cardId'], 'data' => $att['data'], 'size' => (int)$sourceFile->getSize()]
 				);
+				$skipped++;
 				continue;
 			}
 
@@ -399,6 +413,7 @@ class DeckImportService {
 					'Kanso Deck import: could not read deck_file attachment bytes',
 					['deckCardId' => $att['cardId'], 'data' => $att['data'], 'exception' => $e]
 				);
+				$skipped++;
 				continue;
 			}
 
@@ -415,7 +430,7 @@ class DeckImportService {
 			);
 			$count++;
 		}
-		return $count;
+		return [$count, $skipped];
 	}
 
 	/**

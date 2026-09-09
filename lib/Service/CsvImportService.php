@@ -131,9 +131,9 @@ class CsvImportService {
 	 * created - counted in `labelsSkipped` (DISTINCT names, the same unit
 	 * `labelsCreated` uses). Deliberately a partial success rather than a refusal:
 	 * the rows are the point of the import, and a member who cannot define labels
-	 * can still populate the board. The count is reported for a caller that wants
-	 * to surface the shortfall; today's board-list modal does not read it yet, so
-	 * the skip is currently silent in the UI.
+	 * can still populate the board. The count is reported so the shortfall reaches
+	 * a human: the board-list CSV modal renders it (with `skipped`) as a warning on
+	 * its summary step, rather than navigating away as if nothing was lost.
 	 *
 	 * If the target stack's existing keys are already at the sort-key wall the
 	 * first attempt overflows before writing anything; the stack is then

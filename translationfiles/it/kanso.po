@@ -247,8 +247,21 @@ msgstr "%1$s ha richiesto la tua revisione su %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s ha condiviso %2$s con te"
 
+#: src/views/BoardList.vue:216
+msgid "%n attachment"
+msgid_plural "%n attachments"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardList.vue:223
+msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
+msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:256
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -256,7 +269,25 @@ msgid_plural "%n cards"
 msgstr[0] "%n scheda"
 msgstr[1] "%n schede"
 
-#: src/components/CsvImportModal.vue:80
+#: src/components/CsvImportModal.vue:54
+msgid "%n card created"
+msgid_plural "%n cards created"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardList.vue:212
+msgid "%n column"
+msgid_plural "%n columns"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardList.vue:215
+msgid "%n comment"
+msgid_plural "%n comments"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:110
 msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
@@ -273,6 +304,24 @@ msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
+
+#: src/views/BoardList.vue:214
+msgid "%n label"
+msgid_plural "%n labels"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:56
+msgid "%n label created"
+msgid_plural "%n labels created"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:66
+msgid "%n label was not created and is missing from the imported cards: only board managers can add new labels. Ask a manager to add it, then set it on the cards."
+msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/CardDetail.vue:4291
 msgid "%n minute ago"
@@ -307,6 +356,12 @@ msgstr[1] "%n progetti"
 #: src/components/CardDetail.vue:1975
 msgid "%n reply"
 msgid_plural "%n replies"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:60
+msgid "%n row was skipped because it had no title."
+msgid_plural "%n rows were skipped because they had no title."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -1193,6 +1248,8 @@ msgid "close"
 msgstr "chiudi"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CsvImportModal.vue
+#: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
 msgid "Close"
 msgstr "Chiudi"
@@ -2874,6 +2931,10 @@ msgstr "Importa schede da CSV"
 msgid "Import from Deck"
 msgstr "Importa da Deck"
 
+#: src/views/BoardList.vue
+msgid "Imported into a new Kanso board:"
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 msgid "Importing…"
@@ -3730,6 +3791,11 @@ msgstr "Apri"
 #: src/components/CardDetail.vue
 msgid "Open as full page"
 msgstr "Apri a pagina intera"
+
+#: src/components/CsvImportModal.vue
+#: src/views/BoardList.vue
+msgid "Open board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
