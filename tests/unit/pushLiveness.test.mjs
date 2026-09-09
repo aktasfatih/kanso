@@ -278,12 +278,23 @@ test('the poll survives ticks it skips: a mid-drag board still polls afterwards'
 	enqueueMove({ cardId: 1, targetStackId: 20, afterCardId: null, optimisticKey: 'z' })
 	await flush()
 
+	// Which guard this pins, named on purpose: syncBoardDelta's ENTRY check. useBoard's
+	// shouldSync used to carry a duplicate of it, and the pair made this assertion
+	// unfalsifiable (#10292) — removing either one left the whole realtime suite
+	// green, because the other still refused, so neither was pinned by anything. The
+	// duplicate is gone; if the entry check ever leaves syncBoardDelta, this reddens.
+	//
+	// Its post-fetch sibling (a move that STARTS while the delta is in flight) is a
+	// different guard and is still unpinned — deleting it leaves this green, because
+	// the entry check already refused. Not this card's scope; noted so the next
+	// reader does not mistake this assertion for cover.
 	for (let skipped = 0; skipped < 2; skipped++) {
 		tick(cadence)
 		await flush()
 		assert.equal(deltaReads(), 0,
-			'the delta poll must not read while a move is pending — that patch would '
-			+ 'clobber the optimistic placement mid-drag')
+			'no /changes read may go out while a move is pending — a delta patch '
+			+ 'would clobber the optimistic placement mid-drag (the one guard for '
+			+ 'this is syncBoardDelta\'s entry check in useBoardDelta.js)')
 	}
 
 	// The move lands, the queue drains, the board is no longer pending.

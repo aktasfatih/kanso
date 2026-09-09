@@ -88,11 +88,33 @@ export function useBoard(id) {
 	// of "hidden". `typeof document` because the unit rig stubs `window` without a
 	// DOM.
 	const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden'
-	// The one condition that makes a tick worth doing. Mid-drag is skipped for
-	// the reason syncBoardDelta documents: a patch would clobber the optimistic
-	// placement.
-	const shouldSync = () => !isHidden() && !isBoardMovePending(id)
+	// The one condition this loop owns: a tab nobody is looking at does no work.
+	//
+	// Mid-drag suppression is deliberately NOT duplicated here. syncBoardDelta
+	// refuses at its own entry, which covers this loop and the visibilitychange
+	// handler below alike. A second copy lived here until #10292, and the pair was
+	// worse than either alone: with both in place, deleting EITHER left the whole
+	// realtime suite green, because the other still refused - so neither guard was
+	// pinned by any test. Now the entry check is the one this loop relies on, and
+	// pushLiveness.test.mjs ('the poll survives ticks it skips') reddens if it goes.
+	//
+	// Two further copies of the check exist and are NOT pinned by anything
+	// (measured, not assumed): syncBoardDelta's post-fetch re-check, which covers a
+	// move that starts while the delta is in flight and so is genuinely load-bearing,
+	// and main.js's pre-check on the push path. Neither is touched here - they are
+	// their own follow-up, not a licence to add a third copy back into this file.
+	const shouldSync = () => !isHidden()
 	let deltaTimer = null
+	// The dispose below clears `deltaTimer`, but clearTimeout can only cancel a
+	// timer that is still PENDING. A dispose landing after this callback entered its
+	// `try` and before the `finally` would find nothing to cancel, and the finally
+	// would then arm a fresh timer nothing holds a handle to: an immortal 5s
+	// /changes loop for a board that no longer exists, one per occurrence. No such
+	// path is known today (Vue defers unmount to its scheduler, and the only
+	// synchronous work in the try is an invalidation), but CardDetail and
+	// BoardSettingsModal each compose useBoard per open, so the blast radius if one
+	// ever appears is per-interaction - and the latch is one line (#10292).
+	let stopped = false
 	const scheduleDelta = () => {
 		deltaTimer = setTimeout(() => {
 			// The re-arm is in a `finally` because this loop IS the poll: unlike
@@ -107,7 +129,9 @@ export function useBoard(id) {
 					syncBoardDelta(queryClient, id)
 				}
 			} finally {
-				scheduleDelta()
+				if (!stopped) {
+					scheduleDelta()
+				}
 			}
 		}, pushActive() ? 30_000 : 5_000)
 	}
@@ -137,6 +161,9 @@ export function useBoard(id) {
 		document.addEventListener('visibilitychange', onVisibilityChange)
 	}
 	onScopeDispose(() => {
+		// Both are needed: the latch stops a re-arm from inside a tick already in
+		// flight, clearTimeout stops the one sitting in the queue.
+		stopped = true
 		clearTimeout(deltaTimer)
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('visibilitychange', onVisibilityChange)

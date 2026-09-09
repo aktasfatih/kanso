@@ -320,3 +320,69 @@ test('the delta poll timer is cleared when the board scope is disposed', async (
 			+ 'for the rest of the session')
 	}
 })
+
+test('a dispose landing inside a tick does not let the re-arm outlive it', async (t) => {
+	// The `stopped` latch (#10292). clearTimeout above only cancels a PENDING timer,
+	// so it cannot help once a tick is already running: a dispose that lands after
+	// the callback entered its `try` and before the `finally` leaves the finally free
+	// to arm a fresh timer that NOTHING holds a handle to. That one is unkillable -
+	// no clearTimeout can reach it and no later dispose knows about it - so it polls
+	// /changes for a dead board until the page is closed.
+	//
+	// The interleaving is INJECTED, and deliberately so: no real path to it is known
+	// (Vue defers unmount to its scheduler), which is exactly why the latch needs a
+	// test to be worth having. The injection point is honest rather than arbitrary -
+	// `isHidden()` reads document.visibilityState from inside the try, so a getter
+	// that disposes on read reproduces "disposed mid-tick" at the precise moment the
+	// hypothesis is about, deterministically and with no timing race.
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+	const tick = (ms) => t.mock.timers.tick(ms)
+	setVisibility(false)
+
+	const { deltaReads, scope } = harness(t, 205)
+
+	let disposedInsideTick = false
+	Object.defineProperty(document, 'visibilityState', {
+		configurable: true,
+		get() {
+			if (!disposedInsideTick) {
+				disposedInsideTick = true
+				scope.stop()
+			}
+			return 'visible'
+		},
+	})
+	tick(CADENCE)
+	await flush()
+	// Back to a plain property immediately: setVisibility() assigns to it, and this
+	// module is ESM (strict), so a getter-only property left behind would throw in
+	// any test added after this one.
+	Object.defineProperty(document, 'visibilityState', {
+		configurable: true, writable: true, enumerable: true, value: 'visible',
+	})
+	assert.ok(disposedInsideTick,
+		'the rig must actually have disposed from inside the tick, or this test '
+		+ 'proves nothing - if shouldSync() stops reading visibilityState, move the '
+		+ 'injection to whatever it does read inside the try')
+
+	// The anchor, and it is doing more work than the usual one. The getter above is
+	// first-read-wins, so `disposedInsideTick` only proves SOMETHING read
+	// visibilityState - if a future reader (TanStack's focusManager reads the same
+	// property) got there first, the dispose would have landed BEFORE the tick, which
+	// plain clearTimeout already handles, and this test would quietly stop exercising
+	// the latch at all. This read count separates the two cases: a dispose before the
+	// tick cancels the pending timer, so the tick does nothing and this is 0. Exactly
+	// 1 means the tick ran, did its work, and THEN hit the dispose - the interleaving
+	// the latch is for.
+	const readsAtDispose = deltaReads()
+	assert.equal(readsAtDispose, 1,
+		'the dispose must have landed inside a tick that actually ran: 0 here means '
+		+ 'it landed before the tick instead, and the latch is no longer under test')
+	for (let window = 0; window < 3; window++) {
+		tick(CADENCE)
+		await flush()
+		assert.equal(deltaReads(), readsAtDispose,
+			'the finally must not re-arm after a dispose: that timer is untracked, so '
+			+ 'no clearTimeout can ever reach it and the board polls /changes forever')
+	}
+})
