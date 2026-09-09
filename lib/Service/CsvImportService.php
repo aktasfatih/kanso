@@ -13,7 +13,6 @@ use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
@@ -55,12 +54,24 @@ use OCP\IUserManager;
  *   - title       REQUIRED. A row with a blank title is skipped, not fatal.
  *   - description optional.
  *   - duedate     optional; a spreadsheet date/datetime → the card due date.
- *   - labels      optional; comma-separated names, match-or-CREATE on the board
- *                 (mirrors the whole-board importers, which create the labels
- *                 they reference rather than dropping them).
+ *   - labels      optional; comma-separated names, match-or-CREATE on the board -
+ *                 but creating a label DEFINITION is a board-MANAGE concern
+ *                 ({@see LabelService::create}), and this importer only requires
+ *                 EDIT. A name that already exists is reused; an unseen one is
+ *                 created only when the actor ALSO holds MANAGE, and otherwise
+ *                 dropped from the card and counted in `labelsSkipped`. The
+ *                 whole-board importers create the labels they reference because
+ *                 they mint a FRESH board owned by the importer; this one appends
+ *                 into an existing - possibly someone else's - board, so that
+ *                 rationale does not carry over.
  *   - assignees   optional; comma-separated uids, match-or-DROP filtered by READ
  *                 on the target board (mirrors the Deck importer's assignee rule
  *                 and never leaks a uid onto a board they cannot see).
+ *
+ * The EDIT/MANAGE split matters at this importer's scale: {@see self::MAX_ROWS}
+ * rows with a per-row-unique label column would otherwise let any EDIT-level
+ * member mint that many board-level label definitions, every one of which then
+ * ships in the board payload's `labels` array to EVERY viewer of the board.
  */
 class CsvImportService {
 	/**
@@ -95,6 +106,9 @@ class CsvImportService {
 		private SortKeyService $sortKeyService,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
+		// Label CREATION goes through the service, never the mapper: it owns the
+		// MANAGE gate, the color validation and the ENTITY_LABEL change row.
+		private LabelService $labelService,
 		// Only for rebalanceStack(): the recovery when the target stack's tail
 		// sort key is already at the varchar(64) wall (see import()).
 		private CardService $cardService,
@@ -111,12 +125,22 @@ class CsvImportService {
 	 * that field is not mapped); `title` MUST be mapped. When $hasHeader is true
 	 * the first parsed row is treated as headers and skipped.
 	 *
+	 * A mapped label column NEVER escalates the actor's rights: the import stays
+	 * EDIT-gated, but minting a label definition needs MANAGE, so an EDIT-only
+	 * member's unknown label names are dropped from their cards rather than
+	 * created - counted in `labelsSkipped` (DISTINCT names, the same unit
+	 * `labelsCreated` uses). Deliberately a partial success rather than a refusal:
+	 * the rows are the point of the import, and a member who cannot define labels
+	 * can still populate the board. The count is reported for a caller that wants
+	 * to surface the shortfall; today's board-list modal does not read it yet, so
+	 * the skip is currently silent in the UI.
+	 *
 	 * If the target stack's existing keys are already at the sort-key wall the
 	 * first attempt overflows before writing anything; the stack is then
 	 * rebalanced and the import replayed once (see below).
 	 *
 	 * @param array{title: int, description?: ?int, duedate?: ?int, labels?: ?int, assignees?: ?int} $mapping
-	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int}
+	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int, labelsSkipped: int}
 	 * @throws InvalidInputException on an oversized/malformed CSV, a missing title mapping, or too many rows
 	 * @throws NotPermittedException if the actor lacks EDIT on the board
 	 * @throws \OverflowException if the sort keys still overflow after the rebalance
@@ -198,7 +222,7 @@ class CsvImportService {
 	 *
 	 * @param resource $handle a rewound CSV stream positioned at the first record
 	 * @param array{title: int, description?: ?int, duedate?: ?int, labels?: ?int, assignees?: ?int} $mapping
-	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int}
+	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int, labelsSkipped: int}
 	 */
 	private function attempt($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
 		$this->db->beginTransaction();
@@ -221,7 +245,7 @@ class CsvImportService {
 	 * @param array{title: int, description?: ?int, duedate?: ?int, labels?: ?int, assignees?: ?int} $mapping
 	 * @param int $dataRows the number of data rows counted in the pre-pass; sizes
 	 *                      the sort-key block so it never runs short
-	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int}
+	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int, labelsSkipped: int}
 	 */
 	private function rebuild($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
 		$boardId = $board->getId();
@@ -234,7 +258,29 @@ class CsvImportService {
 		foreach ($this->labelMapper->findByBoard($boardId) as $label) {
 			$labelIdByName[$this->labelKey((string)$label->getTitle())] = $label->getId();
 		}
+		// Creating a board-level label is a MANAGE concern (LabelService::create),
+		// while the import itself only needs EDIT. Resolve the actor's MANAGE bit
+		// ONCE here, before the row loop, rather than per row: an EDIT-only member
+		// keeps the useful part of their import (every row, plus the label names
+		// that already exist on the board) and simply cannot mint a definition they
+		// could not have created through the labels endpoint.
+		//
+		// Note this needs NO separate internal-side assert (the shape
+		// StackService::assertInternal applies to its EDIT-gated stack mutations):
+		// PermissionService::getPermissions() already strips SHARE|MANAGE from a
+		// member whose effective role folds to external, so a MANAGE bit surviving
+		// that fold IS an internal-side bit. See PermissionService's class doc.
+		$mayCreateLabels = ($this->permissionService->getPermissions($board, $actorUid)
+			& PermissionService::PERMISSION_MANAGE) !== 0;
 		$labelsCreated = 0;
+		/**
+		 * Distinct label names an EDIT-only actor could not create, as a key set so
+		 * a name repeated across rows is reported once (mirroring $labelsCreated,
+		 * which counts distinct labels created).
+		 *
+		 * @var array<string, true> $skippedLabelKeys
+		 */
+		$skippedLabelKeys = [];
 
 		// Append after the current tail of the stack. The whole block's sort keys
 		// are laid out in one shot as a bounded, evenly-spaced sequence past the
@@ -313,7 +359,10 @@ class CsvImportService {
 					$this->splitList($this->cell($row, $labelsIdx)),
 					$newCardId,
 					$boardId,
+					$actorUid,
+					$mayCreateLabels,
 					$labelIdByName,
+					$skippedLabelKeys,
 				);
 			}
 			if ($assigneesIdx !== null) {
@@ -333,20 +382,52 @@ class CsvImportService {
 			'cards' => $cards,
 			'skipped' => $skipped,
 			'labelsCreated' => $labelsCreated,
+			'labelsSkipped' => count($skippedLabelKeys),
 		];
 	}
 
 	/**
 	 * Match-or-create each label name on the board: a name that already exists
 	 * (case-insensitively) is reused, an unseen one is created once and cached so
-	 * repeated names across rows share one label. Mirrors the whole-board
-	 * importers, which create the labels they reference.
+	 * repeated names across rows share one label.
+	 *
+	 * The create half is gated: $mayCreate carries the actor's MANAGE bit
+	 * (resolved once in {@see self::rebuild}), because a label DEFINITION is a
+	 * board-management write. Without it an unseen name is dropped from the card
+	 * and recorded in $skippedLabelKeys instead - the import is not failed over it.
+	 *
+	 * Creates go through {@see LabelService::create} rather than
+	 * {@see LabelMapper::insert} so the MANAGE assert, {@see ColorValidator} and
+	 * the {@see Change::ENTITY_LABEL} change row all come from the one place that
+	 * owns label creation - the missing change row is why a delta client used to
+	 * receive card upserts naming label ids absent from its cache instead of the
+	 * resync a label change forces. `push: false` because the change row lands
+	 * inside the import's transaction; the single post-commit
+	 * {@see ChangeNotifier::pushBoardChanged} in {@see self::import} covers it.
+	 * That routing costs a board load + an ACL fetch per NEWLY CREATED label
+	 * (never per row, and never for a reused name), which is the price of having
+	 * exactly one gate rather than two implementations of it.
 	 *
 	 * @param string[] $names
+	 * @param bool $mayCreate whether the actor holds MANAGE and so may define labels
 	 * @param array<string, int> $labelIdByName label key → id, updated by reference
+	 * @param array<string, true> $skippedLabelKeys distinct un-creatable names, updated by reference
 	 * @return int the number of labels newly created
+	 * @throws NotPermittedException if LabelService refuses the create. $mayCreate
+	 *                               tests the same bit, so in practice this needs
+	 *                               MANAGE to be revoked between the two reads; the
+	 *                               import then fails whole rather than skipping -
+	 *                               the safe direction, and rare enough to accept.
 	 */
-	private function attachLabels(array $names, int $cardId, int $boardId, array &$labelIdByName): int {
+	private function attachLabels(
+		array $names,
+		int $cardId,
+		int $boardId,
+		string $actorUid,
+		bool $mayCreate,
+		array &$labelIdByName,
+		array &$skippedLabelKeys,
+	): int {
 		$created = 0;
 		$seen = [];
 		foreach ($names as $name) {
@@ -357,11 +438,13 @@ class CsvImportService {
 			$key = $this->labelKey($name);
 			$labelId = $labelIdByName[$key] ?? null;
 			if ($labelId === null) {
-				$label = new Label();
-				$label->setBoardId($boardId);
-				$label->setTitle($name);
-				$label->setColor(self::DEFAULT_LABEL_COLOR);
-				$labelId = $this->labelMapper->insert($label)->getId();
+				if (!$mayCreate) {
+					$skippedLabelKeys[$key] = true;
+					continue;
+				}
+				$labelId = $this->labelService
+					->create($boardId, $name, self::DEFAULT_LABEL_COLOR, $actorUid, push: false)
+					->getId();
 				$labelIdByName[$key] = $labelId;
 				$created++;
 			}

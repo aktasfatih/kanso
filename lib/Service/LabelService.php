@@ -46,13 +46,26 @@ class LabelService {
 	}
 
 	/**
-	 * Creates a label on the board.
+	 * Creates a label on the board. This is the ONE place a board-level label
+	 * definition is minted, so the MANAGE gate, the color validation and the
+	 * ENTITY_LABEL change row always travel together - a caller that inserts
+	 * through {@see LabelMapper} directly would skip all three (see
+	 * {@see CsvImportService::attachLabels()}, which routes its match-or-create
+	 * through here for exactly that reason).
 	 *
+	 * @param bool $push whether to broadcast the realtime board-changed event right
+	 *                   away. Pass false when creating from INSIDE a caller-managed
+	 *                   transaction, or when batching several creates behind ONE
+	 *                   push, and call {@see ChangeNotifier::pushBoardChanged()}
+	 *                   after the commit instead - otherwise a client could refetch
+	 *                   pre-commit state, or get an event for a create that rolled
+	 *                   back. The change row is written either way, so delta sync
+	 *                   and the ETag stay correct regardless.
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
 	 * @throws InvalidInputException on invalid title or color
 	 */
-	public function create(int $boardId, string $title, ?string $color, string $uid): Label {
+	public function create(int $boardId, string $title, ?string $color, string $uid, bool $push = true): Label {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -67,7 +80,8 @@ class LabelService {
 			Change::ENTITY_LABEL,
 			$label->getId(),
 			Change::ACTION_CREATE,
-			$uid
+			$uid,
+			$push,
 		);
 
 		return $label;
