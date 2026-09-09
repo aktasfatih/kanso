@@ -4618,6 +4618,19 @@ async function handleToggleResolved(topComment) {
 // isn't in the loaded thread (deleted / not yet loaded) - never throws.
 const highlightedCommentId = ref(null)
 let highlightTimer = null
+// The thread pane is still settling when we scroll, and the deferral below can
+// only ever guess at how long that takes. The composer under the thread renders
+// its MarkdownEditor as a LAZY chunk (defineAsyncComponent) behind a much shorter
+// placeholder, so on a slow connection - or a slow machine - the real editor
+// mounts AFTER the scroll and grows, and `.card-modal__thread-scroll` (flex: 1)
+// shrinks by exactly that much. `scrollTop` survives the shrink; the comment we
+// centred does not, and since `scrollHandled` is already latched nothing scrolls
+// again. A reminder or mention link then lands the reader on a nearby comment
+// with no sign that it missed. So the scroll is not a one-shot: the target is
+// re-pinned on every resize of the pane, for exactly as long as the highlight is
+// up (4s) - the window in which the app is still telling the reader "this is the
+// one you came for".
+let threadResizeObserver = null
 
 function parseTargetCommentId() {
 	// Prefer the query the boot handoff set; fall back to a raw location hash so
@@ -4677,12 +4690,44 @@ async function scrollToTargetComment() {
 	await new Promise((r) => requestAnimationFrame(r))
 	await new Promise((r) => requestAnimationFrame(r))
 	el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+	pinTargetWhileThreadSettles(el)
 	highlightedCommentId.value = id
 	if (highlightTimer) clearTimeout(highlightTimer)
 	highlightTimer = setTimeout(() => {
 		highlightedCommentId.value = null
 		highlightTimer = null
+		stopPinningTarget()
 	}, 4000)
+}
+
+/**
+ * Keep `el` centred while the thread pane is still resizing under it.
+ *
+ * Only a RESIZE re-scrolls, so this does not fight the reader: scrolling the
+ * thread by hand does not resize it, and once the composer has settled the
+ * observer stops firing on its own. It is torn down with the highlight either
+ * way, so the correction window is bounded by the same 4s the highlight is.
+ *
+ * @param {HTMLElement} el the deep-linked comment node
+ */
+function pinTargetWhileThreadSettles(el) {
+	if (typeof ResizeObserver === 'undefined') return
+	const scroller = el.closest('.card-modal__thread-scroll')
+	if (!scroller) return
+	stopPinningTarget()
+	threadResizeObserver = new ResizeObserver(() => {
+		// Instant, not smooth: this corrects a scroll that already ran, and a
+		// second animation would be interrupted by the next resize anyway.
+		el.scrollIntoView({ block: 'center' })
+	})
+	threadResizeObserver.observe(scroller)
+}
+
+function stopPinningTarget() {
+	if (threadResizeObserver) {
+		threadResizeObserver.disconnect()
+		threadResizeObserver = null
+	}
 }
 
 // The thread loads async, so wait until comments actually arrive, then scroll.
@@ -5320,6 +5365,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', onDocumentMousedown, true)
 	if (highlightTimer) clearTimeout(highlightTimer)
+	stopPinningTarget()
 })
 
 // The modal shell funnels its X button here, and the backdrop handler above does
