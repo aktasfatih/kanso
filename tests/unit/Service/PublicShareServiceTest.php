@@ -495,9 +495,24 @@ class PublicShareServiceTest extends TestCase {
 		return $user;
 	}
 
+	/**
+	 * Who is on the board, as the anonymous read resolves it: every listed uid holds
+	 * READ, everybody else holds nothing. Mention substitution is MEMBER-SCOPED, so a
+	 * fixture that wants a mention rewritten has to say who is actually on the board -
+	 * "this account exists" is deliberately not enough any more.
+	 */
+	private function members(string ...$uids): void {
+		$onBoard = array_fill_keys($uids, true);
+		$this->permissionService->method('getPermissions')->willReturnCallback(
+			static fn (Board $board, string $uid): int
+				=> isset($onBoard[$uid]) ? PermissionService::PERMISSION_READ : 0
+		);
+	}
+
 	public function testDescriptionMentionShipsDisplayNameNotUid(): void {
 		// The default configuration: comments opt-in OFF, description still public.
 		$this->primeCardWithText('@jsmith please review before Friday');
+		$this->members('jsmith');
 		$this->userManager->method('get')->willReturnMap([['jsmith', $this->liveUser('Jane Smith')]]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
@@ -512,6 +527,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->primeCardWithText('no mentions here', [
 			$this->comment(1, 100, 'bob', 'cc @jsmith on this one'),
 		]);
+		$this->members('jsmith');
 		$this->userManager->method('get')->willReturnMap([
 			['bob', $this->liveUser('Bob Builder')],
 			['jsmith', $this->liveUser('Jane Smith')],
@@ -528,6 +544,88 @@ class PublicShareServiceTest extends TestCase {
 		self::assertStringNotContainsString('"bob"', $json);
 	}
 
+	public function testAMentionOfANonMemberStaysARawTokenWhileAMembersResolves(): void {
+		// The account-existence probe, closed. Resolving ANY uid the pattern matched
+		// made this endpoint an oracle: an EDIT member who ALSO holds the public link
+		// writes `@candidate` into a description, reads the anonymous payload, and
+		// learns whether that account exists and what it is called - up to
+		// MentionService::MAX_MENTIONS guesses per field per read, instance-wide, with
+		// no session, bypassing an admin who deliberately disabled sharee enumeration.
+		// Only a uid that holds READ on THIS board resolves now.
+		$this->primeCardWithText('cc @onboard and @stranger please');
+		$this->members('onboard');
+		$this->userManager->method('get')->willReturnMap([
+			['onboard', $this->liveUser('On Board')],
+			// A REAL account on the instance - which is the whole point: the answer
+			// must not depend on whether the guess was right.
+			['stranger', $this->liveUser('Stranger Nonmember')],
+		]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+		$description = $payload['cards'][0]['description'];
+
+		// A genuine member still resolves; the non-member's token is untouched.
+		self::assertSame('cc On Board and @stranger please', $description);
+		// The residue this KNOWINGLY accepts, pinned so nobody reads it as a
+		// regression: a non-member mention ships its raw uid, exactly as a mention of
+		// a deleted account already did. It needs somebody to type a real off-board
+		// uid into published board content, and it buys closing the enumeration
+		// oracle - the uid of somebody who was never on the board is not worth an
+		// anonymous "does this account exist?" answer for every uid on the instance.
+		self::assertStringContainsString('@stranger', (string)$description);
+		// What must NOT survive is the non-member's NAME, i.e. the confirmation that
+		// the guessed account exists at all.
+		self::assertStringNotContainsString('Stranger Nonmember', (string)json_encode($payload));
+	}
+
+	public function testANonMemberMentionNeverReachesThePersonLookup(): void {
+		// Belt and braces on the same probe: not merely "the name is not printed" but
+		// "the candidate is never resolved to a person at all", so there is no second
+		// path (a future fallback label, an error message, a cached name) by which the
+		// answer could come back. Note the scope of the claim: this pins that the
+		// REDACTION does not resolve a non-member. It is NOT a promise that the
+		// request touches no user backend - PermissionService::getPermissions() asks
+		// the backend for the candidate's groups on a group-shared board, and that is
+		// mocked away here.
+		$this->primeCardWithText('is @candidate1 or @candidate2 or @candidate3 a real account?');
+		$this->members('somebodyelse');
+		$this->userManager->expects(self::never())->method('get');
+
+		self::assertSame(
+			'is @candidate1 or @candidate2 or @candidate3 a real account?',
+			$this->service->getPublicBoard(self::TOKEN)['cards'][0]['description']
+		);
+	}
+
+	public function testMembershipIsResolvedOncePerDistinctUidPerRead(): void {
+		// The gate sits on an unauthenticated, unthrottled endpoint, so it must not
+		// turn into one ACL resolution per mention. Same request-scoped memoisation as
+		// the display-name cache, shared across cards and both free-text fields.
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, true));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([$this->stack(10, 'To do')]);
+		$cards = [];
+		foreach ([100, 101, 102] as $id) {
+			$card = $this->card($id, 10, 'Card ' . $id);
+			$card->setDescription('@jsmith and @jsmith again');
+			$cards[] = $card;
+		}
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn($cards);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->commentMapper->method('findByBoardPublicOnly')->with(1)->willReturn([
+			100 => [$this->comment(1, 100, 'jsmith', 'mine, and @jsmith again')],
+		]);
+		$this->permissionService->expects(self::once())->method('getPermissions')
+			->with(self::anything(), 'jsmith')->willReturn(PermissionService::PERMISSION_READ);
+		$this->userManager->method('get')->with('jsmith')->willReturn($this->liveUser('Jane Smith'));
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertSame('Jane Smith and Jane Smith again', $payload['cards'][2]['description']);
+	}
+
 	public function testNonResolvableAtStringsAreLeftByteIdentical(): void {
 		// `@`-shaped text that is NOT an account: an email address (which the shared
 		// MENTION_PATTERN never matches at all), a plain handle, a time, a hyphenated
@@ -535,6 +633,12 @@ class PublicShareServiceTest extends TestCase {
 		// this is as load-bearing as the redaction itself.
 		$text = 'mail foo@bar.com, follow @nextcloud, standup @9.30, ping @nosuchuser-42 later';
 		$this->primeCardWithText($text);
+		// Deliberately treat every one of these tokens as a board member, so the
+		// membership gate is NOT what saves them: the lookup miss is. Otherwise this
+		// test would pass on any build where the gate simply rejects everything, and
+		// would stop pinning that `foo@bar.com` never matches the pattern and that
+		// `@9.30` / `@nosuchuser-42` resolve to nothing.
+		$this->members('nextcloud', '9.30', 'nosuchuser-42', 'bar.com', 'bar');
 		// Every lookup misses: none of these tokens is an account.
 		$this->userManager->method('get')->willReturn(null);
 
@@ -554,6 +658,7 @@ class PublicShareServiceTest extends TestCase {
 		// Widening that is a change to MentionService's semantics, not to this
 		// redaction.)
 		$this->primeCardWithText('ping @jsmith. dash @jsmith- under @jsmith_ done');
+		$this->members('jsmith');
 		$this->userManager->method('get')->willReturnMap([['jsmith', $this->liveUser('Jane Smith')]]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
@@ -570,6 +675,8 @@ class PublicShareServiceTest extends TestCase {
 		// server would not notify bob either), so it must be looked up whole and left
 		// alone - never rewritten to "Bob Builder.smith".
 		$this->primeCardWithText('ask @bob.smith about it');
+		// `bob` really is on the board; `bob.smith` is not a uid at all.
+		$this->members('bob');
 		$this->userManager->method('get')->willReturnMap([
 			['bob.smith', null],
 			['bob', $this->liveUser('Bob Builder')],
@@ -588,6 +695,9 @@ class PublicShareServiceTest extends TestCase {
 		$this->primeCardWithText('@ghostuid used to own this', [
 			$this->comment(1, 100, 'ghostuid', 'and @ghostuid said so'),
 		]);
+		// Their ACL row outlived the account, so the membership gate passes and the
+		// residue under test is purely the deleted-account one.
+		$this->members('ghostuid');
 		$this->userManager->method('get')->with('ghostuid')->willReturn(null);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
@@ -605,6 +715,7 @@ class PublicShareServiceTest extends TestCase {
 		// apostrophes, parentheses and sentence dots are what real names are made of.
 		// None of them can open a markdown construct, so none of them is escaped.
 		$this->primeCardWithText('@a and @b and @c and @d');
+		$this->members('a', 'b', 'c', 'd');
 		$this->userManager->method('get')->willReturnMap([
 			['a', $this->liveUser('Anne-Marie Dubois')],
 			['b', $this->liveUser("Sinead O'Brien")],
@@ -624,6 +735,7 @@ class PublicShareServiceTest extends TestCase {
 		// escaped form renders as the literal characters (CommonMark), and the
 		// domain-shaped name must not survive `linkify: true` as a live link either.
 		$this->primeCardWithText('ask @trickster or @domainy about it');
+		$this->members('trickster', 'domainy');
 		$this->userManager->method('get')->willReturnMap([
 			['trickster', $this->liveUser('[click](https://evil.example)')],
 			['domainy', $this->liveUser('www.evil.example')],
@@ -639,6 +751,7 @@ class PublicShareServiceTest extends TestCase {
 		// The account EXISTS (so the token really is a uid) but has no displayable
 		// name. The one thing that must not happen is answering with the raw uid.
 		$this->primeCardWithText('ping @blankname now');
+		$this->members('blankname');
 		$this->userManager->method('get')->willReturnMap([['blankname', $this->liveUser('   ')]]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
@@ -655,6 +768,7 @@ class PublicShareServiceTest extends TestCase {
 		// the same fixture make this a MIXED case: greedy over-substitution fails here
 		// just as a missed substitution does.
 		$this->primeCardWithText('see https://forge.example/@jsmith and `@jsmith` but not @nobody or foo@bar.com');
+		$this->members('jsmith');
 		$this->userManager->method('get')->willReturnCallback(
 			fn (string $uid): ?IUser => $uid === 'jsmith' ? $this->liveUser('Jane Smith') : null
 		);
@@ -685,6 +799,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->commentMapper->method('findByBoardPublicOnly')->with(1)->willReturn([
 			100 => [$this->comment(1, 100, 'jsmith', 'mine, and @jsmith again')],
 		]);
+		$this->members('jsmith');
 		// SIX mentions plus one author byline, all naming the same uid: exactly one
 		// lookup.
 		$this->userManager->expects(self::once())->method('get')->with('jsmith')
@@ -707,6 +822,15 @@ class PublicShareServiceTest extends TestCase {
 			$tokens[] = '@user' . $i;
 		}
 		$this->primeCardWithText(implode(' ', $tokens));
+		// Everyone in this fixture is on the board (the single getPermissions stub
+		// below answers READ for every uid), so membership is never what stops the
+		// substitution - only the bound is.
+		// The bound now counts MEMBERSHIP resolutions - that is the step every token
+		// takes, member or not - so it is what has to be pinned. Counting only the
+		// user lookups would leave the ACL side unbounded the moment somebody reorders
+		// the gate and the budget check.
+		$this->permissionService->expects(self::exactly(MentionService::MAX_MENTIONS))
+			->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
 		$this->userManager->expects(self::exactly(MentionService::MAX_MENTIONS))->method('get')
 			->willReturnCallback(fn (string $uid): IUser => $this->liveUser('Name of ' . $uid));
 
@@ -736,6 +860,7 @@ class PublicShareServiceTest extends TestCase {
 		$real = $this->card(101, 10, 'Real work');
 		$real->setDescription('@jsmith please review');
 		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn([$padded, $real]);
+		$this->members('jsmith');
 		$this->labelMapper->method('findByBoard')->willReturn([]);
 		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
 		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
@@ -759,6 +884,7 @@ class PublicShareServiceTest extends TestCase {
 			$comments[] = $this->comment($i, 100, 'commenter' . $i, 'nothing to redact here');
 		}
 		$this->primeCardWithText('@jsmith please review', $comments);
+		$this->members('jsmith');
 		$this->userManager->method('get')->willReturnCallback(
 			fn (string $uid): IUser => $this->liveUser($uid === 'jsmith' ? 'Jane Smith' : 'Commenter ' . $uid)
 		);
@@ -773,6 +899,7 @@ class PublicShareServiceTest extends TestCase {
 		// Payload-only: the mention must keep working for authenticated viewers, so
 		// nothing in the public read may write back through a mapper.
 		$this->primeCardWithText('@jsmith please review');
+		$this->members('jsmith');
 		$this->userManager->method('get')->willReturnMap([['jsmith', $this->liveUser('Jane Smith')]]);
 		$this->cardMapper->expects(self::never())->method('update');
 		$this->commentMapper->expects(self::never())->method('update');
