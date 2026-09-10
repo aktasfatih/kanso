@@ -470,6 +470,10 @@ msgid "Add label"
 msgstr "Label toevoegen"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Label toevoegen…"
 
@@ -643,6 +647,7 @@ msgstr "Weet je het zeker?"
 msgid "Ascending"
 msgstr "Oplopend"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Toewijzen"
@@ -652,8 +657,8 @@ msgid "Assign step"
 msgstr "Stap toewijzen"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Toewijzen…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -3287,6 +3292,10 @@ msgstr "Maandelijks"
 msgid "More"
 msgstr "Meer"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Meer bordacties"
@@ -3306,6 +3315,10 @@ msgstr "Kaart naar een bord verplaatsen…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Kaart verplaatsen…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4178,8 +4191,12 @@ msgid "Remove from project"
 msgstr "Uit het project verwijderen"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Label verwijderen…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4525,10 +4542,6 @@ msgstr "Meerdere kaarten selecteren"
 #: src/components/BulkActionBar.vue
 msgid "Set due date"
 msgstr "Einddatum instellen"
-
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Einddatum instellen…"
 
 #: src/components/CardDetail.vue
 msgid "Set parent"
