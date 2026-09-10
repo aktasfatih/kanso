@@ -41,8 +41,12 @@ let outsiderRef = null
 //   anon   → PUB              (public share + ICS feed)
 //
 // The outsider holds no ACL row, so every board-scoped route 403s for them
-// before visibility is ever consulted; they exist here to pin the ORDER of
-// those two checks on the routes that read a child row by id (#10296).
+// before visibility is ever consulted. That makes them the only viewer who can
+// SEE which of the two guards answered: a member 404s at the visibility guard
+// whatever the order is, so the member sweep alone cannot tell a
+// membership-first route from a visibility-first one. The outsider therefore
+// sweeps the WHOLE card-addressed route list (#10307), not just the review
+// routes that first exposed the ordering (#10296).
 
 // Per-viewer API clients (owner + external peer + non-member), cached so the
 // (auth, method, path, body) call sites below stay byte-for-byte identical. The
@@ -258,38 +262,122 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		expect((await call(TESTER, 'POST', `/boards/${state.boardId}/duplicate`, { withCards: true })).status).toBe(403)
 	})
 
+	/**
+	 * Every route addressed by a BARE card id — the leak class being "guessing an
+	 * id reveals whether it exists". ONE list, swept by two viewers below:
+	 *
+	 *   - the member who may not see the card  → 404 (a hidden card is missing)
+	 *   - the non-member                       → 403 (membership answers first)
+	 *
+	 * so a route added here is automatically probed from both sides.
+	 *
+	 * ⚠️ The VERB is load-bearing. A verb that hits no route answers 405, and a
+	 * path that hits none answers 404 — which is precisely what the member sweep
+	 * expects, so a typo there would pass vacuously. Every entry below was read
+	 * off appinfo/routes.php and confirmed against a live server (each one
+	 * answers non-404 for a viewer who passes the guards).
+	 *
+	 * `manage: true` marks the MANAGE-gated routes: the external member holds
+	 * READ|EDIT, so those answer 403 on the permission ladder for EVERY card of
+	 * the board (see the member sweep).
+	 */
+	const cardRoutes = (id) => [
+		{ method: 'GET', path: `/cards/${id}` },
+		{ method: 'PATCH', path: `/cards/${id}`, body: { title: 'pwned' } },
+		{ method: 'DELETE', path: `/cards/${id}` },
+		{ method: 'POST', path: `/cards/${id}/comments`, body: { body: 'hi' } },
+		{ method: 'GET', path: `/cards/${id}/comments` },
+		{ method: 'GET', path: `/cards/${id}/activity` },
+		{ method: 'GET', path: `/cards/${id}/relations` },
+		{ method: 'GET', path: `/cards/${id}/attachments` },
+		{ method: 'GET', path: `/cards/${id}/time-entries` },
+		{ method: 'GET', path: `/cards/${id}/checklist` },
+		{ method: 'POST', path: `/cards/${id}/move`, body: { targetStackId: state.stackId } },
+		{ method: 'PUT', path: `/cards/${id}/labels/1` },
+		{ method: 'PUT', path: `/cards/${id}/assignees/${peerRef.user}` },
+		// The review routes belong in this list like any other card-addressed
+		// route: hidden card ⇒ 404, whatever review id is named. (What they do
+		// NOT cover is the check ORDER inside a verdict — a member 404s here
+		// either way; that oracle is asserted against the OUTSIDER above.)
+		{ method: 'PATCH', path: `/cards/${id}/reviews/1`, body: { state: 'approved' } },
+		{ method: 'DELETE', path: `/cards/${id}/reviews/1` },
+		{ method: 'PUT', path: `/cards/${id}/reviews/${peerRef.user}` },
+		// The destructive pair first (#10307): both take a bare card id and both
+		// are irreversible past the guards. purge is DELETE, not POST.
+		{ method: 'DELETE', path: `/cards/${id}/purge`, manage: true },
+		// restore on a LIVE card: the trash test covers the trashed case, but the
+		// live one is where the trash-state check used to answer 400 ahead of both
+		// guards — an existence oracle for anyone holding a card id (#10307).
+		{ method: 'POST', path: `/cards/${id}/restore` },
+		{ method: 'POST', path: `/cards/${id}/move-to-board`, body: { targetStackId: state.stackId } },
+		{ method: 'POST', path: `/cards/${id}/copy`, body: { targetStackId: state.stackId } },
+		{ method: 'PUT', path: `/cards/${id}/parent`, body: { parentCardId: null } },
+		{ method: 'POST', path: `/cards/${id}/create-from-template`, body: { targetStackId: state.stackId } },
+		{ method: 'PUT', path: `/cards/${id}/template`, body: { isTemplate: true } },
+		{ method: 'POST', path: `/cards/${id}/contacts`, body: { contactUri: 'ghost', displayName: 'ghost' } },
+		{ method: 'DELETE', path: `/cards/${id}/contacts`, body: { contactUri: 'ghost' } },
+	]
+
 	test('card-id probes: reads AND writes on a hidden card 404 (no existence oracle)', async () => {
-		const hidden = state.cards.PROV.id
-		const probes = [
-			['GET', `/cards/${hidden}`],
-			['PATCH', `/cards/${hidden}`, { title: 'pwned' }],
-			['DELETE', `/cards/${hidden}`],
-			['POST', `/cards/${hidden}/comments`, { body: 'hi' }],
-			['GET', `/cards/${hidden}/comments`],
-			['GET', `/cards/${hidden}/activity`],
-			['GET', `/cards/${hidden}/relations`],
-			['GET', `/cards/${hidden}/attachments`],
-			['GET', `/cards/${hidden}/time-entries`],
-			['GET', `/cards/${hidden}/checklist`],
-			['POST', `/cards/${hidden}/move`, { targetStackId: state.stackId }],
-			['PUT', `/cards/${hidden}/labels/1`],
-			['PUT', `/cards/${hidden}/assignees/${peerRef.user}`],
-			// The review routes belong in this list like any other card-addressed
-			// route: hidden card ⇒ 404, whatever review id is named. (What they do
-			// NOT cover is the check ORDER inside a verdict — a member 404s here
-			// either way; that oracle is asserted against the OUTSIDER above.)
-			['PATCH', `/cards/${hidden}/reviews/1`, { state: 'approved' }],
-			['DELETE', `/cards/${hidden}/reviews/1`],
-			['PUT', `/cards/${hidden}/reviews/${peerRef.user}`],
-		]
-		for (const [method, path, body] of probes) {
+		const onHidden = cardRoutes(state.cards.PROV.id)
+		const onVisible = cardRoutes(state.cards.PUB.id)
+		for (const [i, { method, path, body, manage }] of onHidden.entries()) {
 			const r = await call(TESTER, method, path, body)
+			if (manage) {
+				// A MANAGE-gated route answers on the PERMISSION ladder before any
+				// card fact — this member holds READ|EDIT, so it 403s for EVERY card
+				// on the board. What must not happen is that the answer varies with
+				// the card's visibility; the outsider sweep below pins the rest.
+				const twin = onVisible[i]
+				const visible = await call(TESTER, twin.method, twin.path, twin.body)
+				expect(r.status, `${method} ${path} (MANAGE-gated)`).toBe(403)
+				expect(visible.status, `${method} ${path}: hidden and visible must answer alike`).toBe(r.status)
+				continue
+			}
 			expect(r.status, `${method} ${path}`).toBe(404)
 		}
 		// Same probes with an id that does not exist at all must be
 		// indistinguishable (also 404) — the no-oracle property.
 		const ghost = await call(TESTER, 'GET', '/cards/99999999')
 		expect(ghost.status).toBe(404)
+	})
+
+	test('card-id probes: a NON-member is refused before visibility is ever read (#10307)', async () => {
+		// The same probe list, one viewer further out. A board MEMBER 404s at the
+		// visibility guard on every one of these, so the member sweep above can
+		// never observe WHICH guard answered — swap the two asserts on any route
+		// and it stays green. The non-member can: they fail the membership check
+		// (403) but would pass a visibility-first check on a public card and fail
+		// it on an internal one (404). So a uniform 403 across the whole list is
+		// exactly the statement "membership is checked BEFORE visibility, on every
+		// card-addressed route" — the generalisation of #10296.
+		const hidden = state.cards.PROV.id
+		for (const { method, path, body } of cardRoutes(hidden)) {
+			const r = await call(OUTSIDER, method, path, body)
+			expect(r.status, `${method} ${path} (non-member)`).toBe(403)
+		}
+		// …and the same routes on the PUBLIC card, whose visibility class lets
+		// role-less viewers past (CardVisibilityScope): still 403, so visibility
+		// never grants what membership denies.
+		for (const { method, path, body } of cardRoutes(state.cards.PUB.id)) {
+			const r = await call(OUTSIDER, method, path, body)
+			expect(r.status, `${method} ${path} (non-member, public card)`).toBe(403)
+		}
+		// A card id that does not exist stays 404 for them too — the 403s above
+		// are the board's answer, not a per-id one.
+		expect((await call(OUTSIDER, 'GET', '/cards/99999999')).status).toBe(404)
+		expect((await call(OUTSIDER, 'DELETE', '/cards/99999999/purge')).status).toBe(404)
+
+		// Nothing was written on the way to any of those refusals: both cards are
+		// still there, still named the same, still live (the sweep includes
+		// DELETE, purge, move-to-board and the template flag).
+		for (const name of ['PUB', 'PROV']) {
+			const after = await api(ADMIN, 'GET', `/cards/${state.cards[name].id}`)
+			expect(after.title, `${name} survived the non-member sweep`).toBe(title(name))
+			expect(after.isTemplate ?? false).toBe(false)
+		}
+		const board = await api(ADMIN, 'GET', `/boards/${state.boardId}`)
+		expectTitles(board.cards, ['PUB', 'PROV', 'PRIV'])
 	})
 
 	test('human-ref resolution: a hidden card reads as an unknown reference', async () => {
