@@ -15,11 +15,13 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\DeckImportMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\DB\Exception as DbException;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\File;
 use OCP\Files\IAppData;
@@ -70,6 +72,7 @@ class DeckImportService {
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private CommentMapper $commentMapper,
 		private CardAttachmentMapper $cardAttachmentMapper,
+		private DeckImportMapper $deckImportMapper,
 		private SortKeyService $sortKeyService,
 		private IUserManager $userManager,
 		private IDBConnection $db,
@@ -83,9 +86,11 @@ class DeckImportService {
 
 	/**
 	 * The Deck boards the user can import (owned or directly shared), or an empty
-	 * list when Deck is not installed.
+	 * list when Deck is not installed. Each row carries the per-user "already
+	 * imported" marker so the picker never offers a bare Import button for a
+	 * board this user has imported before (#10300).
 	 *
-	 * @return list<array{id: int, title: string, color: ?string, archived: bool, cardCount: int}>
+	 * @return list<array{id: int, title: string, color: ?string, archived: bool, cardCount: int, importedAt: ?int}>
 	 */
 	public function listImportableBoards(string $actorUid): array {
 		if (!$this->deckReader->isAvailable()) {
@@ -102,12 +107,23 @@ class DeckImportService {
 	/**
 	 * Imports one Deck board into a new Kanso board owned by the actor.
 	 *
+	 * Importing the SAME Deck board twice is refused unless the caller passes
+	 * $confirmReimport (#10300). Re-importing is a real use case - clean up a bad
+	 * first attempt and try again - so it is allowed, but only deliberately: the
+	 * accidental case is a double-submit whose first request actually succeeded
+	 * and whose response was lost, and that used to produce a second complete
+	 * board plus a second physical copy of every attachment's bytes.
+	 *
+	 * @param bool $confirmReimport the user has explicitly confirmed they want
+	 *                              another copy of a board they already imported
 	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int, comments: int, attachments: int, skippedAttachments: int}
 	 * @throws InvalidInputException if Deck is not available
 	 * @throws NotPermittedException if the actor cannot read the Deck board
 	 * @throws DoesNotExistException if the Deck board does not exist
+	 * @throws AlreadyImportedException if the actor already imported this board
+	 *                                  and did not confirm a re-import
 	 */
-	public function importBoard(int $deckBoardId, string $actorUid): array {
+	public function importBoard(int $deckBoardId, string $actorUid, bool $confirmReimport = false): array {
 		if (!$this->deckReader->isAvailable()) {
 			throw new InvalidInputException('The Deck app is not available to import from');
 		}
@@ -119,11 +135,24 @@ class DeckImportService {
 			throw new DoesNotExistException('Deck board ' . $deckBoardId . ' does not exist');
 		}
 
+		// Cheap pre-check for the ordinary sequential retry: answer before any
+		// board row is created or a single attachment byte is copied. It runs
+		// AFTER the permission check, so it can never tell a stranger whether
+		// somebody imported a board they cannot read. The unique index below is
+		// what covers the concurrent double-submit this cannot see.
+		if (!$confirmReimport && $this->deckImportMapper->findForUser($deckBoardId, $actorUid) !== null) {
+			throw new AlreadyImportedException('You have already imported that Deck board');
+		}
+
 		// All-or-nothing on the DB side (rolled back on any failure). App-data
 		// byte writes are NOT transactional, so every object we write is tracked
 		// here and best-effort cleaned up if the import throws after it landed.
 		/** @var list<array{cardId: int, storageKey: string}> $writtenObjects */
 		$writtenObjects = [];
+		// Set when the claim on the (Deck board, user) pair is what failed, so the
+		// outer catch can tell "somebody else got there first" apart from a real
+		// import failure.
+		$mappingClash = false;
 		$this->db->beginTransaction();
 		try {
 			// BoardService::create() validates the title and would throw on a
@@ -133,6 +162,33 @@ class DeckImportService {
 			$board = $this->boardService->create($boardTitle, $deckBoard['color'], $actorUid);
 			$boardId = $board->getId();
 			$now = time();
+
+			// Claim the (Deck board, user) pair in the SAME transaction as the
+			// import, and do it FIRST - before a single attachment byte is
+			// written. Two simultaneous submits both get past the pre-check above;
+			// here exactly one wins the unique index and the loser's whole
+			// transaction rolls back, so the duplicate board never exists and its
+			// attachment bytes are never copied. A CONFIRMED re-import releases
+			// the pair first, so the deliberate case still goes through.
+			if ($confirmReimport) {
+				$this->deckImportMapper->forget($deckBoardId, $actorUid);
+			}
+			try {
+				$this->deckImportMapper->record($deckBoardId, $boardId, $actorUid, $now);
+			} catch (DbException $e) {
+				// Any DB failure on THIS statement may be the race, not just the
+				// plain unique-constraint violation: the loser blocks on the index
+				// for as long as the winner's import runs, so MySQL is just as
+				// likely to answer with a lock-wait timeout or a deadlock. The
+				// outer catch decides by re-reading the ledger - the point is to
+				// answer "already imported" rather than 500 in exactly the
+				// double-submit case this guard exists for.
+				$mappingClash = true;
+				// Rethrown either way: on Postgres the failed statement has
+				// already aborted the transaction, so nothing more can be written
+				// in it. The outer catch rolls back and translates.
+				throw $e;
+			}
 
 			// Labels first, so card assignments can reference the new ids.
 			$labelIdMap = [];
@@ -239,6 +295,22 @@ class DeckImportService {
 			// The DB is rolled back, but any app-data bytes we already copied are
 			// not - remove them so a failed import strands no orphan objects.
 			$this->cleanupWrittenObjects($writtenObjects);
+			// The claim failed and the caller had NOT confirmed a second copy: if a
+			// record now exists, a concurrent submit for the same pair committed
+			// first and this one is the duplicate - answer that, not a 500.
+			// Anything else (including a confirmed re-import, which by definition
+			// cannot be told to confirm again) keeps its original error, and a
+			// failure of the re-read itself must never mask that error either.
+			if ($mappingClash && !$confirmReimport) {
+				try {
+					$winner = $this->deckImportMapper->findForUser($deckBoardId, $actorUid);
+				} catch (\Throwable) {
+					$winner = null;
+				}
+				if ($winner !== null) {
+					throw new AlreadyImportedException('You have already imported that Deck board');
+				}
+			}
 			throw $e;
 		}
 	}

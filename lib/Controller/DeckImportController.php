@@ -42,11 +42,17 @@ class DeckImportController extends Controller {
 		});
 	}
 
+	/**
+	 * @param bool $confirm the caller has explicitly confirmed a re-import of a
+	 *                      Deck board they already imported. Defaults to false, so a plain
+	 *                      double-submit is answered with 409 `already_imported` instead of silently
+	 *                      producing a second board.
+	 */
 	#[NoAdminRequired]
-	public function import(int $deckBoardId): JSONResponse {
-		return $this->respond(function () use ($deckBoardId): JSONResponse {
+	public function import(int $deckBoardId, bool $confirm = false): JSONResponse {
+		return $this->respond(function () use ($deckBoardId, $confirm): JSONResponse {
 			return new JSONResponse(
-				$this->importService->importBoard($deckBoardId, $this->currentUserId())
+				$this->importService->importBoard($deckBoardId, $this->currentUserId(), $confirm)
 			);
 		});
 	}

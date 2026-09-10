@@ -233,6 +233,35 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</template>
 
+				<!-- Confirmation step: this Deck board has been imported by this
+				     user before, so a second import has to be asked for. It is a
+				     step in THIS modal rather than a dialog stacked on top of it,
+				     so there is only ever one thing on screen to answer. -->
+				<template v-else-if="reimportTarget">
+					<p class="deck-import__hint" data-test="deck-import-confirm">
+						{{ t('kanso', 'You already imported this Deck board on {date}. Importing it again creates another, separate Kanso board with its own copy of every attachment — nothing from the earlier import is reused or updated.', { date: formatImportedAt(reimportTarget.importedAt) }) }}
+					</p>
+					<!-- Rendered by Vue, not interpolated through t(), so a board
+					     called "R&D" reads as itself (same reason as the summary). -->
+					<p class="deck-import__hint"><strong>{{ reimportTarget.title }}</strong></p>
+					<div class="deck-import__actions">
+						<NcButton
+							type="primary"
+							:disabled="importingId !== null"
+							data-test="deck-import-confirm-yes"
+							@click="confirmReimport">
+							{{ importingId !== null ? t('kanso', 'Importing…') : t('kanso', 'Import again') }}
+						</NcButton>
+						<NcButton
+							:disabled="importingId !== null"
+							data-test="deck-import-confirm-cancel"
+							@click="reimportTarget = null">
+							{{ t('kanso', 'Cancel') }}
+						</NcButton>
+					</div>
+					<p v-if="importError" class="deck-import__error">{{ importError }}</p>
+				</template>
+
 				<template v-else>
 					<p class="deck-import__hint">
 						{{ t('kanso', 'Each Deck board is copied into a new Kanso board you own: stacks, cards, labels and assignees. Your Deck boards are left untouched.') }}
@@ -254,11 +283,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:style="{ background: db.color ? '#' + db.color : 'var(--color-primary-element)' }" />
 							<span class="deck-import__name">{{ db.title }}</span>
 							<span class="deck-import__count">{{ n('kanso', '%n card', '%n cards', db.cardCount) }}</span>
+							<!-- Already imported by THIS user: say so, and make the
+							     repeat a deliberate "Import again" rather than the
+							     same Import button that produced the first copy. -->
+							<span
+								v-if="db.importedAt"
+								class="deck-import__imported"
+								data-test="deck-import-imported">
+								{{ t('kanso', 'Imported {date}', { date: formatImportedAt(db.importedAt) }) }}
+							</span>
 							<NcButton
 								type="primary"
 								:disabled="importingId !== null"
-								@click="doImport(db)">
-								{{ importingId === db.id ? t('kanso', 'Importing…') : t('kanso', 'Import') }}
+								:data-test="db.importedAt ? 'deck-import-again' : 'deck-import-start'"
+								@click="db.importedAt ? askReimport(db) : doImport(db)">
+								{{ importingId === db.id
+									? t('kanso', 'Importing…')
+									: (db.importedAt ? t('kanso', 'Import again') : t('kanso', 'Import')) }}
 							</NcButton>
 						</li>
 					</ul>
@@ -555,6 +596,7 @@ import CsvImportModal from '../components/CsvImportModal.vue'
 import { useBoards } from '../composables/useBoards.js'
 import { useBoardActions } from '../composables/useBoardActions.js'
 import { useBoardGroups } from '../composables/useBoardGroups.js'
+import { exactTimeLabel } from '../utils/dateDisplay.js'
 import { getSettings, updateSettings, createStack, createCard } from '../services/api.js'
 import { fetchDeckImportBoards, importDeckBoard, importBoardFile, importTrelloBoard } from '../services/api.js'
 
@@ -840,12 +882,21 @@ const importError = ref('')
 // so the counts (and any skipped attachments) reach the user before they act on
 // "the migration worked".
 const importSummary = ref(null)
+// The Deck board a "Import again" click is asking about — the confirmation step
+// for a board this user has already imported (#10300).
+const reimportTarget = ref(null)
 
-async function openImport() {
-	showImport.value = true
-	importError.value = ''
+/**
+ * A recorded import timestamp, in the same shortened form the rest of the app
+ * shows timestamps in — `exactTimeLabel` also degrades an absent or unusable
+ * value to an empty label rather than to "1 Jan 1970".
+ */
+function formatImportedAt(ts) {
+	return exactTimeLabel(ts)
+}
+
+async function refreshDeckBoards() {
 	importLoadError.value = ''
-	importSummary.value = null
 	importLoading.value = true
 	try {
 		const res = await fetchDeckImportBoards()
@@ -858,19 +909,47 @@ async function openImport() {
 	}
 }
 
-async function doImport(db) {
+async function openImport() {
+	showImport.value = true
+	importError.value = ''
+	importSummary.value = null
+	reimportTarget.value = null
+	await refreshDeckBoards()
+}
+
+function askReimport(db) {
+	importError.value = ''
+	reimportTarget.value = db
+}
+
+function confirmReimport() {
+	if (reimportTarget.value) return doImport(reimportTarget.value, true)
+}
+
+async function doImport(db, confirm = false) {
 	importError.value = ''
 	importingId.value = db.id
 	try {
-		const res = await importDeckBoard(db.id)
+		const res = await importDeckBoard(db.id, confirm)
 		await queryClient.invalidateQueries({ queryKey: ['boards'] })
+		reimportTarget.value = null
 		// Stay on the modal and show what was imported. Navigating straight to a
 		// board full of cards reads as "the migration worked" even when
 		// attachments were dropped — the one moment a user then deletes the
 		// source board in Deck.
 		importSummary.value = res
 	} catch (err) {
-		importError.value = err?.response?.data?.error || t('kanso', 'Failed to import that board.')
+		if (err?.response?.status === 409 && err?.response?.data?.error === 'already_imported') {
+			// The classic double-submit: an earlier request actually succeeded and
+			// its response was lost, so this one looked like a fresh import. The
+			// server wrote nothing — re-read the list so the row comes back marked
+			// and a second copy becomes a deliberate choice, not an accident.
+			reimportTarget.value = null
+			importError.value = t('kanso', 'You have already imported that Deck board, so nothing was imported now. Use “Import again” if you really do want a second copy.')
+			await refreshDeckBoards()
+		} else {
+			importError.value = err?.response?.data?.error || t('kanso', 'Failed to import that board.')
+		}
 	} finally {
 		importingId.value = null
 	}
@@ -885,6 +964,7 @@ function openImportedBoard() {
 function closeImport() {
 	showImport.value = false
 	importSummary.value = null
+	reimportTarget.value = null
 }
 
 // ── Import from a Kanso export (.zip archive, or an older bare .json) ─────────
@@ -1376,5 +1456,11 @@ button.board-tile:hover,
 .deck-import__count {
 	color: var(--color-text-maxcontrast);
 	font-size: 0.9em;
+}
+
+.deck-import__imported {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9em;
+	white-space: nowrap;
 }
 </style>

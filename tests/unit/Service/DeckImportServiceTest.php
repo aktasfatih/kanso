@@ -16,10 +16,13 @@ use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\DeckImport;
+use OCA\Kanso\Db\DeckImportMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\AlreadyImportedException;
 use OCA\Kanso\Service\AttachmentSanitizer;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardService;
@@ -53,6 +56,9 @@ class DeckImportServiceTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CommentMapper&MockObject $commentMapper;
 	private CardAttachmentMapper&MockObject $cardAttachmentMapper;
+	private DeckImportMapper&MockObject $deckImportMapper;
+	/** Every write the stubbed import makes, in order - see stubImportableBoard(). */
+	private array $writeOrder = [];
 	private IUserManager&MockObject $userManager;
 	private \OCP\IDBConnection&MockObject $db;
 	private IAppData&MockObject $appData;
@@ -73,6 +79,7 @@ class DeckImportServiceTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->cardAttachmentMapper = $this->createMock(CardAttachmentMapper::class);
+		$this->deckImportMapper = $this->createMock(DeckImportMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(\OCP\IDBConnection::class);
 		$this->appData = $this->createMock(IAppData::class);
@@ -90,6 +97,7 @@ class DeckImportServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->commentMapper,
 			$this->cardAttachmentMapper,
+			$this->deckImportMapper,
 			new SortKeyService(),
 			$this->userManager,
 			$this->db,
@@ -118,8 +126,266 @@ class DeckImportServiceTest extends TestCase {
 	public function testImportWithoutAccessThrows(): void {
 		$this->deckReader->method('isAvailable')->willReturn(true);
 		$this->deckReader->method('userCanReadBoard')->with('bob', 2)->willReturn(false);
+		// The permission check comes FIRST: a user who cannot read the Deck board
+		// never reaches the import ledger, so the "already imported" answer can
+		// never tell a stranger that somebody else imported a board (#10300).
+		$this->deckImportMapper->expects(self::never())->method('findForUser');
+		$this->deckImportMapper->expects(self::never())->method('record');
+		$this->boardService->expects(self::never())->method('create');
 		$this->expectException(NotPermittedException::class);
 		$this->service->importBoard(2, 'bob');
+	}
+
+	/**
+	 * Same denial, but with a prior import on record for that user: the answer
+	 * must still be "access denied", never "already imported".
+	 */
+	public function testImportWithoutAccessIsDeniedEvenWithAPriorImport(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->with('bob', 2)->willReturn(false);
+		$this->deckImportMapper->method('findForUser')->willReturn($this->recordedImport(2, 100, 'bob'));
+		$this->expectException(NotPermittedException::class);
+		$this->service->importBoard(2, 'bob');
+	}
+
+	// ---- re-import guard (#10300) -----------------------------------------
+
+	/** A DB failure carrying the given `OCP\DB\Exception::REASON_*`. */
+	private function dbFailure(int $reason): \OCP\DB\Exception&MockObject {
+		$e = $this->createMock(\OCP\DB\Exception::class);
+		$e->method('getReason')->willReturn($reason);
+		return $e;
+	}
+
+	/** An existing `kanso_deck_imports` row for the given pair. */
+	private function recordedImport(int $deckBoardId, int $kansoBoardId, string $uid, int $at = 1700000000): DeckImport {
+		$row = new DeckImport();
+		$row->setId(7);
+		$row->setDeckBoardId($deckBoardId);
+		$row->setKansoBoardId($kansoBoardId);
+		$row->setImportedBy($uid);
+		$row->setImportedAt($at);
+		return $row;
+	}
+
+	/**
+	 * Stubs a readable, importable one-stack/one-card Deck board so a test can
+	 * concentrate on the guard rather than the mapping.
+	 *
+	 * Every write the import makes appends to {@see self::$writeOrder}, so a test
+	 * can assert not just THAT the ledger row was claimed but that it was claimed
+	 * FIRST - the property the whole guard rests on.
+	 */
+	private function stubImportableBoard(): void {
+		$this->deckReader->method('isAvailable')->willReturn(true);
+		$this->deckReader->method('userCanReadBoard')->willReturn(true);
+		$this->deckReader->method('readBoard')->with(2)
+			->willReturn(['id' => 2, 'title' => 'Migrate me', 'color' => null, 'owner' => 'carol']);
+
+		$board = new Board();
+		$board->setId(100);
+		$board->setTitle('Migrate me');
+		$this->boardService->method('create')->willReturn($board);
+
+		$this->deckReader->method('readLabels')->willReturn([]);
+		$this->deckReader->method('readStacks')->willReturn([['id' => 11, 'title' => 'To do']]);
+		$this->deckReader->method('readCards')->willReturn([
+			['id' => 21, 'title' => 'First', 'description' => '', 'archived' => false, 'duedate' => null, 'doneAt' => 0, 'createdAt' => 0],
+		]);
+		$this->deckReader->method('readAssignedLabels')->willReturn([]);
+		$this->deckReader->method('readAssignedUsers')->willReturn([]);
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([]);
+		$this->deckReader->method('readFileReferenceAttachments')->willReturn([]);
+
+		// Registered FIRST, so these supply the return values; a test's own
+		// expects()->with(...) on the same method still verifies its arguments.
+		$this->deckImportMapper->method('forget')->willReturnCallback(function (): int {
+			$this->writeOrder[] = 'forget';
+			return 1;
+		});
+		$this->deckImportMapper->method('record')->willReturnCallback(function (): DeckImport {
+			$this->writeOrder[] = 'record';
+			return $this->recordedImport(2, 100, 'alice');
+		});
+		$this->stackMapper->method('insert')->willReturnCallback(function (Stack $s): Stack {
+			$this->writeOrder[] = 'stack';
+			$s->setId(1);
+			return $s;
+		});
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c): Card {
+			$this->writeOrder[] = 'card';
+			$c->setId(500);
+			return $c;
+		});
+	}
+
+	/**
+	 * The happy path records the (Deck board, user) pair INSIDE the import
+	 * transaction, so a later attempt has something to find. This is the row the
+	 * whole guard rests on - without it a re-run duplicates the board and every
+	 * attachment's bytes.
+	 */
+	public function testFirstImportRecordsTheMapping(): void {
+		$this->stubImportableBoard();
+		$this->deckImportMapper->method('findForUser')->with(2, 'alice')->willReturn(null);
+		// Recorded against the NEW board id, for the importing user, and never as
+		// a re-import (nothing to forget on a first run).
+		$this->deckImportMapper->expects(self::never())->method('forget');
+		$this->deckImportMapper->expects(self::once())->method('record')
+			->with(2, 100, 'alice', self::isType('int'));
+
+		$result = $this->service->importBoard(2, 'alice');
+		self::assertSame(100, $result['boardId']);
+		// ORDER is the guarantee, not merely the call: the claim has to land
+		// before the import writes anything, or a losing double-submit would have
+		// copied stacks, cards and attachment bytes before finding out it lost.
+		self::assertSame(['record', 'stack', 'card'], $this->writeOrder);
+	}
+
+	/**
+	 * The defect this card fixes: running the same import twice used to produce a
+	 * second complete board plus a second physical copy of every attachment. Now
+	 * the second run is refused BEFORE anything is created - no board, no cards,
+	 * no attachment bytes.
+	 */
+	public function testSecondImportOfTheSameBoardIsRefusedWithoutConfirmation(): void {
+		$this->stubImportableBoard();
+		$this->deckImportMapper->method('findForUser')->with(2, 'alice')
+			->willReturn($this->recordedImport(2, 100, 'alice'));
+
+		// Nothing is written: not the board, not the cards, not the ledger row.
+		$this->boardService->expects(self::never())->method('create');
+		$this->deckImportMapper->expects(self::never())->method('record');
+		// Refused before the transaction even opens.
+		$this->db->expects(self::never())->method('beginTransaction');
+
+		$this->expectException(AlreadyImportedException::class);
+		try {
+			$this->service->importBoard(2, 'alice');
+		} finally {
+			self::assertSame([], $this->writeOrder, 'a refused repeat writes nothing at all');
+		}
+	}
+
+	/**
+	 * Cleaning up a bad first attempt and importing again is a real use case, so
+	 * an EXPLICIT confirmation is allowed through - it replaces the recorded
+	 * mapping rather than adding a second one.
+	 */
+	public function testConfirmedReimportIsAllowedAndReplacesTheMapping(): void {
+		$this->stubImportableBoard();
+		// The confirmed path does not need the pre-check at all.
+		$this->deckImportMapper->expects(self::never())->method('findForUser');
+		$this->deckImportMapper->expects(self::once())->method('forget')->with(2, 'alice');
+		$this->deckImportMapper->expects(self::once())->method('record')
+			->with(2, 100, 'alice', self::isType('int'));
+
+		$result = $this->service->importBoard(2, 'alice', true);
+		self::assertSame(100, $result['boardId']);
+		// The release must precede the re-claim (and both must precede the
+		// content), or the re-claim would collide with the row it is replacing.
+		self::assertSame(['forget', 'record', 'stack', 'card'], $this->writeOrder);
+	}
+
+	/**
+	 * The pre-check cannot see a request that is still in flight, so the unique
+	 * index on (deck_board_id, imported_by) is the real guard for the classic
+	 * double-submit. The loser's whole transaction rolls back - no duplicate
+	 * board - and the answer is still the clean "already imported", not a 500.
+	 */
+	public function testConcurrentDoubleSubmitLosesOnTheUniqueIndexAndRollsBack(): void {
+		$this->stubImportableBoard();
+		// Pre-check sees nothing (the winner had not committed yet); the ledger
+		// read in the failure path then finds the winner's row.
+		$this->deckImportMapper->method('findForUser')
+			->willReturnOnConsecutiveCalls(null, $this->recordedImport(2, 100, 'alice'));
+		$this->deckImportMapper->method('record')->willThrowException($this->dbFailure(
+			\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION
+		));
+
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+
+		$this->expectException(AlreadyImportedException::class);
+		try {
+			$this->service->importBoard(2, 'alice');
+		} finally {
+			// The claim is the transaction's FIRST write and it is where the
+			// losing submit dies, so it never reaches a stack, a card, or an
+			// attachment's bytes.
+			self::assertSame(['record'], $this->writeOrder);
+		}
+	}
+
+	/**
+	 * The loser does not always come back with a unique-constraint violation: it
+	 * blocks on the index for as long as the winner's import runs - minutes, for
+	 * a board full of attachments - so MySQL is just as likely to answer with a
+	 * lock-wait timeout. That must still read as "already imported", not as a
+	 * 500, because this IS the double-submit the guard exists for.
+	 */
+	public function testLockTimeoutOnTheClaimStillReadsAsAlreadyImported(): void {
+		$this->stubImportableBoard();
+		$this->deckImportMapper->method('findForUser')
+			->willReturnOnConsecutiveCalls(null, $this->recordedImport(2, 100, 'alice'));
+		$this->deckImportMapper->method('record')->willThrowException($this->dbFailure(
+			\OCP\DB\Exception::REASON_LOCK_WAIT_TIMEOUT
+		));
+
+		$this->expectException(AlreadyImportedException::class);
+		$this->service->importBoard(2, 'alice');
+	}
+
+	/**
+	 * ...but a claim that failed for an unrelated reason, with no winning record
+	 * to point at, must surface as its own error. Dressing a broken database up
+	 * as "already imported" would tell the user their import landed when it did
+	 * not - the exact confusion this card is about.
+	 */
+	public function testAFailedClaimWithNoWinnerKeepsItsOriginalError(): void {
+		$this->stubImportableBoard();
+		// Nothing in the ledger before or after: not a race.
+		$this->deckImportMapper->method('findForUser')->willReturn(null);
+		$broken = $this->dbFailure(\OCP\DB\Exception::REASON_CONNECTION_LOST);
+		$this->deckImportMapper->method('record')->willThrowException($broken);
+
+		$this->db->expects(self::once())->method('rollBack');
+		$this->expectException(\OCP\DB\Exception::class);
+		$this->service->importBoard(2, 'alice');
+	}
+
+	/**
+	 * A CONFIRMED re-import that loses a race must not be told to confirm - it
+	 * just did. It keeps the underlying error instead of a nonsensical prompt.
+	 */
+	public function testConfirmedReimportIsNeverToldToConfirmAgain(): void {
+		$this->stubImportableBoard();
+		$this->deckImportMapper->method('findForUser')->willReturn($this->recordedImport(2, 100, 'alice'));
+		$this->deckImportMapper->method('record')->willThrowException($this->dbFailure(
+			\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION
+		));
+
+		$this->expectException(\OCP\DB\Exception::class);
+		$this->service->importBoard(2, 'alice', true);
+	}
+
+	/**
+	 * The key is (Deck board, importing USER). A board Alice imported must stay
+	 * importable for Bob - refusing it would silently break a shared board
+	 * mid-migration, which is worse than the duplicate this card prevents.
+	 */
+	public function testAnotherUsersImportDoesNotBlockThisUser(): void {
+		$this->stubImportableBoard();
+		// Scoped lookup: asked for BOB, and Bob has imported nothing.
+		$this->deckImportMapper->expects(self::once())->method('findForUser')
+			->with(2, 'bob')->willReturn(null);
+		$this->deckImportMapper->expects(self::once())->method('record')
+			->with(2, 100, 'bob', self::isType('int'));
+
+		$result = $this->service->importBoard(2, 'bob');
+		self::assertSame(100, $result['boardId']);
 	}
 
 	public function testImportMissingBoardThrows(): void {

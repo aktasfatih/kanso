@@ -20,6 +20,10 @@ use OCP\IDBConnection;
  *
  * Reserved-word note: Deck's ordering column is `order`, so every read uses
  * `SELECT *` and sorts in PHP - no unquoted `ORDER BY "order"` in the SQL.
+ *
+ * The one exception to "Deck tables only" is {@see self::listImportableBoards()},
+ * which LEFT JOINs Kanso's own `kanso_deck_imports` ledger to mark the boards
+ * this user has already imported. It is still a read, and still one query.
  */
 class DeckReader {
 	public function __construct(
@@ -38,7 +42,16 @@ class DeckReader {
 	 * shared to them by a direct user ACL entry. Each carries a card count for
 	 * the picker. (Group/circle shares are out of scope for v1.)
 	 *
-	 * @return list<array{id: int, title: string, color: ?string, archived: bool, cardCount: int}>
+	 * Each row also carries the "already imported" marker (#10300): a LEFT JOIN
+	 * onto `kanso_deck_imports` for THIS user - one join, never a query per board
+	 * - so the picker can say "Imported <date>" and demand a confirmation instead
+	 * of offering a bare Import button that silently produces a duplicate board.
+	 * The join is scoped to the calling user, so a board someone ELSE has already
+	 * imported still shows as importable to this one.
+	 *
+	 * `importedAt` is null when the user has never imported that board.
+	 *
+	 * @return list<array{id: int, title: string, color: ?string, archived: bool, cardCount: int, importedAt: ?int}>
 	 */
 	public function listImportableBoards(string $uid): array {
 		$ids = $this->readableBoardIds($uid);
@@ -46,11 +59,19 @@ class DeckReader {
 			return [];
 		}
 
+		// Columns are listed explicitly (rather than the SELECT * the other reads
+		// use) because the join would otherwise collide `id` between the two
+		// tables. None of them is a reserved word, so no quoting problem arises.
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')
-			->from('deck_boards')
-			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
-			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		$qb->select('b.id', 'b.title', 'b.color', 'b.archived')
+			->selectAlias('i.imported_at', 'imported_at')
+			->from('deck_boards', 'b')
+			->leftJoin('b', 'kanso_deck_imports', 'i', $qb->expr()->andX(
+				$qb->expr()->eq('i.deck_board_id', 'b.id'),
+				$qb->expr()->eq('i.imported_by', $qb->createNamedParameter($uid)),
+			))
+			->where($qb->expr()->in('b.id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('b.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 		$rows = $this->fetchAll($qb);
 
 		$counts = $this->cardCountsByBoard($ids);
@@ -58,12 +79,14 @@ class DeckReader {
 		$boards = [];
 		foreach ($rows as $row) {
 			$id = (int)$row['id'];
+			$importedAt = $row['imported_at'] ?? null;
 			$boards[] = [
 				'id' => $id,
 				'title' => (string)$row['title'],
 				'color' => $this->bareColor($row['color'] ?? null),
 				'archived' => (bool)$row['archived'],
 				'cardCount' => $counts[$id] ?? 0,
+				'importedAt' => $importedAt === null ? null : (int)$importedAt,
 			];
 		}
 		usort($boards, static fn (array $a, array $b): int => strcasecmp($a['title'], $b['title']));
