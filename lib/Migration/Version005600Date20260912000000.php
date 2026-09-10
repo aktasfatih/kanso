@@ -16,14 +16,17 @@ use OCP\Migration\SimpleMigrationStep;
 /**
  * Per-board built-in card feature switches (`kanso_boards.disabled_card_features`).
  *
- * A board manager can hide card sections the team never uses (contacts,
- * attachments, GitHub links, time tracking, cover colour). The column stores a
- * small JSON array of the DISABLED keys, e.g. `["attachments","github"]`.
+ * A board manager can hide card sections the team never uses. This step shipped
+ * with five (contacts, attachments, GitHub links, time tracking, cover colour);
+ * the live set is whatever {@see \OCA\Kanso\Db\CardFeatures::ALL} lists today.
+ * The column stores a small JSON array of the DISABLED keys, e.g.
+ * `["attachments","github"]`.
  *
  * NULL (the default for every existing row) means "nothing disabled" - every
  * feature stays on - so this is purely additive with no backfill and no
  * behaviour change on upgrade. Storing only the disabled keys also means a
- * sixth feature can be added later without another migration.
+ * further feature can be added without another migration - `checklist` was, and
+ * needed none.
  *
  * Guarded (hasColumn) so the step is idempotent.
  */

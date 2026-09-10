@@ -20,11 +20,31 @@ export default defineConfig({
 	// namespaces all of that per worker — then E2E_WORKERS can be raised safely.
 	//   E2E_ISOLATE=1 E2E_WORKERS=4 npx playwright test
 	workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : 1,
-	// 120s per test: the self-hosted CI runner is ~4-5x slower than a dev box,
-	// so a test that takes ~10s locally can approach the old 60s cap there and
-	// flake. Locally tests still finish in a few seconds, so this only adds
-	// headroom on slow infra (and avoids the retry churn a tight cap caused).
-	timeout: 120_000,
+	// 240s per test: the self-hosted CI runner is ~4-5x slower than a dev box to
+	// begin with, and when the runner POOL is saturated it degrades a further
+	// 1.8-3x on top of that — measured, not guessed: with no code change at all,
+	// `main`'s own e2e job went 39m → 106-119m and its browser-free `unit-php`
+	// job went 1m → 7-8m (2.61x) over one day, and one `e2e` job sat queued 18h
+	// waiting for a runner. Under that load the old 120s cap was inside the
+	// measured range for the suite's longest tests (timeline-view's tall board:
+	// 72s healthy → 120s+ saturated, i.e. it timed out deterministically on all
+	// three attempts), so the cap itself became the failure. 240s keeps ~3x
+	// headroom over the worst duration observed on a saturated runner.
+	//
+	// This costs nothing when the suite is green — a test only spends its budget
+	// when it is already failing. The handful of tests measured close to even
+	// this cap carry their own explicit, commented `test.setTimeout(...)`.
+	timeout: 240_000,
+	// Assertion budget. Playwright's default is 5s, which is the same trap one
+	// level down: an `expect(...)` with no explicit timeout gets 5s to cover a
+	// round-trip that costs ~0.3s healthy and ~1s on a saturated runner, and
+	// several specs lost a whole CI run to exactly that. 15s restores ~3x
+	// headroom for every assertion that never stated a budget of its own.
+	// Raising a timeout can only ever lengthen a wait, so no assertion becomes
+	// weaker: a positive assertion gets longer to succeed, and a negative one
+	// (`not.toBeVisible`, `toHaveCount(0)`) gets longer to catch the thing it
+	// forbids. Only a FAILING assertion spends the extra time.
+	expect: { timeout: 15_000 },
 	// Warm the app once before any spec so the first spec doesn't race
 	// PHP/route-cache cold-start (a long-standing flake on `checklist`, which
 	// runs first alphabetically).

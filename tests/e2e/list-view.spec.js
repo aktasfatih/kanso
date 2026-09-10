@@ -568,6 +568,22 @@ test.describe('List view — column composer (#9853)', () => {
 	})
 
 	test('the composer keeps its focus and half-typed draft while the list recycles rows', async ({ page }) => {
+		// Explicit budget, measured rather than guessed. This is the thinnest margin
+		// in the whole suite: 60s on two healthy CI runs and 108s on two saturated
+		// ones, against what used to be a 120s cap — 1.11x headroom, i.e. it passed
+		// twice with 12 seconds to spare and a slightly worse runner turns it into a
+		// deterministic timeout (the failure mode that took out timeline-view at the
+		// same 1.67x margin, #10332).
+		//
+		// The cost is the 50 sequential card creates below, and they CANNOT be
+		// overlapped: CardService::create derives each sort key from the stack tail
+		// under the (stack_id, sort_key) and (board_id, board_seq) unique indexes and
+		// re-derives only MAX_CREATE_ATTEMPTS=5 times, so firing them concurrently
+		// into one stack trades a slow test for a flaky one. Nor can the fixture
+		// shrink: 50 rows is what makes the list actually recycle, which is the whole
+		// regression under test. So the honest fix is to state the budget.
+		test.setTimeout(360_000)
+
 		// This is the whole reason the composer is rendered OUTSIDE the virtualizer:
 		// as a virtual row it would be unmounted and recycled onto another card the
 		// moment the list scrolled, taking the focus and the draft with it. Needs

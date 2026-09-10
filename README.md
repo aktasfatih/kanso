@@ -230,7 +230,20 @@ is **not** bundled into the installed Nextcloud app.
 
 The dev stack mounts your checkout as `custom_apps/kanso`, so a rebuild
 (`npm run build`) plus a browser reload picks up frontend changes; PHP changes
-apply immediately. `docker compose down` in `dev/` resets the instance.
+apply immediately. In `dev/`:
+
+```sh
+docker compose down && ./setup.sh                    # restart: install + data survive
+docker compose --profile '*' down -v && ./setup.sh   # reset: wipes everything
+```
+
+`--profile '*'` on the reset matters — `-v` only removes the volumes of services
+in active profiles, so a bare `docker compose down -v` deletes the webroot but
+leaves the database, and the next boot fails trying to install over it. Reset
+(not restart) after switching `NC_VERSION` or `KANSO_DB`, and after **adding a
+migration**: `setup.sh` only re-enables the app, and Nextcloud re-runs an app's
+migrations only when `info.xml`'s `<version>` grows, which feature branches never
+do. `./seed.sh` refills a reset stack; `./smoke.sh` reports a schema left behind.
 
 PHP tooling runs via Docker (no host PHP needed):
 

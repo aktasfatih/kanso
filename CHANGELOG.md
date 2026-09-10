@@ -11,6 +11,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.27.0](https://github.com/aktasfatih/kanso/compare/v0.26.0...v0.27.0) (2026-09-10)
+
+
+### Bug Fixes
+
+* **checklist:** stop a just-added step from losing its assignee on a slow connection ([e779f3a](https://github.com/aktasfatih/kanso/commit/e779f3a9dccc02b1cd348bb06a3e4c546f6e9f5f)), closes [#10284](https://github.com/aktasfatih/kanso/issues/10284)
+* **checklist:** stop a just-added step from reappearing when you delete it on a slow connection ([327e2ba](https://github.com/aktasfatih/kanso/commit/327e2ba8b67c9e8322f31d526e52cf615827ed1b)), closes [#10285](https://github.com/aktasfatih/kanso/issues/10285)
+* **comments:** keep a linked comment in view while the rest of the card loads ([d7bb6c0](https://github.com/aktasfatih/kanso/commit/d7bb6c0de88b2a2e0d100aafca1d9f606a44f64e))
+* **import:** only board managers add new labels during a CSV import ([b46136f](https://github.com/aktasfatih/kanso/commit/b46136fb592769170aa8092740ec61569250bd5b))
+* **import:** show what an import copied, and warn about anything it skipped ([9871ce0](https://github.com/aktasfatih/kanso/commit/9871ce004578cd5f1bf15f2da3aa2d0d4ffd36d6))
+* **realtime:** keep boards on the fast 5s refresh until push proves it is really working ([672336e](https://github.com/aktasfatih/kanso/commit/672336ec8156f277cfd1a34c39ba513688b1975c))
+* **realtime:** stop a closed board from ever leaving a poll loop behind ([98095dd](https://github.com/aktasfatih/kanso/commit/98095dd1aa7a5f30a30895437ed04e1c9443432e))
+* **realtime:** stop polling a board for changes while its tab is in the background ([b63826a](https://github.com/aktasfatih/kanso/commit/b63826a2d0ad08aeb67b3a20c779ab99b79003f8))
+* **recurrence:** keep a sub-day due-date lead time when editing a repeat rule ([5e86d08](https://github.com/aktasfatih/kanso/commit/5e86d0894742ba2ef886c701ee1cc2ef4b13384b))
+* **security:** stop outsiders probing which reviews sit on a card ([87264bd](https://github.com/aktasfatih/kanso/commit/87264bdc443af8bb9dc481283f4f03e34a212e24)), closes [#10296](https://github.com/aktasfatih/kanso/issues/10296)
+* **share:** show display names, not account login names, in public board text ([36523c7](https://github.com/aktasfatih/kanso/commit/36523c712c8f22b3db59d5ff75d7675266db8b0d)), closes [#10294](https://github.com/aktasfatih/kanso/issues/10294)
+* **ui:** show a hover hint on every button in the multi-select action bar ([a50b67c](https://github.com/aktasfatih/kanso/commit/a50b67c99aeebbe0402c0429444f07e612f56eb0)), closes [#10275](https://github.com/aktasfatih/kanso/issues/10275)
+
+
+### Features
+
+* **boards:** let a board hide the checklist section like the other card sections ([e54af07](https://github.com/aktasfatih/kanso/commit/e54af0750ec5b2deeee432cdf920ac4c0812f582))
+
 # [0.26.0](https://github.com/aktasfatih/kanso/compare/v0.25.0...v0.26.0) (2026-09-08)
 
 

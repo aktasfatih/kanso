@@ -25,6 +25,7 @@ class CardFeaturesTest extends TestCase {
 		'github' => true,
 		'timeTracking' => true,
 		'coverColor' => true,
+		'checklist' => true,
 	];
 
 	public function testNullColumnMeansEveryFeatureIsEnabled(): void {
@@ -48,9 +49,39 @@ class CardFeaturesTest extends TestCase {
 
 	public function testDecodeMarksOnlyTheStoredKeysDisabled(): void {
 		self::assertSame(
-			['contacts' => true, 'attachments' => false, 'github' => false, 'timeTracking' => true, 'coverColor' => true],
+			['contacts' => true, 'attachments' => false, 'github' => false, 'timeTracking' => true, 'coverColor' => true, 'checklist' => true],
 			CardFeatures::decode('["attachments","github"]')
 		);
+	}
+
+	/**
+	 * Checklists are switchable like the five sections that shipped with the
+	 * column, and they cost no migration: `disabled_card_features` stores only the
+	 * DISABLED keys, so an existing board simply reads back `checklist => true`.
+	 */
+	public function testChecklistRoundTripsThroughStorage(): void {
+		// A board that predates the key reads back as "checklist shown".
+		self::assertTrue(CardFeatures::decode(null)['checklist']);
+
+		$disabled = self::ALL_ENABLED;
+		$disabled['checklist'] = false;
+		self::assertSame('["checklist"]', CardFeatures::encode($disabled));
+		self::assertSame($disabled, CardFeatures::decode('["checklist"]'));
+	}
+
+	/**
+	 * The one assertion that pins the SERVER allowlist rather than the client
+	 * mirror: applyPatch() throws InvalidInputException for any key missing from
+	 * CardFeatures::ALL, so a checklist-only patch being ACCEPTED is what proves
+	 * the settings switch won't 400. Deliberately its own test with nothing before
+	 * it, so dropping the key from ::ALL surfaces as that exception and not as an
+	 * earlier assertion failure.
+	 */
+	public function testApplyPatchAcceptsTheChecklistKey(): void {
+		$disabled = self::ALL_ENABLED;
+		$disabled['checklist'] = false;
+		self::assertSame($disabled, CardFeatures::applyPatch(self::ALL_ENABLED, ['checklist' => false]));
+		self::assertSame(self::ALL_ENABLED, CardFeatures::applyPatch($disabled, ['checklist' => true]));
 	}
 
 	/** A key from a newer version (after a downgrade) is simply ignored. */

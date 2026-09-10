@@ -139,6 +139,61 @@ export async function ncLogin(page, { user = ADMIN.user, pass = ADMIN.pass } = {
 	}
 }
 
+/** Kanso's own front-end assets. The dev + CI stack bind-mounts the app at
+ * /custom_apps/kanso, an app-store install lands at /apps/kanso; both match. */
+const KANSO_SOURCE = /\/(?:custom_)?apps\/kanso\//
+
+/** Another Nextcloud app's front-end bundle, or the server's own (`/dist/`,
+ * `/core/`). Kanso is excluded from the apps arm by the negative lookahead, so
+ * a Kanso URL can never be classified as foreign here. `/index.php/` is
+ * optional because NC serves the same routes with and without it. */
+const FOREIGN_SOURCE = new RegExp(
+	'^https?://[^/]+/(?:index\\.php/)?(?:(?:custom_)?apps/(?!kanso/)[^/]+/|dist/|core/)',
+)
+
+/**
+ * Collect this page's console errors, keeping only the ones Kanso is answerable
+ * for. Returns a live array — read it at the end of the test.
+ *
+ * Two specs assert "rendering this page logs no console errors", and CI failed
+ * both on errors that were not Kanso's and not even on Kanso's page:
+ *
+ *     Failed to load resource: the server responded with a status of 404
+ *     could not load recommendation preview Event
+ *
+ * That pair comes from /apps/recommendations/js/recommendations-dashboard.js.
+ * It reaches the assertion because the collector is attached before `ncLogin`,
+ * and `ncLogin` goes through /index.php/login — which, with a live session,
+ * redirects through the Nextcloud DASHBOARD, where every other installed app
+ * mounts a widget (photos, circles, notifications, deck, recommendations…).
+ *
+ * The discriminator is the message's SOURCE URL, not its text. An allowlist of
+ * message strings rots the moment another app rewords its own logging (and it
+ * grows by one entry per unrelated app), whereas "which bundle logged this"
+ * stays true. Callers should also attach AFTER ncLogin so the login detour is
+ * out of scope by construction; the URL filter then covers the foreign bundles
+ * that Kanso's own page really does load (theming, user_status, notifications,
+ * files_sharing, unified-search, core).
+ *
+ * Anything NOT positively attributable to a foreign origin is KEPT. That is the
+ * important direction: Kanso's own console errors still fail the assertion, and
+ * so do uncaught exceptions with no location and failed requests for Kanso's
+ * own URLs. A filter that passed everything would be worse than no assertion.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @return {string[]} live array of `<message>  [<source url>]`
+ */
+export function collectConsoleErrors(page) {
+	const errors = []
+	page.on('console', (msg) => {
+		if (msg.type() !== 'error') return
+		const url = msg.location()?.url ?? ''
+		if (!KANSO_SOURCE.test(url) && FOREIGN_SOURCE.test(url)) return
+		errors.push(`${msg.text()}  [${url || 'no source url'}]`)
+	})
+	return errors
+}
+
 /**
  * A ~40-line zip reader, so the board export archive (#10060) can be verified
  * with no new dependency: walk the central directory and inflate each entry

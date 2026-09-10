@@ -1,25 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, makeApi, currentAuth, API, BASE, exportArchive } from './helpers.js'
+import { test, expect, makeApi, currentAuth, API, BASE, exportArchive, provisionUser, deleteUser } from './helpers.js'
 
-// Sentinels for the two viewers. They are NOT auth strings themselves — the
+// Sentinels for the three viewers. They are NOT auth strings themselves — the
 // client dispatch below resolves them at CALL time: ADMIN → the current user
 // (board owner, `currentAuth`), TESTER → the worker-scoped `peer` (captured in
-// beforeAll). This keeps every `api(ADMIN|TESTER, …)` call site byte-for-byte
+// beforeAll), OUTSIDER → an account with NO membership on the board at all.
+// This keeps every `api(ADMIN|TESTER|OUTSIDER, …)` call site byte-for-byte
 // identical while staying parallel-safe under E2E_ISOLATE.
 const ADMIN = Symbol('owner')
 const TESTER = Symbol('peer')
+const OUTSIDER = Symbol('non-member')
 
 // The worker-scoped peer, captured once in beforeAll so the module-level client
 // dispatch and the `peer.user` participant/assignee literals can reach it.
 let peerRef = null
 
-// #3743 — the endpoint-level leak matrix: two viewers (admin = internal board
-// owner, tester = EXTERNAL member) plus the anonymous token surfaces, asserted
-// against every HTTP read path AND the write gates. The unit-level truth table
-// lives in tests/unit/Service/LeakMatrixTest.php; this spec proves the same
-// rule holds through real SQL on a real server.
+// A logged-in account that is NOT on the board's ACL — the third viewer the
+// matrix needs, because "member who may not see this card" (TESTER) and
+// "not a member" (OUTSIDER) fail through different guards and so leak
+// differently. Provisioned per run in beforeAll, removed in afterAll.
+let outsiderRef = null
+
+// #3743 — the endpoint-level leak matrix: three viewers (admin = internal board
+// owner, tester = EXTERNAL member, outsider = NON-member) plus the anonymous
+// token surfaces, asserted against every HTTP read path AND the write gates.
+// The unit-level truth table lives in tests/unit/Service/LeakMatrixTest.php;
+// this spec proves the same rule holds through real SQL on a real server.
 //
 // Fixture (one board, one stack, unique title token per run):
 //   PUB        public,   created by admin
@@ -31,9 +39,13 @@ let peerRef = null
 //   admin  → PUB, PROV, PRIV   (never CLI — no owner/manager backdoor)
 //   tester → PUB, CLI      (never PROV, never PRIV)
 //   anon   → PUB              (public share + ICS feed)
+//
+// The outsider holds no ACL row, so every board-scoped route 403s for them
+// before visibility is ever consulted; they exist here to pin the ORDER of
+// those two checks on the routes that read a child row by id (#10296).
 
-// Per-viewer API clients (owner + external peer), cached so the (auth, method,
-// path, body) call sites below stay byte-for-byte identical. The ADMIN/TESTER
+// Per-viewer API clients (owner + external peer + non-member), cached so the
+// (auth, method, path, body) call sites below stay byte-for-byte identical. The
 // sentinels resolve lazily (after the worker-isolation rebind + peer capture).
 const clients = new Map()
 function clientFor(auth) {
@@ -44,6 +56,7 @@ function clientFor(auth) {
 		return clients.get(currentAuth)
 	}
 	if (auth === TESTER) return peerRef.api
+	if (auth === OUTSIDER) return outsiderRef.api
 	if (!clients.has(auth)) clients.set(auth, makeApi(auth))
 	return clients.get(auth)
 }
@@ -70,6 +83,8 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 
 	test.beforeAll(async ({ peer }) => {
 		peerRef = peer
+		// Named off the worker's peer so two parallel workers never share it.
+		outsiderRef = await provisionUser(`${peer.user}_out`, peer.pass, { displayName: `${peer.user}_out` })
 		const board = await api(ADMIN, 'POST', '/boards', { title: 'Leak Matrix ' + token })
 		state.boardId = board.id
 		const stack = await api(ADMIN, 'POST', '/stacks', { boardId: board.id, title: 'Lane' })
@@ -104,6 +119,7 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 
 	test.afterAll(async () => {
 		if (state.boardId) await api(ADMIN, 'DELETE', `/boards/${state.boardId}`).catch(() => {})
+		if (outsiderRef) await deleteUser(outsiderRef.user)
 	})
 
 	const expectTitles = (payloadCards, expectedNames) => {
@@ -173,6 +189,43 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		expect(titles).toEqual([title('PUB')])
 	})
 
+	test('reviews: a non-member cannot tell an existing review from a ghost id (#10296)', async () => {
+		// This one needs the OUTSIDER, not the tester: the card-id probes below
+		// pin "hidden card ⇒ 404", but a board MEMBER 404s at the visibility guard
+		// for every review id, so they can never observe the review lookup. The
+		// oracle lives one step out — a NON-member on a card whose `public`
+		// visibility passes that guard for everyone. Only the ORDER of the
+		// board-READ assert then decides whether the row lookup runs at all and
+		// answers 404 (no such review) vs 403 (exists, not yours).
+		const card = state.cards.PUB.id
+		const detail = await api(ADMIN, 'GET', `/cards/${card}`)
+		expect(detail.visibility, 'the probe needs a card the guard lets anyone past').toBe('public')
+		const real = detail.reviews.find((r) => r.reviewer === peerRef.user)
+		expect(real, 'PUB carries the review requested in the previous test').toBeTruthy()
+
+		const onReal = await call(OUTSIDER, 'PATCH', `/cards/${card}/reviews/${real.id}`, { state: 'approved' })
+		const onGhost = await call(OUTSIDER, 'PATCH', `/cards/${card}/reviews/99999999`, { state: 'approved' })
+		expect(onReal.status, 'verdict on a review that DOES exist').toBe(403)
+		expect(onGhost.status, 'verdict on a review id that does not exist').toBe(403)
+		// The property, stated directly: the two answers must be identical, or the
+		// difference itself enumerates the reviews on the card.
+		expect(onGhost.status, 'the two responses must be indistinguishable').toBe(onReal.status)
+
+		// …and nothing was written on the way to that 403.
+		const after = await api(ADMIN, 'GET', `/cards/${card}`)
+		expect(after.reviews.find((r) => r.id === real.id).state).toBe('pending')
+
+		// The siblings gate on board permission before the row lookup by
+		// construction; assert it, so a reordering there is caught too. Withdraw
+		// is the sharper one: past the gate it would answer 200 for a ghost id
+		// (and DELETE the real review).
+		expect((await call(OUTSIDER, 'PUT', `/cards/${card}/reviews/${peerRef.user}`)).status).toBe(403)
+		expect((await call(OUTSIDER, 'DELETE', `/cards/${card}/reviews/${real.id}`)).status).toBe(403)
+		expect((await call(OUTSIDER, 'DELETE', `/cards/${card}/reviews/99999999`)).status).toBe(403)
+		const survived = await api(ADMIN, 'GET', `/cards/${card}`)
+		expect(survived.reviews.some((r) => r.id === real.id)).toBe(true)
+	})
+
 	test('board stats + boards-list counts: hidden cards are not counted', async () => {
 		const adminStats = await api(ADMIN, 'GET', `/boards/${state.boardId}/stats`)
 		const adminByStack = adminStats.byStack.reduce((n, r) => n + r.count, 0)
@@ -221,6 +274,13 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 			['POST', `/cards/${hidden}/move`, { targetStackId: state.stackId }],
 			['PUT', `/cards/${hidden}/labels/1`],
 			['PUT', `/cards/${hidden}/assignees/${peerRef.user}`],
+			// The review routes belong in this list like any other card-addressed
+			// route: hidden card ⇒ 404, whatever review id is named. (What they do
+			// NOT cover is the check ORDER inside a verdict — a member 404s here
+			// either way; that oracle is asserted against the OUTSIDER above.)
+			['PATCH', `/cards/${hidden}/reviews/1`, { state: 'approved' }],
+			['DELETE', `/cards/${hidden}/reviews/1`],
+			['PUT', `/cards/${hidden}/reviews/${peerRef.user}`],
 		]
 		for (const [method, path, body] of probes) {
 			const r = await call(TESTER, method, path, body)

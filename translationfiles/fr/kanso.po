@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— aucun —"
 
-#: src/components/BoardSettingsModal.vue:4389
+#: src/components/BoardSettingsModal.vue:4404
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n fois"
@@ -247,8 +247,21 @@ msgstr "%1$s a demandé votre revue sur %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s a partagé %2$s avec vous"
 
+#: src/views/BoardList.vue:216
+msgid "%n attachment"
+msgid_plural "%n attachments"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardList.vue:223
+msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
+msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:256
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -256,25 +269,61 @@ msgid_plural "%n cards"
 msgstr[0] "%n carte"
 msgstr[1] "%n cartes"
 
-#: src/components/CsvImportModal.vue:80
+#: src/components/CsvImportModal.vue:54
+msgid "%n card created"
+msgid_plural "%n cards created"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardList.vue:212
+msgid "%n column"
+msgid_plural "%n columns"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/BoardList.vue:215
+msgid "%n comment"
+msgid_plural "%n comments"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:110
 msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "%n ligne de données détectée"
 msgstr[1] "%n lignes de données détectées"
 
-#: src/components/CardDetail.vue:4246
+#: src/components/CardDetail.vue:4295
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "il y a %n jour"
 msgstr[1] "il y a %n jours"
 
-#: src/components/CardDetail.vue:4244
+#: src/components/CardDetail.vue:4293
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "il y a %n heure"
 msgstr[1] "il y a %n heures"
 
-#: src/components/CardDetail.vue:4242
+#: src/views/BoardList.vue:214
+msgid "%n label"
+msgid_plural "%n labels"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:56
+msgid "%n label created"
+msgid_plural "%n labels created"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:66
+msgid "%n label was not created and is missing from the imported cards: only board managers can add new labels. Ask a manager to add it, then set it on the cards."
+msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CardDetail.vue:4291
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "il y a %n minute"
@@ -304,9 +353,15 @@ msgid_plural "%n projects"
 msgstr[0] "%n projet"
 msgstr[1] "%n projets"
 
-#: src/components/CardDetail.vue:1969
+#: src/components/CardDetail.vue:1975
 msgid "%n reply"
 msgid_plural "%n replies"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/CsvImportModal.vue:60
+msgid "%n row was skipped because it had no title."
+msgid_plural "%n rows were skipped because they had no title."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -1113,6 +1168,7 @@ msgid "Check this mailbox automatically"
 msgstr ""
 
 #: src/components/BoardFilterBar.vue
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Checklist"
 msgstr "Liste de contrôle"
@@ -1214,6 +1270,8 @@ msgid "close"
 msgstr "fermer"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CsvImportModal.vue
+#: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
 msgid "Close"
 msgstr "Fermer"
@@ -1581,6 +1639,10 @@ msgstr "Ctrl+Entrée pour publier"
 msgid "Custom fields"
 msgstr "Champs personnalisés"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom offset — it is kept exactly as it is."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "Rythme personnalisé — modifiable dans Paramètres du tableau → Automatisation."
@@ -1611,7 +1673,7 @@ msgid "Date"
 msgstr "Date"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4435
+#: src/components/CardDetail.vue:4484
 msgid "day"
 msgid_plural "days"
 msgstr[0] "jour"
@@ -2104,25 +2166,25 @@ msgstr "tous les"
 msgid "Every"
 msgstr "Tous les"
 
-#: src/components/BoardSettingsModal.vue:4369
+#: src/components/BoardSettingsModal.vue:4384
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Tous les jours"
 msgstr[1] "Tous les %n jours"
 
-#: src/components/BoardSettingsModal.vue:4379
+#: src/components/BoardSettingsModal.vue:4394
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Tous les mois"
 msgstr[1] "Tous les %n mois"
 
-#: src/components/BoardSettingsModal.vue:4371
+#: src/components/BoardSettingsModal.vue:4386
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Toutes les semaines"
 msgstr[1] "Toutes les %n semaines"
 
-#: src/components/BoardSettingsModal.vue:4381
+#: src/components/BoardSettingsModal.vue:4396
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Tous les ans"
@@ -2939,6 +3001,10 @@ msgstr "Importer des cartes depuis un CSV"
 msgid "Import from Deck"
 msgstr "Importer depuis Deck"
 
+#: src/views/BoardList.vue
+msgid "Imported into a new Kanso board:"
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 msgid "Importing…"
@@ -3281,7 +3347,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4437
+#: src/components/CardDetail.vue:4486
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mois"
@@ -3768,6 +3834,10 @@ msgid "Off — do not create cards"
 msgstr "Désactivé — ne pas créer de cartes"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Offset"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
 msgstr "Décalage (jours)"
 
@@ -3807,6 +3877,11 @@ msgstr "Ouvrir"
 #: src/components/CardDetail.vue
 msgid "Open as full page"
 msgstr "Ouvrir en pleine page"
+
+#: src/components/CsvImportModal.vue
+#: src/views/BoardList.vue
+msgid "Open board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
@@ -4637,7 +4712,7 @@ msgstr "Afficher la barre de mise en forme"
 msgid "Show the discussion panel"
 msgstr "Afficher le panneau de discussion"
 
-#: src/components/CardDetail.vue:6059
+#: src/components/CardDetail.vue:6154
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Afficher le panneau de discussion (%n commentaire)"
@@ -5291,7 +5366,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4436
+#: src/components/CardDetail.vue:4485
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semaine"
@@ -5372,7 +5447,7 @@ msgid "wrote"
 msgstr "a écrit"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4438
+#: src/components/CardDetail.vue:4487
 msgid "year"
 msgid_plural "years"
 msgstr[0] "an"

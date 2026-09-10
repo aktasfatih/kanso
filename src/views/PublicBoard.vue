@@ -52,7 +52,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<div class="public-card__meta">
 							<span v-if="card.priority >= 4" class="public-card__prio">{{ t('kanso', 'Urgent') }}</span>
 							<span v-if="card.duedate" class="public-card__due">{{ formatDate(card.duedate) }}</span>
-							<span v-if="card.checklist.total > 0" class="public-card__check">
+							<span v-if="checklistEnabled && card.checklist.total > 0" class="public-card__check">
 								{{ card.checklist.done }}/{{ card.checklist.total }}
 							</span>
 						</div>
@@ -115,7 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span v-if="selectedCard.estimate" class="public-detail__field">
 						{{ t('kanso', 'Estimate') }}: {{ selectedCard.estimate }}
 					</span>
-					<span v-if="selectedCard.checklist.total > 0" class="public-detail__field">
+					<span v-if="checklistEnabled && selectedCard.checklist.total > 0" class="public-detail__field">
 						{{ selectedCard.checklist.done }}/{{ selectedCard.checklist.total }}
 					</span>
 				</div>
@@ -184,9 +184,10 @@ export default {
 			cards: [],
 			selectedCard: null,
 			commentsEnabled: false,
-			// Built-in card sections (#5894); defaults to ON so a payload without the
-			// flag (or an older server) looks exactly as it did before.
+			// Built-in card sections (#5894); default to ON so a payload without the
+			// flags (or an older server) looks exactly as it did before.
 			coverColorEnabled: true,
+			checklistEnabled: true,
 		}
 	},
 	computed: {
@@ -208,7 +209,8 @@ export default {
 		hasMeta() {
 			const c = this.selectedCard
 			if (!c) return false
-			return c.priority >= 4 || !!c.startDate || !!c.duedate || !!c.estimate || c.checklist.total > 0
+			return c.priority >= 4 || !!c.startDate || !!c.duedate || !!c.estimate
+				|| (this.checklistEnabled && c.checklist.total > 0)
 		},
 		// The open card's flat comment list nested one level by parentCommentId:
 		// top-level comments in order, each with its direct replies (also in order).
@@ -240,6 +242,7 @@ export default {
 			this.cards = data.cards
 			this.commentsEnabled = !!(data.board && data.board.commentsEnabled)
 			this.coverColorEnabled = data.board?.cardFeatures?.coverColor !== false
+			this.checklistEnabled = data.board?.cardFeatures?.checklist !== false
 		} catch (e) {
 			this.error = true
 		} finally {

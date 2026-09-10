@@ -5,9 +5,9 @@
 # Side-load the optional Nextcloud apps two e2e specs need, into the running
 # dev stack (container `kanso-dev`). Idempotent — safe to re-run.
 #
-#   deck     → tests/e2e/deck-import.spec.js  (its beforeAll seeds a source
-#              board through the real Deck API, so the whole describe errors
-#              out when Deck is missing)
+#   deck     → tests/e2e/deck-import.spec.js and deck-import-ui.spec.js (their
+#              beforeAll seeds a source board through the real Deck API, so the
+#              whole describe errors out when Deck is missing)
 #   contacts → tests/e2e/card-contacts.spec.js (ContactService::isAvailable()
 #              is false without the app, so the picker search returns an empty
 #              list and the spec's option assertion times out)

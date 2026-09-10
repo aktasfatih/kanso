@@ -15,7 +15,7 @@ npx playwright test labels       # a single spec
 
 ## Optional Nextcloud apps some specs need
 
-Two specs exercise integrations with other Nextcloud apps, and fail with a
+A few specs exercise integrations with other Nextcloud apps, and fail with a
 confusing "button is missing" / "board not found" error if that app isn't
 installed rather than saying so:
 
@@ -23,6 +23,7 @@ installed rather than saying so:
 | --- | --- |
 | [`card-contacts.spec.js`](./card-contacts.spec.js) | `contacts` — `ContactService::isAvailable()` is false without the app, so the picker's search returns an empty list and the spec times out waiting for its option |
 | [`deck-import.spec.js`](./deck-import.spec.js) | `deck` — its `beforeAll` seeds a source board through the real Deck API, so the whole describe errors out |
+| [`deck-import-ui.spec.js`](./deck-import-ui.spec.js) | `deck` — same reason: it seeds a source board, then drives the import modal to assert the result summary |
 
 `dev/setup.sh` side-loads both (pinned release tarballs) through
 [`dev/install-optional-apps.sh`](../../dev/install-optional-apps.sh), and the CI
@@ -34,11 +35,14 @@ afterwards. The pins support Nextcloud **34** only, so on a stack booted with
 that's expected, not a regression.
 
 One more spec depends on an optional app: [`realtime.spec.js`](./realtime.spec.js)'s
-push test needs `notify_push`, which `dev/setup.sh` installs from the appstore.
-That install is best-effort — if it printed a `WARNING: could not install
-notify_push`, push is unavailable and the test **fails rather than skips**. Run
-the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and exercise only the
-delta-poll fallback.
+push test needs `notify_push`, which `dev/setup.sh` side-loads from a pinned
+release tarball (falling back to the appstore only when that download fails).
+The pin has to match the `icewind1991/notify_push` image tag in
+`dev/docker-compose.yml` — `notify_push:self-test` compares the two versions and
+fails on a skew. The install is best-effort — if the boot printed a
+`WARNING: could not set up notify_push`, push is unavailable and the test **fails
+rather than skips**. Run the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and
+exercise only the delta-poll fallback.
 
 ## Shared helpers — use these, don't re-roll them
 

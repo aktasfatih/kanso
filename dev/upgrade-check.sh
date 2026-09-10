@@ -126,7 +126,11 @@ step "3. Install the RELEASED version on a pristine Nextcloud ${NC_VERSION}/${KA
 # Same KANSO_DB → compose-profile mapping setup.sh uses.
 COMPOSE_PROFILE="$KANSO_DB"
 if [ "$COMPOSE_PROFILE" = "mariadb" ]; then COMPOSE_PROFILE=mysql; fi
-docker compose --profile "$COMPOSE_PROFILE" down -v >/dev/null 2>&1 || true
+# The pristine-database precondition this whole script rests on. `|| true`
+# because there may be nothing to tear down, but stderr is NOT discarded: if the
+# reset half-fails, that message is the only warning that everything below is
+# now running against leftover state.
+docker compose --profile "$COMPOSE_PROFILE" down -v >/dev/null || true
 KANSO_APP_SRC="./${STAGE}" \
 	KANSO_SKIP_NOTIFY_PUSH=1 KANSO_SKIP_OPTIONAL_APPS=1 \
 	./setup.sh || fail "dev/setup.sh could not boot the released version"

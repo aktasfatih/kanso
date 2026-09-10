@@ -51,14 +51,14 @@ test.describe('Quick-look preview (Space)', () => {
 		await page.keyboard.press('Space')
 
 		const preview = page.locator('.card-preview')
-		await expect(preview).toBeVisible({ timeout: 3000 })
+		await expect(preview).toBeVisible()
 		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha')
 		// Description is lazily fetched via useCard - poll until it renders.
 		await expect(preview.locator('.card-preview__desc-rendered')).toContainText(DESC, { timeout: 5000 })
 
 		// Space again closes it.
 		await page.keyboard.press('Space')
-		await expect(preview).not.toBeVisible({ timeout: 3000 })
+		await expect(preview).not.toBeVisible()
 
 		// The board must not have scrolled from the Space presses (preventDefault).
 		const scrolled = await page.evaluate(() => window.scrollY)
@@ -74,16 +74,16 @@ test.describe('Quick-look preview (Space)', () => {
 		await page.keyboard.press('ArrowDown')
 		await page.waitForTimeout(200)
 		const firstTile = page.locator('.card-tile').first()
-		await expect(firstTile).toBeFocused({ timeout: 3000 })
+		await expect(firstTile).toBeFocused()
 
 		await page.keyboard.press('Space')
 		const preview = page.locator('.card-preview')
-		await expect(preview).toBeVisible({ timeout: 3000 })
+		await expect(preview).toBeVisible()
 		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha')
 
 		// Escape closes it.
 		await page.keyboard.press('Escape')
-		await expect(preview).not.toBeVisible({ timeout: 3000 })
+		await expect(preview).not.toBeVisible()
 	})
 
 	test('Enter from an open preview opens the full card modal', async ({ page }) => {
@@ -94,13 +94,13 @@ test.describe('Quick-look preview (Space)', () => {
 		await page.keyboard.press('ArrowDown')
 		await page.waitForTimeout(200)
 		await page.keyboard.press('Space')
-		await expect(page.locator('.card-preview')).toBeVisible({ timeout: 3000 })
+		await expect(page.locator('.card-preview')).toBeVisible()
 
 		await page.keyboard.press('Enter')
 		// Wait for the route to actually change (auto-waiting; replaces a fixed sleep).
 		await page.waitForURL(/\/card\//, { timeout: 5_000 })
 		// Preview is dismissed when the modal opens.
-		await expect(page.locator('.card-preview')).not.toBeVisible({ timeout: 3000 })
+		await expect(page.locator('.card-preview')).not.toBeVisible()
 	})
 
 	test('click-away on the backdrop dismisses the preview', async ({ page }) => {
@@ -112,13 +112,13 @@ test.describe('Quick-look preview (Space)', () => {
 		await page.waitForTimeout(200)
 		await page.keyboard.press('Space')
 		const preview = page.locator('.card-preview')
-		await expect(preview).toBeVisible({ timeout: 3000 })
+		await expect(preview).toBeVisible()
 
 		// Click empty board whitespace (viewport coords) - covered only by the
 		// transparent full-screen backdrop, clear of the floating panel (anchored
 		// near the top-left card) and the fixed Nextcloud header at the very top.
 		await page.mouse.click(900, 500)
-		await expect(preview).not.toBeVisible({ timeout: 3000 })
+		await expect(preview).not.toBeVisible()
 		// Click-away must not have opened the card modal.
 		expect(page.url()).not.toContain('/card/')
 	})
@@ -138,11 +138,11 @@ test.describe('Quick-look preview (Space)', () => {
 		await page.waitForTimeout(200)
 		const alphaTile = page.locator(`[data-card-id="${state.card1Id}"]`)
 		const betaTile = page.locator(`[data-card-id="${state.card2Id}"]`)
-		await expect(alphaTile).toBeFocused({ timeout: 3000 })
+		await expect(alphaTile).toBeFocused()
 
 		await page.keyboard.press('Space')
 		const preview = page.locator('.card-preview')
-		await expect(preview).toBeVisible({ timeout: 3000 })
+		await expect(preview).toBeVisible()
 		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha')
 		await expect(preview.locator('.card-preview__desc-rendered')).toContainText(DESC, { timeout: 5000 })
 
@@ -152,8 +152,8 @@ test.describe('Quick-look preview (Space)', () => {
 
 		// Move the keyboard selection down: the OPEN preview must switch to Beta.
 		await page.keyboard.press('ArrowDown')
-		await expect(betaTile).toBeFocused({ timeout: 3000 })
-		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Beta', { timeout: 3000 })
+		await expect(betaTile).toBeFocused()
+		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Beta')
 		// No stale content: it must now show Beta's body, not Alpha's.
 		await expect(preview.locator('.card-preview__desc-rendered')).toContainText(DESC_B, { timeout: 5000 })
 
@@ -166,8 +166,8 @@ test.describe('Quick-look preview (Space)', () => {
 
 		// Move back up: preview follows to Alpha again and re-anchors.
 		await page.keyboard.press('ArrowUp')
-		await expect(alphaTile).toBeFocused({ timeout: 3000 })
-		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha', { timeout: 3000 })
+		await expect(alphaTile).toBeFocused()
+		await expect(preview.locator('.card-preview__title')).toHaveText('Preview Alpha')
 		const alphaLeft2 = await preview.evaluate((el) => el.getBoundingClientRect().left)
 		const alphaPanelTop2 = await preview.evaluate((el) => el.getBoundingClientRect().top)
 		// Same column → same horizontal anchor, and the panel returned up to Alpha.
@@ -176,7 +176,7 @@ test.describe('Quick-look preview (Space)', () => {
 
 		// Escape still dismisses.
 		await page.keyboard.press('Escape')
-		await expect(preview).not.toBeVisible({ timeout: 3000 })
+		await expect(preview).not.toBeVisible()
 
 		expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 	})
@@ -189,7 +189,7 @@ test.describe('Quick-look preview (Space)', () => {
 		const s1 = page.locator('.stack-column').nth(0)
 		const composer = s1.locator('.card-composer__input')
 		await composer.click()
-		await expect(composer).toBeFocused({ timeout: 3000 })
+		await expect(composer).toBeFocused()
 
 		// A title with an embedded space must insert the space, not open a preview.
 		await page.keyboard.type('hello world')

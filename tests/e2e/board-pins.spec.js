@@ -42,7 +42,7 @@ test.describe('Board pinning (#3632)', () => {
 		// Open the tile's options (⋯) menu and click Pin — must NOT navigate.
 		await tile.locator(`[data-test="board-options-menu-${state.boardId}"] button`).first().click()
 		await page.locator(`[data-test="toggle-pin-${state.boardId}"]`).first().click()
-		await expect(page).toHaveURL(/#\/$|apps\/kanso#\/$|apps\/kanso#\//, { timeout: 3_000 })
+		await expect(page).toHaveURL(/#\/$|apps\/kanso#\/$|apps\/kanso#\//)
 
 		// The board now appears in the Pinned section.
 		await expect(page.locator('.board-section', { hasText: 'Pinned' })

@@ -3,7 +3,7 @@
 
 // BASE/API come from helpers.js so this spec honours E2E_BASE_URL like every
 // other spec; it used to hardcode http://localhost:8891 and silently ignore it.
-import { test, expect, currentAuth, me, BASE, API } from './helpers.js'
+import { test, expect, currentAuth, me, BASE, API, OCS, adminAuth, provisionUser, deleteUser } from './helpers.js'
 
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
 
@@ -51,6 +51,34 @@ async function fetchPublic(token) {
 	return { status: r.status, body: text ? JSON.parse(text) : null }
 }
 
+// The EXHAUSTIVE key set of one anonymous card object, mirrored from the closed
+// literal at lib/Service/PublicShareService.php:247-274. `comments` is the ONE
+// conditional addition, and only when a MANAGE user opts in (:276-278).
+//
+// Asserting the whole KEY SET — not just the absence of a few known-bad VALUES —
+// is what makes the leak guard hold. A raw-string check over the payload can only
+// catch a leak whose text happens to match a fixture string, so a future
+// person-bearing field on $cardPayload (an owner uid, an author, an email) slips
+// past it whenever its value doesn't collide with one. An exact key set fails on
+// the drift itself, whatever the value turns out to be.
+const PUBLIC_CARD_KEYS = [
+	'allDay', 'checklist', 'coverColor', 'description', 'duedate', 'estimate',
+	'humanId', 'id', 'labels', 'priority', 'stackId', 'startDate', 'status',
+	'title', 'type',
+].sort()
+
+// Likewise for one stack (PublicShareService.php:218-222): presentational only,
+// and never the internal board id.
+const PUBLIC_STACK_KEYS = ['color', 'id', 'title'].sort()
+
+// And likewise for one entry of the card's nested `labels` array, built at
+// PublicShareService.php:242. The card/stack/comment key sets above are pinned
+// but this one was not (#10292), and it is the other nested object on the public
+// payload — so the same drift a flat key set catches (a label gaining a
+// createdBy, an owner, a lastEditedBy) would have slipped through here. Note the
+// internal label `id` is deliberately NOT exposed.
+const PUBLIC_LABEL_KEYS = ['color', 'name'].sort()
+
 // Public / read-only board share links (#3531). A MANAGE user mints a token; an
 // unauthenticated reader gets a STRIPPED read-only board; disabling 404s it.
 test.describe('Public read-only board share', () => {
@@ -79,6 +107,11 @@ test.describe('Public read-only board share', () => {
 		const comment = await api('POST', `/cards/${cardId}/comments`, { body: 'internal comment SHOULD NOT LEAK' })
 		expect(comment.status).toBe(200)
 		expect(comment.body.body).toContain('SHOULD NOT LEAK')
+		// A label on the public card, so the nested-labels key assertion below runs
+		// against a real entry instead of passing vacuously over an empty array.
+		const label = await api('POST', '/labels', { boardId, title: 'Public label', color: '31CC7C' })
+		expect(label.status).toBe(200)
+		expect((await api('PUT', `/cards/${cardId}/labels/${label.body.id}`)).status).toBe(200)
 	})
 
 	// The token is minted by the 'MANAGE enables a link' test below, so every
@@ -123,17 +156,41 @@ test.describe('Public read-only board share', () => {
 
 		// The board object carries no owner / acl / token / webhook - only the
 		// presentational fields, the comments opt-in flag (#3949) and the
-		// built-in-section switches (#5894, five booleans about the BOARD, never
-		// about a person) so the public link honours what the manager hid.
+		// built-in-section switches (#5894, six booleans about the BOARD, never
+		// about a person — CardFeatures::ALL) so the public link honours what the
+		// manager hid.
 		expect(Object.keys(res.body.board).sort()).toEqual(['cardFeatures', 'color', 'commentsEnabled', 'prefix', 'title'])
 
 		const card = res.body.cards.find((c) => c.title === 'Public visible card')
 		expect(card).toBeTruthy()
 
-		// No people, no comments, no internal metadata anywhere in the payload.
+		// The card and stack objects carry EXACTLY the public field lists — the same
+		// exhaustive treatment the board envelope gets above. This is the assertion
+		// that catches drift: a person-bearing field added to the payload fails here
+		// on its KEY, whatever its value happens to be.
+		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
+		expect(res.body.stacks.length).toBe(1) // so the loop below can't pass by being empty
+		for (const stack of res.body.stacks) {
+			expect(Object.keys(stack).sort()).toEqual(PUBLIC_STACK_KEYS)
+		}
+		// The nested `labels` entries get the same exhaustive treatment. The length
+		// check is what stops it passing over an empty array — beforeAll assigns
+		// exactly one label to this card.
+		expect(card.labels.length).toBe(1)
+		for (const label of card.labels) {
+			expect(Object.keys(label).sort()).toEqual(PUBLIC_LABEL_KEYS)
+		}
+
+		// Raw-string SUPPLEMENTS to the key-set assertions above — deliberately not
+		// identity checks. `me` is both the acting uid AND its display name in the
+		// e2e env (helpers.js:269 provisions displayName === username), so a trip on
+		// the line below cannot tell a leaked uid from a leaked display name; it is a
+		// substring match over the whole serialized payload for two exact fixture
+		// strings, nothing more. Their value is coverage BREADTH (board and stack
+		// envelopes too, not just the card keys), not precision.
 		const json = JSON.stringify(res.body)
-		expect(json).not.toContain(me) // no assignee / owner uid
-		expect(json).not.toContain('SHOULD NOT LEAK') // no comments
+		expect(json).not.toContain(me)
+		expect(json).not.toContain('SHOULD NOT LEAK') // no comment bodies while the opt-in is off
 		expect(card.assignees).toBeUndefined()
 		expect(card.assigneeIds).toBeUndefined()
 		expect(card.comments).toBeUndefined()
@@ -345,6 +402,12 @@ test.describe('Public board comments opt-in', () => {
 		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
 		expect(Array.isArray(card.comments)).toBe(true)
 		expect(card.comments.length).toBe(2)
+		// Opting in adds EXACTLY one key to the card — `comments` — and the comment
+		// object carries exactly {id, parentCommentId, author, body, timestamps}.
+		// This is the one place a person-data regression can actually land (an
+		// `authorUid` alongside the display name), so pin both key sets here too.
+		expect(Object.keys(card).sort()).toEqual([...PUBLIC_CARD_KEYS, 'comments'].sort())
+		expect(Object.keys(card.comments[0]).sort()).toEqual(['author', 'body', 'createdAt', 'editedAt', 'id', 'parentCommentId'])
 		// The comment carries the author's DISPLAY NAME (resolved from the uid, like
 		// the authenticated endpoint) - a non-empty string - and its markdown body,
 		// timestamps and one-level parent link. (In this dev instance the admin's
@@ -382,5 +445,359 @@ test.describe('Public board comments opt-in', () => {
 		const card = res.body.cards.find((c) => c.title === 'Card with a discussion')
 		expect(card.comments).toBeUndefined()
 		expect(JSON.stringify(res.body)).not.toContain('PUBLIC_TOP')
+	})
+})
+
+// A card title may legitimately CONTAIN the acting user's uid inside a longer word
+// ("administrator notes" contains "admin"), and such a card must still be served
+// VERBATIM on the public link — the fix for a person-data leak is a narrower
+// payload, never scrubbing uid-shaped text out of board content. Nothing else in
+// the suite covers that: every other fixture title is uid-free, so an over-eager
+// redaction would pass unnoticed. The board is its own because the raw-string
+// supplement in the leak test above would read this title as a leak — the two
+// cannot share a payload, which is itself the point.
+test.describe('Public payload key sets are substring-immune', () => {
+	// Match the sibling describes and keep the shared admin storageState out of it.
+	// (Nothing here drives a browser — fetchPublic is cookieless and the local api()
+	// carries its own Authorization — so this is consistency, not load-bearing.)
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	let boardId = 0
+	let token = ''
+	let title = ''
+
+	test.beforeAll(async () => {
+		// Built here, not at module scope: `me` is rebound by the worker fixture
+		// (helpers.js:269), and a describe body runs at collection time — before the
+		// rebind — so a top-level snapshot would embed 'admin' instead of the worker.
+		title = `${me}istrator notes`
+		boardId = (await api('POST', '/boards', { title: 'Public Substring E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		await api('POST', '/cards', { stackId, title })
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('a card title that embeds the uid in a longer word is not a leak', async () => {
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		// The title is served verbatim, uid substring and all — no redaction of
+		// legitimate board content. This is the assertion that can fail here.
+		const card = res.body.cards.find((c) => c.title === title)
+		expect(card).toBeTruthy()
+		// And no false red from the structural guard: keys are value-blind, so the
+		// key set is still exactly the public field list.
+		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
+	})
+})
+
+// The built-in card sections a manager can switch off (#5894) are a BOARD-level
+// setting, and the public link is the same board — so the anonymous view follows
+// the same switches. tests/e2e/card-features.spec.js asserts the checklist switch
+// on the authenticated tile and card modal, plus attachments and time tracking;
+// the public share was uncovered, and it is the only surface whose audience is
+// anonymous. (For `coverColor`, this is the only place in the suite that asserts
+// the switch changes anything ON SCREEN at all — card-features.spec.js checks its
+// settings checkbox and its payload flag, never a rendered cover band.)
+//
+// Two keys are exercised, because it is one test shape used twice: `checklist`
+// (src/views/PublicBoard.vue:55, :118 and the `hasMeta` computed at :213) and
+// `coverColor` (:84). Deleting any of those guards must turn this test red.
+//
+// SCOPE, stated so nobody later reads this as more than it is: hiding a section
+// is PRESENTATION-ONLY by design (lib/Db/CardFeatures.php:28-38 — "Enforcement:
+// CLIENT-SIDE ONLY (deliberate)"). The payload assertions at the end pin exactly
+// that: the anonymous JSON still carries the checklist counts and the cover
+// colour while both sections are hidden. This is a RENDERING contract, not a
+// confidentiality one; making it one would be a server change, not a test change.
+test.describe('Public board honours the hidden card sections', () => {
+	// True anonymous reader (opt out of the shared admin storageState). This is
+	// load-bearing here, not decoration: under the admin session the page would
+	// still render and every "…is hidden" assertion would pass for the wrong
+	// reason. The test asserts its own anonymity below rather than trusting this.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	const CARD_TITLE = 'Card with a cover and a checklist'
+	const DATED_TITLE = 'Card with a due date and a checklist'
+	const COVER = 'cc3311'
+
+	let boardId = 0
+	let token = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Card Features E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		const cardId = (await api('POST', '/cards', { stackId, title: CARD_TITLE })).body.id
+		await api('PATCH', `/cards/${cardId}`, { coverColor: COVER })
+		// One step of two ticked, so every surface has a 1/2 to show. This card
+		// deliberately carries NO other meta (no priority, due/start date or
+		// estimate): that makes the checklist the only thing keeping the detail's
+		// meta ROW alive, which is what pins the `hasMeta` guard.
+		const step = (await api('POST', `/cards/${cardId}/checklist`, { title: 'Step one' })).body
+		await api('PATCH', `/checklist/${step.id}`, { done: true })
+		await api('POST', `/cards/${cardId}/checklist`, { title: 'Step two' })
+
+		// A SECOND card whose meta row survives the checklist being hidden, because
+		// it also has a due date. Without it the FIELD guard inside the meta row is
+		// untestable: `hasMeta` already removes the whole row for the card above, so
+		// the two guards could only ever be proven together. Here the row stays and
+		// only the 0/1 must go.
+		const datedId = (await api('POST', '/cards', { stackId, title: DATED_TITLE })).body.id
+		await api('PATCH', `/cards/${datedId}`, { duedate: '2026-05-06T12:00:00+00:00' })
+		await api('POST', `/cards/${datedId}/checklist`, { title: 'Only step' })
+
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('both sections render while they are on, and vanish once the board hides them', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Card Features E2E')
+
+		// This browser context really is anonymous — asserted, not assumed. An
+		// authenticated Kanso call from the page's own origin is refused, which it
+		// would not be if the shared admin storageState had leaked in: a live session
+		// answers 200, or 412 (CSRF, no requesttoken on a bare fetch). Neither is in
+		// the accepted set, so the guard catches a leak either way. Without it the
+		// "hidden" assertions below could all be vacuous.
+		//
+		// `Accept: application/json` is load-bearing, not decoration: NC's
+		// SecurityMiddleware answers an unauthenticated request with a JSON 401 only
+		// for a JSON-ish Accept, and with a 303 to the login page for `text/html`
+		// (which fetch would follow into a 200). The path comes from `API` rather
+		// than a literal so this honours E2E_BASE_URL under a webroot subdirectory,
+		// the same reason the header of this file gives for not hardcoding a host.
+		const apiPath = new URL(API).pathname
+		const authedStatus = await page.evaluate(async (p) => {
+			const r = await fetch(p + '/boards', {
+				headers: { Accept: 'application/json', 'OCS-APIREQUEST': 'true' },
+			})
+			return r.status
+		}, apiPath)
+		expect([401, 403]).toContain(authedStatus)
+
+		const tile = page.locator('.public-card').filter({ hasText: CARD_TITLE })
+		const datedTile = page.locator('.public-card').filter({ hasText: DATED_TITLE })
+		const detail = page.locator('.public-detail')
+		const meta = detail.locator('.public-detail__meta')
+
+		// --- Both features ON (the default): the badge, the cover band and the
+		//     checklist meta field are all there.
+		await expect(tile.locator('.public-card__check')).toHaveText('1/2')
+		await tile.click()
+		await expect(detail).toBeVisible()
+		await expect(detail.locator('.public-detail__cover')).toBeVisible()
+		// The checklist is this card's ONLY meta, so the whole row reads '1/2'.
+		await expect(meta).toHaveText('1/2')
+		await detail.locator('.public-detail__close').click()
+		await expect(detail).toHaveCount(0)
+
+		// The dated card shows its progress alongside the due date.
+		await expect(datedTile.locator('.public-card__check')).toHaveText('0/1')
+		await datedTile.click()
+		await expect(detail).toBeVisible()
+		await expect(meta).toContainText('Due')
+		await expect(meta).toContainText('0/1')
+		await detail.locator('.public-detail__close').click()
+		await expect(detail).toHaveCount(0)
+
+		// --- The manager hides both sections on the board.
+		const patched = await api('PATCH', `/boards/${boardId}`, {
+			cardFeatures: { checklist: false, coverColor: false },
+		})
+		expect(patched.status).toBe(200)
+		// Read it back before touching the page, so a switch that never landed fails
+		// here with a clear cause instead of as a confusing "still visible" below.
+		const stored = (await api('GET', `/boards/${boardId}`)).body.board.cardFeatures
+		expect(stored.checklist).toBe(false)
+		expect(stored.coverColor).toBe(false)
+
+		// --- Both features OFF: the anonymous view drops them. The card itself is
+		//     still listed — hiding a section is not hiding the card.
+		await page.reload()
+		await expect(page.locator('.public-board__title')).toHaveText('Public Card Features E2E')
+		await expect(tile).toBeVisible()
+		// The badge is GONE, not merely emptied.
+		await expect(tile.locator('.public-card__check')).toHaveCount(0)
+		await expect(tile).not.toContainText('1/2')
+
+		await tile.click()
+		await expect(detail).toBeVisible()
+		await expect(detail.locator('.public-detail__cover')).toHaveCount(0)
+		// The checklist was this card's only meta, so the row goes with it — the
+		// `hasMeta` guard.
+		await expect(meta).toHaveCount(0)
+		await expect(detail).not.toContainText('1/2')
+		// Still the same read-only detail otherwise.
+		await expect(detail.locator('.public-detail__title')).toHaveText(CARD_TITLE)
+		await detail.locator('.public-detail__close').click()
+		await expect(detail).toHaveCount(0)
+
+		// The dated card's meta row SURVIVES (it still has a due date) — and the
+		// progress is gone from inside it. This is the field guard on its own, the
+		// one `hasMeta` would otherwise mask.
+		// Assert the tile is there BEFORE counting what it must not contain, so the
+		// count-0 can't pass by the tile itself having gone missing.
+		await expect(datedTile).toBeVisible()
+		await expect(datedTile.locator('.public-card__check')).toHaveCount(0)
+		await datedTile.click()
+		await expect(detail).toBeVisible()
+		await expect(meta).toBeVisible()
+		await expect(meta).toContainText('Due')
+		await expect(meta).not.toContainText('0/1')
+
+		// --- Presentation-only, exactly as documented: the anonymous PAYLOAD is
+		//     unchanged by the switches. The counts and the colour are still served;
+		//     only the rendering above respects the flags.
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		const payloadCard = res.body.cards.find((c) => c.title === CARD_TITLE)
+		expect(payloadCard).toBeTruthy()
+		expect(payloadCard.checklist).toEqual({ total: 2, done: 1 })
+		expect(payloadCard.coverColor).toBe(COVER)
+		expect(res.body.board.cardFeatures.checklist).toBe(false)
+		expect(res.body.board.cardFeatures.coverColor).toBe(false)
+	})
+})
+
+// A `@mention` is the one way a real LOGIN uid rides the anonymous payload as
+// "board content": mentions have no entity table, so they are stored as the
+// literal string `@uid` inside a card description and a comment body, and the
+// public page renders them as chips. The key-set assertions above cannot catch
+// this — the uid arrives inside the VALUE of a permitted key — so it needs its
+// own board and its own fixture.
+//
+// This is the DEFAULT configuration, not an opt-in: the description case holds
+// with the comments toggle off, which is why the first test does not touch it.
+//
+// Why a dedicated provisioned account instead of `me`: helpers.js:269 provisions
+// the worker's own user with displayName === username, so substituting a display
+// name for that uid changes nothing and every assertion here would pass
+// vacuously. This account's display name deliberately differs from its uid, and
+// beforeAll asserts that it really does.
+test.describe('Public payload redacts @mention uids', () => {
+	// Nothing here drives a browser, but keep the shared admin storageState out of
+	// it like every sibling describe — fetchPublic must stay cookieless.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	// SCOPE, so the whole-payload assertion below is not over-trusted: only the two
+	// FREE-TEXT fields are redacted. A `@name` typed into a card/stack/board title or
+	// a label name still ships verbatim by design — those are not mention surfaces
+	// and the sibling 'substring-immune' describe pins them as byte-exact. The
+	// `not.toContain(mentioned)` checks hold here because this board's titles are
+	// mention-free, not because the payload redacts everything.
+	//
+	// The three tests share one fixture and run in declaration order (the config is
+	// serial per file: workers default to 1 and fullyParallel is off), which the
+	// second one relies on — it flips the comments toggle the first asserts is off.
+
+	const DISPLAY_NAME = 'Mona Mentioned'
+	const PASS = 'Public#Mention2026'
+	const CARD_TITLE = 'Card that mentions a board member'
+	// `@`-shaped text that is NOT an account and must survive byte-identical: an
+	// email address, a social handle, a time, an unknown uid. Over-eager
+	// substitution here would corrupt real board content, so these are asserted as
+	// explicitly as the redaction itself.
+	const DECOYS = ['foo@bar.com', '@nextcloud', '@9.30', '@nosuchuser-42']
+
+	let mentioned = ''
+	let description = ''
+	let boardId = 0
+	let cardId = 0
+	let token = ''
+
+	test.beforeAll(async ({}, workerInfo) => {
+		// Per-worker unique, so parallel workers never fight over the account.
+		mentioned = `kanso_pubmention_w${workerInfo.workerIndex}`
+		// Delete-then-create: the shared provisionUser is idempotent, so a leftover
+		// account from an earlier run would keep its OLD display name and the
+		// assertions below would be comparing against the wrong string.
+		await deleteUser(mentioned)
+		await provisionUser(mentioned, PASS, { displayName: DISPLAY_NAME })
+		// Assert the display name actually landed AND that it differs from the uid.
+		// Without this the whole describe can pass vacuously: if the display name
+		// were the uid (Nextcloud's fallback when none is set), substituting one for
+		// the other is a no-op and "the uid is gone" could never fail.
+		const info = await fetch(`${OCS}/users/${encodeURIComponent(mentioned)}`, {
+			headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json', Authorization: adminAuth },
+		})
+		const stored = (await info.json()).ocs.data.displayname
+		expect(stored).toBe(DISPLAY_NAME)
+		expect(stored).not.toContain(mentioned)
+
+		boardId = (await api('POST', '/boards', { title: 'Public Mention E2E' })).body.id
+		// A real board member — this is a member's login uid, not a stranger's.
+		expect((await api('POST', `/boards/${boardId}/acl`, {
+			participant: mentioned, participantType: 'user', permission: 3,
+		})).status).toBe(200)
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		cardId = (await api('POST', '/cards', { stackId, title: CARD_TITLE })).body.id
+		// Two shapes of the same mention: one followed by a space, and one ENDING a
+		// sentence — `.` is a legal uid character, so the second token is `<uid>.` and
+		// only resolves after the trailing punctuation is trimmed. Writing an ordinary
+		// English sentence was the bypass.
+		description = `Assigned to @${mentioned} for review. Also ping @${mentioned}. Decoys: ${DECOYS.join(' ')}`
+		expect((await api('PATCH', `/cards/${cardId}`, { description })).status).toBe(200)
+		expect((await api('POST', `/cards/${cardId}/comments`, {
+			body: `cc @${mentioned} — please look`,
+		})).status).toBe(200)
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+		await deleteUser(mentioned)
+	})
+
+	test('the default payload serves the description with display names, never uids', async () => {
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		// Comments opt-in untouched: this is the out-of-the-box configuration.
+		expect(res.body.board.commentsEnabled).toBe(false)
+
+		const card = res.body.cards.find((c) => c.title === CARD_TITLE)
+		expect(card).toBeTruthy()
+		expect(card.description).toContain(DISPLAY_NAME)
+		// THE assertion: no board member's uid anywhere in what the token serves.
+		expect(card.description).not.toContain(mentioned)
+		expect(JSON.stringify(res.body)).not.toContain(mentioned)
+		// …and nothing else was mangled on the way.
+		for (const decoy of DECOYS) {
+			expect(card.description).toContain(decoy)
+		}
+		// Redaction is a VALUE change, so the field list must be untouched.
+		expect(Object.keys(card).sort()).toEqual(PUBLIC_CARD_KEYS)
+	})
+
+	test('the opted-in comment body is redacted too', async () => {
+		expect((await api('PUT', `/boards/${boardId}/public-share/comments`, { enabled: true })).body.commentsEnabled).toBe(true)
+
+		const res = await fetchPublic(token)
+		const card = res.body.cards.find((c) => c.title === CARD_TITLE)
+		expect(card.comments.length).toBe(1)
+		expect(card.comments[0].body).toContain(DISPLAY_NAME)
+		expect(card.comments[0].body).not.toContain(mentioned)
+		// Widening the link with comments must not widen it to uids: the whole
+		// payload — description, comment body and author byline together — is uid-free.
+		expect(JSON.stringify(res.body)).not.toContain(mentioned)
+	})
+
+	test('the stored row keeps its raw @mention for authenticated viewers', async () => {
+		// Redaction is payload-only. If it ever became a write-back, the mention would
+		// stop notifying and stop rendering as a chip for members — and no migration
+		// may rewrite user content.
+		const stored = (await api('GET', `/cards/${cardId}`)).body
+		expect(stored.description).toBe(description)
+		expect(stored.description).toContain(`@${mentioned}`)
+		const comments = (await api('GET', `/cards/${cardId}/comments`)).body
+		expect(JSON.stringify(comments)).toContain(`@${mentioned}`)
 	})
 })

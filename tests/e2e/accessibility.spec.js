@@ -30,6 +30,14 @@ test.describe('Accessibility smoke', () => {
 		// The single polite aria-live region for own-action announcements exists.
 		await expect(page.locator('.board-view [aria-live="polite"]')).toHaveCount(1)
 
+		// `.board-view` is the SHELL: it renders (with skeleton columns) before the
+		// board read resolves, so snapshotting here races the data exactly as the
+		// modal half below does. On a slow runner the tree held nothing but the back
+		// button and this live region. Wait for the card to actually be on the board
+		// first — the snapshot assertion below is then about the ARIA tree (is the
+		// card exposed under an accessible name?), not about the fetch.
+		await expect(page.locator('.board-view')).toContainText('Accessible card', { timeout: 20_000 })
+
 		// Playwright's native accessibility snapshot (aria tree) must be
 		// non-trivial and surface the card by its accessible name.
 		const boardSnapshot = await page.locator('.board-view').ariaSnapshot()

@@ -34,6 +34,7 @@ use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IAppData;
 use OCP\Files\IRootFolder;
+use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IUserManager;
@@ -188,7 +189,7 @@ class DeckImportServiceTest extends TestCase {
 			'labels' => 1,
 			'comments' => 0,
 			'attachments' => 0,
-			'skippedFileAttachments' => 0,
+			'skippedAttachments' => 0,
 		], $result);
 
 		// Card field mapping: archived + done + duedate carried across.
@@ -801,6 +802,40 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame('appdata.json', $captured->getFilename());
 	}
 
+	public function testImportSkipsDeckFileWithMissingSourceObjectButFinishesImport(): void {
+		// A deck_file row whose source object is GONE from Deck's app-data (the
+		// "row present, object missing" case that object-storage/relocated-appdata
+		// instances hit) is logged + skipped, never fatal - and, critically, it is
+		// COUNTED in skippedAttachments so the summary cannot claim a clean import.
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readFileReferenceAttachments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => 'gone.pdf', 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		$deckFolder->method('getFile')->with('gone.pdf')
+			->willThrowException(new NotFoundException('no such object'));
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('file-card-21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		// Nothing written/linked; the miss is logged, not fatal.
+		$this->appData->expects(self::never())->method('getFolder');
+		$this->cardAttachmentMapper->expects(self::never())->method('insert');
+		$this->logger->expects(self::atLeastOnce())->method('warning');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame(0, $result['attachments']);
+		self::assertSame(1, $result['skippedAttachments']);
+		self::assertSame(1, $result['cards']);
+	}
+
 	public function testImportSkipsOversizedAttachmentButFinishesImport(): void {
 		// An oversized source (getSize() > MAX_SIZE) is skipped-and-not-counted,
 		// never read, and never fatal - the rest of the import still succeeds.
@@ -831,8 +866,10 @@ class DeckImportServiceTest extends TestCase {
 
 		$result = $this->service->importBoard(2, 'alice');
 
-		// The whole import still succeeds; the oversized attachment is not counted.
+		// The whole import still succeeds; the oversized attachment is not counted
+		// as imported - and IS counted as skipped, so the summary reports the loss.
 		self::assertSame(0, $result['attachments']);
+		self::assertSame(1, $result['skippedAttachments']);
 		self::assertSame(1, $result['cards']);
 	}
 
@@ -865,13 +902,14 @@ class DeckImportServiceTest extends TestCase {
 		$result = $this->service->importBoard(2, 'alice');
 
 		self::assertSame(0, $result['attachments']);
+		self::assertSame(1, $result['skippedAttachments']);
 		self::assertSame(1, $result['cards']);
 	}
 
 	public function testImportSkipsUnresolvableFileReferenceAttachment(): void {
 		// Two `file`-kind references (Deck shares) whose source nodes can no longer
 		// be resolved (owner has no matching file id) are LOGGED and skipped -
-		// counted as skippedFileAttachments, never fatal, nothing written/linked.
+		// counted in skippedAttachments, never fatal, nothing written/linked.
 		$this->stubOneCardBoard();
 		$this->deckReader->method('readComments')->willReturn([]);
 		$this->deckReader->method('readAttachments')->willReturn([]);
@@ -892,7 +930,7 @@ class DeckImportServiceTest extends TestCase {
 		$result = $this->service->importBoard(2, 'alice');
 
 		self::assertSame(0, $result['attachments']);
-		self::assertSame(2, $result['skippedFileAttachments']);
+		self::assertSame(2, $result['skippedAttachments']);
 		self::assertSame(1, $result['cards']);
 	}
 
@@ -900,7 +938,7 @@ class DeckImportServiceTest extends TestCase {
 		// A `file`-kind reference (a Deck share) is resolved from the owner's Files
 		// by file id and its bytes are COPIED into Kanso via the same sanitized
 		// store path as an upload - so it lands as a normal Kanso attachment and
-		// counts toward `attachments`, not `skippedFileAttachments`.
+		// counts toward `attachments`, not `skippedAttachments`.
 		$this->stubOneCardBoard();
 		$this->deckReader->method('readComments')->willReturn([]);
 		$this->deckReader->method('readAttachments')->willReturn([]);
@@ -934,7 +972,7 @@ class DeckImportServiceTest extends TestCase {
 		$result = $this->service->importBoard(2, 'alice');
 
 		self::assertSame(1, $result['attachments']);
-		self::assertSame(0, $result['skippedFileAttachments']);
+		self::assertSame(0, $result['skippedAttachments']);
 		self::assertNotNull($captured);
 		self::assertSame(500, $captured->getCardId());
 		self::assertSame(100, $captured->getBoardId());
@@ -944,6 +982,43 @@ class DeckImportServiceTest extends TestCase {
 		self::assertSame('reffkey1', $captured->getStorageKey());
 		self::assertSame('carol', $captured->getUploadedBy());
 		self::assertSame(444, $captured->getCreatedAt());
+	}
+
+	public function testImportSumsSkippedAttachmentsAcrossBothPaths(): void {
+		// The summary reports ONE honest skipped total: a dropped deck_file upload
+		// and a dropped file reference both land in the same number, so neither
+		// path can hide a loss behind the other's clean count.
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => 'huge.bin', 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->deckReader->method('readFileReferenceAttachments')->willReturn([
+			['cardId' => 21, 'fileId' => 900, 'filename' => 'a.pdf', 'owner' => 'carol', 'createdBy' => 'carol', 'createdAt' => 10],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+
+		// deck_file: oversized → skipped.
+		$sourceFile = $this->createMock(ISimpleFile::class);
+		$sourceFile->method('getSize')->willReturn(AttachmentSanitizer::MAX_SIZE + 1);
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		$deckFolder->method('getFile')->with('huge.bin')->willReturn($sourceFile);
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('file-card-21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		// file reference: unresolvable → skipped.
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getById')->willReturn([]);
+		$this->rootFolder->method('getUserFolder')->with('carol')->willReturn($userFolder);
+
+		$this->cardAttachmentMapper->expects(self::never())->method('insert');
+		$this->db->expects(self::once())->method('commit');
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame(0, $result['attachments']);
+		self::assertSame(2, $result['skippedAttachments']);
 	}
 
 	public function testImportImportsBothAttachmentKindsTogether(): void {
@@ -996,7 +1071,7 @@ class DeckImportServiceTest extends TestCase {
 		$result = $this->service->importBoard(2, 'alice');
 
 		self::assertSame(2, $result['attachments']);
-		self::assertSame(0, $result['skippedFileAttachments']);
+		self::assertSame(0, $result['skippedAttachments']);
 		self::assertCount(2, $captured);
 		$filenames = array_map(static fn (CardAttachment $a): string => $a->getFilename(), $captured);
 		self::assertContains('upload.pdf', $filenames);

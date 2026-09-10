@@ -18,11 +18,13 @@
 // only by ViewPage and invalidateQueries refetches ACTIVE queries.
 //
 // This is asserted here rather than in Playwright on purpose: the trigger is a
-// notify_push event, and push is unavailable in the dev stack and explicitly
-// disabled in CI (KANSO_SKIP_NOTIFY_PUSH=1), so a browser test of it would pass
-// vacuously and guard nothing. queryKeys.js imports nothing, so the real module
-// can be exercised directly here — no bundler, no DOM, no mocks beyond a
-// recording stub.
+// notify_push event, and push is explicitly disabled in CI
+// (KANSO_SKIP_NOTIFY_PUSH=1 — the runner has no egress to install the app), so
+// a browser test of it would pass vacuously there and guard nothing. (The dev
+// stack does wire up a real push daemon, so a local run would exercise it — but
+// a guard that only holds on one developer's machine is not a guard.)
+// queryKeys.js imports nothing, so the real module can be exercised directly
+// here — no bundler, no DOM, no mocks beyond a recording stub.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'

@@ -149,11 +149,11 @@ test.describe('Trash', () => {
 
 		// The confirm row should appear.
 		const confirmText = cardItem.locator('.trash-view__confirm-text')
-		await expect(confirmText).toBeVisible({ timeout: 3000 })
+		await expect(confirmText).toBeVisible()
 
 		// Click "Yes, delete" to confirm purge.
 		const confirmBtn = cardItem.locator('button', { hasText: 'Yes, delete' })
-		await expect(confirmBtn).toBeVisible({ timeout: 3000 })
+		await expect(confirmBtn).toBeVisible()
 		await confirmBtn.click()
 
 		// The item should disappear from the trash list.
