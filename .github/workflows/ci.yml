@@ -694,8 +694,9 @@ jobs:
       # postgres + redis + notify_push + nextcloud:34-apache, app enabled,
       # firstrunwizard disabled, tester user + push wired up. Idempotent.
       #
-      # setup.sh also side-loads the optional apps two specs need — deck (for
-      # deck-import.spec.js) and contacts (for card-contacts.spec.js) — via
+      # setup.sh also side-loads the optional apps a few specs need — deck (for
+      # deck-import.spec.js and deck-import-ui.spec.js) and contacts (for
+      # card-contacts.spec.js) — via
       # dev/install-optional-apps.sh. That used to be two steps here, which
       # meant a local stack silently lacked both and those specs were red for
       # everyone but CI; the pins now live in the script, in one place. It still

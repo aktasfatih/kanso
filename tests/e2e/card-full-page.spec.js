@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, BASE, api, ncLogin } from './helpers.js'
+import { test, expect, BASE, api, ncLogin, collectConsoleErrors } from './helpers.js'
 
 // The standalone full-page card view (#3817): the modal and the full page share
 // one CardDetail component, so both render identical card content. These specs
@@ -49,13 +49,20 @@ test.describe('Full-page card view (#3817)', () => {
 	})
 
 	test('navigating to /card/:cardId renders the card full-page (not as an overlay)', async ({ page }) => {
-		const consoleErrors = []
-		page.on('console', (msg) => {
-			if (msg.type() === 'error') consoleErrors.push(msg.text())
-		})
-
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
+
+		// Collect AFTER logging in, and filter by the message's source bundle. This
+		// assertion used to catch every console error on every page the test ever
+		// touched: ncLogin goes via /index.php/login, which with a live session
+		// redirects through the Nextcloud DASHBOARD, where every other installed
+		// app mounts a widget. CI failed here on "could not load recommendation
+		// preview Event" + a 404 from /apps/recommendations/js/ — another app's
+		// code, on a page this test does not even assert about. See
+		// collectConsoleErrors() for why the filter keys on the source URL rather
+		// than on an allowlist of message strings.
+		const consoleErrors = collectConsoleErrors(page)
+
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}`)
 
 		// The shared CardDetail content renders...
@@ -73,7 +80,7 @@ test.describe('Full-page card view (#3817)', () => {
 		// A back-to-board affordance exists on the page shell.
 		await expect(page.locator('.card-page__back')).toBeVisible()
 
-		// No new console errors while rendering the full page.
+		// No console errors from Kanso's own code while rendering the full page.
 		expect(consoleErrors, consoleErrors.join('\n')).toEqual([])
 	})
 

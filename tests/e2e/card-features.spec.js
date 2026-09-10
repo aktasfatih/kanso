@@ -4,13 +4,14 @@
 // #5894 — per-board switches for the BUILT-IN card sections.
 //
 // Every card used to show every section whether the team used it or not. A
-// board manager can now switch five of them off (contacts, attachments, GitHub
-// links, time tracking, cover colour) from board settings → Card fields.
+// board manager can now switch six of them off (contacts, attachments, GitHub
+// links, time tracking, cover colour, checklist) from board settings → Card
+// fields.
 //
 // The guarantee this suite exists to protect: **hiding is not deleting.** A
 // disabled section vanishes from the card modal AND from the tiles/list rows,
-// but the attachment, time entry and cover colour behind it stay in the
-// database and come back intact the moment the switch goes on again.
+// but the attachment, time entry, cover colour and checklist items behind it
+// stay in the database and come back intact the moment the switch goes on again.
 
 import { test, expect, api, ncLogin, BASE, currentAuth } from './helpers.js'
 
@@ -49,6 +50,9 @@ async function openCardFieldsPane(page, boardId) {
 }
 
 const FILE_NAME = 'kept-on-purpose.txt'
+// Two checklist steps, one ticked, so every surface shows a 1/2 progress badge.
+const STEP_DONE = 'Draft the brief'
+const STEP_OPEN = 'Sign it off'
 
 test.describe('Built-in card sections (#5894)', () => {
 	const state = { boardId: 0, otherBoardId: 0, todoStackId: 0, progStackId: 0, cardId: 0 }
@@ -66,13 +70,16 @@ test.describe('Built-in card sections (#5894)', () => {
 		const otherStack = await api.post('/stacks', { boardId: state.otherBoardId, title: 'To do' })
 		await api.post('/cards', { stackId: otherStack.id, title: 'Untouched card' })
 
-		// The card carries real data behind three of the five features, so a
+		// The card carries real data behind four of the six features, so a
 		// later re-enable has something to restore.
 		const card = await api.post('/cards', { stackId: state.todoStackId, title: 'Loaded card' })
 		state.cardId = card.id
 		await uploadFile(card.id, FILE_NAME, 'do not delete me')
 		await api.post(`/cards/${card.id}/time-entries`, { seconds: 3600, note: 'Manual entry' })
 		await api.patch(`/cards/${card.id}`, { coverColor: '0082c9' })
+		const step = await api.post(`/cards/${card.id}/checklist`, { title: STEP_DONE })
+		await api.patch(`/checklist/${step.id}`, { done: true })
+		await api.post(`/cards/${card.id}/checklist`, { title: STEP_OPEN })
 
 		// A running timer, so the tile badge has something to show. Started the
 		// only way the app starts one: an automation rule on column entry.
@@ -95,10 +102,73 @@ test.describe('Built-in card sections (#5894)', () => {
 			github: true,
 			timeTracking: true,
 			coverColor: true,
+			checklist: true,
 		})
 		// Sanity: the fixture data really is there.
 		expect(board.cards.find((c) => c.id === state.cardId).timerRunning).toBe(true)
+		expect(board.cards.find((c) => c.id === state.cardId).checklist).toEqual({ done: 1, total: 2 })
 		expect(await api.get(`/cards/${state.cardId}/attachments`)).toHaveLength(1)
+	})
+
+	test('switching the checklist off hides the section and the tile badge, and back on restores the items', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+
+		const tile = page.locator('.card-tile', { hasText: 'Loaded card' })
+		const modal = page.locator('.card-modal')
+		const checklistSection = modal.locator('.card-modal__checklist')
+
+		// --- Baseline: the tile badge and the modal section both show 1/2 ---
+		await expect(tile).toBeVisible({ timeout: 10_000 })
+		await expect(tile.locator('.card-tile__checklist')).toHaveText('1/2')
+
+		await tile.click()
+		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(checklistSection).toBeVisible()
+		await expect(checklistSection.locator('.card-modal__checklist-count')).toHaveText('1 / 2')
+		await expect(checklistSection.getByText(STEP_DONE)).toBeVisible()
+		await expect(checklistSection.getByText(STEP_OPEN)).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(modal).toBeHidden({ timeout: 8_000 })
+
+		// --- Switch it off ---
+		await openCardFieldsPane(page, state.boardId)
+		await expect(featureInput(page, 'checklist')).toBeChecked()
+		await featureLabel(page, 'Checklist').click()
+		await expect(featureInput(page, 'checklist')).not.toBeChecked({ timeout: 8_000 })
+		await page.keyboard.press('Escape')
+
+		// Gone from the tile - and the badge is gone, not merely emptied.
+		await expect(tile.locator('.card-tile__checklist')).toHaveCount(0, { timeout: 10_000 })
+		// Gone from the card modal, including its add-an-item row.
+		await tile.click()
+		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(checklistSection).toHaveCount(0)
+		await expect(modal.getByText(STEP_OPEN)).toHaveCount(0)
+		await page.keyboard.press('Escape')
+		await expect(modal).toBeHidden({ timeout: 8_000 })
+
+		// Hiding is not deleting: both items are still on the server, one still ticked.
+		const stored = await api.get(`/cards/${state.cardId}/checklist`)
+		expect(stored).toHaveLength(2)
+		expect(stored.filter((i) => i.done)).toHaveLength(1)
+
+		// --- Switch it back on: the same items, the same done/total ---
+		await openCardFieldsPane(page, state.boardId)
+		await featureLabel(page, 'Checklist').click()
+		await expect(featureInput(page, 'checklist')).toBeChecked({ timeout: 8_000 })
+		await page.keyboard.press('Escape')
+
+		await expect(tile.locator('.card-tile__checklist')).toHaveText('1/2', { timeout: 10_000 })
+		await tile.click()
+		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(checklistSection).toBeVisible({ timeout: 8_000 })
+		await expect(checklistSection.locator('.card-modal__checklist-count')).toHaveText('1 / 2')
+		await expect(checklistSection.getByText(STEP_DONE)).toBeVisible()
+		await expect(checklistSection.getByText(STEP_OPEN)).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(modal).toBeHidden({ timeout: 8_000 })
 	})
 
 	test('switching attachments and time tracking off hides them everywhere, and back on restores the data', async ({ page }) => {
@@ -154,7 +224,8 @@ test.describe('Built-in card sections (#5894)', () => {
 		expect(await api.get(`/cards/${state.cardId}/attachments`)).toHaveLength(1)
 		expect(await api.get(`/cards/${state.cardId}/time-entries`)).toHaveLength(1)
 
-		// --- Now the other three, so all five switches have a UI-level guard ---
+		// --- Now the other three, so every switch bar checklist (covered by its
+		//     own test above) has a UI-level guard ---
 		await openCardFieldsPane(page, state.boardId)
 		await featureLabel(page, 'Cover colour').click()
 		await expect(featureInput(page, 'coverColor')).not.toBeChecked({ timeout: 8_000 })
@@ -210,7 +281,7 @@ test.describe('Built-in card sections (#5894)', () => {
 		const boardB = await api.get(`/boards/${state.otherBoardId}`)
 		expect(boardA.board.cardFeatures.github).toBe(false)
 		expect(boardB.board.cardFeatures.github).toBe(true)
-		// And the other four on board A are still on.
+		// And the other five on board A are still on.
 		expect(boardA.board.cardFeatures.attachments).toBe(true)
 		expect(boardA.board.cardFeatures.timeTracking).toBe(true)
 		await api.patch(`/boards/${state.boardId}`, { cardFeatures: { github: true } })

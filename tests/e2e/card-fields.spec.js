@@ -110,7 +110,11 @@ test.describe('Custom fields', () => {
 			const cardPayload = await api.get(`/cards/${state.cardId}`)
 			const byField = Object.fromEntries(cardPayload.fieldValues.map((v) => [v.fieldId, v.value]))
 			return byField[state.fields.text]
-		}, { timeout: 8_000 }).toBe('done and dusted')
+		// 30s, not 8s: this covers a debounced write plus the PATCH round-trip plus
+		// the read-back, and the debounce is a FIXED cost that eats most of an 8s
+		// budget before the network is even reached. On a saturated CI runner
+		// (#10332) the poll expired still seeing the old value, failing the run.
+		}, { timeout: 30_000 }).toBe('done and dusted')
 	})
 
 	// ── Board settings: create a new field via the UI form ───────────────────
@@ -134,6 +138,8 @@ test.describe('Custom fields', () => {
 		await expect.poll(async () => {
 			const boardPayload = await api.get(`/boards/${state.boardId}`)
 			return boardPayload.cardFields.some((f) => f.name === 'Team')
-		}, { timeout: 8_000 }).toBe(true)
+		// 30s for the same reason as the poll above: a form submit round-trip has
+		// no business sharing a budget sized for a local DOM update.
+		}, { timeout: 30_000 }).toBe(true)
 	})
 })

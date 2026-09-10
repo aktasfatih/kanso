@@ -7,26 +7,35 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Db\Acl;
+use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssignee;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabel;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\CsvImportService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
 use OCP\IDBConnection;
+use OCP\IGroupManager;
 use OCP\IUserManager;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -40,6 +49,7 @@ class CsvImportServiceTest extends TestCase {
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
+	private BoardMapper&MockObject $boardMapper;
 	private CardService&MockObject $cardService;
 	private IUserManager&MockObject $userManager;
 	private IDBConnection&MockObject $db;
@@ -58,11 +68,35 @@ class CsvImportServiceTest extends TestCase {
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->cardService = $this->createMock(CardService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->db = $this->createMock(IDBConnection::class);
 
-		$this->service = new CsvImportService(
+		$this->service = $this->serviceWith($this->permissionService);
+	}
+
+	/**
+	 * The importer wired against $permissions, with a REAL {@see LabelService}
+	 * behind it. Real, not mocked, deliberately: label creation is the privileged
+	 * write this suite has to pin, so the MANAGE assert and the ENTITY_LABEL
+	 * change row must be the production ones - a LabelService mock would let the
+	 * importer "create" a label without either and the tests would still pass.
+	 */
+	private function serviceWith(PermissionService $permissions): CsvImportService {
+		$labelService = new LabelService(
+			$this->labelMapper,
+			$this->cardLabelMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->changeNotifier,
+			$permissions,
+			$this->db,
+			$this->createMock(CardVisibilityGuard::class),
+			$this->createMock(ChangeDetailMapper::class),
+		);
+
+		return new CsvImportService(
 			$this->boardService,
 			$this->stackMapper,
 			$this->cardMapper,
@@ -71,11 +105,41 @@ class CsvImportServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			new SortKeyService(),
 			$this->changeNotifier,
-			$this->permissionService,
+			$permissions,
+			$labelService,
 			$this->cardService,
 			$this->userManager,
 			$this->db,
 		);
+	}
+
+	/**
+	 * An importer whose permission checks run through the REAL
+	 * {@see PermissionService} over $rows, so a test can pin what the effective
+	 * mask actually folds to (notably the external-role strip) instead of
+	 * asserting against a mock that was told the answer.
+	 */
+	private function serviceWithRealPermissions(Acl ...$rows): CsvImportService {
+		$aclMapper = $this->createMock(AclMapper::class);
+		$aclMapper->method('findByBoard')->willReturn($rows);
+		// Group rows would need $this->userManager->get() stubbed as well:
+		// PermissionService::getUserGroupIds() short-circuits to [] for an unknown
+		// uid, so a group-ACL test written against this helper without that stub
+		// would silently resolve to no groups. Only TYPE_USER rows are used here.
+		$groupManager = $this->createMock(IGroupManager::class);
+
+		return $this->serviceWith(new PermissionService($aclMapper, $groupManager, $this->userManager));
+	}
+
+	/** One board ACL row for $uid, on the given board side, carrying $permission. */
+	private function acl(string $uid, int $permission, string $role): Acl {
+		$acl = new Acl();
+		$acl->setBoardId(self::BOARD_ID);
+		$acl->setParticipantType(Acl::TYPE_USER);
+		$acl->setParticipant($uid);
+		$acl->setPermission($permission);
+		$acl->setRole($role);
+		return $acl;
 	}
 
 	private function board(): Board {
@@ -94,11 +158,25 @@ class CsvImportServiceTest extends TestCase {
 		return $s;
 	}
 
-	/** Wires up the common happy-path expectations (board/stack found + EDIT ok). */
-	private function primeTarget(): void {
-		$this->boardService->method('find')->with(self::BOARD_ID, 'alice')->willReturn($this->board());
+	/**
+	 * Wires up the common happy-path expectations (board/stack found + the actor's
+	 * rights). $mask drives assertPermission() the way the real PermissionService
+	 * does - throwing when the mask lacks a required bit - so a test cannot grant
+	 * EDIT to the import while silently granting MANAGE to label creation too.
+	 *
+	 * getPermissions() is deliberately left to the individual test: the label tests
+	 * pin one mask for the actor, the assignee test drives it per uid.
+	 */
+	private function primeTarget(int $mask = PermissionService::PERMISSION_ALL, string $actorUid = 'alice'): void {
+		$this->boardService->method('find')->with(self::BOARD_ID, $actorUid)->willReturn($this->board());
 		$this->stackMapper->method('find')->with(self::STACK_ID)->willReturn($this->stack());
-		$this->permissionService->method('assertPermission');
+		$this->permissionService->method('assertPermission')->willReturnCallback(
+			static function (Board $board, string $uid, int $permission) use ($mask): void {
+				if (($mask & $permission) !== $permission) {
+					throw new NotPermittedException('Operation not allowed on this board');
+				}
+			},
+		);
 		$this->cardMapper->method('nextBoardSeq')->willReturnCallback(function (): int {
 			static $n = 0;
 			return ++$n;
@@ -222,25 +300,53 @@ class CsvImportServiceTest extends TestCase {
 		self::assertSame(100, mb_strlen($captured->getTitle()));
 	}
 
-	// ── labels: match-or-create ─────────────────────────────────────────────────
+	// ── labels: match-or-create, and creating is MANAGE-gated ───────────────────
 
-	public function testLabelsMatchExistingOrAreCreated(): void {
-		$this->primeTarget();
-		$this->db->method('beginTransaction');
-		$this->db->method('commit');
+	/**
+	 * The CSV every label test imports. Row 1 names the existing "bug" (in a
+	 * different case) plus an unknown "urgent"; row 2 names "urgent" again, so a
+	 * name is created - or counted as skipped - exactly ONCE either way.
+	 */
+	private const LABEL_CSV = "title,labels\n"
+		. "A,\"bug, urgent\"\n"
+		. "B,urgent\n";
 
-		// An existing "Bug" label on the board (matched case-insensitively).
+	/** The board already carries a "Bug" label, matched case-insensitively. */
+	private function primeExistingBugLabel(): void {
 		$existing = new Label();
 		$existing->setId(7);
 		$existing->setTitle('Bug');
 		$existing->setColor('eb5a46');
 		$this->labelMapper->method('findByBoard')->willReturn([$existing]);
-
 		$this->cardMapper->method('insert')->willReturnCallback(function (Card $c): Card {
 			static $id = 100;
 			$c->setId($id++);
 			return $c;
 		});
+	}
+
+	/**
+	 * Records every card↔label assignment the import writes into $assignments.
+	 *
+	 * @param list<array{int, int}> $assignments
+	 */
+	private function captureAssignments(array &$assignments): void {
+		$this->cardLabelMapper->method('insertAssignment')->willReturnCallback(
+			function (int $cardId, int $labelId) use (&$assignments): CardLabel {
+				$assignments[] = [$cardId, $labelId];
+				return new CardLabel();
+			},
+		);
+	}
+
+	public function testAManagerImportCreatesUnknownLabelsWithTheirChangeRow(): void {
+		$this->primeTarget();
+		$this->db->method('beginTransaction');
+		$this->db->method('commit');
+		$this->primeExistingBugLabel();
+		// alice manages the board, so her import may still define labels.
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->boardMapper->method('find')->with(self::BOARD_ID)->willReturn($this->board());
 
 		$createdLabels = [];
 		$this->labelMapper->method('insert')->willReturnCallback(function (Label $l) use (&$createdLabels): Label {
@@ -250,31 +356,136 @@ class CsvImportServiceTest extends TestCase {
 		});
 
 		$assignments = [];
-		$this->cardLabelMapper->method('insertAssignment')->willReturnCallback(function (int $cardId, int $labelId) use (&$assignments): CardLabel {
-			$assignments[] = [$cardId, $labelId];
-			return new CardLabel();
-		});
+		$this->captureAssignments($assignments);
 
-		// Row 1 references the existing "bug" (different case) + a new "urgent";
-		// row 2 references "urgent" again → it must be created ONCE and reused.
-		$csv = "title,labels\n"
-			. "A,\"bug, urgent\"\n"
-			. "B,urgent\n";
-		$result = $this->service->import($csv, self::BOARD_ID, self::STACK_ID, ['title' => 0, 'labels' => 1], true, 'alice');
+		// Every created label carries its OWN ENTITY_LABEL / ACTION_CREATE change
+		// row. Without it a delta client patches in cards naming a label id that is
+		// absent from its cached `labels` array, instead of the resync an
+		// ENTITY_LABEL row forces. push MUST be false: the row is written inside
+		// the import transaction, and import() fires ONE board push after commit.
+		$labelChanges = [];
+		$this->changeNotifier->method('notify')->willReturnCallback(
+			function (int $boardId, int $entity, int $entityId, int $action, ?string $actor, bool $push = true, ?int $verb = null) use (&$labelChanges): Change {
+				$labelChanges[] = [$boardId, $entity, $entityId, $action, $actor, $push];
+				return new Change();
+			},
+		);
+
+		$result = $this->service->import(
+			self::LABEL_CSV,
+			self::BOARD_ID,
+			self::STACK_ID,
+			['title' => 0, 'labels' => 1],
+			true,
+			'alice',
+		);
 
 		self::assertSame(1, $result['labelsCreated']);
+		self::assertSame(0, $result['labelsSkipped']);
 		self::assertCount(1, $createdLabels);
 		self::assertSame('urgent', $createdLabels[0]->getTitle());
 
+		$newLabelId = $createdLabels[0]->getId();
+		self::assertSame(
+			[[self::BOARD_ID, Change::ENTITY_LABEL, $newLabelId, Change::ACTION_CREATE, 'alice', false]],
+			$labelChanges,
+		);
+
 		// Card A got both the existing (7) and the new label; card B reused the new
 		// label id (never a second create).
-		$newLabelId = $createdLabels[0]->getId();
 		$forA = array_values(array_filter($assignments, fn ($a) => $a[0] === 100));
 		$forB = array_values(array_filter($assignments, fn ($a) => $a[0] === 101));
 		$aIds = array_map(fn ($a) => $a[1], $forA);
 		sort($aIds);
 		self::assertSame([7, $newLabelId], $aIds);
 		self::assertSame([[101, $newLabelId]], $forB);
+	}
+
+	public function testAnEditOnlyImportReusesExistingLabelsButNeverMintsNewOnes(): void {
+		// bob holds READ|EDIT and not MANAGE - exactly what the share dialog's "can
+		// edit" grants. The import is EDIT-gated and must still run; defining a
+		// board-level label is a MANAGE concern, so "urgent" is dropped and counted
+		// rather than minted through the importer's back door.
+		$editOnly = PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT;
+		$this->primeTarget($editOnly, 'bob');
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+		$this->primeExistingBugLabel();
+		$this->permissionService->method('getPermissions')->willReturn($editOnly);
+
+		// The escalation, pinned: not one board-level label definition is written.
+		$this->labelMapper->expects(self::never())->method('insert');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$assignments = [];
+		$this->captureAssignments($assignments);
+
+		$result = $this->service->import(
+			self::LABEL_CSV,
+			self::BOARD_ID,
+			self::STACK_ID,
+			['title' => 0, 'labels' => 1],
+			true,
+			'bob',
+		);
+
+		// Skipped, NOT rejected: the rows are the point of the import, so both cards
+		// land and the response reports the shortfall instead of refusing outright.
+		self::assertSame(2, $result['cards']);
+		self::assertSame(0, $result['labelsCreated']);
+		// "urgent" appears on both rows and is reported ONCE - distinct names, the
+		// same unit labelsCreated counts.
+		self::assertSame(1, $result['labelsSkipped']);
+
+		// The existing "bug" still attaches (case-insensitively) to card A; card B
+		// referenced only the un-creatable name, so it gets no labels at all.
+		self::assertSame([[100, 7]], $assignments);
+	}
+
+	public function testAnExternalSideMemberCannotMintLabelsEvenHoldingTheManageBit(): void {
+		// The role cap, end to end through the REAL PermissionService: 'ext' holds
+		// an ACL row that literally stores MANAGE, but every matching row is
+		// external, so getPermissions() strips SHARE|MANAGE from the effective mask
+		// (PermissionService::INTERNAL_ONLY_PERMISSIONS). EDIT survives that strip -
+		// which is why the import itself still runs - and MANAGE does not, so no
+		// separate internal-side assert is needed to stop the label creation here.
+		$service = $this->serviceWithRealPermissions($this->acl(
+			'ext',
+			PermissionService::PERMISSION_ALL,
+			ViewerContext::ROLE_EXTERNAL,
+		));
+		$this->boardService->method('find')->with(self::BOARD_ID, 'ext')->willReturn($this->board());
+		$this->stackMapper->method('find')->with(self::STACK_ID)->willReturn($this->stack());
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		// Resolvable for LabelService too, so removing the importer's own MANAGE
+		// pre-check surfaces the role cap refusing the create - not a mock TypeError.
+		$this->boardMapper->method('find')->with(self::BOARD_ID)->willReturn($this->board());
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+		$this->primeExistingBugLabel();
+
+		$this->labelMapper->expects(self::never())->method('insert');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$assignments = [];
+		$this->captureAssignments($assignments);
+
+		$result = $service->import(
+			self::LABEL_CSV,
+			self::BOARD_ID,
+			self::STACK_ID,
+			['title' => 0, 'labels' => 1],
+			true,
+			'ext',
+		);
+
+		self::assertSame(2, $result['cards']);
+		self::assertSame(0, $result['labelsCreated']);
+		self::assertSame(1, $result['labelsSkipped']);
+		self::assertSame([[100, 7]], $assignments);
 	}
 
 	// ── assignees: match-or-drop, READ-filtered ─────────────────────────────────

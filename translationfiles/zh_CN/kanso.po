@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4048
+#: src/components/BoardSettingsModal.vue:4063
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -246,30 +246,71 @@ msgstr "%1$s 请求你评审 %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s 与你共享了 %2$s"
 
+#: src/views/BoardList.vue:216
+msgid "%n attachment"
+msgid_plural "%n attachments"
+msgstr[0] ""
+
+#: src/views/BoardList.vue:223
+msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
+msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
+msgstr[0] ""
+
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:256
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/CsvImportModal.vue:80
+#: src/components/CsvImportModal.vue:54
+msgid "%n card created"
+msgid_plural "%n cards created"
+msgstr[0] ""
+
+#: src/views/BoardList.vue:212
+msgid "%n column"
+msgid_plural "%n columns"
+msgstr[0] ""
+
+#: src/views/BoardList.vue:215
+msgid "%n comment"
+msgid_plural "%n comments"
+msgstr[0] ""
+
+#: src/components/CsvImportModal.vue:110
 msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4246
+#: src/components/CardDetail.vue:4295
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4244
+#: src/components/CardDetail.vue:4293
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/components/CardDetail.vue:4242
+#: src/views/BoardList.vue:214
+msgid "%n label"
+msgid_plural "%n labels"
+msgstr[0] ""
+
+#: src/components/CsvImportModal.vue:56
+msgid "%n label created"
+msgid_plural "%n labels created"
+msgstr[0] ""
+
+#: src/components/CsvImportModal.vue:66
+msgid "%n label was not created and is missing from the imported cards: only board managers can add new labels. Ask a manager to add it, then set it on the cards."
+msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
+msgstr[0] ""
+
+#: src/components/CardDetail.vue:4291
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -294,9 +335,14 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:1969
+#: src/components/CardDetail.vue:1975
 msgid "%n reply"
 msgid_plural "%n replies"
+msgstr[0] ""
+
+#: src/components/CsvImportModal.vue:60
+msgid "%n row was skipped because it had no title."
+msgid_plural "%n rows were skipped because they had no title."
 msgstr[0] ""
 
 #: src/components/BoardTimelineView.vue:306
@@ -1079,6 +1125,7 @@ msgid "Changes requested"
 msgstr "已请求修改"
 
 #: src/components/BoardFilterBar.vue
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Checklist"
 msgstr "清单"
@@ -1179,6 +1226,8 @@ msgid "close"
 msgstr "关闭"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CsvImportModal.vue
+#: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
 msgid "Close"
 msgstr "关闭"
@@ -1526,6 +1575,10 @@ msgstr "Ctrl+Enter 发布"
 msgid "Custom fields"
 msgstr "自定义字段"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Custom offset — it is kept exactly as it is."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
 msgstr "自定义计划 — 请在“看板设置 → 自动化”中编辑。"
@@ -1552,7 +1605,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:1949
-#: src/components/CardDetail.vue:4435
+#: src/components/CardDetail.vue:4484
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2032,22 +2085,22 @@ msgstr "每"
 msgid "Every"
 msgstr "每"
 
-#: src/components/BoardSettingsModal.vue:4028
+#: src/components/BoardSettingsModal.vue:4043
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
 
-#: src/components/BoardSettingsModal.vue:4038
+#: src/components/BoardSettingsModal.vue:4053
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4030
+#: src/components/BoardSettingsModal.vue:4045
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4040
+#: src/components/BoardSettingsModal.vue:4055
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -2851,6 +2904,10 @@ msgstr "从 CSV 导入卡片"
 msgid "Import from Deck"
 msgstr "从 Deck 导入"
 
+#: src/views/BoardList.vue
+msgid "Imported into a new Kanso board:"
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 msgid "Importing…"
@@ -3177,7 +3234,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:1951
-#: src/components/CardDetail.vue:4437
+#: src/components/CardDetail.vue:4486
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -3663,6 +3720,10 @@ msgid "Off — do not create cards"
 msgstr "关闭 — 不创建卡片"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Offset"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
 msgstr "偏移（天）"
 
@@ -3702,6 +3763,11 @@ msgstr "打开"
 #: src/components/CardDetail.vue
 msgid "Open as full page"
 msgstr "以整页方式打开"
+
+#: src/components/CsvImportModal.vue
+#: src/views/BoardList.vue
+msgid "Open board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
@@ -4500,7 +4566,7 @@ msgstr "显示格式工具栏"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6059
+#: src/components/CardDetail.vue:6154
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5141,7 +5207,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:1950
-#: src/components/CardDetail.vue:4436
+#: src/components/CardDetail.vue:4485
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5221,7 +5287,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:1952
-#: src/components/CardDetail.vue:4438
+#: src/components/CardDetail.vue:4487
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

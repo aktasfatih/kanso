@@ -8,8 +8,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			{{ t('kanso', '{count} selected', { count }) }}
 		</span>
 
+		<!-- The bar is icon-only, so every control also carries a `title` for the
+		     hover tooltip a sighted mouse user relies on (#10275). On NcActions
+		     `title` is a fall-through attribute: it lands on the wrapping
+		     `.action-item` element rather than the trigger button, which is still
+		     what the browser resolves the tooltip from when the button itself has
+		     none. `menuName` is deliberately NOT used — it nulls the trigger's
+		     aria-label and widens the control. The data-driven menus bind their
+		     hint through menuHint() so it disappears along with the menu; see
+		     that helper for why. -->
+
 		<!-- Move to stack -->
 		<NcActions
+			v-bind="menuHint(stacks, t('kanso', 'Move to…'))"
 			:disabled="applying || count === 0"
 			:aria-label="t('kanso', 'Move to…')">
 			<template #icon>
@@ -26,6 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Add label -->
 		<NcActions
+			v-bind="menuHint(labels, t('kanso', 'Add label…'))"
 			:disabled="applying || count === 0"
 			:aria-label="t('kanso', 'Add label…')">
 			<template #icon>
@@ -47,6 +59,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Remove label -->
 		<NcActions
+			v-bind="menuHint(labels, t('kanso', 'Remove label…'))"
 			:disabled="applying || count === 0"
 			:aria-label="t('kanso', 'Remove label…')">
 			<template #icon>
@@ -68,6 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Assign user -->
 		<NcActions
+			v-bind="menuHint(participants, t('kanso', 'Assign…'))"
 			:disabled="applying || count === 0"
 			:aria-label="t('kanso', 'Assign…')">
 			<template #icon>
@@ -82,9 +96,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcActionButton>
 		</NcActions>
 
-		<!-- Set due date -->
+		<!-- Set due date — a fixed two-entry menu, so it never collapses and can
+		     carry its hint directly. -->
 		<NcActions
 			:disabled="applying || count === 0"
+			:title="t('kanso', 'Set due date…')"
 			:aria-label="t('kanso', 'Set due date…')">
 			<template #icon>
 				<CalendarClockIcon :size="20" />
@@ -203,6 +219,26 @@ defineProps({
 		default: false,
 	},
 })
+
+/**
+ * Hover hint for one of the data-driven menu triggers, bound with `v-bind` so
+ * the attribute is ABSENT rather than empty when it must not apply.
+ *
+ * NcActions renders nothing at all for an empty menu, and collapses to a single
+ * button that acts immediately when it holds exactly one entry. In that
+ * collapsed form the library already sets a better `title` — the entry's own
+ * name ("Bug", "Alice") — and a menu label ending in "…" would promise a picker
+ * that never opens. Passing `title: null` would not help: a fall-through
+ * attribute is merged unconditionally, so it would wipe the library's title
+ * instead of leaving it alone. Hence an object with or without the key.
+ *
+ * @param {Array} items entries the menu will render
+ * @param {string} label hint to show while it really is a menu
+ * @return {object} `{ title }` for a real menu, `{}` otherwise
+ */
+function menuHint(items, label) {
+	return items.length > 1 ? { title: label } : {}
+}
 
 const emit = defineEmits(['move', 'add-label', 'remove-label', 'assign', 'set-due', 'set-status', 'archive', 'delete', 'close'])
 

@@ -60,11 +60,20 @@ class ReviewServiceTest extends TestCase {
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->commentService = $this->createMock(CommentService::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
-		// Default: everyone sees every card (assertVisible passes as a no-op);
-		// a test hides the card from specific uids via $this->hiddenFrom.
+		// Default: everyone sees every card; a test hides it from specific uids via
+		// $this->hiddenFrom. assertVisible mirrors the real guard - "hidden" is
+		// raised as the SAME DoesNotExistException a missing id raises - so a test
+		// can tell apart "rejected for membership (403)" from "hidden (404)".
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturnCallback(
 			fn (Board $board, Card $card, string $uid): bool => !in_array($uid, $this->hiddenFrom, true),
+		);
+		$this->visibilityGuard->method('assertVisible')->willReturnCallback(
+			function (Board $board, Card $card, string $uid): void {
+				if (in_array($uid, $this->hiddenFrom, true)) {
+					throw new DoesNotExistException('Card ' . $card->getId() . ' does not exist');
+				}
+			},
 		);
 		$this->service = new ReviewService(
 			$this->cardReviewMapper,
@@ -298,6 +307,23 @@ class ReviewServiceTest extends TestCase {
 		$this->service->requestReview(9, 'bob', 'alice');
 	}
 
+	public function testRequestRejectsActorWhoCannotSeeTheCard(): void {
+		// The ACTOR's own visibility guard, distinct from the reviewer check above:
+		// a board member with EDIT who sits outside this card's visibility must not
+		// be able to route a review at a card that reads as missing to them.
+		// Deleting that guard leaves the reviewer check untouched, so it needs its
+		// own test - the reviewer-side test only exercises isVisible().
+		$this->loadCardAndBoard();
+		$this->hiddenFrom = ['mallory'];
+		$this->cardReviewMapper->expects(self::never())->method('existsForType');
+		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->expectExceptionMessage('Card 9 does not exist');
+		$this->service->requestReview(9, 'bob', 'mallory');
+	}
+
 	public function testRequestRejectsDeletedCard(): void {
 		$card = $this->card();
 		$card->setDeletedAt(1234);
@@ -391,6 +417,21 @@ class ReviewServiceTest extends TestCase {
 		$this->cardReviewMapper->expects(self::never())->method('delete');
 
 		$this->service->withdrawReview(9, 1, 'alice');
+	}
+
+	public function testWithdrawRejectsActorWhoCannotSeeTheCard(): void {
+		// Same guard as testRequestRejectsActorWhoCannotSeeTheCard, on the other
+		// EDIT-gated mutation: a hidden card must read as missing before the review
+		// row is even looked up, or withdraw becomes an existence oracle.
+		$this->loadCardAndBoard();
+		$this->hiddenFrom = ['mallory'];
+		$this->cardReviewMapper->expects(self::never())->method('findById');
+		$this->cardReviewMapper->expects(self::never())->method('delete');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->expectExceptionMessage('Card 9 does not exist');
+		$this->service->withdrawReview(9, 1, 'mallory');
 	}
 
 	// ---- setState (by review id) ------------------------------------------
@@ -516,11 +557,20 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testSetStateRejectsActorWhoIsNotTheReviewer(): void {
-		$this->loadCardAndBoard();
+		// mallory is a full board member (READ granted) so she sails past the
+		// board-access guard - the ONLY thing that may stop her is the
+		// reviewer-identity check. Asserting the MESSAGE, not just the class, is
+		// what keeps the two NotPermittedException guards apart: without it,
+		// deleting this guard passes the test on the next guard's throw.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'mallory')
+			->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
+		$this->expectExceptionMessage('Only the reviewer may set their review state');
 		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'mallory');
 	}
 
@@ -532,11 +582,15 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testSetStateThrowsWhenReviewMissing(): void {
-		$this->loadCardAndBoard();
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardReviewMapper->method('findById')->with(1)->willReturn(null);
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(DoesNotExistException::class);
+		$this->expectExceptionMessage('Review 1 does not exist on card 9');
 		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 
@@ -554,6 +608,10 @@ class ReviewServiceTest extends TestCase {
 	}
 
 	public function testSetStateRejectsReviewerWhoLostBoardAccess(): void {
+		// The actor IS the reviewer, so the identity guard is a no-op here and only
+		// the board-access guard can reject - the mirror image of
+		// testSetStateRejectsActorWhoIsNotTheReviewer. Message asserted for the
+		// same reason: the two guards must stay individually falsifiable.
 		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
 			->with($board, 'bob')
@@ -562,6 +620,79 @@ class ReviewServiceTest extends TestCase {
 		$this->cardReviewMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
+		$this->expectExceptionMessage('User has no access to this board');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+	}
+
+	public function testSetStateRejectsNonMemberWithoutProbingWhetherTheReviewExists(): void {
+		// Existence oracle: with the board-access guard behind the review lookup, a
+		// non-member got a 404 for an unknown review id and a 403 for a real one -
+		// enough to enumerate which reviews sit on a card. Membership is now
+		// asserted BEFORE the lookup, so the row is never read at all.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'mallory')
+			->willReturn(0);
+		$this->cardReviewMapper->expects(self::never())->method('findById');
+		$this->cardReviewMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->expectExceptionMessage('User has no access to this board');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'mallory');
+	}
+
+	public function testSetStateChecksMembershipBeforeCardVisibility(): void {
+		// Ordering pinned by CardVisibilityGuard's own contract (membership first -
+		// 403 for non-members - then visibility, 404 for members who may not see
+		// this card). A non-member who ALSO cannot see the card must still get the
+		// membership 403; if the visibility guard ran first they would get the
+		// DoesNotExistException instead, diverging from every sibling mutation.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'mallory')
+			->willReturn(0);
+		$this->hiddenFrom = ['mallory'];
+		$this->cardReviewMapper->expects(self::never())->method('findById');
+		$this->cardReviewMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->expectExceptionMessage('User has no access to this board');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'mallory');
+	}
+
+	public function testSetStateRejectsMemberHoldingEditButNotRead(): void {
+		// The guard is a BITMASK test, not a truthiness test: a row granting EDIT
+		// without READ is storable, and such a member must still be turned away.
+		// Without this, weakening the guard to `getPermissions(...) === 0` passes
+		// every other setState test (they all stub exactly 0 or exactly READ).
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_EDIT);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		$this->cardReviewMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->expectExceptionMessage('User has no access to this board');
+		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
+	}
+
+	public function testSetStateRejectsReviewerWhoCanNoLongerSeeTheCard(): void {
+		// The card narrowed past its own reviewer (#3743): a member who still holds
+		// READ but is outside the card's visibility gets the missing-card 404, and
+		// no verdict is written. setState raises DoesNotExistException from TWO
+		// places (this guard and the review lookup below), so the message is
+		// asserted to keep them apart.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$this->hiddenFrom = ['bob'];
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		$this->cardReviewMapper->expects(self::never())->method('update');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->expectExceptionMessage('Card 9 does not exist');
 		$this->service->setState(9, 1, CardReview::STATE_APPROVED, 'bob');
 	}
 

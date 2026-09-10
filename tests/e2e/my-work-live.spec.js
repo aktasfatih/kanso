@@ -69,7 +69,11 @@ test.describe('My Work live updates (#3768)', () => {
 
 	test('a review requested by another user appears in the open My Reviews view by itself', async ({ browser, peer }) => {
 		// Polling budget (60s interval + slow-CI headroom) on top of the default.
-		test.setTimeout(180_000)
+		// 240s: measured 66s healthy / 90s saturated. Most of that is the FIXED 60s
+		// poll interval rather than runner speed, but 180s was only 2x the worst
+		// observed, and an explicit setTimeout overrides the config default in both
+		// directions — at 180s this would now cap below the suite-wide 240s.
+		test.setTimeout(240_000)
 		const ctx = await browser.newContext()
 		try {
 			const page = await ctx.newPage()
@@ -96,7 +100,8 @@ test.describe('My Work live updates (#3768)', () => {
 	})
 
 	test('a card assigned by another user appears in the open My Tasks view by itself', async ({ browser, peer }) => {
-		test.setTimeout(180_000)
+		// 240s — see the sibling test above (measured 72s healthy / 72s saturated).
+		test.setTimeout(240_000)
 		const ctx = await browser.newContext()
 		try {
 			const page = await ctx.newPage()

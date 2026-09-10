@@ -161,7 +161,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<CsvImportModal
 			v-if="showCsvImport"
 			@close="showCsvImport = false"
-			@imported="onCsvImported" />
+			@imported="onCsvImported"
+			@open-board="onCsvOpenBoard" />
 
 		<!-- Delete-board confirm (#3750). Same pattern as BoardSettingsModal's
 		     danger zone: an explicit confirm dialog, no undo toast (board delete
@@ -190,38 +191,79 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</NcDialog>
 
 		<!-- Import-from-Deck modal -->
-		<NcModal v-if="showImport" size="normal" @close="showImport = false">
+		<NcModal v-if="showImport" size="normal" @close="closeImport">
 			<div class="deck-import">
 				<h2 class="deck-import__title">{{ t('kanso', 'Import from Deck') }}</h2>
-				<p class="deck-import__hint">
-					{{ t('kanso', 'Each Deck board is copied into a new Kanso board you own: stacks, cards, labels and assignees. Your Deck boards are left untouched.') }}
-				</p>
 
-				<p v-if="importLoading" class="deck-import__state">{{ t('kanso', 'Loading your Deck boards…') }}</p>
-				<p v-else-if="importLoadError" class="deck-import__error">{{ importLoadError }}</p>
-				<p v-else-if="!deckAvailable" class="deck-import__state">
-					{{ t('kanso', 'The Deck app is not installed on this server, so there is nothing to import.') }}
-				</p>
-				<p v-else-if="deckBoards.length === 0" class="deck-import__state">
-					{{ t('kanso', 'No Deck boards found to import.') }}
-				</p>
-
-				<ul v-else class="deck-import__list">
-					<li v-for="db in deckBoards" :key="db.id" class="deck-import__row">
-						<span
-							class="deck-import__dot"
-							:style="{ background: db.color ? '#' + db.color : 'var(--color-primary-element)' }" />
-						<span class="deck-import__name">{{ db.title }}</span>
-						<span class="deck-import__count">{{ n('kanso', '%n card', '%n cards', db.cardCount) }}</span>
-						<NcButton
-							type="primary"
-							:disabled="importingId !== null"
-							@click="doImport(db)">
-							{{ importingId === db.id ? t('kanso', 'Importing…') : t('kanso', 'Import') }}
+				<!-- Result step: the import finished, so report what actually landed
+				     instead of navigating away. A summary the user never sees is how
+				     a partial import gets mistaken for a complete one. -->
+				<template v-if="importSummary">
+					<!-- The board title is rendered by Vue, NOT interpolated through
+					     t(): t() escapes + sanitizes its placeholders and the mustache
+					     escapes again, which would show a board called "R&D" as
+					     "R&amp;D" on the one line the user reads to confirm the right
+					     board landed. -->
+					<p class="deck-import__hint">
+						{{ t('kanso', 'Imported into a new Kanso board:') }}
+						<strong>{{ importSummary.title }}</strong>
+					</p>
+					<ul class="deck-import__summary" role="status" data-test="deck-import-summary">
+						<li>{{ n('kanso', '%n column', '%n columns', importSummary.stacks) }}</li>
+						<li>{{ n('kanso', '%n card', '%n cards', importSummary.cards) }}</li>
+						<li>{{ n('kanso', '%n label', '%n labels', importSummary.labels) }}</li>
+						<li>{{ n('kanso', '%n comment', '%n comments', importSummary.comments) }}</li>
+						<li>{{ n('kanso', '%n attachment', '%n attachments', importSummary.attachments) }}</li>
+					</ul>
+					<p
+						v-if="importSummary.skippedAttachments > 0"
+						class="deck-import__warning"
+						role="status"
+						data-test="deck-import-skipped">
+						{{ n('kanso',
+							'%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it.',
+							'%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them.',
+							importSummary.skippedAttachments) }}
+					</p>
+					<div class="deck-import__actions">
+						<NcButton type="primary" data-test="deck-import-open" @click="openImportedBoard">
+							{{ t('kanso', 'Open board') }}
 						</NcButton>
-					</li>
-				</ul>
-				<p v-if="importError" class="deck-import__error">{{ importError }}</p>
+						<NcButton @click="closeImport">{{ t('kanso', 'Close') }}</NcButton>
+					</div>
+				</template>
+
+				<template v-else>
+					<p class="deck-import__hint">
+						{{ t('kanso', 'Each Deck board is copied into a new Kanso board you own: stacks, cards, labels and assignees. Your Deck boards are left untouched.') }}
+					</p>
+
+					<p v-if="importLoading" class="deck-import__state">{{ t('kanso', 'Loading your Deck boards…') }}</p>
+					<p v-else-if="importLoadError" class="deck-import__error">{{ importLoadError }}</p>
+					<p v-else-if="!deckAvailable" class="deck-import__state">
+						{{ t('kanso', 'The Deck app is not installed on this server, so there is nothing to import.') }}
+					</p>
+					<p v-else-if="deckBoards.length === 0" class="deck-import__state">
+						{{ t('kanso', 'No Deck boards found to import.') }}
+					</p>
+
+					<ul v-else class="deck-import__list">
+						<li v-for="db in deckBoards" :key="db.id" class="deck-import__row">
+							<span
+								class="deck-import__dot"
+								:style="{ background: db.color ? '#' + db.color : 'var(--color-primary-element)' }" />
+							<span class="deck-import__name">{{ db.title }}</span>
+							<span class="deck-import__count">{{ n('kanso', '%n card', '%n cards', db.cardCount) }}</span>
+							<NcButton
+								type="primary"
+								:disabled="importingId !== null"
+								@click="doImport(db)">
+								{{ importingId === db.id ? t('kanso', 'Importing…') : t('kanso', 'Import') }}
+							</NcButton>
+						</li>
+					</ul>
+					<p v-if="importError" class="deck-import__error">{{ importError }}</p>
+				</template>
 			</div>
 		</NcModal>
 
@@ -794,11 +836,16 @@ const deckAvailable = ref(false)
 const deckBoards = ref([])
 const importingId = ref(null)
 const importError = ref('')
+// The result payload of a finished import — rendered in place of the board list
+// so the counts (and any skipped attachments) reach the user before they act on
+// "the migration worked".
+const importSummary = ref(null)
 
 async function openImport() {
 	showImport.value = true
 	importError.value = ''
 	importLoadError.value = ''
+	importSummary.value = null
 	importLoading.value = true
 	try {
 		const res = await fetchDeckImportBoards()
@@ -817,13 +864,27 @@ async function doImport(db) {
 	try {
 		const res = await importDeckBoard(db.id)
 		await queryClient.invalidateQueries({ queryKey: ['boards'] })
-		showImport.value = false
-		router.push({ name: 'board', params: { id: res.boardId } })
+		// Stay on the modal and show what was imported. Navigating straight to a
+		// board full of cards reads as "the migration worked" even when
+		// attachments were dropped — the one moment a user then deletes the
+		// source board in Deck.
+		importSummary.value = res
 	} catch (err) {
 		importError.value = err?.response?.data?.error || t('kanso', 'Failed to import that board.')
 	} finally {
 		importingId.value = null
 	}
+}
+
+function openImportedBoard() {
+	const id = importSummary.value?.boardId
+	closeImport()
+	if (id) router.push({ name: 'board', params: { id } })
+}
+
+function closeImport() {
+	showImport.value = false
+	importSummary.value = null
 }
 
 // ── Import from a Kanso export (.zip archive, or an older bare .json) ─────────
@@ -882,11 +943,15 @@ async function onTrelloImportChange(event) {
 // ── Import cards from CSV into an existing board/stack (#3678) ─────────────────
 const showCsvImport = ref(false)
 
-async function onCsvImported({ boardId }) {
-	showCsvImport.value = false
-	// The imported cards land on an existing board; refresh the list stats and
-	// jump the user to the board they just populated.
+// The import finished: refresh the board stats behind the modal, but leave the
+// modal mounted — it now renders its own summary (rows skipped, labels not
+// created) and the user clicks through from there.
+async function onCsvImported() {
 	await queryClient.invalidateQueries({ queryKey: ['boards'] })
+}
+
+function onCsvOpenBoard({ boardId }) {
+	showCsvImport.value = false
 	if (boardId) router.push({ name: 'board', params: { id: boardId } })
 }
 </script>
@@ -1238,6 +1303,26 @@ button.board-tile:hover,
 .deck-import__hint {
 	color: var(--color-text-maxcontrast);
 	margin-bottom: 16px;
+}
+
+/* Post-import summary: the counts that actually landed, plus a skip warning. */
+.deck-import__summary {
+	list-style: disc;
+	padding-left: 20px;
+	margin: 0 0 12px;
+	color: var(--color-main-text);
+}
+
+.deck-import__warning {
+	color: var(--color-warning-text, var(--color-error));
+	font-weight: 600;
+	margin: 0 0 16px;
+}
+
+.deck-import__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
 }
 
 .deck-import__state {

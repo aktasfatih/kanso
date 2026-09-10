@@ -1241,8 +1241,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 						</section>
 
-						<!-- Checklist - promoted next to the description -->
-						<section v-if="checklistTotal > 0 || canEdit" class="card-modal__checklist">
+						<!-- Checklist - promoted next to the description. Hidden entirely
+						     when the board switched checklists off (#5894); the items stay
+						     in the database and come back on re-enable. -->
+						<section v-if="cardFeatures.checklist && (checklistTotal > 0 || canEdit)" class="card-modal__checklist">
 							<div class="card-modal__checklist-head">
 								<CheckboxMarkedOutlineIcon :size="16" class="card-modal__checklist-head-icon" />
 								<span class="card-modal__checklist-title">{{ t('kanso', 'Checklist') }}</span>
@@ -1263,12 +1265,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:class="{ 'card-modal__checklist-item--done': item.done }"
 									:data-item-id="item.id"
 									:data-drag-over="dragOverItemId === item.id ? 'true' : 'false'"
+									:aria-busy="isUnsavedItem(item) ? 'true' : undefined"
 									@dragover.prevent="onItemDragOver($event, item)"
 									@dragleave="onItemDragLeave($event, item)"
 									@drop.prevent="onItemDrop($event, item)">
 									<span
 										class="card-modal__checklist-drag"
-										:draggable="true"
+										:draggable="!isUnsavedItem(item)"
 										:title="t('kanso', 'Drag to reorder')"
 										@dragstart="onItemDragStart($event, item)"
 										@dragend="onItemDragEnd">
@@ -1297,6 +1300,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:class="{ 'card-modal__checklist-item-title--done': item.done }"
 										role="button"
 										tabindex="0"
+										:aria-disabled="isUnsavedItem(item) ? 'true' : undefined"
 										:aria-label="t('kanso', 'Edit item')"
 										@click="startItemEdit(item)"
 										@keydown.enter.prevent="startItemEdit(item)"
@@ -1338,6 +1342,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											v-if="!item.assignedUser"
 											class="card-modal__step-btn"
 											:title="t('kanso', 'Assign step')"
+											:disabled="isUnsavedItem(item)"
 											:aria-expanded="isStepMenuOpen(item, 'assign')"
 											@click="toggleStepMenu(item, 'assign')">
 											<AccountPlusIcon :size="14" />
@@ -1346,6 +1351,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											v-if="!item.dueDate"
 											class="card-modal__step-btn"
 											:title="t('kanso', 'Set step due date')"
+											:disabled="isUnsavedItem(item)"
 											:aria-expanded="isStepMenuOpen(item, 'due')"
 											@click="toggleStepMenu(item, 'due')">
 											<CalendarIcon :size="14" />
@@ -1354,7 +1360,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<button
 										class="card-modal__checklist-item-delete"
 										:title="t('kanso', 'Delete item')"
-										:disabled="deleteItem.isPending.value"
+										:disabled="deleteItem.isPending.value || isUnsavedItem(item)"
 										@click="handleDeleteItem(item)">
 										<CloseIcon :size="14" />
 									</button>
@@ -3788,10 +3794,16 @@ async function handleAddItem() {
 
 // A checklist row rendered from the optimistic create still carries the negative
 // placeholder id `useChecklist` assigns it, and is not addressable on the server
-// yet. Its checkbox is disabled until the create resolves and swaps in the real
-// row, so a click in that window waits instead of firing
-// `PATCH /api/checklist/-1788…` — which can never match and used to drop the
-// toggle silently after rolling the optimistic tick back.
+// yet. Every ENTRY POINT into a row — the checkbox, the step pickers (assign /
+// due date), delete, inline rename and drag-reorder — is guarded here, so an
+// action in that window waits instead of firing
+// `PATCH|POST|DELETE /api/checklist/-1788…`, which can never match a row and used
+// to roll the change back with a bare "Not found": the toggle and the assignment
+// were dropped silently, and a delete was worse still — the row vanished and then
+// came BACK when the in-flight create landed. The mutation helpers behind the step
+// popover (assign / unassign / due / clear-due) carry no guard of their own: they
+// are reachable only through a popover that `toggleStepMenu` refuses to open on an
+// unsaved row.
 function isUnsavedItem(item) {
 	return Number(item?.id) < 0
 }
@@ -3807,6 +3819,11 @@ async function handleToggleItem(item) {
 }
 
 async function handleDeleteItem(item) {
+	// Backs up the `:disabled` on the delete button. Deleting an unsaved row sent
+	// `DELETE /api/checklist/-1788…` → 404, which rolled the optimistic removal
+	// back WHILE the create was still in flight, so the step the user just deleted
+	// reappeared a moment later.
+	if (isUnsavedItem(item)) return
 	checklistError.value = ''
 	try {
 		await deleteItem.mutateAsync({ item })
@@ -3829,6 +3846,13 @@ function setItemInputRef(id, el) {
 }
 
 async function startItemEdit(item) {
+	// The editor is keyed by the row id (`editingItemId === item.id`, and the row
+	// itself by `:key="item.id"`), so opening it on an unsaved row was doubly
+	// broken: saving sent `PATCH /api/checklist/-1788…` → 404 "Failed to rename
+	// item.", and if the create resolved mid-edit the id swap tore the input down
+	// without a blur and threw the typed title away. Editing waits for the real id
+	// instead — the same window the row's other controls already wait out.
+	if (isUnsavedItem(item)) return
 	editingItemId.value = item.id
 	editingItemTitle.value = item.title
 	await nextTick()
@@ -3866,6 +3890,11 @@ function isStepMenuOpen(item, type) {
 	return openStepMenu.value === `${type}:${item.id}`
 }
 function toggleStepMenu(item, type) {
+	// Belt and braces with the `:disabled` on the two picker buttons, exactly as
+	// `handleToggleItem` backs up the checkbox: an unsaved row has no server id to
+	// address, and the popover key is `${type}:${item.id}`, so a menu opened on the
+	// placeholder id would also vanish the moment the create swaps the real one in.
+	if (isUnsavedItem(item)) return
 	const key = `${type}:${item.id}`
 	openStepMenu.value = openStepMenu.value === key ? null : key
 }
@@ -3953,6 +3982,15 @@ const draggingItem = ref(null)
 const dragOverItemId = ref(null)
 
 function onItemDragStart(event, item) {
+	// Backs up `:draggable="!isUnsavedItem(item)"` on the handle: a row still on its
+	// placeholder id cannot be reordered, in either role. Dragging it sent
+	// `POST /api/checklist/-1788…/move` → 404; dropping onto it sent a real row's
+	// move with `afterItemId: -1788…` → 400 "afterItemId is not an item of this
+	// card" (see onItemDragOver / onItemDrop for the drop-target half).
+	if (isUnsavedItem(item)) {
+		event.preventDefault()
+		return
+	}
 	draggingItem.value = item
 	event.dataTransfer.effectAllowed = 'move'
 	event.dataTransfer.setData('text/plain', String(item.id))
@@ -3964,7 +4002,8 @@ function onItemDragEnd() {
 }
 
 function onItemDragOver(event, item) {
-	if (!draggingItem.value || draggingItem.value.id === item.id) return
+	// No drop indicator on an unsaved row — the drop it advertises can't be sent.
+	if (!draggingItem.value || draggingItem.value.id === item.id || isUnsavedItem(item)) return
 	event.dataTransfer.dropEffect = 'move'
 	dragOverItemId.value = item.id
 }
@@ -3976,7 +4015,10 @@ function onItemDragLeave(_event, item) {
 }
 
 async function onItemDrop(event, targetItem) {
-	if (!draggingItem.value || draggingItem.value.id === targetItem.id) {
+	// `isUnsavedItem(targetItem)`: the drop-target half of the guard in
+	// onItemDragStart — the move would carry `afterItemId: -1788…`, which is not a
+	// row of this card, so the server rejects it with a 400.
+	if (!draggingItem.value || draggingItem.value.id === targetItem.id || isUnsavedItem(targetItem)) {
 		dragOverItemId.value = null
 		return
 	}
@@ -3996,6 +4038,13 @@ async function onItemDrop(event, targetItem) {
 		// Insert before the target → sit after the target's predecessor,
 		// skipping the item being moved (so dragging item #2 onto item #1's top
 		// half lands it at the top, not back where it was).
+		//
+		// The predecessor cannot be an unsaved row, so `afterItemId` cannot carry a
+		// placeholder id: an optimistic row is appended LAST (useChecklist.addItem),
+		// and there is only ever one of them, because the add input is disabled
+		// while `addItem.isPending`. If concurrent creates ever become possible, a
+		// placeholder could sit ahead of a real row and this scan would need the
+		// same isUnsavedItem check the drop target above gets.
 		const ordered = checklistItems.value
 		const targetIdx = ordered.findIndex((i) => i.id === targetItem.id)
 		let predecessor = null
@@ -4569,6 +4618,19 @@ async function handleToggleResolved(topComment) {
 // isn't in the loaded thread (deleted / not yet loaded) - never throws.
 const highlightedCommentId = ref(null)
 let highlightTimer = null
+// The thread pane is still settling when we scroll, and the deferral below can
+// only ever guess at how long that takes. The composer under the thread renders
+// its MarkdownEditor as a LAZY chunk (defineAsyncComponent) behind a much shorter
+// placeholder, so on a slow connection - or a slow machine - the real editor
+// mounts AFTER the scroll and grows, and `.card-modal__thread-scroll` (flex: 1)
+// shrinks by exactly that much. `scrollTop` survives the shrink; the comment we
+// centred does not, and since `scrollHandled` is already latched nothing scrolls
+// again. A reminder or mention link then lands the reader on a nearby comment
+// with no sign that it missed. So the scroll is not a one-shot: the target is
+// re-pinned on every resize of the pane, for exactly as long as the highlight is
+// up (4s) - the window in which the app is still telling the reader "this is the
+// one you came for".
+let threadResizeObserver = null
 
 function parseTargetCommentId() {
 	// Prefer the query the boot handoff set; fall back to a raw location hash so
@@ -4628,12 +4690,44 @@ async function scrollToTargetComment() {
 	await new Promise((r) => requestAnimationFrame(r))
 	await new Promise((r) => requestAnimationFrame(r))
 	el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+	pinTargetWhileThreadSettles(el)
 	highlightedCommentId.value = id
 	if (highlightTimer) clearTimeout(highlightTimer)
 	highlightTimer = setTimeout(() => {
 		highlightedCommentId.value = null
 		highlightTimer = null
+		stopPinningTarget()
 	}, 4000)
+}
+
+/**
+ * Keep `el` centred while the thread pane is still resizing under it.
+ *
+ * Only a RESIZE re-scrolls, so this does not fight the reader: scrolling the
+ * thread by hand does not resize it, and once the composer has settled the
+ * observer stops firing on its own. It is torn down with the highlight either
+ * way, so the correction window is bounded by the same 4s the highlight is.
+ *
+ * @param {HTMLElement} el the deep-linked comment node
+ */
+function pinTargetWhileThreadSettles(el) {
+	if (typeof ResizeObserver === 'undefined') return
+	const scroller = el.closest('.card-modal__thread-scroll')
+	if (!scroller) return
+	stopPinningTarget()
+	threadResizeObserver = new ResizeObserver(() => {
+		// Instant, not smooth: this corrects a scroll that already ran, and a
+		// second animation would be interrupted by the next resize anyway.
+		el.scrollIntoView({ block: 'center' })
+	})
+	threadResizeObserver.observe(scroller)
+}
+
+function stopPinningTarget() {
+	if (threadResizeObserver) {
+		threadResizeObserver.disconnect()
+		threadResizeObserver = null
+	}
 }
 
 // The thread loads async, so wait until comments actually arrive, then scroll.
@@ -5271,6 +5365,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', onDocumentMousedown, true)
 	if (highlightTimer) clearTimeout(highlightTimer)
+	stopPinningTarget()
 })
 
 // The modal shell funnels its X button here, and the backdrop handler above does
@@ -7638,10 +7733,21 @@ body.theme--dark .card-modal,
 .card-modal__checklist-item[data-drag-over='true'] {
 	box-shadow: inset 0 2px 0 var(--color-primary-element);
 }
+/* Still on its optimistic placeholder id: every control that addresses the row
+   by id is inert for this window, so the row reads as pending rather than
+   leaving the user clicking a title that silently does nothing. */
+.card-modal__checklist-item[aria-busy='true'] {
+	opacity: 0.65;
+}
 .card-modal__checklist-drag {
 	display: inline-flex;
 	color: var(--color-border-dark);
 	cursor: grab;
+}
+/* A row still on its optimistic placeholder id can't be reordered yet. */
+.card-modal__checklist-drag[draggable='false'] {
+	cursor: default;
+	opacity: 0.5;
 }
 .card-modal__checklist-checkbox {
 	width: 16px;
@@ -7656,6 +7762,9 @@ body.theme--dark .card-modal,
 	color: var(--color-main-text);
 	cursor: text;
 	word-break: break-word;
+}
+.card-modal__checklist-item-title[aria-disabled='true'] {
+	cursor: default;
 }
 .card-modal__checklist-item-title--done {
 	color: var(--color-text-maxcontrast);
@@ -7726,9 +7835,13 @@ body.theme--dark .card-modal,
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
-.card-modal__step-btn:hover {
+.card-modal__step-btn:hover:not(:disabled) {
 	background: var(--color-background-dark);
 	color: var(--color-main-text);
+}
+.card-modal__step-btn:disabled {
+	cursor: default;
+	opacity: 0.5;
 }
 .card-modal__step-popover {
 	top: calc(100% - 4px);
@@ -7748,9 +7861,13 @@ body.theme--dark .card-modal,
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 }
-.card-modal__checklist-item-delete:hover {
+.card-modal__checklist-item-delete:hover:not(:disabled) {
 	background: var(--color-error);
 	color: #fff;
+}
+.card-modal__checklist-item-delete:disabled {
+	cursor: default;
+	opacity: 0.5;
 }
 .card-modal__checklist-add {
 	display: flex;

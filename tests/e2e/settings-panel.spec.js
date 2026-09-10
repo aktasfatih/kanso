@@ -66,7 +66,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 
 		// ── Escape key closes the panel ───────────────────────────────────────
 		await page.keyboard.press('Escape')
-		await expect(panel).not.toBeVisible({ timeout: 3_000 })
+		await expect(panel).not.toBeVisible()
 	})
 
 	test('close button (×) inside panel header dismisses the panel', async ({ page }) => {
@@ -83,7 +83,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 
 		// Click the close (×) button inside the settings modal header
 		await page.locator('.bs-modal__close').click()
-		await expect(panel).not.toBeVisible({ timeout: 3_000 })
+		await expect(panel).not.toBeVisible()
 	})
 
 	test('Board settings menu item toggles the panel (second invocation closes)', async ({ page }) => {
@@ -106,6 +106,6 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		// menu — its item is hidden while the menu is dismissed — then invoke again.
 		await moreBtn.click()
 		await settingsItem.click()
-		await expect(panel).not.toBeVisible({ timeout: 3_000 })
+		await expect(panel).not.toBeVisible()
 	})
 })

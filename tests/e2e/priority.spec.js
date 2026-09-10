@@ -78,7 +78,7 @@ test.describe('Card priorities', () => {
 			.locator('.card-tile__priority')
 		await expect(priorityBadge).toBeVisible({ timeout: 5000 })
 		// High is priority level 3 - badge should carry the --3 class
-		await expect(priorityBadge).toHaveClass(/card-tile__priority--3/, { timeout: 3000 })
+		await expect(priorityBadge).toHaveClass(/card-tile__priority--3/)
 	})
 
 	test('set Urgent card priority via UI; assert its tile shows urgent indicator', async ({ page }) => {

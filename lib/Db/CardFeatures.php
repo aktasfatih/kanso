@@ -19,11 +19,11 @@ use OCA\Kanso\Service\InvalidInputException;
  *
  * Switching a feature off is a pure PRESENTATION flag: it hides the feature's
  * UI and nothing else. Existing attachments, contact links, GitHub links, time
- * entries and cover colours stay in the database untouched and come back
- * exactly as they were when the feature is re-enabled. There is deliberately no
- * cascade delete anywhere, a running timer is NOT stopped when time tracking is
- * switched off, and historical activity entries ("linked a contact") stay
- * readable.
+ * entries, cover colours and checklist items stay in the database untouched and
+ * come back exactly as they were when the feature is re-enabled. There is
+ * deliberately no cascade delete anywhere, a running timer is NOT stopped when
+ * time tracking is switched off, and historical activity entries ("linked a
+ * contact") stay readable.
  *
  * ## Enforcement: CLIENT-SIDE ONLY (deliberate)
  *
@@ -46,7 +46,8 @@ use OCA\Kanso\Service\InvalidInputException;
  *
  * Only the DISABLED keys are persisted, as a small JSON array
  * (`["attachments","github"]`). NULL / an empty array = everything enabled, so
- * existing boards need no backfill and a sixth feature costs no migration.
+ * existing boards need no backfill and a further feature costs no migration
+ * ({@see self::CHECKLIST}, added after the column shipped, needed none).
  * Unknown keys read back from storage are ignored, so a downgraded instance
  * still renders - but they are NOT preserved: {@see self::encode()} writes only
  * the keys it knows, so the first flip of any switch on a downgraded instance
@@ -58,9 +59,14 @@ final class CardFeatures {
 	public const GITHUB = 'github';
 	public const TIME_TRACKING = 'timeTracking';
 	public const COVER_COLOR = 'coverColor';
+	public const CHECKLIST = 'checklist';
 
 	/**
 	 * Every toggleable key, in the order the board settings UI lists them.
+	 *
+	 * New keys go on the END: this order is what {@see self::encode()} writes and
+	 * what {@see self::decode()} hands the client, so inserting in the middle
+	 * would churn stored values for no gain.
 	 *
 	 * @var string[]
 	 */
@@ -70,6 +76,7 @@ final class CardFeatures {
 		self::GITHUB,
 		self::TIME_TRACKING,
 		self::COVER_COLOR,
+		self::CHECKLIST,
 	];
 
 	/**

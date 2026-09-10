@@ -68,13 +68,107 @@ export function useBoard(id) {
 	// (5s), a slow secondary safety net when push covers realtime (30s, since the
 	// push handler in main.js already delta-syncs on each mutation). Guarded to
 	// never run mid-drag inside syncBoardDelta.
-	const deltaTimer = setInterval(() => {
-		if (isBoardMovePending(id)) {
-			return
+	//
+	// A self-rescheduling timeout, not setInterval, on purpose (#10225):
+	// pushActive() is false until the first push frame proves the socket is
+	// really live, so the cadence has to be re-read on every tick. setInterval
+	// captures its delay once at setup and would pin the board to whatever push
+	// looked like the instant the view mounted - the flag flipping later would
+	// change nothing.
+	//
+	// Hidden tabs don't poll (#10278). Every sibling feed gets this for free from
+	// TanStack's refetchIntervalInBackground=false default (queryKeys.js,
+	// useMyReviews.js, useInbox.js); this loop is hand-rolled, so it has to
+	// implement the same policy itself - a board left open in a background tab
+	// otherwise hits /changes forever, and that tick is NOT free: the endpoint
+	// has no ETag/304 path (BoardController::changes), so every empty poll still
+	// costs a request, an ACL check and a findSince.
+	// Read as `visibilityState`, the same bit main.js:invalidateMyWorkThrottled and
+	// TanStack's own focusManager test, so the whole app agrees on one definition
+	// of "hidden". `typeof document` because the unit rig stubs `window` without a
+	// DOM.
+	const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden'
+	// The one condition this loop owns: a tab nobody is looking at does no work.
+	//
+	// Mid-drag suppression is deliberately NOT duplicated here. syncBoardDelta
+	// refuses at its own entry, which covers this loop and the visibilitychange
+	// handler below alike. A second copy lived here until #10292, and the pair was
+	// worse than either alone: with both in place, deleting EITHER left the whole
+	// realtime suite green, because the other still refused - so neither guard was
+	// pinned by any test. Now the entry check is the one this loop relies on, and
+	// pushLiveness.test.mjs ('the poll survives ticks it skips') reddens if it goes.
+	//
+	// Two further copies of the check exist and are NOT pinned by anything
+	// (measured, not assumed): syncBoardDelta's post-fetch re-check, which covers a
+	// move that starts while the delta is in flight and so is genuinely load-bearing,
+	// and main.js's pre-check on the push path. Neither is touched here - they are
+	// their own follow-up, not a licence to add a third copy back into this file.
+	const shouldSync = () => !isHidden()
+	let deltaTimer = null
+	// The dispose below clears `deltaTimer`, but clearTimeout can only cancel a
+	// timer that is still PENDING. A dispose landing after this callback entered its
+	// `try` and before the `finally` would find nothing to cancel, and the finally
+	// would then arm a fresh timer nothing holds a handle to: an immortal 5s
+	// /changes loop for a board that no longer exists, one per occurrence. No such
+	// path is known today (Vue defers unmount to its scheduler, and the only
+	// synchronous work in the try is an invalidation), but CardDetail and
+	// BoardSettingsModal each compose useBoard per open, so the blast radius if one
+	// ever appears is per-interaction - and the latch is one line (#10292).
+	let stopped = false
+	const scheduleDelta = () => {
+		deltaTimer = setTimeout(() => {
+			// The re-arm is in a `finally` because this loop IS the poll: unlike
+			// setInterval - which fires again regardless of what its callback did -
+			// a single throw here would end the chain for the lifetime of the page
+			// and leave only the 60s refetch. Same reason the skips above are
+			// conditions and not an early return: an early `return` past this
+			// finally would stop the poll for the rest of the session, silently,
+			// for VISIBLE tabs too.
+			try {
+				if (shouldSync()) {
+					syncBoardDelta(queryClient, id)
+				}
+			} finally {
+				if (!stopped) {
+					scheduleDelta()
+				}
+			}
+		}, pushActive() ? 30_000 : 5_000)
+	}
+	scheduleDelta()
+
+	// Catch the tab up on the way back in, for the window nothing else covers.
+	// TanStack's focusManager listens to this same event, so a return already
+	// triggers the query's own refetchOnWindowFocus - but only once the data is
+	// stale, and staleTime is 30s globally (main.js). Hide for 10s and come back
+	// and no refetch fires; without this handler the board would then wait out the
+	// rest of the poll interval. This covers exactly that sub-staleTime gap, and it
+	// covers it as a delta (O(changes)) rather than a full board read.
+	//
+	// visibilitychange fires on hide as well as show, hence the guard inside: only
+	// the transition TO visible does work. And, like the loop above, this is per
+	// useBoard instance - CardDetail's is alive on top of BoardView's while a card
+	// modal is open - so a return costs one delta read per live consumer, all in
+	// one event dispatch with the same cursor. That is the fan-out #10279 measures:
+	// the loop already has it (staggered by mount time instead), it is not made
+	// worse here, and it is not fixed here either.
+	const onVisibilityChange = () => {
+		if (shouldSync()) {
+			syncBoardDelta(queryClient, id)
 		}
-		syncBoardDelta(queryClient, id)
-	}, pushActive() ? 30_000 : 5_000)
-	onScopeDispose(() => clearInterval(deltaTimer))
+	}
+	if (typeof document !== 'undefined') {
+		document.addEventListener('visibilitychange', onVisibilityChange)
+	}
+	onScopeDispose(() => {
+		// Both are needed: the latch stops a re-arm from inside a tick already in
+		// flight, clearTimeout stops the one sitting in the queue.
+		stopped = true
+		clearTimeout(deltaTimer)
+		if (typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', onVisibilityChange)
+		}
+	})
 
 	const createStack = useMutation({
 		mutationFn: (data) => apiCreateStack(data),

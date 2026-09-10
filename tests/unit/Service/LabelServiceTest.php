@@ -116,7 +116,13 @@ class LabelServiceTest extends TestCase {
 				Change::ENTITY_LABEL,
 				7,
 				Change::ACTION_CREATE,
-				'alice'
+				'alice',
+				// The endpoint pushes immediately - it is NOT inside a caller-managed
+				// transaction. Pinned explicitly because PHPUnit ignores actual
+				// arguments beyond the constraints given, so without this the $push
+				// default could flip to false and silence the realtime broadcast for
+				// POST /labels with the whole suite still green.
+				true,
 			)
 			->willReturn(new Change());
 

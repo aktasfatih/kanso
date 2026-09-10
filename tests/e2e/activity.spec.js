@@ -158,9 +158,19 @@ test.describe('Card Activity feed', () => {
 		// One card with MANY activity rows, all authored by the same actor (admin).
 		const stack = await api.send('POST', '/stacks', { boardId: state.boardId, title: 'Storm' })
 		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Storm card' })
+		// 30 seeding round-trips, and they were all awaited one at a time: measured
+		// 43s healthy / 72s on a saturated CI runner, most of it here rather than in
+		// the browser. The comment POST and the priority PATCH within one iteration
+		// touch different rows and neither depends on the other's result, so they go
+		// out together — halving the serial round-trips to 15 without changing what
+		// is seeded. Iterations stay sequential so the priority sequence (and so the
+		// activity rows it generates) is exactly as before; only the comment/patch
+		// interleaving inside an iteration changes, and nothing asserts on that.
 		for (let i = 0; i < 15; i++) {
-			await api.send('POST', `/cards/${card.id}/comments`, { body: `note ${i}` })
-			await api.send('PATCH', `/cards/${card.id}`, { priority: i % 3 })
+			await Promise.all([
+				api.send('POST', `/cards/${card.id}/comments`, { body: `note ${i}` }),
+				api.send('PATCH', `/cards/${card.id}`, { priority: i % 3 }),
+			])
 		}
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
 

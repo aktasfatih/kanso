@@ -195,7 +195,7 @@ test.describe('Search', () => {
 		// Input should be cleared
 		await expect(searchInput).toHaveValue('')
 		// Dropdown should be gone
-		await expect(page.locator('.search-box__dropdown')).not.toBeVisible({ timeout: 3000 })
+		await expect(page.locator('.search-box__dropdown')).not.toBeVisible()
 	})
 
 	test('pressing "/" keyboard shortcut focuses the search box', async ({ page }) => {
@@ -208,6 +208,6 @@ test.describe('Search', () => {
 		await page.keyboard.press('/')
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeFocused({ timeout: 3000 })
+		await expect(searchInput).toBeFocused()
 	})
 })
