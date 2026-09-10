@@ -27,6 +27,15 @@ people read. Two facts drive everything below:
 Every row has at least one test; the ones marked ▲ were additionally verified by
 mutation (break the code, watch the named test fail).
 
+The unit tests drive a scripted IMAP server, so the client was additionally
+checked against a **real Dovecot 2.3** instance with a CA-signed certificate:
+TLS handshake, `LOGIN`, `EXAMINE`, `UID SEARCH` and a literal `UID FETCH` all
+behaved, an RFC 2047 subject and a quoted-printable UTF-8 body came through
+intact, and of three seeded messages only the genuine one became a card — the
+auto-reply and the spam-flagged message were declined. Polling four times, and
+then again with the watermark forcibly rewound to zero, still produced exactly
+one card.
+
 ### Content and privilege
 
 | Threat | Defence |

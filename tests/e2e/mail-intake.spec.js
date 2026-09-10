@@ -11,6 +11,12 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 //
 // That last one is the reason this spec exists rather than an API-level test:
 // the password round-trip is a property of what the *browser* receives.
+// These four are one flow over a single board - save it, read it back, re-save
+// it, remove it - so each depends on the previous one having run. Serial mode
+// keeps them in one worker and in order; without it a run at E2E_WORKERS=2 can
+// start the "reads it back" test before the save has landed.
+test.describe.configure({ mode: 'serial' })
+
 test.describe('Email intake configuration', () => {
 	const state = { boardId: 0, stackId: 0 }
 
@@ -54,22 +60,22 @@ test.describe('Email intake configuration', () => {
 		await body.locator('#bs-mail-folder').fill('INBOX')
 		await body.locator('select').last().selectOption(String(state.stackId))
 
-		// Capture what the server sends back for the save AND for the reload.
-		const responses = []
-		page.on('response', async (res) => {
-			if (res.url().includes('/mail-intake')) {
-				responses.push(await res.text().catch(() => ''))
-			}
-		})
-
-		await body.getByRole('button', { name: /^Save$/ }).click()
+		// waitForResponse rather than a page.on('response') collector: the handler
+		// form has to await res.text(), so the assertion can run before the body
+		// has been read and see an empty array. This ties the capture to the click.
+		const [saveResponse] = await Promise.all([
+			page.waitForResponse(
+				(r) => r.url().includes('/mail-intake') && r.request().method() === 'PUT',
+				{ timeout: 15_000 },
+			),
+			body.getByRole('button', { name: /^Save$/ }).click(),
+		])
 		await expect(body.getByText(/Saved\./)).toBeVisible({ timeout: 8_000 })
 
 		// The credential must not travel back to the browser in any form.
-		for (const payload of responses) {
-			expect(payload).not.toContain('super-secret-value')
-		}
-		expect(responses.join('')).toContain('hasPassword')
+		const payload = await saveResponse.text()
+		expect(payload).not.toContain('super-secret-value')
+		expect(payload).toContain('hasPassword')
 	})
 
 	test('a saved mailbox reloads without the password and keeps it on re-save', async ({ page }) => {
