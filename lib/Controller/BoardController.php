@@ -79,8 +79,19 @@ class BoardController extends Controller {
 	 * rules (`acl`), the requesting user's own permission bits and card
 	 * SUMMARIES (no descriptions - those load on card open; each summary
 	 * carries its labelIds and assigneeIds). The board's latest change id
-	 * doubles as ETag: on an If-None-Match hit we return 304 before touching
-	 * the stack/card/label/assignee/acl tables at all.
+	 * doubles as ETag: on an If-None-Match hit we return 304 without assembling
+	 * any of that - no stack, card, label, assignee or acl PAYLOAD is built.
+	 * (The viewer's own acl context is still resolved first, below: it gates the
+	 * read, and the answer depends on who is asking. It is one small acl read,
+	 * not the board.)
+	 *
+	 * The client half of the bargain lives in `src/services/api.js`
+	 * (`fetchBoard`), which replays the validator whenever it re-reads a board it
+	 * already holds and serves its cached payload on the 304. Without a caller
+	 * replaying it this branch is unreachable in production, so the browser-level
+	 * proof is `tests/e2e/board-etag.spec.js`; the controller tests in
+	 * `tests/unit/Controller/BoardControllerTest.php` set the request header
+	 * themselves and so cannot show it.
 	 */
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {

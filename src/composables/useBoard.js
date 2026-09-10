@@ -44,7 +44,18 @@ export function useBoard(id) {
 		}),
 		queryFn: async () => {
 			const boardId = typeof id === 'object' ? id.value : id
-			const data = await fetchBoard(boardId)
+			// Conditional read (speed bet #4): hand fetchBoard the payload we
+			// already hold so it can replay this board's ETag. On a 304 it gives
+			// that same object back, and the re-read costs an ACL check and a
+			// MAX(id) instead of the whole stacks + cards + labels assembly.
+			// The reads this pays off on are the ones that re-fetch a board
+			// nothing has changed: coming back to a board left for longer than
+			// staleTime, a tab regaining focus, a delta resync, a mutation that
+			// failed. Passing the cache entry in (rather than fetchBoard reaching
+			// for it) is what keeps the "never overwrite a rendered board with an
+			// empty 304 body" guarantee inside one function; see services/api.js.
+			const previous = queryClient.getQueryData(boardKey.value)
+			const data = await fetchBoard(boardId, previous)
 			// Seed / re-seed the delta-sync cursor from the board payload's
 			// latest change id, so the delta poll can advance from here (#3675).
 			seedCursor(boardId, data.cursor)
