@@ -37,6 +37,48 @@ class MailHostGuard {
 	public const APP_ID = 'kanso';
 	public const KEY_ALLOW_PRIVATE = 'mail_intake_allow_private_hosts';
 
+	/**
+	 * Ranges the server must never dial, whatever the admin has opted into.
+	 *
+	 * These are matched EXPLICITLY rather than through `filter_var`'s
+	 * `FILTER_FLAG_NO_RES_RANGE`, because that flag's answer depends on the PHP
+	 * version: PHP 8.2 rejects `2001:db8::1` as reserved and PHP 8.5 accepts it.
+	 * A security control whose verdict changes when the runtime is upgraded is
+	 * not a control, so the list is spelled out here and compared bit by bit.
+	 *
+	 * Covers loopback, the unspecified address, link-local (which is where
+	 * 169.254.169.254, the cloud metadata endpoint, lives), carrier-grade NAT,
+	 * IETF protocol assignments, benchmarking, multicast and the reserved
+	 * top block.
+	 */
+	private const ALWAYS_BLOCKED = [
+		// IPv4
+		'0.0.0.0/8',
+		'127.0.0.0/8',
+		'100.64.0.0/10',
+		'169.254.0.0/16',
+		'192.0.0.0/24',
+		'198.18.0.0/15',
+		'224.0.0.0/4',
+		'240.0.0.0/4',
+		// IPv6
+		'::/128',
+		'::1/128',
+		'fe80::/10',
+		'ff00::/8',
+	];
+
+	/**
+	 * Ranges an admin can opt into with {@see KEY_ALLOW_PRIVATE} - the "our IMAP
+	 * server is on the LAN" case, and nothing beyond it.
+	 */
+	private const PRIVATE_RANGES = [
+		'10.0.0.0/8',
+		'172.16.0.0/12',
+		'192.168.0.0/16',
+		'fc00::/7',
+	];
+
 	public function __construct(
 		private IConfig $config,
 	) {
@@ -115,86 +157,89 @@ class MailHostGuard {
 	 * @throws ImapException if the address is one the server must not dial
 	 */
 	private function assertAddressAllowed(string $address, bool $allowPrivate): void {
-		if (filter_var($address, FILTER_VALIDATE_IP) === false) {
+		$packed = @inet_pton($address);
+		if ($packed === false) {
 			throw new ImapException('Mail server host resolved to an invalid address');
 		}
 
-		if ($allowPrivate) {
-			// Even with the opt-in, loopback stays blocked: there is no legitimate
-			// "my IMAP server is the Nextcloud process itself", and it is the most
-			// useful address to an attacker (admin panels bound to 127.0.0.1).
-			if ($this->isLoopback($address)) {
-				throw new ImapException('Mail server host resolves to a loopback address');
+		// An IPv4-mapped IPv6 address (::ffff:127.0.0.1) is an IPv4 address in a
+		// costume; unwrap it so it is judged by the IPv4 rules rather than
+		// sliding past them as "some IPv6 address".
+		$packed = $this->unwrapMappedV4($packed);
+
+		foreach (self::ALWAYS_BLOCKED as $range) {
+			if ($this->inRange($packed, $range)) {
+				throw new ImapException(
+					'Mail server host resolves to a restricted address (' . $address . ')'
+				);
 			}
+		}
+
+		if ($allowPrivate) {
+			// The opt-in covers RFC 1918 / ULA only. Loopback, link-local and the
+			// rest stayed blocked above: there is no legitimate "my IMAP server is
+			// the Nextcloud process itself", and loopback is where admin panels bind.
 			return;
 		}
 
-		// NO_PRIV_RANGE covers RFC 1918 and fc00::/7; NO_RES_RANGE covers
-		// loopback, link-local, 0.0.0.0/8 and the reserved blocks.
-		$public = filter_var(
-			$address,
-			FILTER_VALIDATE_IP,
-			FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
-		);
-		if ($public === false) {
-			throw new ImapException(
-				'Mail server host resolves to a private or reserved address ('
-				. $address
-				. '). An administrator can allow this with the mail_intake_allow_private_hosts app setting.'
-			);
+		foreach (self::PRIVATE_RANGES as $range) {
+			if ($this->inRange($packed, $range)) {
+				throw new ImapException(
+					'Mail server host resolves to a private or reserved address ('
+					. $address
+					. '). An administrator can allow this with the mail_intake_allow_private_hosts app setting.'
+				);
+			}
 		}
-
-		// Belt and braces for the ranges PHP's filter has historically been
-		// inconsistent about across versions, and the ones that matter most:
-		// the cloud metadata address and IPv4-mapped IPv6.
-		if ($this->isLoopback($address) || $this->isLinkLocal($address) || $this->isMappedV4($address)) {
-			throw new ImapException('Mail server host resolves to a restricted address (' . $address . ')');
-		}
-	}
-
-	private function isLoopback(string $address): bool {
-		if (str_starts_with($address, '127.')) {
-			return true;
-		}
-		$packed = @inet_pton($address);
-		return $packed !== false && $packed === @inet_pton('::1');
-	}
-
-	private function isLinkLocal(string $address): bool {
-		// 169.254.0.0/16 - includes 169.254.169.254, the cloud metadata endpoint.
-		if (str_starts_with($address, '169.254.')) {
-			return true;
-		}
-		// fe80::/10
-		$lower = strtolower($address);
-		return str_starts_with($lower, 'fe8')
-			|| str_starts_with($lower, 'fe9')
-			|| str_starts_with($lower, 'fea')
-			|| str_starts_with($lower, 'feb');
 	}
 
 	/**
-	 * ::ffff:127.0.0.1 and friends - an IPv4 address wearing an IPv6 costume,
-	 * which some validators wave through.
+	 * `::ffff:a.b.c.d` -> the packed 4-byte form of `a.b.c.d`. Anything else is
+	 * returned unchanged.
 	 */
-	private function isMappedV4(string $address): bool {
-		$lower = strtolower($address);
-		if (!str_contains($lower, ':') || !str_contains($lower, '.')) {
+	private function unwrapMappedV4(string $packed): string {
+		if (strlen($packed) !== 16) {
+			return $packed;
+		}
+		// 80 zero bits then 16 one bits is the IPv4-mapped prefix.
+		if (substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
+			return substr($packed, 12, 4);
+		}
+		return $packed;
+	}
+
+	/**
+	 * Whether a packed address falls inside `<address>/<prefix>`. Compares whole
+	 * bytes then the remaining bits, so it is exact rather than a string prefix
+	 * match on the textual form (which is what makes '169.254.' style checks
+	 * miss things like '::ffff:169.254.169.254').
+	 */
+	private function inRange(string $packed, string $cidr): bool {
+		$parts = explode('/', $cidr, 2);
+		$networkPacked = @inet_pton($parts[0]);
+		if ($networkPacked === false) {
 			return false;
 		}
-		$lastColon = strrpos($lower, ':');
-		if ($lastColon === false) {
+		// An IPv4 address is never inside an IPv6 range, and vice versa.
+		if (strlen($networkPacked) !== strlen($packed)) {
 			return false;
 		}
-		$tail = substr($lower, $lastColon + 1);
-		if (filter_var($tail, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+
+		// A bare address with no prefix means that single host, not "everything":
+		// the entries above all carry a prefix, and defaulting the other way
+		// would turn a typo into a rule that matches the whole internet.
+		$bits = isset($parts[1]) ? (int)$parts[1] : strlen($networkPacked) * 8;
+		$wholeBytes = intdiv($bits, 8);
+		$remainingBits = $bits % 8;
+
+		if ($wholeBytes > 0 && strncmp($packed, $networkPacked, $wholeBytes) !== 0) {
 			return false;
 		}
-		// Judge the embedded IPv4 on its own merits.
-		return filter_var(
-			$tail,
-			FILTER_VALIDATE_IP,
-			FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
-		) === false;
+		if ($remainingBits === 0) {
+			return true;
+		}
+
+		$mask = 0xFF << (8 - $remainingBits) & 0xFF;
+		return (ord($packed[$wholeBytes]) & $mask) === (ord($networkPacked[$wholeBytes]) & $mask);
 	}
 }

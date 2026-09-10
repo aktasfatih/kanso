@@ -49,10 +49,17 @@ class MailHostGuardTest extends TestCase {
 			'link-local v6' => ['fe80::1'],
 			'unique local v6' => ['fd00::1'],
 			'unspecified' => ['0.0.0.0'],
+			'unspecified v6' => ['::'],
+			'multicast v4' => ['224.0.0.1'],
+			'multicast v6' => ['ff02::1'],
+			'carrier-grade NAT' => ['100.64.0.1'],
+			'benchmarking' => ['198.18.0.1'],
+			'reserved top block' => ['240.0.0.1'],
 			// An IPv4 address wearing an IPv6 costume, which some validators wave
 			// through.
 			'ipv4-mapped loopback' => ['::ffff:127.0.0.1'],
 			'ipv4-mapped private' => ['::ffff:10.0.0.51'],
+			'ipv4-mapped metadata' => ['::ffff:169.254.169.254'],
 		];
 	}
 
@@ -69,7 +76,36 @@ class MailHostGuardTest extends TestCase {
 	}
 
 	public function testAllowsAPublicIpv6Address(): void {
-		self::assertSame('2001:db8::1', $this->guard()->resolve('2001:db8::1'));
+		// A genuinely routable address. NOT 2001:db8::1 - that is the RFC 3849
+		// documentation prefix, and whether filter_var calls it "reserved"
+		// changes between PHP 8.2 and 8.5, which is exactly the version-dependent
+		// behaviour the guard now avoids by matching ranges itself.
+		self::assertSame('2606:4700:4700::1111', $this->guard()->resolve('2606:4700:4700::1111'));
+	}
+
+	public function testBoundariesOfBlockedRangesAreExact(): void {
+		$guard = $this->guard();
+
+		// 172.16/12 ends at 172.31.255.255, so its neighbours are public. A
+		// string-prefix check ('172.16.') would get these wrong in both
+		// directions.
+		self::assertSame('172.15.0.1', $guard->resolve('172.15.0.1'));
+		self::assertSame('172.32.0.1', $guard->resolve('172.32.0.1'));
+		// 100.64/10 ends at 100.127.255.255.
+		self::assertSame('100.128.0.1', $guard->resolve('100.128.0.1'));
+	}
+
+	public function testJustInsideABlockedRangeIsStillBlocked(): void {
+		$guard = $this->guard();
+		$refused = 0;
+		foreach (['172.16.0.0', '172.31.255.255', '100.64.0.0', '100.127.255.255'] as $address) {
+			try {
+				$guard->resolve($address);
+			} catch (ImapException) {
+				$refused++;
+			}
+		}
+		self::assertSame(4, $refused, 'every edge of a blocked range must be refused');
 	}
 
 	public function testAdminOptInAllowsPrivateRanges(): void {
