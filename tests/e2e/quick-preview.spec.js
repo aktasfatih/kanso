@@ -6,7 +6,7 @@
 // Space typing-guard must hold so a space typed in the composer still inserts a
 // space (never opens a preview).
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, collectConsoleErrors } from './helpers.js'
 
 const DESC = 'Peekaboo description text for the quick look preview.'
 const DESC_B = 'Beta body content that only the second card shows.'
@@ -32,10 +32,20 @@ test.describe('Quick-look preview (Space)', () => {
 	 * keypress sent before the card summaries have rendered is swallowed. Waiting
 	 * for both seeded tiles makes that precondition explicit.
 	 *
+	 * `onLoggedIn` runs in the one window that matters for console assertions:
+	 * after `ncLogin`, before the board is fetched. `ncLogin` goes via
+	 * /index.php/login, which with a live session redirects through the Nextcloud
+	 * DASHBOARD, where every other installed app mounts a widget and logs its own
+	 * errors — none of which this spec asserts about. Attaching there keeps the
+	 * board's own load inside the assertion while leaving the login detour out of
+	 * it by construction (see collectConsoleErrors() in helpers.js).
+	 *
 	 * @param {import('@playwright/test').Page} page the page under test
+	 * @param {{onLoggedIn?: (page: import('@playwright/test').Page) => void}} [hooks]
 	 */
-	async function openBoard(page) {
+	async function openBoard(page, { onLoggedIn } = {}) {
 		await ncLogin(page)
+		onLoggedIn?.(page)
 		await page.goto(state.boardUrl)
 		await expect(page.locator('.stack-column').first()).toBeVisible({ timeout: 30_000 })
 		await expect(page.locator('.card-tile')).toHaveCount(2, { timeout: 30_000 })
@@ -148,12 +158,16 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('open preview follows keyboard selection and re-anchors to the new tile (#3908)', async ({ page }) => {
-		const errors = []
-		page.on('console', (msg) => {
-			if (msg.type() === 'error') errors.push(msg.text())
-		})
-
-		await openBoard(page)
+		// Collected from inside openBoard(), after the login and before the board
+		// loads. The old collector was attached before ncLogin and filtered nothing
+		// at all, so it asserted on every console error of every page the test
+		// touched — including the post-login dashboard, where CI produced "could not
+		// load recommendation preview Event" + a 404 from /apps/recommendations/js/.
+		// collectConsoleErrors() keys on the message's source bundle instead of on an
+		// allowlist of message strings, so an unrelated app rewording its own logging
+		// cannot rot this — while Kanso's own errors still fail the assertion.
+		let errors = []
+		await openBoard(page, { onLoggedIn: (p) => { errors = collectConsoleErrors(p) } })
 
 		// Focus the first card (Alpha) and Space to open the preview on it.
 		await page.keyboard.press('ArrowDown')
