@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nenhum —"
 
-#: src/components/BoardSettingsModal.vue:4367
+#: src/components/BoardSettingsModal.vue:4389
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n vez"
@@ -2055,6 +2055,10 @@ msgstr "Informe uma duração, ex.: 1h 30m."
 msgid "Enter a name."
 msgstr "Informe um nome."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Enter the password again for the new server or account"
+msgstr ""
+
 #: src/components/CardPreview.vue
 msgid "Enter to open · Esc to close"
 msgstr "Enter para abrir · Esc para fechar"
@@ -2100,25 +2104,25 @@ msgstr "a cada"
 msgid "Every"
 msgstr "A cada"
 
-#: src/components/BoardSettingsModal.vue:4347
+#: src/components/BoardSettingsModal.vue:4369
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Todo dia"
 msgstr[1] "A cada %n dias"
 
-#: src/components/BoardSettingsModal.vue:4357
+#: src/components/BoardSettingsModal.vue:4379
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Todo mês"
 msgstr[1] "A cada %n meses"
 
-#: src/components/BoardSettingsModal.vue:4349
+#: src/components/BoardSettingsModal.vue:4371
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Toda semana"
 msgstr[1] "A cada %n semanas"
 
-#: src/components/BoardSettingsModal.vue:4359
+#: src/components/BoardSettingsModal.vue:4381
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Todo ano"

@@ -251,6 +251,54 @@ class MailIntakeServiceTest extends TestCase {
 		$this->save(password: null);
 	}
 
+	public function testStoredPasswordCannotBeCarriedOverToADifferentServer(): void {
+		$existing = $this->config();
+		$this->expectBoardAndStackResolve();
+		$this->mapper->method('findByBoard')->willReturn($existing);
+		$this->mapper->expects(self::never())->method('update');
+
+		// Otherwise a manager who never knew the credential repoints the mailbox
+		// at a host they control, leaves the password blank, and the next
+		// connection hands them the password.
+		$this->expectException(InvalidInputException::class);
+		$this->save(password: null, host: 'evil.attacker.test');
+	}
+
+	public function testStoredPasswordCannotBeCarriedOverToADifferentAccount(): void {
+		$existing = $this->config();
+		$this->expectBoardAndStackResolve();
+		$this->mapper->method('findByBoard')->willReturn($existing);
+
+		$this->expectException(InvalidInputException::class);
+		$this->save(password: null, username: 'someone-else@example.com');
+	}
+
+	public function testChangingTheServerIsAllowedWhenThePasswordIsSuppliedAgain(): void {
+		$existing = $this->config();
+		$this->expectBoardAndStackResolve();
+		$this->mapper->method('findByBoard')->willReturn($existing);
+		$this->mapper->method('update')->willReturnCallback(static fn (MailIntake $c): MailIntake => $c);
+
+		$saved = $this->save(password: 'new-password', host: 'imap.newhost.example');
+
+		self::assertSame('imap.newhost.example', $saved->getHost());
+		self::assertSame('enc:new-password', $saved->getPassword());
+	}
+
+	public function testChangingOnlyTheFolderStillKeepsTheStoredPassword(): void {
+		$existing = $this->config();
+		$this->expectBoardAndStackResolve();
+		$this->mapper->method('findByBoard')->willReturn($existing);
+		$this->mapper->method('update')->willReturnCallback(static fn (MailIntake $c): MailIntake => $c);
+
+		// Same server, same account - nothing to steal, so forcing a re-type here
+		// would be friction with no security benefit.
+		$saved = $this->save(password: null, mailbox: 'Archive');
+
+		self::assertSame('Archive', $saved->getMailbox());
+		self::assertSame('enc:secret', $saved->getPassword());
+	}
+
 	public function testSaveConfigRejectsAnOutOfRangePort(): void {
 		$this->expectBoardAndStackResolve();
 

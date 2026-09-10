@@ -62,6 +62,7 @@ one card.
 |---|---|
 | Credential readable at rest | `ICrypto`-encrypted (NC's server-secret cipher). |
 | Credential leaking outward | Absent from `jsonSerialize` (`hasPassword` instead); login-failure text replaced wholesale, since servers echo the command back; the configured username is scrubbed out of any stored error. |
+| **Credential theft by repointing the mailbox** — a manager who never knew the password could edit an existing config to a host they control, leave the password field blank (which means "keep the stored one") and have the next connection hand them the credential. MANAGE on the board was the only thing needed. | A stored password is only ever carried over to the **same host and account**. Changing either requires typing it again. Changing just the folder does not — same server, same account, nothing to steal. |
 | Credential outliving its mailbox | Deleting the config removes the row and its dedupe keys. |
 | Undecryptable credential after a server-secret change | Reported as "re-enter it" rather than a generic failure. |
 
@@ -113,7 +114,14 @@ These are accepted, not solved. They are properties of the feature as specified.
   detect this, so the option is off by default and the admin doc states the
   requirement.
 - **A board manager still chooses the mail server.** The SSRF guard restricts
-  *where*, not *whether*. A manager can still point intake at any public host.
+  *where*, not *whether*. A manager can still point intake at any public host —
+  with a password they supply themselves, since a stored one cannot be carried
+  to a different server.
+- **A Nextcloud server administrator can recover the password.** `ICrypto` keys
+  off the instance secret in `config.php`, so anyone holding both the database
+  and that file can decrypt it. This is the same guarantee Nextcloud gives its
+  own external-storage credentials, and it is why the docs say to use a
+  dedicated mailbox rather than a personal account.
 - **Content is unverified text.** A phishing mail that clears the filters still
   becomes a card with a clickable link. The provenance line is the mitigation;
   it is not a content filter.

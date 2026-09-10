@@ -116,6 +116,23 @@ the address and nothing happened, look there first.
 - `@name` in an email does **not** notify that person. Only mentions typed by a
   real user in Kanso do.
 
+## Who can see these settings
+
+Only people with **manage** permission on the board. Ordinary members — read or
+edit — cannot see the mail server, the account name, or that intake exists at
+all; the endpoint returns "Access denied" to them.
+
+**Nobody gets the password back, not even a manager.** It is stored encrypted
+and the settings screen only reports that one is saved, which is why the field
+comes up blank when you reopen the form. Leaving it blank keeps the stored
+password; you only have to retype it if you change the mail server or the
+account, because a saved password is never carried across to a different server.
+
+The password is not included in board exports or backups. A Nextcloud server
+administrator can still recover it from the database and `config.php`, the same
+way they can any external-storage credential — another reason to use a mailbox
+that exists only for this.
+
 ## Administration
 
 ### Mail servers on your local network

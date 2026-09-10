@@ -1529,7 +1529,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									class="github-webhook__input"
 									type="password"
 									autocomplete="new-password"
-									:placeholder="mailIntake.hasPassword ? t('kanso', 'Password stored — leave blank to keep it') : t('kanso', 'Password')"
+									:placeholder="mailIntakePasswordPlaceholder"
 									:disabled="mailIntakeBusy">
 							</div>
 
@@ -2635,9 +2635,31 @@ function emptyMailIntakeForm() {
 
 const mailIntakeCanSave = computed(() => {
 	const f = mailIntakeForm.value
-	// A first save needs a password; later saves may reuse the stored one.
-	const hasCredential = f.password.trim() !== '' || mailIntake.value.hasPassword
+	// A first save needs a password; later saves may reuse the stored one - but
+	// only for the same server and account (see mailIntakeCredentialTargetChanged).
+	const hasCredential = f.password.trim() !== ''
+		|| (mailIntake.value.hasPassword && !mailIntakeCredentialTargetChanged.value)
 	return f.host.trim() !== '' && f.username.trim() !== '' && f.stackId !== '' && hasCredential
+})
+
+// A stored password is only reusable for the SAME server and account - moving
+// either one means retyping it, so that a manager cannot repoint the mailbox at
+// a host they control and collect the credential. Say so in the field itself
+// rather than letting the save fail with a message.
+const mailIntakeCredentialTargetChanged = computed(() => {
+	if (!mailIntake.value.hasPassword) return false
+	return mailIntakeForm.value.host.trim() !== (mailIntake.value.host || '')
+		|| mailIntakeForm.value.username.trim() !== (mailIntake.value.username || '')
+})
+
+const mailIntakePasswordPlaceholder = computed(() => {
+	if (mailIntakeCredentialTargetChanged.value) {
+		return t('kanso', 'Enter the password again for the new server or account')
+	}
+	if (mailIntake.value.hasPassword) {
+		return t('kanso', 'Password stored — leave blank to keep it')
+	}
+	return t('kanso', 'Password')
 })
 
 const formatMailIntakeLastRun = computed(() => {

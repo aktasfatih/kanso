@@ -215,6 +215,18 @@ class MailIntakeService {
 			if ($existing === null || $existing->getPassword() === '') {
 				throw new InvalidInputException('Mail account password is required');
 			}
+			// A stored password may only be carried over to the SAME server and
+			// account. Otherwise a board manager who never knew the credential
+			// could repoint an existing config at a host they control, leave the
+			// password field blank, and have the next connection hand them the
+			// password - credential theft needing nothing but MANAGE on the board.
+			// Changing only the folder is exempt: same server, same account,
+			// nothing to steal.
+			if ($existing->getHost() !== $host || $existing->getUsername() !== $username) {
+				throw new InvalidInputException(
+					'Enter the mailbox password again when you change the mail server or account'
+				);
+			}
 		}
 
 		$entity = $existing ?? new MailIntake();

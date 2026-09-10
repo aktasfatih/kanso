@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4367
+#: src/components/BoardSettingsModal.vue:4389
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -2041,6 +2041,10 @@ msgstr "请输入时长，例如 1h 30m。"
 msgid "Enter a name."
 msgstr "请输入名称。"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Enter the password again for the new server or account"
+msgstr ""
+
 #: src/components/CardPreview.vue
 msgid "Enter to open · Esc to close"
 msgstr "Enter 打开 · Esc 关闭"
@@ -2086,22 +2090,22 @@ msgstr "每"
 msgid "Every"
 msgstr "每"
 
-#: src/components/BoardSettingsModal.vue:4347
+#: src/components/BoardSettingsModal.vue:4369
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
 
-#: src/components/BoardSettingsModal.vue:4357
+#: src/components/BoardSettingsModal.vue:4379
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4349
+#: src/components/BoardSettingsModal.vue:4371
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4359
+#: src/components/BoardSettingsModal.vue:4381
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
