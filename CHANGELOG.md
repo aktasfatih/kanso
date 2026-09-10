@@ -11,6 +11,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.28.0](https://github.com/aktasfatih/kanso/compare/v0.27.0...v0.28.0) (2026-09-10)
+
+
+### Bug Fixes
+
+* **mail:** decide blocked mail-server addresses without depending on the PHP version ([0beb45e](https://github.com/aktasfatih/kanso/commit/0beb45eb9ed4851114a96ef031693f4d98d77e14))
+* **mail:** let the email-intake booleans be nullable so Nextcloud 32 installs ([77a23ea](https://github.com/aktasfatih/kanso/commit/77a23ea34eed954d5950443639ccc3d0a7294b1b))
+* **mail:** require the mailbox password again when the server or account changes ([b0da391](https://github.com/aktasfatih/kanso/commit/b0da391e6eab64499bca673d2f6fb7c2b663062e))
+
+
+### Features
+
+* **mail:** create cards by sending email to a board ([d7e4965](https://github.com/aktasfatih/kanso/commit/d7e49655a76db51d55e636cc6d16ca2c09ce44e7))
+
 # [0.27.0](https://github.com/aktasfatih/kanso/compare/v0.26.0...v0.27.0) (2026-09-10)
 
 
