@@ -624,6 +624,25 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(7, $rule->getId());
 	}
 
+	/**
+	 * The "recurring" badge on a card tile is a card-SUMMARY field derived from the
+	 * board's enabled rules, so creating a rule changes the board payload. The rule
+	 * lives in its own table and nothing else touches the change log on this path,
+	 * so without the row the badge would never reach an already-open board.
+	 */
+	public function testCreateLogsACardChangeForTheTemplatesRecurringBadge(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('insert')->willReturnArgument(0);
+
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 10, Change::ACTION_UPDATE, 'alice');
+
+		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', RecurRule::POLICY_AT_OCCURRENCE, 0, false, 'alice');
+	}
+
 	public function testCreateIsNotImmediatelyDue(): void {
 		// Regression for #80. A card set to repeat "Yearly" should sit quietly for a
 		// year. The bug was that a brand-new rule was ready to fire straight away, so
@@ -723,6 +742,11 @@ class RecurrenceServiceTest extends TestCase {
 		$this->permissionService->method('assertPermission')
 			->willThrowException(new NotPermittedException());
 		$this->ruleMapper->expects(self::never())->method('insert');
+		// A refused caller must leave the change log alone: a row here would move the
+		// board ETag (and wake every client) for a mutation that never happened.
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->create(1, 10, 5, RecurRule::MODE_CLONE, 'FREQ=DAILY', 0, 0, false, 'bob');
@@ -1048,6 +1072,39 @@ class RecurrenceServiceTest extends TestCase {
 		$this->ruleMapper->expects(self::once())->method('delete')->with($rule)->willReturnArgument(0);
 
 		$this->service->delete(3, 'alice');
+	}
+
+	/**
+	 * Deleting the rule clears the template's "recurring" badge - the same
+	 * card-summary flip as create(), in reverse, and just as invisible without a
+	 * change row.
+	 */
+	public function testDeleteLogsACardChangeForTheClearedBadge(): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->ruleMapper->method('delete')->willReturnArgument(0);
+
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 10, Change::ACTION_UPDATE, 'alice');
+
+		$this->service->delete(3, 'alice');
+	}
+
+	public function testDeleteWithoutManageLogsNothing(): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->ruleMapper->expects(self::never())->method('delete');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->delete(3, 'bob');
 	}
 
 	// ---- spawn CLONE ------------------------------------------------------
@@ -2385,6 +2442,76 @@ class RecurrenceServiceTest extends TestCase {
 
 		self::assertSame(11, $rule->getTemplateCardId());
 		self::assertSame($newStart, $rule->getNextOccurrenceAt());
+	}
+
+	// ---- update() must log the card-summary badge it flips ------------------
+
+	/**
+	 * Switching a rule off (or on) flips the template's "recurring" badge, which is
+	 * part of the board payload - so the edit has to land in the change log or open
+	 * clients keep showing the old badge until an unrelated mutation bumps the board.
+	 */
+	public function testUpdateLogsACardChangeForItsTemplate(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->wireUpdate($rule);
+
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 10, Change::ACTION_UPDATE, 'alice');
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+
+		$this->service->update(3, null, null, null, null, null, null, null, false, 'alice');
+	}
+
+	/**
+	 * Re-pointing the rule moves the badge: the NEW card gains it and the OLD one
+	 * loses it, so both need a row. They are on the same board (validate() enforces
+	 * it), so the two rows share ONE push - a template switch is a single board
+	 * event, not two wake-ups for every participant.
+	 */
+	public function testUpdateRepointingLogsBothCardsButPushesOnce(): void {
+		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW + 86400);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('find')->willReturnMap([
+			[10, $this->templateCard()],
+			[11, $this->templateCard(11)],
+		]);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->ruleMapper->method('update')->willReturnArgument(0);
+
+		$logged = [];
+		$this->changeNotifier->expects(self::exactly(2))
+			->method('recordChange')
+			->willReturnCallback(function (int $boardId, int $entityType, int $entityId, int $action, ?string $actor) use (&$logged): Change {
+				self::assertSame(1, $boardId);
+				self::assertSame(Change::ENTITY_CARD, $entityType);
+				self::assertSame(Change::ACTION_UPDATE, $action);
+				self::assertSame('alice', $actor);
+				$logged[] = $entityId;
+				return new Change();
+			});
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+
+		$this->service->update(3, 11, null, null, null, null, null, null, null, 'alice');
+
+		sort($logged);
+		self::assertSame([10, 11], $logged);
+	}
+
+	public function testUpdateWithoutManageLogsNothing(): void {
+		$rule = $this->rule();
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->ruleMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(3, null, null, null, null, null, null, null, false, 'bob');
 	}
 
 	/**

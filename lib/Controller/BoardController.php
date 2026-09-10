@@ -78,20 +78,40 @@ class BoardController extends Controller {
 	 * Full board payload: the board, its stacks, its labels, its sharing
 	 * rules (`acl`), the requesting user's own permission bits and card
 	 * SUMMARIES (no descriptions - those load on card open; each summary
-	 * carries its labelIds and assigneeIds). The board's latest change id
-	 * doubles as ETag: on an If-None-Match hit we return 304 without assembling
-	 * any of that - no stack, card, label, assignee or acl PAYLOAD is built.
-	 * (The viewer's own acl context is still resolved first, below: it gates the
-	 * read, and the answer depends on who is asking. It is one small acl read,
-	 * not the board.)
+	 * carries its labelIds and assigneeIds). On an If-None-Match hit we return
+	 * 304 without assembling any of that - no stack, card, label, assignee or
+	 * acl PAYLOAD is built. (The viewer's own acl context is still resolved
+	 * first, below: it gates the read, and the answer depends on who is asking.
+	 * It is one small acl read, not the board.)
+	 *
+	 * The validator is NOT the board's latest change id alone (#10384). This
+	 * response is viewer-scoped - `permissions` and `role` are folded from the
+	 * ACL rows that address this uid, directly or through one of their NEXTCLOUD
+	 * GROUPS - and a group membership changes in Nextcloud, outside every Kanso
+	 * write path, so it appends no `kanso_changes` row and cannot move a
+	 * change-id validator. A user dropped from a group that granted them EDIT
+	 * would keep revalidating, keep getting 304, and keep rendering the bits
+	 * they no longer hold, for as long as the board stayed open. So the ETag is
+	 * `<latest change id>-<this viewer's permission mask>-<this viewer's role>`:
+	 * the board-global part still covers every content change, and the
+	 * viewer-scoped part covers the membership changes nothing else can see.
+	 * Full revocation is already handled a line earlier - BoardService::find
+	 * throws before any of this - but a partial one (a user in two groups losing
+	 * the wider grant) is exactly what this catches.
+	 *
+	 * The cost is one extra `getPermissions()` on the 304 path: one indexed acl
+	 * read plus the group-id lookup the read gate has already warmed. The 200
+	 * path pays nothing - the mask is reused in the payload below.
 	 *
 	 * The client half of the bargain lives in `src/services/api.js`
 	 * (`fetchBoard`), which replays the validator whenever it re-reads a board it
-	 * already holds and serves its cached payload on the 304. Without a caller
-	 * replaying it this branch is unreachable in production, so the browser-level
-	 * proof is `tests/e2e/board-etag.spec.js`; the controller tests in
-	 * `tests/unit/Controller/BoardControllerTest.php` set the request header
-	 * themselves and so cannot show it.
+	 * already holds and serves its cached payload on the 304. It reads the
+	 * validator off the payload's own `etag` field rather than rebuilding it
+	 * from `cursor`, which is why that field ships in the body at all. Without a
+	 * caller replaying it this branch is unreachable in production, so the
+	 * browser-level proof is `tests/e2e/board-etag.spec.js`; the controller
+	 * tests in `tests/unit/Controller/BoardControllerTest.php` set the request
+	 * header themselves and so cannot show it.
 	 */
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
@@ -102,7 +122,11 @@ class BoardController extends Controller {
 			// and count below (#3743). Resolved once, after the READ gate.
 			$viewer = $this->boardAccess->contextFor($board, $uid);
 
-			$etag = (string)$this->changeMapper->getLatestChangeId($id);
+			$cursor = $this->changeMapper->getLatestChangeId($id);
+			// Resolved before the conditional branch because it is part of the
+			// validator, not just of the payload; the 200 path below reuses it.
+			$permissions = $this->permissionService->getPermissions($board, $uid);
+			$etag = $cursor . '-' . $permissions . '-' . $viewer->role;
 			if ($this->matchesIfNoneMatch($etag)) {
 				$response = new JSONResponse([], Http::STATUS_NOT_MODIFIED);
 				$response->setETag($etag);
@@ -125,22 +149,29 @@ class BoardController extends Controller {
 				// lives on CardRelationService::blocksEdgesForBoard). The ETag above
 				// already covers it - adding or removing a relation notifies BOTH
 				// endpoint cards (ChangeNotifier), so new kanso_changes rows move the
-				// board's latest change id, which IS this response's ETag.
+				// board's latest change id, and with it this response's ETag.
 				'blocksEdges' => $this->cardRelationService->blocksEdgesForBoard($board, $uid),
 				'acl' => $this->aclMapper->findByBoard($id),
 				// The requester's own bits, so the frontend can gate the
 				// share/manage UI without re-deriving ACL semantics.
-				'permissions' => $this->permissionService->getPermissions($board, $uid),
+				'permissions' => $permissions,
 				// The requester's board side (#3744) - 'internal' or 'external'.
 				// Gates the internal-only UI (export/duplicate) client-side; the
 				// server enforces regardless.
 				'role' => $viewer->role,
 				// The requester's board-watch state {subscribed, subscribers, count}.
 				'subscription' => $this->subscriptionService->buildBoardSubscription($id, $uid),
-				// The board's latest change id - the same value as the ETag. Seeds
-				// the client's delta-sync cursor from the body so it can poll
-				// `?since=<cursor>` without parsing the ETag header.
-				'cursor' => (int)$etag,
+				// The board's latest change id. Seeds the client's delta-sync
+				// cursor from the body so it can poll `?since=<cursor>`. It is
+				// only PART of the ETag (see the method doc), so it is no longer
+				// enough to rebuild the validator - hence `etag` below.
+				'cursor' => $cursor,
+				// This response's validator, verbatim, so `fetchBoard` can replay
+				// it on the next re-read. Shipped in the BODY rather than read
+				// back off the ETag header for the reason #10299 recorded: the
+				// validator must be derived from the payload the client actually
+				// holds, so it can never describe a different one.
+				'etag' => $etag,
 			]);
 			$response->setETag($etag);
 			return $response;

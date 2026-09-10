@@ -165,32 +165,118 @@ class BoardControllerTest extends TestCase {
 	}
 
 	public function testShowReturns304WithoutTouchingStacksCardsAndLabels(): void {
-		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
 		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
-		$this->request->method('getHeader')->with('If-None-Match')->willReturn('"7"');
+		$this->permissionService->method('getPermissions')
+			->with($board, 'alice')
+			->willReturn(PermissionService::PERMISSION_ALL);
+		$this->request->method('getHeader')->with('If-None-Match')
+			->willReturn('"7-' . PermissionService::PERMISSION_ALL . '-internal"');
 
 		$this->stackMapper->expects(self::never())->method('findByBoard');
 		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
 		$this->labelMapper->expects(self::never())->method('findByBoard');
 		$this->cardLabelMapper->expects(self::never())->method('findLabelIdsByBoard');
 		$this->cardAssigneeMapper->expects(self::never())->method('findUserIdsByBoard');
+		// The acl LIST is still not assembled. The viewer's own permission mask
+		// IS resolved (it is part of the validator since #10384) - that is one
+		// indexed acl read, not the board's sharing payload.
 		$this->aclMapper->expects(self::never())->method('findByBoard');
-		$this->permissionService->expects(self::never())->method('getPermissions');
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
-		self::assertSame('7', $response->getETag());
+		self::assertSame('7-' . PermissionService::PERMISSION_ALL . '-internal', $response->getETag());
 	}
 
 	public function testShowReturns304ForWeakIfNoneMatch(): void {
-		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
 		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
-		$this->request->method('getHeader')->with('If-None-Match')->willReturn('W/"7"');
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->request->method('getHeader')->with('If-None-Match')
+			->willReturn('W/"7-' . PermissionService::PERMISSION_ALL . '-internal"');
 
 		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
+	}
+
+	/**
+	 * #10384. The board payload is viewer-scoped, and the part of it that says
+	 * what this user may DO comes from ACL rows that can address them through a
+	 * NEXTCLOUD GROUP. A group membership changes outside Kanso, so it writes no
+	 * `kanso_changes` row and cannot move the board's latest change id - which
+	 * is why the change id alone is not a sufficient validator. Same board,
+	 * same change id, narrower mask: this must come back 200 with the new bits,
+	 * not 304 with the old ones.
+	 *
+	 * Without this the failure is invisible and indefinite: the client keeps
+	 * revalidating, the server keeps saying "unchanged", and the user goes on
+	 * being offered edit affordances they no longer hold until they navigate
+	 * away. (Full revocation is a different, already-safe path - BoardService
+	 * ::find throws 403 before any of this. The dangerous case is the partial
+	 * one, a user in two groups losing the wider grant.)
+	 */
+	public function testShowRevalidates200WhenOnlyTheViewersPermissionsChanged(): void {
+		$board = $this->board(1);
+		// Not the owner: an owner short-circuits to PERMISSION_ALL and has no
+		// group-derived membership to lose.
+		$board->setOwner('carol');
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
+		// The board has not changed at all. Only alice's group membership has.
+		$this->permissionService->method('getPermissions')
+			->with($board, 'alice')
+			->willReturn(PermissionService::PERMISSION_READ);
+		// …and the client replays the validator it was given while it still
+		// held READ|EDIT through the group it was just removed from.
+		$this->request->method('getHeader')->with('If-None-Match')->willReturn(
+			'"7-' . (PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT) . '-internal"'
+		);
+
+		$this->stackMapper->method('findByBoard')->willReturn([]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->aclMapper->method('findByBoard')->willReturn([]);
+		$this->cardMapper->method('findSummariesByBoard')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+
+		$response = $this->controller->show(1);
+		self::assertSame(Http::STATUS_OK, $response->getStatus(),
+			'a viewer whose own permissions changed must not be answered 304: the '
+			. 'change id cannot see a group membership change, so the validator has '
+			. 'to');
+		self::assertSame(PermissionService::PERMISSION_READ, $response->getData()['permissions']);
+		self::assertSame('7-' . PermissionService::PERMISSION_READ . '-internal', $response->getETag());
+	}
+
+	/**
+	 * The validator has to reach the client for any of this to work, and it is
+	 * no longer reconstructible from `cursor` (#10384). `fetchBoard` replays
+	 * `cached.etag`, so the body must carry exactly what the header carries -
+	 * a payload whose `etag` disagreed with its own ETag header would revalidate
+	 * against a response that never existed.
+	 */
+	public function testShowShipsItsValidatorInTheBody(): void {
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(9);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->request->method('getHeader')->with('If-None-Match')->willReturn('');
+		$this->stackMapper->method('findByBoard')->willReturn([]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->aclMapper->method('findByBoard')->willReturn([]);
+		$this->cardMapper->method('findSummariesByBoard')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+
+		$response = $this->controller->show(1);
+		$data = $response->getData();
+		self::assertSame($response->getETag(), $data['etag'],
+			'the payload must carry the validator it was served with, byte for byte');
+		// …and `cursor` stays the bare change id, because the delta poll asks
+		// `?since=<cursor>` with it.
+		self::assertSame(9, $data['cursor']);
 	}
 
 	public function testShowReturnsFullPayloadWithETagOnMiss(): void {
@@ -244,7 +330,7 @@ class BoardControllerTest extends TestCase {
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
-		self::assertSame('7', $response->getETag());
+		self::assertSame('7-' . PermissionService::PERMISSION_ALL . '-internal', $response->getETag());
 
 		$data = $response->getData();
 		self::assertSame($board, $data['board']);
@@ -636,7 +722,9 @@ class BoardControllerTest extends TestCase {
 		// cards → the board's latest change id moves), so a 304 must not pay for it.
 		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
 		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
-		$this->request->method('getHeader')->with('If-None-Match')->willReturn('"7"');
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->request->method('getHeader')->with('If-None-Match')
+			->willReturn('"7-' . PermissionService::PERMISSION_ALL . '-internal"');
 
 		$this->cardRelationService->expects(self::never())->method('blocksEdgesForBoard');
 

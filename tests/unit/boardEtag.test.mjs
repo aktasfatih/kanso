@@ -100,17 +100,21 @@ function settle(response) {
 /**
  * A miniature BoardController::show as an axios adapter.
  *
- * `latest` is the board's newest kanso_changes id — the ETag, exactly as the
- * real controller derives it. Mutating the board through `edit()` bumps it, so
- * the next validator no longer matches and the read must fall through to a full
- * 200, which is the "no stale board, ever" half of the story.
+ * `latest` is the board's newest kanso_changes id and `permissions` is the
+ * VIEWER's own effective mask; the validator folds both, exactly as the real
+ * controller does since #10384 (`<latest>-<permissions>-<role>`). Mutating the
+ * board through `edit()` bumps `latest`; `revoke()` narrows the mask while
+ * leaving `latest` alone, which is the shape of an NC group membership change —
+ * it happens outside Kanso, so it writes no change row and moves no change id.
+ * Either must make the next validator stop matching.
  *
  * @param {number} boardId - the board this server serves
- * @return {object} the server handle (reads log, edit(), install())
+ * @return {object} the server handle (reads log, edit(), revoke(), install())
  */
 function server(boardId) {
-	const state = { latest: 41, title: 'before' }
+	const state = { latest: 41, title: 'before', permissions: 15 }
 	const reads = []
+	const etagOf = () => `${state.latest}-${state.permissions}-internal`
 
 	const install = () => {
 		axios.defaults.adapter = async (config) => {
@@ -126,7 +130,7 @@ function server(boardId) {
 					config,
 				})
 			}
-			const etag = `"${state.latest}"`
+			const etag = `"${etagOf()}"`
 			const sent = header(config, 'If-None-Match')
 			if (sent === etag) {
 				reads.push({ conditional: true, status: 304 })
@@ -144,7 +148,12 @@ function server(boardId) {
 					stacks: [{ id: 10, title: 'Todo' }],
 					cards: [{ id: 1, stackId: 10, sortKey: 'a', title: state.title }],
 					labels: [],
+					permissions: state.permissions,
 					cursor: state.latest,
+					// The validator, in the body, because the client replays it
+					// from there — see fetchBoard's note on why it is no longer
+					// reconstructible from `cursor`.
+					etag: etagOf(),
 				},
 				headers: { etag },
 				config,
@@ -158,6 +167,9 @@ function server(boardId) {
 		edit: (title) => {
 			state.title = title
 			state.latest++
+		},
+		revoke: (permissions) => {
+			state.permissions = permissions
 		},
 	}
 }
@@ -232,7 +244,7 @@ test('a read that bypassed the cache cannot validate a board the cache is still 
 	// re-seeded from the same stale payload every time, so even a resync just
 	// 304s again.
 	//
-	// Deriving the validator from `cached.cursor` makes that unrepresentable,
+	// Reading the validator off `cached.etag` makes that unrepresentable,
 	// because the validator is a FIELD OF the payload it validates. This test is
 	// what says so.
 	const srv = server(203)
@@ -258,18 +270,56 @@ test('a read that bypassed the cache cannot validate a board the cache is still 
 		+ 'they happened to be holding')
 })
 
-// The trigger below is an invalidation-driven refetch, NOT useBoard's 60s
-// `refetchInterval`. That is deliberate: measured in a real browser, the 60s
-// interval never fires at all. syncBoardDelta calls `setQueryData` on EVERY
-// delta tick (useBoardDelta.js, including empty ones), each dispatch reaches
-// QueryObserver.onQueryUpdate → #updateTimers, and the refetch interval is
-// cleared and re-armed from zero every 5s (or 30s with push live) — always
-// sooner than the 60s it is waiting for. Separate bug, not this card's; noted so
-// the next reader does not build on that timer.
+test('a viewer whose own permissions changed is not answered 304', async () => {
+	// #10384, and the reason the validator is no longer just the change id.
+	//
+	// The board payload is VIEWER-SCOPED: `permissions` and `role` are folded
+	// from the ACL rows that address this uid, which may reach them through a
+	// Nextcloud GROUP. Group membership changes in Nextcloud, outside every
+	// Kanso write path, so it appends no `kanso_changes` row — the board's
+	// latest change id does not move, and a change-id validator says "unchanged"
+	// about a payload that changed. Nothing else can catch it either: delta sync
+	// reads the same log, so it sees nothing to send.
+	//
+	// The failure this prevents is silent and unbounded: the client keeps
+	// revalidating, the server keeps answering 304 out of a stale cache entry,
+	// and the user goes on being shown affordances they no longer hold for as
+	// long as the board stays open.
+	const srv = server(204)
+	srv.install()
+
+	const held = await fetchBoard(204)
+	assert.equal(held.permissions, 15)
+
+	// Unchanged board, unchanged viewer: still the cheap hit. This anchor is
+	// what stops the assertion below from passing because nothing ever 304s.
+	const same = await fetchBoard(204, held)
+	assert.deepEqual(srv.reads.at(-1), { conditional: true, status: 304 })
+	assert.equal(same, held)
+
+	// Now alice is dropped from the group that granted EDIT. No board content
+	// changed; `latest` does not move.
+	srv.revoke(1)
+
+	const after = await fetchBoard(204, held)
+	assert.deepEqual(srv.reads.at(-1), { conditional: true, status: 200 },
+		'a narrowed permission mask must break the validator even though the '
+		+ 'board itself did not change — a group membership writes no change row, '
+		+ 'so the change id cannot represent it')
+	assert.equal(after.permissions, 1,
+		'and the client must end up holding the bits it actually has now')
+})
+
+// The trigger below is an invalidation-driven refetch rather than useBoard's 60s
+// `refetchInterval`, because this file is about the conditional read itself and
+// an invalidation is the shortest way to provoke one. Every mutation's
+// `onSettled` takes that path, so does the delta layer's `resync`, and so do
+// refetchOnMount / refetchOnWindowFocus.
 //
-// What IS the live path for a full board re-read is exactly this: an
-// invalidation. Every mutation's `onSettled` takes it, so does the delta layer's
-// `resync`, and so do refetchOnMount / refetchOnWindowFocus.
+// The 60s interval is real again as of #10384 — until then syncBoardDelta wrote
+// the query cache on EVERY delta tick, empty ones included, and each write
+// re-armed the interval from zero every 5s so it never once fired. That timer
+// has its own test now (boardRefetchInterval.test.mjs); do not re-derive it here.
 test('a refetched board goes conditional and its 304 leaves the rendered board in the cache', async () => {
 	const srv = server(202)
 	srv.install()

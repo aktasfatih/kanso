@@ -26,34 +26,45 @@ export const fetchBoards = () =>
  *
  * Two things make this safe, and both are structural rather than careful:
  *
- * 1. The validator is derived from `cached.cursor`, which the controller
- *    documents as the same value it puts in the ETag header. It therefore
- *    cannot describe any payload other than the one we would fall back to. The
- *    obvious alternative - a module-scope map of board id -> last ETag - gets
- *    this wrong: the board pickers in CardDetail and CsvImportModal read OTHER
- *    boards unconditionally and never put the result in the query cache, so
- *    they would arm a validator NEWER than the cached board, and the next
+ * 1. The validator is read off `cached.etag`, the validator the server sent
+ *    WITH that exact payload. It therefore cannot describe any payload other
+ *    than the one we would fall back to. The obvious alternative - a
+ *    module-scope map of board id -> last ETag - gets this wrong: the board
+ *    pickers in CardDetail and CsvImportModal read OTHER boards
+ *    unconditionally and never put the result in the query cache, so they
+ *    would arm a validator NEWER than the cached board, and the next
  *    conditional read would be answered 304 and freeze the user on a payload
  *    that really is out of date.
+ *
+ *    It used to be rebuilt from `cached.cursor` instead, which held while the
+ *    ETag was the board's latest change id and nothing else. Since #10384 the
+ *    validator also covers the viewer's own permission mask and role - the
+ *    board payload is viewer-scoped, and an NC group membership change alters
+ *    it without writing any `kanso_changes` row - so the cursor no longer
+ *    determines it and the server ships the value itself.
  * 2. A 304 resolves to `cached`, never to `response.data`. A 304 carries an
  *    empty body, so returning the response would replace a rendered board with
  *    `undefined` - a blank board, strictly worse than paying for the read. And
  *    a 304 is only reachable when we sent a validator, which only happens when
  *    `cached` is a real payload, so there is no path that returns nothing.
  *
- * Note that the board payload does carry a few fields whose changes write no
- * `kanso_changes` row and so do not move the ETag (board watch state is the one
- * with a UI toggle; see useBoardSubscription, which takes server truth from its
- * own response instead of from a refetch). Those already do not reach other
- * clients through delta sync either - the gap is the missing change rows, not
- * this validator.
+ * Note that the board payload still carries a field whose changes write no
+ * `kanso_changes` row and so do not move the ETag: board watch state, the one
+ * with a UI toggle (see useBoardSubscription, which takes server truth from its
+ * own response instead of from a refetch). That one is deliberate - it is a
+ * single user's private state, where a change row is board-global.
  *
  * @param {number|string} id - board id
  * @param {object|null} cached - the payload the caller already holds, if any
  * @return {Promise<object>} the board payload (fresh, or `cached` on a 304)
  */
 export const fetchBoard = async (id, cached = null) => {
-	const validator = cached?.cursor != null ? `"${cached.cursor}"` : null
+	// `cursor` is the pre-#10384 fallback: a payload cached by an older bundle
+	// has no `etag`, and a validator the server will simply fail to match costs
+	// one request header and still answers 200 with the full body. Dropping the
+	// conditional read entirely for those would cost the whole saving instead.
+	const stored = cached?.etag ?? cached?.cursor
+	const validator = stored != null ? `"${stored}"` : null
 	const response = await axios.get(url(`/api/boards/${id}`), {
 		...(validator ? { headers: { 'If-None-Match': validator } } : {}),
 		// 304 is a SUCCESS for a conditional read. Axios's default

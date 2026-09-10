@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 
@@ -44,6 +45,12 @@ use OCP\AppFramework\Utility\ITimeFactory;
  * {@see RecurrenceService}): at most {@see self::MAX_PER_RUN} cards per run, and
  * each card is wrapped in its own try/catch so one bad card (e.g. a purged
  * assignee) cannot abort the sweep. The remainder is picked up next run.
+ *
+ * Change log: stamping a marker rewrites summary columns, so every stamped card
+ * appends its own ENTITY_CARD/ACTION_UPDATE row - otherwise the reminder state
+ * would be invisible to delta sync and the board ETag. The realtime push, which
+ * says nothing more than "this board moved", is coalesced to one event per
+ * touched board and emitted at the end of the run.
  */
 class DueReminderService {
 	/**
@@ -73,6 +80,7 @@ class DueReminderService {
 		private CardVisibilityGuard $visibilityGuard,
 		private ITimeFactory $time,
 		private \Psr\Log\LoggerInterface $logger,
+		private ChangeNotifier $changeNotifier,
 	) {
 	}
 
@@ -82,17 +90,30 @@ class DueReminderService {
 	 * its assignees and watchers, then stamps the marker(s) so it is not
 	 * re-notified. A card that throws is logged and skipped.
 	 *
+	 * Each stamped card gets its own `kanso_changes` row (see {@see self::processCard()}),
+	 * but the realtime pushes are coalesced to one per touched board and emitted
+	 * here, after the sweep.
+	 *
 	 * @return int number of reminder notifications' cards processed (a card that
 	 *             fired at least one reminder counts once)
 	 */
 	public function runDueReminders(): int {
 		$now = $this->time->getTime();
 		$processed = 0;
+		// Boards this run actually stamped, keyed by id for dedup. The change ROW is
+		// per card (delta sync needs each one), but the push is per BOARD and says
+		// nothing beyond "this board moved" - and pushBoardChanged() fans out per
+		// board participant, so one push per card would turn a routine tick over
+		// MAX_PER_RUN cards into hundreds of identical queue writes.
+		$touchedBoards = [];
 
 		foreach ($this->cardMapper->findDueForReminder($now, self::MAX_PER_RUN) as $card) {
 			try {
 				if ($this->processCard($card, $now)) {
 					$processed++;
+					// Only a card that fired (and whose change row landed - a throw
+					// from processCard skips this) puts its board on the push list.
+					$touchedBoards[$card->getBoardId()] = true;
 				}
 			} catch (\Throwable $e) {
 				$this->logger->warning(
@@ -100,6 +121,14 @@ class DueReminderService {
 					['exception' => $e]
 				);
 			}
+		}
+
+		// After the loop, so every stamped card is written before any client is told
+		// to refetch. Best-effort by contract - pushBoardChanged() never throws, and
+		// the change rows already landed, so a client that misses the event still
+		// converges on its next poll.
+		foreach (array_keys($touchedBoards) as $boardId) {
+			$this->changeNotifier->pushBoardChanged($boardId);
 		}
 
 		return $processed;
@@ -113,6 +142,10 @@ class DueReminderService {
 	 * The candidate query is a coarse filter (either marker possibly owed); the
 	 * precise per-marker decision is re-checked here against $now so the count and
 	 * the markers are exact.
+	 *
+	 * A card that fires also appends a change row; a card that fires nothing writes
+	 * neither row nor stamp, so the board ETag does not move for a sweep that
+	 * changed nothing.
 	 */
 	private function processCard(Card $card, int $now): bool {
 		$duedate = $card->getDuedate();
@@ -143,6 +176,23 @@ class DueReminderService {
 		if ($fired) {
 			$card->setLastModified($now);
 			$this->cardMapper->update($card);
+			// `last_modified` and both reminder markers are CardMapper::SUMMARY_COLUMNS,
+			// so this stamp IS a board-payload mutation. Without the row the board ETag
+			// never moves and a delta-sync client keeps serving the pre-reminder card
+			// forever. Actor null - the cron acts for nobody (and ChangeNotifier skips
+			// Activity for a null actor, which is what we want for a sweep).
+			//
+			// Written here, inside the caller's per-card try/catch, so a failed insert
+			// skips ONE card instead of aborting the sweep. The push is deliberately
+			// NOT emitted per card: runDueReminders() collects the boards and fires
+			// one event each at the end of the run.
+			$this->changeNotifier->recordChange(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$card->getId(),
+				Change::ACTION_UPDATE,
+				null,
+			);
 		}
 
 		return $fired;
