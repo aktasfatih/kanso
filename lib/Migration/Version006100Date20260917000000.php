@@ -51,8 +51,12 @@ class Version006100Date20260917000000 extends SimpleMigrationStep {
 			$table = $schema->getTable('kanso_mail_intake');
 
 			if (!$table->hasColumn('require_auth')) {
+				// Nullable for the same reason as `enabled` in the migration this
+				// builds on: Nextcloud rejects a NOT NULL boolean that defaults to
+				// false, because Oracle stores false as an empty string and reads
+				// that back as NULL.
 				$table->addColumn('require_auth', Types::BOOLEAN, [
-					'notnull' => true,
+					'notnull' => false,
 					'default' => false,
 				]);
 			}

@@ -106,8 +106,14 @@ class Version006000Date20260916000000 extends SimpleMigrationStep {
 			$table->addColumn('sender_allowlist', Types::TEXT, [
 				'notnull' => false,
 			]);
+			// Nullable, like every other boolean in this schema. A NOT NULL
+			// boolean defaulting to false is rejected by Nextcloud's migration
+			// validation ("is type Bool and also NotNull, so it can not store
+			// false") because Oracle stores false as an empty string, which it
+			// then treats as NULL. The entity casts on read, so a null reads as
+			// false either way.
 			$table->addColumn('enabled', Types::BOOLEAN, [
-				'notnull' => true,
+				'notnull' => false,
 				'default' => false,
 			]);
 			$table->addColumn('last_uid', Types::BIGINT, [
