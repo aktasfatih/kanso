@@ -43,8 +43,11 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *     comments and file attachments (both the app-data objects and the rows).
  *
  * Restore/purge only ever act on an ALREADY-trashed card (deleted_at > 0); a
- * live card is rejected as invalid input. Both append a card-targeted row to
- * `kanso_changes` so the board ETag bumps and clients refetch.
+ * live card is rejected as invalid input - but only once the caller has cleared
+ * the board permission AND the card-visibility guard, in that order, so the
+ * rejection can never double as an existence oracle (#10307). Both append a
+ * card-targeted row to `kanso_changes` so the board ETag bumps and clients
+ * refetch.
  */
 class TrashService {
 	public function __construct(
@@ -103,10 +106,13 @@ class TrashService {
 	 * @throws InvalidInputException if the card is not in the trash
 	 */
 	public function restore(int $cardId, string $actorUid): Card {
-		$card = $this->loadTrashedCard($cardId);
+		$card = $this->cardMapper->find($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		// Only AFTER access is settled may the card's trash state be revealed:
+		// a 400 "not in the trash" ahead of the guards is an existence oracle.
+		$this->assertTrashed($card);
 
 		$card->setDeletedAt(0);
 		$card->setLastModified(time());
@@ -132,10 +138,12 @@ class TrashService {
 	 * @throws InvalidInputException if the card is not in the trash
 	 */
 	public function purge(int $cardId, string $actorUid): void {
-		$card = $this->loadTrashedCard($cardId);
+		$card = $this->cardMapper->find($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		// Access first, trash state second - see restore().
+		$this->assertTrashed($card);
 
 		$this->cardLabelMapper->deleteByCard($cardId);
 		$this->cardAssigneeMapper->deleteByCard($cardId);
@@ -183,15 +191,18 @@ class TrashService {
 	}
 
 	/**
-	 * @throws DoesNotExistException if the card does not exist
+	 * The "is this card actually trashed?" input check, deliberately run LAST -
+	 * after board permission AND card visibility. It answers 400 for a live card
+	 * while a card the caller may not reach answers 403/404, so running it first
+	 * would let ANY logged-in user probe a bare card id and learn that the card
+	 * exists and is not in the trash - across board boundaries (#10307).
+	 *
 	 * @throws InvalidInputException if the card is not in the trash (deleted_at == 0)
 	 */
-	private function loadTrashedCard(int $id): Card {
-		$card = $this->cardMapper->find($id);
+	private function assertTrashed(Card $card): void {
 		if ($card->getDeletedAt() === 0) {
-			throw new InvalidInputException('Card ' . $id . ' is not in the trash');
+			throw new InvalidInputException('Card ' . $card->getId() . ' is not in the trash');
 		}
-		return $card;
 	}
 
 	/**
