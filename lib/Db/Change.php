@@ -98,9 +98,13 @@ class Change extends Entity {
 	// addition carries it in `to` - the same convention attachments use.
 	public const VERB_LINK_ATTACHED = 27;      // detail: link title, else the URL
 	public const VERB_LINK_REMOVED = 28;
-	public const VERB_SUBCARD_ATTACHED = 29;   // detail: the parent card's title
+	// The two verbs that name ANOTHER card carry that detail only when the card
+	// they name is PUBLIC (#3743): a stored detail has no viewer and the activity
+	// feed gates on the card being read, never on the card being named. A
+	// narrower counterpart leaves a bare verb - no detail row at all.
+	public const VERB_SUBCARD_ATTACHED = 29;   // detail: a public parent card's title
 	public const VERB_SUBCARD_DETACHED = 30;
-	public const VERB_RELATION_ADDED = 31;     // detail: "<kind>: <other card title>"
+	public const VERB_RELATION_ADDED = 31;     // detail: "<kind>: <public other card's title>"
 	public const VERB_RELATION_REMOVED = 32;
 	public const VERB_TIME_ENTRY_REMOVED = 33; // detail: duration, plus the note when present
 	public const VERB_VISIBILITY_CHANGED = 34; // detail: from/to visibility labels

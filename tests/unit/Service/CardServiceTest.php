@@ -22,6 +22,7 @@ use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AutomationService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\CardVisibilityGuard;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
@@ -122,6 +123,9 @@ class CardServiceTest extends TestCase {
 			$this->subscriptionMapper,
 			$this->boardAccess,
 			$this->visibilityGuard,
+			// A REAL scope - what may be NAMED in a stored change detail is the
+			// behaviour under test, not a stub.
+			new CardVisibilityScope(),
 			$this->changeDetailMapper,
 			$container
 		);
@@ -2911,6 +2915,102 @@ class CardServiceTest extends TestCase {
 
 		$this->service->setParent(9, null, 'alice');
 		self::assertSame(Change::VERB_SUBCARD_DETACHED, $captured->verb);
+	}
+
+	/**
+	 * The stored detail has NO viewer: it is written once into the CHILD's feed
+	 * and later served verbatim by ActivityService, which gates only on the
+	 * child being readable. CardController already rules that a hidden parent
+	 * "reads as no parent (#3743) - its title must not be exposed", so a parent
+	 * that is not public is never named here either: the change row keeps a bare
+	 * VERB_SUBCARD_ATTACHED with no detail row at all. The actor CAN see the
+	 * parent (isVisible is true) - it is the later readers of the child who
+	 * must not learn its title.
+	 */
+	public function testSetParentDoesNotNameANonPublicParent(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: the secret rewrite');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(803);
+		$captured = new \stdClass();
+		$captured->verb = null;
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willReturnCallback(function (...$args) use ($change, $captured): Change {
+				$captured->verb = $args[5] ?? null;
+				return $change;
+			});
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->service->setParent(9, 20, 'alice');
+		self::assertSame(Change::VERB_SUBCARD_ATTACHED, $captured->verb);
+	}
+
+	/**
+	 * The detach analogue, and the live case: narrowing a card's visibility is
+	 * deliberately NOT retroactive, so a parent made internal AFTER the link was
+	 * made still has children pointing at it. Detaching must not write its title
+	 * into the child's feed.
+	 */
+	public function testSetParentDetachDoesNotNameANonPublicOldParent(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setParentCardId(20);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: the secret rewrite');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(804);
+		$captured = new \stdClass();
+		$captured->verb = null;
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willReturnCallback(function (...$args) use ($change, $captured): Change {
+				$captured->verb = $args[5] ?? null;
+				return $change;
+			});
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->service->setParent(9, null, 'alice');
+		self::assertSame(Change::VERB_SUBCARD_DETACHED, $captured->verb);
+	}
+
+	/** An explicitly PUBLIC parent is still named - the guard is not a blanket mute. */
+	public function testSetParentNamesAnExplicitlyPublicParent(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: search');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_PUBLIC);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(805);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(805, null, 'Epic: search')
+			->willReturn(new ChangeDetail());
+
+		$this->service->setParent(9, 20, 'alice');
 	}
 
 	/** A caller denied EDIT links nothing and writes no trace. */

@@ -127,6 +127,10 @@ class CardService {
 		private SubscriptionMapper $subscriptionMapper,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
+		// The viewer-less half of the visibility rules: what may be written into
+		// a stored change detail that many different readers will later see
+		// ({@see self::parentTitleOrNull()}).
+		private CardVisibilityScope $visibilityScope,
 		private ChangeDetailMapper $changeDetailMapper,
 		// Lazily resolved (RecurrenceService depends on CardService) to re-point a
 		// card's repeat when its Start/due date is edited - same pattern as
@@ -1612,7 +1616,10 @@ class CardService {
 			if ($card->getParentCardId() === $parentCardId) {
 				return $card;
 			}
-			$parentTitle = $parent->getTitle();
+			// Same rule as the detach branch: the actor can see this parent, but
+			// the stored detail outlives the actor and is read by everyone who
+			// can see the CHILD. Only a public parent may be named.
+			$parentTitle = $this->visibilityScope->isPublic($parent) ? $parent->getTitle() : null;
 			$card->setParentCardId($parentCardId);
 		}
 
@@ -1620,7 +1627,9 @@ class CardService {
 
 		// The detail names the card at the OTHER end of the link (the parent) -
 		// naming this card would just repeat the feed it is rendered in. `to` on
-		// attach, `from` on detach, the convention every other verb uses.
+		// attach, `from` on detach, the convention every other verb uses. A
+		// parent that may not be named (not public, or gone) leaves $parentTitle
+		// null and the change row keeps a bare verb, no detail at all.
 		$detail = null;
 		if ($parentTitle !== null) {
 			$capped = $this->capDetail($parentTitle);
@@ -1647,15 +1656,25 @@ class CardService {
 
 	/**
 	 * A parent card's title for the Activity detail, or null when it can no
-	 * longer be read (deleted out from under the link). Never throws - a missing
-	 * title must not block clearing the parent.
+	 * longer be read (deleted out from under the link) or must not be named.
+	 * Never throws - a missing title must not block clearing the parent.
+	 *
+	 * Visibility (#3743): the detail is stored once with NO viewer and then
+	 * served verbatim from the CHILD's feed, which gates only on the child being
+	 * readable - so a parent that is not
+	 * {@see CardVisibilityScope::isPublic()} is never named, matching
+	 * CardController's rule that a hidden parent "reads as no parent". Narrowing
+	 * is not retroactive, so a parent made internal/private AFTER the link was
+	 * made is exactly the live case. The caller then writes a bare verb with no
+	 * detail at all; "#<id>" would still be an existence oracle.
 	 */
 	private function parentTitleOrNull(int $parentCardId): ?string {
 		try {
-			return $this->cardMapper->find($parentCardId)->getTitle();
+			$parent = $this->cardMapper->find($parentCardId);
 		} catch (\Throwable) {
 			return null;
 		}
+		return $this->visibilityScope->isPublic($parent) ? $parent->getTitle() : null;
 	}
 
 	/**

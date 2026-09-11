@@ -259,9 +259,9 @@ class CardRelationService {
 		$this->notifyBoth(
 			$card->getBoardId(),
 			$src,
-			$srcCard->getTitle(),
+			$srcCard,
 			$dst,
-			$dstCard->getTitle(),
+			$dstCard,
 			$type,
 			$uid,
 			Change::VERB_RELATION_ADDED,
@@ -282,16 +282,18 @@ class CardRelationService {
 		// legitimate - but an id probed blind, where both endpoints are
 		// hidden, must read as not-found.
 		$endpointVisible = false;
-		// Keep each endpoint's title while we are here: after the delete the
+		// Keep each endpoint's CARD while we are here: after the delete the
 		// relation row is gone, and the change row is its only remaining trace.
-		$titles = [];
+		// The card (not just its title) is what notifyBoth needs - the detail is
+		// only written for a counterpart that is public to everyone.
+		$endpoints = [];
 		foreach ([$relation->getCardId(), $relation->getOtherCardId()] as $endpointId) {
 			try {
 				$endpoint = $this->cardMapper->find($endpointId);
 			} catch (DoesNotExistException) {
 				continue;
 			}
-			$titles[$endpointId] = $endpoint->getTitle();
+			$endpoints[$endpointId] = $endpoint;
 			if ($this->visibilityGuard->isVisible($board, $endpoint, $uid)) {
 				$endpointVisible = true;
 			}
@@ -304,9 +306,9 @@ class CardRelationService {
 		$this->notifyBoth(
 			$relation->getBoardId(),
 			$relation->getCardId(),
-			$titles[$relation->getCardId()] ?? null,
+			$endpoints[$relation->getCardId()] ?? null,
 			$relation->getOtherCardId(),
-			$titles[$relation->getOtherCardId()] ?? null,
+			$endpoints[$relation->getOtherCardId()] ?? null,
 			$relation->getType(),
 			$uid,
 			Change::VERB_RELATION_REMOVED,
@@ -366,17 +368,32 @@ class CardRelationService {
 	 * the convention labels/assignees/attachments already use.
 	 *
 	 * $srcId/$dstId are in STORAGE order (the `blocks` direction), not the order
-	 * the API call named them. A title may be null when that endpoint has since
-	 * been deleted; the detail then falls back to the card id.
+	 * the API call named them. A card may be null when that endpoint has since
+	 * been deleted outright; the detail then falls back to the card id.
+	 *
+	 * Visibility (#3743): the stored detail has NO viewer - it is written once
+	 * and later served verbatim by {@see ActivityService::getCardActivity()},
+	 * which gates on the card being READ, never on the card being NAMED. So a
+	 * counterpart's title is recorded only when that card is
+	 * {@see CardVisibilityScope::isPublic()}; anything narrower would put the
+	 * title the relations panel deliberately masks into the other card's feed,
+	 * readable by anyone who can see THIS card. The two sides are decided
+	 * INDEPENDENTLY: a public card may legitimately be named in a hidden card's
+	 * feed while the hidden one stays unnamed in the public card's.
+	 *
+	 * A withheld counterpart writes the change row with NO detail at all - a bare
+	 * verb, like VERB_FIELD_CHANGED. "#<id>" is not a substitute: a card id is
+	 * still an existence oracle for a card the guard hides, and it tells a reader
+	 * nothing.
 	 */
-	private function notifyBoth(int $boardId, int $srcId, ?string $srcTitle, int $dstId, ?string $dstTitle, string $type, string $uid, int $verb): void {
+	private function notifyBoth(int $boardId, int $srcId, ?Card $srcCard, int $dstId, ?Card $dstCard, string $type, string $uid, int $verb): void {
 		[$srcLabel, $dstLabel] = self::RELATION_LABELS[$type] ?? ['Relates to', 'Relates to'];
 		$sides = [
 			// [card the row is about, how the relation reads from there, the OTHER card]
-			[$srcId, $srcLabel, $dstId, $dstTitle],
-			[$dstId, $dstLabel, $srcId, $srcTitle],
+			[$srcId, $srcLabel, $dstId, $dstCard],
+			[$dstId, $dstLabel, $srcId, $srcCard],
 		];
-		foreach ($sides as [$cardId, $label, $otherId, $otherTitle]) {
+		foreach ($sides as [$cardId, $label, $otherId, $otherCard]) {
 			$change = $this->changeNotifier->notify(
 				$boardId,
 				Change::ENTITY_CARD,
@@ -385,11 +402,10 @@ class CardRelationService {
 				$uid,
 				verb: $verb,
 			);
-			$detail = mb_substr(
-				$label . ': ' . (($otherTitle !== null && $otherTitle !== '') ? $otherTitle : '#' . $otherId),
-				0,
-				self::MAX_DETAIL_LENGTH,
-			);
+			$detail = $this->relationDetail($label, $otherId, $otherCard);
+			if ($detail === null) {
+				continue;
+			}
 			$added = $verb === Change::VERB_RELATION_ADDED;
 			$this->changeDetailMapper->insertDetail(
 				$change->getId(),
@@ -397,6 +413,23 @@ class CardRelationService {
 				$added ? $detail : null,
 			);
 		}
+	}
+
+	/**
+	 * The change detail naming the counterpart, or null when it must not be
+	 * recorded at all (see {@see self::notifyBoth()}): a counterpart that still
+	 * exists but is NOT public never reaches the side table.
+	 */
+	private function relationDetail(string $label, int $otherId, ?Card $otherCard): ?string {
+		if ($otherCard !== null && !$this->visibilityScope->isPublic($otherCard)) {
+			return null;
+		}
+		$title = $otherCard?->getTitle();
+		return mb_substr(
+			$label . ': ' . (($title !== null && $title !== '') ? $title : '#' . $otherId),
+			0,
+			self::MAX_DETAIL_LENGTH,
+		);
 	}
 
 	/**

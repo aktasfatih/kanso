@@ -66,14 +66,21 @@ class CardRelationServiceTest extends TestCase {
 		);
 	}
 
-	/** Every card maps to board 1 unless overridden in a specific test. */
-	private function wireCards(array $boardByCardId = [], array $titleByCardId = []): void {
-		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($boardByCardId, $titleByCardId): Card {
+	/**
+	 * Every card maps to board 1 unless overridden in a specific test. A card's
+	 * visibility defaults to unset (which reads as 'public'); pass
+	 * $visibilityByCardId to narrow one.
+	 */
+	private function wireCards(array $boardByCardId = [], array $titleByCardId = [], array $visibilityByCardId = []): void {
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($boardByCardId, $titleByCardId, $visibilityByCardId): Card {
 			$card = new Card();
 			$card->setId($id);
 			$card->setBoardId($boardByCardId[$id] ?? 1);
 			$card->setTitle($titleByCardId[$id] ?? ('Card ' . $id));
 			$card->setDeletedAt(0);
+			if (isset($visibilityByCardId[$id])) {
+				$card->setVisibility($visibilityByCardId[$id]);
+			}
 			return $card;
 		});
 		$board = new Board();
@@ -281,6 +288,99 @@ class CardRelationServiceTest extends TestCase {
 			['Blocks: Fix the build', null],
 			['Blocked by: Ship it', null],
 		], $details);
+	}
+
+	// ---- Activity trace must not leak a masked counterpart (#3743) ---------
+
+	/**
+	 * A stored change detail has NO viewer: it is written once and then served
+	 * verbatim by ActivityService, which gates on the card being READ, never on
+	 * the card being NAMED. So a counterpart that is not public is never named -
+	 * that side's change row keeps a bare verb with no detail row at all,
+	 * rather than putting into card A's feed the title groupedForCard()
+	 * deliberately masks out of card A's relations panel.
+	 *
+	 * The two sides are decided INDEPENDENTLY: the public card may still be
+	 * named in the non-public card's own feed.
+	 */
+	public function testAddDoesNotNameANonPublicCounterpart(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[20 => CardVisibilityScope::VISIBILITY_PRIVATE],
+		);
+		$this->relationMapper->method('findBlocksEdgesByBoard')->willReturn([]);
+		$this->relationMapper->method('exists')->willReturn(false);
+		$this->relationMapper->method('insert')->willReturnCallback(fn (CardRelation $r): CardRelation => $r);
+		// BOTH endpoints still get their change row - only the detail is withheld.
+		$this->changeNotifier->expects($this->exactly(2))->method('notify');
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->addRelation(10, 20, 'blocks', 'alice');
+
+		// Card 10's row would have said "Blocks: Fix the build" - dropped entirely.
+		// Card 20's row still names the public card 10.
+		self::assertSame([[null, 'Blocked by: Ship it']], $details);
+	}
+
+	/**
+	 * The remove path is the self-service oracle: removeRelation deliberately
+	 * requires the actor to see only ONE endpoint (so a masked row stays
+	 * removable), so an EDIT-holder who cannot see card B could delete the
+	 * masked relation on the visible card A and then read B's title back out of
+	 * A's activity feed. The non-public endpoint is never named.
+	 */
+	public function testRemoveDoesNotNameANonPublicCounterpart(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[20 => CardVisibilityScope::VISIBILITY_INTERNAL],
+		);
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_BLOCKS);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+		$this->changeNotifier->expects($this->exactly(2))->method('notify');
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->removeRelation(7, 'alice');
+
+		self::assertSame([['Blocked by: Ship it', null]], $details);
+	}
+
+	/** Both ends non-public: two change rows, not one detail between them. */
+	public function testRemoveWritesNoDetailWhenNeitherEndMayBeNamed(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[10 => CardVisibilityScope::VISIBILITY_PRIVATE, 20 => CardVisibilityScope::VISIBILITY_PRIVATE],
+		);
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_RELATES);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+		$this->changeNotifier->expects($this->exactly(2))->method('notify');
+		$this->changeDetailMapper->expects($this->never())->method('insertDetail');
+
+		$this->service->removeRelation(7, 'alice');
 	}
 
 	/** A caller denied EDIT unlinks nothing and writes no trace. */

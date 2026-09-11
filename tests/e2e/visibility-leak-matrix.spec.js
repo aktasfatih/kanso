@@ -400,12 +400,85 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		expect(masked.title).toBeNull()
 		expect(JSON.stringify(rels)).not.toContain(title('PROV'))
 
+		// …and the ACTIVITY feed of the visible card must not name it either. The
+		// relation verbs record a change detail naming the card at the other end,
+		// and that detail is stored with NO viewer: ActivityService gates on the
+		// card being READ, never on the card being NAMED, so a leak here would
+		// hand TESTER through PUB's feed exactly what the panel above masks.
+		const feed = await api(TESTER, 'GET', `/cards/${state.cards.PUB.id}/activity`)
+		expect(feed.length, 'PUB has activity to leak through').toBeGreaterThan(0)
+		expect(JSON.stringify(feed)).not.toContain(title('PROV'))
+
+		// The two sides are decided independently, and the detail machinery is
+		// NOT muted wholesale: the hidden card's own feed still names the public
+		// counterpart, which is what keeps the assertion above non-vacuous.
+		const provFeed = await api(ADMIN, 'GET', `/cards/${state.cards.PROV.id}/activity`)
+		expect(JSON.stringify(provFeed)).toContain(title('PUB'))
+
 		// Relating TO a hidden card is itself blocked (404 — unprobeable).
 		const r = await call(TESTER, 'POST', `/cards/${state.cards.CLI.id}/relations`, {
 			otherCardId: state.cards.PRIV.id,
 			kind: 'relates',
 		})
 		expect(r.status).toBe(404)
+	})
+
+	// The self-service oracle: removeRelation deliberately requires the actor to
+	// see only ONE endpoint, so that a masked row stays removable from the side
+	// that renders it. That makes an EDIT-holder who cannot see PROV able to
+	// delete the masked relation on PUB — and then read PUB's own activity. The
+	// removal verb must not hand them the title on the way out.
+	test('relations: removing a masked relation leaves no trace naming the counterpart', async () => {
+		const rels = await api(TESTER, 'GET', `/cards/${state.cards.PUB.id}/relations`)
+		const masked = rels.relates.find((r) => r.hidden === true)
+		expect(masked, 'the masked relation from the previous test is still there').toBeTruthy()
+
+		await api(TESTER, 'DELETE', `/cards/${state.cards.PUB.id}/relations/${masked.id}`)
+
+		const feed = await api(TESTER, 'GET', `/cards/${state.cards.PUB.id}/activity`)
+		expect(feed.length, 'PUB has activity to leak through').toBeGreaterThan(0)
+		expect(JSON.stringify(feed)).not.toContain(title('PROV'))
+
+		// Non-vacuous: the removal DID record a trace on the other side, naming
+		// the public card — only the hidden one goes unnamed.
+		const provFeed = await api(ADMIN, 'GET', `/cards/${state.cards.PROV.id}/activity`)
+		expect(JSON.stringify(provFeed)).toContain(title('PUB'))
+	})
+
+	// The sub-card analogue. setParent asserts visibility on the CHILD only, so a
+	// public child can be detached from a parent the actor cannot see — and
+	// visibility narrowing is deliberately not retroactive, so a parent narrowed
+	// AFTER the link was made is the live case. Neither the attach (written by
+	// someone who CAN see the parent) nor the detach may name it in the child's
+	// feed, which every reader of the child can open.
+	test('sub-cards: a hidden parent is never named in the child activity feed', async () => {
+		await api(ADMIN, 'PUT', `/cards/${state.cards.PUB.id}/parent`, {
+			parentCardId: state.cards.PROV.id,
+		})
+		let feed = await api(TESTER, 'GET', `/cards/${state.cards.PUB.id}/activity`)
+		expect(JSON.stringify(feed), 'attach must not name the hidden parent').not.toContain(title('PROV'))
+
+		await api(TESTER, 'PUT', `/cards/${state.cards.PUB.id}/parent`, { parentCardId: null })
+		feed = await api(TESTER, 'GET', `/cards/${state.cards.PUB.id}/activity`)
+		expect(JSON.stringify(feed), 'detach must not name the hidden parent').not.toContain(title('PROV'))
+
+		// Control: a PUBLIC parent IS still named, so the two assertions above
+		// are not just "sub-card verbs never carry a detail".
+		const open = await api(ADMIN, 'POST', '/cards', {
+			stackId: state.stackId,
+			title: title('OPEN'),
+		})
+		await api(ADMIN, 'PUT', `/cards/${state.cards.PUB.id}/parent`, { parentCardId: open.id })
+		feed = await api(TESTER, 'GET', `/cards/${state.cards.PUB.id}/activity`)
+		expect(JSON.stringify(feed), 'a public parent is still named').toContain(title('OPEN'))
+
+		// Leave the fixture as the later tests expect it: PUB parentless, and the
+		// control card hard-removed (soft-delete + purge) so it shows up in
+		// neither the board payload, the public snapshot, nor the exact trash
+		// assertions at the end of this spec.
+		await api(TESTER, 'PUT', `/cards/${state.cards.PUB.id}/parent`, { parentCardId: null })
+		await api(ADMIN, 'DELETE', `/cards/${open.id}`)
+		await api(ADMIN, 'DELETE', `/cards/${open.id}/purge`)
 	})
 
 	test('anonymous surfaces: public share and ICS feed carry public cards only', async () => {
