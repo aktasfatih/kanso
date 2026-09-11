@@ -620,22 +620,6 @@ jobs:
       # Realtime push isn't needed for the UI specs (they poll); skip it so a
       # flaky appstore release can't fail the boot.
       KANSO_SKIP_NOTIFY_PUSH: '1'
-      # Dependabot PRs skip the SUITE, never the CHECK — see the long comment
-      # above the first step for why that distinction is the whole point.
-      #
-      # Keyed off the PR AUTHOR, not `github.actor`: a manual re-run of a
-      # dependabot PR's checks makes the actor the human who pressed the button,
-      # which would silently start running the 40-120m suite again on exactly the
-      # runs someone is trying to unblock. The `pull_request` guard keeps pushes
-      # to main (where there is no PR context, so the login is empty) running the
-      # full suite, so main is still stamped by a real e2e run after a bot PR
-      # merges.
-      #
-      # Known trade-off: a human who pushes hand-written code onto a dependabot
-      # branch keeps the bot as PR author and so keeps the skip. Nothing in this
-      # repo does that; if it ever becomes a habit, close the branch and reopen
-      # the change as your own PR rather than weakening this to `github.actor`.
-      SKIP_E2E: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}
       # setup.sh's default anyway, but stated explicitly: the deck/contacts pins
       # in dev/install-optional-apps.sh support NC 34 only, and the script skips
       # itself on any other major. Pinning the version here keeps the two specs
@@ -643,61 +627,23 @@ jobs:
       # into the runner environment.
       NC_VERSION: '34'
     steps:
-      # ── Why a dependabot PR skips the STEPS and not the JOB ──────────────────
-      #
-      # A lockfile bump does not need a 40-120m browser suite: `cs-check`,
-      # `psalm`, both `unit-php` legs, `build-frontend` and the ten-leg
-      # install-matrix already cover what a dependency bump can break, and this
-      # job is by far the most expensive thing in the repo. One dependabot `e2e`
-      # job sat QUEUED for 18 hours waiting for a runner (run 34304313801) while
-      # its other 14 jobs had finished in eight minutes, and everything else in
-      # the pool degraded 2-3x behind it.
-      #
-      # But `e2e` is a REQUIRED check, and a job that does not run does not
-      # report. A job-level `if:` — the obvious way to write this — leaves the
-      # `e2e` check permanently PENDING on every dependabot PR, so none of them
-      # could ever be merged: the exact opposite of the intent, and strictly
-      # worse than the 18h queue it was meant to fix. The same trap is recorded
-      # a few jobs up, on `unit-mcp`, about paths-filtering a required check.
-      #
-      # So the job always runs and always reports; only its steps short-circuit.
-      # It costs a runner slot for the seconds it takes to skip eleven steps
-      # instead of the 40-120 minutes it takes to run them, which is the whole
-      # saving. Every step below therefore carries the same guard — a new step
-      # added without one WILL execute on dependabot PRs.
-      #
-      # Not done here, deliberately: serialising e2e repo-wide with a job-level
-      # `concurrency: e2e-global`. With a ~1.5h suite that head-of-line-blocks a
-      # human PR behind a bot PR, and the contention it targets is cross-repo and
-      # cluster-side (the shared runner scale set admits pods against a 2-core
-      # request while each burst to 4), so it is owned there, not here.
-      - name: Skip the browser suite (dependabot PR)
-        if: ${{ env.SKIP_E2E == 'true' }}
-        run: |
-          echo "Dependabot PR — skipping the e2e suite; this required check still reports." \
-            >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v7
-        if: ${{ env.SKIP_E2E != 'true' }}
       - uses: actions/setup-node@v7
-        if: ${{ env.SKIP_E2E != 'true' }}
         with:
           node-version: 22
           cache: npm
       - name: Install dependencies
-        if: ${{ env.SKIP_E2E != 'true' }}
         run: npm ci --no-audit --no-fund
 
       # The app is mounted into the container from the checkout, and js/ + css/
       # are gitignored — so the frontend must be built before the stack boots.
       - name: Build frontend
-        if: ${{ env.SKIP_E2E != 'true' }}
         run: npm run build
 
       # The self-hosted ARC runner image ships the docker CLI but not the
       # Compose v2 plugin (ubuntu-latest has it preinstalled). setup.sh uses
       # `docker compose`, so install the plugin if it's missing.
       - name: Ensure docker compose plugin
-        if: ${{ env.SKIP_E2E != 'true' }}
         run: |
           if ! docker compose version >/dev/null 2>&1; then
             mkdir -p ~/.docker/cli-plugins
@@ -712,7 +658,6 @@ jobs:
       # job. This is the job the registry timeout actually killed. No KANSO_DB
       # is set here, so the profile resolves to setup.sh's postgres default.
       - name: Pre-pull dev stack images (with retry)
-        if: ${{ env.SKIP_E2E != 'true' }}
         working-directory: dev
         continue-on-error: true
         run: |
@@ -760,14 +705,12 @@ jobs:
       # runner host can reach GitHub, so the download happens outside the
       # container and is `docker cp`-ed in).
       - name: Boot dev Nextcloud stack
-        if: ${{ env.SKIP_E2E != 'true' }}
         run: ./dev/setup.sh
 
       # chromium runs the whole desktop suite + the mobile-chromium (Pixel 7)
       # project; webkit runs the mobile-webkit (iPhone 14) project so the PWA is
       # covered on the iOS-Safari engine too (no KVM/Apple hardware needed).
       - name: Install Playwright browsers
-        if: ${{ env.SKIP_E2E != 'true' }}
         run: npx playwright install --with-deps chromium webkit
 
       # Run the suite in PARALLEL: each Playwright worker provisions its own
@@ -782,14 +725,13 @@ jobs:
       # is the wall. To go past 2, tune the backend (pm.max_children /
       # postgres max_connections) and raise the runner CPU limit first.
       - name: Run e2e tests
-        if: ${{ env.SKIP_E2E != 'true' }}
         run: npm run test:e2e
         env:
           E2E_ISOLATE: '1'
           E2E_WORKERS: '2'
 
       - name: Upload Playwright report
-        if: ${{ !cancelled() && env.SKIP_E2E != 'true' }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
@@ -802,7 +744,7 @@ jobs:
       # Surface container logs when the stack or a spec fails so failures are
       # diagnosable without re-running locally.
       - name: Dump Nextcloud logs on failure
-        if: ${{ failure() && env.SKIP_E2E != 'true' }}
+        if: ${{ failure() }}
         run: |
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true
