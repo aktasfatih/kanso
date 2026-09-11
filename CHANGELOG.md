@@ -11,6 +11,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.30.0](https://github.com/aktasfatih/kanso/compare/v0.29.0...v0.30.0) (2026-09-11)
+
+
+### Bug Fixes
+
+* **board:** refresh an open board when access, timers or repeats change behind it ([e5fca37](https://github.com/aktasfatih/kanso/commit/e5fca37d7fb5cb42ebdbdb89aba974b9b9f130e4)), closes [#updateTimers](https://github.com/aktasfatih/kanso/issues/updateTimers) [#updateRefetchInterval](https://github.com/aktasfatih/kanso/issues/updateRefetchInterval)
+* **board:** stop showing a board once your access to it has been taken away ([8a4dea6](https://github.com/aktasfatih/kanso/commit/8a4dea60aa57d44fcafd0f5aefcb5ed2d7aeaa88))
+* **import:** say whether a failed Deck import left anything behind ([a4e9f17](https://github.com/aktasfatih/kanso/commit/a4e9f172035fbdf4642a2976f093dbb4f9102221))
+* **migration:** renumber the Deck-import ledger past the email-intake migrations ([b56863f](https://github.com/aktasfatih/kanso/commit/b56863f314f9e87bd3d3f9d7531cd22512dac02c)), closes [#10300](https://github.com/aktasfatih/kanso/issues/10300)
+* **search:** don't reserve a meta line on a result that has nothing to show ([e6e4abc](https://github.com/aktasfatih/kanso/commit/e6e4abcdbebf15c2bd775c693b0c153d51878970))
+* **security:** stop a public board link confirming whether any account exists ([7f40032](https://github.com/aktasfatih/kanso/commit/7f400328e932fa914c5ecdbd4c71e4dc632765b4)), closes [#10302](https://github.com/aktasfatih/kanso/issues/10302)
+* **security:** stop the trash endpoints telling strangers that a card exists ([2f84e17](https://github.com/aktasfatih/kanso/commit/2f84e177f336cabd4512aa9361ae16f57d38021b))
+* **ui:** stop bulk-action controls being cut off the screen on a phone ([d82cb49](https://github.com/aktasfatih/kanso/commit/d82cb49658338021de877967d34098229cb37268))
+
+
+### Features
+
+* **search:** show which column each search hit is in ([c651ef2](https://github.com/aktasfatih/kanso/commit/c651ef2ca53c3c8602bbc1f2586e3663c240fb0b)), closes [#122](https://github.com/aktasfatih/kanso/issues/122)
+* **sub-cards:** list sub-cards one per row with their start and due dates ([c2898af](https://github.com/aktasfatih/kanso/commit/c2898afc6ba9990e9b6ab31e30129cd595538d33)), closes [#122](https://github.com/aktasfatih/kanso/issues/122) [#FFE7E7](https://github.com/aktasfatih/kanso/issues/FFE7E7) [#FFEEC5](https://github.com/aktasfatih/kanso/issues/FFEEC5)
+
+
+### Performance Improvements
+
+* **board:** stop re-downloading a board that has not changed ([6373057](https://github.com/aktasfatih/kanso/commit/6373057fbe3270f4da54fca598a57b1a838386af))
+
 # [0.29.0](https://github.com/aktasfatih/kanso/compare/v0.28.0...v0.29.0) (2026-09-11)
 
 
