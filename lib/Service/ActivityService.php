@@ -43,9 +43,9 @@ class ActivityService {
 	 * Any item whose change has a `kanso_change_details` side-table row carries
 	 * `detail: {from, to}` (the before/after values) so the client can render the
 	 * specifics of the change: the description diff, the source/target column of a
-	 * move, the label title added/removed, the assignee name, the priority/status/
-	 * type/estimate/date values. Verbs with no detail row (and legacy edits recorded
-	 * before this feature) carry null.
+	 * move, the label title added/removed, the assignee name, the attachment
+	 * filename added/removed, the priority/status/type/estimate/date values. Verbs
+	 * with no detail row (and legacy edits recorded before this feature) carry null.
 	 *
 	 * @return list<array{id: int, actor: ?string, actorName: ?string, verb: ?int, action: int, timestamp: int, detail: array{from: ?string, to: ?string}|null}>
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted

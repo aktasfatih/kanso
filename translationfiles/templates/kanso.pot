@@ -292,13 +292,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4295
+#: src/components/CardDetail.vue:4323
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4293
+#: src/components/CardDetail.vue:4321
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
@@ -322,7 +322,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4291
+#: src/components/CardDetail.vue:4319
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -352,7 +352,7 @@ msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1975
+#: src/components/CardDetail.vue:1995
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -701,6 +701,14 @@ msgstr ""
 
 #: src/components/AddToKansoDialog.vue
 msgid "Attach “{file}” to a card. A copy is stored on the card."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached a file"
 msgstr ""
 
 #: src/components/AddToKansoDialog.vue
@@ -1672,7 +1680,7 @@ msgid "Date"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4484
+#: src/components/CardDetail.vue:4512
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3346,7 +3354,7 @@ msgid "Mon"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4486
+#: src/components/CardDetail.vue:4514
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4311,6 +4319,14 @@ msgid "removed an assignee"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "removed an attachment"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the attachment {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed the label {value}"
 msgstr ""
 
@@ -4711,7 +4727,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:6154
+#: src/components/CardDetail.vue:6189
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5365,7 +5381,7 @@ msgid "Wed"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4485
+#: src/components/CardDetail.vue:4513
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5446,7 +5462,7 @@ msgid "wrote"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4487
+#: src/components/CardDetail.vue:4515
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

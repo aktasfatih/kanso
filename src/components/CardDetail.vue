@@ -1598,11 +1598,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 							<ul v-if="cardAttachments.length > 0" class="card-modal__links-list">
 								<li v-for="att in cardAttachments" :key="att.id" class="card-modal__link-row">
-									<a :href="attachmentHref(att.id)" class="card-modal__link" download>
-										<PaperclipIcon :size="14" class="card-modal__eyebrow-icon" />
-										<span class="card-modal__link-text">{{ att.filename }}</span>
-										<span class="card-modal__attachment-size">{{ formatBytes(att.size) }}</span>
-									</a>
+									<div class="card-modal__attachment">
+										<a :href="attachmentHref(att.id)" class="card-modal__link" download>
+											<PaperclipIcon :size="14" class="card-modal__eyebrow-icon" />
+											<span class="card-modal__link-text">{{ att.filename }}</span>
+											<span class="card-modal__attachment-size">{{ formatBytes(att.size) }}</span>
+										</a>
+										<!-- #119 — "when did this file reach this card?" had no answer
+										     anywhere in the UI, though createdAt was already on the wire.
+										     Same relative + exact pair the activity feed uses, always
+										     rendered rather than hover-only (a tooltip is unreachable on
+										     touch). -->
+										<span v-if="att.createdAt" class="card-modal__attachment-meta">
+											<NcAvatar
+												:user="att.uploadedBy || ''"
+												:display-name="attachmentUploader(att)"
+												:size="16"
+												:disable-menu="true" />
+											<span class="card-modal__attachment-uploader">{{ attachmentUploader(att) }}</span>
+											<span class="card-modal__activity-time"><template v-if="activityRelativeTime(att.createdAt)">{{ activityRelativeTime(att.createdAt) }}<span v-if="exactTimeLabel(att.createdAt)" class="card-modal__activity-sep"> · </span></template><time
+												v-if="exactTimeLabel(att.createdAt)"
+												class="card-modal__activity-exact"
+												:datetime="isoTimestamp(att.createdAt)"
+												:title="exactTimeTitle(att.createdAt)">{{ exactTimeLabel(att.createdAt) }}</time></span>
+										</span>
+									</div>
 									<button
 										v-if="canEdit"
 										class="card-modal__child-remove"
@@ -4107,6 +4127,8 @@ const ACTIVITY_VERBS = {
 	22: () => t('kanso', 'changed the card type'),
 	23: () => t('kanso', 'resolved a thread'),
 	24: () => t('kanso', 'reopened a thread'),
+	25: () => t('kanso', 'attached a file'),
+	26: () => t('kanso', 'removed an attachment'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
@@ -4203,6 +4225,12 @@ function activitySegments(item) {
 		if (d) {
 			return d.to ? withOne(t('kanso', 'changed the card type to {value}'), d.to) : plain(t('kanso', 'cleared the card type'))
 		}
+		break
+	case 25: // attachment added
+		if (d && d.to) return withOne(t('kanso', 'attached {value}'), d.to)
+		break
+	case 26: // attachment removed
+		if (d && d.from) return withOne(t('kanso', 'removed the attachment {value}'), d.from)
 		break
 	}
 	// Description (16) keeps the collapsible diff below; every other case falls
@@ -5654,6 +5682,13 @@ const attachmentError = ref('')
 
 function attachmentHref(attachmentId) {
 	return cardAttachmentUrl(props.cardId, attachmentId)
+}
+
+// Who uploaded it (#119). The API sends the resolved display name alongside the
+// uid; fall back to the uid (and then to nothing) so a row from an older cached
+// payload, or an account that has since gone, still renders.
+function attachmentUploader(att) {
+	return att.uploadedByName || att.uploadedBy || ''
 }
 
 function formatBytes(bytes) {
@@ -8081,6 +8116,33 @@ body.theme--dark .card-modal,
 	padding-left: 8px;
 	color: var(--color-text-maxcontrast);
 	font-size: 0.8125rem;
+	white-space: nowrap;
+}
+/* #119 — the attachment row carries a second line (uploader + upload time), so
+ * the link and its meta stack in a column while the remove button stays beside
+ * them. The link's own `flex: 1` is reset: with a `0%` basis in a column it
+ * would contribute no height and collapse the filename line. */
+.card-modal__attachment {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.card-modal__attachment > .card-modal__link {
+	flex: 0 0 auto;
+}
+.card-modal__attachment-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 0 10px 6px 10px;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.72rem;
+}
+.card-modal__attachment-uploader {
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 .card-modal__link-add {

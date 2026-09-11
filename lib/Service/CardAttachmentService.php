@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardAttachment;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Files\File;
 use OCP\Files\IAppData;
@@ -41,8 +42,11 @@ use OCP\Security\ISecureRandom;
  *    rejected before anything is written.
  *
  * Add/delete reuse the card's ENTITY_CARD / ACTION_UPDATE change row so the
- * existing realtime/delta-sync + ETag path reflects the new attachment count
- * with no new Change type.
+ * existing realtime/delta-sync + ETag path reflects the new attachment count.
+ * Since #119 that row also carries a verb (VERB_ATTACHMENT_ADDED /
+ * VERB_ATTACHMENT_REMOVED) plus the filename in `kanso_change_details`, so the
+ * per-card Activity feed can say WHO attached or removed WHICH file and WHEN -
+ * a removal has no other trace, the row and the bytes are both gone.
  */
 class CardAttachmentService {
 	/** Hard cap on a single upload. Oversized uploads are rejected. */
@@ -50,6 +54,12 @@ class CardAttachmentService {
 
 	/** Per-card app-data subfolder holding that card's attachment objects. */
 	private const FOLDER_PREFIX = 'card-';
+
+	/**
+	 * Cap on a change-detail string, matching the other services that write the
+	 * side table (LabelService, AssigneeService, CardService).
+	 */
+	private const MAX_DETAIL_LENGTH = 10000;
 
 	public function __construct(
 		private CardAttachmentMapper $attachmentMapper,
@@ -61,6 +71,7 @@ class CardAttachmentService {
 		private ISecureRandom $secureRandom,
 		private IRootFolder $rootFolder,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
@@ -176,13 +187,7 @@ class CardAttachmentService {
 			throw $e;
 		}
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+		$this->recordAttachmentChange($card, $attachment->getFilename(), $actorUid, Change::VERB_ATTACHMENT_ADDED);
 
 		return $attachment;
 	}
@@ -277,13 +282,7 @@ class CardAttachmentService {
 			throw $e;
 		}
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+		$this->recordAttachmentChange($card, $attachment->getFilename(), $actorUid, Change::VERB_ATTACHMENT_ADDED);
 
 		return $attachment;
 	}
@@ -408,19 +407,17 @@ class CardAttachmentService {
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
+		// Read the label BEFORE the row goes: after the delete it is the only
+		// surviving record of which file this was. (The column is NOT NULL, so the
+		// cast is for the entity's nullable property, never a real row.)
+		$filename = (string)$attachment->getFilename();
 
 		// Drop the row first (the source of truth for what's listed); then
 		// best-effort remove the bytes.
 		$this->attachmentMapper->delete($attachment);
 		$this->deleteObjectQuietly($cardId, $attachment->getStorageKey());
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+		$this->recordAttachmentChange($card, $filename, $actorUid, Change::VERB_ATTACHMENT_REMOVED);
 	}
 
 	/**
@@ -456,6 +453,43 @@ class CardAttachmentService {
 		}
 
 		$this->attachmentMapper->deleteByCard($cardId);
+	}
+
+	/**
+	 * Appends the card's change row for an attachment add/remove (#119) and
+	 * records the filename in the `kanso_change_details` side table, so the
+	 * Activity feed can name the file rather than render a bare "updated this
+	 * card". The filename rides the same side as the equivalent label change:
+	 * `to` when something appeared, `from` when something went away.
+	 *
+	 * Still an ENTITY_CARD / ACTION_UPDATE row - delta sync and the ETag key on
+	 * (entity_type, action), never on the verb, so the realtime path is unchanged.
+	 */
+	private function recordAttachmentChange(Card $card, string $filename, string $actorUid, int $verb): void {
+		$change = $this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			(int)$card->getId(),
+			Change::ACTION_UPDATE,
+			$actorUid,
+			verb: $verb,
+		);
+
+		$label = $this->capDetail($filename);
+		$added = $verb === Change::VERB_ATTACHMENT_ADDED;
+		$this->changeDetailMapper->insertDetail(
+			$change->getId(),
+			$added ? null : $label,
+			$added ? $label : null,
+		);
+	}
+
+	/**
+	 * Caps a detail string to {@see self::MAX_DETAIL_LENGTH} chars (multibyte-safe),
+	 * consistent with the other services that write the side table.
+	 */
+	private function capDetail(string $value): string {
+		return mb_substr($value, 0, self::MAX_DETAIL_LENGTH);
 	}
 
 	/**

@@ -264,6 +264,54 @@ test.describe('Card file attachments', () => {
 			.toHaveCount(0, { timeout: 8000 })
 	})
 
+	// #119 — "when did this file reach this card?" had no answer anywhere: the
+	// row printed only name + size, and the change log had no attachment verb, so
+	// an upload rendered as a bare "updated this card" and a REMOVAL left no trace
+	// at all. Both halves are asserted here, add and remove.
+	test('an attachment shows its upload time, and add/remove are recorded in Activity', async ({ page }) => {
+		await ncLogin(page)
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
+		await page.goto(cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		await page.setInputFiles('.card-modal__file-input', {
+			name: 'dated.txt',
+			mimeType: 'text/plain',
+			buffer: Buffer.from('when did this arrive?'),
+		})
+
+		const row = page.locator('.card-modal__link-row', { hasText: 'dated.txt' })
+		await expect(row).toHaveCount(1, { timeout: 8000 })
+
+		// (a) The row itself now answers "when": a machine-readable <time> stamp
+		// beside a human relative label, and the uploader's name.
+		const meta = row.locator('.card-modal__attachment-meta')
+		await expect(meta).toHaveCount(1)
+		await expect(meta).toContainText('just now')
+		const datetime = await meta.locator('time').getAttribute('datetime')
+		expect(datetime).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+		// The uploader is credited by display name, not a bare uid.
+		await expect(meta.locator('.card-modal__attachment-uploader')).not.toBeEmpty()
+
+		// (b) The upload lands in Activity, naming the file.
+		const activityTab = page.locator('.card-modal__discussion-tab', { hasText: 'Activity' })
+		const discussionTab = page.locator('.card-modal__discussion-tab', { hasText: 'Discussion' })
+		await activityTab.click()
+		await expect(page.locator('.card-modal__activity-row', { hasText: 'attached dated.txt' }))
+			.toHaveCount(1, { timeout: 8000 })
+
+		// ...and so does the removal - the case with no other trace, since the row
+		// and the bytes are both gone.
+		await row.locator('.card-modal__child-remove').click()
+		await expect(page.locator('.card-modal__link-row', { hasText: 'dated.txt' }))
+			.toHaveCount(0, { timeout: 8000 })
+		// The feed is fetched when the tab opens, so reopen it to refetch.
+		await discussionTab.click()
+		await activityTab.click()
+		await expect(page.locator('.card-modal__activity-row', { hasText: 'removed the attachment dated.txt' }))
+			.toHaveCount(1, { timeout: 8000 })
+	})
+
 	// Paste an image into the description editor (#3525): it uploads via the
 	// attachment endpoint and the saved description renders an <img> pointing at
 	// the inline endpoint.

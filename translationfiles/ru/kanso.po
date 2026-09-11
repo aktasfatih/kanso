@@ -301,14 +301,14 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4295
+#: src/components/CardDetail.vue:4323
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
 msgstr[1] "%n дня назад"
 msgstr[2] "%n дней назад"
 
-#: src/components/CardDetail.vue:4293
+#: src/components/CardDetail.vue:4321
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -336,7 +336,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4291
+#: src/components/CardDetail.vue:4319
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -371,7 +371,7 @@ msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:1975
+#: src/components/CardDetail.vue:1995
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -725,6 +725,14 @@ msgstr "Прикрепить"
 #: src/components/AddToKansoDialog.vue
 msgid "Attach “{file}” to a card. A copy is stored on the card."
 msgstr "Прикрепить «{file}» к карточке. На карточке сохраняется копия."
+
+#: src/components/CardDetail.vue
+msgid "attached {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached a file"
+msgstr ""
 
 #: src/components/AddToKansoDialog.vue
 msgid "Attaching…"
@@ -1695,7 +1703,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4484
+#: src/components/CardDetail.vue:4512
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3374,7 +3382,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4486
+#: src/components/CardDetail.vue:4514
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4340,6 +4348,14 @@ msgid "removed an assignee"
 msgstr "убрал исполнителя"
 
 #: src/components/CardDetail.vue
+msgid "removed an attachment"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the attachment {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed the label {value}"
 msgstr "убрал метку {value}"
 
@@ -4740,7 +4756,7 @@ msgstr "Показывать панель форматирования"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:6154
+#: src/components/CardDetail.vue:6189
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5395,7 +5411,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4485
+#: src/components/CardDetail.vue:4513
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -5477,7 +5493,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4487
+#: src/components/CardDetail.vue:4515
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"
