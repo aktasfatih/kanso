@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.29.0](https://github.com/aktasfatih/kanso/compare/v0.28.0...v0.29.0) (2026-09-11)
+
+
+### Features
+
+* **attachments:** show when a file was attached and record attachment changes in Activity ([151927b](https://github.com/aktasfatih/kanso/commit/151927b758722cf8cc2468a82d4413c12d29a6c4)), closes [#119](https://github.com/aktasfatih/kanso/issues/119)
+
 # [0.28.0](https://github.com/aktasfatih/kanso/compare/v0.27.0...v0.28.0) (2026-09-10)
 
 
