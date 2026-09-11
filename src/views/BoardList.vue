@@ -858,6 +858,30 @@ async function openImport() {
 	}
 }
 
+// A failed import means one of two very different things, and the difference is
+// the only thing standing between a user and a duplicate board.
+//
+// The import runs in a single transaction, so when OUR server answers with an
+// error nothing was written — saying "nothing was imported" is a fact, and
+// retrying is safe. But a gateway timeout or a dropped connection means the
+// request never got a verdict: the import may well have finished server-side,
+// and blind retrying is exactly what produces a second complete board plus a
+// second copy of every attachment's bytes.
+//
+// 502/503/504 come from a proxy, not from Kanso, so they belong with "no answer"
+// even though they arrive as a response.
+function importFailureMessage(err) {
+	const status = err?.response?.status
+	const answeredByApp = status !== undefined && status !== 502 && status !== 503 && status !== 504
+
+	if (answeredByApp) {
+		return err?.response?.data?.error
+			|| t('kanso', 'That board could not be imported, so nothing was created. You can safely try again.')
+	}
+
+	return t('kanso', 'The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy.')
+}
+
 async function doImport(db) {
 	importError.value = ''
 	importingId.value = db.id
@@ -870,7 +894,7 @@ async function doImport(db) {
 		// source board in Deck.
 		importSummary.value = res
 	} catch (err) {
-		importError.value = err?.response?.data?.error || t('kanso', 'Failed to import that board.')
+		importError.value = importFailureMessage(err)
 	} finally {
 		importingId.value = null
 	}

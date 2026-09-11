@@ -514,7 +514,6 @@ OC.L10N.register(
     "Failed to detach from parent." : "Kan niet losmaken van de hoofdkaart.",
     "Failed to detach sub-card." : "Kan de subkaart niet losmaken.",
     "Failed to edit comment." : "Kan de reactie niet bewerken.",
-    "Failed to import that board." : "Kan dat bord niet importeren.",
     "Failed to leave board." : "Kan het bord niet verlaten.",
     "Failed to link card." : "Kan de kaart niet koppelen.",
     "Failed to load analytics. Please try again." : "Kan de statistieken niet laden. Probeer het opnieuw.",

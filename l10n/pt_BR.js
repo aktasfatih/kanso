@@ -514,7 +514,6 @@ OC.L10N.register(
     "Failed to detach from parent." : "Não foi possível desvincular do cartão pai.",
     "Failed to detach sub-card." : "Não foi possível desvincular o subcartão.",
     "Failed to edit comment." : "Não foi possível editar o comentário.",
-    "Failed to import that board." : "Não foi possível importar esse quadro.",
     "Failed to leave board." : "Não foi possível sair do quadro.",
     "Failed to link card." : "Não foi possível vincular o cartão.",
     "Failed to load analytics. Please try again." : "Não foi possível carregar as análises. Tente novamente.",

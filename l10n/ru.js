@@ -514,7 +514,6 @@ OC.L10N.register(
     "Failed to detach from parent." : "Не удалось открепить от родительской карточки.",
     "Failed to detach sub-card." : "Не удалось открепить подкарточку.",
     "Failed to edit comment." : "Не удалось изменить комментарий.",
-    "Failed to import that board." : "Не удалось импортировать эту доску.",
     "Failed to leave board." : "Не удалось покинуть доску.",
     "Failed to link card." : "Не удалось связать карточку.",
     "Failed to load analytics. Please try again." : "Не удалось загрузить аналитику. Попробуйте еще раз.",

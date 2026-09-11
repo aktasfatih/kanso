@@ -514,7 +514,6 @@ OC.L10N.register(
     "Failed to detach from parent." : "Error al desvincular de la tarjeta principal.",
     "Failed to detach sub-card." : "Error al desvincular la subtarjeta.",
     "Failed to edit comment." : "Error al editar el comentario.",
-    "Failed to import that board." : "Error al importar ese tablero.",
     "Failed to leave board." : "Error al abandonar el tablero.",
     "Failed to link card." : "Error al enlazar la tarjeta.",
     "Failed to load analytics. Please try again." : "Error al cargar las estadísticas. Inténtalo de nuevo.",

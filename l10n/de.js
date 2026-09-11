@@ -514,7 +514,6 @@ OC.L10N.register(
     "Failed to detach from parent." : "Karte konnte nicht von der übergeordneten Karte getrennt werden.",
     "Failed to detach sub-card." : "Unterkarte konnte nicht getrennt werden.",
     "Failed to edit comment." : "Kommentar konnte nicht bearbeitet werden.",
-    "Failed to import that board." : "Board konnte nicht importiert werden.",
     "Failed to leave board." : "Board konnte nicht verlassen werden.",
     "Failed to link card." : "Karte konnte nicht verknüpft werden.",
     "Failed to load analytics. Please try again." : "Analysen konnten nicht geladen werden. Bitte erneut versuchen.",

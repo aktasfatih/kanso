@@ -2411,10 +2411,6 @@ msgstr "Nie udało się odłączyć podkarty."
 msgid "Failed to edit comment."
 msgstr "Nie udało się edytować komentarza."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Nie udało się zaimportować tej tablicy."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Nie udało się opuścić tablicy."
@@ -4992,6 +4988,10 @@ msgstr ""
 msgid "Text"
 msgstr "Tekst"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Tej karty nie ma już na tej tablicy."
@@ -5023,6 +5023,10 @@ msgstr "Lista dozwolonych aplikacji Guests zawiera Kanso i aplikację Viewer."
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "Lista dozwolonych aplikacji Guests jest wyłączona — goście mogą korzystać z Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

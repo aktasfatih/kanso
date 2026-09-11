@@ -514,7 +514,6 @@ OC.L10N.register(
     "Failed to detach from parent." : "Üst karttan ayrılamadı.",
     "Failed to detach sub-card." : "Alt kart ayrılamadı.",
     "Failed to edit comment." : "Yorum düzenlenemedi.",
-    "Failed to import that board." : "Bu pano içe aktarılamadı.",
     "Failed to leave board." : "Panodan ayrılamadı.",
     "Failed to link card." : "Kart bağlanamadı.",
     "Failed to load analytics. Please try again." : "Analitik yüklenemedi. Lütfen tekrar dene.",

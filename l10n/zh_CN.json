@@ -547,7 +547,6 @@
         "Failed to detach from parent.": "从父卡片分离失败。",
         "Failed to detach sub-card.": "分离子卡片失败。",
         "Failed to edit comment.": "编辑评论失败。",
-        "Failed to import that board.": "导入该看板失败。",
         "Failed to leave board.": "退出看板失败。",
         "Failed to link card.": "关联卡片失败。",
         "Failed to load analytics. Please try again.": "加载分析数据失败，请重试。",

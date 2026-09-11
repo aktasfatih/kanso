@@ -2411,10 +2411,6 @@ msgstr "Не удалось открепить подкарточку."
 msgid "Failed to edit comment."
 msgstr "Не удалось изменить комментарий."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Не удалось импортировать эту доску."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Не удалось покинуть доску."
@@ -4992,6 +4988,10 @@ msgstr ""
 msgid "Text"
 msgstr "Текст"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Этой карточки больше нет на этой доске."
@@ -5023,6 +5023,10 @@ msgstr "Белый список приложения Guests включает Kan
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "Белый список приложения Guests отключен — гости могут пользоваться Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

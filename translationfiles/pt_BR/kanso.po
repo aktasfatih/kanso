@@ -2384,10 +2384,6 @@ msgstr "Não foi possível desvincular o subcartão."
 msgid "Failed to edit comment."
 msgstr "Não foi possível editar o comentário."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Não foi possível importar esse quadro."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Não foi possível sair do quadro."
@@ -4963,6 +4959,10 @@ msgstr ""
 msgid "Text"
 msgstr "Texto"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Esse cartão não está mais neste quadro."
@@ -4994,6 +4994,10 @@ msgstr "A lista de permissões do aplicativo Guests inclui o Kanso e o aplicativ
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "A lista de permissões do aplicativo Guests está desativada — convidados podem usar o Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

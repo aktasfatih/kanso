@@ -564,7 +564,6 @@
         "Failed to detach from parent.": "Échec du détachement de la carte parente.",
         "Failed to detach sub-card.": "Échec du détachement de la sous-carte.",
         "Failed to edit comment.": "Échec de la modification du commentaire.",
-        "Failed to import that board.": "Échec de l'importation de ce tableau.",
         "Failed to leave board.": "Impossible de quitter le tableau.",
         "Failed to link card.": "Échec de la liaison de la carte.",
         "Failed to load analytics. Please try again.": "Échec du chargement des statistiques. Veuillez réessayer.",
