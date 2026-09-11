@@ -195,6 +195,64 @@ class ActivityServiceTest extends TestCase {
 		self::assertSame(['from' => 'Medium', 'to' => 'Urgent'], $result[1]['detail']);
 	}
 
+	/**
+	 * #119: the destructive verbs. A removed time entry and a narrowed visibility
+	 * have NO other record - the entry's row is gone and the old visibility is
+	 * overwritten - so the feed must surface both the verb and its detail.
+	 */
+	public function testSurfacesTheDestructiveAndVisibilityVerbsWithTheirDetail(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->changeMapper->method('findByEntity')->willReturn([
+			$this->change(Change::VERB_TIME_ENTRY_REMOVED, Change::ACTION_UPDATE, 'alice', 400, 80),
+			$this->change(Change::VERB_VISIBILITY_CHANGED, Change::ACTION_UPDATE, 'alice', 300, 81),
+			$this->change(Change::VERB_LINK_REMOVED, Change::ACTION_UPDATE, 'alice', 200, 82),
+			$this->change(Change::VERB_FIELD_CHANGED, Change::ACTION_UPDATE, 'alice', 100, 83),
+		]);
+		$this->userManager->method('get')->willReturn(null);
+
+		$time = new ChangeDetail();
+		$time->setChangeId(80);
+		$time->setFromText('1h 30m - Pairing');
+		$visibility = new ChangeDetail();
+		$visibility->setChangeId(81);
+		$visibility->setFromText('Public');
+		$visibility->setToText('Private');
+		$link = new ChangeDetail();
+		$link->setChangeId(82);
+		$link->setFromText('Fix login');
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		$this->changeDetailMapper->expects(self::once())
+			->method('findByChangeIds')
+			->with([80, 81, 82, 83])
+			->willReturn([80 => $time, 81 => $visibility, 82 => $link]);
+		$this->service = new ActivityService(
+			$this->changeMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->permissionService,
+			$this->userManager,
+			$this->visibilityGuard,
+			$this->changeDetailMapper,
+		);
+
+		$result = $this->service->getCardActivity(9, 'bob');
+
+		// The deleted time entry names the duration it destroyed.
+		self::assertSame(Change::VERB_TIME_ENTRY_REMOVED, $result[0]['verb']);
+		self::assertSame(['from' => '1h 30m - Pairing', 'to' => null], $result[0]['detail']);
+		// The visibility change names both ends of the move.
+		self::assertSame(Change::VERB_VISIBILITY_CHANGED, $result[1]['verb']);
+		self::assertSame(['from' => 'Public', 'to' => 'Private'], $result[1]['detail']);
+		// A removed link names what went away.
+		self::assertSame(Change::VERB_LINK_REMOVED, $result[2]['verb']);
+		self::assertSame(['from' => 'Fix login', 'to' => null], $result[2]['detail']);
+		// A custom-field edit is verb-only by design - no detail, but no longer
+		// the meaningless generic VERB_UPDATED either.
+		self::assertSame(Change::VERB_FIELD_CHANGED, $result[3]['verb']);
+		self::assertNull($result[3]['detail']);
+	}
+
 	public function testDescriptionItemWithoutDetailRowCarriesNullDetail(): void {
 		// Legacy description edit recorded before this feature: no side-table row.
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());

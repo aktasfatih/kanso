@@ -1696,6 +1696,57 @@ class CardServiceTest extends TestCase {
 		self::assertSame('internal', $updated->getVisibility());
 	}
 
+	/**
+	 * #119: narrowing who can see a card must leave a readable trace - it used to
+	 * fall through to the generic VERB_UPDATED with no detail at all, so a manager
+	 * restricting someone else's card was indistinguishable from any other edit.
+	 */
+	public function testUpdateVisibilityStampsItsOwnVerbAndFromToLabels(): void {
+		$card = $this->card(); // visibility unset → public
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(601);
+		$captured = new \stdClass();
+		$captured->verb = null;
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willReturnCallback(function (...$args) use ($change, $captured): Change {
+				$captured->verb = $args[5] ?? null;
+				return $change;
+			});
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(601, 'Public', 'Private')
+			->willReturn(new ChangeDetail());
+
+		$this->service->update(9, null, null, null, null, null, 'alice', visibility: 'private');
+		self::assertSame(Change::VERB_VISIBILITY_CHANGED, $captured->verb);
+	}
+
+	/** Archiving and restoring each get their own verb (no detail to name). */
+	public function testUpdateArchivedStampsArchivedVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card());
+		$this->service->update(9, null, null, null, null, true, 'alice');
+		self::assertSame(Change::VERB_ARCHIVED, $verb->verb);
+	}
+
+	public function testUpdateUnarchiveStampsUnarchivedVerb(): void {
+		$card = $this->card();
+		$card->setArchived(true);
+		$verb = $this->captureUpdateVerb($card);
+		$this->service->update(9, null, null, null, null, false, 'alice');
+		self::assertSame(Change::VERB_UNARCHIVED, $verb->verb);
+	}
+
+	/** A no-op archived save is still not mislabelled as an archive. */
+	public function testUpdateArchivedNoOpKeepsTheGenericVerb(): void {
+		$verb = $this->captureUpdateVerb($this->card()); // already unarchived
+		$this->service->update(9, null, null, null, null, false, 'alice');
+		self::assertSame(Change::VERB_UPDATED, $verb->verb);
+	}
+
 	public function testUpdateVisibilityDeniedForNonOwnerNonManager(): void {
 		// 'bob' is neither the card's owner nor a manager (the setUp contextFor
 		// stub resolves isManager=false) - flipping someone else's card across
@@ -2773,7 +2824,11 @@ class CardServiceTest extends TestCase {
 	public function testSetParentClearsParentAndWritesChangeRow(): void {
 		$child = $this->card(9, 5, 1);
 		$child->setParentCardId(20);
-		$this->cardMapper->method('find')->with(9)->willReturn($child);
+		$parent = $this->card(20, 5, 1);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::once())
 			->method('update')
@@ -2784,6 +2839,97 @@ class CardServiceTest extends TestCase {
 		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturn(new Change());
 
 		$this->service->setParent(9, null, 'alice');
+	}
+
+	// ---- setParent Activity trace (#119) ----------------------------------
+
+	/**
+	 * Linking a card under a parent used to write the generic VERB_UPDATED with
+	 * no detail. It now stamps VERB_SUBCARD_ATTACHED naming the card at the OTHER
+	 * end of the link (the parent) - naming this card would just repeat the feed
+	 * the row is rendered in.
+	 */
+	public function testSetParentStampsAttachedVerbNamingTheParent(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: search');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(801);
+		$captured = new \stdClass();
+		$captured->verb = null;
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willReturnCallback(function (...$args) use ($change, $captured): Change {
+				$captured->verb = $args[5] ?? null;
+				return $change;
+			});
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(801, null, 'Epic: search')
+			->willReturn(new ChangeDetail());
+
+		$this->service->setParent(9, 20, 'alice');
+		self::assertSame(Change::VERB_SUBCARD_ATTACHED, $captured->verb);
+	}
+
+	/**
+	 * Detaching destroys the link, so the change row is its only trace: the old
+	 * parent's title has to be read BEFORE the parent id is cleared.
+	 */
+	public function testSetParentDetachStampsDetachedVerbNamingTheOldParent(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setParentCardId(20);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: search');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(802);
+		$captured = new \stdClass();
+		$captured->verb = null;
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->willReturnCallback(function (...$args) use ($change, $captured): Change {
+				$captured->verb = $args[5] ?? null;
+				return $change;
+			});
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(802, 'Epic: search', null)
+			->willReturn(new ChangeDetail());
+
+		$this->service->setParent(9, null, 'alice');
+		self::assertSame(Change::VERB_SUBCARD_DETACHED, $captured->verb);
+	}
+
+	/** A caller denied EDIT links nothing and writes no trace. */
+	public function testSetParentDeniedWritesNoTrace(): void {
+		$child = $this->card(9, 5, 1);
+		$parent = $this->card(20, 5, 1);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setParent(9, 20, 'alice');
 	}
 
 	public function testSetParentClearingAlreadyUnparentedIsNoOp(): void {

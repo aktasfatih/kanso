@@ -14,6 +14,9 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelation;
 use OCA\Kanso\Db\CardRelationMapper;
+use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetail;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\CardVisibilityScope;
@@ -32,6 +35,7 @@ class CardRelationServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private CardRelationService $service;
 
 	protected function setUp(): void {
@@ -41,9 +45,14 @@ class CardRelationServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
+		// Each notify() returns a persisted row; both sides of a relation get one.
+		$change = new Change();
+		$change->setId(4242);
+		$this->changeNotifier->method('notify')->willReturn($change);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->visibilityGuard->method('roleOn')->willReturn(ViewerContext::ROLE_INTERNAL);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
 		// A REAL scope - the masking rule is the behaviour under test, not a stub.
 		$this->service = new CardRelationService(
 			$this->relationMapper,
@@ -53,15 +62,17 @@ class CardRelationServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->visibilityGuard,
 			new CardVisibilityScope(),
+			$this->changeDetailMapper,
 		);
 	}
 
 	/** Every card maps to board 1 unless overridden in a specific test. */
-	private function wireCards(array $boardByCardId = []): void {
-		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($boardByCardId): Card {
+	private function wireCards(array $boardByCardId = [], array $titleByCardId = []): void {
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($boardByCardId, $titleByCardId): Card {
 			$card = new Card();
 			$card->setId($id);
 			$card->setBoardId($boardByCardId[$id] ?? 1);
+			$card->setTitle($titleByCardId[$id] ?? ('Card ' . $id));
 			$card->setDeletedAt(0);
 			return $card;
 		});
@@ -157,11 +168,20 @@ class CardRelationServiceTest extends TestCase {
 	}
 
 	public function testRemoveAssertsEditAndDeletes(): void {
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id): Card {
+			$card = new Card();
+			$card->setId($id);
+			$card->setBoardId(1);
+			$card->setTitle('Card ' . $id);
+			$card->setDeletedAt(0);
+			return $card;
+		});
 		$relation = new CardRelation();
 		$relation->setId(7);
 		$relation->setBoardId(1);
 		$relation->setCardId(10);
 		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_BLOCKS);
 		$this->relationMapper->method('find')->with(7)->willReturn($relation);
 		$board = new Board();
 		$board->setId(1);
@@ -173,6 +193,113 @@ class CardRelationServiceTest extends TestCase {
 		$this->relationMapper->expects($this->once())->method('delete')->with($relation);
 		$this->changeNotifier->expects($this->exactly(2))->method('notify');
 
+		$this->service->removeRelation(7, 'alice');
+	}
+
+	// ---- Activity trace (#119) --------------------------------------------
+
+	/**
+	 * Both endpoints get a change row, and each one's detail names the card at
+	 * the OTHER end with the direction as read from THAT side - recording the
+	 * same string twice would leave each card's feed describing itself.
+	 */
+	public function testAddBlocksGivesEachSideItsOwnDirectionalDetail(): void {
+		$this->wireCards([], [10 => 'Ship it', 20 => 'Fix the build']);
+		$this->relationMapper->method('findBlocksEdgesByBoard')->willReturn([]);
+		$this->relationMapper->method('exists')->willReturn(false);
+		$this->relationMapper->method('insert')->willReturnCallback(fn (CardRelation $r): CardRelation => $r);
+		$this->changeNotifier->expects($this->exactly(2))
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, self::anything(), Change::ACTION_UPDATE, 'alice', true, Change::VERB_RELATION_ADDED);
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->addRelation(10, 20, 'blocks', 'alice');
+
+		// 'to' on an add; the blocking card names what it blocks, the blocked card
+		// names what blocks it.
+		self::assertSame([
+			[null, 'Blocks: Fix the build'],
+			[null, 'Blocked by: Ship it'],
+		], $details);
+	}
+
+	/** A symmetric relation reads the same way from both ends. */
+	public function testAddRelatesUsesTheSymmetricLabelOnBothSides(): void {
+		$this->wireCards([], [10 => 'Ship it', 20 => 'Fix the build']);
+		$this->relationMapper->method('exists')->willReturn(false);
+		$this->relationMapper->method('insert')->willReturnCallback(fn (CardRelation $r): CardRelation => $r);
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->addRelation(10, 20, 'relates', 'alice');
+
+		self::assertSame([
+			[null, 'Relates to: Fix the build'],
+			[null, 'Relates to: Ship it'],
+		], $details);
+	}
+
+	/**
+	 * Removing a relation drops the row, so the change log is the only trace:
+	 * VERB_RELATION_REMOVED with the counterpart named on the 'from' side, read
+	 * BEFORE the delete.
+	 */
+	public function testRemoveRecordsWhatWasUnlinkedOnBothSides(): void {
+		$this->wireCards([], [10 => 'Ship it', 20 => 'Fix the build']);
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_BLOCKS);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+		$this->changeNotifier->expects($this->exactly(2))
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, self::anything(), Change::ACTION_UPDATE, 'alice', true, Change::VERB_RELATION_REMOVED);
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->removeRelation(7, 'alice');
+
+		self::assertSame([
+			['Blocks: Fix the build', null],
+			['Blocked by: Ship it', null],
+		], $details);
+	}
+
+	/** A caller denied EDIT unlinks nothing and writes no trace. */
+	public function testRemoveDeniedWritesNoTrace(): void {
+		$this->wireCards();
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_BLOCKS);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->relationMapper->expects($this->never())->method('delete');
+		$this->changeNotifier->expects($this->never())->method('notify');
+		$this->changeDetailMapper->expects($this->never())->method('insertDetail');
+
+		$this->expectException(NotPermittedException::class);
 		$this->service->removeRelation(7, 'alice');
 	}
 

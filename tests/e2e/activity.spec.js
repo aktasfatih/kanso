@@ -100,6 +100,51 @@ test.describe('Card Activity feed', () => {
 		await api.send('DELETE', `/cards/${state.cardId}/time-entries/${timeEntry.id}`).catch(() => {})
 	})
 
+	// #119 — an action that DESTROYS data or changes WHO CAN SEE a card must leave
+	// a readable trace. Both of these used to render as a bare "updated this card"
+	// (or, for the time entry, nothing readable at all): the entry row is deleted
+	// outright, so the change log is the only remaining record that the time was
+	// ever logged, and a visibility change is the one edit a manager can make to
+	// someone else's card.
+	test('deleting a time entry and changing visibility each leave a named Activity line', async ({ page }) => {
+		const stack = await api.send('POST', '/stacks', { boardId: state.boardId, title: 'Traces' })
+		const card = await api.send('POST', '/cards', { stackId: stack.id, title: 'Traced card' })
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`
+
+		// Log time, then destroy it - the row is gone after this.
+		const entry = await api.send('POST', `/cards/${card.id}/time-entries`, { seconds: 5400, note: 'Pairing' })
+		await api.send('DELETE', `/cards/${card.id}/time-entries/${entry.id}`)
+		// Then narrow who can see the card.
+		await api.send('PATCH', `/cards/${card.id}`, { visibility: 'private' })
+
+		await ncLogin(page)
+		await page.goto(cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
+
+		const rows = page.locator('.card-modal__activity-row')
+		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		const feed = page.locator('.card-modal__activity')
+
+		// Newest-first: the visibility change, then the time-entry delete. Assert
+		// per ROW, not on the whole feed - the time-entry ADD deliberately keeps a
+		// verb-less row (the entry persists its own author/time and the list
+		// renders them, so a second line for it would only be noise), and a
+		// feed-wide "no generic phrase" assertion would wrongly catch it.
+		// The visibility line names BOTH ends of the move.
+		await expect(rows.nth(0)).toContainText('changed who can see this card from Public to Private')
+		await expect(rows.nth(0)).not.toContainText('updated this card')
+		// The deleted entry is named by the duration (and note) it destroyed - the
+		// row itself is gone, so this line is the only record it ever existed.
+		await expect(rows.nth(1)).toContainText('removed the time entry 1h 30m - Pairing')
+		await expect(rows.nth(1)).not.toContainText('updated this card')
+		// And the feed does surface both, not one at the cost of the other.
+		await expect(feed).toContainText('created this card')
+
+		// The time-tracking list itself is empty - the feed is the only trace.
+		await expect(page.locator('.card-modal__time-entry')).toHaveCount(0)
+	})
+
 	// #3553 — the feed must update live while the Activity tab is open, both for a
 	// change the same client makes and for one arriving via realtime/poll. We drive
 	// the change through the API (an external mutation that broadcasts

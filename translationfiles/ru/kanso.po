@@ -301,14 +301,14 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4323
+#: src/components/CardDetail.vue:4360
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
 msgstr[1] "%n дня назад"
 msgstr[2] "%n дней назад"
 
-#: src/components/CardDetail.vue:4321
+#: src/components/CardDetail.vue:4358
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -336,7 +336,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4319
+#: src/components/CardDetail.vue:4356
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -553,6 +553,10 @@ msgid "added a label"
 msgstr "добавил метку"
 
 #: src/components/CardDetail.vue
+msgid "added a linked card"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "added the label {value}"
 msgstr "добавил метку {value}"
 
@@ -669,6 +673,10 @@ msgstr "Архив карточек"
 msgid "Archived cards ({count})"
 msgstr "Архив карточек ({count})"
 
+#: src/components/CardDetail.vue
+msgid "archived this card"
+msgstr ""
+
 #: src/views/TrashView.vue
 msgid "Are you sure?"
 msgstr "Вы уверены?"
@@ -737,6 +745,14 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "attached a file"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached a link"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached the link {value}"
 msgstr ""
 
 #: src/components/AddToKansoDialog.vue
@@ -1136,6 +1152,10 @@ msgid "Change status"
 msgstr "Изменить статус"
 
 #: src/components/CardDetail.vue
+msgid "changed a custom field"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "changed the card type"
 msgstr "изменил тип карточки"
 
@@ -1190,6 +1210,14 @@ msgstr "изменил статус с {from} на {to}"
 #: src/components/CardDetail.vue
 msgid "changed the status to {value}"
 msgstr "изменил статус на {value}"
+
+#: src/components/CardDetail.vue
+msgid "changed who can see this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed who can see this card from {from} to {to}"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -1708,7 +1736,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4512
+#: src/components/CardDetail.vue:4549
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -1889,6 +1917,14 @@ msgstr "Открепить от родительской карточки"
 #: src/components/CardDetail.vue
 msgid "Detach sub-card"
 msgstr "Открепить подкарточку"
+
+#: src/components/CardDetail.vue
+msgid "detached this card from {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "detached this sub-card"
+msgstr ""
 
 #: src/views/ViewPage.vue
 msgid "Direction"
@@ -3264,6 +3300,10 @@ msgstr "Ссылка недоступна"
 msgid "linked a contact"
 msgstr "связал контакт"
 
+#: src/components/CardDetail.vue
+msgid "linked this card — {value}"
+msgstr ""
+
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
 msgid "List"
@@ -3315,6 +3355,14 @@ msgstr "Загрузка…"
 #: src/composables/usePriority.js
 msgid "Low"
 msgstr "Низкий"
+
+#: src/components/CardDetail.vue
+msgid "made this a sub-card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "made this a sub-card of {value}"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Mailbox account"
@@ -3383,7 +3431,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4514
+#: src/components/CardDetail.vue:4551
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4357,6 +4405,18 @@ msgid "removed a label"
 msgstr "убрал метку"
 
 #: src/components/CardDetail.vue
+msgid "removed a link"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed a linked card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed a time entry"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed an assignee"
 msgstr "убрал исполнителя"
 
@@ -4371,6 +4431,18 @@ msgstr ""
 #: src/components/CardDetail.vue
 msgid "removed the label {value}"
 msgstr "убрал метку {value}"
+
+#: src/components/CardDetail.vue
+msgid "removed the link — {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the link {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the time entry {value}"
+msgstr ""
 
 #: src/App.vue
 #: src/components/BoardSettingsModal.vue
@@ -4492,6 +4564,10 @@ msgstr ""
 #: src/views/TrashView.vue
 msgid "Restore"
 msgstr "Восстановить"
+
+#: src/components/CardDetail.vue
+msgid "restored this card from the archive"
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -4765,7 +4841,7 @@ msgstr "Показывать панель форматирования"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:6189
+#: src/components/CardDetail.vue:6226
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5428,7 +5504,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4513
+#: src/components/CardDetail.vue:4550
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -5510,7 +5586,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4515
+#: src/components/CardDetail.vue:4552
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardTimeEntry;
 use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Service\CardTimeEntryService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
@@ -31,6 +32,7 @@ class CardTimeEntryServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private CardTimeEntryService $service;
 
 	protected function setUp(): void {
@@ -40,9 +42,14 @@ class CardTimeEntryServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
+		// Every notify() returns a persisted change row - the detail write keys on its id.
+		$change = new Change();
+		$change->setId(4242);
+		$this->changeNotifier->method('notify')->willReturn($change);
 
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
 		$this->service = new CardTimeEntryService(
 			$this->timeEntryMapper,
 			$this->cardMapper,
@@ -50,6 +57,7 @@ class CardTimeEntryServiceTest extends TestCase {
 			$this->permissionService,
 			$this->changeNotifier,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
 		);
 	}
 
@@ -223,6 +231,7 @@ class CardTimeEntryServiceTest extends TestCase {
 		$entry = new CardTimeEntry();
 		$entry->setId(5);
 		$entry->setCardId(9);
+		$entry->setSeconds(5400);
 		$this->timeEntryMapper->method('find')->with(5)->willReturn($entry);
 		$this->timeEntryMapper->expects(self::once())->method('delete')->with($entry);
 		$this->changeNotifier->expects(self::once())
@@ -230,6 +239,62 @@ class CardTimeEntryServiceTest extends TestCase {
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob');
 
 		$this->service->delete(9, 5, 'bob');
+	}
+
+	// ---- Activity trace (#119) --------------------------------------------
+
+	/**
+	 * Deleting an entry drops the row outright, so without this the fact that
+	 * (potentially billable) time was ever logged has NO trace. The change row
+	 * must carry VERB_TIME_ENTRY_REMOVED plus the lost duration and note, on the
+	 * 'from' side - and the label must be read BEFORE the row is dropped.
+	 */
+	public function testDeleteRecordsTheLostDurationAndNote(): void {
+		$this->expectCardLoaded();
+		$entry = new CardTimeEntry();
+		$entry->setId(5);
+		$entry->setCardId(9);
+		$entry->setSeconds(5400);
+		$entry->setNote('Pairing');
+		$this->timeEntryMapper->method('find')->with(5)->willReturn($entry);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob', true, Change::VERB_TIME_ENTRY_REMOVED);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(4242, '1h 30m - Pairing', null);
+
+		$this->service->delete(9, 5, 'bob');
+	}
+
+	/** A note-less entry still names its duration; sub-minute entries read in seconds. */
+	public function testDeleteRecordsTheDurationAloneWhenThereIsNoNote(): void {
+		$this->expectCardLoaded();
+		$entry = new CardTimeEntry();
+		$entry->setId(5);
+		$entry->setCardId(9);
+		$entry->setSeconds(45);
+		$this->timeEntryMapper->method('find')->with(5)->willReturn($entry);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(4242, '45s', null);
+
+		$this->service->delete(9, 5, 'bob');
+	}
+
+	/** A caller denied EDIT destroys nothing and writes no trace. */
+	public function testDeleteDeniedWritesNoTrace(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'stranger', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->timeEntryMapper->expects(self::never())->method('delete');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->delete(9, 5, 'stranger');
 	}
 
 	// ---- deleteAllForCard (cascade on purge) ------------------------------

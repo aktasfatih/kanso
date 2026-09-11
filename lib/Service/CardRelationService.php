@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRelation;
 use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -35,6 +36,26 @@ class CardRelationService {
 	public const KIND_RELATES = 'relates';
 	private const KINDS = [self::KIND_BLOCKS, self::KIND_BLOCKED_BY, self::KIND_DUPLICATES, self::KIND_RELATES];
 
+	/**
+	 * How a relation reads in the Activity feed, per SIDE of the stored row: the
+	 * source card of a `blocks` row blocks, the target is blocked by. English by
+	 * design, like the other server-recorded history labels (CardService's
+	 * STATUS_LABELS) - the feed shows what was recorded, when it was recorded.
+	 *
+	 * @var array<string, array{0: string, 1: string}> stored type → [source-side label, target-side label]
+	 */
+	private const RELATION_LABELS = [
+		CardRelation::TYPE_BLOCKS => ['Blocks', 'Blocked by'],
+		CardRelation::TYPE_DUPLICATES => ['Duplicates', 'Duplicates'],
+		CardRelation::TYPE_RELATES => ['Relates to', 'Relates to'],
+	];
+
+	/**
+	 * Cap on a change-detail string, matching the other services that write the
+	 * side table (CardService, CardAttachmentService, LabelService).
+	 */
+	private const MAX_DETAIL_LENGTH = 10000;
+
 	public function __construct(
 		private CardRelationMapper $relationMapper,
 		private CardMapper $cardMapper,
@@ -43,6 +64,7 @@ class CardRelationService {
 		private ChangeNotifier $changeNotifier,
 		private CardVisibilityGuard $visibilityGuard,
 		private CardVisibilityScope $visibilityScope,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
@@ -231,7 +253,19 @@ class CardRelationService {
 			throw $e;
 		}
 
-		$this->notifyBoth($card->getBoardId(), $cardId, $otherCardId, $uid);
+		// Notify in STORAGE order (source, target) so each side's detail reads with
+		// the right direction: the source blocks, the target is blocked by.
+		[$srcCard, $dstCard] = $src === $cardId ? [$card, $other] : [$other, $card];
+		$this->notifyBoth(
+			$card->getBoardId(),
+			$src,
+			$srcCard->getTitle(),
+			$dst,
+			$dstCard->getTitle(),
+			$type,
+			$uid,
+			Change::VERB_RELATION_ADDED,
+		);
 		return $relation;
 	}
 
@@ -248,15 +282,18 @@ class CardRelationService {
 		// legitimate - but an id probed blind, where both endpoints are
 		// hidden, must read as not-found.
 		$endpointVisible = false;
+		// Keep each endpoint's title while we are here: after the delete the
+		// relation row is gone, and the change row is its only remaining trace.
+		$titles = [];
 		foreach ([$relation->getCardId(), $relation->getOtherCardId()] as $endpointId) {
 			try {
 				$endpoint = $this->cardMapper->find($endpointId);
 			} catch (DoesNotExistException) {
 				continue;
 			}
+			$titles[$endpointId] = $endpoint->getTitle();
 			if ($this->visibilityGuard->isVisible($board, $endpoint, $uid)) {
 				$endpointVisible = true;
-				break;
 			}
 		}
 		if (!$endpointVisible) {
@@ -264,7 +301,16 @@ class CardRelationService {
 		}
 
 		$this->relationMapper->delete($relation);
-		$this->notifyBoth($relation->getBoardId(), $relation->getCardId(), $relation->getOtherCardId(), $uid);
+		$this->notifyBoth(
+			$relation->getBoardId(),
+			$relation->getCardId(),
+			$titles[$relation->getCardId()] ?? null,
+			$relation->getOtherCardId(),
+			$titles[$relation->getOtherCardId()] ?? null,
+			$relation->getType(),
+			$uid,
+			Change::VERB_RELATION_REMOVED,
+		);
 	}
 
 	/**
@@ -311,9 +357,45 @@ class CardRelationService {
 		return false;
 	}
 
-	private function notifyBoth(int $boardId, int $cardIdA, int $cardIdB, string $uid): void {
-		foreach ([$cardIdA, $cardIdB] as $id) {
-			$this->changeNotifier->notify($boardId, Change::ENTITY_CARD, $id, Change::ACTION_UPDATE, $uid);
+	/**
+	 * Writes the card change row for BOTH endpoints of a relation (#119) and
+	 * gives each one its OWN detail, naming the card at the other end and the
+	 * direction from that side ("Blocks: X" on the source, "Blocked by: Y" on the
+	 * target) - recording the same string twice would leave each card's feed
+	 * describing itself. The detail rides `to` on an add and `from` on a remove,
+	 * the convention labels/assignees/attachments already use.
+	 *
+	 * $srcId/$dstId are in STORAGE order (the `blocks` direction), not the order
+	 * the API call named them. A title may be null when that endpoint has since
+	 * been deleted; the detail then falls back to the card id.
+	 */
+	private function notifyBoth(int $boardId, int $srcId, ?string $srcTitle, int $dstId, ?string $dstTitle, string $type, string $uid, int $verb): void {
+		[$srcLabel, $dstLabel] = self::RELATION_LABELS[$type] ?? ['Relates to', 'Relates to'];
+		$sides = [
+			// [card the row is about, how the relation reads from there, the OTHER card]
+			[$srcId, $srcLabel, $dstId, $dstTitle],
+			[$dstId, $dstLabel, $srcId, $srcTitle],
+		];
+		foreach ($sides as [$cardId, $label, $otherId, $otherTitle]) {
+			$change = $this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$uid,
+				verb: $verb,
+			);
+			$detail = mb_substr(
+				$label . ': ' . (($otherTitle !== null && $otherTitle !== '') ? $otherTitle : '#' . $otherId),
+				0,
+				self::MAX_DETAIL_LENGTH,
+			);
+			$added = $verb === Change::VERB_RELATION_ADDED;
+			$this->changeDetailMapper->insertDetail(
+				$change->getId(),
+				$added ? null : $detail,
+				$added ? $detail : null,
+			);
 		}
 	}
 

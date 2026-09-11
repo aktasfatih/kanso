@@ -4129,6 +4129,17 @@ const ACTIVITY_VERBS = {
 	24: () => t('kanso', 'reopened a thread'),
 	25: () => t('kanso', 'attached a file'),
 	26: () => t('kanso', 'removed an attachment'),
+	27: () => t('kanso', 'attached a link'),
+	28: () => t('kanso', 'removed a link'),
+	29: () => t('kanso', 'made this a sub-card'),
+	30: () => t('kanso', 'detached this sub-card'),
+	31: () => t('kanso', 'added a linked card'),
+	32: () => t('kanso', 'removed a linked card'),
+	33: () => t('kanso', 'removed a time entry'),
+	34: () => t('kanso', 'changed who can see this card'),
+	35: () => t('kanso', 'archived this card'),
+	36: () => t('kanso', 'restored this card from the archive'),
+	37: () => t('kanso', 'changed a custom field'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
@@ -4231,6 +4242,32 @@ function activitySegments(item) {
 		break
 	case 26: // attachment removed
 		if (d && d.from) return withOne(t('kanso', 'removed the attachment {value}'), d.from)
+		break
+	case 27: // link attached
+		if (d && d.to) return withOne(t('kanso', 'attached the link {value}'), d.to)
+		break
+	case 28: // link removed
+		if (d && d.from) return withOne(t('kanso', 'removed the link {value}'), d.from)
+		break
+	case 29: // sub-card attached — the detail names the PARENT
+		if (d && d.to) return withOne(t('kanso', 'made this a sub-card of {value}'), d.to)
+		break
+	case 30: // sub-card detached
+		if (d && d.from) return withOne(t('kanso', 'detached this card from {value}'), d.from)
+		break
+	case 31: // relation added — detail is "<direction>: <other card>"
+		if (d && d.to) return withOne(t('kanso', 'linked this card — {value}'), d.to)
+		break
+	case 32: // relation removed
+		if (d && d.from) return withOne(t('kanso', 'removed the link — {value}'), d.from)
+		break
+	case 33: // time entry removed — the ONLY record the entry ever existed
+		if (d && d.from) return withOne(t('kanso', 'removed the time entry {value}'), d.from)
+		break
+	case 34: // visibility changed
+		if (d && d.from && d.to) {
+			return withFromTo(t('kanso', 'changed who can see this card from {from} to {to}'), d.from, d.to)
+		}
 		break
 	}
 	// Description (16) keeps the collapsible diff below; every other case falls

@@ -102,9 +102,11 @@ class CardFieldValueServiceTest extends TestCase {
 				return $v;
 			});
 		$this->cardFieldValueMapper->expects(self::never())->method('update');
+		// #119: a custom-field edit stamps its OWN verb - it used to write the
+		// generic VERB_UPDATED and render as a meaningless "updated this card".
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
-			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', true, Change::VERB_UPDATED)
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', true, Change::VERB_FIELD_CHANGED)
 			->willReturn(new Change());
 
 		$this->service->set(9, 3, 'hello', 'alice');
@@ -265,9 +267,10 @@ class CardFieldValueServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardFieldMapper->method('find')->with(3)->willReturn($this->field());
 		$this->cardFieldValueMapper->expects(self::once())->method('deleteByCardAndField')->with(9, 3);
+		// #119: clearing a field is a field change too, not a generic card update.
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
-			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', true, Change::VERB_UPDATED)
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice', true, Change::VERB_FIELD_CHANGED)
 			->willReturn(new Change());
 
 		$this->service->clear(9, 3, 'alice');

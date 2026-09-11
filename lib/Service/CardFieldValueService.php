@@ -23,8 +23,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * one board field definition. Setting/clearing a value is a plain card edit, so
  * it is EDIT-gated (NOT MANAGE - defining the field is the MANAGE concern) and
  * stamps the ordinary card-change path (ENTITY_CARD / ACTION_UPDATE with
- * VERB_UPDATED) so the card's ETag and activity feed update like any other card
- * edit.
+ * VERB_FIELD_CHANGED) so the card's ETag and activity feed update like any other
+ * card edit.
  *
  * One value per (card, field) - the unique index makes a set an upsert. The
  * value lives in ONE stringified column; per-type coercion/validation
@@ -116,6 +116,14 @@ class CardFieldValueService {
 		return $empty;
 	}
 
+	/**
+	 * VERB_FIELD_CHANGED, not the generic VERB_UPDATED (#119): a custom-field
+	 * edit used to render as "updated this card", which says nothing. Verb ONLY -
+	 * no detail row. The side table's two columns mean "before value" and "after
+	 * value"; prefixing the field NAME into them would overload that with a third
+	 * meaning that later has to be unpicked, and the bare verb already beats the
+	 * generic line.
+	 */
 	private function notifyCardChanged(int $boardId, int $cardId, string $uid): void {
 		$this->changeNotifier->notify(
 			$boardId,
@@ -123,7 +131,7 @@ class CardFieldValueService {
 			$cardId,
 			Change::ACTION_UPDATE,
 			$uid,
-			verb: Change::VERB_UPDATED,
+			verb: Change::VERB_FIELD_CHANGED,
 		);
 	}
 

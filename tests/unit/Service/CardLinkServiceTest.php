@@ -13,6 +13,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Service\CardLinkService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
@@ -34,6 +36,7 @@ class CardLinkServiceTest extends TestCase {
 	private IClientService&MockObject $clientService;
 	private IClient&MockObject $client;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private CardLinkService $service;
 
 	protected function setUp(): void {
@@ -43,11 +46,16 @@ class CardLinkServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
+		// Every notify() returns a persisted change row - the detail write keys on its id.
+		$change = new Change();
+		$change->setId(4242);
+		$this->changeNotifier->method('notify')->willReturn($change);
 		$this->clientService = $this->createMock(IClientService::class);
 		$this->client = $this->createMock(IClient::class);
 		$this->clientService->method('newClient')->willReturn($this->client);
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
 		$this->service = new CardLinkService(
 			$this->cardLinkMapper,
 			$this->cardMapper,
@@ -56,6 +64,7 @@ class CardLinkServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->clientService,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
 		);
 	}
 
@@ -390,10 +399,80 @@ class CardLinkServiceTest extends TestCase {
 		$link = new CardLink();
 		$link->setId(5);
 		$link->setCardId(9);
+		$link->setUrl('https://github.com/octo/app/pull/42');
 		$this->cardLinkMapper->method('find')->with(5)->willReturn($link);
 		$this->cardLinkMapper->expects(self::once())->method('delete')->with($link);
 		$this->changeNotifier->expects(self::once())->method('notify');
 
 		$this->service->deleteLink(9, 5, 'bob');
+	}
+
+	// ---- Activity trace (#119) --------------------------------------------
+
+	/**
+	 * Attaching a link stamps VERB_LINK_ATTACHED and records the link's TITLE in
+	 * the detail side table ('to' - the side that appeared), so the feed names
+	 * the link instead of rendering a bare "updated this card".
+	 */
+	public function testAddLinkRecordsTheAttachedVerbAndTitle(): void {
+		$this->expectCardLoaded();
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+		$this->githubResponse('{"title":"Fix login","state":"open","merged_at":null}');
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob', true, Change::VERB_LINK_ATTACHED);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(4242, null, 'Fix login');
+
+		$this->service->addLink(9, 'https://github.com/octo/app/pull/42', 'bob');
+	}
+
+	/** An unpolled link (no title) still names something: its URL. */
+	public function testAddLinkFallsBackToTheUrlWhenThereIsNoTitle(): void {
+		$this->expectCardLoaded();
+		$this->cardLinkMapper->method('insert')->willReturnCallback(fn (CardLink $l): CardLink => $l);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(4242, null, 'https://github.com/octo/app');
+
+		$this->service->addLink(9, 'https://github.com/octo/app', 'bob');
+	}
+
+	/**
+	 * Removing a link destroys the row, so the change log is the only remaining
+	 * trace: VERB_LINK_REMOVED plus the label on the 'from' side.
+	 */
+	public function testDeleteLinkRecordsTheRemovedVerbAndLabel(): void {
+		$this->expectCardLoaded();
+		$link = new CardLink();
+		$link->setId(5);
+		$link->setCardId(9);
+		$link->setUrl('https://github.com/octo/app/pull/42');
+		$link->setTitle('Fix login');
+		$this->cardLinkMapper->method('find')->with(5)->willReturn($link);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob', true, Change::VERB_LINK_REMOVED);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(4242, 'Fix login', null);
+
+		$this->service->deleteLink(9, 5, 'bob');
+	}
+
+	/** A caller denied EDIT writes no change row and no detail row. */
+	public function testDeleteLinkDeniedWritesNoTrace(): void {
+		$board = $this->expectCardLoaded();
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'stranger', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->cardLinkMapper->expects(self::never())->method('delete');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->deleteLink(9, 5, 'stranger');
 	}
 }

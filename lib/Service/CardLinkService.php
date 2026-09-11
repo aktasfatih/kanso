@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Http\Client\IClientService;
 
@@ -40,12 +41,22 @@ use OCP\Http\Client\IClientService;
  *
  * A link add/remove reuses the card's ENTITY_CARD / ACTION_UPDATE change row so
  * the existing realtime/delta-sync path reflects it with no new Change type.
+ * Since #119 that row also carries a verb (VERB_LINK_ATTACHED /
+ * VERB_LINK_REMOVED) plus the link's title (or its URL) in
+ * `kanso_change_details`, so the Activity feed can name WHICH link was attached
+ * or removed - a removal has no other trace, the row is gone.
  */
 class CardLinkService {
 	/** Re-poll a link's state at most this often (seconds). */
 	private const POLL_THROTTLE = 300;
 	/** Per-request timeout for the GitHub poll (seconds). */
 	private const POLL_TIMEOUT = 4;
+
+	/**
+	 * Cap on a change-detail string, matching the other services that write the
+	 * side table (CardService, CardAttachmentService, LabelService).
+	 */
+	private const MAX_DETAIL_LENGTH = 10000;
 
 	public function __construct(
 		private CardLinkMapper $cardLinkMapper,
@@ -55,6 +66,7 @@ class CardLinkService {
 		private ChangeNotifier $changeNotifier,
 		private IClientService $clientService,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
@@ -141,13 +153,7 @@ class CardLinkService {
 			$this->refreshState($link, $now);
 		}
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+		$this->recordLinkChange($card->getBoardId(), $cardId, $link, $actorUid, Change::VERB_LINK_ATTACHED);
 
 		return $link;
 	}
@@ -168,15 +174,52 @@ class CardLinkService {
 		if ($link->getCardId() !== $cardId) {
 			throw new DoesNotExistException('Link ' . $linkId . ' is not on card ' . $cardId);
 		}
+		// Read the label BEFORE the row is dropped - after the delete the link's
+		// title/URL exists nowhere else, and the change row is the only trace.
+		$label = $this->linkLabel($link);
 		$this->cardLinkMapper->delete($link);
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
+		$this->recordLinkChange($card->getBoardId(), $cardId, $link, $actorUid, Change::VERB_LINK_REMOVED, $label);
+	}
+
+	/**
+	 * Appends the card's change row for a link add/remove (#119) and records the
+	 * link's label in the `kanso_change_details` side table, so the Activity feed
+	 * names the link rather than rendering a bare "updated this card". The label
+	 * rides the same side as the equivalent label change: `to` when something
+	 * appeared, `from` when something went away.
+	 *
+	 * Still an ENTITY_CARD / ACTION_UPDATE row - delta sync and the ETag key on
+	 * (entity_type, action), never on the verb, so the realtime path is unchanged.
+	 */
+	private function recordLinkChange(int $boardId, int $cardId, CardLink $link, string $actorUid, int $verb, ?string $label = null): void {
+		$change = $this->changeNotifier->notify(
+			$boardId,
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$actorUid
+			$actorUid,
+			verb: $verb,
 		);
+
+		$label ??= $this->linkLabel($link);
+		$added = $verb === Change::VERB_LINK_ATTACHED;
+		$this->changeDetailMapper->insertDetail(
+			$change->getId(),
+			$added ? null : $label,
+			$added ? $label : null,
+		);
+	}
+
+	/**
+	 * How a link reads in the Activity feed: its polled title when we have one,
+	 * otherwise the raw URL (a Forgejo link is never polled, and a GitHub poll
+	 * can fail, so the URL is the dependable fallback). Capped multibyte-safe.
+	 */
+	private function linkLabel(CardLink $link): string {
+		$title = $link->getTitle();
+		$label = ($title !== null && $title !== '') ? $title : $link->getUrl();
+		return mb_substr($label, 0, self::MAX_DETAIL_LENGTH);
 	}
 
 	/**

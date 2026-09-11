@@ -97,6 +97,14 @@ class CardService {
 		'in_progress' => 'In progress',
 		'done' => 'Done',
 	];
+	// Who-can-see-this labels (#119). A visibility change is gated to the card's
+	// creator or a board manager, so a manager narrowing someone else's card has
+	// to leave a readable trace naming both ends of the move.
+	private const VISIBILITY_LABELS = [
+		CardVisibilityScope::VISIBILITY_PUBLIC => 'Public',
+		CardVisibilityScope::VISIBILITY_INTERNAL => 'Internal',
+		CardVisibilityScope::VISIBILITY_PRIVATE => 'Private',
+	];
 
 	public function __construct(
 		private CardMapper $cardMapper,
@@ -1051,6 +1059,10 @@ class CardService {
 		$origPriority = $card->getPriority();
 		$origEstimate = $card->getEstimate();
 		$origType = $card->getType();
+		// Who-can-see-this and archived state (#119): both are tracked like any
+		// other field so they get their own verb instead of a generic "updated".
+		$origVisibility = $card->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC;
+		$origArchived = (bool)$card->getArchived();
 		// Derived status (done/in_progress/not_started) BEFORE any timestamp setter,
 		// so a timestamp-only status change can record its from/to labels.
 		$origStatus = $this->deriveStatus($card);
@@ -1200,9 +1212,10 @@ class CardService {
 		// ACTUALLY changed (current value vs the pre-setter snapshot; a set of the
 		// same value counts as unchanged, so a no-op save is not mislabelled). When
 		// exactly ONE tracked field changed we stamp its specific verb; zero or more
-		// than one fall back to the generic VERB_UPDATED. No from/to values (verb
-		// only) - deferred, and no schema change. The status→workflow-column path is
-		// untouched: it becomes a move() (VERB_MOVED) below.
+		// than one fall back to the generic VERB_UPDATED. Most verbs also carry
+		// their from/to values, built by buildUpdateDetail() below. The
+		// status→workflow-column path is untouched: it becomes a move()
+		// (VERB_MOVED) below.
 		$changedVerbs = [];
 		if ($card->getTitle() !== $origTitle) {
 			$changedVerbs[] = Change::VERB_RENAMED;
@@ -1228,6 +1241,14 @@ class CardService {
 		if ($statusAppliedTimestampOnly) {
 			$changedVerbs[] = Change::VERB_STATUS_CHANGED;
 		}
+		// Changing WHO CAN SEE a card is the one edit here a member can make to
+		// someone else's card, so it must never fall through to "updated this card".
+		if (($card->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC) !== $origVisibility) {
+			$changedVerbs[] = Change::VERB_VISIBILITY_CHANGED;
+		}
+		if ((bool)$card->getArchived() !== $origArchived) {
+			$changedVerbs[] = $card->getArchived() ? Change::VERB_ARCHIVED : Change::VERB_UNARCHIVED;
+		}
 		$verb = count($changedVerbs) === 1 ? $changedVerbs[0] : Change::VERB_UPDATED;
 
 		// A single-field save carries a before/after payload so the Activity feed can
@@ -1244,6 +1265,7 @@ class CardService {
 			'estimate' => $origEstimate,
 			'type' => $origType,
 			'status' => $origStatus,
+			'visibility' => $origVisibility,
 		]);
 
 		// The description write, INSIDE the transaction that also writes the change
@@ -1555,10 +1577,18 @@ class CardService {
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $uid);
 
+		// What the Activity row will name (#119). On a detach the old parent's
+		// title has to be read BEFORE the link is cleared - afterwards nothing on
+		// this card points at it any more.
+		$verb = Change::VERB_SUBCARD_ATTACHED;
+		$parentTitle = null;
 		if ($parentCardId === null) {
-			if ($card->getParentCardId() === null) {
+			$oldParentId = $card->getParentCardId();
+			if ($oldParentId === null) {
 				return $card;
 			}
+			$verb = Change::VERB_SUBCARD_DETACHED;
+			$parentTitle = $this->parentTitleOrNull($oldParentId);
 			$card->setParentCardId(null);
 		} else {
 			if ($parentCardId === $id) {
@@ -1582,10 +1612,24 @@ class CardService {
 			if ($card->getParentCardId() === $parentCardId) {
 				return $card;
 			}
+			$parentTitle = $parent->getTitle();
 			$card->setParentCardId($parentCardId);
 		}
 
 		$card->setLastModified(time());
+
+		// The detail names the card at the OTHER end of the link (the parent) -
+		// naming this card would just repeat the feed it is rendered in. `to` on
+		// attach, `from` on detach, the convention every other verb uses.
+		$detail = null;
+		if ($parentTitle !== null) {
+			$capped = $this->capDetail($parentTitle);
+			$attached = $verb === Change::VERB_SUBCARD_ATTACHED;
+			$detail = [
+				'from' => $attached ? null : $capped,
+				'to' => $attached ? $capped : null,
+			];
+		}
 
 		// Atomic entity-write + change-row (#3579); push after commit.
 		$card = $this->writeCardChange(
@@ -1593,11 +1637,25 @@ class CardService {
 			$id,
 			Change::ACTION_UPDATE,
 			$uid,
-			Change::VERB_UPDATED,
+			$verb,
 			fn (): Card => $this->cardMapper->update($card),
+			$detail,
 		);
 
 		return $card;
+	}
+
+	/**
+	 * A parent card's title for the Activity detail, or null when it can no
+	 * longer be read (deleted out from under the link). Never throws - a missing
+	 * title must not block clearing the parent.
+	 */
+	private function parentTitleOrNull(int $parentCardId): ?string {
+		try {
+			return $this->cardMapper->find($parentCardId)->getTitle();
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	/**
@@ -1920,7 +1978,7 @@ class CardService {
 	 * Reads the ALREADY-mutated card for the "to" side and the pre-setter
 	 * snapshot for the "from" side. Every value is capped {@see self::capDetail()}.
 	 *
-	 * @param array{title: ?string, description: ?string, due: ?int, start: ?int, priority: ?int, estimate: ?string, type: ?string, status: string} $orig
+	 * @param array{title: ?string, description: ?string, due: ?int, start: ?int, priority: ?int, estimate: ?string, type: ?string, status: string, visibility: string} $orig
 	 * @return array{from: ?string, to: ?string}|null
 	 */
 	private function buildUpdateDetail(int $verb, Card $card, array $orig): ?array {
@@ -1963,6 +2021,14 @@ class CardService {
 				'from' => self::STATUS_LABELS[$orig['status']] ?? null,
 				'to' => self::STATUS_LABELS[$this->deriveStatus($card)] ?? null,
 			],
+			// Who could see the card before, and who can now. Both sides always
+			// resolve (the value was validated against VISIBILITIES on the way in).
+			Change::VERB_VISIBILITY_CHANGED => [
+				'from' => self::VISIBILITY_LABELS[$orig['visibility']] ?? null,
+				'to' => self::VISIBILITY_LABELS[$card->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC] ?? null,
+			],
+			// VERB_ARCHIVED / VERB_UNARCHIVED carry no detail: the verb IS the
+			// whole fact, there is no value to name.
 			default => null,
 		};
 	}

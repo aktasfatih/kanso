@@ -64,7 +64,8 @@ class Change extends Entity {
 	public const VERB_CONTACT_UNLINKED = 14;
 	// Field-specific card update verbs (#70). The card-field update path picks the
 	// matching verb when exactly one tracked field changed; multi-field or no-op
-	// saves keep the generic VERB_UPDATED. Verb-only (no from/to values, deferred).
+	// saves keep the generic VERB_UPDATED. Most also record their before/after
+	// values in `kanso_change_details` ({@see CardService::buildUpdateDetail()}).
 	public const VERB_RENAMED = 15;              // title changed
 	public const VERB_DESCRIPTION_UPDATED = 16;
 	public const VERB_DUE_CHANGED = 17;          // due date set/changed/cleared
@@ -88,6 +89,28 @@ class Change extends Entity {
 	// the deletion of one.
 	public const VERB_ATTACHMENT_ADDED = 25;
 	public const VERB_ATTACHMENT_REMOVED = 26;
+
+	// The remaining card mutations that used to write a verb-less or generic
+	// change row (#119). The organising principle: an action that DESTROYS data
+	// or changes WHO CAN SEE a card must leave a readable trace. Every removal
+	// verb carries what went away in `kanso_change_details` `from` (the row and
+	// its subject are gone; the change log is the only record left), every
+	// addition carries it in `to` - the same convention attachments use.
+	public const VERB_LINK_ATTACHED = 27;      // detail: link title, else the URL
+	public const VERB_LINK_REMOVED = 28;
+	public const VERB_SUBCARD_ATTACHED = 29;   // detail: the parent card's title
+	public const VERB_SUBCARD_DETACHED = 30;
+	public const VERB_RELATION_ADDED = 31;     // detail: "<kind>: <other card title>"
+	public const VERB_RELATION_REMOVED = 32;
+	public const VERB_TIME_ENTRY_REMOVED = 33; // detail: duration, plus the note when present
+	public const VERB_VISIBILITY_CHANGED = 34; // detail: from/to visibility labels
+	public const VERB_ARCHIVED = 35;
+	public const VERB_UNARCHIVED = 36;
+	// Custom field value set/cleared. Verb ONLY, deliberately no detail: the
+	// side table's two columns mean "before value" and "after value", and
+	// prefixing the field NAME into them would overload that with a third
+	// meaning. A bare verb is honest and beats the generic "updated this card".
+	public const VERB_FIELD_CHANGED = 37;
 
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of

@@ -285,12 +285,12 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4323
+#: src/components/CardDetail.vue:4360
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4321
+#: src/components/CardDetail.vue:4358
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -310,7 +310,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] ""
 
-#: src/components/CardDetail.vue:4319
+#: src/components/CardDetail.vue:4356
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -509,6 +509,10 @@ msgid "added a label"
 msgstr "添加了一个标签"
 
 #: src/components/CardDetail.vue
+msgid "added a linked card"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "added the label {value}"
 msgstr "添加了标签 {value}"
 
@@ -625,6 +629,10 @@ msgstr "已归档的卡片"
 msgid "Archived cards ({count})"
 msgstr "已归档的卡片（{count}）"
 
+#: src/components/CardDetail.vue
+msgid "archived this card"
+msgstr ""
+
 #: src/views/TrashView.vue
 msgid "Are you sure?"
 msgstr "确定吗？"
@@ -693,6 +701,14 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "attached a file"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached a link"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached the link {value}"
 msgstr ""
 
 #: src/components/AddToKansoDialog.vue
@@ -1092,6 +1108,10 @@ msgid "Change status"
 msgstr "更改状态"
 
 #: src/components/CardDetail.vue
+msgid "changed a custom field"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "changed the card type"
 msgstr "更改了卡片类型"
 
@@ -1146,6 +1166,14 @@ msgstr "把状态从 {from} 改为 {to}"
 #: src/components/CardDetail.vue
 msgid "changed the status to {value}"
 msgstr "把状态改为 {value}"
+
+#: src/components/CardDetail.vue
+msgid "changed who can see this card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "changed who can see this card from {from} to {to}"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -1664,7 +1692,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4512
+#: src/components/CardDetail.vue:4549
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -1843,6 +1871,14 @@ msgstr "从父卡片分离"
 #: src/components/CardDetail.vue
 msgid "Detach sub-card"
 msgstr "分离子卡片"
+
+#: src/components/CardDetail.vue
+msgid "detached this card from {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "detached this sub-card"
+msgstr ""
 
 #: src/views/ViewPage.vue
 msgid "Direction"
@@ -3210,6 +3246,10 @@ msgstr "链接不可用"
 msgid "linked a contact"
 msgstr "关联了一位联系人"
 
+#: src/components/CardDetail.vue
+msgid "linked this card — {value}"
+msgstr ""
+
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
 msgid "List"
@@ -3261,6 +3301,14 @@ msgstr "加载中…"
 #: src/composables/usePriority.js
 msgid "Low"
 msgstr "低"
+
+#: src/components/CardDetail.vue
+msgid "made this a sub-card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "made this a sub-card of {value}"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Mailbox account"
@@ -3329,7 +3377,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4514
+#: src/components/CardDetail.vue:4551
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4301,6 +4349,18 @@ msgid "removed a label"
 msgstr "移除了一个标签"
 
 #: src/components/CardDetail.vue
+msgid "removed a link"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed a linked card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed a time entry"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed an assignee"
 msgstr "移除了一位负责人"
 
@@ -4315,6 +4375,18 @@ msgstr ""
 #: src/components/CardDetail.vue
 msgid "removed the label {value}"
 msgstr "移除了标签 {value}"
+
+#: src/components/CardDetail.vue
+msgid "removed the link — {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the link {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the time entry {value}"
+msgstr ""
 
 #: src/App.vue
 #: src/components/BoardSettingsModal.vue
@@ -4436,6 +4508,10 @@ msgstr ""
 #: src/views/TrashView.vue
 msgid "Restore"
 msgstr "恢复"
+
+#: src/components/CardDetail.vue
+msgid "restored this card from the archive"
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -4709,7 +4785,7 @@ msgstr "显示格式工具栏"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6189
+#: src/components/CardDetail.vue:6226
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5370,7 +5446,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4513
+#: src/components/CardDetail.vue:4550
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5450,7 +5526,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4515
+#: src/components/CardDetail.vue:4552
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

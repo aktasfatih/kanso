@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardTimeEntry;
 use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -30,6 +31,13 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * change row so the existing realtime/delta-sync + ETag path reflects the new
  * total with no new Change type. Delete is IDOR-guarded (the entry must belong
  * to the card in the URL, otherwise a 404 - never a leak).
+ *
+ * Deleting an entry additionally stamps VERB_TIME_ENTRY_REMOVED with the lost
+ * duration (and note) in `kanso_change_details` (#119): the row is gone, so
+ * without that the fact that time was ever logged - and then removed - would
+ * have no trace at all. The ADD side deliberately carries no verb: the entry
+ * persists its own created_by/created_at and the list renders them, so an
+ * activity line for it would be duplicate noise.
  */
 class CardTimeEntryService {
 	/**
@@ -42,6 +50,12 @@ class CardTimeEntryService {
 	/** Max stored note length (mirrors the note column width). */
 	private const MAX_NOTE_LENGTH = 255;
 
+	/**
+	 * Cap on a change-detail string, matching the other services that write the
+	 * side table (CardService, CardAttachmentService, LabelService).
+	 */
+	private const MAX_DETAIL_LENGTH = 10000;
+
 	public function __construct(
 		private CardTimeEntryMapper $timeEntryMapper,
 		private CardMapper $cardMapper,
@@ -49,6 +63,7 @@ class CardTimeEntryService {
 		private PermissionService $permissionService,
 		private ChangeNotifier $changeNotifier,
 		private CardVisibilityGuard $visibilityGuard,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 	}
 
@@ -127,15 +142,62 @@ class CardTimeEntryService {
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 		$entry = $this->loadEntryOnCard($entryId, $cardId);
+		// Read the label BEFORE the row is dropped. Deleting an entry destroys the
+		// only record that the (potentially billable) time was ever logged, so the
+		// change row must carry what went away - it is the sole remaining trace.
+		$label = $this->entryLabel($entry);
 		$this->timeEntryMapper->delete($entry);
 
-		$this->changeNotifier->notify(
+		$change = $this->changeNotifier->notify(
 			$card->getBoardId(),
 			Change::ENTITY_CARD,
 			$cardId,
 			Change::ACTION_UPDATE,
-			$actorUid
+			$actorUid,
+			verb: Change::VERB_TIME_ENTRY_REMOVED,
 		);
+		// `from` - the removal side, the same convention labels/attachments use.
+		$this->changeDetailMapper->insertDetail($change->getId(), $label, null);
+	}
+
+	/**
+	 * How a deleted entry reads in the Activity feed: its duration, plus the note
+	 * when it had one. The duration format mirrors the client's formatDuration()
+	 * ("1h 30m", "45m", "20s") so the feed reads like the list it vanished from.
+	 */
+	private function entryLabel(CardTimeEntry $entry): string {
+		$label = self::formatDuration($entry->getSeconds());
+		$note = $entry->getNote();
+		if ($note !== null && $note !== '') {
+			$label .= ' - ' . $note;
+		}
+		return mb_substr($label, 0, self::MAX_DETAIL_LENGTH);
+	}
+
+	/**
+	 * Formats a duration in seconds as "1h 30m" / "45m" / "20s". Bare seconds are
+	 * only surfaced when there is no hour or minute component, exactly as the
+	 * client does it (CardDetail.vue formatDuration).
+	 */
+	private static function formatDuration(int $seconds): string {
+		$seconds = max(0, $seconds);
+		if ($seconds === 0) {
+			return '0m';
+		}
+		$hours = intdiv($seconds, 3600);
+		$minutes = intdiv($seconds % 3600, 60);
+		$rest = $seconds % 60;
+		$parts = [];
+		if ($hours > 0) {
+			$parts[] = $hours . 'h';
+		}
+		if ($minutes > 0) {
+			$parts[] = $minutes . 'm';
+		}
+		if ($rest > 0 && $hours === 0 && $minutes === 0) {
+			$parts[] = $rest . 's';
+		}
+		return implode(' ', $parts);
 	}
 
 	/**
