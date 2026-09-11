@@ -101,7 +101,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span class="command-palette__result-title" v-html="item.highlightedTitle" />
 							<span v-if="item.snippet" class="command-palette__result-snippet">{{ item.snippet }}</span>
 							<span v-if="item.column || item.badge" class="command-palette__result-meta">
-								<span v-if="item.column" class="command-palette__result-column">{{ item.column }}</span>
+								<span v-if="item.column" class="command-palette__result-column" :title="item.column">{{ item.column }}</span>
 								<span v-if="item.badge" class="command-palette__result-badge">{{ item.badge }}</span>
 							</span>
 						</div>

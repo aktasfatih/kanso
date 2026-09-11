@@ -222,8 +222,8 @@ class CommentMapper extends QBMapper {
 				'cardId' => (int)$row['card_id'],
 				'boardId' => (int)$row['board_id'],
 				// The card's column, so a search hit can name the stage it is at
-				// (#122). Carried as an id; SearchService resolves the titles for
-				// the whole result set in one query.
+				// (#122). Carried as an id; SearchService batch-resolves the titles
+				// for the page it returns.
 				'stackId' => (int)$row['stack_id'],
 				'cardTitle' => (string)$row['title'],
 				'body' => (string)$row['body'],

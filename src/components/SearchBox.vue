@@ -94,8 +94,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					     cards with near-identical titles whose only difference is the
 					     stage they are at, which left the list unreadable without
 					     opening each row. Absent when the column no longer resolves. -->
-					<span class="search-box__result-meta">
-						<span v-if="result.stackTitle" class="search-box__result-column">
+					<span v-if="result.stackTitle || result.type === 'comment'" class="search-box__result-meta">
+						<span v-if="result.stackTitle" class="search-box__result-column" :title="result.stackTitle">
 							{{ result.stackTitle }}
 						</span>
 						<!-- Label for comment hits to distinguish from card hits -->
