@@ -1461,7 +1461,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:disabled="addChildMutation.isPending.value"
 									@keydown.enter.prevent="handleAddChild">
 							</div>
-							<div v-if="children.length > 0" class="card-modal__children-grid">
+							<div v-if="children.length > 0" class="card-modal__children-list">
 								<div
 									v-for="child in children"
 									:key="child.id"
@@ -1476,6 +1476,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="openCard(child.id)">
 										{{ child.title }}
 									</button>
+									<!-- #122 — a sub-card's dates, so reading a case's steps no longer
+									     means opening each one. Display-only: children[] comes from
+									     jsonSerializeSummary(), which already carries both dates. -->
+									<span v-if="child.startDate || child.duedate" class="card-modal__child-dates">
+										<span
+											v-if="child.startDate"
+											class="card-modal__child-date card-modal__child-date--start"
+											:title="t('kanso', 'Starts {date}', { date: childDateFull(child, child.startDate) })">
+											<CalendarStartIcon :size="12" />
+											{{ childDate(child, child.startDate) }}
+										</span>
+										<span
+											v-if="child.duedate"
+											class="card-modal__child-date"
+											:class="childDueClass(child)"
+											:title="t('kanso', 'Due {date}', { date: childDateFull(child, child.duedate) })">
+											<CalendarIcon :size="12" />
+											{{ childDate(child, child.duedate) }}
+										</span>
+									</span>
 									<button
 										class="card-modal__child-remove"
 										:title="t('kanso', 'Detach sub-card')"
@@ -2418,6 +2438,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import EmoticonHappyOutlineIcon from 'vue-material-design-icons/EmoticonHappyOutline.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
+import CalendarStartIcon from 'vue-material-design-icons/CalendarStart.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
@@ -5436,6 +5457,34 @@ const childrenDone = computed(() =>
 	children.value.filter((c) => Number(c.doneAt) > 0).length,
 )
 
+// ── Sub-card date chips (#122) ───────────────────────────────────────────────
+// Display-only: `children[]` rides the card payload from jsonSerializeSummary(),
+// which already carries duedate, startDate and allDay.
+//
+// allDay is load-bearing, not decoration: an all-day date is stored at UTC
+// midnight, so formatting it in local time renders the PREVIOUS day for anyone
+// west of UTC. formatCardDate() handles that when it is told — so tell it.
+function childDate(child, iso) {
+	return formatCardDate(iso, child.allDay === true, { month: 'short', day: 'numeric' })
+}
+
+/** The unabbreviated date, for the chip's title attribute (the year is the point). */
+function childDateFull(child, iso) {
+	return formatCardDate(iso, child.allDay === true, { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+// Overdue / due-soon colouring, mirroring the board tile and the checklist-step
+// chip - including their rule that a DONE sub-card shows its due date neutrally
+// rather than shouting red about work that is already finished.
+function childDueClass(child) {
+	if (!child.duedate || Number(child.doneAt) > 0) return ''
+	const due = new Date(child.duedate)
+	const now = new Date()
+	if (due < now) return 'card-modal__child-date--overdue'
+	if ((due - now) / (1000 * 60 * 60) <= 24) return 'card-modal__child-date--soon'
+	return ''
+}
+
 // Parent title: look up the parent's title from the board cache (fast path),
 // falling back to a generic label so we never render an undefined value.
 const parentTitle = computed(() => {
@@ -7832,13 +7881,24 @@ body.theme--dark .card-modal,
 .card-modal__step-due[role='button'] {
 	cursor: pointer;
 }
+/* Legibility (#122): `--color-error` / `--color-warning` are pale TINT
+ * backgrounds in NC 34 (#FFE7E7 / #FFEEC5), NOT saturated fills - so the
+ * `color: #fff` these carried put white on near-white at roughly 1.1:1, which
+ * is how an overdue chip ended up unreadable.
+ *
+ * Both halves are now derived from the SAME theme-aware `--color-*-text` token
+ * (the legible foreground NC pairs with those tints): the text as-is, the
+ * background as a 12% tint of it. Deriving both from one token is what keeps
+ * this correct across NC 32-34 and both themes - a version where the base
+ * token is a saturated fill instead of a tint would otherwise flip the pairing
+ * from unreadable-light to unreadable-dark. */
 .card-modal__step-due--overdue {
-	background: var(--color-error);
-	color: #fff;
+	background: color-mix(in srgb, var(--color-error-text, #8a0000) 12%, transparent);
+	color: var(--color-error-text, #8a0000);
 }
 .card-modal__step-due--soon {
-	background: var(--color-warning, #d89b00);
-	color: #fff;
+	background: color-mix(in srgb, var(--color-warning-text, #664700) 14%, transparent);
+	color: var(--color-warning-text, #664700);
 }
 .card-modal__step-assignee {
 	display: inline-flex;
@@ -7950,13 +8010,21 @@ body.theme--dark .card-modal,
 .card-modal__parent-link:hover {
 	border-color: var(--color-primary-element);
 }
-.card-modal__children-grid {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 8px;
-}
-.card-modal__child {
+/* #122 — sub-cards are a single-column LIST, not a 2-up grid. Two cards side by
+   side read as a matrix rather than an ordered set of steps, each cell was too
+   narrow to carry anything but the title, and an odd count left a ragged hole.
+   The full row width is also what makes room for the date chips. */
+.card-modal__children-list {
 	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+/* A grid, not a flex row, so the mobile rule below can re-flow the same four
+   parts onto two lines by redeclaring the areas - no duplicated markup. */
+.card-modal__child {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
+	grid-template-areas: "dot title dates remove";
 	align-items: center;
 	gap: 10px;
 	padding: 10px 12px;
@@ -7964,6 +8032,47 @@ body.theme--dark .card-modal,
 	border-radius: 3px;
 	background: var(--color-main-background);
 	min-width: 0;
+}
+.card-modal__child > .card-modal__child-dot { grid-area: dot; }
+.card-modal__child > .card-modal__child-link { grid-area: title; }
+.card-modal__child > .card-modal__child-dates { grid-area: dates; }
+.card-modal__child > .card-modal__child-remove { grid-area: remove; }
+.card-modal__child-dates {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+/* Same shape as the checklist-step due chip above, so the two read as one
+   family rather than two inventions. */
+.card-modal__child-date {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+	padding: 1px 7px;
+	border-radius: 10px;
+	font-size: 12px;
+	white-space: nowrap;
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+}
+/* The START chip is deliberately quieter - no pill, just icon + date. Two
+ * identical pills side by side read as one ambiguous pair; the due date is the
+ * one people act on, so it keeps the filled shape and the urgency colour. */
+.card-modal__child-date--start {
+	background: transparent;
+	padding-inline: 0 2px;
+}
+/* Same derived-from-one-token pairing as the checklist step chip above - see
+ * the legibility note there. */
+.card-modal__child-date--overdue {
+	background: color-mix(in srgb, var(--color-error-text, #8a0000) 12%, transparent);
+	color: var(--color-error-text, #8a0000);
+}
+.card-modal__child-date--soon {
+	background: color-mix(in srgb, var(--color-warning-text, #664700) 14%, transparent);
+	color: var(--color-warning-text, #664700);
 }
 .card-modal__child:hover {
 	border-color: var(--color-primary-element);
@@ -9061,7 +9170,19 @@ body.theme--dark .card-modal,
 	.card-modal__content,
 	.card-modal__discussion { max-height: none; }
 	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }
-	.card-modal__children-grid { grid-template-columns: 1fr; }
+	/* #122 — on a phone the title and two date chips cannot share one line
+	   without crushing the title to an ellipsis, so the dates drop to a second
+	   line, indented under the title and clear of the detach button. Same four
+	   elements, re-flowed by the grid areas alone. */
+	.card-modal__child {
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-areas:
+			"dot title remove"
+			"dot dates dates";
+		row-gap: 4px;
+	}
+	.card-modal__child > .card-modal__child-dot { align-self: start; margin-top: 5px; }
+	.card-modal__child-dates { flex-wrap: wrap; }
 	.card-modal__tabbar {
 		display: flex;
 		position: sticky;
