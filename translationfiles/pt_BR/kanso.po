@@ -293,13 +293,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n linha de dados detectada"
 msgstr[1] "%n linhas de dados detectadas"
 
-#: src/components/CardDetail.vue:4323
+#: src/components/CardDetail.vue:4344
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "há %n dia"
 msgstr[1] "há %n dias"
 
-#: src/components/CardDetail.vue:4321
+#: src/components/CardDetail.vue:4342
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
@@ -323,7 +323,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4319
+#: src/components/CardDetail.vue:4340
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "há %n minuto"
@@ -353,7 +353,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n projeto"
 msgstr[1] "%n projetos"
 
-#: src/components/CardDetail.vue:1995
+#: src/components/CardDetail.vue:2015
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1686,7 +1686,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4512
+#: src/components/CardDetail.vue:4533
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dia"
@@ -1984,6 +1984,10 @@ msgstr "Solte para remover do cartão pai"
 #: src/views/PublicBoard.vue
 msgid "Due"
 msgstr "Vencimento"
+
+#: src/components/CardDetail.vue
+msgid "Due {date}"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -3356,7 +3360,7 @@ msgid "Mon"
 msgstr "Seg"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4514
+#: src/components/CardDetail.vue:4535
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mês"
@@ -4737,7 +4741,7 @@ msgstr "Mostrar a barra de formatação"
 msgid "Show the discussion panel"
 msgstr "Mostrar o painel de discussão"
 
-#: src/components/CardDetail.vue:6189
+#: src/components/CardDetail.vue:6238
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar o painel de discussão (%n comentário)"
@@ -4873,6 +4877,10 @@ msgstr "Comece com um modelo"
 #: src/composables/useBoardFilters.js
 msgid "Started"
 msgstr "Iniciado"
+
+#: src/components/CardDetail.vue
+msgid "Starts {date}"
+msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
@@ -5399,7 +5407,7 @@ msgid "Wed"
 msgstr "Qua"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4513
+#: src/components/CardDetail.vue:4534
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -5480,7 +5488,7 @@ msgid "wrote"
 msgstr "escreveu"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4515
+#: src/components/CardDetail.vue:4536
 msgid "year"
 msgid_plural "years"
 msgstr[0] "ano"

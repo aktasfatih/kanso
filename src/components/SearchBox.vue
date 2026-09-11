@@ -90,9 +90,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span v-if="result.snippet" class="search-box__result-snippet">
 						{{ truncate(result.snippet, 80) }}
 					</span>
-					<!-- Label for comment hits to distinguish from card hits -->
-					<span v-if="result.type === 'comment'" class="search-box__result-badge">
-						{{ t('kanso', 'comment') }}
+					<!-- #122 — the column a hit sits in. Boards routinely hold several
+					     cards with near-identical titles whose only difference is the
+					     stage they are at, which left the list unreadable without
+					     opening each row. Absent when the column no longer resolves. -->
+					<span class="search-box__result-meta">
+						<span v-if="result.stackTitle" class="search-box__result-column">
+							{{ result.stackTitle }}
+						</span>
+						<!-- Label for comment hits to distinguish from card hits -->
+						<span v-if="result.type === 'comment'" class="search-box__result-badge">
+							{{ t('kanso', 'comment') }}
+						</span>
 					</span>
 				</div>
 			</li>
@@ -432,6 +441,27 @@ defineExpose({ focus: () => inputRef.value?.focus() })
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* #122 — the column chip and the comment badge share one line under the
+   snippet, so a comment hit shows both without stacking a third row. */
+.search-box__result-meta {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+.search-box__result-column {
+	font-size: 0.7rem;
+	color: var(--color-text-maxcontrast);
+	background: var(--color-background-dark);
+	border-radius: 8px;
+	padding: 0 6px;
+	line-height: 1.5;
+	max-width: 14em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .search-box__result-badge {

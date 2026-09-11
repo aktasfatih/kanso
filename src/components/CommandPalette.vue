@@ -100,7 +100,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<!-- eslint-disable-next-line vue/no-v-html -->
 							<span class="command-palette__result-title" v-html="item.highlightedTitle" />
 							<span v-if="item.snippet" class="command-palette__result-snippet">{{ item.snippet }}</span>
-							<span v-if="item.badge" class="command-palette__result-badge">{{ item.badge }}</span>
+							<span v-if="item.column || item.badge" class="command-palette__result-meta">
+								<span v-if="item.column" class="command-palette__result-column">{{ item.column }}</span>
+								<span v-if="item.badge" class="command-palette__result-badge">{{ item.badge }}</span>
+							</span>
 						</div>
 					</li>
 				</template>
@@ -239,6 +242,10 @@ const sections = computed(() => {
 				highlightedTitle: highlightMatch(r.title, debouncedTerm.value),
 				snippet: r.snippet ? truncate(r.snippet, 80) : null,
 				badge: r.type === 'comment' ? t('kanso', 'comment') : null,
+				// The column the card sits in (#122) - the palette lists hits from
+				// every board, so near-identical titles need it even more than the
+				// board-scoped search box does. Null when it no longer resolves.
+				column: r.stackTitle || null,
 				// navigation payload
 				type: 'card',
 				boardId: r.boardId,
@@ -463,6 +470,29 @@ function selectItem(item) {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* #122 — the column chip sits on one line with the comment badge, under the
+   snippet, rather than adding a third stacked row to every hit. */
+.command-palette__result-meta {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	align-self: flex-start;
+	max-width: 100%;
+}
+.command-palette__result-column {
+	font-size: 0.7rem;
+	color: var(--color-text-maxcontrast);
+	background: var(--color-background-dark);
+	border-radius: 8px;
+	padding: 0 6px;
+	line-height: 1.5;
+	max-width: 14em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .command-palette__result-badge {
