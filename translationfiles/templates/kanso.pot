@@ -260,7 +260,7 @@ msgstr[1] ""
 
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
-#: src/views/BoardList.vue:285
+#: src/views/BoardList.vue:256
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -2993,10 +2993,6 @@ msgstr ""
 msgid "Import a board"
 msgstr ""
 
-#: src/views/BoardList.vue
-msgid "Import again"
-msgstr ""
-
 #: src/components/CsvImportModal.vue
 msgid "Import cards"
 msgstr ""
@@ -3007,10 +3003,6 @@ msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Import from Deck"
-msgstr ""
-
-#: src/views/BoardList.vue
-msgid "Imported {date}"
 msgstr ""
 
 #: src/views/BoardList.vue
@@ -5490,10 +5482,6 @@ msgstr ""
 msgid "Yes, delete"
 msgstr ""
 
-#: src/views/BoardList.vue
-msgid "You already imported this Deck board on {date}. Importing it again creates another, separate Kanso board with its own copy of every attachment — nothing from the earlier import is reused or updated."
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "you can edit"
 msgstr ""
@@ -5504,10 +5492,6 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
-msgstr ""
-
-#: src/views/BoardList.vue
-msgid "You have already imported that Deck board, so nothing was imported now. Use “Import again” if you really do want a second copy."
 msgstr ""
 
 #: src/components/CardDetail.vue

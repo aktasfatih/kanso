@@ -426,11 +426,8 @@ export const deleteCardTimeEntry = (cardId, entryId) =>
 export const fetchDeckImportBoards = () =>
 	axios.get(url('/api/deck-import/boards')).then((r) => r.data)
 
-// `confirm` is the user's explicit yes to a SECOND import of a board they have
-// imported before. Without it the server answers 409 `already_imported` rather
-// than duplicating the board and every attachment's bytes.
-export const importDeckBoard = (deckBoardId, confirm = false) =>
-	axios.post(url(`/api/deck-import/boards/${deckBoardId}`), { confirm }).then((r) => r.data)
+export const importDeckBoard = (deckBoardId) =>
+	axios.post(url(`/api/deck-import/boards/${deckBoardId}`)).then((r) => r.data)
 
 // Full-board portability (Kanso's own round-trippable JSON format)
 // The export is a .zip (board.json + the card attachments), so it comes back as

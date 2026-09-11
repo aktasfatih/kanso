@@ -7,7 +7,6 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
-use OCA\Kanso\Service\AlreadyImportedException;
 use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -47,12 +46,6 @@ trait ApiErrorTrait {
 				// unchanged for clients written against #9845.
 				'revision' => $e->getCurrentRevision(),
 			], Http::STATUS_CONFLICT);
-		} catch (AlreadyImportedException) {
-			// The Deck board is already imported and the caller did not confirm a
-			// second copy (#10300). NOTHING was written - a conflict to resolve,
-			// not a failure to retry blindly - so it is a 409, not a 500, and the
-			// client re-reads the picker to see when the board was imported.
-			return new JSONResponse(['error' => 'already_imported'], Http::STATUS_CONFLICT);
 		} catch (\OverflowException) {
 			// A derived fractional sort key would exceed the column width, or a
 			// concurrent move kept colliding after a retry (CardService) - the

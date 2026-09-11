@@ -261,7 +261,7 @@ msgstr[1] ""
 
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
-#: src/views/BoardList.vue:285
+#: src/views/BoardList.vue:256
 #: src/views/BoardStats.vue:420
 #: src/views/ProjectStats.vue:340
 msgid "%n card"
@@ -2994,10 +2994,6 @@ msgstr "Importer"
 msgid "Import a board"
 msgstr "Importer un tableau"
 
-#: src/views/BoardList.vue
-msgid "Import again"
-msgstr ""
-
 #: src/components/CsvImportModal.vue
 msgid "Import cards"
 msgstr "Importer des cartes"
@@ -3009,10 +3005,6 @@ msgstr "Importer des cartes depuis un CSV"
 #: src/views/BoardList.vue
 msgid "Import from Deck"
 msgstr "Importer depuis Deck"
-
-#: src/views/BoardList.vue
-msgid "Imported {date}"
-msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Imported into a new Kanso board:"
@@ -5491,10 +5483,6 @@ msgstr "Oui"
 msgid "Yes, delete"
 msgstr "Oui, supprimer"
 
-#: src/views/BoardList.vue
-msgid "You already imported this Deck board on {date}. Importing it again creates another, separate Kanso board with its own copy of every attachment — nothing from the earlier import is reused or updated."
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "you can edit"
 msgstr "vous pouvez modifier"
@@ -5506,10 +5494,6 @@ msgstr "vous pouvez gérer"
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
 msgstr "Vous ne pouvez pas copier vers ce tableau."
-
-#: src/views/BoardList.vue
-msgid "You have already imported that Deck board, so nothing was imported now. Use “Import again” if you really do want a second copy."
-msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "You have unsaved changes on this card. If you leave now, they will be lost."
