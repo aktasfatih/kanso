@@ -13,6 +13,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAttachment;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
@@ -42,6 +44,7 @@ class CardAttachmentServiceTest extends TestCase {
 	private IRootFolder&MockObject $rootFolder;
 	private ISimpleFolder&MockObject $folder;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private CardAttachmentService $service;
 
 	/** @var string[] Temp files created for upload tests, cleaned up in tearDown. */
@@ -66,6 +69,12 @@ class CardAttachmentServiceTest extends TestCase {
 
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
+		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		// Every attachment add/remove records a change row whose id the filename
+		// detail hangs off (#119); hand back a real Change so that id is a real one.
+		$change = new Change();
+		$change->setId(77);
+		$this->changeNotifier->method('notify')->willReturn($change);
 		$this->service = new CardAttachmentService(
 			$this->attachmentMapper,
 			$this->cardMapper,
@@ -76,6 +85,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->secureRandom,
 			$this->rootFolder,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
 		);
 	}
 
@@ -223,6 +233,41 @@ class CardAttachmentServiceTest extends TestCase {
 		self::assertSame(9, $captured->getCardId());
 		self::assertSame(1, $captured->getBoardId());
 		self::assertSame('bob', $captured->getUploadedBy());
+	}
+
+	/**
+	 * #119: the change row an upload writes carries VERB_ATTACHMENT_ADDED and the
+	 * filename as the detail's `to` side, so the Activity feed can name the file
+	 * instead of rendering a bare "updated this card".
+	 */
+	public function testUploadRecordsAnAttachmentAddedChangeNamingTheFile(): void {
+		$this->expectCardLoaded();
+		$this->folder->method('newFile')->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(7);
+				return $a;
+			}
+		);
+
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				9,
+				Change::ACTION_UPDATE,
+				'bob',
+				// Pinned: an upload is not inside a caller-managed transaction, so
+				// the realtime push must fire right away.
+				true,
+				Change::VERB_ATTACHMENT_ADDED,
+			);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(77, null, 'report.pdf');
+
+		$this->service->upload(9, $this->upload(['name' => 'report.pdf']), 'bob');
 	}
 
 	public function testUploadIgnoresClientFilenameForStoragePath(): void {
@@ -550,6 +595,39 @@ class CardAttachmentServiceTest extends TestCase {
 		$this->service->delete(9, 5, 'bob');
 	}
 
+	/**
+	 * #119: a removal is the case with NO other trace - the row and the bytes are
+	 * both gone - so the change row must carry VERB_ATTACHMENT_REMOVED and the
+	 * filename on the detail's `from` side, read BEFORE the row is dropped.
+	 */
+	public function testDeleteRecordsAnAttachmentRemovedChangeNamingTheFile(): void {
+		$this->expectCardLoaded();
+		$a = new CardAttachment();
+		$a->setId(5);
+		$a->setCardId(9);
+		$a->setFilename('invoice-2026.pdf');
+		$a->setStorageKey('deadbeefdeadbeefdeadbeefdeadbeef');
+		$this->attachmentMapper->method('find')->with(5)->willReturn($a);
+		$this->folder->method('getFile')->willReturn($this->createMock(ISimpleFile::class));
+
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(
+				1,
+				Change::ENTITY_CARD,
+				9,
+				Change::ACTION_UPDATE,
+				'bob',
+				true,
+				Change::VERB_ATTACHMENT_REMOVED,
+			);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(77, 'invoice-2026.pdf', null);
+
+		$this->service->delete(9, 5, 'bob');
+	}
+
 	// ---- deleteAllForCard (cascade on card purge) -------------------------
 
 	private function attachment(int $id, string $key): CardAttachment {
@@ -579,9 +657,12 @@ class CardAttachmentServiceTest extends TestCase {
 		$this->folder->expects(self::once())->method('delete');
 		// ...and every row is dropped in one shot.
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
-		// No permission check and no realtime notification on an internal cascade.
+		// No permission check and no realtime notification on an internal cascade -
+		// and no per-file "removed" activity either (#119): the card itself is being
+		// purged and emits its own DELETE row.
 		$this->permissionService->expects(self::never())->method('assertPermission');
 		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
 
 		$this->service->deleteAllForCard(9);
 	}
@@ -634,6 +715,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->secureRandom,
 			$this->rootFolder,
 			$this->visibilityGuard,
+			$this->changeDetailMapper,
 		);
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
 
@@ -688,6 +770,32 @@ class CardAttachmentServiceTest extends TestCase {
 		self::assertSame(9, $captured->getCardId());
 		self::assertSame(1, $captured->getBoardId());
 		self::assertSame('bob', $captured->getUploadedBy());
+	}
+
+	/**
+	 * A file copied from Files is an ordinary attachment, so it must log the same
+	 * "attached {file}" activity as a multipart upload (#119) - otherwise the two
+	 * doors into the same store leave different traces.
+	 */
+	public function testAttachFromFileRecordsAnAttachmentAddedChangeNamingTheFile(): void {
+		$this->expectCardLoaded();
+		$this->expectUserFolderById(42, [$this->fileNode(42, 11, 'notes.txt', 'text/plain')]);
+		$this->folder->method('newFile')->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(12);
+				return $a;
+			}
+		);
+
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob', true, Change::VERB_ATTACHMENT_ADDED);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(77, null, 'notes.txt');
+
+		$this->service->attachFromFileNode(9, 42, 'bob');
 	}
 
 	public function testAttachFromFileRejectsUnreadableFileId(): void {

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Controller;
 
+use OCA\Kanso\Db\CardAttachment;
 use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
@@ -17,6 +18,7 @@ use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
+use OCP\IUserManager;
 use OCP\IUserSession;
 
 /**
@@ -32,6 +34,7 @@ class CardAttachmentController extends Controller {
 		IRequest $request,
 		private IUserSession $userSession,
 		private CardAttachmentService $attachmentService,
+		private IUserManager $userManager,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -39,9 +42,14 @@ class CardAttachmentController extends Controller {
 	#[NoAdminRequired]
 	public function index(int $cardId): JSONResponse {
 		return $this->respond(function () use ($cardId): JSONResponse {
-			return new JSONResponse(
-				$this->attachmentService->listForCard($cardId, $this->currentUserId())
-			);
+			// One display-name cache across the list: a card's attachments are
+			// usually all from the same one or two people.
+			$nameCache = [];
+			$out = [];
+			foreach ($this->attachmentService->listForCard($cardId, $this->currentUserId()) as $attachment) {
+				$out[] = $this->serialize($attachment, $nameCache);
+			}
+			return new JSONResponse($out);
 		});
 	}
 
@@ -61,9 +69,9 @@ class CardAttachmentController extends Controller {
 	public function create(int $cardId): JSONResponse {
 		return $this->respond(function () use ($cardId): JSONResponse {
 			$upload = $this->request->getUploadedFile('file');
-			return new JSONResponse(
+			return new JSONResponse($this->serialize(
 				$this->attachmentService->upload($cardId, $upload, $this->currentUserId())
-			);
+			));
 		});
 	}
 
@@ -81,9 +89,9 @@ class CardAttachmentController extends Controller {
 	#[UserRateLimit(limit: 120, period: 3600)]
 	public function createFromFile(int $cardId, int $fileId = 0): JSONResponse {
 		return $this->respond(function () use ($cardId, $fileId): JSONResponse {
-			return new JSONResponse(
+			return new JSONResponse($this->serialize(
 				$this->attachmentService->attachFromFileNode($cardId, $fileId, $this->currentUserId())
-			);
+			));
 		});
 	}
 
@@ -164,6 +172,31 @@ class CardAttachmentController extends Controller {
 			$this->attachmentService->delete($cardId, $attachmentId, $this->currentUserId());
 			return new JSONResponse([]);
 		});
+	}
+
+	/**
+	 * The wire shape of one attachment: the entity's own metadata plus the
+	 * uploader's display name (#119), so the card can credit a person rather than
+	 * print a raw uid. The uid itself stays in the payload - the avatar endpoint
+	 * is keyed on it.
+	 *
+	 * @param array<string, string> $nameCache uid => display name, reused across a list
+	 * @return array<string, mixed>
+	 */
+	private function serialize(CardAttachment $attachment, array &$nameCache = []): array {
+		return $attachment->jsonSerialize()
+			+ ['uploadedByName' => $this->displayName((string)$attachment->getUploadedBy(), $nameCache)];
+	}
+
+	/**
+	 * @param array<string, string> $nameCache uid => display name, reused across a list
+	 */
+	private function displayName(string $uid, array &$nameCache): string {
+		if (!isset($nameCache[$uid])) {
+			$user = $this->userManager->get($uid);
+			$nameCache[$uid] = $user !== null ? $user->getDisplayName() : $uid;
+		}
+		return $nameCache[$uid];
 	}
 
 	/**

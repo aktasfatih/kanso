@@ -293,13 +293,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4295
+#: src/components/CardDetail.vue:4323
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
 msgstr[1] "%n gün önce"
 
-#: src/components/CardDetail.vue:4293
+#: src/components/CardDetail.vue:4321
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -323,7 +323,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4291
+#: src/components/CardDetail.vue:4319
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -353,7 +353,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:1975
+#: src/components/CardDetail.vue:1995
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -703,6 +703,14 @@ msgstr "İliştir"
 #: src/components/AddToKansoDialog.vue
 msgid "Attach “{file}” to a card. A copy is stored on the card."
 msgstr "“{file}” dosyasını bir karta iliştir. Kartta bir kopyası saklanır."
+
+#: src/components/CardDetail.vue
+msgid "attached {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "attached a file"
+msgstr ""
 
 #: src/components/AddToKansoDialog.vue
 msgid "Attaching…"
@@ -1673,7 +1681,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4484
+#: src/components/CardDetail.vue:4512
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -3347,7 +3355,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4486
+#: src/components/CardDetail.vue:4514
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4312,6 +4320,14 @@ msgid "removed an assignee"
 msgstr "bir atananı kaldırdı"
 
 #: src/components/CardDetail.vue
+msgid "removed an attachment"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "removed the attachment {value}"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "removed the label {value}"
 msgstr "{value} etiketini kaldırdı"
 
@@ -4712,7 +4728,7 @@ msgstr "Biçimlendirme araç çubuğunu göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6154
+#: src/components/CardDetail.vue:6189
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5366,7 +5382,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4485
+#: src/components/CardDetail.vue:4513
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5447,7 +5463,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4487
+#: src/components/CardDetail.vue:4515
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

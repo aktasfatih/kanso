@@ -80,6 +80,15 @@ class Change extends Entity {
 	public const VERB_THREAD_RESOLVED = 23;
 	public const VERB_THREAD_REOPENED = 24;
 
+	// File attachments (#119). Attachment add/remove previously reused the bare
+	// ENTITY_CARD / ACTION_UPDATE row with no verb, so it rendered as a generic
+	// "updated this card" - and a removal left no readable trace at all. These
+	// verbs carry the filename in `kanso_change_details` (`to` on add, `from` on
+	// remove), so the Activity feed can name the file and, crucially, timestamp
+	// the deletion of one.
+	public const VERB_ATTACHMENT_ADDED = 25;
+	public const VERB_ATTACHMENT_REMOVED = 26;
+
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of
 	// ACTION_CREATE would silently drop `action` from INSERTs of create
