@@ -854,12 +854,18 @@ test.describe('the bulk action bar at a phone width', () => {
 		await expect(page.locator('.card-tile', { hasText: 'Bulk card one' })).toBeVisible({ timeout: 15_000 })
 
 		// The one-time keyboard-shortcut nudge (#3413) is fixed to the same bottom
-		// strip and overlaps the bar at a phone width — unrelated to the bar's own
-		// geometry, and it would make every hit-test below report IT instead. Take
-		// it out of the picture the way timeline-view.spec.js does, rather than
-		// dismissing it: dismissal is persisted for the shared e2e user, and
-		// onboarding.spec.js asserts on that state.
-		await page.addStyleTag({ content: '.board-view__shortcuts-hint { display: none !important; }' })
+		// strip at the same z-index as the bar, and used to be hidden here with
+		// addStyleTag so the hit-tests below could not see it — which is exactly why
+		// CI never caught it painting over the bar's controls at a phone width. The
+		// nudge is now left alone: assert it is actually on screen first, so the
+		// hit-tests are demonstrably probing a page where it COULD cover the bar,
+		// then let the app suppress it on entering selection mode.
+		//
+		// Nothing here dismisses it — dismissal is persisted for this user and
+		// onboarding.spec.js asserts on that state, so it must stay untouched.
+		const hint = page.locator('[data-test="shortcuts-hint"]')
+		await expect(hint, 'the nudge must be showing, or these hit-tests prove nothing')
+			.toBeVisible({ timeout: 15_000 })
 
 		await act(page.getByRole('button', { name: moreButton }))
 		const selectItem = page.getByRole('menuitem', { name: 'Select multiple cards' })
@@ -869,6 +875,12 @@ test.describe('the bulk action bar at a phone width', () => {
 		await act(page.locator('.card-tile', { hasText: 'Bulk card one' }))
 		await act(page.locator('.card-tile', { hasText: 'Bulk card two' }))
 		await expect(page.locator('.bulk-action-bar')).toContainText('2', { timeout: 15_000 })
+
+		// …and it steps out of the way for the bar, without being dismissed: it is
+		// back as soon as the selection is cleared (asserted at the end of the
+		// 360x740 test).
+		await expect(hint, 'the nudge must not share the bottom strip with the bar')
+			.toHaveCount(0)
 	}
 
 	/** Every control sits inside the viewport and is the topmost element there. */
@@ -946,6 +958,11 @@ test.describe('the bulk action bar at a phone width', () => {
 
 			await page.getByRole('button', { name: 'Exit selection mode' }).tap()
 			await expect(page.locator('.bulk-action-bar')).toHaveCount(0, { timeout: 10_000 })
+
+			// Leaving the selection brings the nudge back: it was only stepped
+			// aside for the bar, not dismissed (which would be persisted).
+			await expect(page.locator('[data-test="shortcuts-hint"]'), 'the nudge must return once the bar is gone')
+				.toBeVisible({ timeout: 10_000 })
 
 			expect(errors, errors.join('\n')).toEqual([])
 		})

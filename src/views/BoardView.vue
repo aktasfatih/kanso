@@ -566,9 +566,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- One-time keyboard-shortcut discoverability hint (#3413): a subtle,
 		     dismissible nudge shown once after the user first opens a board.
-		     Dismissal is persisted per user (settings key), so it stays hidden. -->
+		     Dismissal is persisted per user (settings key), so it stays hidden.
+		     It shares the bottom strip with the bulk action bar above, which is
+		     full-width below 480px, so it is not rendered while a selection is
+		     active — otherwise it paints over the bar's controls on a phone.
+		     This hides the nudge only; the persisted dismissal state is
+		     untouched, so it returns once the selection is cleared. -->
 		<div
-			v-if="showShortcutsHint && boardData"
+			v-if="showShortcutsHint && boardData && !bulk.selectionMode.value"
 			class="board-view__shortcuts-hint"
 			data-test="shortcuts-hint"
 			role="status">
@@ -2671,7 +2676,12 @@ const onBulkDelete = () => runBulkAction('delete', {})
 }
 
 /* One-time keyboard-shortcut discoverability hint (#3413): a small, unobtrusive
-   pill anchored bottom-left, out of the way of the bulk action bar (centered). */
+   pill anchored bottom-RIGHT. It shares this bottom strip — and this z-index —
+   with .bulk-action-bar, which is a centred island on a desktop but goes
+   full-width below 480px, so the two collide on a phone. Keep them apart in the
+   template (the nudge is not rendered while a selection is active), not with a
+   z-index tweak: raising the bar would only put the pill under it, still
+   covering controls. */
 .board-view__shortcuts-hint {
 	position: fixed;
 	right: 16px;
