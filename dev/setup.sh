@@ -433,5 +433,35 @@ if [ "$notify_push_ready" != "1" ]; then
 fi
 fi
 
+# --- did the migrations actually run? ----------------------------------------
+# The last thing before "Ready:", because a boot that lies is worse than one that
+# fails. Nextcloud runs an app's migrations only when info.xml's <version> is
+# NEWER than the installed one, and Kanso's version is stamped at release time,
+# never on a feature branch (CLAUDE.md). So on a stack that already had kanso
+# enabled, the `app:enable` above is a no-op and a migration ADDED since the last
+# reset never runs: the stack comes up as new code on the old schema, and until
+# this check it said "Ready:" anyway. Every downstream verdict — a manual click,
+# a Playwright run, a PHPUnit-passing fix "confirmed" by hand — is then worthless
+# for a reason nothing prints.
+#
+# Detect, don't repair: a setup script must not silently migrate a shared dev
+# database under whoever else is using it. The assertion is the same one
+# smoke.sh runs (assert-migrations.sh), not a copy of it.
+if ! ./assert-migrations.sh; then
+	echo >&2
+	echo "The stack is UP but its schema is older than its code, so nothing you" >&2
+	echo "test on it means anything. Migrations only run on a version bump, which" >&2
+	echo "feature branches never make, so the fix is a reset (this destroys the" >&2
+	echo "dev database — dev/seed.sh reseeds it):" >&2
+	echo "  ${RESET_CMD}" >&2
+	echo >&2
+	echo "Keeping the data instead means making the migrator run: bump" >&2
+	echo "appinfo/info.xml's <version> above" >&2
+	echo "  $($OCC config:app:get kanso installed_version 2>/dev/null | tr -d '\r\n ')" >&2
+	echo "(the installed version) and re-run this script — but do NOT commit that" >&2
+	echo "bump; versions are release-only. See docs/RELEASING.md." >&2
+	exit 1
+fi
+
 echo
 echo "Ready: http://localhost:8891  (admin / admin, test user: tester / kanso-dev-tester!1)"

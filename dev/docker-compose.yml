@@ -26,7 +26,8 @@
 # and Nextcloud runs an app's migrations only when info.xml's <version> is newer
 # than the installed one (feature branches never bump it — see CLAUDE.md). So
 # after ADDING a migration, reset rather than restart, or you get new PHP code
-# against the previous schema. `./smoke.sh` says so out loud when that happens.
+# against the previous schema. Both `./setup.sh` (before it says "Ready:") and
+# `./smoke.sh` assert against that and refuse to report success when it happens.
 #
 # Cross-version / cross-DB matrix (used by CI, works locally too):
 #   NC_VERSION=32 KANSO_DB=postgres ./setup.sh   # NC 32 on postgres
