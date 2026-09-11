@@ -301,14 +301,14 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4323
+#: src/components/CardDetail.vue:4344
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
 msgstr[1] "%n dni temu"
 msgstr[2] "%n dni temu"
 
-#: src/components/CardDetail.vue:4321
+#: src/components/CardDetail.vue:4342
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
@@ -336,7 +336,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4319
+#: src/components/CardDetail.vue:4340
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -371,7 +371,7 @@ msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:1995
+#: src/components/CardDetail.vue:2015
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1708,7 +1708,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4512
+#: src/components/CardDetail.vue:4533
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -2007,6 +2007,10 @@ msgstr "Upuść, aby odłączyć od karty nadrzędnej"
 #: src/views/PublicBoard.vue
 msgid "Due"
 msgstr "Termin"
+
+#: src/components/CardDetail.vue
+msgid "Due {date}"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -3383,7 +3387,7 @@ msgid "Mon"
 msgstr "Pn"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4514
+#: src/components/CardDetail.vue:4535
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4765,7 +4769,7 @@ msgstr "Pokaż pasek formatowania"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6189
+#: src/components/CardDetail.vue:6238
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -4902,6 +4906,10 @@ msgstr "Zacznij od szablonu"
 #: src/composables/useBoardFilters.js
 msgid "Started"
 msgstr "Rozpoczęte"
+
+#: src/components/CardDetail.vue
+msgid "Starts {date}"
+msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
@@ -5428,7 +5436,7 @@ msgid "Wed"
 msgstr "Śr"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4513
+#: src/components/CardDetail.vue:4534
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -5510,7 +5518,7 @@ msgid "wrote"
 msgstr "napisał"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4515
+#: src/components/CardDetail.vue:4536
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"

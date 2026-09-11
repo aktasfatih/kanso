@@ -293,13 +293,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:4323
+#: src/components/CardDetail.vue:4344
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
 msgstr[1] "vor %n Tagen"
 
-#: src/components/CardDetail.vue:4321
+#: src/components/CardDetail.vue:4342
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
@@ -323,7 +323,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4319
+#: src/components/CardDetail.vue:4340
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -353,7 +353,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n Projekt"
 msgstr[1] "%n Projekte"
 
-#: src/components/CardDetail.vue:1995
+#: src/components/CardDetail.vue:2015
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1686,7 +1686,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4512
+#: src/components/CardDetail.vue:4533
 msgid "day"
 msgid_plural "days"
 msgstr[0] "Tag"
@@ -1984,6 +1984,10 @@ msgstr "Ablegen, um von der übergeordneten Karte zu lösen"
 #: src/views/PublicBoard.vue
 msgid "Due"
 msgstr "Fällig"
+
+#: src/components/CardDetail.vue
+msgid "Due {date}"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -3356,7 +3360,7 @@ msgid "Mon"
 msgstr "Mo"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4514
+#: src/components/CardDetail.vue:4535
 msgid "month"
 msgid_plural "months"
 msgstr[0] "Monat"
@@ -4737,7 +4741,7 @@ msgstr "Formatierungsleiste anzeigen"
 msgid "Show the discussion panel"
 msgstr "Diskussionsbereich anzeigen"
 
-#: src/components/CardDetail.vue:6189
+#: src/components/CardDetail.vue:6238
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
@@ -4873,6 +4877,10 @@ msgstr "Mit einer Vorlage beginnen"
 #: src/composables/useBoardFilters.js
 msgid "Started"
 msgstr "Gestartet"
+
+#: src/components/CardDetail.vue
+msgid "Starts {date}"
+msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
@@ -5399,7 +5407,7 @@ msgid "Wed"
 msgstr "Mi"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4513
+#: src/components/CardDetail.vue:4534
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "Woche"
@@ -5480,7 +5488,7 @@ msgid "wrote"
 msgstr "schrieb"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4515
+#: src/components/CardDetail.vue:4536
 msgid "year"
 msgid_plural "years"
 msgstr[0] "Jahr"

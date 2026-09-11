@@ -11,6 +11,7 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\StackMapper;
 use OCP\IDBConnection;
 
 /**
@@ -24,6 +25,10 @@ use OCP\IDBConnection;
  * Ranking (highest first): a card whose TITLE matches, then a card matching only
  * on DESCRIPTION, then a COMMENT body match. Each source is capped before the
  * merge so one noisy source cannot crowd out the others.
+ *
+ * Every hit also names the card's COLUMN (#122) - boards routinely hold several
+ * cards with near-identical titles that are told apart only by the stage they
+ * are at. The titles are batch-resolved for the returned page only.
  */
 class SearchService {
 	/** Per-source row cap before merge/rank - bounds the LIKE scan. */
@@ -41,6 +46,7 @@ class SearchService {
 		private CommentMapper $commentMapper,
 		private IDBConnection $db,
 		private BoardAccess $boardAccess,
+		private StackMapper $stackMapper,
 	) {
 	}
 
@@ -82,6 +88,7 @@ class SearchService {
 				'type' => 'comment',
 				'cardId' => $row['cardId'],
 				'boardId' => $row['boardId'],
+				'stackId' => $row['stackId'],
 				'commentId' => $row['id'],
 				'title' => $row['cardTitle'],
 				'snippet' => $this->snippet($row['body']),
@@ -96,7 +103,7 @@ class SearchService {
 		$total = count($results);
 		$page = array_slice($results, $offset, $limit);
 
-		return ['query' => $term, 'total' => $total, 'results' => $page];
+		return ['query' => $term, 'total' => $total, 'results' => $this->withStackTitles($page)];
 	}
 
 	/**
@@ -108,10 +115,40 @@ class SearchService {
 			'type' => 'card',
 			'cardId' => $card->getId(),
 			'boardId' => $card->getBoardId(),
+			'stackId' => $card->getStackId(),
 			'title' => $card->getTitle(),
 			'snippet' => $this->snippet((string)$card->getDescription()),
 			'rank' => $titleMatches ? self::RANK_CARD_TITLE : self::RANK_CARD_DESCRIPTION,
 		];
+	}
+
+	/**
+	 * Names each hit's column (#122). Two cards can carry near-identical titles
+	 * and be told apart only by the stage they sit at, so a result list without
+	 * the column forces the reader to open rows one by one.
+	 *
+	 * Resolved for the PAGE, not the whole result set - the caller has already
+	 * sliced, so this is at most `$limit` rows however many matched - and in ONE
+	 * batched query over the distinct ids. A stack that does not resolve (it was
+	 * deleted between the match and now) yields a null title, which the client
+	 * renders as no column rather than an empty one.
+	 *
+	 * @param list<array<string, mixed>> $page
+	 * @return list<array<string, mixed>>
+	 */
+	private function withStackTitles(array $page): array {
+		$stackIds = array_values(array_unique(array_filter(
+			array_map(static fn (array $row): ?int => $row['stackId'] ?? null, $page),
+			static fn (?int $id): bool => $id !== null,
+		)));
+		$titles = $this->stackMapper->titlesByIds($stackIds);
+
+		foreach ($page as $index => $row) {
+			$stackId = $row['stackId'] ?? null;
+			$page[$index]['stackTitle'] = $stackId !== null ? ($titles[$stackId] ?? null) : null;
+		}
+
+		return array_values($page);
 	}
 
 	/**

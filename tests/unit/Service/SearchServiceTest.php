@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\SearchService;
 use OCP\IDBConnection;
@@ -25,6 +26,7 @@ class SearchServiceTest extends TestCase {
 	private CommentMapper&MockObject $commentMapper;
 	private IDBConnection&MockObject $db;
 	private BoardAccess&MockObject $boardAccess;
+	private StackMapper&MockObject $stackMapper;
 	private SearchService $service;
 
 	protected function setUp(): void {
@@ -38,12 +40,18 @@ class SearchServiceTest extends TestCase {
 			static fn (string $s): string => str_replace(['\\', '_', '%'], ['\\\\', '\\_', '\\%'], $s),
 		);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
+		// Deliberately NOT given a default stub: PHPUnit takes the return value
+		// from the FIRST matching matcher, so a convenience default configured
+		// here would silently beat every per-test willReturn() and make the
+		// column assertions below untestable.
+		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->service = new SearchService(
 			$this->boardService,
 			$this->cardMapper,
 			$this->commentMapper,
 			$this->db,
 			$this->boardAccess,
+			$this->stackMapper,
 		);
 	}
 
@@ -59,6 +67,13 @@ class SearchServiceTest extends TestCase {
 		$card->setBoardId($boardId);
 		$card->setTitle($title);
 		$card->setDescription($description);
+		return $card;
+	}
+
+	/** A card pinned to a specific column, for the #122 column assertions. */
+	private function cardInStack(int $id, int $boardId, int $stackId, string $title): Card {
+		$card = $this->card($id, $boardId, $title);
+		$card->setStackId($stackId);
 		return $card;
 	}
 
@@ -94,7 +109,7 @@ class SearchServiceTest extends TestCase {
 			$this->card(21, 1, 'Widget master', 'nope'), // title → rank 3
 		]);
 		$this->commentMapper->method('searchInBoards')->willReturn([
-			['id' => 5, 'cardId' => 22, 'boardId' => 1, 'cardTitle' => 'Card with comment', 'body' => 'a widget mention'],
+			['id' => 5, 'cardId' => 22, 'boardId' => 1, 'stackId' => 3, 'cardTitle' => 'Card with comment', 'body' => 'a widget mention'],
 		]);
 
 		$result = $this->service->search('widget', 'alice', null, 25, 0);
@@ -106,6 +121,84 @@ class SearchServiceTest extends TestCase {
 		self::assertSame('comment', $result['results'][2]['type']); // comment last
 		self::assertSame(22, $result['results'][2]['cardId']);
 		self::assertSame(5, $result['results'][2]['commentId']);
+	}
+
+	/**
+	 * #122: two cards can carry near-identical titles and be told apart only by
+	 * the column they sit in, so every hit - card AND comment - names its
+	 * column.
+	 */
+	public function testEveryResultNamesItsColumn(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$this->cardMapper->method('searchInBoards')->willReturn([
+			$this->cardInStack(20, 1, 11, 'Wheelchair repair - Yilmaz'),
+			$this->cardInStack(21, 1, 12, 'Wheelchair repair - Yilmaz'),
+		]);
+		$this->commentMapper->method('searchInBoards')->willReturn([
+			['id' => 5, 'cardId' => 22, 'boardId' => 1, 'stackId' => 12, 'cardTitle' => 'Other case', 'body' => 'a wheelchair mention'],
+		]);
+		$this->stackMapper->expects(self::once())
+			->method('titlesByIds')
+			// One batched call over the DISTINCT ids, never one query per row.
+			->with(self::callback(static function (array $ids): bool {
+				sort($ids);
+				return $ids === [11, 12];
+			}))
+			->willReturn([11 => 'Open cases', 12 => 'Awaiting parts']);
+
+		$results = $this->service->search('wheelchair', 'alice', null, 25, 0)['results'];
+
+		self::assertSame('Open cases', $results[0]['stackTitle']);
+		self::assertSame(11, $results[0]['stackId']);
+		// The identically-titled sibling is distinguishable by its column alone.
+		self::assertSame('Awaiting parts', $results[1]['stackTitle']);
+		self::assertSame($results[0]['title'], $results[1]['title']);
+		// Comment hits carry it too - they are card hits by another route.
+		self::assertSame('comment', $results[2]['type']);
+		self::assertSame('Awaiting parts', $results[2]['stackTitle']);
+	}
+
+	/**
+	 * A stack deleted between the match and the read resolves to nothing. The
+	 * key must still be present and null so the client renders no column rather
+	 * than an empty chip.
+	 */
+	public function testAnUnresolvedColumnYieldsANullTitleRatherThanBreaking(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$this->cardMapper->method('searchInBoards')->willReturn([
+			$this->cardInStack(20, 1, 99, 'Widget master'),
+		]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->stackMapper->method('titlesByIds')->willReturn([]);
+
+		$results = $this->service->search('widget', 'alice', null, 25, 0)['results'];
+
+		self::assertArrayHasKey('stackTitle', $results[0]);
+		self::assertNull($results[0]['stackTitle']);
+	}
+
+	/**
+	 * The titles are resolved for the PAGE, not the whole match set: a wide
+	 * search can match hundreds of rows across as many columns, and all but one
+	 * page of them is about to be thrown away.
+	 */
+	public function testColumnTitlesAreResolvedForThePageOnly(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$cards = [];
+		for ($i = 0; $i < 30; $i++) {
+			$cards[] = $this->cardInStack(100 + $i, 1, 200 + $i, 'Widget ' . $i);
+		}
+		$this->cardMapper->method('searchInBoards')->willReturn($cards);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->stackMapper->expects(self::once())
+			->method('titlesByIds')
+			->with(self::callback(static fn (array $ids): bool => count($ids) === 5))
+			->willReturn([]);
+
+		$result = $this->service->search('widget', 'alice', null, 5, 0);
+
+		self::assertSame(30, $result['total']);
+		self::assertCount(5, $result['results']);
 	}
 
 	public function testSearchSkipsBoardsTheUserHasArchived(): void {

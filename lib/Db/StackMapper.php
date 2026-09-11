@@ -91,6 +91,48 @@ class StackMapper extends QBMapper {
 	}
 
 	/**
+	 * Stack titles by id, ACROSS boards, in ONE query - for a result set that
+	 * already spans every board the viewer can read, where the board-scoped
+	 * {@see self::findByIds()} would mean a query per board (search, #122).
+	 *
+	 * Returns titles only, not entities: the caller wants a label, and a search
+	 * page can reference up to a couple of hundred distinct stacks. Ids the
+	 * query does not resolve - a deleted stack - are simply absent, so the
+	 * caller renders no column rather than an empty one.
+	 *
+	 * NOT filtered on archived: archiving a column does not archive its cards,
+	 * so an archived stack still holds live, searchable cards that must still
+	 * be able to name where they are.
+	 *
+	 * This is a READ of labels the caller has already gated (the rows come from
+	 * boards it resolved as readable), so it carries no ACL of its own.
+	 *
+	 * @param int[] $ids
+	 * @return array<int, string> stack id => title
+	 * @throws Exception
+	 */
+	public function titlesByIds(array $ids): array {
+		if ($ids === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'title')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+
+		$titles = [];
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$titles[(int)$row['id']] = (string)$row['title'];
+		}
+		$result->closeCursor();
+
+		return $titles;
+	}
+
+	/**
 	 * The first non-deleted stack of a board carrying the given workflow role
 	 * (in display order), or null. Used to resolve auto-move targets (e.g. the
 	 * "In review" or "Done" column) without a separate config surface. Ordered

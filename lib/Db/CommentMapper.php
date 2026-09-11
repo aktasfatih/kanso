@@ -192,17 +192,18 @@ class CommentMapper extends QBMapper {
 	 * Non-deleted comments whose body matches a LIKE pattern, restricted to the
 	 * given readable boards (joined through non-deleted cards). Portable
 	 * case-insensitive LIKE; the pattern is pre-escaped/wrapped by the caller.
-	 * Each row carries the parent card's id, board and title so a hit can be
-	 * shown and deep-linked without a second query. $boardIds must be non-empty.
+	 * Each row carries the parent card's id, board, stack and title so a hit can
+	 * be shown and deep-linked without a second query. $boardIds must be
+	 * non-empty.
 	 *
 	 * @param int[] $boardIds
 	 * @param array<int, string> $rolesByBoard the viewer's role per board id
-	 * @return array<int, array{id: int, cardId: int, boardId: int, cardTitle: string, body: string}>
+	 * @return array<int, array{id: int, cardId: int, boardId: int, stackId: int, cardTitle: string, body: string}>
 	 * @throws Exception
 	 */
 	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('cm.id', 'cm.card_id', 'cm.body', 'c.board_id', 'c.title')
+		$qb->select('cm.id', 'cm.card_id', 'cm.body', 'c.board_id', 'c.stack_id', 'c.title')
 			->from($this->getTableName(), 'cm')
 			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
 			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
@@ -220,6 +221,10 @@ class CommentMapper extends QBMapper {
 				'id' => (int)$row['id'],
 				'cardId' => (int)$row['card_id'],
 				'boardId' => (int)$row['board_id'],
+				// The card's column, so a search hit can name the stage it is at
+				// (#122). Carried as an id; SearchService batch-resolves the titles
+				// for the page it returns.
+				'stackId' => (int)$row['stack_id'],
 				'cardTitle' => (string)$row['title'],
 				'body' => (string)$row['body'],
 			];
