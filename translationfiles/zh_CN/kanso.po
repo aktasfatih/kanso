@@ -285,12 +285,12 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4360
+#: src/components/CardDetail.vue:4363
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4358
+#: src/components/CardDetail.vue:4361
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -310,7 +310,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] ""
 
-#: src/components/CardDetail.vue:4356
+#: src/components/CardDetail.vue:4359
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -1692,7 +1692,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4549
+#: src/components/CardDetail.vue:4552
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3377,7 +3377,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4551
+#: src/components/CardDetail.vue:4554
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4785,7 +4785,7 @@ msgstr "显示格式工具栏"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6226
+#: src/components/CardDetail.vue:6229
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5446,7 +5446,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4550
+#: src/components/CardDetail.vue:4553
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5460,8 +5460,8 @@ msgid "Weekly"
 msgstr "每周"
 
 #: src/components/CardDetail.vue
-msgid "What changes are needed? (posted as a comment)"
-msgstr "需要做哪些修改？（会作为评论发布）"
+msgid "What changes are needed? (optional, posted as a comment)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5526,7 +5526,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4552
+#: src/components/CardDetail.vue:4555
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

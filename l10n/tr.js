@@ -1187,7 +1187,6 @@ OC.L10N.register(
     "_week_::_weeks_" : ["hafta","hafta"],
     "Week" : "Hafta",
     "Weekly" : "Haftalık",
-    "What changes are needed? (posted as a comment)" : "Hangi değişiklikler gerekiyor? (yorum olarak yayımlanır)",
     "When a card enters {role}" : "Bir kart {role} rolüne girdiğinde",
     "When a card enters role" : "Bir kart şu role girdiğinde",
     "When someone requests your review on a card it will appear here." : "Biri bir kartta incelemeni istediğinde burada görünür.",

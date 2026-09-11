@@ -293,13 +293,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n fila de datos detectada"
 msgstr[1] "%n filas de datos detectadas"
 
-#: src/components/CardDetail.vue:4360
+#: src/components/CardDetail.vue:4363
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "hace %n día"
 msgstr[1] "hace %n días"
 
-#: src/components/CardDetail.vue:4358
+#: src/components/CardDetail.vue:4361
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "hace %n hora"
@@ -323,7 +323,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4356
+#: src/components/CardDetail.vue:4359
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "hace %n minuto"
@@ -1714,7 +1714,7 @@ msgid "Date"
 msgstr "Fecha"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4549
+#: src/components/CardDetail.vue:4552
 msgid "day"
 msgid_plural "days"
 msgstr[0] "día"
@@ -3404,7 +3404,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4551
+#: src/components/CardDetail.vue:4554
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mes"
@@ -4813,7 +4813,7 @@ msgstr "Mostrar la barra de formato"
 msgid "Show the discussion panel"
 msgstr "Mostrar el panel de conversación"
 
-#: src/components/CardDetail.vue:6226
+#: src/components/CardDetail.vue:6229
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar el panel de conversación (%n comentario)"
@@ -5475,7 +5475,7 @@ msgid "Wed"
 msgstr "Mié"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4550
+#: src/components/CardDetail.vue:4553
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -5490,8 +5490,8 @@ msgid "Weekly"
 msgstr "Semanal"
 
 #: src/components/CardDetail.vue
-msgid "What changes are needed? (posted as a comment)"
-msgstr "¿Qué cambios hacen falta? (se publica como comentario)"
+msgid "What changes are needed? (optional, posted as a comment)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5556,7 +5556,7 @@ msgid "wrote"
 msgstr "escribió"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4552
+#: src/components/CardDetail.vue:4555
 msgid "year"
 msgid_plural "years"
 msgstr[0] "año"

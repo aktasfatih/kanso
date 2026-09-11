@@ -293,13 +293,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4360
+#: src/components/CardDetail.vue:4363
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
 
-#: src/components/CardDetail.vue:4358
+#: src/components/CardDetail.vue:4361
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
@@ -323,7 +323,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4356
+#: src/components/CardDetail.vue:4359
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -1714,7 +1714,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4549
+#: src/components/CardDetail.vue:4552
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3404,7 +3404,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4551
+#: src/components/CardDetail.vue:4554
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4813,7 +4813,7 @@ msgstr "Opmaakbalk tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:6226
+#: src/components/CardDetail.vue:6229
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5475,7 +5475,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4550
+#: src/components/CardDetail.vue:4553
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -5490,8 +5490,8 @@ msgid "Weekly"
 msgstr "Wekelijks"
 
 #: src/components/CardDetail.vue
-msgid "What changes are needed? (posted as a comment)"
-msgstr "Welke wijzigingen zijn nodig? (wordt als reactie geplaatst)"
+msgid "What changes are needed? (optional, posted as a comment)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5556,7 +5556,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4552
+#: src/components/CardDetail.vue:4555
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

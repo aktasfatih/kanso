@@ -731,9 +731,28 @@ class ReviewServiceTest extends TestCase {
 			->with($board, 'bob')
 			->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardReviewMapper->method('findById')->with(1)->willReturn($this->review('bob'));
+		// The verdict still lands - only the comment is skipped.
+		$this->cardReviewMapper->expects(self::once())->method('update');
 		$this->commentService->expects(self::never())->method('addComment');
 
 		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', '   ');
+	}
+
+	public function testSetStateChangesRequestedWithNullReasonRecordsVerdict(): void {
+		// A reason is OPTIONAL: requesting changes with no reason at all records
+		// the verdict and posts nothing. The card modal relies on this.
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ);
+		$review = $this->review('bob');
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($review);
+		$this->cardReviewMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(static fn ($r) => $r->getState() === CardReview::STATE_CHANGES_REQUESTED));
+		$this->commentService->expects(self::never())->method('addComment');
+
+		$this->service->setState(9, 1, CardReview::STATE_CHANGES_REQUESTED, 'bob', null);
 	}
 
 	// ---- serializeReviewsForCard (derived gating) -------------------------

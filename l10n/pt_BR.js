@@ -1187,7 +1187,6 @@ OC.L10N.register(
     "_week_::_weeks_" : ["semana","semanas"],
     "Week" : "Semana",
     "Weekly" : "Semanalmente",
-    "What changes are needed? (posted as a comment)" : "Quais alterações são necessárias? (publicado como comentário)",
     "When a card enters {role}" : "Quando um cartão entra em {role}",
     "When a card enters role" : "Quando um cartão entra no papel",
     "When someone requests your review on a card it will appear here." : "Quando alguém solicitar sua revisão em um cartão, ela aparecerá aqui.",

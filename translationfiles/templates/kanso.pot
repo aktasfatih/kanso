@@ -292,13 +292,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4360
+#: src/components/CardDetail.vue:4363
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4358
+#: src/components/CardDetail.vue:4361
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
@@ -322,7 +322,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4356
+#: src/components/CardDetail.vue:4359
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -1713,7 +1713,7 @@ msgid "Date"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4549
+#: src/components/CardDetail.vue:4552
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3403,7 +3403,7 @@ msgid "Mon"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4551
+#: src/components/CardDetail.vue:4554
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4812,7 +4812,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:6226
+#: src/components/CardDetail.vue:6229
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5474,7 +5474,7 @@ msgid "Wed"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4550
+#: src/components/CardDetail.vue:4553
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -5489,7 +5489,7 @@ msgid "Weekly"
 msgstr ""
 
 #: src/components/CardDetail.vue
-msgid "What changes are needed? (posted as a comment)"
+msgid "What changes are needed? (optional, posted as a comment)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5555,7 +5555,7 @@ msgid "wrote"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4552
+#: src/components/CardDetail.vue:4555
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

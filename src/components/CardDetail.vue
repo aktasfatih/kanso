@@ -83,11 +83,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<textarea
 								v-model="changesReasonText"
 								class="card-modal__verdict-reason"
-								:placeholder="t('kanso', 'What changes are needed? (posted as a comment)')"
+								:placeholder="t('kanso', 'What changes are needed? (optional, posted as a comment)')"
 								rows="2" />
 							<NcButton
 								type="error"
-								:disabled="setReviewState.isPending.value || !changesReasonText.trim()"
+								:disabled="setReviewState.isPending.value"
 								@click="submitChangesRequested(review.id)">
 								{{ t('kanso', 'Submit') }}
 							</NcButton>
@@ -3158,6 +3158,9 @@ const myPendingReviews = computed(() =>
 )
 
 // Reject-reason prompt state (#3469): the review id being rejected + its text.
+// The reason is OPTIONAL - Submit stays enabled on an empty box, matching the
+// My Reviews list, which requests changes with no reason at all. An empty reason
+// simply posts no comment (the backend skips it).
 const changesReasonFor = ref(null)
 const changesReasonText = ref('')
 

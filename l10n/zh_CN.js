@@ -1187,7 +1187,6 @@ OC.L10N.register(
     "_week_::_weeks_" : ["周"],
     "Week" : "周",
     "Weekly" : "每周",
-    "What changes are needed? (posted as a comment)" : "需要做哪些修改？（会作为评论发布）",
     "When a card enters {role}" : "当卡片进入{role}时",
     "When a card enters role" : "当卡片进入以下角色的列时",
     "When someone requests your review on a card it will appear here." : "当有人请求你评审某张卡片时，它会显示在这里。",

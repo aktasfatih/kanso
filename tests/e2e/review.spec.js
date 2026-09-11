@@ -62,6 +62,34 @@ test.describe('Card review flow', () => {
 		await expect(page.locator('.card-modal__verdict')).toHaveCount(0, { timeout: 4000 })
 	})
 
+	test('requesting changes with an empty reason submits from the card modal', async ({ page }) => {
+		// The reason is OPTIONAL - Submit must stay clickable on an empty box.
+		// Its own card, so this does not depend on the verdicts above.
+		const card = await api.post('/cards', { stackId: state.stackId, title: 'Reasonless reject' })
+		await api.put(`/cards/${card.id}/reviews/${me}`)
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`)
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+		const verdict = page.locator('.card-modal__verdict')
+		await verdict.getByRole('button', { name: 'Request changes' }).click()
+
+		// The reason box opens EMPTY and Submit is enabled anyway.
+		await expect(verdict.locator('.card-modal__verdict-reason')).toHaveValue('')
+		const submit = verdict.getByRole('button', { name: 'Submit' })
+		await expect(submit).toBeEnabled()
+		await submit.click()
+
+		await expect(page.locator('.card-modal__review-pill--changes_requested'))
+			.toBeVisible({ timeout: 6000 })
+
+		// The verdict is recorded server-side, and an empty reason posts no comment.
+		const fresh = await api.get(`/cards/${card.id}`)
+		expect(fresh.reviews.find((r) => r.reviewer === me).state).toBe('changes_requested')
+		expect(await api.get(`/cards/${card.id}/comments`)).toHaveLength(0)
+	})
+
 	test('board tile shows the review-state chip', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)

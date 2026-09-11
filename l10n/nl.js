@@ -1187,7 +1187,6 @@ OC.L10N.register(
     "_week_::_weeks_" : ["week","weken"],
     "Week" : "Week",
     "Weekly" : "Wekelijks",
-    "What changes are needed? (posted as a comment)" : "Welke wijzigingen zijn nodig? (wordt als reactie geplaatst)",
     "When a card enters {role}" : "Zodra een kaart in {role} komt",
     "When a card enters role" : "Zodra een kaart in een rol komt",
     "When someone requests your review on a card it will appear here." : "Zodra iemand jouw review op een kaart vraagt, verschijnt die hier.",

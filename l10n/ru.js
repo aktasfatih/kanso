@@ -1187,7 +1187,6 @@ OC.L10N.register(
     "_week_::_weeks_" : ["неделя","недели","недель"],
     "Week" : "Неделя",
     "Weekly" : "Еженедельно",
-    "What changes are needed? (posted as a comment)" : "Какие изменения нужны? (будет опубликовано как комментарий)",
     "When a card enters {role}" : "Когда карточка попадает в {role}",
     "When a card enters role" : "Когда карточка попадает в роль",
     "When someone requests your review on a card it will appear here." : "Когда кто-то запросит вашу проверку карточки, она появится здесь.",
