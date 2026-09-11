@@ -41,7 +41,7 @@ use OCP\Migration\SimpleMigrationStep;
  *  docblocked as Doctrine\DBAL\Schema\Table, which is not part of the OCP
  *  stubs (Deck suppresses the same class in its psalm config).
  */
-class Version006000Date20260916000000 extends SimpleMigrationStep {
+class Version006200Date20260918000000 extends SimpleMigrationStep {
 	#[\Override]
 	public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper {
 		/** @var ISchemaWrapper $schema */
