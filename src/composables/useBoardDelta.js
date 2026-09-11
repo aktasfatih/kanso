@@ -19,6 +19,14 @@ import { boardQueryKey } from './queryKeys.js'
  *    dropped and a full board invalidate re-seeds it. The query's own slow 60s
  *    refetchInterval is the belt-and-suspenders that self-heals any missed delta.
  *
+ * That last sentence was a lie until #10384: an EMPTY tick used to write the
+ * cache too, and a cache write re-arms the observer's refetch interval from
+ * zero, so the 5s poll kept resetting a 60s timer that consequently never
+ * fired. Nothing about this loop may write the query cache on a window that
+ * carried no rows - the safety net it disarms is the only refresh path for the
+ * board state that has no `kanso_changes` row to ride (NC group membership
+ * above all, which changes outside Kanso entirely).
+ *
  * Mid-drag safety: never patch while a move is pending for the board - a patch
  * (like a refetch) would clobber the optimistic move placement. The move queue's
  * drain invalidate (useCardMove) is the post-drag reconciliation point.
@@ -286,10 +294,15 @@ export async function syncBoardDelta(queryClient, boardId) {
 		...(delta.cards?.remove ?? []),
 	]
 	// An empty delta (most poll ticks) is not a change event - don't spam
-	// listeners with it.
+	// listeners with it, and (see the setQueryData below) don't write the cache
+	// for it either. `blocksEdges` is in the condition because the server sends
+	// that key only for a NON-empty window; it can never be the sole content of
+	// one, but reading the flag off the payload rather than off an invariant
+	// keeps "did this window carry anything" true by construction.
 	const hasChanges = touchedCardIds.length > 0
 		|| (delta.stacks?.upsert?.length ?? 0) > 0
 		|| (delta.stacks?.remove?.length ?? 0) > 0
+		|| Array.isArray(delta.blocksEdges)
 
 	const existing = queryClient.getQueryData(boardKey)
 	if (!existing) {
@@ -305,20 +318,38 @@ export async function syncBoardDelta(queryClient, boardId) {
 		return
 	}
 
-	queryClient.setQueryData(boardKey, (old) => {
-		if (!old) return old
-		return {
-			...old,
-			cards: applyDelta(old.cards, delta.cards),
-			stacks: applyDelta(old.stacks, delta.stacks),
-			// Dependency edges (#5896) are a whole-list replacement, not a
-			// per-id delta: they aren't derivable from card summaries, and the
-			// server only sends them when the window was non-empty (a relation
-			// add/remove always puts ENTITY_CARD rows in it). Absent key = no
-			// relation change rode this window, so keep what we have.
-			...(Array.isArray(delta.blocksEdges) ? { blocksEdges: delta.blocksEdges } : {}),
-		}
-	})
+	// An EMPTY window must not write the cache (#10384). setQueryData is not a
+	// free no-op even when the value is structurally identical: every call
+	// dispatches a `success` on the query, which refreshes `dataUpdatedAt` and
+	// takes QueryObserver through onQueryUpdate -> #updateTimers, and
+	// #updateRefetchInterval clears and re-arms the interval from zero. This
+	// loop ticks every 5s (30s with push), always sooner than useBoard's 60s
+	// refetchInterval is counting to, so writing on empty ticks meant the board
+	// query was never stale and the interval never fired once: measured, zero
+	// GET /boards/{id} in 100s with a board open. That killed refetchInterval,
+	// refetchOnMount and refetchOnWindowFocus together - i.e. every safety net
+	// that catches state delta sync cannot see (see the class of gaps in
+	// #10384: an NC group membership change writes no `kanso_changes` row
+	// because it does not happen inside Kanso at all, so the periodic re-read
+	// is the ONLY thing that can heal it). Skipping the write costs nothing:
+	// there is by definition nothing to apply. Pinned by
+	// tests/unit/boardRefetchInterval.test.mjs.
+	if (hasChanges) {
+		queryClient.setQueryData(boardKey, (old) => {
+			if (!old) return old
+			return {
+				...old,
+				cards: applyDelta(old.cards, delta.cards),
+				stacks: applyDelta(old.stacks, delta.stacks),
+				// Dependency edges (#5896) are a whole-list replacement, not a
+				// per-id delta: they aren't derivable from card summaries, and the
+				// server only sends them when the window was non-empty (a relation
+				// add/remove always puts ENTITY_CARD rows in it). Absent key = no
+				// relation change rode this window, so keep what we have.
+				...(Array.isArray(delta.blocksEdges) ? { blocksEdges: delta.blocksEdges } : {}),
+			}
+		})
+	}
 
 	// Open-card freshness (#3767): a change row for a card means its DETAIL
 	// data may have changed too - refetch the open modal's queries.

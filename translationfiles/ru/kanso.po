@@ -497,6 +497,10 @@ msgid "Add label"
 msgstr "Добавить метку"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Добавить метку…"
 
@@ -674,6 +678,7 @@ msgstr "Вы уверены?"
 msgid "Ascending"
 msgstr "По возрастанию"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Назначить"
@@ -683,8 +688,8 @@ msgid "Assign step"
 msgstr "Назначить пункт"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Назначить…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2414,10 +2419,6 @@ msgstr "Не удалось открепить подкарточку."
 msgid "Failed to edit comment."
 msgstr "Не удалось изменить комментарий."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Не удалось импортировать эту доску."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Не удалось покинуть доску."
@@ -3401,6 +3402,10 @@ msgstr "Ежемесячно"
 msgid "More"
 msgstr "Еще"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Другие действия с доской"
@@ -3420,6 +3425,10 @@ msgstr "Переместить карточку на доску…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Переместить карточку…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4312,8 +4321,12 @@ msgid "Remove from project"
 msgstr "Убрать из проекта"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Убрать метку…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4680,10 +4693,6 @@ msgstr "Выбрать несколько карточек"
 msgid "Set due date"
 msgstr "Задать срок выполнения"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Задать срок выполнения…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "Назначить родительскую карточку"
@@ -4995,6 +5004,10 @@ msgstr ""
 msgid "Text"
 msgstr "Текст"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Этой карточки больше нет на этой доске."
@@ -5026,6 +5039,10 @@ msgstr "Белый список приложения Guests включает Kan
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "Белый список приложения Guests отключен — гости могут пользоваться Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

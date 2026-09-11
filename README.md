@@ -170,6 +170,19 @@ sudo -u www-data php occ app:enable kanso
 - **Realtime updates** use the [High Performance Backend (`notify_push`)](https://github.com/nextcloud/notify_push)
   when it's installed; otherwise Kanso falls back to polling automatically.
 
+### Offline data on the device
+
+Kanso is an installable PWA: a service worker caches the app shell, and the
+boards you have opened are kept in the browser's own storage, so Kanso starts
+and shows your last-known board with no network. That copy expires after 24
+hours, and it is deleted as soon as a different account is detected.
+
+On a shared device, **logging out is not sufficient on its own**: a device that
+is offline at the next start cannot reach the server to learn who is logged in,
+so it can still show the previous user's cached boards until it regains contact.
+On a shared or kiosk device, don't install Kanso as an app, or clear the
+browser's site data after use.
+
 ### Try it locally (no Nextcloud required)
 
 The repo ships a throwaway Docker dev stack:

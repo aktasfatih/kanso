@@ -6,13 +6,50 @@
 // Space typing-guard must hold so a space typed in the composer still inserts a
 // space (never opens a preview).
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, collectConsoleErrors } from './helpers.js'
 
 const DESC = 'Peekaboo description text for the quick look preview.'
 const DESC_B = 'Beta body content that only the second card shows.'
 
+// Space is a keypress BoardView can DROP: its handler peeks
+// `hoveredCardId ?? focusedCardId` (src/views/BoardView.vue), and with both null
+// it returns without doing anything. A dropped keypress is not something an
+// auto-retrying assertion can recover from — the `expect(preview).toBeVisible()`
+// that follows then waits out its whole budget for a state that will never
+// arrive. So every Space here is preceded by a wait on the condition that makes
+// it actionable (the focus ring having landed, or the mouse hover having taken
+// effect) rather than by a fixed sleep, which only holds while the runner is
+// fast enough — see playwright.config.js on the measured 1.8-3x CI degradation.
+
 test.describe('Quick-look preview (Space)', () => {
 	const state = { boardId: 0, stackId: 0, card1Id: 0, card2Id: 0, boardUrl: '' }
+
+	/**
+	 * Open the board and wait until it is actually keyboard-navigable.
+	 *
+	 * `waitForSelector('.stack-column')` alone was not enough: ArrowDown with no
+	 * `focusedCardId` seeds to the first card of the first NON-EMPTY stack, so a
+	 * keypress sent before the card summaries have rendered is swallowed. Waiting
+	 * for both seeded tiles makes that precondition explicit.
+	 *
+	 * `onLoggedIn` runs in the one window that matters for console assertions:
+	 * after `ncLogin`, before the board is fetched. `ncLogin` goes via
+	 * /index.php/login, which with a live session redirects through the Nextcloud
+	 * DASHBOARD, where every other installed app mounts a widget and logs its own
+	 * errors — none of which this spec asserts about. Attaching there keeps the
+	 * board's own load inside the assertion while leaving the login detour out of
+	 * it by construction (see collectConsoleErrors() in helpers.js).
+	 *
+	 * @param {import('@playwright/test').Page} page the page under test
+	 * @param {{onLoggedIn?: (page: import('@playwright/test').Page) => void}} [hooks]
+	 */
+	async function openBoard(page, { onLoggedIn } = {}) {
+		await ncLogin(page)
+		onLoggedIn?.(page)
+		await page.goto(state.boardUrl)
+		await expect(page.locator('.stack-column').first()).toBeVisible({ timeout: 30_000 })
+		await expect(page.locator('.card-tile')).toHaveCount(2, { timeout: 30_000 })
+	}
 
 	test.beforeAll(async () => {
 		const boards = await api.get('/boards')
@@ -39,13 +76,15 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('hover + Space opens a preview showing title + description; Space closes it', async ({ page }) => {
-		await ncLogin(page)
-		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await openBoard(page)
 
 		const firstTile = page.locator('.card-tile').first()
 		await firstTile.hover()
-		await page.waitForTimeout(100)
+		// `hover()` only guarantees the mouse was moved onto the tile; what Space
+		// needs is BoardView's `hoveredCardId`, set from the tile's mouseenter.
+		// The browser's own :hover state landing on that tile is the observable
+		// condition the 100ms sleep was standing in for.
+		await expect(page.locator('.card-tile:hover')).toHaveCount(1)
 
 		// Space peeks the hovered card.
 		await page.keyboard.press('Space')
@@ -66,13 +105,10 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('keyboard-focused card + Space opens the preview; Escape closes it', async ({ page }) => {
-		await ncLogin(page)
-		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await openBoard(page)
 
 		// Seed keyboard focus to the first card (no mouse hover).
 		await page.keyboard.press('ArrowDown')
-		await page.waitForTimeout(200)
 		const firstTile = page.locator('.card-tile').first()
 		await expect(firstTile).toBeFocused()
 
@@ -87,12 +123,11 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('Enter from an open preview opens the full card modal', async ({ page }) => {
-		await ncLogin(page)
-		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await openBoard(page)
 
 		await page.keyboard.press('ArrowDown')
-		await page.waitForTimeout(200)
+		// Guard the Space: without the focus ring having landed it is dropped.
+		await expect(page.locator('.card-tile').first()).toBeFocused()
 		await page.keyboard.press('Space')
 		await expect(page.locator('.card-preview')).toBeVisible()
 
@@ -104,12 +139,11 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('click-away on the backdrop dismisses the preview', async ({ page }) => {
-		await ncLogin(page)
-		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await openBoard(page)
 
 		await page.keyboard.press('ArrowDown')
-		await page.waitForTimeout(200)
+		// Same dropped-Space hole as the test above.
+		await expect(page.locator('.card-tile').first()).toBeFocused()
 		await page.keyboard.press('Space')
 		const preview = page.locator('.card-preview')
 		await expect(preview).toBeVisible()
@@ -124,18 +158,19 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('open preview follows keyboard selection and re-anchors to the new tile (#3908)', async ({ page }) => {
-		const errors = []
-		page.on('console', (msg) => {
-			if (msg.type() === 'error') errors.push(msg.text())
-		})
-
-		await ncLogin(page)
-		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		// Collected from inside openBoard(), after the login and before the board
+		// loads. The old collector was attached before ncLogin and filtered nothing
+		// at all, so it asserted on every console error of every page the test
+		// touched — including the post-login dashboard, where CI produced "could not
+		// load recommendation preview Event" + a 404 from /apps/recommendations/js/.
+		// collectConsoleErrors() keys on the message's source bundle instead of on an
+		// allowlist of message strings, so an unrelated app rewording its own logging
+		// cannot rot this — while Kanso's own errors still fail the assertion.
+		let errors = []
+		await openBoard(page, { onLoggedIn: (p) => { errors = collectConsoleErrors(p) } })
 
 		// Focus the first card (Alpha) and Space to open the preview on it.
 		await page.keyboard.press('ArrowDown')
-		await page.waitForTimeout(200)
 		const alphaTile = page.locator(`[data-card-id="${state.card1Id}"]`)
 		const betaTile = page.locator(`[data-card-id="${state.card2Id}"]`)
 		await expect(alphaTile).toBeFocused()
@@ -182,9 +217,7 @@ test.describe('Quick-look preview (Space)', () => {
 	})
 
 	test('typing space in the composer inserts a space (guard holds, no preview)', async ({ page }) => {
-		await ncLogin(page)
-		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await openBoard(page)
 
 		const s1 = page.locator('.stack-column').nth(0)
 		const composer = s1.locator('.card-composer__input')

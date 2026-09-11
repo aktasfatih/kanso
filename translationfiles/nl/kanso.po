@@ -475,6 +475,10 @@ msgid "Add label"
 msgstr "Label toevoegen"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Label toevoegen…"
 
@@ -652,6 +656,7 @@ msgstr "Weet je het zeker?"
 msgid "Ascending"
 msgstr "Oplopend"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Toewijzen"
@@ -661,8 +666,8 @@ msgid "Assign step"
 msgstr "Stap toewijzen"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Toewijzen…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2387,10 +2392,6 @@ msgstr "Kan de subkaart niet losmaken."
 msgid "Failed to edit comment."
 msgstr "Kan de reactie niet bewerken."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Kan dat bord niet importeren."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Kan het bord niet verlaten."
@@ -3373,6 +3374,10 @@ msgstr "Maandelijks"
 msgid "More"
 msgstr "Meer"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Meer bordacties"
@@ -3392,6 +3397,10 @@ msgstr "Kaart naar een bord verplaatsen…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Kaart verplaatsen…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4284,8 +4293,12 @@ msgid "Remove from project"
 msgstr "Uit het project verwijderen"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Label verwijderen…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4652,10 +4665,6 @@ msgstr "Meerdere kaarten selecteren"
 msgid "Set due date"
 msgstr "Einddatum instellen"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Einddatum instellen…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "Hoofdkaart instellen"
@@ -4966,6 +4975,10 @@ msgstr ""
 msgid "Text"
 msgstr "Tekst"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Die kaart staat niet meer op dit bord."
@@ -4997,6 +5010,10 @@ msgstr "De lijst met toegestane apps van de Guests-app bevat Kanso en de Viewer-
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "De lijst met toegestane apps van de Guests-app staat uit – gasten kunnen Kanso gebruiken."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

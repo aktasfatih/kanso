@@ -11,8 +11,70 @@ const url = (path) => generateUrl('/apps/kanso' + path)
 export const fetchBoards = () =>
 	axios.get(url('/api/boards')).then((r) => r.data)
 
-export const fetchBoard = (id) =>
-	axios.get(url(`/api/boards/${id}`)).then((r) => r.data)
+/**
+ * Read a board - conditionally when the caller already holds its payload.
+ *
+ * Charter speed bet #4's board half. `BoardController::show` has always answered
+ * a matching `If-None-Match` with a 304 before assembling stacks, cards, labels
+ * and acl, but nothing ever replayed the validator, so the branch was dead.
+ *
+ * Pass `cached` - the payload the caller currently holds, i.e. what is in the
+ * query cache - to opt in: the validator rides along and a 304 hands `cached`
+ * straight back, having cost the server an ACL check and one `MAX(id)` instead
+ * of the whole board. Omit it, as every one-shot caller does, and the read is
+ * unconditional, so a body is guaranteed.
+ *
+ * Two things make this safe, and both are structural rather than careful:
+ *
+ * 1. The validator is read off `cached.etag`, the validator the server sent
+ *    WITH that exact payload. It therefore cannot describe any payload other
+ *    than the one we would fall back to. The obvious alternative - a
+ *    module-scope map of board id -> last ETag - gets this wrong: the board
+ *    pickers in CardDetail and CsvImportModal read OTHER boards
+ *    unconditionally and never put the result in the query cache, so they
+ *    would arm a validator NEWER than the cached board, and the next
+ *    conditional read would be answered 304 and freeze the user on a payload
+ *    that really is out of date.
+ *
+ *    It used to be rebuilt from `cached.cursor` instead, which held while the
+ *    ETag was the board's latest change id and nothing else. Since #10384 the
+ *    validator also covers the viewer's own permission mask and role - the
+ *    board payload is viewer-scoped, and an NC group membership change alters
+ *    it without writing any `kanso_changes` row - so the cursor no longer
+ *    determines it and the server ships the value itself.
+ * 2. A 304 resolves to `cached`, never to `response.data`. A 304 carries an
+ *    empty body, so returning the response would replace a rendered board with
+ *    `undefined` - a blank board, strictly worse than paying for the read. And
+ *    a 304 is only reachable when we sent a validator, which only happens when
+ *    `cached` is a real payload, so there is no path that returns nothing.
+ *
+ * Note that the board payload still carries a field whose changes write no
+ * `kanso_changes` row and so do not move the ETag: board watch state, the one
+ * with a UI toggle (see useBoardSubscription, which takes server truth from its
+ * own response instead of from a refetch). That one is deliberate - it is a
+ * single user's private state, where a change row is board-global.
+ *
+ * @param {number|string} id - board id
+ * @param {object|null} cached - the payload the caller already holds, if any
+ * @return {Promise<object>} the board payload (fresh, or `cached` on a 304)
+ */
+export const fetchBoard = async (id, cached = null) => {
+	// `cursor` is the pre-#10384 fallback: a payload cached by an older bundle
+	// has no `etag`, and a validator the server will simply fail to match costs
+	// one request header and still answers 200 with the full body. Dropping the
+	// conditional read entirely for those would cost the whole saving instead.
+	const stored = cached?.etag ?? cached?.cursor
+	const validator = stored != null ? `"${stored}"` : null
+	const response = await axios.get(url(`/api/boards/${id}`), {
+		...(validator ? { headers: { 'If-None-Match': validator } } : {}),
+		// 304 is a SUCCESS for a conditional read. Axios's default
+		// validateStatus rejects everything outside 2xx, which would turn the
+		// cheap hit into a rejected promise - a failed query and a board-wide
+		// error state instead of the saving.
+		validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
+	})
+	return response.status === 304 ? cached : response.data
+}
 
 // Delta-sync read (#3675): the board's changes since `since` (the client's
 // cursor). Returns { cursor, resync, cards:{upsert,remove}, stacks:{upsert,remove} }.

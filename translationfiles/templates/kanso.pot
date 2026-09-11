@@ -474,6 +474,10 @@ msgid "Add label"
 msgstr ""
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr ""
 
@@ -651,6 +655,7 @@ msgstr ""
 msgid "Ascending"
 msgstr ""
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr ""
@@ -660,7 +665,7 @@ msgid "Assign step"
 msgstr ""
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
+msgid "Assign to {user}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -2386,10 +2391,6 @@ msgstr ""
 msgid "Failed to edit comment."
 msgstr ""
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr ""
@@ -3372,6 +3373,10 @@ msgstr ""
 msgid "More"
 msgstr ""
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr ""
@@ -3390,6 +3395,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move card…"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4283,7 +4292,11 @@ msgid "Remove from project"
 msgstr ""
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -4651,10 +4664,6 @@ msgstr ""
 msgid "Set due date"
 msgstr ""
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr ""
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr ""
@@ -4965,6 +4974,10 @@ msgstr ""
 msgid "Text"
 msgstr ""
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr ""
@@ -4995,6 +5008,10 @@ msgstr ""
 
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
+msgstr ""
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
 msgstr ""
 
 #: src/components/CardDetail.vue

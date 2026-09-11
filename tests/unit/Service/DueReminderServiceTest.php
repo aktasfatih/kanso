@@ -15,9 +15,11 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\CardVisibilityScope;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\DueReminderService;
 use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -36,6 +38,7 @@ class DueReminderServiceTest extends TestCase {
 	private BoardAccess&MockObject $boardAccess;
 	private ITimeFactory&MockObject $time;
 	private LoggerInterface&MockObject $logger;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private DueReminderService $service;
 
 	/**
@@ -54,10 +57,14 @@ class DueReminderServiceTest extends TestCase {
 		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
-		$board = new Board();
-		$board->setId(1);
-		$board->setOwner('board-owner');
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		// Id-agnostic: most tests use board 1, but the push-batching tests sweep
+		// cards across two boards in one run.
+		$this->boardMapper->method('find')->willReturnCallback(static function (int $id): Board {
+			$board = new Board();
+			$board->setId($id);
+			$board->setOwner('board-owner');
+			return $board;
+		});
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->boardAccess->method('rolesOn')->willReturnCallback(
 			fn (Board $b, array $uids): array => array_intersect_key($this->rolesOnBoard, array_flip($uids)),
@@ -74,6 +81,7 @@ class DueReminderServiceTest extends TestCase {
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->service = new DueReminderService(
 			$this->cardMapper,
 			$this->cardAssigneeMapper,
@@ -83,6 +91,7 @@ class DueReminderServiceTest extends TestCase {
 			new CardVisibilityGuard($this->boardAccess, new CardVisibilityScope()),
 			$this->time,
 			$this->logger,
+			$this->changeNotifier,
 		);
 	}
 
@@ -92,10 +101,11 @@ class DueReminderServiceTest extends TestCase {
 		bool $dayBefore = false,
 		int $dueSent = 0,
 		int $dayBeforeSent = 0,
+		int $boardId = 1,
 	): Card {
 		$card = new Card();
 		$card->setId($id);
-		$card->setBoardId(1);
+		$card->setBoardId($boardId);
 		$card->setStackId(5);
 		$card->setDoneAt(0);
 		$card->setArchived(false);
@@ -310,6 +320,101 @@ class DueReminderServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())->method('update');
 
 		self::assertSame(1, $this->service->runDueReminders());
+	}
+
+	// ---- change log: the stamp is a board-payload mutation ------------------
+
+	/**
+	 * Stamping a marker rewrites CardMapper::SUMMARY_COLUMNS (`due_reminder_sent`,
+	 * `day_before_reminder_sent`, `last_modified`), so the sweep mutates the board
+	 * payload. Without a change row the board ETag never moves and a delta-sync
+	 * client keeps serving the pre-reminder card indefinitely. Actor is null - the
+	 * cron acts for nobody.
+	 */
+	public function testFiredReminderRecordsACardChangeRow(): void {
+		$card = $this->card(10, self::NOW - 60);
+		$this->cardMapper->method('findDueForReminder')->willReturn([$card]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['alice']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->willReturn([]);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+
+		$this->changeNotifier->expects(self::once())
+			->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 10, Change::ACTION_UPDATE, null);
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+
+		self::assertSame(1, $this->service->runDueReminders());
+	}
+
+	/**
+	 * The guard that keeps the row above honest: a candidate that owes nothing
+	 * writes no card row, so it must write no change row either - a sweep that
+	 * changed nothing must not move the ETag or wake a single client.
+	 */
+	public function testCandidateThatFiresNothingRecordsNoChangeAndNoPush(): void {
+		// Due in ~12h, day-before not opted in - nothing owed yet.
+		$card = $this->card(10, self::NOW + 43200, dayBefore: false);
+		$this->cardMapper->method('findDueForReminder')->willReturn([$card]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['alice']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->willReturn([]);
+
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		self::assertSame(0, $this->service->runDueReminders());
+	}
+
+	/**
+	 * The batching contract. A run may stamp up to MAX_PER_RUN cards and
+	 * pushBoardChanged() fans out per board participant, so one push per card would
+	 * turn a routine tick into hundreds of identical queue writes. The change ROWS
+	 * stay per card (delta sync needs them individually); the PUSH collapses to one
+	 * per board, emitted after the sweep.
+	 */
+	public function testTwoCardsOnOneBoardRecordTwoRowsButPushOnce(): void {
+		$this->cardMapper->method('findDueForReminder')->willReturn([
+			$this->card(10, self::NOW - 60),
+			$this->card(11, self::NOW - 60),
+		]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['alice']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->willReturn([]);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+
+		$rows = [];
+		$this->changeNotifier->expects(self::exactly(2))
+			->method('recordChange')
+			->willReturnCallback(function (int $boardId, int $entityType, int $entityId, int $action, ?string $actor) use (&$rows): Change {
+				self::assertSame(Change::ENTITY_CARD, $entityType);
+				self::assertSame(Change::ACTION_UPDATE, $action);
+				self::assertNull($actor);
+				$rows[] = [$boardId, $entityId];
+				return new Change();
+			});
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+
+		self::assertSame(2, $this->service->runDueReminders());
+		self::assertSame([[1, 10], [1, 11]], $rows);
+	}
+
+	public function testCardsOnDifferentBoardsPushOnceEach(): void {
+		$this->cardMapper->method('findDueForReminder')->willReturn([
+			$this->card(10, self::NOW - 60),
+			$this->card(11, self::NOW - 60, boardId: 2),
+		]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['alice']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->willReturn([]);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+
+		$pushed = [];
+		$this->changeNotifier->expects(self::exactly(2))
+			->method('pushBoardChanged')
+			->willReturnCallback(function (int $boardId) use (&$pushed): void {
+				$pushed[] = $boardId;
+			});
+
+		self::assertSame(2, $this->service->runDueReminders());
+		sort($pushed);
+		self::assertSame([1, 2], $pushed);
 	}
 
 	public function testPrivateCardRemindsOnlyItsOwner(): void {

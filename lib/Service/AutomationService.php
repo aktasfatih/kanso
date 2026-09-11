@@ -238,8 +238,10 @@ class AutomationService {
 	/**
 	 * Stops the card's running timer: writes the elapsed seconds as a finished
 	 * time-entry and drops the running row. A no-op if no timer is running; a
-	 * zero-second run persists no entry (only the running row is dropped). The
-	 * entry insert + change row commit atomically, mirroring add_label. #73.
+	 * zero-second run persists no entry (only the running row is dropped). Either
+	 * way the running row's disappearance is logged as a card change, because
+	 * `timerRunning` rides the board payload. The entry insert + change row commit
+	 * atomically, mirroring add_label. #73.
 	 */
 	private function stopTimer(Card $card, string $actorUid): void {
 		try {
@@ -250,7 +252,30 @@ class AutomationService {
 
 		$seconds = max(0, $this->timeFactory->getTime() - $timer->getStartedAt());
 		if ($seconds === 0) {
-			$this->runningTimerMapper->delete($timer);
+			// No elapsed time worth persisting as an entry - but the running row
+			// still goes away, and `timerRunning` is a card-summary field
+			// ({@see CardSummaryService::serialize}). Dropping it without a change
+			// row leaves every OTHER open client rendering a timer that no longer
+			// exists, permanently: neither delta-sync (?since=) nor the board ETag
+			// would ever mention it. Symmetric with startTimer - delete and change
+			// row commit together, push after commit.
+			$this->db->beginTransaction();
+			try {
+				$this->runningTimerMapper->delete($timer);
+
+				$this->changeNotifier->recordChange(
+					$card->getBoardId(),
+					Change::ENTITY_CARD,
+					$card->getId(),
+					Change::ACTION_UPDATE,
+					$actorUid,
+				);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+			$this->changeNotifier->pushBoardChanged($card->getBoardId());
 			return;
 		}
 

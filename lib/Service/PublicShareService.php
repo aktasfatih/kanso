@@ -67,6 +67,12 @@ use OCP\Security\ISecureRandom;
  *    the person publishes as, whereas a uid is half of a credential pair and the
  *    handle for user enumeration against the login form, so the baseline is
  *    person-LIGHT rather than person-free, on purpose.
+ *    That substitution is MEMBER-SCOPED ({@see self::isBoardMember()}): only a uid
+ *    that actually holds READ on THIS board resolves. Without that scope an EDIT
+ *    member who also holds the link could write `@candidate` into a description and
+ *    read back, anonymously, whether that account exists and what it is called -
+ *    instance-wide account enumeration through a public page, and a bypass of an
+ *    admin who deliberately disabled Nextcloud's sharee enumeration.
  *  - Only those two fields are redacted. A `@name` typed into a card/stack/board
  *    title or a label name is served VERBATIM, as all board content is: those are
  *    not mention surfaces ({@see MentionService} is only wired to descriptions and
@@ -189,7 +195,9 @@ class PublicShareService {
 	 *
 	 * Both free-text fields - every card `description` and, when opted in, every
 	 * comment `body` - pass through {@see self::redactMentions()}, which substitutes
-	 * display names for the `@uid` mentions stored inside them.
+	 * display names for the `@uid` mentions of BOARD MEMBERS stored inside them (a
+	 * mention of anybody else is left alone, so the public link can never be used to
+	 * ask whether an arbitrary account exists).
 	 *
 	 * @return array{
 	 *   board: array{title: ?string, color: ?string, prefix: string, commentsEnabled: bool, cardFeatures: array<string, bool>},
@@ -238,6 +246,12 @@ class PublicShareService {
 		// is cached too: an unresolvable token must not be re-looked-up per card.
 		/** @var array<string, ?string> $displayNames */
 		$displayNames = [];
+		// uid => "holds READ on this board". The membership gate in front of every
+		// mention substitution ({@see self::isBoardMember()}), memoised for the same
+		// reason and over the same request scope as $displayNames: one ACL resolution
+		// per DISTINCT uid, however many cards or comments name it.
+		/** @var array<string, bool> $members */
+		$members = [];
 
 		// Only NON-archived stacks, in display order; drop the internal board id.
 		$stacks = [];
@@ -287,7 +301,7 @@ class PublicShareService {
 				// as a literal `@uid` inside the description text, so the raw column
 				// would hand an anonymous reader a real login uid. It goes out with
 				// those mentions redacted; the stored row is untouched.
-				'description' => $this->redactMentions($card->getDescription(), $displayNames),
+				'description' => $this->redactMentions($card->getDescription(), $board, $displayNames, $members),
 				'labels' => $labels,
 				'duedate' => $card->getDuedate()?->format(\DateTimeInterface::ATOM),
 				// Presentational, non-person card attributes (#3951): a cover colour
@@ -311,7 +325,7 @@ class PublicShareService {
 			];
 
 			if ($commentsEnabled) {
-				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $displayNames);
+				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $board, $displayNames, $members);
 			}
 
 			$cards[] = $cardPayload;
@@ -352,11 +366,19 @@ class PublicShareService {
 	 * ({@see self::redactMentions()}) - the author byline was never the only place a
 	 * uid could ride a public comment.
 	 *
+	 * The author byline is deliberately NOT member-scoped, unlike the mentions in
+	 * the body: an author uid is not attacker-chosen text but the recorded writer of
+	 * a comment that the board manager opted into publishing, so resolving it hands
+	 * an anonymous reader nothing they could not read off the thread anyway. It is
+	 * only the FREE-TEXT side - where any EDIT member can type any candidate uid -
+	 * that is an enumeration oracle and therefore gated.
+	 *
 	 * @param Comment[] $comments
 	 * @param array<string, ?string> $displayNames uid => display name (null = no such account) cache, reused across cards
+	 * @param array<string, bool> $members uid => holds READ on this board, cache reused across cards
 	 * @return list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>
 	 */
-	private function serializeComments(array $comments, array &$displayNames): array {
+	private function serializeComments(array $comments, Board $board, array &$displayNames, array &$members): array {
 		$out = [];
 		foreach ($comments as $comment) {
 			$uid = (string)$comment->getAuthor();
@@ -369,7 +391,7 @@ class PublicShareService {
 				'id' => (int)$comment->getId(),
 				'parentCommentId' => $comment->getParentCommentId(),
 				'author' => $author,
-				'body' => $this->redactMentions($comment->getBody(), $displayNames),
+				'body' => $this->redactMentions($comment->getBody(), $board, $displayNames, $members),
 				'createdAt' => $comment->getCreatedAt() ?? 0,
 				'editedAt' => $comment->getEditedAt() ?? 0,
 			];
@@ -396,8 +418,40 @@ class PublicShareService {
 	}
 
 	/**
+	 * Whether the uid holds READ on THIS board - the gate every free-text mention
+	 * substitution passes through ({@see self::redactMentions()}).
+	 *
+	 * It is deliberately the SAME authority the write path already uses to decide
+	 * whether a mention does anything at all ({@see MentionService::handleMentions()}
+	 * takes the same `getPermissions() & READ` decision), so the anonymous page can
+	 * never resolve a mention that would not have notified anybody. Board membership,
+	 * not account existence, is what a public link is allowed to answer questions
+	 * about.
+	 *
+	 * Memoised by the caller, so a uid costs at most ONE membership resolution per
+	 * public read however many fields name it, and the per-FIELD bound in
+	 * {@see self::redactMentions()} caps how many NEW ones a single field may start.
+	 * Be precise about what that resolution costs, because the naive reading is
+	 * wrong: {@see PermissionService::getPermissions()} reads the board's ACL rows
+	 * per call, and on a board carrying a GROUP share it also asks the user backend
+	 * which groups the candidate is in. So a non-member token costs an ACL read
+	 * (roughly trading places with the user lookup it no longer does) on a
+	 * user-shared board, and both on a group-shared one. It is the same
+	 * per-distinct-uid shape this endpoint already had, not a new one - but it is
+	 * NOT free, and it is not a directory-silent gate either.
+	 *
+	 * @param array<string, bool> $members uid => holds READ, request-scoped cache
+	 */
+	private function isBoardMember(Board $board, string $uid, array &$members): bool {
+		if (!array_key_exists($uid, $members)) {
+			$members[$uid] = ($this->permissionService->getPermissions($board, $uid) & PermissionService::PERMISSION_READ) !== 0;
+		}
+		return $members[$uid];
+	}
+
+	/**
 	 * Free text (a card description or a comment body) with every `@mention` of a
-	 * REAL account rewritten to that account's display name. Payload-only: the
+	 * BOARD MEMBER rewritten to that member's display name. Payload-only: the
 	 * stored row is never rewritten, so the mention keeps notifying, keeps
 	 * rendering as a chip for authenticated viewers, and no migration ever touches
 	 * user content.
@@ -411,15 +465,45 @@ class PublicShareService {
 	 * nowhere else in the payload, in the DEFAULT configuration (descriptions ship
 	 * with comments toggled off).
 	 *
-	 * A token that does NOT resolve to an account is left BYTE-IDENTICAL. `@2pm`,
-	 * `@nextcloud`, a price, a social handle and `foo@bar.com` are ordinary board
-	 * content, and mangling them would be its own bug - so unlike the comment-author
-	 * byline there is no "Former user" fallback here: a bare `@token` is
-	 * indistinguishable from prose, and a mention of a DELETED account therefore
+	 * A token that does not resolve to a MEMBER of this board is left BYTE-IDENTICAL.
+	 * `@2pm`, `@nextcloud`, a price, a social handle and `foo@bar.com` are ordinary
+	 * board content, and mangling them would be its own bug - so unlike the
+	 * comment-author byline there is no "Former user" fallback here: a bare `@token`
+	 * is indistinguishable from prose, and a mention of a DELETED account therefore
 	 * keeps its literal text. That residue is the weakest of the three cases (the
 	 * account cannot be logged into, so it is not half of a credential pair) and
 	 * the alternative - rewriting every unresolvable `@word` - would corrupt real
 	 * descriptions on every board.
+	 *
+	 * MEMBER-SCOPED, and the trade that makes is deliberate, not an oversight.
+	 * Resolving ANY uid the pattern matched turned this method into an
+	 * account-existence oracle: an EDIT member who also holds the public link could
+	 * write `@candidate` into a description, read the anonymous payload, and learn
+	 * whether that account exists and what it is called - up to
+	 * {@see MentionService::MAX_MENTIONS} guesses per field per read, instance-wide,
+	 * on an endpoint that needs no session. That is exactly the enumeration an admin
+	 * turns OFF when they disable sharee lookup, and a public board link must not
+	 * quietly re-open it.
+	 *
+	 * The COST of scoping it is that a mention of a NON-member now ships as its raw
+	 * `@uid` token again, where it would previously have shown that person's display
+	 * name - so on such a mention the uid still reaches the anonymous page. That is
+	 * accepted knowingly: it is the same residue already accepted just above for a
+	 * mention of a deleted account, and it is far smaller than the enumeration oracle
+	 * it buys. Note the everyday shape of it is not somebody typing a stranger's uid
+	 * but somebody who WAS a member when they were mentioned and has since left the
+	 * board (or left the group it is shared through): their mention un-redacts. A
+	 * non-member mention is inert in every other respect too - it never notified
+	 * anyone ({@see MentionService::handleMentions()} skips exactly the same uids) -
+	 * so this makes the public view agree with what the app already treats as a
+	 * mention that does nothing.
+	 *
+	 * Where this gate buys LEAST: a board shared to a broad group. Membership counts
+	 * group-derived READ, so on a board shared to an "everyone"-shaped group nearly
+	 * every account is a member and the oracle degrades only from "does this account
+	 * exist?" to "does it exist AND is it in that group?". That is inherent in
+	 * scoping by membership rather than by an allow-list, and it is still strictly
+	 * narrower than answering for the whole instance.
 	 *
 	 * The substituted name goes through {@see self::inlineSafeName()}, because it is
 	 * spliced into somebody ELSE's markdown: a mentioned user who renames themselves
@@ -446,8 +530,9 @@ class PublicShareService {
 	 * answering with a generic label instead would blank every mention on the board.
 	 *
 	 * @param array<string, ?string> $displayNames uid => display name (null = no such account), shared cache
+	 * @param array<string, bool> $members uid => holds READ on this board, shared cache
 	 */
-	private function redactMentions(?string $text, array &$displayNames): ?string {
+	private function redactMentions(?string $text, Board $board, array &$displayNames, array &$members): ?string {
 		if ($text === null) {
 			return null;
 		}
@@ -457,10 +542,17 @@ class PublicShareService {
 			return $text;
 		}
 
-		// The per-FIELD bound on how many NEW uids one field may resolve. Reusing
+		// The per-FIELD bound on how many NEW candidate uids one field may resolve
+		// membership for - membership is the costly step now, and it is the step that
+		// runs for EVERY token, member or not. Reusing
 		// MentionService::MAX_MENTIONS is not cosmetic: past that count the write path
 		// already ignores a mention entirely (no notification, no subscription), so
-		// this redacts exactly the tokens the app treats as mentions at all. Per FIELD
+		// this stays inside the set of tokens the app treats as mentions at all. (Not
+		// token-for-token identical to the write path's count: the punctuation retry
+		// below can spend two of these on one token, so a field of sentence-ending
+		// mentions reaches the bound sooner here than extractUsernames() would, and
+		// past it the raw token survives - the documented behaviour for anything past
+		// this bound, only reachable by a field stuffed with dozens of them.) Per FIELD
 		// rather than per request on purpose - a bound shared across the board would
 		// let ONE card padded with junk `@tokens` (a pasted log, a CSV) spend the
 		// budget and silently de-redact every LATER card's real mentions.
@@ -468,7 +560,7 @@ class PublicShareService {
 
 		$redacted = preg_replace_callback(
 			MentionService::MENTION_PATTERN,
-			function (array $match) use (&$displayNames, &$newLookups): string {
+			function (array $match) use ($board, &$displayNames, &$members, &$newLookups): string {
 				// `.`, `-` and `_` are legal uid characters, so a mention that ENDS a
 				// sentence swallows the punctuation: "cc @jsmith." captures the token
 				// `jsmith.`, which resolves to nothing and would have shipped the uid
@@ -491,7 +583,8 @@ class PublicShareService {
 				}
 
 				foreach ($candidates as $uid => $tail) {
-					if (!array_key_exists($uid, $displayNames)) {
+					$uid = (string)$uid;
+					if (!array_key_exists($uid, $members)) {
 						// A uid this request has not seen: the one costly step, so it is
 						// what the bound counts. An already-cached uid still substitutes
 						// below (free), and a comment-author byline never spends the bound
@@ -501,9 +594,16 @@ class PublicShareService {
 						}
 						$newLookups++;
 					}
-					$name = $this->resolveDisplayName((string)$uid, $displayNames);
+					if (!$this->isBoardMember($board, $uid, $members)) {
+						// Not a member of THIS board: ordinary text, left byte-identical, and
+						// never resolved to a person - so the anonymous payload cannot answer
+						// "does this account exist, and what is it called?".
+						continue;
+					}
+					$name = $this->resolveDisplayName($uid, $displayNames);
 					if ($name === null) {
-						// No such account: ordinary text, left byte-identical.
+						// A member whose account is gone (an ACL row can outlive its user):
+						// same residue as any unresolvable token, left byte-identical.
 						continue;
 					}
 					return $this->inlineSafeName($name) . $tail;

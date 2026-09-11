@@ -586,7 +586,9 @@ class RecurrenceService {
 	 * Creates a rule. The template card and the target stack must both belong
 	 * to $boardId; the RRULE must parse. The rule's owner is the creating user
 	 * - spawns run as them, so revoked board access naturally disables spawning.
-	 * `next_occurrence_at` is computed and stored on creation.
+	 * `next_occurrence_at` is computed and stored on creation. The template card
+	 * gains the "recurring" card-summary badge, which is logged as a card change so
+	 * open clients pick it up through delta sync rather than a full refetch.
 	 *
 	 * @throws DoesNotExistException if the board, template card or target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
@@ -646,7 +648,23 @@ class RecurrenceService {
 		// spawn one right away on purpose.
 		$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
 
-		return $this->ruleMapper->insert($rule);
+		$inserted = $this->ruleMapper->insert($rule);
+
+		// The template card now wears the "recurring" badge - a card-SUMMARY field
+		// derived from the board's enabled rules
+		// ({@see CardSummaryService::serialize}, {@see RecurRuleMapper::findTemplateCardIdsByBoard}).
+		// The rule row lives in its own table, so nothing else moves the change log:
+		// without this row the badge is invisible to every open client until some
+		// unrelated mutation happens to bump the board ETag.
+		$this->changeNotifier->notify(
+			$boardId,
+			Change::ENTITY_CARD,
+			$templateCardId,
+			Change::ACTION_UPDATE,
+			$uid,
+		);
+
+		return $inserted;
 	}
 
 	/**
@@ -661,6 +679,10 @@ class RecurrenceService {
 	 * A changed RRULE additionally resets the `occurrences_spawned` tally, so an
 	 * "ends after N times" edit means N MORE cards rather than N counted from the
 	 * rule's creation - see the reset below for the trade-off.
+	 *
+	 * A card change is logged for the rule's template card (and, on a re-point, for
+	 * the card it left behind) because the "recurring" badge is part of the board
+	 * payload - see the recordChange pair at the end.
 	 *
 	 * @throws DoesNotExistException if the rule, its board, the template card or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
@@ -794,10 +816,42 @@ class RecurrenceService {
 			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
 		}
 
-		return $this->ruleMapper->update($rule);
+		$updated = $this->ruleMapper->update($rule);
+
+		// Every edit that can flip the "recurring" card-summary badge goes through
+		// here - enabling/disabling the rule, or pointing it at another card - so the
+		// edit has to reach the change log or the badge only corrects itself on a
+		// full board refetch. Recording unconditionally (rather than only for the
+		// enabled/template deltas) costs one row per save and keeps this free of a
+		// "which fields feed the summary" list that would silently rot.
+		$this->changeNotifier->recordChange(
+			$rule->getBoardId(),
+			Change::ENTITY_CARD,
+			$rule->getTemplateCardId(),
+			Change::ACTION_UPDATE,
+			$uid,
+		);
+		// A re-point clears the OLD card's badge too, so that card needs its own row.
+		// validate() has already established both cards are on THIS board, so the two
+		// rows share one push - a template switch is one board event, not two.
+		if ($templateCardId !== null && $templateCardId !== $originalTemplate) {
+			$this->changeNotifier->recordChange(
+				$rule->getBoardId(),
+				Change::ENTITY_CARD,
+				$originalTemplate,
+				Change::ACTION_UPDATE,
+				$uid,
+			);
+		}
+		$this->changeNotifier->pushBoardChanged($rule->getBoardId());
+
+		return $updated;
 	}
 
 	/**
+	 * Deletes a rule. The template card's "recurring" badge clears with it, which is
+	 * a card-summary change and so needs its own change-log row (see {@see self::create()}).
+	 *
 	 * @throws DoesNotExistException if the rule or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
@@ -805,7 +859,22 @@ class RecurrenceService {
 		$rule = $this->ruleMapper->find($id);
 		$board = $this->loadBoard($rule->getBoardId());
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
-		return $this->ruleMapper->delete($rule);
+		// Read the board/template ids BEFORE the delete - the entity is detached
+		// afterwards and nothing guarantees it stays readable.
+		$boardId = $rule->getBoardId();
+		$templateCardId = $rule->getTemplateCardId();
+
+		$deleted = $this->ruleMapper->delete($rule);
+
+		$this->changeNotifier->notify(
+			$boardId,
+			Change::ENTITY_CARD,
+			$templateCardId,
+			Change::ACTION_UPDATE,
+			$uid,
+		);
+
+		return $deleted;
 	}
 
 	/**

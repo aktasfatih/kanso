@@ -187,10 +187,42 @@ class TrashServiceTest extends TestCase {
 		$card = $this->trashedCard(9);
 		$card->setDeletedAt(0); // a live card
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::never())->method('update');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->restore(9, 'alice');
+	}
+
+	public function testRestoreChecksAccessBeforeRevealingTrashState(): void {
+		// #10307: "not in the trash" is a 400 that a non-member would otherwise
+		// get for ANY live card id on ANY board - an existence oracle. The board
+		// permission (403) must be settled BEFORE that input check speaks.
+		$card = $this->trashedCard(9);
+		$card->setDeletedAt(0); // a live card - the 400 case
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with(self::anything(), 'mallory', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->restore(9, 'mallory');
+	}
+
+	public function testRestoreOfALiveHiddenCardReadsAsMissing(): void {
+		// Same ordering one step in: a member who cannot SEE the card gets the
+		// visibility 404, never the 400 that would confirm the card is live.
+		$card = $this->trashedCard(9);
+		$card->setDeletedAt(0);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->restore(9, 'mallory');
 	}
 
 	public function testRestoreAssertsActorEditPermission(): void {
@@ -317,10 +349,42 @@ class TrashServiceTest extends TestCase {
 		$card = $this->trashedCard(9);
 		$card->setDeletedAt(0);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::never())->method('delete');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->purge(9, 'alice');
+	}
+
+	public function testPurgeChecksAccessBeforeRevealingTrashState(): void {
+		// #10307, the destructive twin of the restore case: a live card must
+		// answer the caller's ACCESS verdict (403), not the input-level 400 that
+		// would confirm the id exists and is not trashed.
+		$card = $this->trashedCard(9);
+		$card->setDeletedAt(0);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with(self::anything(), 'mallory', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->cardMapper->expects(self::never())->method('delete');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->purge(9, 'mallory');
+	}
+
+	public function testPurgeOfALiveHiddenCardReadsAsMissing(): void {
+		$card = $this->trashedCard(9);
+		$card->setDeletedAt(0);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
+		$this->cardMapper->expects(self::never())->method('delete');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->purge(9, 'mallory');
 	}
 
 	public function testPurgeAssertsActorManagePermission(): void {

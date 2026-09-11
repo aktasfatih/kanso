@@ -475,6 +475,10 @@ msgid "Add label"
 msgstr "Añadir etiqueta"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Añadir etiqueta…"
 
@@ -652,6 +656,7 @@ msgstr "¿Seguro que quieres continuar?"
 msgid "Ascending"
 msgstr "Ascendente"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Asignar"
@@ -661,8 +666,8 @@ msgid "Assign step"
 msgstr "Asignar el paso"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Asignar…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2387,10 +2392,6 @@ msgstr "Error al desvincular la subtarjeta."
 msgid "Failed to edit comment."
 msgstr "Error al editar el comentario."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Error al importar ese tablero."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Error al abandonar el tablero."
@@ -3373,6 +3374,10 @@ msgstr "Mensual"
 msgid "More"
 msgstr "Más"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Más acciones del tablero"
@@ -3392,6 +3397,10 @@ msgstr "Mover la tarjeta a un tablero…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Mover la tarjeta…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4284,8 +4293,12 @@ msgid "Remove from project"
 msgstr "Quitar del proyecto"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Quitar etiqueta…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4652,10 +4665,6 @@ msgstr "Seleccionar varias tarjetas"
 msgid "Set due date"
 msgstr "Definir la fecha de vencimiento"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Definir la fecha de vencimiento…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "Definir la tarjeta principal"
@@ -4966,6 +4975,10 @@ msgstr ""
 msgid "Text"
 msgstr "Texto"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Esa tarjeta ya no está en este tablero."
@@ -4997,6 +5010,10 @@ msgstr "La lista de aplicaciones permitidas de Guests incluye Kanso y la aplicac
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "La lista de aplicaciones permitidas de Guests está desactivada: los invitados pueden usar Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

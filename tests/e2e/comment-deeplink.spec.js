@@ -151,12 +151,15 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 	})
 
 	test('an unknown comment fragment opens the card normally with no error', async ({ page }) => {
-		const errors = []
-		page.on('console', (msg) => {
-			if (msg.type() === 'error') errors.push(msg.text())
-		})
-
 		await ncLogin(page)
+
+		// Same collector as the first test in this file, for the same reason: the
+		// `favicon|manifest|ResizeObserver` allowlist rotted on messages from
+		// /apps/recommendations/js/ logged during ncLogin's dashboard detour.
+		// collectConsoleErrors() keys on the source bundle, and is attached after the
+		// login so that detour is out of scope by construction.
+		const errors = collectConsoleErrors(page)
+
 		// A comment id that does not exist in this thread.
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}?comment=99999999`)
 
@@ -166,7 +169,6 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		// Nothing got the highlight class.
 		await expect(page.locator('.card-modal__comment-group--highlight')).toHaveCount(0)
 
-		const relevant = errors.filter((e) => !/favicon|manifest|ResizeObserver/i.test(e))
-		expect(relevant, `console errors: ${relevant.join('\n')}`).toEqual([])
+		expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 	})
 })

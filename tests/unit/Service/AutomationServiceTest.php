@@ -338,6 +338,11 @@ class AutomationServiceTest extends TestCase {
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_DONE, self::ACTOR);
 	}
 
+	/**
+	 * The guard that proves the zero-second change row below is not just "the mock
+	 * records something on every stop": with NO running timer at all there is
+	 * nothing to un-show, so the log must stay untouched and no client woken.
+	 */
 	public function testStopTimerIsNoOpWhenNoneRunning(): void {
 		$rule = $this->rule(AutomationRule::ACTION_STOP_TIMER, ['role' => Stack::ROLE_DONE]);
 		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
@@ -347,11 +352,12 @@ class AutomationServiceTest extends TestCase {
 		$this->timeEntryMapper->expects($this->never())->method('insert');
 		$this->runningTimerMapper->expects($this->never())->method('delete');
 		$this->changeNotifier->expects($this->never())->method('recordChange');
+		$this->changeNotifier->expects($this->never())->method('pushBoardChanged');
 
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_DONE, self::ACTOR);
 	}
 
-	public function testStopTimerWithZeroElapsedPersistsNoEntry(): void {
+	public function testStopTimerWithZeroElapsedPersistsNoEntryButStillLogsTheCardChange(): void {
 		$rule = $this->rule(AutomationRule::ACTION_STOP_TIMER, ['role' => Stack::ROLE_DONE]);
 		$this->ruleMapper->method('findEnabledByBoardAndTrigger')->willReturn([$rule]);
 
@@ -364,10 +370,19 @@ class AutomationServiceTest extends TestCase {
 		// Same instant -> 0 elapsed seconds.
 		$this->timeFactory->method('getTime')->willReturn(1000);
 
-		// No finished entry, no change row - but the running row is still dropped.
+		// No finished entry - there is no elapsed time to bank.
 		$this->timeEntryMapper->expects($this->never())->method('insert');
-		$this->changeNotifier->expects($this->never())->method('recordChange');
+		// But the running row IS dropped, and `timerRunning` rides the board payload:
+		// without a change row every other open client would render the timer as
+		// still running forever (no delta row, no ETag move). Same atomic shape as
+		// startTimer - delete + row in one transaction, push after commit.
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('commit');
 		$this->runningTimerMapper->expects($this->once())->method('delete')->with($timer);
+		$this->changeNotifier->expects($this->once())
+			->method('recordChange')
+			->with(self::BOARD_ID, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, self::ACTOR);
+		$this->changeNotifier->expects($this->once())->method('pushBoardChanged')->with(self::BOARD_ID);
 
 		$this->service->runCardEnteredRole($this->card(), Stack::ROLE_DONE, self::ACTOR);
 	}

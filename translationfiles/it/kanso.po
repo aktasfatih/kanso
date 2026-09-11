@@ -475,6 +475,10 @@ msgid "Add label"
 msgstr "Aggiungi etichetta"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Aggiungi etichetta…"
 
@@ -652,6 +656,7 @@ msgstr "Confermare l'eliminazione?"
 msgid "Ascending"
 msgstr "Crescente"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Assegna"
@@ -661,8 +666,8 @@ msgid "Assign step"
 msgstr "Assegna elemento"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Assegna…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2387,10 +2392,6 @@ msgstr "Impossibile staccare la sotto-scheda."
 msgid "Failed to edit comment."
 msgstr "Impossibile modificare il commento."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Impossibile importare quella bacheca."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Impossibile abbandonare la bacheca."
@@ -3373,6 +3374,10 @@ msgstr "Mensile"
 msgid "More"
 msgstr "Altro"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Altre azioni della bacheca"
@@ -3392,6 +3397,10 @@ msgstr "Sposta la scheda in un'altra bacheca…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Sposta scheda…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4284,8 +4293,12 @@ msgid "Remove from project"
 msgstr "Rimuovi dal progetto"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Rimuovi etichetta…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4652,10 +4665,6 @@ msgstr "Seleziona più schede"
 msgid "Set due date"
 msgstr "Imposta la scadenza"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Imposta la scadenza…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "Imposta la scheda principale"
@@ -4966,6 +4975,10 @@ msgstr ""
 msgid "Text"
 msgstr "Testo"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Questa scheda non è più in questa bacheca."
@@ -4997,6 +5010,10 @@ msgstr "La lista di app consentite di Guests include Kanso e l'app Viewer."
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "La lista di app consentite di Guests è disattivata: gli ospiti possono usare Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

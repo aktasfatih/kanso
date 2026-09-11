@@ -475,6 +475,10 @@ msgid "Add label"
 msgstr "Etiket ekle"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Etiket ekle…"
 
@@ -652,6 +656,7 @@ msgstr "Emin misin?"
 msgid "Ascending"
 msgstr "Artan"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Ata"
@@ -661,8 +666,8 @@ msgid "Assign step"
 msgstr "Adım ata"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Ata…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2387,10 +2392,6 @@ msgstr "Alt kart ayrılamadı."
 msgid "Failed to edit comment."
 msgstr "Yorum düzenlenemedi."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Bu pano içe aktarılamadı."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Panodan ayrılamadı."
@@ -3373,6 +3374,10 @@ msgstr "Aylık"
 msgid "More"
 msgstr "Daha fazla"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Diğer pano işlemleri"
@@ -3392,6 +3397,10 @@ msgstr "Kartı panoya taşı…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Kartı taşı…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4284,8 +4293,12 @@ msgid "Remove from project"
 msgstr "Projeden çıkar"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Etiketi kaldır…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4652,10 +4665,6 @@ msgstr "Birden çok kart seç"
 msgid "Set due date"
 msgstr "Bitiş tarihi ayarla"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Bitiş tarihi ayarla…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "Üst kartı ayarla"
@@ -4966,6 +4975,10 @@ msgstr ""
 msgid "Text"
 msgstr "Metin"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Bu kart artık bu panoda değil."
@@ -4997,6 +5010,10 @@ msgstr "Guests uygulaması beyaz listesinde Kanso ve Viewer uygulaması var."
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "Guests uygulaması beyaz listesi devre dışı — konuklar Kanso'yu kullanabilir."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

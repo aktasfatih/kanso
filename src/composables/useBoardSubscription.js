@@ -98,6 +98,27 @@ export function useBoardSubscription(boardId) {
 			}
 		},
 
+		// Server truth, taken from the response that just produced it rather than
+		// from a refetch. The endpoints return the board's whole watch block
+		// ({subscribed, subscribers, count} - SubscriptionService::subscribeBoard),
+		// so this is exact and costs nothing.
+		//
+		// It also has to be here rather than left to the settle-phase refetch:
+		// watch state writes no kanso_changes row - deliberately, since it is one
+		// user's private state while a change row is board-global and would make
+		// every other viewer resync - so the board's ETag does not move when it
+		// changes, and the conditional read below is answered 304. Relying on
+		// that refetch would leave the optimistic count above standing in for the
+		// server's.
+		onSuccess: (serverState) => {
+			if (typeof serverState?.subscribed !== 'boolean') {
+				return
+			}
+			queryClient.setQueryData(getBoardKey(), (old) =>
+				(old ? { ...old, subscription: serverState } : old),
+			)
+		},
+
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: getBoardKey() })
 		},

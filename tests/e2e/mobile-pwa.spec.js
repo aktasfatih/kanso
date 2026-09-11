@@ -15,7 +15,7 @@
  * projects (see playwright.config.js), so each test executes on both the
  * Android-Chrome and iOS-Safari engines with a real phone viewport + touch.
  */
-import { test, expect, api, gotoBoard, BASE, me } from './helpers.js'
+import { test, expect, api, gotoBoard, collectConsoleErrors, BASE, me } from './helpers.js'
 
 const state = { boardId: null }
 
@@ -757,6 +757,232 @@ test.describe('review rows at a phone width', () => {
 			expect(m.actionsTop, 'desktop actions must sit beside the titles, not under them')
 				.toBeLessThan(m.contentBottom)
 			expect(m.actionsRight).toBeLessThanOrEqual(m.rowRight + 1)
+		})
+	})
+})
+
+// #10287 — the bulk action bar at a phone width.
+//
+// Measured before the fix, at 360x740 with all 9 controls present: the bar was
+// 502px wide and spanned x = -71 to x = 431. It is `position: fixed`, so the
+// overflow produced no scrollbar (documentElement.scrollWidth stayed 360) — the
+// leftmost and rightmost controls were simply CLIPPED off-screen and unreachable
+// on a phone. The fix keeps the three most-used actions inline (with visible
+// labels from 768px up) and moves the rest into one "More" overflow menu.
+//
+// These tests live HERE because only tests/e2e/mobile-pwa.spec.js runs at a phone
+// viewport (playwright.config.js matches both mobile projects on this file);
+// tests/e2e/bulk-edit.spec.js is desktop-only and can never see this.
+//
+// No `browserName` gate: the specs above gate because Playwright's WebKit has no
+// service-worker support and their assertions would be vacuous without one.
+// Nothing here touches the worker — this is layout, and BOTH engines must satisfy
+// it, which is the point of running the mobile spec on two engines.
+test.describe('the bulk action bar at a phone width', () => {
+	const BOARD_TITLE = 'Mobile Bulk Bar E2E'
+	const bulk = { boardId: null, doneId: null }
+
+	test.beforeAll(async () => {
+		for (const b of await api.get('/boards')) {
+			if (b.title === BOARD_TITLE) await api.delete(`/boards/${b.id}`).catch(() => {})
+		}
+		const board = await api.post('/boards', { title: BOARD_TITLE })
+		bulk.boardId = board.id
+		const todo = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		bulk.doneId = (await api.post('/stacks', { boardId: board.id, title: 'Done' })).id
+		// Two labels, so "Add label" is a real menu: NcActions collapses a
+		// one-entry menu into a single immediate-action button, which would make
+		// the bar narrower than the case under test.
+		await api.post('/labels', { boardId: board.id, title: 'Bug', color: 'e07b00' })
+		await api.post('/labels', { boardId: board.id, title: 'Chore', color: '2ecc71' })
+		await api.post('/cards', { stackId: todo.id, title: 'Bulk card one' })
+		await api.post('/cards', { stackId: todo.id, title: 'Bulk card two' })
+	})
+
+	test.afterAll(async () => {
+		if (bulk.boardId) await api.delete(`/boards/${bulk.boardId}`).catch(() => {})
+	})
+
+	/**
+	 * Geometry of the bar and of every control in it, measured in the page.
+	 *
+	 * `hit` is the reachability half of the acceptance criterion: a box inside the
+	 * viewport that some other element covers is still unusable, so each control is
+	 * probed with elementFromPoint at its own centre. A control clipped off-screen
+	 * gives coordinates outside the viewport, for which elementFromPoint returns
+	 * null — so it fails here too, which is exactly the reported bug.
+	 */
+	function measureBar(page) {
+		return page.evaluate(() => {
+			const bar = document.querySelector('.bulk-action-bar')
+			if (!bar) return null
+			const b = bar.getBoundingClientRect()
+			const controls = [...bar.querySelectorAll('button')].map((el) => {
+				const r = el.getBoundingClientRect()
+				const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+				return {
+					name: el.getAttribute('aria-label')
+						|| el.closest('[title]')?.getAttribute('title')
+						|| el.textContent.trim(),
+					left: r.left,
+					right: r.right,
+					top: r.top,
+					bottom: r.bottom,
+					width: r.width,
+					hit: !!(hit && (hit === el || el.contains(hit))),
+					// What is actually on top there, so a failure names the culprit
+					// instead of just saying "false".
+					hitBy: hit ? `${hit.tagName.toLowerCase()}.${hit.className || '(no class)'}` : 'nothing (outside the viewport)',
+				}
+			})
+			return {
+				left: b.left,
+				right: b.right,
+				width: b.width,
+				controls,
+				text: bar.textContent.replace(/\s+/g, ' ').trim(),
+				viewportWidth: window.innerWidth,
+				scrollWidth: document.documentElement.scrollWidth,
+			}
+		})
+	}
+
+	/** Open the board, enter multi-select mode and select both cards. */
+	async function selectTwoCards(page, { moreButton, act }) {
+		await gotoBoard(page, bulk.boardId)
+		await expect(page.locator('.stack-column').first()).toBeVisible({ timeout: 30_000 })
+		await expect(page.locator('.card-tile', { hasText: 'Bulk card one' })).toBeVisible({ timeout: 15_000 })
+
+		// The one-time keyboard-shortcut nudge (#3413) is fixed to the same bottom
+		// strip and overlaps the bar at a phone width — unrelated to the bar's own
+		// geometry, and it would make every hit-test below report IT instead. Take
+		// it out of the picture the way timeline-view.spec.js does, rather than
+		// dismissing it: dismissal is persisted for the shared e2e user, and
+		// onboarding.spec.js asserts on that state.
+		await page.addStyleTag({ content: '.board-view__shortcuts-hint { display: none !important; }' })
+
+		await act(page.getByRole('button', { name: moreButton }))
+		const selectItem = page.getByRole('menuitem', { name: 'Select multiple cards' })
+		await expect(selectItem).toBeVisible({ timeout: 10_000 })
+		await act(selectItem)
+
+		await act(page.locator('.card-tile', { hasText: 'Bulk card one' }))
+		await act(page.locator('.card-tile', { hasText: 'Bulk card two' }))
+		await expect(page.locator('.bulk-action-bar')).toContainText('2', { timeout: 15_000 })
+	}
+
+	/** Every control sits inside the viewport and is the topmost element there. */
+	function expectAllControlsReachable(m, where) {
+		expect(m, `${where}: the bulk action bar never rendered`).not.toBeNull()
+		expect(m.controls.length, `${where}: no controls in the bar`).toBeGreaterThanOrEqual(5)
+		expect(m.left, `${where}: the bar starts left of the viewport (${m.left})`).toBeGreaterThanOrEqual(-1)
+		expect(m.right, `${where}: the bar ends right of the viewport (${m.right} > ${m.viewportWidth})`)
+			.toBeLessThanOrEqual(m.viewportWidth + 1)
+
+		for (const c of m.controls) {
+			expect(c.width, `${where}: "${c.name}" has no width`).toBeGreaterThan(0)
+			expect(c.left, `${where}: "${c.name}" is clipped off the left edge (x=${c.left})`)
+				.toBeGreaterThanOrEqual(-1)
+			expect(c.right, `${where}: "${c.name}" is clipped off the right edge (x=${c.right} > ${m.viewportWidth})`)
+				.toBeLessThanOrEqual(m.viewportWidth + 1)
+			expect(c.hit, `${where}: "${c.name}" is not clickable where it is drawn — covered by ${c.hitBy}`).toBe(true)
+		}
+	}
+
+	test.describe('at 360x740', () => {
+		// The exact viewport the bug was measured at. isMobile/hasTouch stay as the
+		// project set them, so this is a real phone context, driven by touch.
+		test.use({ viewport: { width: 360, height: 740 } })
+
+		test('every control is inside the viewport and reachable', async ({ page }) => {
+			const errors = collectConsoleErrors(page)
+			await selectTwoCards(page, {
+				moreButton: 'More board actions',
+				act: (locator) => locator.tap(),
+			})
+
+			const m = await measureBar(page)
+			expectAllControlsReachable(m, '360x740')
+
+			// The bar must fit by DELEGATING to the overflow menu, not by wrapping
+			// into a stack of rows over the board (option (a), which was rejected):
+			// every control still shares one row.
+			const top = Math.min(...m.controls.map((c) => c.top))
+			const bottom = Math.max(...m.controls.map((c) => c.bottom))
+			expect(bottom - top, `the bar wrapped into rows instead of overflowing: ${JSON.stringify(m.controls.map((c) => [c.name, c.top]))}`)
+				.toBeLessThanOrEqual(60)
+
+			// …and the page still does not scroll sideways.
+			expect(m.scrollWidth).toBeLessThanOrEqual(m.viewportWidth + 1)
+
+			// All 9 actions are still available: five inline (count aside), the rest
+			// as entries in the one overflow menu.
+			// The overflow holds a date input as well as buttons, so NcActions gives
+			// its popover role=dialog rather than role=menu (a menu may only contain
+			// menuitems) — hence dialog/button here and menu/menuitem for the
+			// button-only "Move to…" picker below.
+			await page.getByRole('button', { name: 'More actions' }).tap()
+			const more = page.getByRole('dialog', { name: 'More actions' })
+			await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible({ timeout: 10_000 })
+			await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible({ timeout: 10_000 })
+			await expect(more.getByRole('button', { name: 'Clear due date' })).toBeVisible()
+			await expect(more.getByRole('button', { name: 'Archive selected' })).toBeVisible()
+			await expect(more.getByRole('button', { name: 'Delete selected' })).toBeVisible()
+			await page.keyboard.press('Escape')
+			await expect(more).toBeHidden()
+
+			// Reachability, demonstrated rather than measured: the two controls that
+			// used to sit at x = -71 and x = 431 both respond to a real tap now.
+			await page.getByRole('button', { name: 'Move to…' }).tap()
+			const moveMenu = page.getByRole('menu')
+			await expect(moveMenu.getByRole('menuitem', { name: 'Done' })).toBeVisible({ timeout: 10_000 })
+			await moveMenu.getByRole('menuitem', { name: 'Done' }).tap()
+			await expect
+				.poll(async () => {
+					const board = await api.get(`/boards/${bulk.boardId}`)
+					return board.cards.filter((c) => c.stackId === bulk.doneId).map((c) => c.title).sort()
+				}, { timeout: 15_000 })
+				.toEqual(['Bulk card one', 'Bulk card two'])
+
+			await page.getByRole('button', { name: 'Exit selection mode' }).tap()
+			await expect(page.locator('.bulk-action-bar')).toHaveCount(0, { timeout: 10_000 })
+
+			expect(errors, errors.join('\n')).toEqual([])
+		})
+	})
+
+	// The phone treatment must not leak upward: at a desktop width the bar stays a
+	// single centred row, and that is where the visible text labels the owner asked
+	// for (#10275) live.
+	test.describe('at a desktop width', () => {
+		test.use({
+			viewport: { width: 1440, height: 900 },
+			isMobile: false,
+			hasTouch: false,
+			deviceScaleFactor: 1,
+		})
+
+		test('the bar keeps its single-row layout and shows text labels', async ({ page }) => {
+			await selectTwoCards(page, {
+				moreButton: 'More',
+				act: (locator) => locator.click(),
+			})
+
+			const m = await measureBar(page)
+			expectAllControlsReachable(m, '1440x900')
+
+			const top = Math.min(...m.controls.map((c) => c.top))
+			const bottom = Math.max(...m.controls.map((c) => c.bottom))
+			expect(bottom - top, 'the desktop bar must stay one row').toBeLessThanOrEqual(60)
+
+			// Still a centred island, not a full-width phone bar.
+			expect(m.left, 'the desktop bar is no longer centred').toBeGreaterThan(0)
+			expect(m.right).toBeLessThan(m.viewportWidth)
+
+			// The inline controls name themselves in visible text here.
+			expect(m.text).toContain('Move to…')
+			expect(m.text).toContain('Add label…')
+			expect(m.text).toContain('Mark done')
 		})
 	})
 })

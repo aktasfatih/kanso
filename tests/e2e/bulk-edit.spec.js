@@ -68,9 +68,11 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		// themselves; the menu triggers get it from the wrapping `.action-item`
 		// (NcActions forwards fall-through attributes to its root element, not to
 		// the trigger button) — which is exactly what the browser resolves a
-		// tooltip from when the button itself has none. Polled: the assignee list
-		// is a separate request, so the "Assign…" menu appears a beat after the
-		// rest of the bar.
+		// tooltip from when the button itself has none.
+		//
+		// #10287 — the bar is now three inline actions plus one "More" overflow, so
+		// this is the whole inline row: the remaining actions are entries INSIDE
+		// More and are asserted below.
 		await expect.poll(
 			() => page.locator('.bulk-action-bar button').evaluateAll(
 				(els) => els.map((el) => el.closest('[title]')?.getAttribute('title') ?? null),
@@ -79,14 +81,27 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		).toEqual([
 			'Move to…',
 			'Add label…',
-			'Remove label…',
-			'Assign…',
-			'Set due date…',
 			'Mark done',
-			'Archive selected',
-			'Delete selected',
+			'More actions',
 			'Exit selection mode',
 		])
+
+		// The overflow holds the rest, and each entry names the ACTION rather than
+		// just the thing it acts on — the assignee list is a separate request, so
+		// its entries appear a beat after the menu opens.
+		// The overflow holds a date input as well as buttons, so NcActions gives its
+		// popover role=dialog rather than role=menu (a menu may only contain
+		// menuitems) — the button-only "Move to…" picker below is still a menu.
+		await page.getByRole('button', { name: 'More actions' }).click()
+		const more = page.getByRole('dialog', { name: 'More actions' })
+		await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible({ timeout: 10_000 })
+		await expect(more.getByRole('button', { name: 'Remove label Chore' })).toBeVisible()
+		await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible({ timeout: 10_000 })
+		await expect(more.getByRole('button', { name: 'Clear due date' })).toBeVisible()
+		await expect(more.getByRole('button', { name: 'Archive selected' })).toBeVisible()
+		await expect(more.getByRole('button', { name: 'Delete selected' })).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(more).toBeHidden()
 
 		// Open the "Move to…" menu and pick the Done stack.
 		await page.getByRole('button', { name: 'Move to…' }).click()

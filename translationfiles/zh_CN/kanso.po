@@ -453,6 +453,10 @@ msgid "Add label"
 msgstr "添加标签"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "添加标签…"
 
@@ -630,6 +634,7 @@ msgstr "确定吗？"
 msgid "Ascending"
 msgstr "升序"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "指派"
@@ -639,8 +644,8 @@ msgid "Assign step"
 msgstr "指派步骤"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "指派…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2360,10 +2365,6 @@ msgstr "分离子卡片失败。"
 msgid "Failed to edit comment."
 msgstr "编辑评论失败。"
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "导入该看板失败。"
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "退出看板失败。"
@@ -3345,6 +3346,10 @@ msgstr "每月"
 msgid "More"
 msgstr "更多"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "更多看板操作"
@@ -3364,6 +3369,10 @@ msgstr "把卡片移动到看板…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "移动卡片…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4256,8 +4265,12 @@ msgid "Remove from project"
 msgstr "从项目中移除"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "移除标签…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4624,10 +4637,6 @@ msgstr "选择多张卡片"
 msgid "Set due date"
 msgstr "设置截止日期"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "设置截止日期…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "设置父卡片"
@@ -4937,6 +4946,10 @@ msgstr ""
 msgid "Text"
 msgstr "文本"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "该卡片已不在此看板上。"
@@ -4968,6 +4981,10 @@ msgstr "Guests 应用白名单已包含 Kanso 和 Viewer 应用。"
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "Guests 应用白名单已禁用 — 访客可以使用 Kanso。"
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."

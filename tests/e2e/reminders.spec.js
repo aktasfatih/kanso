@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, currentAuth, BASE, API } from './helpers.js'
+import { test, expect, api, ncLogin, currentAuth, BASE, API, collectConsoleErrors } from './helpers.js'
 import { execSync } from 'node:child_process'
 
 const NOTIF = BASE + '/ocs/v2.php/apps/notifications/api/v2/notifications'
@@ -138,10 +138,18 @@ test.describe('Personal reminders (remind me)', () => {
 	})
 
 	test('UI: card menu "Remind me later today" sets a chip; cancel removes it', async ({ page }) => {
-		const errors = []
-		page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()) })
-
 		await ncLogin(page)
+
+		// Collect AFTER logging in, and filter by the message's source bundle. The
+		// old `favicon|manifest` allowlist was a string allowlist and rots as one
+		// does: ncLogin goes via /index.php/login, which with a live session
+		// redirects through the Nextcloud DASHBOARD, where every other installed app
+		// mounts a widget — CI produced "could not load recommendation preview Event"
+		// + a 404 from /apps/recommendations/js/ that way, on a page this test does
+		// not assert about. collectConsoleErrors() keys on the source URL, so it
+		// needs no new entry when an unrelated app rewords its logging.
+		const errors = collectConsoleErrors(page)
+
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 10_000 })
 
@@ -157,7 +165,7 @@ test.describe('Personal reminders (remind me)', () => {
 		await chip.first().locator('.card-modal__reminder-cancel').click()
 		await expect(page.locator('.card-modal__reminder-chip')).toHaveCount(0, { timeout: 6000 })
 
-		// No new console errors from the reminder flow.
-		expect(errors.filter((e) => !/favicon|manifest/i.test(e))).toEqual([])
+		// No new console errors from Kanso's own code on the reminder flow.
+		expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 	})
 })

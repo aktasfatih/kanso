@@ -475,6 +475,10 @@ msgid "Add label"
 msgstr "Ajouter une étiquette"
 
 #: src/components/BulkActionBar.vue
+msgid "Add label {label}"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
 msgid "Add label…"
 msgstr "Ajouter une étiquette…"
 
@@ -652,6 +656,7 @@ msgstr "Êtes-vous sûr ?"
 msgid "Ascending"
 msgstr "Croissant"
 
+#: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Assign"
 msgstr "Assigner"
@@ -661,8 +666,8 @@ msgid "Assign step"
 msgstr "Assigner l'étape"
 
 #: src/components/BulkActionBar.vue
-msgid "Assign…"
-msgstr "Assigner…"
+msgid "Assign to {user}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -2387,10 +2392,6 @@ msgstr "Échec du détachement de la sous-carte."
 msgid "Failed to edit comment."
 msgstr "Échec de la modification du commentaire."
 
-#: src/views/BoardList.vue
-msgid "Failed to import that board."
-msgstr "Échec de l'importation de ce tableau."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to leave board."
 msgstr "Impossible de quitter le tableau."
@@ -3373,6 +3374,10 @@ msgstr "Tous les mois"
 msgid "More"
 msgstr "Plus"
 
+#: src/components/BulkActionBar.vue
+msgid "More actions"
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "More board actions"
 msgstr "Plus d'actions du tableau"
@@ -3392,6 +3397,10 @@ msgstr "Déplacer la carte vers un tableau…"
 #: src/components/CardDetail.vue
 msgid "Move card…"
 msgstr "Déplacer la carte…"
+
+#: src/components/BulkActionBar.vue
+msgid "Move to {stack}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -4284,8 +4293,12 @@ msgid "Remove from project"
 msgstr "Retirer du projet"
 
 #: src/components/BulkActionBar.vue
-msgid "Remove label…"
-msgstr "Retirer une étiquette…"
+msgid "Remove label"
+msgstr ""
+
+#: src/components/BulkActionBar.vue
+msgid "Remove label {label}"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4652,10 +4665,6 @@ msgstr "Sélectionner plusieurs cartes"
 msgid "Set due date"
 msgstr "Définir la date d'échéance"
 
-#: src/components/BulkActionBar.vue
-msgid "Set due date…"
-msgstr "Définir la date d'échéance…"
-
 #: src/components/CardDetail.vue
 msgid "Set parent"
 msgstr "Définir la carte parente"
@@ -4966,6 +4975,10 @@ msgstr ""
 msgid "Text"
 msgstr "Texte"
 
+#: src/views/BoardList.vue
+msgid "That board could not be imported, so nothing was created. You can safely try again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Cette carte n'est plus sur ce tableau."
@@ -4997,6 +5010,10 @@ msgstr "La liste blanche de l'application Guests inclut Kanso et l'application V
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app whitelist is disabled - guests can use Kanso."
 msgstr "La liste blanche de l'application Guests est désactivée — les invités peuvent utiliser Kanso."
+
+#: src/views/BoardList.vue
+msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."
