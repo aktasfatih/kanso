@@ -50,6 +50,13 @@ APP_SRC="${KANSO_APP_SRC:-..}"
 fail() { echo "MIGRATION CHECK FAIL: $*" >&2; exit 1; }
 
 MIGRATION_FILES="$(ls "$APP_SRC"/lib/Migration/Version*.php | wc -l | tr -d ' ')"
+# A glob that matches nothing counts 0, and `set -e` cannot see it: `ls` is not
+# the last element of the pipeline, so the exit status is `tr`'s. The assertion
+# below would then read `[ "$MIGS" -ge 0 ]` — true for every value of MIGS, i.e.
+# the whole check passes while asserting nothing. A typo'd, unset or relocated
+# KANSO_APP_SRC must go red here, not go quiet.
+[ "$MIGRATION_FILES" -gt 0 ] \
+	|| fail "no migration files under '$APP_SRC' — KANSO_APP_SRC does not point at a Kanso app tree"
 
 count_migrations_postgres() {
 	docker exec "$DB_CONTAINER" psql -U nextcloud -d nextcloud -tAc \
