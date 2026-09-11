@@ -247,6 +247,13 @@ return [
 		['name' => 'webhook#forgejoIntake', 'url' => '/api/boards/{id}/forgejo/intake', 'verb' => 'PUT'],
 		['name' => 'webhook#forgejoDisable', 'url' => '/api/boards/{id}/forgejo', 'verb' => 'DELETE'],
 
+		// Email intake (#117). No ingest route: unlike the webhooks above, mail is
+		// PULLED from IMAP by cron, so these are config-only and all MANAGE-gated.
+		['name' => 'mailIntake#show', 'url' => '/api/boards/{id}/mail-intake', 'verb' => 'GET'],
+		['name' => 'mailIntake#save', 'url' => '/api/boards/{id}/mail-intake', 'verb' => 'PUT'],
+		['name' => 'mailIntake#test', 'url' => '/api/boards/{id}/mail-intake/test', 'verb' => 'POST'],
+		['name' => 'mailIntake#destroy', 'url' => '/api/boards/{id}/mail-intake', 'verb' => 'DELETE'],
+
 		['name' => 'cardLink#index', 'url' => '/api/cards/{cardId}/links', 'verb' => 'GET'],
 		['name' => 'cardLink#create', 'url' => '/api/cards/{cardId}/links', 'verb' => 'POST'],
 		['name' => 'cardLink#destroy', 'url' => '/api/cards/{cardId}/links/{linkId}', 'verb' => 'DELETE'],
