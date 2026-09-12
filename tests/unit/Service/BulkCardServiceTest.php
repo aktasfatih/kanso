@@ -367,10 +367,11 @@ class BulkCardServiceTest extends TestCase {
 	}
 
 	public function testMaxCardsIsThePinnedClientChunkSize(): void {
-		// BoardView.vue's archive-all chunker mirrors this number
-		// (MAX_PER_REQUEST in bulkApplyChunked, #10430). Lowering the cap here
-		// without lowering it there turns a big column into a bare 400, so the
-		// value is pinned rather than left to a comment.
+		// The client's one chunker mirrors this number (MAX_PER_REQUEST in
+		// src/composables/useBulkSelect.js, #10430/#10435 - it covers both the
+		// selection and the column actions). Lowering the cap here without
+		// lowering it there turns a big column, or a big shift-range, into a bare
+		// 400, so the value is pinned rather than left to a comment.
 		self::assertSame(100, BulkCardService::MAX_CARDS);
 		// …and a full chunk is accepted: the guard is `> MAX_CARDS`, not `>=`.
 		$this->cardService->expects(self::exactly(100))->method('update')

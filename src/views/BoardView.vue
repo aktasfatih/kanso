@@ -661,7 +661,7 @@ import { cssColor } from '../services/color.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
-import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings, bulkApplyCards } from '../services/api.js'
+import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -2380,6 +2380,13 @@ async function runBulkAction(action, params) {
 		}
 	} catch (err) {
 		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+		// A big selection is applied in chunks (#10435), so a failure part-way
+		// through still changed everything before it. Say so — the selection stays
+		// put, and "failed" alone would read as "nothing happened".
+		const partialOk = err?.partial?.ok?.length ?? 0
+		if (partialOk > 0) {
+			showWarning(t('kanso', '{ok} cards updated before the action failed', { ok: partialOk }))
+		}
 	}
 }
 
@@ -2393,43 +2400,6 @@ const onBulkArchive = () => runBulkAction('archive', {})
 const onBulkDelete = () => runBulkAction('delete', {})
 
 // ── Column-level archive-all (#10430) ─────────────────────────────────────────
-
-/**
- * Post `action` for `cardIds` over /api/cards/bulk, chunked to the server's
- * MAX_CARDS cap (a single oversized list is a hard 400) and issued SEQUENTIALLY
- * — each archived card fires its own board-changed push, so fanning the chunks
- * out in parallel would only pile more concurrent work on the same board.
- *
- * A chunk that rejects does NOT discard the chunks that already committed: the
- * partial summary is attached to the thrown error as `err.partial` so the caller
- * can still offer an undo for the cards that really did change, and the cache
- * invalidation runs either way (those writes happened server-side regardless).
- *
- * @param {number[]} cardIds - card ids to apply the action to
- * @param {string} action - one of the fixed bulk actions
- * @return {Promise<{ok: number[], skipped: object[]}>} merged summary
- */
-async function bulkApplyChunked(cardIds, action) {
-	// Mirrors BulkCardService::MAX_CARDS (pinned by BulkCardServiceTest).
-	const MAX_PER_REQUEST = 100
-	const summary = { ok: [], skipped: [] }
-	try {
-		for (let i = 0; i < cardIds.length; i += MAX_PER_REQUEST) {
-			const chunk = cardIds.slice(i, i + MAX_PER_REQUEST)
-			const result = await bulkApplyCards(chunk, action, {})
-			summary.ok.push(...(result?.ok ?? []))
-			summary.skipped.push(...(result?.skipped ?? []))
-		}
-	} catch (err) {
-		err.partial = summary
-		throw err
-	} finally {
-		await queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
-		// Archiving can change My Work membership (#3766, #9859).
-		invalidateCrossBoardFeeds(queryClient)
-	}
-	return summary
-}
 
 /**
  * Warn about the cards a bulk pass did not apply. A skip is a per-card refusal
@@ -2464,7 +2434,9 @@ async function handleArchiveAllInStack(stackId) {
 	const cardIds = cardsForStack(stackId).map((c) => c.id)
 	if (cardIds.length === 0) return { ok: [], skipped: [] }
 	try {
-		const result = await bulkApplyChunked(cardIds, 'archive')
+		// Not bulk.apply(): that one runs over — and then clears — the SELECTION,
+		// and this action is a column action available outside selection mode.
+		const result = await bulk.applyToIds(cardIds, 'archive')
 		shortcutError.value = ''
 		// The undo toast (in StackColumn) already carries the success count; only
 		// the skipped cards are news the user would not otherwise see.
@@ -2486,7 +2458,7 @@ async function handleArchiveAllInStack(stackId) {
  */
 async function handleUnarchiveCards(cardIds) {
 	try {
-		const result = await bulkApplyChunked(cardIds, 'unarchive')
+		const result = await bulk.applyToIds(cardIds, 'unarchive')
 		shortcutError.value = ''
 		// A partially-applied undo leaves cards archived; the toast is already gone,
 		// so this is the only place the user would hear about it.

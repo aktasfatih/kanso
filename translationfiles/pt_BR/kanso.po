@@ -168,6 +168,10 @@ msgid "{ok} cards updated"
 msgstr "{ok} cartões atualizados"
 
 #: src/views/BoardView.vue
+msgid "{ok} cards updated before the action failed"
+msgstr ""
+
+#: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr "{ok} atualizados, {skipped} ignorados"
 

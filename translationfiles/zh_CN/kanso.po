@@ -167,6 +167,10 @@ msgid "{ok} cards updated"
 msgstr "已更新 {ok} 张卡片"
 
 #: src/views/BoardView.vue
+msgid "{ok} cards updated before the action failed"
+msgstr ""
+
+#: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr "已更新 {ok} 张，跳过 {skipped} 张"
 
