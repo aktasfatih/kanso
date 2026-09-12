@@ -149,6 +149,7 @@ import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import DeleteForeverIcon from 'vue-material-design-icons/DeleteForever.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { useTrash } from '../composables/useTrash.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { cssColor } from '../services/color.js'
@@ -175,6 +176,12 @@ const boardTitle = computed(() =>
 	?? queryClient.getQueryData(boardQueryKey(props.id))?.board?.title
 	?? '',
 )
+
+// Browser tab title (#125): whose trash this is. Empty until the title resolves,
+// which leaves the bare app name rather than a half-built title.
+usePageTitle(() => (boardTitle.value
+	? boardTitle.value + ' · ' + t('kanso', 'Trash')
+	: ''))
 
 // Permissions bitmask: READ=1, EDIT=2, SHARE=4, MANAGE=8.
 const permissions = computed(() => Number(boardData.value?.permissions ?? 0))

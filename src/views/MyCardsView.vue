@@ -160,11 +160,16 @@ import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { useMyCards } from '../composables/useMyCards.js'
 import { useMyRecentlyDoneCards } from '../composables/useMyRecentlyDoneCards.js'
 import { myCardsFeed, recentlyDoneFeed } from '../services/myCardsFeed.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 
 const props = defineProps({
 	embedded: { type: Boolean, default: false },
 	boardFilter: { type: Number, default: null },
 })
+
+// Browser tab title (#125). Claimed only when this is the page the user is on:
+// embedded means it is a tab inside My Work, which owns the title there.
+usePageTitle(() => (props.embedded ? '' : t('kanso', 'My tasks')))
 
 const router = useRouter()
 const { data, isLoading, isError } = useMyCards()

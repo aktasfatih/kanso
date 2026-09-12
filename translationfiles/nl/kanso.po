@@ -262,8 +262,8 @@ msgstr[1] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
 #: src/views/BoardList.vue:256
-#: src/views/BoardStats.vue:420
-#: src/views/ProjectStats.vue:340
+#: src/views/BoardStats.vue:431
+#: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n kaart"
@@ -299,13 +299,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4344
+#: src/components/CardDetail.vue:4349
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
 
-#: src/components/CardDetail.vue:4342
+#: src/components/CardDetail.vue:4347
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
@@ -329,7 +329,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4340
+#: src/components/CardDetail.vue:4345
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -347,7 +347,7 @@ msgid_plural "%n overdue"
 msgstr[0] "%n te laat"
 msgstr[1] "%n te laat"
 
-#: src/views/BoardStats.vue:421
+#: src/views/BoardStats.vue:432
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n punt"
@@ -647,6 +647,7 @@ msgstr "Selectie archiveren"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 msgid "Archived"
 msgstr "Gearchiveerd"
@@ -1702,7 +1703,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4533
+#: src/components/CardDetail.vue:4538
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3376,7 +3377,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4535
+#: src/components/CardDetail.vue:4540
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4757,7 +4758,7 @@ msgstr "Opmaakbalk tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:6238
+#: src/components/CardDetail.vue:6243
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5423,7 +5424,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4534
+#: src/components/CardDetail.vue:4539
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -5504,7 +5505,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4536
+#: src/components/CardDetail.vue:4541
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

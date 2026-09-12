@@ -649,6 +649,7 @@ import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { useBoardSubscription } from '../composables/useBoardSubscription.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
@@ -900,6 +901,12 @@ function sortCards(cards) {
 	})
 }
 const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+
+// Put the board's name in the browser tab (#125), so a bookmarked or pinned
+// board reads as "Personal - Kanso - Nextcloud" instead of the bare app name.
+// Empty until the query resolves (and forever if it 403s), which the composable
+// treats as "no title of my own" rather than writing `undefined`.
+usePageTitle(() => boardData.value?.board?.title ?? '')
 
 // Status-aware board error copy (#3662). A dead deep-link/notification to a
 // deleted board 404s; a revoked share 403s. Both should read as an explanatory

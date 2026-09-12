@@ -38,7 +38,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</button>
 				<span v-else class="card-page__crumb">{{ boardName }}</span>
 				<ChevronRightIcon :size="14" class="card-page__crumb-sep" />
-				<span class="card-page__crumb card-page__crumb--current">{{ cardTitle }}</span>
+				<span class="card-page__crumb card-page__crumb--current">{{ cardTitle || t('kanso', 'Card') }}</span>
 			</span>
 		</nav>
 
@@ -57,6 +57,7 @@ import { translate as t } from '@nextcloud/l10n'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CardDetail from '../components/CardDetail.vue'
+import { usePageTitle } from '../composables/usePageTitle.js'
 
 defineProps({
 	cardId: {
@@ -67,9 +68,17 @@ defineProps({
 
 const router = useRouter()
 
-const cardTitle = ref(t('kanso', 'Card'))
+// Empty until CardDetail reports the loaded card; the breadcrumb substitutes a
+// generic placeholder for display, but the tab title must NOT - see below.
+const cardTitle = ref('')
 const boardId = ref(null)
 const boardName = ref(t('kanso', 'Board'))
+
+// Browser tab title (#125). Tracks the same value as the breadcrumb, so a
+// full-page card link shared or bookmarked reads as the card, not as "Kanso".
+// Deliberately the raw title rather than the placeholder-substituted one: a card
+// that never loads leaves Nextcloud's own title alone instead of pinning "Card".
+usePageTitle(cardTitle)
 
 function onBoardContext({ boardId: id, boardName: name }) {
 	boardId.value = id

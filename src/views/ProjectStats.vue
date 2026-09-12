@@ -244,6 +244,7 @@ import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import { useProjectStats } from '../composables/useProjectStats.js'
 import { useProjects } from '../composables/useProjects.js'
 import { useProjectCards } from '../composables/useProject.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 
 const props = defineProps({
@@ -263,6 +264,12 @@ const { data: projectsData } = useProjects()
 const projectTitle = computed(() =>
 	(projectsData.value ?? []).find((p) => String(p.id) === String(props.id))?.title ?? '',
 )
+
+// Browser tab title (#125): which project's analytics this is. Empty until the
+// projects list query resolves, which leaves the bare app name in the tab.
+usePageTitle(() => (projectTitle.value
+	? projectTitle.value + ' · ' + t('kanso', 'Analytics')
+	: ''))
 
 function resolvePriorityLabel(priority) {
 	const level = PRIORITY_LEVELS.find((l) => l.value === Number(priority))

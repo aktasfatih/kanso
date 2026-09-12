@@ -478,6 +478,7 @@ import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import { useProjects } from '../composables/useProjects.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { useProjectCards } from '../composables/useProject.js'
 import { useProjectComments } from '../composables/useProjectComments.js'
 import { buildCommentTree } from '../composables/useComments.js'
@@ -502,6 +503,9 @@ const router = useRouter()
 // Resolve the project from the list query (already in cache)
 const { data: projectsData, update: updateMutation, remove: removeMutation } = useProjects()
 const project = computed(() => (projectsData.value ?? []).find((p) => String(p.id) === String(props.id)) ?? null)
+
+// Browser tab title (#125). Empty until the (cached) projects list resolves.
+usePageTitle(() => project.value?.title ?? '')
 
 const {
 	data: cardsData,

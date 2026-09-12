@@ -74,11 +74,16 @@ import { useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { useBoards } from '../composables/useBoards.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import MyCardsView from './MyCardsView.vue'
 import MyReviewsView from './MyReviewsView.vue'
 import InboxView from './InboxView.vue'
 
 const route = useRoute()
+
+// Browser tab title (#125). The hub owns the title for all three of its tabs —
+// the embedded feeds deliberately stand down (see their usePageTitle calls).
+usePageTitle(t('kanso', 'My Work'))
 
 /**
  * Active tab: 'tasks' | 'reviews' | 'inbox'. Initialised from a `?tab=` query so

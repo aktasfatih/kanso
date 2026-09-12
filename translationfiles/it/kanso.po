@@ -262,8 +262,8 @@ msgstr[1] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
 #: src/views/BoardList.vue:256
-#: src/views/BoardStats.vue:420
-#: src/views/ProjectStats.vue:340
+#: src/views/BoardStats.vue:431
+#: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n scheda"
@@ -299,13 +299,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4344
+#: src/components/CardDetail.vue:4349
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
 
-#: src/components/CardDetail.vue:4342
+#: src/components/CardDetail.vue:4347
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
@@ -329,7 +329,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4340
+#: src/components/CardDetail.vue:4345
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -347,7 +347,7 @@ msgid_plural "%n overdue"
 msgstr[0] "%n in ritardo"
 msgstr[1] "%n in ritardo"
 
-#: src/views/BoardStats.vue:421
+#: src/views/BoardStats.vue:432
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n punto"
@@ -647,6 +647,7 @@ msgstr "Archivia le selezionate"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 msgid "Archived"
 msgstr "Archiviate"
@@ -1702,7 +1703,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4533
+#: src/components/CardDetail.vue:4538
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -3376,7 +3377,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4535
+#: src/components/CardDetail.vue:4540
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -4757,7 +4758,7 @@ msgstr "Mostra la barra di formattazione"
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6238
+#: src/components/CardDetail.vue:6243
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5423,7 +5424,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4534
+#: src/components/CardDetail.vue:4539
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5504,7 +5505,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4536
+#: src/components/CardDetail.vue:4541
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"

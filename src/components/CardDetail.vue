@@ -3539,7 +3539,12 @@ const dueDateClass = computed(() => {
 	return ''
 })
 
-const cardTitle = computed(() => cardData.value?.title || t('kanso', 'Card'))
+// The card's own title, and EMPTY whenever it is unknown - not loaded yet, or
+// the fetch failed. The generic "Card" placeholder deliberately does NOT live
+// here: both shells substitute their own for display, and the browser tab title
+// (#125) needs the empty value so an unloaded card defers to the board title
+// underneath it instead of pinning a meaningless "Card" over it for good.
+const cardTitle = computed(() => cardData.value?.title ?? '')
 
 // Surface the resolved title to the shell (the modal uses it for its accessible
 // name; the page uses it for the breadcrumb / document title). Emitted rather than

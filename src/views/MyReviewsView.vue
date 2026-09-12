@@ -93,12 +93,17 @@ import { translate as t } from '@nextcloud/l10n'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import { useMyReviews } from '../composables/useMyReviews.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import ReviewRow from '../components/ReviewRow.vue'
 
 const props = defineProps({
 	embedded: { type: Boolean, default: false },
 	boardFilter: { type: Number, default: null },
 })
+
+// Browser tab title (#125). Claimed only when this is the page the user is on:
+// embedded means it is a tab inside My Work, which owns the title there.
+usePageTitle(() => (props.embedded ? '' : t('kanso', 'My Reviews')))
 
 const router = useRouter()
 const { data: reviews, isLoading, isError, setState } = useMyReviews()

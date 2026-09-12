@@ -305,6 +305,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import { useBoardStats } from '../composables/useBoardStats.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 
@@ -329,6 +330,16 @@ const boardCache = computed(() =>
 )
 
 const boardTitle = computed(() => boardCache.value?.board?.title ?? '')
+
+// Browser tab title (#125): which board's analytics this is. Inherits this
+// page's existing name-resolution trade-off - the cache peek above is not a
+// reactive source and this page runs no board query of its own - so on a HARD
+// load of the stats URL the tab keeps Nextcloud's own title, the same way the
+// bars fall back to "Stack 12". It is named whenever the board has been open in
+// this session, which is every path that reaches this page from the app.
+usePageTitle(() => (boardTitle.value
+	? boardTitle.value + ' · ' + t('kanso', 'Analytics')
+	: ''))
 
 function resolveStackTitle(stackId) {
 	const stacks = boardCache.value?.stacks

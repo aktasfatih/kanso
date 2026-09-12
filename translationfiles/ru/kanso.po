@@ -265,8 +265,8 @@ msgstr[2] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
 #: src/views/BoardList.vue:256
-#: src/views/BoardStats.vue:420
-#: src/views/ProjectStats.vue:340
+#: src/views/BoardStats.vue:431
+#: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n карточка"
@@ -308,14 +308,14 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4344
+#: src/components/CardDetail.vue:4349
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
 msgstr[1] "%n дня назад"
 msgstr[2] "%n дней назад"
 
-#: src/components/CardDetail.vue:4342
+#: src/components/CardDetail.vue:4347
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -343,7 +343,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4340
+#: src/components/CardDetail.vue:4345
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -364,7 +364,7 @@ msgstr[0] "%n просрочена"
 msgstr[1] "%n просрочены"
 msgstr[2] "%n просрочено"
 
-#: src/views/BoardStats.vue:421
+#: src/views/BoardStats.vue:432
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n балл"
@@ -671,6 +671,7 @@ msgstr "Архивировать выбранные"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 msgid "Archived"
 msgstr "Архив"
@@ -1726,7 +1727,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4533
+#: src/components/CardDetail.vue:4538
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3405,7 +3406,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4535
+#: src/components/CardDetail.vue:4540
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4787,7 +4788,7 @@ msgstr "Показывать панель форматирования"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:6238
+#: src/components/CardDetail.vue:6243
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5454,7 +5455,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4534
+#: src/components/CardDetail.vue:4539
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -5536,7 +5537,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4536
+#: src/components/CardDetail.vue:4541
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"
