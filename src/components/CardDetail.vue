@@ -811,8 +811,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:display-name="participantName(uid)"
 							:size="22"
 							:hide-status="true"
-							:disable-tooltip="false" />
-						<span class="card-modal__assignee-name">{{ participantName(uid) }}</span>
+							:disable-tooltip="true" />
+						<span class="card-modal__assignee-name" :title="participantName(uid)">{{ participantName(uid) }}</span>
 						<button
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
@@ -860,8 +860,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:display-name="c.displayName"
 									:size="22"
 									:hide-status="true"
-									:disable-tooltip="false" />
-								<span class="card-modal__assignee-name">{{ c.displayName }}</span>
+									:disable-tooltip="true" />
+								<span class="card-modal__assignee-name" :title="c.displayName">{{ c.displayName }}</span>
 								<button
 									class="card-modal__pill-x"
 									:title="t('kanso', 'Unlink contact')"
@@ -1056,8 +1056,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:display-name="participantName(review.reviewer)"
 								:size="22"
 								:hide-status="true"
-								:disable-tooltip="false" />
-							<span class="card-modal__review-name">{{ participantName(review.reviewer) }}</span>
+								:disable-tooltip="true" />
+							<span class="card-modal__review-name" :title="participantName(review.reviewer)">{{ participantName(review.reviewer) }}</span>
 							<span
 								v-if="reviewTypeById(review.reviewTypeId)"
 								class="card-modal__review-type-badge"
