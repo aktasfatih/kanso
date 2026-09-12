@@ -266,7 +266,7 @@ msgstr[1] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
 #: src/views/BoardList.vue:256
-#: src/views/BoardStats.vue:431
+#: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
@@ -351,7 +351,7 @@ msgid_plural "%n overdue"
 msgstr[0] "%n atrasado"
 msgstr[1] "%n atrasados"
 
-#: src/views/BoardStats.vue:432
+#: src/views/BoardStats.vue:445
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n ponto"

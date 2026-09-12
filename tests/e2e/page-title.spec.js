@@ -102,15 +102,13 @@ test.describe('Browser tab title (#125)', () => {
 		// Board sub-pages qualify the board name with the section they show, so two
 		// tabs on the same board are tellable apart.
 		//
-		// Reached the way a user reaches it — through the board — deliberately, and
-		// not by deep-linking the stats URL: BoardStats resolves the board name by
-		// peeking at the board query cache (`getQueryData`, which is not a reactive
-		// source) rather than running a board query of its own, exactly as it
-		// already does for its stack and label names. So the name is there when the
-		// board has been open in this session, and on a hard load of the stats URL
-		// the tab keeps Nextcloud's own title instead — the composable's
-		// fall-through, not a wrong title. Deep-linking here would have asserted
-		// that path by accident and passed for the wrong reason.
+		// This is the SOFT path — reached the way a user usually reaches it, through
+		// the board, with the board query already warm. The hard path (a bookmark or
+		// a refresh of the stats URL, where the cache is cold and BoardStats has to
+		// fetch the board itself) is covered in board-stats.spec.js, which asserts
+		// the tab title and the bar labels together; it cannot be asserted from here
+		// because a `page.goto` that only changes the hash is a same-document
+		// navigation and would leave this page's cache warm.
 		await gotoBoard(page, state.boardId)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/stats`)

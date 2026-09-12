@@ -301,13 +301,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
-import { useQueryClient } from '@tanstack/vue-query'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import { useBoard } from '../composables/useBoard.js'
 import { useBoardStats } from '../composables/useBoardStats.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
-import { boardQueryKey } from '../composables/queryKeys.js'
 
 const props = defineProps({
 	id: {
@@ -317,32 +316,46 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
 
-const { data: stats, isLoading, isError } = useBoardStats(boardId)
+const {
+	data: stats,
+	isLoading: statsLoading,
+	isError: statsError,
+} = useBoardStats(boardId)
 
-// ── Board cache for name resolution ──────────────────────────────────────────
-// Read stacks + labels from the already-cached board query (populated by
-// BoardView). No extra fetch; falls back gracefully if cache is cold.
-const boardCache = computed(() =>
-	queryClient.getQueryData(boardQueryKey(props.id)),
-)
+// ── Board query for name resolution ──────────────────────────────────────────
+// The stats payload identifies stacks and labels by ID only, so every bar label
+// on this page is resolved against the board. This runs the board query itself,
+// the same way ArchivedView and TrashView do, rather than peeking at the cache
+// with getQueryData: a peek is not a reactive source and fetches nothing, so on
+// a HARD load of this URL — a bookmark, a refresh, a pasted link — the cache is
+// cold and every bar read "Stack 12" while the tab kept the bare app name. On a
+// soft navigation from the board the entry is already warm, so this costs no
+// extra request. Gated by board READ exactly like the board itself.
+const {
+	data: boardData,
+	isLoading: boardLoading,
+	isError: boardError,
+} = useBoard(boardId)
 
-const boardTitle = computed(() => boardCache.value?.board?.title ?? '')
+// Both queries gate the body. Rendering the stats the moment THEY arrive would
+// trade a cold-load "Stack 12" for a flash of it, and a board the viewer may not
+// read (403/404, which useBoard latches) must not render stats at all.
+const isLoading = computed(() => statsLoading.value || boardLoading.value)
+const isError = computed(() => statsError.value || boardError.value)
 
-// Browser tab title (#125): which board's analytics this is. Inherits this
-// page's existing name-resolution trade-off - the cache peek above is not a
-// reactive source and this page runs no board query of its own - so on a HARD
-// load of the stats URL the tab keeps Nextcloud's own title, the same way the
-// bars fall back to "Stack 12". It is named whenever the board has been open in
-// this session, which is every path that reaches this page from the app.
+const boardTitle = computed(() => boardData.value?.board?.title ?? '')
+
+// Browser tab title (#125): which board's analytics this is. Empty while the
+// board query is in flight, which leaves the bare app name rather than a
+// half-built title.
 usePageTitle(() => (boardTitle.value
 	? boardTitle.value + ' · ' + t('kanso', 'Analytics')
 	: ''))
 
 function resolveStackTitle(stackId) {
-	const stacks = boardCache.value?.stacks
+	const stacks = boardData.value?.stacks
 	if (Array.isArray(stacks)) {
 		const found = stacks.find((s) => s.id === stackId)
 		if (found) return found.title
@@ -351,7 +364,7 @@ function resolveStackTitle(stackId) {
 }
 
 function resolveLabelTitle(labelId) {
-	const labels = boardCache.value?.labels
+	const labels = boardData.value?.labels
 	if (Array.isArray(labels)) {
 		const found = labels.find((l) => l.id === labelId)
 		if (found) return found.title
@@ -360,7 +373,7 @@ function resolveLabelTitle(labelId) {
 }
 
 function resolveLabelColor(labelId) {
-	const labels = boardCache.value?.labels
+	const labels = boardData.value?.labels
 	if (Array.isArray(labels)) {
 		const found = labels.find((l) => l.id === labelId)
 		if (found) return found.color || null

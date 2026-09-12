@@ -269,7 +269,7 @@ msgstr[2] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
 #: src/views/BoardList.vue:256
-#: src/views/BoardStats.vue:431
+#: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
@@ -368,7 +368,7 @@ msgstr[0] "%n просрочена"
 msgstr[1] "%n просрочены"
 msgstr[2] "%n просрочено"
 
-#: src/views/BoardStats.vue:432
+#: src/views/BoardStats.vue:445
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n балл"
