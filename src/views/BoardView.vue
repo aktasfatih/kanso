@@ -364,6 +364,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
 					:on-delete-stack="canEditBoard ? handleDeleteStack : null"
 					:on-restore-stack="canEditBoard ? handleRestoreStack : null"
+					:on-archive-all-cards="canEditBoard ? handleArchiveAllInStack : null"
+					:on-unarchive-cards="canEditBoard ? handleUnarchiveCards : null"
+					:filter-active="filterActive"
 					:on-rename-stack="canEditBoard ? handleRenameStack : null"
 					:on-set-role="canEditBoard ? handleSetRole : null"
 					:on-set-wip="canEditBoard ? handleSetWip : null"
@@ -657,7 +660,7 @@ import { cssColor } from '../services/color.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
-import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings } from '../services/api.js'
+import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings, bulkApplyCards } from '../services/api.js'
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -1272,6 +1275,10 @@ const filterState = createFilterState()
 // A live predicate rebuilt whenever the filter changes. `now` is captured once
 // per rebuild so the "this week" / "overdue" windows stay stable across a pass.
 const filterPredicate = computed(() => makePredicate(filterState, Date.now()))
+// Whether the filter bar is currently narrowing what the columns show. Only used
+// for wording (#10430): a column action that says "all cards" must instead name
+// the visible count when a filter is hiding some of them.
+const filterActive = computed(() => !filterIsEmpty(serializeFilter(filterState)))
 
 // ── Saved views (#3407) ───────────────────────────────────────────────────────
 // Per-user, per-board named filter snapshots persisted in NC user config.
@@ -2377,6 +2384,110 @@ const onBulkSetDue = (due) => runBulkAction('set_due_date', { duedate: due })
 const onBulkSetStatus = (status) => runBulkAction('set_status', { status })
 const onBulkArchive = () => runBulkAction('archive', {})
 const onBulkDelete = () => runBulkAction('delete', {})
+
+// ── Column-level archive-all (#10430) ─────────────────────────────────────────
+
+/**
+ * Post `action` for `cardIds` over /api/cards/bulk, chunked to the server's
+ * MAX_CARDS cap (a single oversized list is a hard 400) and issued SEQUENTIALLY
+ * — each archived card fires its own board-changed push, so fanning the chunks
+ * out in parallel would only pile more concurrent work on the same board.
+ *
+ * A chunk that rejects does NOT discard the chunks that already committed: the
+ * partial summary is attached to the thrown error as `err.partial` so the caller
+ * can still offer an undo for the cards that really did change, and the cache
+ * invalidation runs either way (those writes happened server-side regardless).
+ *
+ * @param {number[]} cardIds - card ids to apply the action to
+ * @param {string} action - one of the fixed bulk actions
+ * @return {Promise<{ok: number[], skipped: object[]}>} merged summary
+ */
+async function bulkApplyChunked(cardIds, action) {
+	// Mirrors BulkCardService::MAX_CARDS (pinned by BulkCardServiceTest).
+	const MAX_PER_REQUEST = 100
+	const summary = { ok: [], skipped: [] }
+	try {
+		for (let i = 0; i < cardIds.length; i += MAX_PER_REQUEST) {
+			const chunk = cardIds.slice(i, i + MAX_PER_REQUEST)
+			const result = await bulkApplyCards(chunk, action, {})
+			summary.ok.push(...(result?.ok ?? []))
+			summary.skipped.push(...(result?.skipped ?? []))
+		}
+	} catch (err) {
+		err.partial = summary
+		throw err
+	} finally {
+		await queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		// Archiving can change My Work membership (#3766, #9859).
+		invalidateCrossBoardFeeds(queryClient)
+	}
+	return summary
+}
+
+/**
+ * Warn about the cards a bulk pass did not apply. A skip is a per-card refusal
+ * (not editable any more, vanished), which the undo toast's count alone would
+ * hide — so it gets its own toast, matching runBulkAction's wording.
+ *
+ * @param {{ok: number[], skipped: object[]}} summary - merged per-card summary
+ */
+function warnOnSkipped(summary) {
+	if (summary.skipped.length === 0) return
+	showWarning(t('kanso', '{ok} updated, {skipped} skipped', {
+		ok: summary.ok.length,
+		skipped: summary.skipped.length,
+	}))
+}
+
+/**
+ * Archive every card the column currently SHOWS — i.e. the filter-visible set,
+ * the same cards "select all → archive selected" would have hit. Deliberately
+ * reuses the existing bulk endpoint rather than adding a column-scoped one, so
+ * the per-card ACL, change log and realtime deltas stay exactly as they are.
+ * Returns the summary so StackColumn can offer an undo over the archived ids.
+ *
+ * On a partial failure it still RETURNS the cards that landed rather than
+ * throwing them away: the undo is the whole reason this action ships without a
+ * confirm dialog, and the Archived page only restores one card at a time.
+ *
+ * @param {number} stackId - the column to empty
+ * @return {Promise<{ok: number[], skipped: object[]}>} merged summary
+ */
+async function handleArchiveAllInStack(stackId) {
+	const cardIds = cardsForStack(stackId).map((c) => c.id)
+	if (cardIds.length === 0) return { ok: [], skipped: [] }
+	try {
+		const result = await bulkApplyChunked(cardIds, 'archive')
+		shortcutError.value = ''
+		// The undo toast (in StackColumn) already carries the success count; only
+		// the skipped cards are news the user would not otherwise see.
+		warnOnSkipped(result)
+		return result
+	} catch (err) {
+		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+		const partial = err?.partial ?? { ok: [], skipped: [] }
+		// Some chunks may have committed before the failure — hand them back so the
+		// undo still covers them. The banner above already reports the failure.
+		return partial
+	}
+}
+
+/**
+ * Undo an archive-all: put the given cards back on the board.
+ *
+ * @param {number[]} cardIds - the ids the archive-all reported as archived
+ */
+async function handleUnarchiveCards(cardIds) {
+	try {
+		const result = await bulkApplyChunked(cardIds, 'unarchive')
+		shortcutError.value = ''
+		// A partially-applied undo leaves cards archived; the toast is already gone,
+		// so this is the only place the user would hear about it.
+		warnOnSkipped(result)
+	} catch (err) {
+		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+	}
+}
 </script>
 
 <style scoped>

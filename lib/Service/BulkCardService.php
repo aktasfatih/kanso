@@ -33,6 +33,7 @@ class BulkCardService {
 	public const ACTION_SET_DUE_DATE = 'set_due_date';
 	public const ACTION_SET_STATUS = 'set_status';
 	public const ACTION_ARCHIVE = 'archive';
+	public const ACTION_UNARCHIVE = 'unarchive';
 	public const ACTION_DELETE = 'delete';
 
 	public const ACTIONS = [
@@ -43,6 +44,7 @@ class BulkCardService {
 		self::ACTION_SET_DUE_DATE,
 		self::ACTION_SET_STATUS,
 		self::ACTION_ARCHIVE,
+		self::ACTION_UNARCHIVE,
 		self::ACTION_DELETE,
 	];
 
@@ -79,6 +81,7 @@ class BulkCardService {
 	 *   - set_due_date:  duedate (string; '' clears it - same wire format as update())
 	 *   - set_status:    status ('done' stamps done_at via the single-card done path)
 	 *   - archive:       (none)
+	 *   - unarchive:     (none) - the inverse of archive, so an archive is undoable
 	 *   - delete:        (none)
 	 *
 	 * @param int[] $cardIds
@@ -226,6 +229,13 @@ class BulkCardService {
 			case self::ACTION_ARCHIVE:
 				return function (int $cardId) use ($uid): void {
 					$this->cardService->update($cardId, null, null, null, null, true, $uid);
+				};
+
+			case self::ACTION_UNARCHIVE:
+				// The exact inverse of ACTION_ARCHIVE, so the client can offer a real
+				// undo for an archive that touched many cards at once (#10430).
+				return function (int $cardId) use ($uid): void {
+					$this->cardService->update($cardId, null, null, null, null, false, $uid);
 				};
 
 			case self::ACTION_DELETE:

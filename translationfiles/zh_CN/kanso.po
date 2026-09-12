@@ -265,6 +265,11 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
+#: src/components/StackColumn.vue:955
+msgid "%n card archived"
+msgid_plural "%n cards archived"
+msgstr[0] ""
+
 #: src/components/CsvImportModal.vue:54
 msgid "%n card created"
 msgid_plural "%n cards created"
@@ -585,6 +590,15 @@ msgstr "已通过"
 #: src/components/BoardSettingsModal.vue
 msgid "Archive"
 msgstr "归档"
+
+#: src/components/StackColumn.vue:179
+msgid "Archive %n visible card"
+msgid_plural "Archive %n visible cards"
+msgstr[0] ""
+
+#: src/components/StackColumn.vue
+msgid "Archive all cards"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue

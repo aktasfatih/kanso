@@ -269,6 +269,12 @@ msgid_plural "%n cards"
 msgstr[0] "%n cartão"
 msgstr[1] "%n cartões"
 
+#: src/components/StackColumn.vue:955
+msgid "%n card archived"
+msgid_plural "%n cards archived"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/CsvImportModal.vue:54
 msgid "%n card created"
 msgid_plural "%n cards created"
@@ -607,6 +613,16 @@ msgstr "Aprovado"
 #: src/components/BoardSettingsModal.vue
 msgid "Archive"
 msgstr "Arquivar"
+
+#: src/components/StackColumn.vue:179
+msgid "Archive %n visible card"
+msgid_plural "Archive %n visible cards"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/StackColumn.vue
+msgid "Archive all cards"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue

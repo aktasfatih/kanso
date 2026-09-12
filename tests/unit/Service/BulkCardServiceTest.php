@@ -228,6 +228,51 @@ class BulkCardServiceTest extends TestCase {
 		self::assertSame([11, 12], $result['ok']);
 	}
 
+	public function testBulkUnarchiveCallsUpdateWithArchivedFalse(): void {
+		// The inverse of archive (#10430) - what the archive-all undo toast posts.
+		// `false` (not null) is what actually un-archives: CardService::update only
+		// touches the flag when the argument is non-null.
+		$this->cardService->expects(self::exactly(2))->method('update')
+			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid) {
+				self::assertFalse($arch);
+				self::assertSame('alice', $uid);
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12], BulkCardService::ACTION_UNARCHIVE, [], 'alice');
+		self::assertSame([11, 12], $result['ok']);
+		self::assertSame([], $result['skipped']);
+	}
+
+	public function testUnarchiveIsAcceptedByActionValidation(): void {
+		// Pins the wire value the client posts: an action missing from ACTIONS is a
+		// whole-request 400, so this would fail loudly if the enum entry regressed.
+		self::assertSame('unarchive', BulkCardService::ACTION_UNARCHIVE);
+		self::assertContains(BulkCardService::ACTION_UNARCHIVE, BulkCardService::ACTIONS);
+
+		$this->cardService->expects(self::once())->method('update')
+			->willReturn($this->card(11));
+		$result = $this->service->apply([11], 'unarchive', [], 'alice');
+		self::assertSame([11], $result['ok']);
+	}
+
+	public function testUnarchiveSkipsANonEditableCardInsteadOfFailingTheRequest(): void {
+		// An undo of an archive-all can span boards the caller lost EDIT on in the
+		// meantime; that must skip the one card, not lose the whole undo.
+		$this->cardService->method('update')
+			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid): Card {
+				if ($id === 12) {
+					throw new NotPermittedException('nope');
+				}
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12, 13], BulkCardService::ACTION_UNARCHIVE, [], 'alice');
+
+		self::assertSame([11, 13], $result['ok']);
+		self::assertSame([['id' => 12, 'reason' => 'forbidden']], $result['skipped']);
+	}
+
 	public function testBulkDeleteCallsCardServiceDeletePerCard(): void {
 		$deleted = [];
 		$this->cardService->expects(self::exactly(2))->method('delete')
@@ -319,6 +364,24 @@ class BulkCardServiceTest extends TestCase {
 		// Zero / negative ids are filtered out, leaving an empty selection → 400.
 		$this->expectException(InvalidInputException::class);
 		$this->service->apply([0, -3], BulkCardService::ACTION_ARCHIVE, [], 'alice');
+	}
+
+	public function testMaxCardsIsThePinnedClientChunkSize(): void {
+		// BoardView.vue's archive-all chunker mirrors this number
+		// (MAX_PER_REQUEST in bulkApplyChunked, #10430). Lowering the cap here
+		// without lowering it there turns a big column into a bare 400, so the
+		// value is pinned rather than left to a comment.
+		self::assertSame(100, BulkCardService::MAX_CARDS);
+		// …and a full chunk is accepted: the guard is `> MAX_CARDS`, not `>=`.
+		$this->cardService->expects(self::exactly(100))->method('update')
+			->willReturnCallback(fn (int $id) => $this->card($id));
+		$result = $this->service->apply(
+			range(1, BulkCardService::MAX_CARDS),
+			BulkCardService::ACTION_ARCHIVE,
+			[],
+			'alice',
+		);
+		self::assertCount(100, $result['ok']);
 	}
 
 	public function testOversizedListThrowsInvalidInput(): void {
