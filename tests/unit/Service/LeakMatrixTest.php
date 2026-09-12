@@ -289,6 +289,289 @@ class LeakMatrixTest extends TestCase {
 		self::assertFalse($this->scope->isPublic($bogus));
 	}
 
+	// ---- naming matrix: one card named inside ANOTHER card's feed ----------
+	//
+	// The Activity change detail written when two cards are linked, or a
+	// sub-card attached/detached, names the card at the OTHER end and is stored
+	// with NO viewer: it is later served verbatim from the HOST card's feed to
+	// everyone who may read that host. The test is therefore audience
+	// DOMINANCE - does the counterpart's audience contain the host's? - which
+	// is what CardVisibilityScope::mayBeNamedIn() decides. Public-only
+	// (isPublic) is its floor; the cells below are the full table, written out
+	// like the matrix above so a widening is reviewed as a diff of the table.
+
+	/**
+	 * The card classes for the naming table. Everything is on ONE board except
+	 * the explicit cross-board cells in
+	 * {@see self::testDominanceIsNotClaimedAcrossBoards()}.
+	 *
+	 * @return array<string, Card>
+	 */
+	private function namingCards(): array {
+		$make = static function (?string $visibility, ?string $creatorRole, string $owner): Card {
+			$card = new Card();
+			$card->setBoardId(self::BOARD_ID);
+			if ($visibility !== null) {
+				$card->setVisibility($visibility);
+			}
+			if ($creatorRole !== null) {
+				$card->setCreatorRole($creatorRole);
+			}
+			$card->setOwner($owner);
+			return $card;
+		};
+
+		return [
+			'public' => $make('public', 'internal', 'inty'),
+			// Pre-migration row: NULL visibility AND null creator side.
+			'legacy-null' => $make(null, null, 'inty'),
+			'internal-provider' => $make('internal', 'internal', 'inty'),
+			// Same side, DIFFERENT owner - internal is per-side, not per-person,
+			// so this must behave exactly like 'internal-provider'.
+			'internal-provider-mgr' => $make('internal', 'internal', 'mgr'),
+			'internal-client' => $make('internal', 'external', 'exty'),
+			'private-of-inty' => $make('private', 'internal', 'inty'),
+			'private-of-exty' => $make('private', 'external', 'exty'),
+			// An unknown stored value must fail closed on BOTH axes.
+			'unknown' => $make('everyone', 'internal', 'inty'),
+		];
+	}
+
+	/**
+	 * THE NAMING MATRIX: host (whose feed the detail lands in) => counterpart
+	 * (the card being named) => is the name recorded? Every cell spelled out.
+	 *
+	 * @return array<string, array<string, bool>>
+	 */
+	private function expectedNamingMatrix(): array {
+		return [
+			// A public host is read by everyone, so only a card everyone can
+			// read may be named - this row IS the old isPublic() rule.
+			'public' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => false,
+				'internal-provider-mgr' => false,
+				'internal-client' => false,
+				'private-of-inty' => false,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+			'legacy-null' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => false,
+				'internal-provider-mgr' => false,
+				'internal-client' => false,
+				'private-of-inty' => false,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+			// Provider-internal host: read by exactly the provider side of this
+			// board - which is exactly who can read a provider-internal
+			// counterpart, whoever owns it. THE widened row.
+			'internal-provider' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => true,
+				'internal-provider-mgr' => true,
+				'internal-client' => false, // the other side of the fence
+				'private-of-inty' => false,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+			'internal-provider-mgr' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => true,
+				'internal-provider-mgr' => true,
+				'internal-client' => false,
+				'private-of-inty' => false,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+			// Symmetric: the client side has internals too, and they dominate
+			// each other and nothing else.
+			'internal-client' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => false,
+				'internal-provider-mgr' => false,
+				'internal-client' => true,
+				'private-of-inty' => false,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+			// Private host: an audience of one, so only that same one person's
+			// private card is dominated - private is per-PERSON, never per-side.
+			'private-of-inty' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => false,
+				'internal-provider-mgr' => false,
+				'internal-client' => false,
+				'private-of-inty' => true,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+			'private-of-exty' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => false,
+				'internal-provider-mgr' => false,
+				'internal-client' => false,
+				'private-of-inty' => false,
+				'private-of-exty' => true,
+				'unknown' => false,
+			],
+			// An unknown host value is dominated by nothing narrower than
+			// public - matching an identical unknown counterpart is NOT a
+			// dominance proof, it is two values nobody can reason about.
+			'unknown' => [
+				'public' => true,
+				'legacy-null' => true,
+				'internal-provider' => false,
+				'internal-provider-mgr' => false,
+				'internal-client' => false,
+				'private-of-inty' => false,
+				'private-of-exty' => false,
+				'unknown' => false,
+			],
+		];
+	}
+
+	public function testEveryHostCounterpartCellMatchesTheNamingMatrix(): void {
+		$cards = $this->namingCards();
+		$expected = $this->expectedNamingMatrix();
+
+		foreach ($cards as $hostName => $host) {
+			foreach ($cards as $otherName => $other) {
+				self::assertSame(
+					$expected[$hostName][$otherName],
+					$this->scope->mayBeNamedIn($other, $host),
+					sprintf('naming cell [host %s × named %s]', $hostName, $otherName),
+				);
+			}
+		}
+	}
+
+	public function testNamingIsAPureWideningOfPublicOnly(): void {
+		// The floor: every (host, counterpart) pair the public-only rule
+		// allowed must STILL be allowed. A widening that loses a case is a
+		// history regression of its own.
+		$cards = $this->namingCards();
+
+		foreach ($cards as $hostName => $host) {
+			foreach ($cards as $otherName => $other) {
+				if (!$this->scope->isPublic($other)) {
+					continue;
+				}
+				self::assertTrue(
+					$this->scope->mayBeNamedIn($other, $host),
+					sprintf('public counterpart %s lost its name in %s', $otherName, $hostName),
+				);
+			}
+		}
+	}
+
+	public function testEveryNameableCellIsReadableByTheWholeHostAudience(): void {
+		// The SOUNDNESS proof behind the table: for every cell that records the
+		// name, every viewer who can read the host can already read the named
+		// card - derived from isVisibleTo(), not from the table, so a cell
+		// flipped to true without that property fails here.
+		$cards = $this->namingCards();
+
+		foreach ($cards as $hostName => $host) {
+			foreach ($cards as $otherName => $other) {
+				if (!$this->scope->mayBeNamedIn($other, $host)) {
+					continue;
+				}
+				foreach ($this->viewers() as $uid => $role) {
+					if (!$this->scope->isVisibleTo($host, $uid, $role)) {
+						continue;
+					}
+					self::assertTrue(
+						$this->scope->isVisibleTo($other, $uid, $role),
+						sprintf(
+							'%s is named in %s but %s can read %s without being able to read %s',
+							$otherName,
+							$hostName,
+							$uid,
+							$hostName,
+							$otherName,
+						),
+					);
+				}
+			}
+		}
+	}
+
+	public function testDominanceIsNotClaimedAcrossBoards(): void {
+		// A role is resolved PER board, so an equal creator side on a DIFFERENT
+		// board is a different audience; a private owner may not even be a
+		// member there. Both fall back to the public-only floor.
+		foreach (['internal-provider', 'private-of-inty'] as $className) {
+			$host = $this->namingCards()[$className];
+			$elsewhere = clone $host;
+			$elsewhere->setBoardId(self::BOARD_ID + 1);
+
+			self::assertFalse(
+				$this->scope->mayBeNamedIn($elsewhere, $host),
+				'cross-board counterpart named in ' . $className,
+			);
+			self::assertFalse(
+				$this->scope->mayBeNamedIn($host, $elsewhere),
+				'cross-board host naming ' . $className,
+			);
+		}
+
+		// A counterpart with no board at all cannot be proven to dominate
+		// anything either.
+		$host = $this->namingCards()['internal-provider'];
+		$boardless = new Card();
+		$boardless->setVisibility('internal');
+		$boardless->setCreatorRole('internal');
+		$boardless->setOwner('inty');
+		self::assertFalse($this->scope->mayBeNamedIn($boardless, $host));
+	}
+
+	public function testWithoutAHostOnlyPublicMayBeNamed(): void {
+		// The deleted-endpoint case (removeRelation, where one end is gone):
+		// there is no host to dominate, so the rule collapses to isPublic().
+		foreach ($this->namingCards() as $name => $card) {
+			self::assertSame(
+				$this->scope->isPublic($card),
+				$this->scope->mayBeNamedIn($card, null),
+				'host-less naming cell [' . $name . ']',
+			);
+		}
+	}
+
+	public function testABogusCreatorSideNeverDominates(): void {
+		// A creator_role outside the two sides makes the card visible to NOBODY
+		// (isVisibleTo requires the role to be a real side), so it must not be
+		// named anywhere - not even beside an identical bogus value.
+		$bogus = new Card();
+		$bogus->setBoardId(self::BOARD_ID);
+		$bogus->setVisibility('internal');
+		$bogus->setCreatorRole('admin');
+		$bogus->setOwner('inty');
+
+		self::assertFalse($this->scope->mayBeNamedIn($bogus, clone $bogus));
+		self::assertFalse($this->scope->mayBeNamedIn($bogus, $this->namingCards()['internal-provider']));
+	}
+
+	public function testAnOwnerlessPrivateCardNeverDominates(): void {
+		// "Both have no owner" is not an identity match - a private card with
+		// no owner is readable by nobody and provable as nothing.
+		$ownerless = new Card();
+		$ownerless->setBoardId(self::BOARD_ID);
+		$ownerless->setVisibility('private');
+
+		self::assertFalse($this->scope->mayBeNamedIn($ownerless, clone $ownerless));
+		self::assertFalse($this->scope->mayBeNamedIn($ownerless, $this->namingCards()['private-of-inty']));
+	}
+
 	public function testDeferredReviewFireRespectsTheMatrixColumn(): void {
 		// #3761: a stage-gated review is requested while its reviewer can SEE
 		// the card, then the card narrows before the blocking review approves.

@@ -481,6 +481,41 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		await api(ADMIN, 'DELETE', `/cards/${open.id}/purge`)
 	})
 
+	// The other half of the rule (#10425): the detail is withheld because the
+	// counterpart's audience does not contain the HOST's — not because it is
+	// non-public. Two provider-internal cards have exactly ONE audience, so
+	// muting the name there would protect nobody and lose the history for good
+	// (the title is never written, and widening a card later cannot bring it
+	// back). This cell is what keeps the assertions above from being satisfiable
+	// by "relation verbs simply never name anything narrow".
+	test('relations: a counterpart with the SAME audience is still named', async () => {
+		const twin = await api(ADMIN, 'POST', '/cards', {
+			stackId: state.stackId,
+			title: title('PROV2'),
+		})
+		await api(ADMIN, 'PATCH', `/cards/${twin.id}`, { visibility: 'internal' })
+		await api(ADMIN, 'POST', `/cards/${state.cards.PROV.id}/relations`, {
+			otherCardId: twin.id,
+			kind: 'relates',
+		})
+
+		// Everyone who can open PROV's feed can already open the twin…
+		const provFeed = await api(ADMIN, 'GET', `/cards/${state.cards.PROV.id}/activity`)
+		expect(JSON.stringify(provFeed), 'an equal audience keeps the name').toContain(title('PROV2'))
+
+		// …and that audience is still only the provider side: the external
+		// member can reach neither the twin nor its feed.
+		const probe = await call(TESTER, 'GET', `/cards/${twin.id}/activity`)
+		expect(probe.status).toBe(404)
+		const testerBoard = await api(TESTER, 'GET', `/boards/${state.boardId}`)
+		expect(JSON.stringify(testerBoard.cards)).not.toContain(title('PROV2'))
+
+		// Hard-removed like the sub-card control above, so the exact board,
+		// public-snapshot and trash assertions below are untouched.
+		await api(ADMIN, 'DELETE', `/cards/${twin.id}`)
+		await api(ADMIN, 'DELETE', `/cards/${twin.id}/purge`)
+	})
+
 	test('anonymous surfaces: public share and ICS feed carry public cards only', async () => {
 		await api(ADMIN, 'PATCH', `/cards/${state.cards.PUB.id}`, { duedate: '2027-01-01T12:00:00Z' })
 		await api(ADMIN, 'PATCH', `/cards/${state.cards.PROV.id}`, { duedate: '2027-01-01T12:00:00Z' })

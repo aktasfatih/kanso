@@ -3013,6 +3013,115 @@ class CardServiceTest extends TestCase {
 		$this->service->setParent(9, 20, 'alice');
 	}
 
+	/**
+	 * The widening (CardVisibilityScope::mayBeNamedIn(), truth table in
+	 * LeakMatrixTest): the detail lands in the CHILD's feed, so the question is
+	 * whether the parent's audience CONTAINS the child's - not whether the
+	 * parent is public. A provider-internal epic linked to provider-internal
+	 * work is read by exactly the same people either way, so muting the name
+	 * protects nobody and loses the history for good.
+	 */
+	public function testSetParentNamesAnEquallyInternalParent(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$child->setCreatorRole(ViewerContext::ROLE_INTERNAL);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: the provider rewrite');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$parent->setCreatorRole(ViewerContext::ROLE_INTERNAL);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(806);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(806, null, 'Epic: the provider rewrite')
+			->willReturn(new ChangeDetail());
+
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	/** The other side of the fence is a different audience - still unnamed. */
+	public function testSetParentDoesNotNameAnInternalParentAcrossTheFence(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$child->setCreatorRole(ViewerContext::ROLE_INTERNAL);
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: the client-side plan');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_INTERNAL);
+		$parent->setCreatorRole(ViewerContext::ROLE_EXTERNAL);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('hasChildren')->with(9)->willReturn(false);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(807);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->service->setParent(9, 20, 'alice');
+	}
+
+	/** The detach analogue: two private cards of the same owner, one audience. */
+	public function testSetParentDetachNamesAnEquallyPrivateOldParent(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setParentCardId(20);
+		$child->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$child->setOwner('alice');
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: my own notes');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$parent->setOwner('alice');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(808);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::once())
+			->method('insertDetail')
+			->with(808, 'Epic: my own notes', null)
+			->willReturn(new ChangeDetail());
+
+		$this->service->setParent(9, null, 'alice');
+	}
+
+	/** …and another owner's private parent stays unnamed on detach. */
+	public function testSetParentDetachDoesNotNameAnotherOwnersPrivateParent(): void {
+		$child = $this->card(9, 5, 1);
+		$child->setParentCardId(20);
+		$child->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$child->setOwner('alice');
+		$parent = $this->card(20, 5, 1);
+		$parent->setTitle('Epic: bob only');
+		$parent->setVisibility(CardVisibilityScope::VISIBILITY_PRIVATE);
+		$parent->setOwner('bob');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			20 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$change = new Change();
+		$change->setId(809);
+		$this->changeNotifier->method('recordChange')->willReturn($change);
+		$this->changeDetailMapper->expects(self::never())->method('insertDetail');
+
+		$this->service->setParent(9, null, 'alice');
+	}
+
 	/** A caller denied EDIT links nothing and writes no trace. */
 	public function testSetParentDeniedWritesNoTrace(): void {
 		$child = $this->card(9, 5, 1);

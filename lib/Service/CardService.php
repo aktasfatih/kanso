@@ -1592,7 +1592,7 @@ class CardService {
 				return $card;
 			}
 			$verb = Change::VERB_SUBCARD_DETACHED;
-			$parentTitle = $this->parentTitleOrNull($oldParentId);
+			$parentTitle = $this->parentTitleOrNull($oldParentId, $card);
 			$card->setParentCardId(null);
 		} else {
 			if ($parentCardId === $id) {
@@ -1618,8 +1618,9 @@ class CardService {
 			}
 			// Same rule as the detach branch: the actor can see this parent, but
 			// the stored detail outlives the actor and is read by everyone who
-			// can see the CHILD. Only a public parent may be named.
-			$parentTitle = $this->visibilityScope->isPublic($parent) ? $parent->getTitle() : null;
+			// can see the CHILD. So the parent may be named only when its own
+			// audience already contains the child's.
+			$parentTitle = $this->visibilityScope->mayBeNamedIn($parent, $card) ? $parent->getTitle() : null;
 			$card->setParentCardId($parentCardId);
 		}
 
@@ -1661,20 +1662,22 @@ class CardService {
 	 *
 	 * Visibility (#3743): the detail is stored once with NO viewer and then
 	 * served verbatim from the CHILD's feed, which gates only on the child being
-	 * readable - so a parent that is not
-	 * {@see CardVisibilityScope::isPublic()} is never named, matching
+	 * readable - so a parent whose audience does not contain the CHILD's
+	 * ({@see CardVisibilityScope::mayBeNamedIn()}) is never named, matching
 	 * CardController's rule that a hidden parent "reads as no parent". Narrowing
 	 * is not retroactive, so a parent made internal/private AFTER the link was
 	 * made is exactly the live case. The caller then writes a bare verb with no
 	 * detail at all; "#<id>" would still be an existence oracle.
+	 *
+	 * @param Card $child the card whose feed the detail will be read from
 	 */
-	private function parentTitleOrNull(int $parentCardId): ?string {
+	private function parentTitleOrNull(int $parentCardId, Card $child): ?string {
 		try {
 			$parent = $this->cardMapper->find($parentCardId);
 		} catch (\Throwable) {
 			return null;
 		}
-		return $this->visibilityScope->isPublic($parent) ? $parent->getTitle() : null;
+		return $this->visibilityScope->mayBeNamedIn($parent, $child) ? $parent->getTitle() : null;
 	}
 
 	/**

@@ -69,10 +69,24 @@ class CardRelationServiceTest extends TestCase {
 	/**
 	 * Every card maps to board 1 unless overridden in a specific test. A card's
 	 * visibility defaults to unset (which reads as 'public'); pass
-	 * $visibilityByCardId to narrow one.
+	 * $visibilityByCardId to narrow one, and $creatorRoleByCardId /
+	 * $ownerByCardId to place it on a side or give it an owner - the two
+	 * properties that decide whether two narrowed cards share one audience.
+	 * An id listed in $deletedCardIds is gone entirely (find() throws), the
+	 * endpoint-deleted-out-from-under-the-relation case.
 	 */
-	private function wireCards(array $boardByCardId = [], array $titleByCardId = [], array $visibilityByCardId = []): void {
-		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($boardByCardId, $titleByCardId, $visibilityByCardId): Card {
+	private function wireCards(
+		array $boardByCardId = [],
+		array $titleByCardId = [],
+		array $visibilityByCardId = [],
+		array $creatorRoleByCardId = [],
+		array $ownerByCardId = [],
+		array $deletedCardIds = [],
+	): void {
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use ($boardByCardId, $titleByCardId, $visibilityByCardId, $creatorRoleByCardId, $ownerByCardId, $deletedCardIds): Card {
+			if (in_array($id, $deletedCardIds, true)) {
+				throw new DoesNotExistException('Card ' . $id . ' does not exist');
+			}
 			$card = new Card();
 			$card->setId($id);
 			$card->setBoardId($boardByCardId[$id] ?? 1);
@@ -80,6 +94,12 @@ class CardRelationServiceTest extends TestCase {
 			$card->setDeletedAt(0);
 			if (isset($visibilityByCardId[$id])) {
 				$card->setVisibility($visibilityByCardId[$id]);
+			}
+			if (isset($creatorRoleByCardId[$id])) {
+				$card->setCreatorRole($creatorRoleByCardId[$id]);
+			}
+			if (isset($ownerByCardId[$id])) {
+				$card->setOwner($ownerByCardId[$id]);
 			}
 			return $card;
 		});
@@ -381,6 +401,148 @@ class CardRelationServiceTest extends TestCase {
 		$this->changeDetailMapper->expects($this->never())->method('insertDetail');
 
 		$this->service->removeRelation(7, 'alice');
+	}
+
+	// ---- …but only what the host's own audience could not already read -----
+	//
+	// The detail lands in the HOST card's feed, so the test is whether the
+	// counterpart's audience CONTAINS the host's, not whether the counterpart
+	// is public (CardVisibilityScope::mayBeNamedIn(); the full host ×
+	// counterpart table is LeakMatrixTest). Two cards with one audience lose
+	// their names for nobody's benefit - and irreversibly, since the title is
+	// simply never written.
+
+	/** Two provider-internal cards: one audience, so both sides keep the name. */
+	public function testAddNamesAnEquallyInternalCounterpart(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[10 => CardVisibilityScope::VISIBILITY_INTERNAL, 20 => CardVisibilityScope::VISIBILITY_INTERNAL],
+			[10 => ViewerContext::ROLE_INTERNAL, 20 => ViewerContext::ROLE_INTERNAL],
+		);
+		$this->relationMapper->method('findBlocksEdgesByBoard')->willReturn([]);
+		$this->relationMapper->method('exists')->willReturn(false);
+		$this->relationMapper->method('insert')->willReturnCallback(fn (CardRelation $r): CardRelation => $r);
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->addRelation(10, 20, 'blocks', 'alice');
+
+		self::assertSame([
+			[null, 'Blocks: Fix the build'],
+			[null, 'Blocked by: Ship it'],
+		], $details);
+	}
+
+	/** The other side of the fence is a DIFFERENT audience: neither is named. */
+	public function testAddDoesNotNameAnInternalCounterpartAcrossTheFence(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[10 => CardVisibilityScope::VISIBILITY_INTERNAL, 20 => CardVisibilityScope::VISIBILITY_INTERNAL],
+			[10 => ViewerContext::ROLE_INTERNAL, 20 => ViewerContext::ROLE_EXTERNAL],
+		);
+		$this->relationMapper->method('findBlocksEdgesByBoard')->willReturn([]);
+		$this->relationMapper->method('exists')->willReturn(false);
+		$this->relationMapper->method('insert')->willReturnCallback(fn (CardRelation $r): CardRelation => $r);
+		$this->changeNotifier->expects($this->exactly(2))->method('notify');
+		$this->changeDetailMapper->expects($this->never())->method('insertDetail');
+
+		$this->service->addRelation(10, 20, 'blocks', 'alice');
+	}
+
+	/** Two private cards of the SAME owner: an audience of one, and it is the same one. */
+	public function testRemoveNamesAnEquallyPrivateCounterpart(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[10 => CardVisibilityScope::VISIBILITY_PRIVATE, 20 => CardVisibilityScope::VISIBILITY_PRIVATE],
+			[],
+			[10 => 'alice', 20 => 'alice'],
+		);
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_BLOCKS);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->removeRelation(7, 'alice');
+
+		self::assertSame([
+			['Blocks: Fix the build', null],
+			['Blocked by: Ship it', null],
+		], $details);
+	}
+
+	/** Private is per-PERSON: another owner's private card is a different audience. */
+	public function testRemoveDoesNotNameAnotherOwnersPrivateCard(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it', 20 => 'Fix the build'],
+			[10 => CardVisibilityScope::VISIBILITY_PRIVATE, 20 => CardVisibilityScope::VISIBILITY_PRIVATE],
+			[],
+			[10 => 'alice', 20 => 'bob'],
+		);
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_RELATES);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+		$this->changeNotifier->expects($this->exactly(2))->method('notify');
+		$this->changeDetailMapper->expects($this->never())->method('insertDetail');
+
+		$this->service->removeRelation(7, 'alice');
+	}
+
+	/**
+	 * A DELETED host leaves nothing to dominate, so that side falls back to the
+	 * public-only floor: the surviving internal card is not named in the feed of
+	 * a card that is gone, while the deleted counterpart still reads as "#20" in
+	 * the survivor's feed (an id whose card no longer exists is no oracle).
+	 */
+	public function testRemoveWithADeletedHostFallsBackToPublicOnly(): void {
+		$this->wireCards(
+			[],
+			[10 => 'Ship it'],
+			[10 => CardVisibilityScope::VISIBILITY_INTERNAL],
+			[10 => ViewerContext::ROLE_INTERNAL],
+			[],
+			[20],
+		);
+		$relation = new CardRelation();
+		$relation->setId(7);
+		$relation->setBoardId(1);
+		$relation->setCardId(10);
+		$relation->setOtherCardId(20);
+		$relation->setType(CardRelation::TYPE_BLOCKS);
+		$this->relationMapper->method('find')->with(7)->willReturn($relation);
+
+		$details = [];
+		$this->changeDetailMapper->method('insertDetail')
+			->willReturnCallback(function (int $changeId, ?string $from, ?string $to) use (&$details) {
+				$details[] = [$from, $to];
+				return new ChangeDetail();
+			});
+
+		$this->service->removeRelation(7, 'alice');
+
+		self::assertSame([['Blocks: #20', null]], $details);
 	}
 
 	/** A caller denied EDIT unlinks nothing and writes no trace. */

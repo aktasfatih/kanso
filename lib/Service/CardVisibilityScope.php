@@ -167,6 +167,73 @@ class CardVisibilityScope {
 	}
 
 	/**
+	 * AUDIENCE DOMINANCE: may $card be named inside $host's artifact?
+	 *
+	 * The viewer-less emissions that name one card from INSIDE another card's
+	 * artifact - the Activity change detail written when two cards are linked
+	 * or a sub-card is attached - are read by whoever can open the HOST. So the
+	 * sound test is not "is $card public?" but "does $card's audience CONTAIN
+	 * $host's?": everyone who may read the host may already read the card, so
+	 * naming it tells no one anything they could not read for themselves.
+	 *
+	 * {@see self::isPublic()} is the floor and the fallback - public dominates
+	 * everything, and a null $host (the counterpart of a card that has since
+	 * been deleted outright: nothing left to dominate) leaves only that floor.
+	 * On top of it, exactly the two classes whose audiences are provably equal:
+	 *
+	 *   - both 'internal' on ONE board with the same frozen creator side: by
+	 *     {@see self::isVisibleTo()} each is visible to exactly the viewers
+	 *     whose role on that board equals that side - the same set.
+	 *   - both 'private' on ONE board with the same owner: an audience of one,
+	 *     and it is the same one.
+	 *
+	 * Same board is part of the test, not decoration: a role is resolved PER
+	 * board, so equal sides across two boards are two different audiences.
+	 * Anything else - mixed classes, different side/owner, a missing owner, a
+	 * creator side outside {@see ViewerContext::ROLES}, an unknown stored
+	 * visibility - is NOT provably dominated and fails CLOSED, exactly like
+	 * isVisibleTo()'s own default: the caller then records the bare verb.
+	 *
+	 * This is a pure WIDENING of the isPublic() rule: it only ever adds cases
+	 * where the name was already readable by the whole audience being written
+	 * for. The full host × counterpart truth table is pinned in LeakMatrixTest.
+	 */
+	public function mayBeNamedIn(Card $card, ?Card $host): bool {
+		if ($this->isPublic($card)) {
+			return true;
+		}
+		if ($host === null) {
+			return false;
+		}
+
+		$visibility = $card->getVisibility() ?? self::VISIBILITY_PUBLIC;
+		if ($visibility !== ($host->getVisibility() ?? self::VISIBILITY_PUBLIC)) {
+			return false;
+		}
+		// A role - and therefore an 'internal' audience - only means anything
+		// within one board; a private owner still has to be a member of the
+		// board the host lives on to read anything there at all.
+		$boardId = $card->getBoardId();
+		if ($boardId === null || $boardId !== $host->getBoardId()) {
+			return false;
+		}
+
+		if ($visibility === self::VISIBILITY_PRIVATE) {
+			$owner = (string)$card->getOwner();
+			return $owner !== '' && $owner === (string)$host->getOwner();
+		}
+		if ($visibility === self::VISIBILITY_INTERNAL) {
+			// Same null → 'internal' fold as isVisibleTo(), so a backfilled row
+			// is classed identically on both sides of the comparison.
+			$side = $card->getCreatorRole() ?? ViewerContext::ROLE_INTERNAL;
+			$hostSide = $host->getCreatorRole() ?? ViewerContext::ROLE_INTERNAL;
+			return in_array($side, ViewerContext::ROLES, true) && $side === $hostSide;
+		}
+		// An unknown stored value fails CLOSED, even against an identical one.
+		return false;
+	}
+
+	/**
 	 * Column reference under the caller's alias; '' addresses an un-aliased
 	 * single-table query (the aggregate counts).
 	 */

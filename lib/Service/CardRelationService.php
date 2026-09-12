@@ -374,8 +374,9 @@ class CardRelationService {
 	 * Visibility (#3743): the stored detail has NO viewer - it is written once
 	 * and later served verbatim by {@see ActivityService::getCardActivity()},
 	 * which gates on the card being READ, never on the card being NAMED. So a
-	 * counterpart's title is recorded only when that card is
-	 * {@see CardVisibilityScope::isPublic()}; anything narrower would put the
+	 * counterpart's title is recorded only when that card's audience CONTAINS
+	 * the audience of the card whose feed the detail lands in
+	 * ({@see CardVisibilityScope::mayBeNamedIn()}); anything less would put the
 	 * title the relations panel deliberately masks into the other card's feed,
 	 * readable by anyone who can see THIS card. The two sides are decided
 	 * INDEPENDENTLY: a public card may legitimately be named in a hidden card's
@@ -389,11 +390,12 @@ class CardRelationService {
 	private function notifyBoth(int $boardId, int $srcId, ?Card $srcCard, int $dstId, ?Card $dstCard, string $type, string $uid, int $verb): void {
 		[$srcLabel, $dstLabel] = self::RELATION_LABELS[$type] ?? ['Relates to', 'Relates to'];
 		$sides = [
-			// [card the row is about, how the relation reads from there, the OTHER card]
-			[$srcId, $srcLabel, $dstId, $dstCard],
-			[$dstId, $dstLabel, $srcId, $srcCard],
+			// [card the row is about (the HOST of this detail), how the relation
+			//  reads from there, the OTHER card]
+			[$srcId, $srcCard, $srcLabel, $dstId, $dstCard],
+			[$dstId, $dstCard, $dstLabel, $srcId, $srcCard],
 		];
-		foreach ($sides as [$cardId, $label, $otherId, $otherCard]) {
+		foreach ($sides as [$cardId, $hostCard, $label, $otherId, $otherCard]) {
 			$change = $this->changeNotifier->notify(
 				$boardId,
 				Change::ENTITY_CARD,
@@ -402,7 +404,7 @@ class CardRelationService {
 				$uid,
 				verb: $verb,
 			);
-			$detail = $this->relationDetail($label, $otherId, $otherCard);
+			$detail = $this->relationDetail($label, $otherId, $otherCard, $hostCard);
 			if ($detail === null) {
 				continue;
 			}
@@ -418,10 +420,13 @@ class CardRelationService {
 	/**
 	 * The change detail naming the counterpart, or null when it must not be
 	 * recorded at all (see {@see self::notifyBoth()}): a counterpart that still
-	 * exists but is NOT public never reaches the side table.
+	 * exists but whose audience does not contain the HOST card's never reaches
+	 * the side table. $hostCard is the card this detail is written FOR - null
+	 * only when that end has been deleted outright, which leaves
+	 * {@see CardVisibilityScope::mayBeNamedIn()} on its public-only floor.
 	 */
-	private function relationDetail(string $label, int $otherId, ?Card $otherCard): ?string {
-		if ($otherCard !== null && !$this->visibilityScope->isPublic($otherCard)) {
+	private function relationDetail(string $label, int $otherId, ?Card $otherCard, ?Card $hostCard): ?string {
+		if ($otherCard !== null && !$this->visibilityScope->mayBeNamedIn($otherCard, $hostCard)) {
 			return null;
 		}
 		$title = $otherCard?->getTitle();
