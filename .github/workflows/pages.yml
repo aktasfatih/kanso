@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Website
+
+# Publishes website/ to GitHub Pages (https://aktasfatih.github.io/kanso/).
+#
+# The site is a single hand-written static page — there is no build step, so
+# this workflow only uploads the directory as-is.
+#
+# Trigger scope is deliberately narrow: this must never fire on ordinary app
+# changes. It runs only when the site itself (or this workflow) changes on
+# main, plus a manual button for re-deploying without a commit. Feature
+# branches and PRs are not matched at all, so nothing here touches the merge
+# gate in ci.yml.
+#
+# NOTE: this workflow does nothing until Pages is enabled for the repository —
+# see website/README.md for the one-time setup a repo admin has to do.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write       # deploy to the Pages site
+  id-token: write    # OIDC token the deploy-pages action exchanges
+
+# One deployment at a time. Unlike CI, in-progress runs are NOT cancelled: a
+# half-finished deploy that gets cancelled can leave the live site on an older
+# commit than the queued one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
