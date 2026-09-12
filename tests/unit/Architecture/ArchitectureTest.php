@@ -113,6 +113,11 @@ class ArchitectureTest extends TestCase {
 	 *                                      archiveNow count deliberately stays
 	 *                                      an unscoped aggregate - decision
 	 *                                      documented on archiveNow (#3760)
+	 * - Service/BoardPurgeService.php .... reaping cron for an ALREADY-deleted
+	 *                                      board (no viewer exists); scoping by
+	 *                                      visibility would be a bug - it would
+	 *                                      leave hidden/trashed cards behind as
+	 *                                      unreachable orphans
 	 * - Service/BulkCardService.php ...... delegates every mutation to per-card
 	 *                                      services, which gate visibility and
 	 *                                      convert hidden → skipped
@@ -134,6 +139,7 @@ class ArchitectureTest extends TestCase {
 	private const VIEWERLESS_CARD_READER_ALLOWLIST = [
 		'Db/BoardPinMapper.php',
 		'Service/ArchiveService.php',
+		'Service/BoardPurgeService.php',
 		'Service/BulkCardService.php',
 		'Service/CalendarFeedService.php',
 		'Service/CsvImportService.php',

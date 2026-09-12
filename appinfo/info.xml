@@ -327,6 +327,7 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 		<job>OCA\Kanso\Cron\SendPersonalReminders</job>
 		<job>OCA\Kanso\Cron\BackupBoards</job>
 		<job>OCA\Kanso\Cron\PollMailIntake</job>
+		<job>OCA\Kanso\Cron\PurgeDeletedBoards</job>
 	</background-jobs>
 	<commands>
 		<command>OCA\Kanso\Command\Rebalance</command>

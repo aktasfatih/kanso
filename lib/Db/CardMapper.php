@@ -109,6 +109,49 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * EVERY card id on a board - live, archived and trashed alike, and with no
+	 * visibility scope. Internal mechanics for the board purge: the set it has
+	 * to sweep is the whole table, not the subset some viewer could see, so a
+	 * hidden or trashed card cannot survive as an orphan. Never feeds a payload.
+	 *
+	 * @return list<int>
+	 * @throws Exception
+	 */
+	public function findAllIdsByBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		$ids = [];
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$ids[] = (int)$row['id'];
+		}
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
+	 * Hard-deletes every card of a board - the board-purge cascade, run after
+	 * everything hanging off those cards is gone. Irreversible, no visibility
+	 * scope (see {@see findAllIdsByBoard}) and no soft-delete: the board itself
+	 * is being torn down.
+	 *
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteByBoard(int $boardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Full row including the description - single-card detail fetch.
 	 *
 	 * @throws DoesNotExistException if the card does not exist

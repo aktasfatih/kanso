@@ -456,6 +456,40 @@ class CardAttachmentService {
 	}
 
 	/**
+	 * Removes the stored BYTES of a set of cards - their per-card app-data
+	 * folders - WITHOUT touching any metadata row. The board purge
+	 * ({@see BoardPurgeService}) uses this because app-data objects live outside
+	 * the database and therefore outside its transaction: the bytes have to go
+	 * first, and only a fully successful sweep may be followed by the row purge.
+	 *
+	 * Partial-failure tolerant by design: a storage error on one card is counted
+	 * and the sweep continues through the rest, so one unreadable folder never
+	 * strands the others. The COUNT is what the caller acts on - a non-zero
+	 * result means "leave this board's rows alone and retry next run", which is
+	 * why this reports instead of throwing.
+	 *
+	 * A card that never had an attachment has no folder; that is success, not a
+	 * failure.
+	 *
+	 * @param list<int> $cardIds
+	 * @return int number of cards whose stored bytes could NOT be removed
+	 */
+	public function deleteObjectsForCards(array $cardIds): int {
+		$failures = 0;
+		foreach ($cardIds as $cardId) {
+			try {
+				$this->appData->getFolder(self::FOLDER_PREFIX . $cardId)->delete();
+			} catch (NotFoundException) {
+				// Nothing was ever stored for this card - not a failure.
+			} catch (\Throwable) {
+				$failures++;
+			}
+		}
+
+		return $failures;
+	}
+
+	/**
 	 * Appends the card's change row for an attachment add/remove (#119) and
 	 * records the filename in the `kanso_change_details` side table, so the
 	 * Activity feed can name the file rather than render a bare "updated this
