@@ -303,13 +303,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4349
+#: src/components/CardDetail.vue:4369
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
 
-#: src/components/CardDetail.vue:4347
+#: src/components/CardDetail.vue:4367
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
@@ -333,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4345
+#: src/components/CardDetail.vue:4365
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -357,13 +357,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n punti"
 
-#: src/components/CardDetail.vue:1018
+#: src/components/CardDetail.vue:1030
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n progetto"
 msgstr[1] "%n progetti"
 
-#: src/components/CardDetail.vue:2015
+#: src/components/CardDetail.vue:2029
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -381,7 +381,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n scheda non pianificata"
 msgstr[1] "%n schede non pianificate"
 
-#: src/components/CardDetail.vue:281
+#: src/components/CardDetail.vue:293
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n osservatore"
@@ -946,6 +946,10 @@ msgstr "Elenco puntato"
 msgid "by {user}"
 msgstr "di {user}"
 
+#: src/App.vue
+msgid "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Calendar feed"
 msgstr "Feed del calendario"
@@ -1024,6 +1028,10 @@ msgstr "Anteprima della scheda"
 #: src/components/ManageTemplatesModal.vue
 msgid "Card templates"
 msgstr "Modelli di scheda"
+
+#: src/App.vue
+msgid "Card view"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Card visibility"
@@ -1707,7 +1715,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4538
+#: src/components/CardDetail.vue:4558
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -3100,6 +3108,16 @@ msgstr "Acquisizione delle issue"
 msgid "Italic"
 msgstr "Corsivo"
 
+#: src/components/CardDetail.vue
+msgid "Jump to the discussion"
+msgstr ""
+
+#: src/components/CardDetail.vue:6265
+msgid "Jump to the discussion (%n comment)"
+msgid_plural "Jump to the discussion (%n comments)"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/BoardTimelineView.vue
 msgid "Jump to today"
 msgstr "Vai a oggi"
@@ -3381,7 +3399,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4540
+#: src/components/CardDetail.vue:4560
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -4758,11 +4776,15 @@ msgstr "Mostra i commenti (in sola lettura)"
 msgid "Show formatting toolbar"
 msgstr "Mostra la barra di formattazione"
 
+#: src/App.vue
+msgid "Show the discussion below the card"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6243
+#: src/components/CardDetail.vue:6271
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5428,7 +5450,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4539
+#: src/components/CardDetail.vue:4559
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5509,7 +5531,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4541
+#: src/components/CardDetail.vue:4561
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"

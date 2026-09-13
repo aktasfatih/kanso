@@ -8,7 +8,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:class="[
 			`card-modal--tab-${viewMode}`,
 			`card-modal--mode-${mode}`,
-			{ 'card-modal--discussion-collapsed': discussionCollapsed },
+			{
+				'card-modal--discussion-collapsed': discussionCollapsed,
+				'card-modal--discussion-bottom': discussionAtBottom,
+			},
 		]"
 		@keydown.escape="onRootEscape">
 		<!-- Loading state - real layout, shimmer, never a spinner -->
@@ -215,20 +218,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Collapse/expand the discussion pane (#9854). Lives in the header
 						     so the affordance costs zero horizontal space - collapsing gives
 						     the main pane the entire body width, with no residual rail.
-						     Hidden below 680px, where the panes are tabbed instead. -->
+						     Hidden below 680px, where the panes are tabbed instead.
+
+						     #10408 — the button's job is keyed to the placement preference.
+						     With the panel beside the card it collapses/expands it; with the
+						     panel below, there is nothing to collapse (it is part of the card
+						     now), so the same button jumps down to it instead. `aria-expanded`
+						     is dropped in that mode: the button no longer expands anything. -->
 						<button
 							class="card-modal__discussion-toggle"
-							:class="{ 'card-modal__discussion-toggle--collapsed': discussionCollapsed }"
-							:aria-expanded="!discussionCollapsed"
+							:class="{ 'card-modal__discussion-toggle--collapsed': discussionCollapsed && !discussionAtBottom }"
+							:aria-expanded="discussionAtBottom ? undefined : !discussionCollapsed"
 							:aria-controls="discussionPaneId"
 							:title="discussionToggleLabel"
 							:aria-label="discussionToggleLabel"
-							@click="toggleDiscussionCollapsed">
-							<DockRightIcon :size="18" />
+							@click="onDiscussionToggleClick">
+							<DockBottomIcon v-if="discussionAtBottom" :size="18" />
+							<DockRightIcon v-else :size="18" />
 							<!-- Collapsed, the pane's comment count is the only signal left
-							     that the card has a conversation - keep it visible. -->
+							     that the card has a conversation - keep it visible. Below the
+							     card it is off-screen until scrolled to, which is the same
+							     problem, so the count rides the button there too. -->
 							<span
-								v-if="discussionCollapsed && commentCount > 0"
+								v-if="(discussionCollapsed || discussionAtBottom) && commentCount > 0"
 								class="card-modal__discussion-toggle-count">{{ commentCount }}</span>
 						</button>
 						<!-- Expand the modal into the standalone full-page card view.
@@ -1913,7 +1925,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<!-- RIGHT: discussion pane. Collapsed via CSS (never v-if) so the
 					     comment query keeps feeding the header badge and the mobile
 					     Discussion tab stays intact. -->
-					<aside :id="discussionPaneId" class="card-modal__discussion">
+					<!-- tabindex="-1" so the header's "jump to the discussion" button can
+					     move focus here (#10408) without adding the pane to the tab order. -->
+					<aside :id="discussionPaneId" class="card-modal__discussion" tabindex="-1">
 						<div class="card-modal__discussion-head card-modal__discussion-tabs" role="tablist">
 							<button
 								class="card-modal__discussion-tab"
@@ -2484,6 +2498,7 @@ import CheckCircleOutlineIcon from 'vue-material-design-icons/CheckCircleOutline
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import DockRightIcon from 'vue-material-design-icons/DockRight.vue'
+import DockBottomIcon from 'vue-material-design-icons/DockBottom.vue'
 import TimerSandIcon from 'vue-material-design-icons/TimerSand.vue'
 import PaletteIcon from 'vue-material-design-icons/Palette.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
@@ -2533,6 +2548,7 @@ import { humanId } from '../services/humanId.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
+import { useCardPrefs } from '../composables/useCardPrefs.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -2592,6 +2608,10 @@ const route = useRoute()
 
 // Editor toolbar visibility — shared module-level pref seeded by App.vue from settings
 const { editorToolbarHidden } = useEditorPrefs()
+// Where the Discussion/Activity panel sits (#10408): beside the card ('side',
+// the default) or as a continuation below it. A server-side per-user setting,
+// seeded by App.vue, so it is already reactive here.
+const { discussionAtBottom } = useCardPrefs()
 
 // Modal is open when this component is mounted - enabled is always true here
 const isOpen = ref(true)
@@ -6238,6 +6258,14 @@ const discussionPaneId = computed(() => `card-modal-discussion-${props.cardId}`)
 // An aria-label replaces the whole accessible name, so the count badge would be
 // silent for screen readers unless it is folded into the label itself.
 const discussionToggleLabel = computed(() => {
+	// #10408 — below the card the button scrolls to the panel instead of
+	// collapsing it, so it must say so, count and all.
+	if (discussionAtBottom.value) {
+		if (commentCount.value > 0) {
+			return n('kanso', 'Jump to the discussion (%n comment)', 'Jump to the discussion (%n comments)', commentCount.value)
+		}
+		return t('kanso', 'Jump to the discussion')
+	}
 	if (!discussionCollapsed.value) return t('kanso', 'Hide the discussion panel')
 	if (commentCount.value > 0) {
 		return n('kanso', 'Show the discussion panel (%n comment)', 'Show the discussion panel (%n comments)', commentCount.value)
@@ -6253,6 +6281,40 @@ function toggleDiscussionCollapsed() {
 			localStorage.removeItem(DISCUSSION_COLLAPSED_KEY)
 		}
 	} catch (e) { /* ignore persistence failure */ }
+}
+
+/**
+ * Scroll the card body down to the discussion panel (#10408, 'bottom' layout).
+ * The body is the scroll container there - the panel is the last block inside
+ * it, so scrolling the panel into view is what "scroll down to the discussion"
+ * means. Falls back silently in jsdom/older engines without scrollIntoView.
+ *
+ * Focus moves with the scroll. This button is a skip link in this layout, and a
+ * skip link that only moves the viewport is sighted-mouse-only: it announces
+ * nothing, and Tab would carry on from the header instead of into the panel.
+ * The pane takes tabindex="-1" so it can receive focus without joining the tab
+ * order.
+ */
+function scrollToDiscussion() {
+	const pane = bodyRef.value?.querySelector('.card-modal__discussion')
+	if (!pane) return
+	pane.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+	pane.focus?.({ preventScroll: true })
+}
+
+/**
+ * The header button's job, keyed to the placement preference (#10408): collapse
+ * the side panel, or jump to the bottom one. Never collapses in 'bottom' mode -
+ * there is no residual rail to reclaim, and hiding a section of the card behind
+ * an invisible flag is exactly the trap the collapse rules already guard against
+ * below 680px.
+ */
+function onDiscussionToggleClick() {
+	if (discussionAtBottom.value) {
+		scrollToDiscussion()
+		return
+	}
+	toggleDiscussionCollapsed()
 }
 
 const bodyRef = ref(null)
@@ -9105,12 +9167,66 @@ body.theme--dark .card-modal,
    stacked-layout query, so a fractional viewport width (zoom, display scaling)
    can never fall between the two and leave the toggle inert. */
 @media not all and (max-width: 680px) {
-	.card-modal--discussion-collapsed .card-modal__body {
+	.card-modal--discussion-collapsed:not(.card-modal--discussion-bottom) .card-modal__body {
 		grid-template-columns: minmax(0, 1fr);
 	}
-	.card-modal--discussion-collapsed .card-modal__discussion,
-	.card-modal--discussion-collapsed .card-modal__resizer {
+	.card-modal--discussion-collapsed:not(.card-modal--discussion-bottom) .card-modal__discussion,
+	.card-modal--discussion-collapsed:not(.card-modal--discussion-bottom) .card-modal__resizer {
 		display: none;
+	}
+
+	/* ── Discussion below the card (#10408) ───────────────────────────────────
+	   The user setting moves the same panel - the very same DOM, tabs, thread and
+	   composer, nothing duplicated - from a side track to a full-width block that
+	   continues the card. The body becomes the single scroll container so there is
+	   one scroll to follow down to the discussion, instead of two panes that each
+	   scroll on their own.
+
+	   The `:not()` on the collapse rules above is the other half of this: a user
+	   who collapsed the panel in side mode and then switches to bottom must not
+	   land on an invisible discussion with no way back. Same technique the 680px
+	   complement uses - a persisted flag from another layout regime is made inert
+	   by CSS structure, not by remembering to clear it. */
+	.card-modal--discussion-bottom .card-modal__body {
+		grid-template-columns: minmax(0, 1fr);
+		overflow: auto;
+		/* The SAME 64vh the two panes each use in the side layout - it is what the
+		   modal container actually affords. Anything taller puts the bottom of the
+		   body past the modal's clip, and that is exactly where the sticky composer
+		   sits, so the Post button becomes unreachable. */
+		max-height: 64vh;
+	}
+	/* Hand scrolling to the body: the panes must grow to their content instead of
+	   each opening a nested scroller. */
+	.card-modal--discussion-bottom .card-modal__content,
+	.card-modal--discussion-bottom .card-modal__discussion,
+	.card-modal--discussion-bottom .card-modal__activity,
+	.card-modal--discussion-bottom .card-modal__thread-scroll {
+		max-height: none;
+		overflow: visible;
+	}
+	.card-modal--discussion-bottom .card-modal__discussion {
+		/* The split width and its drag handle belong to the side layout only. */
+		border-left: none;
+		border-top: 1px solid var(--color-border);
+	}
+	.card-modal--discussion-bottom .card-modal__resizer {
+		display: none;
+	}
+	/* The tab bar leads the block the user just scrolled to, so it stays put
+	   while they read down the thread. */
+	.card-modal--discussion-bottom .card-modal__discussion-tabs {
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		background: var(--color-background-hover);
+	}
+	/* The composer is `position: static` in a flow block, so pin it to the bottom
+	   of the viewport-height body rather than letting it scroll away mid-thread. */
+	.card-modal--discussion-bottom .card-modal__composer {
+		position: sticky;
+		bottom: 0;
+		z-index: 10;
 	}
 }
 

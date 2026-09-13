@@ -46,7 +46,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue(['default_board' => '42']);
 
 		self::assertSame(
-			['defaultBoardId' => 42, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
+			['defaultBoardId' => 42, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false, 'cardDiscussionPosition' => 'side'],
 			$this->controller->index()->getData()
 		);
 	}
@@ -55,7 +55,7 @@ class SettingsControllerTest extends TestCase {
 		$this->stubGetUserValue([]);
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false, 'cardDiscussionPosition' => 'side'],
 			$this->controller->index()->getData()
 		);
 	}
@@ -68,7 +68,7 @@ class SettingsControllerTest extends TestCase {
 
 		// Deduped and int-cast.
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [3, 7], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false, 'cardDiscussionPosition' => 'side'],
 			$this->controller->index()->getData()
 		);
 	}
@@ -80,7 +80,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '7');
 
 		self::assertSame(
-			['defaultBoardId' => 7, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
+			['defaultBoardId' => 7, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false, 'cardDiscussionPosition' => 'side'],
 			$this->controller->update(7)->getData()
 		);
 	}
@@ -92,7 +92,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false, 'cardDiscussionPosition' => 'side'],
 			$this->controller->update(null)->getData()
 		);
 	}
@@ -104,7 +104,7 @@ class SettingsControllerTest extends TestCase {
 			->with('alice', 'kanso', 'default_board', '');
 
 		self::assertSame(
-			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false],
+			['defaultBoardId' => null, 'collapsedBoardGroups' => [], 'dismissedHints' => [], 'hiddenNavSections' => [], 'editorToolbarHidden' => false, 'cardDiscussionPosition' => 'side'],
 			$this->controller->update(0)->getData()
 		);
 	}
@@ -228,5 +228,149 @@ class SettingsControllerTest extends TestCase {
 
 		$result = $this->controller->update(5)->getData();
 		self::assertTrue($result['editorToolbarHidden']);
+	}
+
+	// ── Card discussion placement (#10408) ───────────────────────────────────
+
+	public function testDiscussionPositionDefaultsToSide(): void {
+		$this->stubGetUserValue([]);
+
+		self::assertSame('side', $this->controller->index()->getData()['cardDiscussionPosition']);
+	}
+
+	public function testDiscussionPositionRoundTrip(): void {
+		$stored = [];
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
+				return $stored[$key] ?? $default;
+			});
+		$this->config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
+				$stored[$key] = $value;
+			});
+
+		// Default: beside the card.
+		self::assertSame('side', $this->controller->index()->getData()['cardDiscussionPosition']);
+
+		// Move it below the card.
+		$result = $this->controller->update(null, null, null, null, null, 'bottom')->getData();
+		self::assertSame('bottom', $result['cardDiscussionPosition']);
+		self::assertSame('bottom', $stored['card_discussion_position']);
+		// And it reads back on the next request - the whole point of storing it
+		// server-side instead of in localStorage.
+		self::assertSame('bottom', $this->controller->index()->getData()['cardDiscussionPosition']);
+
+		// Move it back beside the card.
+		$result = $this->controller->update(null, null, null, null, null, 'side')->getData();
+		self::assertSame('side', $result['cardDiscussionPosition']);
+		self::assertSame('side', $stored['card_discussion_position']);
+	}
+
+	public function testDiscussionPositionRejectsUnknownValue(): void {
+		$stored = [];
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
+				return $stored[$key] ?? $default;
+			});
+		$this->config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
+				$stored[$key] = $value;
+			});
+
+		// The allow-list guard: an off-list value can't be used as free per-user
+		// storage, it just resets the preference to the default.
+		$result = $this->controller->update(null, null, null, null, null, 'sidebar-left; DROP')->getData();
+		self::assertSame('side', $result['cardDiscussionPosition']);
+		self::assertSame('side', $stored['card_discussion_position']);
+	}
+
+	public function testDiscussionPositionFallsBackToSideOnCorruptStoredValue(): void {
+		$this->stubGetUserValue(['card_discussion_position' => 'top']);
+
+		// A corrupt row degrades to today's layout, never to a broken card view.
+		self::assertSame('side', $this->controller->index()->getData()['cardDiscussionPosition']);
+	}
+
+	public function testDiscussionPositionUntouchedWhenOmitted(): void {
+		$this->stubGetUserValue(['card_discussion_position' => 'bottom']);
+		// Only the default_board key is written; the placement is not touched.
+		$this->config->expects(self::once())
+			->method('setUserValue')
+			->with('alice', 'kanso', 'default_board', '5');
+
+		$result = $this->controller->update(5)->getData();
+		self::assertSame('bottom', $result['cardDiscussionPosition']);
+	}
+
+	// ── Permission / ownership ───────────────────────────────────────────────
+
+	/**
+	 * The preference is addressed by the session's own uid and nothing else -
+	 * there is no uid parameter on the route to tamper with - so one user can
+	 * never read or write another's. Prove it: bob's session sees bob's value
+	 * while alice's row says otherwise, and bob's write lands on bob's row.
+	 */
+	public function testPreferenceIsScopedToTheSessionUser(): void {
+		$store = [
+			'alice' => ['card_discussion_position' => 'bottom'],
+			'bob' => [],
+		];
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default) use (&$store): string {
+				return $store[$uid][$key] ?? $default;
+			});
+		$this->config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$store): void {
+				$store[$uid][$key] = $value;
+			});
+
+		$bob = $this->controllerFor('bob');
+
+		// Bob does NOT inherit alice's 'bottom'.
+		self::assertSame('side', $bob->index()->getData()['cardDiscussionPosition']);
+
+		// Bob's write lands on bob's row and leaves alice's alone.
+		$bob->update(null, null, null, null, null, 'bottom');
+		self::assertSame('bottom', $store['bob']['card_discussion_position']);
+		self::assertSame('bottom', $store['alice']['card_discussion_position']);
+
+		// And the reverse direction: alice flipping back doesn't move bob.
+		$alice = $this->controllerFor('alice');
+		$alice->update(null, null, null, null, null, 'side');
+		self::assertSame('side', $store['alice']['card_discussion_position']);
+		self::assertSame('bottom', $store['bob']['card_discussion_position']);
+	}
+
+	public function testReadIsDeniedWithoutASession(): void {
+		$anonymous = $this->controllerFor(null);
+		$this->config->expects(self::never())->method('getUserValue');
+
+		$response = $anonymous->index();
+		self::assertSame(403, $response->getStatus());
+		self::assertSame(['error' => 'Access denied'], $response->getData());
+	}
+
+	public function testWriteIsDeniedWithoutASession(): void {
+		$anonymous = $this->controllerFor(null);
+		$this->config->expects(self::never())->method('setUserValue');
+
+		$response = $anonymous->update(null, null, null, null, null, 'bottom');
+		self::assertSame(403, $response->getStatus());
+		self::assertSame(['error' => 'Access denied'], $response->getData());
+	}
+
+	/**
+	 * A controller bound to a session for $uid, or to no session at all.
+	 */
+	private function controllerFor(?string $uid): SettingsController {
+		$userSession = $this->createMock(IUserSession::class);
+		if ($uid === null) {
+			$userSession->method('getUser')->willReturn(null);
+		} else {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+			$userSession->method('getUser')->willReturn($user);
+		}
+		return new SettingsController('kanso', $this->createMock(IRequest::class), $userSession, $this->config);
 	}
 }

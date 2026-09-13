@@ -37,6 +37,22 @@ class SettingsController extends Controller {
 	// Editor formatting toolbar visibility: '1' = hidden, '0' or '' = shown.
 	// A pure per-user view preference stored as a boolean-string.
 	private const KEY_EDITOR_TOOLBAR = 'editor_toolbar_hidden';
+	// Where the card view puts the Discussion/Activity panel (#10408): beside the
+	// card ('side', today's behaviour and the default) or as a continuation of the
+	// card that the user scrolls down to ('bottom'). Server-side rather than
+	// localStorage on purpose - the choice follows the user across devices.
+	//
+	// Deliberately NOT routed through ChangeNotifier / kanso_changes: that log is
+	// the per-board delta-sync feed, and a per-user view preference belongs to no
+	// board. Appending to it would fabricate a board change for every other member
+	// of every board the user can see.
+	private const KEY_DISCUSSION_POSITION = 'card_discussion_position';
+	// Fixed allow-list for the discussion position. Like ALLOWED_NAV above, this
+	// is the security guard: anything off-list falls back to the default, so the
+	// value can't be abused as arbitrary per-user storage.
+	private const ALLOWED_DISCUSSION_POSITIONS = ['side', 'bottom'];
+	// Today's layout, so an upgrade changes nobody's card view.
+	private const DEFAULT_DISCUSSION_POSITION = 'side';
 	// Fixed allow-list of toggleable nav sections. `boards` is intentionally
 	// absent — Boards is always shown (hiding it would strand navigation). This
 	// allow-list is the security guard: the value can't be abused as arbitrary
@@ -72,6 +88,7 @@ class SettingsController extends Controller {
 				'dismissedHints' => $this->readDismissedHints($uid),
 				'hiddenNavSections' => $this->readHiddenNav($uid),
 				'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
+				'cardDiscussionPosition' => $this->readDiscussionPosition($uid),
 			]);
 		});
 	}
@@ -90,14 +107,19 @@ class SettingsController extends Controller {
 	 * `hiddenNavSections`, when provided, replaces the set of left-nav sections
 	 * the user has hidden (#69); omitting it leaves that preference untouched.
 	 *
+	 * `cardDiscussionPosition`, when provided, moves the card view's
+	 * Discussion/Activity panel between 'side' and 'bottom' (#10408); omitting it
+	 * leaves that preference untouched, and an unknown value resets it to 'side'.
+	 *
 	 * @param ?int[] $collapsedBoardGroups
 	 * @param ?string[] $dismissedHints
 	 * @param ?string[] $hiddenNavSections
 	 * @param ?bool $editorToolbarHidden
+	 * @param ?string $cardDiscussionPosition
 	 */
 	#[NoAdminRequired]
-	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?array $dismissedHints = null, ?array $hiddenNavSections = null, ?bool $editorToolbarHidden = null): JSONResponse {
-		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups, $dismissedHints, $hiddenNavSections, $editorToolbarHidden): JSONResponse {
+	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?array $dismissedHints = null, ?array $hiddenNavSections = null, ?bool $editorToolbarHidden = null, ?string $cardDiscussionPosition = null): JSONResponse {
+		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups, $dismissedHints, $hiddenNavSections, $editorToolbarHidden, $cardDiscussionPosition): JSONResponse {
 			$uid = $this->currentUserId();
 			$value = ($defaultBoardId === null || $defaultBoardId <= 0) ? '' : (string)$defaultBoardId;
 			$this->config->setUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, $value);
@@ -118,12 +140,17 @@ class SettingsController extends Controller {
 				$this->writeEditorToolbarHidden($uid, $editorToolbarHidden);
 			}
 
+			if ($cardDiscussionPosition !== null) {
+				$this->writeDiscussionPosition($uid, $cardDiscussionPosition);
+			}
+
 			return new JSONResponse([
 				'defaultBoardId' => $value === '' ? null : (int)$value,
 				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
 				'dismissedHints' => $this->readDismissedHints($uid),
 				'hiddenNavSections' => $this->readHiddenNav($uid),
 				'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
+				'cardDiscussionPosition' => $this->readDiscussionPosition($uid),
 			]);
 		});
 	}
@@ -262,6 +289,25 @@ class SettingsController extends Controller {
 
 	private function writeEditorToolbarHidden(string $uid, bool $hidden): void {
 		$this->config->setUserValue($uid, 'kanso', self::KEY_EDITOR_TOOLBAR, $hidden ? '1' : '0');
+	}
+
+	/**
+	 * Where the card view puts the Discussion/Activity panel. Anything unset,
+	 * corrupt or off the allow-list reads back as the default ('side'), so a bad
+	 * stored value degrades to today's layout rather than to a broken card view.
+	 */
+	private function readDiscussionPosition(string $uid): string {
+		$raw = $this->config->getUserValue($uid, 'kanso', self::KEY_DISCUSSION_POSITION, '');
+		return in_array($raw, self::ALLOWED_DISCUSSION_POSITIONS, true)
+			? $raw
+			: self::DEFAULT_DISCUSSION_POSITION;
+	}
+
+	private function writeDiscussionPosition(string $uid, string $position): void {
+		$clean = in_array($position, self::ALLOWED_DISCUSSION_POSITIONS, true)
+			? $position
+			: self::DEFAULT_DISCUSSION_POSITION;
+		$this->config->setUserValue($uid, 'kanso', self::KEY_DISCUSSION_POSITION, $clean);
 	}
 
 	/**
