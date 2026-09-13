@@ -22,6 +22,7 @@ class ChangeMapper extends QBMapper {
 	public function __construct(
 		IDBConnection $db,
 		private CardVisibilityScope $visibilityScope,
+		private ChangeDetailMapper $changeDetailMapper,
 	) {
 		parent::__construct($db, 'kanso_changes', Change::class);
 	}
@@ -237,17 +238,47 @@ class ChangeMapper extends QBMapper {
 	}
 
 	/**
+	 * Deletes change rows by id - the only id-based delete door into this table.
+	 * (The board purge deletes a board's whole slice through
+	 * {@see BoardCascade::BY_BOARD_ID}, which sweeps the details first in the
+	 * same way - see {@see \OCA\Kanso\Service\BoardPurgeService}.)
+	 *
+	 * The `kanso_change_details` children go FIRST, in the same order the board
+	 * cascade uses ({@see BoardCascade::BY_PARENT_ID}), and for the same reason:
+	 * a detail row carries neither a board id nor a card id, so its parent
+	 * change row is the ONLY way anything can reach it. Deleting the parent
+	 * first strands the child instance-wide, forever - no purge, not even a
+	 * board cascade, can find it again. Every caller therefore gets the ordering
+	 * for free rather than having to remember it.
+	 *
+	 * The two deletes are deliberately NOT wrapped in a transaction: with this
+	 * ordering, a failure between them leaves a surviving change row whose
+	 * detail is gone (the Activity feed renders it without a from → to diff),
+	 * which is strictly better than the orphan the reverse order would leave.
+	 * Reordering them to add a transaction would trade a cosmetic loss for an
+	 * unreachable row.
+	 *
+	 * Both statements chunk their id list, so a caller with a very long prune
+	 * batch never builds one unbounded IN (...).
+	 *
 	 * @param int[] $ids
-	 * @return int number of deleted rows
+	 * @return int number of deleted change rows (detail rows are not counted)
 	 * @throws Exception
 	 */
 	public function deleteByIds(array $ids): int {
 		if ($ids === []) {
 			return 0;
 		}
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
-		return $qb->executeStatement();
+		$this->changeDetailMapper->deleteByChangeIds($ids);
+
+		$deleted = 0;
+		foreach (array_chunk(array_values($ids), ChangeDetailMapper::DELETE_CHUNK_SIZE) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->delete($this->getTableName())
+				->where($qb->expr()->in('id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)));
+			$deleted += $qb->executeStatement();
+		}
+
+		return $deleted;
 	}
 }

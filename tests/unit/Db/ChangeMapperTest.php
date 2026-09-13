@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Tests\Unit\Db;
 
 use OCA\Kanso\Db\Change;
+use OCA\Kanso\Db\ChangeDetailMapper;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\DB\IResult;
@@ -29,7 +30,7 @@ class ChangeMapperTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->db = $this->createMock(IDBConnection::class);
-		$this->mapper = new ChangeMapper($this->db, new CardVisibilityScope());
+		$this->mapper = new ChangeMapper($this->db, new CardVisibilityScope(), new ChangeDetailMapper($this->db));
 	}
 
 	private static function exprSink(): object {
