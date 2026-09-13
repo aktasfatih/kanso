@@ -72,7 +72,8 @@ function pluralFormFor(lang) {
 // once already (it still said "German ships today" long after nine more
 // catalogues landed). So the list is derived from l10n/ — the compiled
 // catalogues that actually ship inside the app — and `l10n.lint.test.mjs`
-// fails when the README disagrees with what is on disk.
+// fails when a doc disagrees with what is on disk. docs/TRANSLATING.md spells
+// the same fact as a count ("the ten catalogues"), so it is derived here too.
 
 /** Nextcloud language code → the English name the README uses. */
 const LANGUAGE_NAMES = {
@@ -116,6 +117,23 @@ function languageListSentence(langs = shippedLanguages()) {
 	if (names.length === 0) return ''
 	if (names.length === 1) return names[0]
 	return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/** Small numbers spelled out, the way the prose docs write them. */
+const NUMBER_WORDS = [
+	'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+	'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+	'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty',
+]
+
+/**
+ * How many languages ship, as the word the docs use ("ten"). docs/TRANSLATING.md
+ * says "the ten catalogues" in prose; that count is derived here so language
+ * eleven forces the sentence to follow instead of quietly going wrong. Past
+ * twenty it falls back to digits — spelling those out reads worse anyway.
+ */
+function languageCountWord(langs = shippedLanguages()) {
+	return NUMBER_WORDS[langs.length] ?? String(langs.length)
 }
 
 /** How many msgstr[n] slots a Plural-Forms string declares (2 if unreadable). */
@@ -861,5 +879,5 @@ export {
 	requiredPlaceholderExpectations, lintCatalogText,
 	pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog,
 	extractFrontend,
-	LANGUAGE_NAMES, shippedLanguages, languageListSentence,
+	LANGUAGE_NAMES, shippedLanguages, languageListSentence, languageCountWord,
 }

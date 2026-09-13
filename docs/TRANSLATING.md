@@ -102,14 +102,15 @@ browser profile) picks up the new `l10n/<lang>.js`.
   job runs, so if it's clean locally, that CI step is green.
 
   **Don't skip the sync step.** `extract` only refreshes the template; nothing
-  else copies a new string into the ten catalogues. Skip it and the template
-  looks current, `compile` has nothing new to emit, and the string silently falls
-  back to English in every language.
+  else copies a new string into the <!-- l10n:count -->ten<!-- /l10n:count -->
+  catalogues. Skip it and the template looks current, `compile` has nothing new
+  to emit, and the string silently falls back to English in every language.
 
   `sync` adds the new msgids with an **empty** `msgstr`, and that's a finished
   state as far as CI is concerned — you don't have to translate your string into
-  ten languages to merge it. The check asks only that the catalogues know the
-  string exists; an empty `msgstr` renders the English source (see step 3 above).
+  <!-- l10n:count -->ten<!-- /l10n:count --> languages to merge it. The check
+  asks only that the catalogues know the string exists; an empty `msgstr`
+  renders the English source (see step 3 above).
 - CI also runs `npm run l10n:lint` on every `translationfiles/<lang>/kanso.po`:
   it rejects malformed PO syntax and a `Plural-Forms` header that doesn't match
   the `msgstr[n]` forms actually supplied, and — the main point — diffs the
