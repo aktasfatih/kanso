@@ -15,7 +15,15 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { lintCatalogText, pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog } from './l10n.mjs'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+	lintCatalogText, pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog,
+	LANGUAGE_NAMES, shippedLanguages, languageListSentence,
+} from './l10n.mjs'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const HEADER = [
 	'msgid ""',
@@ -335,4 +343,39 @@ test('sync leaves the Plural-Forms header alone and re-slots to what it declares
 	assert.ok(three.includes('msgstr[1] "%n Karten"'))
 	assert.ok(three.includes('msgstr[2] ""'), 'third plural form not scaffolded')
 	assert.equal(lintCatalogText('ru', three).ok, true)
+})
+
+// ── the README's language list must match what l10n/ actually ships ──────────
+//
+// The README said "German ships today" for months after nine more catalogues
+// landed — a hand-maintained claim with nothing checking it. These tests derive
+// the sentence from l10n/ and fail when the README disagrees, so adding or
+// dropping a language forces the README to follow.
+
+const README = path.join(ROOT, 'README.md')
+const LANG_LIST_RE = /<!-- l10n:languages -->(.*?)<!-- \/l10n:languages -->/s
+
+test('every shipped catalogue has an English name for the README', () => {
+	for (const lang of shippedLanguages()) {
+		assert.ok(LANGUAGE_NAMES[lang],
+			`l10n/${lang}.json ships but "${lang}" has no entry in LANGUAGE_NAMES (scripts/l10n.mjs)`)
+	}
+})
+
+test('languageListSentence renders a prose list and refuses an unnamed language', () => {
+	assert.equal(languageListSentence(['de']), 'German')
+	assert.equal(languageListSentence(['de', 'fr']), 'German and French')
+	assert.equal(languageListSentence(['de', 'fr', 'tr']), 'German, French and Turkish')
+	assert.throws(() => languageListSentence(['de', 'xx']), /No English name for language "xx"/)
+})
+
+test('README lists exactly the languages l10n/ ships', () => {
+	const text = fs.readFileSync(README, 'utf8')
+	const m = LANG_LIST_RE.exec(text)
+	assert.ok(m, 'README.md has no <!-- l10n:languages -->…<!-- /l10n:languages --> block '
+		+ '— the localization claim must stay machine-checkable')
+	const expected = languageListSentence()
+	assert.equal(m[1].trim(), expected,
+		`README.md's language list is stale. Replace the text between the l10n:languages `
+		+ `markers with:\n  ${expected}`)
 })

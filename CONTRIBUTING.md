@@ -74,7 +74,9 @@ per-driver branch, the pattern `dev/smoke.sh` already uses.
 Kanso follows each user's Nextcloud language. Adding or improving a translation
 needs no code — edit `translationfiles/<lang>/kanso.po` and run
 `npm run l10n:compile`. See [docs/TRANSLATING.md](docs/TRANSLATING.md) for the
-full workflow (German ships today; other languages are very welcome).
+full workflow. The languages that ship today are listed under *Localization* in
+the [README](README.md) — kept in step with `l10n/` by a check in
+`npm run test:l10n` — and more are very welcome.
 
 ## Staying current with Nextcloud
 

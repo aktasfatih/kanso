@@ -114,16 +114,33 @@ your work, on your own Nextcloud, laid out plainly.
   **trash** with restore.
 
 ### 🌍 Localization
-- **Follows your Nextcloud language** automatically. German ships today; more
-  languages are welcome — see [docs/TRANSLATING.md](docs/TRANSLATING.md)
+- **Follows your Nextcloud language** automatically. Kanso ships translations for
+  <!-- l10n:languages -->German, Spanish, French, Italian, Dutch, Polish, Brazilian Portuguese, Russian, Turkish and Simplified Chinese<!-- /l10n:languages -->.
+  More languages are welcome — see [docs/TRANSLATING.md](docs/TRANSLATING.md)
   (no code required).
 
 ## Installation
 
-Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
-App Store yet — until it is, install the pre-built tarball from
-[GitHub Releases](https://github.com/aktasfatih/kanso/releases) (no Node or
-Composer needed on your server):
+Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.3**. It's on the
+**[Nextcloud App Store](https://apps.nextcloud.com/apps/kanso)**, so the quickest
+install is the one-click route: in Nextcloud open **Apps**, find **Kanso** under
+*Organization* (or *Office & text*), and click **Download and enable**. From the
+command line:
+
+```sh
+cd /path/to/nextcloud
+sudo -u www-data php occ app:install kanso
+```
+
+Open **Kanso** from the Nextcloud app menu and create your first board. Upgrades
+arrive through Nextcloud's own app updater.
+
+<details>
+<summary><b>Install the release tarball manually</b> (no Node or Composer needed on your server)</summary>
+
+If your server can't reach the App Store, or you'd rather pin an exact build,
+install the pre-built tarball from
+[GitHub Releases](https://github.com/aktasfatih/kanso/releases):
 
 ```sh
 # 1. Download the tarball from the latest release
@@ -138,11 +155,10 @@ cd /path/to/nextcloud
 sudo -u www-data php occ app:enable kanso
 ```
 
-The tarball is not (yet) signed by the App Store, so Nextcloud lists Kanso as
-an untested/custom app — that's expected. To upgrade, extract the new tarball
-over the old directory and run `occ upgrade`.
+To upgrade a tarball install, extract the new tarball over the old directory and
+run `occ upgrade`.
 
-Open **Kanso** from the Nextcloud app menu and create your first board.
+</details>
 
 <details>
 <summary><b>Install from source</b> (needs Node 20+, Composer, shell access)</summary>
@@ -272,7 +288,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app \
 Tests: PHPUnit for the API/services, Playwright for board interactions.
 
 ```sh
-npm test                                   # Playwright e2e (needs the dev stack up)
+npm run test:e2e                           # Playwright e2e (needs the dev stack up)
 docker run --rm -v "$PWD":/app -w /app php:8.2-cli-alpine \
   php vendor/bin/phpunit -c phpunit.xml    # PHP unit tests
 ```

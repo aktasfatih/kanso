@@ -66,6 +66,58 @@ function pluralFormFor(lang) {
 	return PLURAL_FORMS[lang] || PLURAL_FORM
 }
 
+// ── shipped languages (for the README's "Localization" claim) ───────────────
+//
+// The README advertises which languages Kanso ships in, and that sentence drifted
+// once already (it still said "German ships today" long after nine more
+// catalogues landed). So the list is derived from l10n/ — the compiled
+// catalogues that actually ship inside the app — and `l10n.lint.test.mjs`
+// fails when the README disagrees with what is on disk.
+
+/** Nextcloud language code → the English name the README uses. */
+const LANGUAGE_NAMES = {
+	de: 'German',
+	es: 'Spanish',
+	fr: 'French',
+	it: 'Italian',
+	nl: 'Dutch',
+	pl: 'Polish',
+	pt_BR: 'Brazilian Portuguese',
+	ru: 'Russian',
+	tr: 'Turkish',
+	zh_CN: 'Simplified Chinese',
+}
+
+/**
+ * Every language Kanso actually ships, by code: one per compiled
+ * `l10n/<lang>.json`. Sorted, so the derived sentence is deterministic.
+ */
+function shippedLanguages(dir = L10N_DIR) {
+	if (!fs.existsSync(dir)) return []
+	return fs.readdirSync(dir)
+		.filter((f) => f.endsWith('.json'))
+		.map((f) => f.slice(0, -'.json'.length))
+		.sort()
+}
+
+/**
+ * Render language codes as the README's prose list ("German, Spanish … and
+ * Simplified Chinese"). Throws on a code with no English name — adding a
+ * language means naming it here, which is exactly the drift being guarded.
+ */
+function languageListSentence(langs = shippedLanguages()) {
+	const names = langs.map((l) => {
+		const name = LANGUAGE_NAMES[l]
+		if (!name) {
+			throw new Error(`No English name for language "${l}" — add it to LANGUAGE_NAMES in scripts/l10n.mjs.`)
+		}
+		return name
+	})
+	if (names.length === 0) return ''
+	if (names.length === 1) return names[0]
+	return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 /** How many msgstr[n] slots a Plural-Forms string declares (2 if unreadable). */
 function npluralsOf(pluralForm) {
 	const m = /nplurals\s*=\s*(\d+)/.exec(pluralForm || '')
@@ -809,4 +861,5 @@ export {
 	requiredPlaceholderExpectations, lintCatalogText,
 	pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog,
 	extractFrontend,
+	LANGUAGE_NAMES, shippedLanguages, languageListSentence,
 }
