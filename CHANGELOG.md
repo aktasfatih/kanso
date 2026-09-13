@@ -11,6 +11,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.31.0](https://github.com/aktasfatih/kanso/compare/v0.30.0...v0.31.0) (2026-09-13)
+
+
+### Bug Fixes
+
+* **activity:** stop the change-log cleanup from leaving stray rows behind forever ([a26f5d2](https://github.com/aktasfatih/kanso/commit/a26f5d208b7c3530d3e35ee41bcc6834babd6dbc))
+* **analytics:** show the board name and real column names when board statistics is opened from a bookmark ([61cc846](https://github.com/aktasfatih/kanso/commit/61cc8469706b92d4706e4216327e181f56696221)), closes [#125](https://github.com/aktasfatih/kanso/issues/125)
+* **automations:** let an auto-archive rule be widened back to the whole board ([31fda98](https://github.com/aktasfatih/kanso/commit/31fda9803a82b32a598b4600261e0dc259b2d05d))
+* **boards:** actually delete a deleted board instead of leaving its data behind forever ([ac01cd6](https://github.com/aktasfatih/kanso/commit/ac01cd6021d8adda9aaeefc05f9e76f55254749f))
+* **board:** stop a selection of more than 100 cards from failing every bulk action ([eeb6ca9](https://github.com/aktasfatih/kanso/commit/eeb6ca9ebbf6788162ff9e33381047a704146d92)), closes [#10430](https://github.com/aktasfatih/kanso/issues/10430)
+* **settings:** stop an unrelated setting change from clearing your default board ([11304dd](https://github.com/aktasfatih/kanso/commit/11304dd0918600cd971431566e70fa2e42e7e643))
+* **ui:** stop the avatar tooltip from covering the collaborator's name ([8180373](https://github.com/aktasfatih/kanso/commit/81803739589de6602867e133076087a2733c9e08)), closes [#126](https://github.com/aktasfatih/kanso/issues/126) [#126](https://github.com/aktasfatih/kanso/issues/126)
+
+
+### Features
+
+* **board:** archive every card in a column from one menu entry ([fb89a30](https://github.com/aktasfatih/kanso/commit/fb89a3034af6ef38250ed6184a7bd87557aba2d8)), closes [#127](https://github.com/aktasfatih/kanso/issues/127)
+* **cards:** add a setting to move the discussion below the card instead of beside it ([686faf5](https://github.com/aktasfatih/kanso/commit/686faf5c236c079fed964d9dd5d5f1e86755bec5))
+* **ui:** name the board, card or list you are on in the browser tab title ([3f46915](https://github.com/aktasfatih/kanso/commit/3f469151ba2ace307519c034924c0da895850d4d)), closes [#125](https://github.com/aktasfatih/kanso/issues/125) [#125](https://github.com/aktasfatih/kanso/issues/125)
+
 # [0.30.0](https://github.com/aktasfatih/kanso/compare/v0.29.0...v0.30.0) (2026-09-11)
 
 
