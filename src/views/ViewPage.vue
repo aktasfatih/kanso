@@ -234,6 +234,7 @@ import ViewKanban from '../components/ViewKanban.vue'
 import BoardFilterBar from '../components/BoardFilterBar.vue'
 import CardModal from '../components/CardModal.vue'
 import { useViews } from '../composables/useViews.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { useViewCards } from '../composables/useViewCards.js'
 import {
 	createFilterState,
@@ -319,6 +320,10 @@ const { data: viewsData, save, rename } = useViews()
 const { data: cardsData, isLoading, isError } = useViewCards(sort, filterQuery)
 
 const view = computed(() => (viewsData.value ?? []).find((v) => String(v.id) === String(props.id)) ?? null)
+
+// Browser tab title (#125): the saved view's own name, so two pinned Views are
+// tellable apart. Tracks the inline rename as well, since it is the same source.
+usePageTitle(() => view.value?.name ?? '')
 
 // ── Inline rename of the view title (rename by id — distinct from the filter
 // bar's save-as-name, which forks a new view) ────────────────────────────────

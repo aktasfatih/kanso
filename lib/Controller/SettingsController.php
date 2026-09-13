@@ -16,9 +16,13 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * Per-user Kanso preferences, stored in the NC user config (app 'kanso').
- * Currently just the "default board on start" (which board the app opens to);
- * an empty value means the board list.
+ * Per-user Kanso preferences, stored in the NC user config (app 'kanso'):
+ * "default board on start" (an empty value means the board list), plus the
+ * view preferences below.
+ *
+ * Every one of them is saved on its own, by whichever control owns it, so the
+ * write path here touches ONLY the keys present in the request body. See
+ * update() - that rule is the endpoint's contract, not an implementation detail.
  */
 class SettingsController extends Controller {
 	use ApiErrorTrait;
@@ -37,6 +41,22 @@ class SettingsController extends Controller {
 	// Editor formatting toolbar visibility: '1' = hidden, '0' or '' = shown.
 	// A pure per-user view preference stored as a boolean-string.
 	private const KEY_EDITOR_TOOLBAR = 'editor_toolbar_hidden';
+	// Where the card view puts the Discussion/Activity panel (#10408): beside the
+	// card ('side', today's behaviour and the default) or as a continuation of the
+	// card that the user scrolls down to ('bottom'). Server-side rather than
+	// localStorage on purpose - the choice follows the user across devices.
+	//
+	// Deliberately NOT routed through ChangeNotifier / kanso_changes: that log is
+	// the per-board delta-sync feed, and a per-user view preference belongs to no
+	// board. Appending to it would fabricate a board change for every other member
+	// of every board the user can see.
+	private const KEY_DISCUSSION_POSITION = 'card_discussion_position';
+	// Fixed allow-list for the discussion position. Like ALLOWED_NAV above, this
+	// is the security guard: anything off-list falls back to the default, so the
+	// value can't be abused as arbitrary per-user storage.
+	private const ALLOWED_DISCUSSION_POSITIONS = ['side', 'bottom'];
+	// Today's layout, so an upgrade changes nobody's card view.
+	private const DEFAULT_DISCUSSION_POSITION = 'side';
 	// Fixed allow-list of toggleable nav sections. `boards` is intentionally
 	// absent — Boards is always shown (hiding it would strand navigation). This
 	// allow-list is the security guard: the value can't be abused as arbitrary
@@ -64,68 +84,98 @@ class SettingsController extends Controller {
 	#[NoAdminRequired]
 	public function index(): JSONResponse {
 		return $this->respond(function (): JSONResponse {
-			$uid = $this->currentUserId();
-			$raw = $this->config->getUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, '');
-			return new JSONResponse([
-				'defaultBoardId' => $raw === '' ? null : (int)$raw,
-				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
-				'dismissedHints' => $this->readDismissedHints($uid),
-				'hiddenNavSections' => $this->readHiddenNav($uid),
-				'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
-			]);
+			return new JSONResponse($this->readAll($this->currentUserId()));
 		});
 	}
 
 	/**
-	 * Sets the default-board-on-start preference. A null/0 value clears it (the
-	 * app opens to the board list). Board existence is NOT validated here - the
-	 * client falls back to the board list if the stored board is gone.
+	 * Updates the preferences the client actually sent, and only those.
 	 *
-	 * `collapsedBoardGroups`, when provided, replaces the set of nav folders the
-	 * user has collapsed (#3529); omitting it leaves that preference untouched.
+	 * **A key the request body omits is left untouched; sending it with `null`
+	 * clears it.** That distinction is the whole contract here: every control in
+	 * the settings dialog saves just its own key, so anything that wrote on every
+	 * request would wipe the other preferences on each unrelated toggle (which is
+	 * exactly how "default board on start" used to vanish behind the user's back).
 	 *
-	 * `dismissedHints`, when provided, replaces the set of dismissed one-time
-	 * onboarding hints (#3413); omitting it leaves that preference untouched.
+	 * Per key, when sent:
+	 * - `defaultBoardId` - which board the app opens to; `null`/0 clears it (the
+	 *   app opens to the board list). Board existence is NOT validated here - the
+	 *   client falls back to the board list if the stored board is gone.
+	 * - `collapsedBoardGroups` - replaces the set of collapsed nav folders (#3529).
+	 * - `dismissedHints` - replaces the set of dismissed one-time hints (#3413).
+	 * - `hiddenNavSections` - replaces the set of hidden left-nav sections (#69).
+	 * - `editorToolbarHidden` - editor formatting-toolbar visibility.
+	 * - `cardDiscussionPosition` - 'side' or 'bottom' (#10408); an unknown value
+	 *   resets it to 'side'.
 	 *
-	 * `hiddenNavSections`, when provided, replaces the set of left-nav sections
-	 * the user has hidden (#69); omitting it leaves that preference untouched.
+	 * `null` on any of the list/flag keys resets it to its default (empty list,
+	 * toolbar shown, discussion beside the card).
 	 *
 	 * @param ?int[] $collapsedBoardGroups
 	 * @param ?string[] $dismissedHints
 	 * @param ?string[] $hiddenNavSections
 	 * @param ?bool $editorToolbarHidden
+	 * @param ?string $cardDiscussionPosition
 	 */
 	#[NoAdminRequired]
-	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?array $dismissedHints = null, ?array $hiddenNavSections = null, ?bool $editorToolbarHidden = null): JSONResponse {
-		return $this->respond(function () use ($defaultBoardId, $collapsedBoardGroups, $dismissedHints, $hiddenNavSections, $editorToolbarHidden): JSONResponse {
+	public function update(?int $defaultBoardId = null, ?array $collapsedBoardGroups = null, ?array $dismissedHints = null, ?array $hiddenNavSections = null, ?bool $editorToolbarHidden = null, ?string $cardDiscussionPosition = null): JSONResponse {
+		// Which keys the client actually sent. It has to come from the raw request
+		// body: once the dispatcher has filled the arguments above, an omitted key
+		// and an explicit `null` are the same value, and "omit" must not mean
+		// "clear". `array_key_exists` (not `isset`, and not IRequest::getParam()'s
+		// sentinel-default trick, which is `isset`-based and so reports an explicit
+		// null as absent) is what keeps a sent-but-null key visible here.
+		$sent = $this->request->getParams();
+		return $this->respond(function () use ($sent, $defaultBoardId, $collapsedBoardGroups, $dismissedHints, $hiddenNavSections, $editorToolbarHidden, $cardDiscussionPosition): JSONResponse {
 			$uid = $this->currentUserId();
-			$value = ($defaultBoardId === null || $defaultBoardId <= 0) ? '' : (string)$defaultBoardId;
-			$this->config->setUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, $value);
 
-			if ($collapsedBoardGroups !== null) {
-				$this->writeCollapsedGroups($uid, $collapsedBoardGroups);
+			if (array_key_exists('defaultBoardId', $sent)) {
+				$value = ($defaultBoardId === null || $defaultBoardId <= 0) ? '' : (string)$defaultBoardId;
+				$this->config->setUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, $value);
 			}
 
-			if ($dismissedHints !== null) {
-				$this->writeDismissedHints($uid, $dismissedHints);
+			if (array_key_exists('collapsedBoardGroups', $sent)) {
+				$this->writeCollapsedGroups($uid, $collapsedBoardGroups ?? []);
 			}
 
-			if ($hiddenNavSections !== null) {
-				$this->writeHiddenNav($uid, $hiddenNavSections);
+			if (array_key_exists('dismissedHints', $sent)) {
+				$this->writeDismissedHints($uid, $dismissedHints ?? []);
 			}
 
-			if ($editorToolbarHidden !== null) {
-				$this->writeEditorToolbarHidden($uid, $editorToolbarHidden);
+			if (array_key_exists('hiddenNavSections', $sent)) {
+				$this->writeHiddenNav($uid, $hiddenNavSections ?? []);
 			}
 
-			return new JSONResponse([
-				'defaultBoardId' => $value === '' ? null : (int)$value,
-				'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
-				'dismissedHints' => $this->readDismissedHints($uid),
-				'hiddenNavSections' => $this->readHiddenNav($uid),
-				'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
-			]);
+			if (array_key_exists('editorToolbarHidden', $sent)) {
+				$this->writeEditorToolbarHidden($uid, $editorToolbarHidden ?? false);
+			}
+
+			if (array_key_exists('cardDiscussionPosition', $sent)) {
+				$this->writeDiscussionPosition($uid, $cardDiscussionPosition ?? self::DEFAULT_DISCUSSION_POSITION);
+			}
+
+			// Always answer with what is actually stored now, so the client sees the
+			// untouched keys exactly as they are rather than the request echoed back.
+			return new JSONResponse($this->readAll($uid));
 		});
+	}
+
+	/**
+	 * Every preference as the API reports it. Shared by the read and the write
+	 * path so a save can never answer with a different shape than a fetch.
+	 *
+	 * @return array{defaultBoardId: ?int, collapsedBoardGroups: int[], dismissedHints: string[], hiddenNavSections: string[], editorToolbarHidden: bool, cardDiscussionPosition: string}
+	 */
+	private function readAll(string $uid): array {
+		$raw = $this->config->getUserValue($uid, 'kanso', self::KEY_DEFAULT_BOARD, '');
+		return [
+			'defaultBoardId' => $raw === '' ? null : (int)$raw,
+			'collapsedBoardGroups' => $this->readCollapsedGroups($uid),
+			'dismissedHints' => $this->readDismissedHints($uid),
+			'hiddenNavSections' => $this->readHiddenNav($uid),
+			'editorToolbarHidden' => $this->readEditorToolbarHidden($uid),
+			'cardDiscussionPosition' => $this->readDiscussionPosition($uid),
+		];
 	}
 
 	/**
@@ -262,6 +312,25 @@ class SettingsController extends Controller {
 
 	private function writeEditorToolbarHidden(string $uid, bool $hidden): void {
 		$this->config->setUserValue($uid, 'kanso', self::KEY_EDITOR_TOOLBAR, $hidden ? '1' : '0');
+	}
+
+	/**
+	 * Where the card view puts the Discussion/Activity panel. Anything unset,
+	 * corrupt or off the allow-list reads back as the default ('side'), so a bad
+	 * stored value degrades to today's layout rather than to a broken card view.
+	 */
+	private function readDiscussionPosition(string $uid): string {
+		$raw = $this->config->getUserValue($uid, 'kanso', self::KEY_DISCUSSION_POSITION, '');
+		return in_array($raw, self::ALLOWED_DISCUSSION_POSITIONS, true)
+			? $raw
+			: self::DEFAULT_DISCUSSION_POSITION;
+	}
+
+	private function writeDiscussionPosition(string $uid, string $position): void {
+		$clean = in_array($position, self::ALLOWED_DISCUSSION_POSITIONS, true)
+			? $position
+			: self::DEFAULT_DISCUSSION_POSITION;
+		$this->config->setUserValue($uid, 'kanso', self::KEY_DISCUSSION_POSITION, $clean);
 	}
 
 	/**

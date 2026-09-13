@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  Kanso's public landing page. Single, self-contained static file: no build
+  step, no framework, no CDN, no analytics. Open it straight from disk and it
+  renders exactly as it does when deployed.
+
+  Every factual claim below is sourced from README.md, appinfo/info.xml or the
+  live App Store listing (https://apps.nextcloud.com/apps/kanso). Deliberately
+  NOT stated anywhere: a version number — it would go stale between releases,
+  so the page links to Releases and the App Store instead.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kanso — fast, open-source kanban boards for Nextcloud</title>
+<meta name="description" content="Kanso is a fast, open-source kanban board app for Nextcloud: instant drag &amp; drop, realtime sync, reviews, projects and analytics. AGPL-3.0.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230082c9'/%3E%3Crect x='3' y='3.5' width='3' height='9' rx='1' fill='%23fff'/%3E%3Crect x='7.5' y='3.5' width='3' height='6' rx='1' fill='%23fff'/%3E%3Crect x='12' y='3.5' width='1.5' height='4' rx='0.75' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-alt: #f5f7fa;
+  --bg-card: #ffffff;
+  --fg: #1b1f23;
+  --fg-muted: #4a5460;
+  --border: #d8dee6;
+  --accent: #00639a;
+  --accent-strong: #004f7c;
+  --accent-contrast: #ffffff;
+  --shadow: 0 1px 2px rgba(16, 22, 26, .08), 0 8px 24px rgba(16, 22, 26, .06);
+  --radius: 12px;
+  --maxw: 1080px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a;
+    --bg-alt: #1b1f23;
+    --bg-card: #1e2328;
+    --fg: #eceff2;
+    --fg-muted: #aab4c0;
+    --border: #333b43;
+    --accent: #6cc0f0;
+    --accent-strong: #9ad4f7;
+    --accent-contrast: #10161c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); }
+a:hover, a:focus-visible { color: var(--accent-strong); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+
+/* Skip link */
+.skip {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--accent); color: var(--accent-contrast);
+  padding: 10px 16px; border-radius: 0 0 8px 0; z-index: 10; font-weight: 600;
+}
+.skip:focus { left: 0; }
+
+/* Masthead */
+.masthead { border-bottom: 1px solid var(--border); background: var(--bg); }
+.masthead .wrap {
+  display: flex; flex-wrap: wrap; gap: 12px 20px;
+  align-items: center; justify-content: space-between;
+  padding-top: 16px; padding-bottom: 16px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; }
+.brand svg { flex: none; }
+.nav { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .95rem; }
+.nav a { color: var(--fg-muted); text-decoration: none; font-weight: 500; }
+.nav a:hover, .nav a:focus-visible { color: var(--accent); text-decoration: underline; }
+
+/* Hero */
+.hero { padding: 64px 0 8px; }
+.hero h1 {
+  margin: 0 0 16px;
+  font-size: clamp(2.1rem, 6vw, 3.4rem);
+  line-height: 1.1; letter-spacing: -.025em; font-weight: 800;
+}
+.lede { font-size: clamp(1.05rem, 2.4vw, 1.3rem); color: var(--fg-muted); margin: 0 0 12px; max-width: 42ch; }
+.lede-sub { color: var(--fg-muted); margin: 0 0 28px; max-width: 56ch; }
+
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.btn {
+  display: inline-block; padding: 12px 22px; border-radius: 8px;
+  font-weight: 600; text-decoration: none; border: 1px solid transparent;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.btn-primary { background: var(--accent); color: var(--accent-contrast); }
+.btn-primary:hover, .btn-primary:focus-visible { background: var(--accent-strong); color: var(--accent-contrast); }
+.btn-secondary { background: var(--bg-card); color: var(--fg); border-color: var(--border); }
+.btn-secondary:hover, .btn-secondary:focus-visible { border-color: var(--accent); color: var(--accent); }
+.cta-note { font-size: .9rem; color: var(--fg-muted); margin: 0 0 40px; }
+
+/* Figures */
+figure { margin: 0 0 12px; }
+.shot {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); background: var(--bg-card); overflow: hidden;
+}
+figcaption { font-size: .9rem; color: var(--fg-muted); margin-top: 10px; }
+
+/* Sections */
+section { padding: 56px 0; }
+section + section { border-top: 1px solid var(--border); }
+.alt { background: var(--bg-alt); }
+h2 { font-size: clamp(1.5rem, 3.4vw, 2rem); letter-spacing: -.02em; margin: 0 0 14px; line-height: 1.2; }
+h3 { font-size: 1.08rem; margin: 0 0 8px; letter-spacing: -.01em; }
+.section-intro { color: var(--fg-muted); max-width: 62ch; margin: 0 0 32px; }
+
+/* Feature grid */
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); list-style: none; padding: 0; margin: 0; }
+.grid li {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px 22px;
+}
+.grid p { margin: 0; color: var(--fg-muted); font-size: .97rem; }
+
+/* Screenshot gallery */
+.gallery { display: grid; gap: 32px; margin-top: 8px; }
+
+/* Install */
+.steps { max-width: 68ch; padding-left: 1.2em; }
+.steps li { margin-bottom: 14px; }
+.steps code, .inline-code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .88em; background: var(--bg-alt); border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px;
+}
+@media (prefers-color-scheme: dark) {
+  .steps code, .inline-code { background: #11151a; }
+}
+.facts { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); list-style: none; padding: 0; margin: 32px 0 0; }
+.facts div { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.facts dt { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-muted); font-weight: 600; }
+.facts dd { margin: 4px 0 0; font-weight: 600; }
+
+/* Footer */
+footer { border-top: 1px solid var(--border); padding: 40px 0 56px; color: var(--fg-muted); font-size: .94rem; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 0; margin: 0 0 20px; list-style: none; }
+footer p { margin: 0 0 10px; max-width: 70ch; }
+
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  .hero { padding-top: 40px; }
+  section { padding: 40px 0; }
+  .btn { display: block; text-align: center; }
+  .cta { display: block; }
+  .cta .btn { margin-bottom: 10px; }
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to main content</a>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 16 16" role="img" aria-label="Kanso logo">
+        <rect width="16" height="16" rx="3" fill="#0082c9"></rect>
+        <rect x="3" y="3.5" width="3" height="9" rx="1" fill="#fff"></rect>
+        <rect x="7.5" y="3.5" width="3" height="6" rx="1" fill="#fff"></rect>
+        <rect x="12" y="3.5" width="1.5" height="4" rx=".75" fill="#fff"></rect>
+      </svg>
+      Kanso
+    </div>
+    <nav class="nav" aria-label="Page sections">
+      <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/aktasfatih/kanso">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <div class="wrap hero">
+    <h1>Fast, open-source kanban boards for Nextcloud</h1>
+    <p class="lede">Instant drag &amp; drop, payloads sized for large boards, realtime sync: a from-scratch kanban board that stays out of your way.</p>
+    <p class="lede-sub">Kanso runs on your own Nextcloud server and stores its own data. It is free software under the AGPL — no lock-in, no per-seat pricing.</p>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="https://apps.nextcloud.com/apps/kanso">Install from the Nextcloud App Store</a>
+      <a class="btn btn-secondary" href="https://github.com/aktasfatih/kanso">Source on GitHub</a>
+    </div>
+    <p class="cta-note">Requires Nextcloud 32–34 and PHP 8.2–8.3.</p>
+
+    <figure>
+      <div class="shot">
+        <img src="screenshots/kanso-board.png" width="1600" height="1000"
+             alt="A Kanso board with Backlog, In Progress, In Review and Done columns, each holding cards with labels, assignee avatars and due dates.">
+      </div>
+      <figcaption>A Kanso board. Columns, cards, labels, assignees and due dates.</figcaption>
+    </figure>
+  </div>
+
+  <section class="alt">
+    <div class="wrap">
+      <h2>Why “Kanso”?</h2>
+      <p class="section-intro">
+        <strong>Kanso</strong> (簡素) is one of the seven principles of Japanese Zen aesthetics. It means
+        <em>simplicity</em>: the deliberate elimination of clutter so that only what matters remains. That
+        is the whole idea behind this app — a kanban board that is fast, uncluttered, and free. Just your
+        work, on your own Nextcloud, laid out plainly.
+      </p>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What it does</h2>
+      <p class="section-intro">Everything below ships today. The full, always-current feature list lives in the project README.</p>
+      <ul class="grid">
+        <li>
+          <h3>⚡ Fast by design</h3>
+          <p>A card move is a single-row update, never a bulk renumber. Summary-only payloads, <span class="inline-code">ETag</span> caching and virtualized columns stay smooth past 2,000 cards.</p>
+        </li>
+        <li>
+          <h3>🔄 Realtime sync</h3>
+          <p>Live updates through <span class="inline-code">notify_push</span> when your server has it, with a light polling fallback everywhere else.</p>
+        </li>
+        <li>
+          <h3>🗂️ Rich cards</h3>
+          <p>Markdown descriptions, labels, due dates, assignees, priorities, checklists, parent ↔ child cards and threaded comments with @mentions. Plus file attachments, custom fields (text, number, date or a select list) and private reminders.</p>
+        </li>
+        <li>
+          <h3>👥 Collaboration</h3>
+          <p>Board sharing with per-user and per-group access control, plus watchers on a card, a thread or a whole board. A board can also be published read-only at a link that needs no Nextcloud account.</p>
+        </li>
+        <li>
+          <h3>✅ Review workflow</h3>
+          <p>Request a review, then approve or request changes. Customizable review types and an optional done-gate that holds a card until every review is approved.</p>
+        </li>
+        <li>
+          <h3>🔁 Automation</h3>
+          <p>Stack roles and WIP limits, recurring cards on RRULE schedules, auto-archive rules for cards that are done, and card templates to start from. Point a board at an IMAP mailbox and incoming mail lands as cards.</p>
+        </li>
+        <li>
+          <h3>📊 Three views</h3>
+          <p>Board, List and Timeline (Gantt) — switch per board, remembered per user. Cards plot on a date axis by start → due. Group the board into swimlanes by assignee, label or priority, and save a filter to come back to.</p>
+        </li>
+        <li>
+          <h3>🧭 My Work &amp; Projects</h3>
+          <p>A cross-board hub for your tasks, the reviews waiting on you, and an inbox of mentions — plus Projects that collect cards across boards.</p>
+        </li>
+        <li>
+          <h3>📈 Analytics</h3>
+          <p>Per-board and per-project velocity, cycle time and throughput, with breakdowns by column, priority, assignee and label.</p>
+        </li>
+        <li>
+          <h3>⌨️ Power-user UX</h3>
+          <p>A command palette with full-text search across cards and comments, keyboard-first navigation, undo toasts and a trash with restore.</p>
+        </li>
+        <li>
+          <h3>🔗 Migration &amp; code links</h3>
+          <p>Import a board from Deck, a Trello JSON export or a CSV — your originals are left untouched. Attach pull requests and issues to a card, with GitHub and Forgejo webhooks that move cards as work lands.</p>
+        </li>
+        <li>
+          <h3>📅 In your calendar</h3>
+          <p>Every board you can read shows up as a read-only CalDAV calendar of its due-dated cards, so they appear in Nextcloud Calendar and Tasks and on your phone. A board can also publish an <span class="inline-code">.ics</span> feed URL.</p>
+        </li>
+        <li>
+          <h3>⏱️ Time tracking</h3>
+          <p>Log time against a card with a note and see the total per card, or let a column automation start and stop the timer as work moves.</p>
+        </li>
+        <li>
+          <h3>💾 Export &amp; backup</h3>
+          <p>Download any board as a zip with its attachments and import it back anywhere, or duplicate it in place. Administrators can schedule periodic backups of every board.</p>
+        </li>
+        <li>
+          <h3>📱 Works offline</h3>
+          <p>Kanso is an installable PWA: a service worker caches the app shell and the boards you have opened, so it starts with no network.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="screenshots" class="alt">
+    <div class="wrap">
+      <h2>Screenshots</h2>
+      <p class="section-intro">Cards, the timeline and board analytics.</p>
+      <div class="gallery">
+        <figure>
+          <div class="shot">
+            <img src="screenshots/kanso-card.png" width="1600" height="1000" loading="lazy"
+                 alt="A Kanso card open in detail view, showing a markdown description, a checklist, a priority, a due date, an assignee and a threaded discussion.">
+          </div>
+          <figcaption>A card: markdown description, checklist, priority, due date, assignee and a threaded discussion.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot">
+            <img src="screenshots/kanso-timeline.png" width="1600" height="760" loading="lazy"
+                 alt="Kanso Timeline (Gantt) view: cards plotted on a date axis by start date to due date, with a due-only card shown as a milestone marker.">
+          </div>
+          <figcaption>Timeline (Gantt): cards plotted by start → due, with due-only cards as milestones.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot">
+            <img src="screenshots/kanso-analytics.png" width="1600" height="1500" loading="lazy"
+                 alt="Kanso board analytics: charts breaking cards down by column, priority and label, alongside a weekly velocity trend.">
+          </div>
+          <figcaption>Board analytics: cards by column, priority and label, plus a weekly velocity trend.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Install it</h2>
+      <p class="section-intro">Kanso is published on the Nextcloud App Store, so a server administrator can install it without touching the shell.</p>
+      <ol class="steps">
+        <li>In Nextcloud, open <strong>Apps</strong> as an administrator and search for <strong>Kanso</strong> — it is listed under <em>Organization</em> and <em>Office &amp; text</em>.</li>
+        <li>Select <strong>Download and enable</strong>.</li>
+        <li>Open <strong>Kanso</strong> from the app menu and create your first board.</li>
+      </ol>
+      <p>
+        Prefer to install by hand? Every release ships a pre-built tarball on
+        <a href="https://github.com/aktasfatih/kanso/releases">GitHub Releases</a> — no Node or Composer needed on your server.
+        The tarball and source-build steps are in the
+        <a href="https://github.com/aktasfatih/kanso#installation">README installation guide</a>.
+      </p>
+      <p>
+        Two optional server pieces make Kanso better: Nextcloud’s
+        <a href="https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html">system cron</a>
+        drives recurring cards and auto-archiving, and the
+        <a href="https://github.com/nextcloud/notify_push">High Performance Backend</a> turns on realtime updates.
+        Kanso falls back to polling when the latter is absent.
+      </p>
+      <dl class="facts">
+        <div><dt>Nextcloud</dt><dd>32 – 34</dd></div>
+        <div><dt>PHP</dt><dd>8.2 – 8.3</dd></div>
+        <div><dt>Databases</dt><dd>Postgres · MySQL · SQLite</dd></div>
+        <div><dt>License</dt><dd>AGPL-3.0-or-later</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <h2>For tinkerers</h2>
+      <ul class="grid">
+        <li>
+          <h3>Your language</h3>
+          <p>Kanso follows your Nextcloud language automatically, and translations already ship for several. Adding one needs no code — see <a href="https://github.com/aktasfatih/kanso/blob/main/docs/TRANSLATING.md">the translation guide</a>.</p>
+        </li>
+        <li>
+          <h3>AI access over MCP</h3>
+          <p>An optional <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server lets MCP clients read and manage your boards through Kanso’s API, authenticating with a revocable Nextcloud app password. It is a separate artifact, not bundled into the installed app.</p>
+        </li>
+        <li>
+          <h3>Contributions welcome</h3>
+          <p>Bug reports and pull requests are both welcome. Start with the <a href="https://github.com/aktasfatih/kanso/issues">issue tracker</a> and <a href="https://github.com/aktasfatih/kanso/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <ul class="footer-links">
+      <li><a href="https://apps.nextcloud.com/apps/kanso">App Store listing</a></li>
+      <li><a href="https://github.com/aktasfatih/kanso">Source code</a></li>
+      <li><a href="https://github.com/aktasfatih/kanso/releases">Releases</a></li>
+      <li><a href="https://github.com/aktasfatih/kanso/issues">Report an issue</a></li>
+      <li><a href="https://github.com/aktasfatih/kanso/blob/main/LICENSE">License</a></li>
+    </ul>
+    <p>
+      Kanso is free and open source under the
+      <a href="https://github.com/aktasfatih/kanso/blob/main/LICENSE">AGPL-3.0-or-later</a>, and always will be for the community.
+      If your organization needs to use Kanso without AGPL obligations, a separate commercial license is available —
+      reach out at <a href="mailto:akfatih2@gmail.com">akfatih2@gmail.com</a>.
+    </p>
+    <p>Built by Fatih AKTAS. Not affiliated with Nextcloud GmbH.</p>
+  </div>
+</footer>
+
+</body>
+</html>

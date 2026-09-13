@@ -38,6 +38,7 @@ import { ref, computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import CardDetail from './CardDetail.vue'
+import { usePageTitle } from '../composables/usePageTitle.js'
 
 defineProps({
 	cardId: {
@@ -66,6 +67,15 @@ const emit = defineEmits(['close', 'navigate'])
 const detailRef = ref(null)
 const modalTitle = ref('')
 const modalName = computed(() => modalTitle.value || t('kanso', 'Card'))
+
+// The open card owns the browser tab title (#125) for as long as the dialog is
+// up. This component mounts INSIDE BoardView (nested card-modal route) or on top
+// of a cross-board View, and usePageTitle is a stack — so the card title wins
+// while it is open and the board's (or the View's) comes back on close, with
+// neither side knowing about the other. `modalTitle` is empty until CardDetail
+// reports the loaded card, which leaves the underlying title in place rather
+// than flashing a placeholder.
+usePageTitle(modalTitle)
 
 // The X button (NcModal @close) mirrors an Escape at the card root: if an
 // attribute popover is open, dismiss it first rather than closing the whole card.

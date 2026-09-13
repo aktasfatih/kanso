@@ -37,6 +37,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
+# Landing-page screenshots: binary copies of the docs/ PNGs, so they carry no
+# inline header either. website/index.html and website/README.md declare their
+# own.
+[[annotations]]
+path = ["website/screenshots/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Fatih AKTAS <akfatih2@gmail.com>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
 # App icon: an inline SPDX comment before the root <svg> element makes Imagick
 # fail to detect the SVG ("no decode delegate"), which breaks Nextcloud's
 # theming icon generation (→ the PWA manifest icon 404s and the app can't be

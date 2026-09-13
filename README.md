@@ -39,11 +39,24 @@ your work, on your own Nextcloud, laid out plainly.
   priorities.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
   comments**.
+- **Attachments**: upload files to a card (up to 100 MiB each). They live in
+  Kanso's own app storage, not in your personal Files.
+- **Custom fields** defined per board — text, number, date or a select list —
+  and filled in on the card.
+- **Time tracking**: log time against a card, with a note, and see the total per
+  card. An automation rule can start and stop the timer as a card enters a
+  column, so the common case needs no clicking.
+- **Reminders**: nudge yourself about a card, or about a single comment —
+  later today, tomorrow, next week, or a time you pick. Private to you, and
+  delivered as a Nextcloud notification (so it needs cron).
 
 <img src="docs/kanso-card.png" alt="A Kanso card with a markdown description, a checklist, priority, due date, an assignee and a threaded discussion" width="900">
 
 ### 👥 Collaboration
 - **Board sharing** with per-user and per-group access control.
+- **Public link**: publish a board **read-only** at a link that needs no
+  Nextcloud account — optionally with its comments visible. Rotate or switch
+  the link off at any time from board settings.
 - **Watchers**: subscribe to cards, comment threads, or a **whole board** and
   get notified of new activity.
 - **Parent/child cards**: a parent auto-completes when all its children are done.
@@ -61,10 +74,29 @@ your work, on your own Nextcloud, laid out plainly.
   the status (Not started / In progress / Done) directly from the card.
 - **Recurring cards** on RRULE schedules, and **auto-archive** rules for done
   cards.
+- **Card templates**: mark any card as a template, then start new cards from it
+  straight out of the column's composer.
 
 ### 🔗 Integrations & migration
 - **Import from Deck**: one click copies a Deck board (stacks, cards, labels,
   assignees) into a new Kanso board you own. Your Deck boards are left untouched.
+- **Import from Trello or a CSV**: hand Kanso a Trello board's JSON export, or a
+  CSV of cards plus a mapping of which column is the title, the description, the
+  due date and so on. Both sit in the same **Import** menu on the board list.
+- **Export, duplicate, back up**: download any board as a zip (its attachments
+  included) and import that zip back on any instance; or duplicate a board, with
+  or without its cards. Administrators can additionally schedule **periodic
+  backups of every board** into a Nextcloud folder, keeping the most recent few
+  per board — off until an admin turns it on in Nextcloud's admin settings.
+- **Calendar**: every board you can read appears as a **read-only CalDAV
+  calendar** of its due-dated cards, so they show up in Nextcloud Calendar and
+  Tasks and on your phone — nothing to copy or paste, and you can hide a board
+  from your own calendar in board settings. A board can also publish a token
+  **`.ics` feed URL** for calendar apps that want one. Both are read-only:
+  ticking the task off in your calendar does not close the card.
+- **Email intake**: point a board at an IMAP mailbox and mail arriving in a
+  chosen folder becomes a card in a chosen column, with an optional sender
+  allowlist. Kanso polls the mailbox on cron; nothing is exposed inbound.
 - **Code links**: attach pull requests/issues to a card with live
   open/merged/closed badges, and copy a ready-made `kanso-<id>` branch name.
 - **GitHub & Forgejo webhooks**: an HMAC-verified webhook (send it
@@ -87,6 +119,11 @@ your work, on your own Nextcloud, laid out plainly.
 - **Board, List and Timeline** views: switch per board (remembered per user).
   The list is a dense, scannable table; the **Timeline (Gantt)** plots cards on a
   date axis by **start → due**, with due-only cards as milestones.
+- **Swimlanes**: split the board into rows grouped by **assignee**, **label** or
+  **priority**. A view over the cards you already have, remembered per board in
+  your own browser — not lanes you create and maintain.
+- **Saved filters**: name the filter you're looking at and come back to it.
+  Private to you, per board.
 - **Display sort**: order cards by priority, due date or title. View-only: your
   manual drag order is always preserved.
 
@@ -114,16 +151,33 @@ your work, on your own Nextcloud, laid out plainly.
   **trash** with restore.
 
 ### 🌍 Localization
-- **Follows your Nextcloud language** automatically. German ships today; more
-  languages are welcome — see [docs/TRANSLATING.md](docs/TRANSLATING.md)
+- **Follows your Nextcloud language** automatically. Kanso ships translations for
+  <!-- l10n:languages -->German, Spanish, French, Italian, Dutch, Polish, Brazilian Portuguese, Russian, Turkish and Simplified Chinese<!-- /l10n:languages -->.
+  More languages are welcome — see [docs/TRANSLATING.md](docs/TRANSLATING.md)
   (no code required).
 
 ## Installation
 
-Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.3**. It isn't on the Nextcloud
-App Store yet — until it is, install the pre-built tarball from
-[GitHub Releases](https://github.com/aktasfatih/kanso/releases) (no Node or
-Composer needed on your server):
+Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.3**. It's on the
+**[Nextcloud App Store](https://apps.nextcloud.com/apps/kanso)**, so the quickest
+install is the one-click route: in Nextcloud open **Apps**, find **Kanso** under
+*Organization* (or *Office & text*), and click **Download and enable**. From the
+command line:
+
+```sh
+cd /path/to/nextcloud
+sudo -u www-data php occ app:install kanso
+```
+
+Open **Kanso** from the Nextcloud app menu and create your first board. Upgrades
+arrive through Nextcloud's own app updater.
+
+<details>
+<summary><b>Install the release tarball manually</b> (no Node or Composer needed on your server)</summary>
+
+If your server can't reach the App Store, or you'd rather pin an exact build,
+install the pre-built tarball from
+[GitHub Releases](https://github.com/aktasfatih/kanso/releases):
 
 ```sh
 # 1. Download the tarball from the latest release
@@ -138,11 +192,10 @@ cd /path/to/nextcloud
 sudo -u www-data php occ app:enable kanso
 ```
 
-The tarball is not (yet) signed by the App Store, so Nextcloud lists Kanso as
-an untested/custom app — that's expected. To upgrade, extract the new tarball
-over the old directory and run `occ upgrade`.
+To upgrade a tarball install, extract the new tarball over the old directory and
+run `occ upgrade`.
 
-Open **Kanso** from the Nextcloud app menu and create your first board.
+</details>
 
 <details>
 <summary><b>Install from source</b> (needs Node 20+, Composer, shell access)</summary>
@@ -164,8 +217,9 @@ sudo -u www-data php occ app:enable kanso
 
 </details>
 
-- **Background jobs** (recurring cards, auto-archive, change-log pruning) run
-  through Nextcloud's cron. Make sure [system cron](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html)
+- **Background jobs** (recurring cards, auto-archive, reminders, email intake,
+  scheduled backups, change-log pruning) run through Nextcloud's cron. Make sure
+  [system cron](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html)
   is configured.
 - **Realtime updates** use the [High Performance Backend (`notify_push`)](https://github.com/nextcloud/notify_push)
   when it's installed; otherwise Kanso falls back to polling automatically.
@@ -272,7 +326,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app \
 Tests: PHPUnit for the API/services, Playwright for board interactions.
 
 ```sh
-npm test                                   # Playwright e2e (needs the dev stack up)
+npm run test:e2e                           # Playwright e2e (needs the dev stack up)
 docker run --rm -v "$PWD":/app -w /app php:8.2-cli-alpine \
   php vendor/bin/phpunit -c phpunit.xml    # PHP unit tests
 ```
@@ -288,8 +342,9 @@ its own data.
 
 Actively developed and usable day-to-day, with a broad feature set already
 shipped (boards, the cross-board My Work hub, projects, analytics, reviews,
-recurring cards, realtime, Import from Deck, and more). Bug reports and pull
-requests are welcome. See the [issues](https://github.com/aktasfatih/kanso/issues)
+recurring cards, realtime, attachments, custom fields, time tracking, calendar
+sync, and imports from Deck, Trello and CSV). Bug reports and pull requests are
+welcome. See the [issues](https://github.com/aktasfatih/kanso/issues)
 and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Before a release**, re-check that this README and `appinfo/info.xml`

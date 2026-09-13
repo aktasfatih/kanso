@@ -45,7 +45,7 @@ class ChangeDetailMapperTest extends TestCase {
 	 */
 	private function buildQb(array $rows): IQueryBuilder&MockObject {
 		$qb = $this->createMock(IQueryBuilder::class);
-		foreach (['select', 'from', 'where'] as $method) {
+		foreach (['select', 'from', 'leftJoin', 'where', 'orderBy', 'setMaxResults'] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
 		$qb->method('expr')->willReturn(self::exprSink());
@@ -82,5 +82,26 @@ class ChangeDetailMapperTest extends TestCase {
 		self::assertSame('New', $map[55]->getToText());
 		self::assertNull($map[60]->getFromText());
 		self::assertSame('Added', $map[60]->getToText());
+	}
+
+	public function testDeleteByChangeIdsEmptyInputShortCircuits(): void {
+		// No statement is built for an empty id set - the prune's no-op case.
+		$this->db->expects(self::never())->method('getQueryBuilder');
+		self::assertSame(0, $this->mapper->deleteByChangeIds([]));
+	}
+
+	public function testDeleteByIdsEmptyInputShortCircuits(): void {
+		$this->db->expects(self::never())->method('getQueryBuilder');
+		self::assertSame(0, $this->mapper->deleteByIds([]));
+	}
+
+	public function testFindOrphanIdsReturnsTheScannedIds(): void {
+		// The anti-join's rows come back as plain ints for the batched delete.
+		$this->db->method('getQueryBuilder')->willReturn($this->buildQb([
+			['id' => 12],
+			['id' => 34],
+		]));
+
+		self::assertSame([12, 34], $this->mapper->findOrphanIds(100));
 	}
 }

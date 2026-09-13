@@ -246,27 +246,35 @@ fi
 if [ "${KANSO_SKIP_NOTIFY_PUSH:-0}" = "1" ] || [ "$KANSO_DB" != "postgres" ]; then
 	echo "Skipping notify_push setup (KANSO_SKIP_NOTIFY_PUSH=${KANSO_SKIP_NOTIFY_PUSH:-0}, db=${KANSO_DB})"
 else
-# Browsers reach the push daemon through apache at http://localhost:8891/push.
-# Apache additionally listens on 8891 INSIDE the container so the very same
-# URL is reachable from occ/php too (notify_push:setup connects to it).
-docker exec kanso-dev bash -c '
-	a2enmod -q proxy proxy_http proxy_wstunnel >/dev/null
-	cat > /etc/apache2/conf-enabled/notify_push.conf <<CONF
-ProxyPass /push/ws ws://notify_push:7867/ws
-ProxyPass /push/ http://notify_push:7867/
-ProxyPassReverse /push/ http://notify_push:7867/
-CONF
-	grep -q "Listen 8891" /etc/apache2/ports.conf || echo "Listen 8891" >> /etc/apache2/ports.conf
-	# `graceful` on purpose; do NOT "fix" this to `apache2ctl -k restart`. Both
-	# halves were measured on this image (Apache/2.4.68, Debian): a graceful
-	# reload DOES bind a freshly appended `Listen` (append `Listen 8892` here and
-	# :8892 answers straight after), and `-k restart` run in this exec breaks the
-	# boot — the exec came back 129 (128+SIGHUP) and `set -eu` aborted setup.sh on
-	# this very line, with the stderr that would have explained it swallowed by
-	# the `2>/dev/null` below. If push is ever unreachable at :8891 on a first
-	# boot, the reproducible cause is the app store, just below — not this line.
-	apache2ctl graceful
-' 2>/dev/null
+# Browsers reach the push daemon through apache at http://localhost:8891/push,
+# and apache additionally listens on 8891 INSIDE the container so the very same
+# URL is reachable from occ/php too (notify_push:setup connects to it). Both
+# halves are configured by dev/apache/notify_push.conf, which docker-compose.yml
+# bind-mounts into /etc/apache2/conf-enabled/ — so it is applied by the `up -d`
+# above, on every boot, with no step here to forget.
+#
+# This used to be a `docker exec` that ran a2enmod and wrote that conf into the
+# running container. /etc/apache2 is NOT on a volume, so every recreation of the
+# nextcloud service (a compose edit, an NC_VERSION bump, a `docker compose up -d`
+# from a different worktree re-pointing KANSO_APP_SRC) silently reverted it while
+# the daemon stayed up and Nextcloud kept advertising push — the exact
+# "advertised but dead" state the self-test below exists to catch, arriving
+# without anyone re-running setup.sh. Do not move it back into an exec.
+#
+# It does mean the config only lands when the container is (re)created. compose
+# does that for us on the `up -d` above whenever this file changes; a stack left
+# running from before the mount existed needs one `docker compose --profile
+# postgres up -d --force-recreate nextcloud`. The self-test below says so if it
+# is still missing.
+if ! docker exec kanso-dev test -f /etc/apache2/conf-enabled/notify_push.conf; then
+	echo >&2
+	echo "WARNING: the /push reverse-proxy config is not mounted in kanso-dev." >&2
+	echo "  * dev/apache/notify_push.conf should be bind-mounted to" >&2
+	echo "    /etc/apache2/conf-enabled/notify_push.conf (see docker-compose.yml)." >&2
+	echo "  * Recreate the container so the mount is applied:" >&2
+	echo "      docker compose --profile postgres up -d --force-recreate nextcloud" >&2
+	echo >&2
+fi
 
 # Best-effort install: it needs egress (github.com for the pinned tarball, or
 # apps.nextcloud.com for the fallback), which not every host has. Under `set -eu`

@@ -139,6 +139,10 @@ import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useProjects } from '../composables/useProjects.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
+
+// Browser tab title (#125).
+usePageTitle(t('kanso', 'Projects'))
 
 const COLOR_PRESETS = [
 	'e53935', 'f4511e', 'f6bf26', '33b679', '0b8043',

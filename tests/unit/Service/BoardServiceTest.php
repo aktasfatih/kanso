@@ -516,6 +516,22 @@ class BoardServiceTest extends TestCase {
 		self::assertGreaterThan(0, $deleted->getDeletedAt());
 	}
 
+	public function testDeleteWithoutManageLeavesTheBoardUntouched(): void {
+		// The delete path is the ONLY entry point to the irreversible purge
+		// (PurgeDeletedBoards reaps whatever carries a tombstone), so a caller
+		// without MANAGE must not even get as far as writing one.
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->delete(1, 'bob');
+	}
+
 	public function testFindAllUsesGroupIdsFromPermissionService(): void {
 		$boards = [$this->board()];
 		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn(['devs']);

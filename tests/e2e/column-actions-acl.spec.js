@@ -74,6 +74,10 @@ test.describe('Column actions and card drag are editors only (#9897)', () => {
 			await expect(page.locator('.stack-column__actions')).toHaveCount(0)
 			await expect(page.getByRole('button', { name: 'Column actions' })).toHaveCount(0)
 			await expect(page.locator('.stack-column__title--editable')).toHaveCount(0)
+			// Including "Archive all cards" (#10430) — the column has a card, so the
+			// entry would render for an editor; a viewer must not reach it at all.
+			await expect(page.getByRole('button', { name: /^Archive (all cards|\d+ visible cards?)$/ }))
+				.toHaveCount(0)
 			// Neither the tile nor the column header is a drag source: pragmatic
 			// drag-and-drop marks a registered draggable with draggable="true".
 			await expect(page.locator('.card-tile[draggable="true"]')).toHaveCount(0)
@@ -118,6 +122,8 @@ test.describe('Column actions and card drag stay available to editors (#9897)', 
 		await expect(page.locator('.stack-column__actions')).toHaveCount(1, { timeout: 10_000 })
 		await page.locator('.stack-column__actions button').first().click()
 		await expect(page.getByRole('button', { name: 'Delete column' })).toBeVisible({ timeout: 8_000 })
+		// …and the bulk archive entry (#10430), which the viewer above does not get.
+		await expect(page.getByRole('button', { name: 'Archive all cards' })).toBeVisible()
 		await page.keyboard.press('Escape')
 
 		// Tile and column header are both real drag sources.

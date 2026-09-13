@@ -957,14 +957,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:user="entry.participant"
 								:display-name="resolveDisplayName(entry)"
 								:size="32"
-								:disable-tooltip="false" />
+								:disable-tooltip="true" />
 							<span v-else class="sharing__group-icon" :title="t('kanso', 'Group')">
 								<AccountGroupIcon :size="20" />
 							</span>
 						</div>
 
 						<!-- Display name -->
-						<span class="sharing__entry-name">{{ resolveDisplayName(entry) }}</span>
+						<span class="sharing__entry-name" :title="resolveDisplayName(entry)">{{ resolveDisplayName(entry) }}</span>
 
 						<!-- Board side (#3742): internal (provider) vs external (client).
 						     Role assignment is MANAGE-gated; others see a passive badge. -->

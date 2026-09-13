@@ -168,6 +168,10 @@ msgid "{ok} cards updated"
 msgstr "{ok} kaarten bijgewerkt"
 
 #: src/views/BoardView.vue
+msgid "{ok} cards updated before the action failed"
+msgstr ""
+
+#: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr "{ok} bijgewerkt, {skipped} overgeslagen"
 
@@ -262,12 +266,18 @@ msgstr[1] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:213
 #: src/views/BoardList.vue:256
-#: src/views/BoardStats.vue:420
-#: src/views/ProjectStats.vue:340
+#: src/views/BoardStats.vue:444
+#: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n kaart"
 msgstr[1] "%n kaarten"
+
+#: src/components/StackColumn.vue:955
+msgid "%n card archived"
+msgid_plural "%n cards archived"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/CsvImportModal.vue:54
 msgid "%n card created"
@@ -293,13 +303,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4344
+#: src/components/CardDetail.vue:4369
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
 
-#: src/components/CardDetail.vue:4342
+#: src/components/CardDetail.vue:4367
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
@@ -323,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4340
+#: src/components/CardDetail.vue:4365
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -341,19 +351,19 @@ msgid_plural "%n overdue"
 msgstr[0] "%n te laat"
 msgstr[1] "%n te laat"
 
-#: src/views/BoardStats.vue:421
+#: src/views/BoardStats.vue:445
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1018
+#: src/components/CardDetail.vue:1030
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
 msgstr[1] "%n projecten"
 
-#: src/components/CardDetail.vue:2015
+#: src/components/CardDetail.vue:2029
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -371,7 +381,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n ongeplande kaart"
 msgstr[1] "%n ongeplande kaarten"
 
-#: src/components/CardDetail.vue:281
+#: src/components/CardDetail.vue:293
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n volger"
@@ -608,6 +618,16 @@ msgstr "Goedgekeurd"
 msgid "Archive"
 msgstr "Archiveren"
 
+#: src/components/StackColumn.vue:179
+msgid "Archive %n visible card"
+msgid_plural "Archive %n visible cards"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/StackColumn.vue
+msgid "Archive all cards"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue
 msgid "Archive board"
@@ -631,6 +651,7 @@ msgstr "Selectie archiveren"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 msgid "Archived"
 msgstr "Gearchiveerd"
@@ -925,6 +946,10 @@ msgstr "Opsommingslijst"
 msgid "by {user}"
 msgstr "door {user}"
 
+#: src/App.vue
+msgid "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Calendar feed"
 msgstr "Agendafeed"
@@ -1003,6 +1028,10 @@ msgstr "Kaartvoorbeeld"
 #: src/components/ManageTemplatesModal.vue
 msgid "Card templates"
 msgstr "Kaartsjablonen"
+
+#: src/App.vue
+msgid "Card view"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Card visibility"
@@ -1686,7 +1715,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4533
+#: src/components/CardDetail.vue:4558
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3079,6 +3108,16 @@ msgstr "Issue-opname"
 msgid "Italic"
 msgstr "Cursief"
 
+#: src/components/CardDetail.vue
+msgid "Jump to the discussion"
+msgstr ""
+
+#: src/components/CardDetail.vue:6265
+msgid "Jump to the discussion (%n comment)"
+msgid_plural "Jump to the discussion (%n comments)"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/BoardTimelineView.vue
 msgid "Jump to today"
 msgstr "Naar vandaag springen"
@@ -3360,7 +3399,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4535
+#: src/components/CardDetail.vue:4560
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4737,11 +4776,15 @@ msgstr "Reacties tonen (alleen-lezen)"
 msgid "Show formatting toolbar"
 msgstr "Opmaakbalk tonen"
 
+#: src/App.vue
+msgid "Show the discussion below the card"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:6238
+#: src/components/CardDetail.vue:6271
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5407,7 +5450,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4534
+#: src/components/CardDetail.vue:4559
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -5488,7 +5531,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4536
+#: src/components/CardDetail.vue:4561
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

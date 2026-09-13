@@ -15,7 +15,15 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { lintCatalogText, pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog } from './l10n.mjs'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+	lintCatalogText, pluralFormFor, npluralsOf, scaffoldFromPot, mergeCatalog,
+	LANGUAGE_NAMES, shippedLanguages, languageListSentence, languageCountWord,
+} from './l10n.mjs'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const HEADER = [
 	'msgid ""',
@@ -335,4 +343,88 @@ test('sync leaves the Plural-Forms header alone and re-slots to what it declares
 	assert.ok(three.includes('msgstr[1] "%n Karten"'))
 	assert.ok(three.includes('msgstr[2] ""'), 'third plural form not scaffolded')
 	assert.equal(lintCatalogText('ru', three).ok, true)
+})
+
+// ── the docs' language claims must match what l10n/ actually ships ───────────
+//
+// The README said "German ships today" for months after nine more catalogues
+// landed — a hand-maintained claim with nothing checking it. These tests derive
+// the prose from l10n/ and fail when a doc disagrees, so adding or dropping a
+// language forces the docs to follow.
+//
+// Each guarded phrase sits between a matching pair of HTML comment markers, so
+// the same machinery covers the README's language *list* and TRANSLATING.md's
+// language *count*. Guarding another sentence means wrapping it in markers and
+// adding a row below — not a second mechanism.
+
+/** Every prose claim derived from l10n/: file, marker name, expected text. */
+const GUARDED_CLAIMS = [
+	{
+		file: 'README.md',
+		marker: 'l10n:languages',
+		expected: () => languageListSentence(),
+	},
+	{
+		// "…nothing else copies a new string into the ten catalogues."
+		file: 'docs/TRANSLATING.md',
+		marker: 'l10n:count',
+		expected: () => languageCountWord(),
+	},
+	{
+		// "…you don't have to translate your string into ten languages to merge it."
+		file: 'docs/TRANSLATING.md',
+		marker: 'l10n:count',
+		expected: () => languageCountWord(),
+	},
+]
+
+/** All texts wrapped in `<!-- name -->…<!-- /name -->` within `text`. */
+function markedBlocks(text, marker) {
+	const re = new RegExp(`<!-- ${marker} -->(.*?)<!-- /${marker} -->`, 'gs')
+	return [...text.matchAll(re)].map((m) => m[1].trim())
+}
+
+test('every shipped catalogue has an English name for the README', () => {
+	for (const lang of shippedLanguages()) {
+		assert.ok(LANGUAGE_NAMES[lang],
+			`l10n/${lang}.json ships but "${lang}" has no entry in LANGUAGE_NAMES (scripts/l10n.mjs)`)
+	}
+})
+
+test('languageListSentence renders a prose list and refuses an unnamed language', () => {
+	assert.equal(languageListSentence(['de']), 'German')
+	assert.equal(languageListSentence(['de', 'fr']), 'German and French')
+	assert.equal(languageListSentence(['de', 'fr', 'tr']), 'German, French and Turkish')
+	assert.throws(() => languageListSentence(['de', 'xx']), /No English name for language "xx"/)
+})
+
+test('languageCountWord spells small counts and falls back to digits', () => {
+	assert.equal(languageCountWord(['de']), 'one')
+	assert.equal(languageCountWord(Array(10).fill('de')), 'ten')
+	assert.equal(languageCountWord(Array(11).fill('de')), 'eleven')
+	assert.equal(languageCountWord(Array(20).fill('de')), 'twenty')
+	assert.equal(languageCountWord(Array(21).fill('de')), '21')
+})
+
+test('the docs state exactly the languages l10n/ ships', () => {
+	// Group by file so each file is read once and every marker pair is checked,
+	// including repeated ones (TRANSLATING.md says "ten" twice).
+	for (const file of new Set(GUARDED_CLAIMS.map((c) => c.file))) {
+		const claims = GUARDED_CLAIMS.filter((c) => c.file === file)
+		const text = fs.readFileSync(path.join(ROOT, file), 'utf8')
+		for (const marker of new Set(claims.map((c) => c.marker))) {
+			const found = markedBlocks(text, marker)
+			const wanted = claims.filter((c) => c.marker === marker)
+			assert.equal(found.length, wanted.length,
+				`${file} has ${found.length} <!-- ${marker} -->…<!-- /${marker} --> block(s), `
+				+ `expected ${wanted.length} — the claim must stay machine-checkable, so keep the `
+				+ `markers around it (and add a row to GUARDED_CLAIMS if you wrapped a new sentence)`)
+			found.forEach((actual, i) => {
+				const expected = wanted[i].expected()
+				assert.equal(actual, expected,
+					`${file}: the text between ${marker} marker pair #${i + 1} is stale. `
+					+ `Replace it with:\n  ${expected}`)
+			})
+		}
+	}
 })

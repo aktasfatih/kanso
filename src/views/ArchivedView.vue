@@ -139,6 +139,7 @@ import ArchiveArrowUpIcon from 'vue-material-design-icons/ArchiveArrowUp.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { updateCard as apiUpdateCard } from '../services/api.js'
 import { cssColor } from '../services/color.js'
@@ -161,6 +162,12 @@ const boardId = computed(() => props.id)
 const { data: boardData, isLoading, isError } = useBoard(boardId)
 
 const boardTitle = computed(() => boardData.value?.board?.title ?? '')
+
+// Browser tab title (#125): whose archive this is. Empty while the board query
+// is in flight, which leaves the bare app name rather than a half-built title.
+usePageTitle(() => (boardTitle.value
+	? boardTitle.value + ' · ' + t('kanso', 'Archived')
+	: ''))
 
 const bySortKey = (a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)
 

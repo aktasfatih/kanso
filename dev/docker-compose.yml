@@ -167,6 +167,12 @@ services:
       # Ensure the bundled apps dir is writable at install time; older NC majors
       # (30/31) abort the first-boot install otherwise. Runs as root pre-install.
       - ./hooks/pre-installation:/docker-entrypoint-hooks.d/pre-installation:ro
+      # The notify_push reverse proxy (/push/ws + /push/). MOUNTED, not written
+      # by setup.sh at boot: /etc/apache2 lives in the container's ephemeral
+      # layer, so anything exec'd into it vanished the next time this service was
+      # recreated — leaving the daemon up, the push capability still advertised,
+      # and /push/ws answering 404. See the file for the full story.
+      - ./apache/notify_push.conf:/etc/apache2/conf-enabled/notify_push.conf:ro
     depends_on:
       redis:
         condition: service_started

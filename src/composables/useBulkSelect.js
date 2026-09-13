@@ -6,6 +6,12 @@ import { bulkApplyCards } from '../services/api.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
 
 /**
+ * Cards per /api/cards/bulk request. Mirrors BulkCardService::MAX_CARDS, which
+ * is pinned to this number by BulkCardServiceTest — a longer list is a 400.
+ */
+const MAX_PER_REQUEST = 100
+
+/**
  * Resolve a value that may be a plain primitive, a Vue ref, or a getter fn.
  * @param {any} v
  */
@@ -106,20 +112,61 @@ export function useBulkSelect(boardId, queryClient) {
 	const lastResult = ref(null)
 
 	/**
-	 * Apply a bulk action to the current selection.
+	 * Apply a bulk action to an explicit list of card ids, WITHOUT touching the
+	 * selection or selection mode — the column-level actions (#10430) run over a
+	 * whole column, not over a selection, so they must not clear one.
 	 *
-	 * @param {string} action - one of: move, add_label, remove_label, assign_user, set_due_date, set_status, archive, delete
+	 * The list is chunked to the server's MAX_CARDS cap (#10435: a single
+	 * oversized list is a hard 400, and a shift-range has no upper limit, so any
+	 * column with more than 100 cards could otherwise fail every bulk action
+	 * wholesale). The chunks are issued SEQUENTIALLY — each card's update fires
+	 * its own board-changed push, so fanning them out in parallel would only pile
+	 * more concurrent work on the same board.
+	 *
+	 * A chunk that rejects does NOT discard the chunks that already committed:
+	 * the partial summary is attached to the thrown error as `err.partial` so the
+	 * caller can still report — or offer an undo over — the cards that really did
+	 * change, and the cache invalidation runs either way (those writes happened
+	 * server-side regardless).
+	 *
+	 * @param {number[]} cardIds - card ids to apply the action to
+	 * @param {string} action - one of: move, add_label, remove_label, assign_user, set_due_date, set_status, archive, unarchive, delete
+	 * @param {object} params - action-specific params
+	 * @return {Promise<{ok: number[], skipped: object[]}>} merged per-card summary
+	 * @throws on server error, with the partial summary on `err.partial`
+	 */
+	async function applyToIds(cardIds, action, params = {}) {
+		const summary = { ok: [], skipped: [] }
+		try {
+			for (let i = 0; i < cardIds.length; i += MAX_PER_REQUEST) {
+				const chunk = cardIds.slice(i, i + MAX_PER_REQUEST)
+				const result = await bulkApplyCards(chunk, action, params)
+				summary.ok.push(...(result?.ok ?? []))
+				summary.skipped.push(...(result?.skipped ?? []))
+			}
+		} catch (err) {
+			err.partial = summary
+			throw err
+		} finally {
+			await queryClient.invalidateQueries({ queryKey: boardQueryKey(resolve(boardId)) })
+			// Bulk assign/archive/delete/move can change My Work membership (#3766, #9859).
+			invalidateCrossBoardFeeds(queryClient)
+		}
+		return summary
+	}
+
+	/**
+	 * Apply a bulk action to the current selection, then clear it.
+	 *
+	 * @param {string} action - one of: move, add_label, remove_label, assign_user, set_due_date, set_status, archive, unarchive, delete
 	 * @param {object} params - action-specific params
 	 * @throws on server error
 	 */
 	async function apply(action, params = {}) {
 		applying.value = true
 		try {
-			const result = await bulkApplyCards([...selected.value], action, params)
+			const result = await applyToIds([...selected.value], action, params)
 			lastResult.value = result
-			await queryClient.invalidateQueries({ queryKey: boardQueryKey(resolve(boardId)) })
-			// Bulk assign/archive/delete/move can change My Work membership (#3766, #9859).
-			invalidateCrossBoardFeeds(queryClient)
 			clear()
 			return result
 		} finally {
@@ -141,5 +188,6 @@ export function useBulkSelect(boardId, queryClient) {
 		applying,
 		lastResult,
 		apply,
+		applyToIds,
 	}
 }

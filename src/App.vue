@@ -270,6 +270,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Show formatting toolbar') }}
 				</NcCheckboxRadioSwitch>
 			</NcAppSettingsSection>
+			<!-- Card view (#10408). Where the Discussion/Activity panel sits. Stored
+			     server-side, so the choice follows the user to their other devices. -->
+			<NcAppSettingsSection id="card" :name="t('kanso', 'Card view')">
+				<p class="app-settings__intro">
+					{{ t('kanso', 'By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to.') }}
+				</p>
+				<!-- NcCheckboxRadioSwitch sets inheritAttrs:false and spreads $attrs
+				     onto its inner <input>, so this hook lands on the input itself. -->
+				<NcCheckboxRadioSwitch
+					type="switch"
+					data-test="setting-discussion-bottom"
+					:model-value="discussionAtBottom"
+					@update:model-value="toggleDiscussionPosition">
+					{{ t('kanso', 'Show the discussion below the card') }}
+				</NcCheckboxRadioSwitch>
+			</NcAppSettingsSection>
 		</NcAppSettingsDialog>
 	</NcContent>
 </template>
@@ -313,12 +329,16 @@ import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
 import { useViews } from './composables/useViews.js'
 import { useEditorPrefs } from './composables/useEditorPrefs.js'
+import { useCardPrefs } from './composables/useCardPrefs.js'
 
 const route = useRoute()
 const router = useRouter()
 
 // Editor toolbar pref — shared with all MarkdownEditor instances reactively
 const { editorToolbarHidden, setEditorToolbarHidden } = useEditorPrefs()
+
+// Card-view discussion placement (#10408) — shared with every open card view.
+const { discussionAtBottom, setDiscussionPosition } = useCardPrefs()
 
 // Help-menu destinations (#3901). Static external URLs — deliberately NOT
 // translated (they're addresses, not copy). Rendered by the nav-footer help
@@ -399,8 +419,10 @@ async function loadCollapsed() {
 		collapsedIds.value = new Set((s.collapsedBoardGroups ?? []).map(Number))
 		hiddenNav.value = new Set(s.hiddenNavSections ?? [])
 		setEditorToolbarHidden(s.editorToolbarHidden ?? false)
+		setDiscussionPosition(s.cardDiscussionPosition ?? 'side')
 	} catch {
-		// Non-fatal: folders just start expanded, all sections stay visible, toolbar stays shown.
+		// Non-fatal: folders just start expanded, all sections stay visible, toolbar
+		// stays shown, and the discussion panel keeps its default side placement.
 	}
 }
 function setGroupOpen(groupId, open) {
@@ -439,6 +461,17 @@ function toggleEditorToolbar(shown) {
 	updateSettings({ editorToolbarHidden: hidden }).catch(() => {
 		// Revert on failure
 		setEditorToolbarHidden(!hidden)
+	})
+}
+
+// Move the card view's Discussion/Activity panel between beside and below the
+// card (#10408), optimistically, reverting if the server write fails.
+function toggleDiscussionPosition(atBottom) {
+	const previous = discussionAtBottom.value ? 'bottom' : 'side'
+	const next = atBottom ? 'bottom' : 'side'
+	setDiscussionPosition(next)
+	updateSettings({ cardDiscussionPosition: next }).catch(() => {
+		setDiscussionPosition(previous)
 	})
 }
 

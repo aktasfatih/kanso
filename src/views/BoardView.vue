@@ -364,6 +364,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
 					:on-delete-stack="canEditBoard ? handleDeleteStack : null"
 					:on-restore-stack="canEditBoard ? handleRestoreStack : null"
+					:on-archive-all-cards="canEditBoard ? handleArchiveAllInStack : null"
+					:on-unarchive-cards="canEditBoard ? handleUnarchiveCards : null"
+					:filter-active="filterActive"
 					:on-rename-stack="canEditBoard ? handleRenameStack : null"
 					:on-set-role="canEditBoard ? handleSetRole : null"
 					:on-set-wip="canEditBoard ? handleSetWip : null"
@@ -646,6 +649,7 @@ import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
+import { usePageTitle } from '../composables/usePageTitle.js'
 import { useBoardSubscription } from '../composables/useBoardSubscription.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useAssignees } from '../composables/useAssignees.js'
@@ -897,6 +901,12 @@ function sortCards(cards) {
 	})
 }
 const { data: boardData, isLoading, isError, error: boardError, refetch: boardRefetch, createStack, createCard, updateStack, deleteStack, restoreStack } = useBoard(boardId)
+
+// Put the board's name in the browser tab (#125), so a bookmarked or pinned
+// board reads as "Personal - Kanso - Nextcloud" instead of the bare app name.
+// Empty until the query resolves (and forever if it 403s), which the composable
+// treats as "no title of my own" rather than writing `undefined`.
+usePageTitle(() => boardData.value?.board?.title ?? '')
 
 // Status-aware board error copy (#3662). A dead deep-link/notification to a
 // deleted board 404s; a revoked share 403s. Both should read as an explanatory
@@ -1272,6 +1282,10 @@ const filterState = createFilterState()
 // A live predicate rebuilt whenever the filter changes. `now` is captured once
 // per rebuild so the "this week" / "overdue" windows stay stable across a pass.
 const filterPredicate = computed(() => makePredicate(filterState, Date.now()))
+// Whether the filter bar is currently narrowing what the columns show. Only used
+// for wording (#10430): a column action that says "all cards" must instead name
+// the visible count when a filter is hiding some of them.
+const filterActive = computed(() => !filterIsEmpty(serializeFilter(filterState)))
 
 // ── Saved views (#3407) ───────────────────────────────────────────────────────
 // Per-user, per-board named filter snapshots persisted in NC user config.
@@ -2366,6 +2380,13 @@ async function runBulkAction(action, params) {
 		}
 	} catch (err) {
 		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+		// A big selection is applied in chunks (#10435), so a failure part-way
+		// through still changed everything before it. Say so — the selection stays
+		// put, and "failed" alone would read as "nothing happened".
+		const partialOk = err?.partial?.ok?.length ?? 0
+		if (partialOk > 0) {
+			showWarning(t('kanso', '{ok} cards updated before the action failed', { ok: partialOk }))
+		}
 	}
 }
 
@@ -2377,6 +2398,75 @@ const onBulkSetDue = (due) => runBulkAction('set_due_date', { duedate: due })
 const onBulkSetStatus = (status) => runBulkAction('set_status', { status })
 const onBulkArchive = () => runBulkAction('archive', {})
 const onBulkDelete = () => runBulkAction('delete', {})
+
+// ── Column-level archive-all (#10430) ─────────────────────────────────────────
+
+/**
+ * Warn about the cards a bulk pass did not apply. A skip is a per-card refusal
+ * (not editable any more, vanished), which the undo toast's count alone would
+ * hide — so it gets its own toast, matching runBulkAction's wording.
+ *
+ * @param {{ok: number[], skipped: object[]}} summary - merged per-card summary
+ */
+function warnOnSkipped(summary) {
+	if (summary.skipped.length === 0) return
+	showWarning(t('kanso', '{ok} updated, {skipped} skipped', {
+		ok: summary.ok.length,
+		skipped: summary.skipped.length,
+	}))
+}
+
+/**
+ * Archive every card the column currently SHOWS — i.e. the filter-visible set,
+ * the same cards "select all → archive selected" would have hit. Deliberately
+ * reuses the existing bulk endpoint rather than adding a column-scoped one, so
+ * the per-card ACL, change log and realtime deltas stay exactly as they are.
+ * Returns the summary so StackColumn can offer an undo over the archived ids.
+ *
+ * On a partial failure it still RETURNS the cards that landed rather than
+ * throwing them away: the undo is the whole reason this action ships without a
+ * confirm dialog, and the Archived page only restores one card at a time.
+ *
+ * @param {number} stackId - the column to empty
+ * @return {Promise<{ok: number[], skipped: object[]}>} merged summary
+ */
+async function handleArchiveAllInStack(stackId) {
+	const cardIds = cardsForStack(stackId).map((c) => c.id)
+	if (cardIds.length === 0) return { ok: [], skipped: [] }
+	try {
+		// Not bulk.apply(): that one runs over — and then clears — the SELECTION,
+		// and this action is a column action available outside selection mode.
+		const result = await bulk.applyToIds(cardIds, 'archive')
+		shortcutError.value = ''
+		// The undo toast (in StackColumn) already carries the success count; only
+		// the skipped cards are news the user would not otherwise see.
+		warnOnSkipped(result)
+		return result
+	} catch (err) {
+		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+		const partial = err?.partial ?? { ok: [], skipped: [] }
+		// Some chunks may have committed before the failure — hand them back so the
+		// undo still covers them. The banner above already reports the failure.
+		return partial
+	}
+}
+
+/**
+ * Undo an archive-all: put the given cards back on the board.
+ *
+ * @param {number[]} cardIds - the ids the archive-all reported as archived
+ */
+async function handleUnarchiveCards(cardIds) {
+	try {
+		const result = await bulk.applyToIds(cardIds, 'unarchive')
+		shortcutError.value = ''
+		// A partially-applied undo leaves cards archived; the toast is already gone,
+		// so this is the only place the user would hear about it.
+		warnOnSkipped(result)
+	} catch (err) {
+		shortcutError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+	}
+}
 </script>
 
 <style scoped>

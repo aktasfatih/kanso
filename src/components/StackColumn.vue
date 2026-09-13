@@ -89,7 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</span>
 				<!-- Stack actions menu - rendered whenever at least one edit action is wired -->
 			<NcActions
-				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip"
+				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip || onArchiveAllCards"
 				class="stack-column__actions"
 				:force-menu="true"
 				:aria-label="t('kanso', 'Column actions')">
@@ -163,9 +163,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActionButton>
 				</template>
 
+				<!-- Archive every card the column currently SHOWS (#10430). With a
+				     filter on that is a subset, so the label says so rather than
+				     silently archiving less than "all". Undoable, hence no confirm. -->
+				<template v-if="onArchiveAllCards && cards.length > 0">
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor" />
+					<NcActionButton
+						:close-after-click="true"
+						:disabled="archivingAll"
+						@click="handleArchiveAllCards">
+						<template #icon>
+							<ArchiveArrowDownOutlineIcon :size="20" />
+						</template>
+						{{ filterActive
+							? n('kanso', 'Archive %n visible card', 'Archive %n visible cards', cards.length)
+							: t('kanso', 'Archive all cards') }}
+					</NcActionButton>
+				</template>
+
 				<!-- Delete -->
 				<template v-if="onDeleteStack">
-					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor" />
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor || (onArchiveAllCards && cards.length > 0)" />
 					<NcActionButton
 						:close-after-click="true"
 						@click="handleDeleteStack">
@@ -325,7 +343,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showUndo } from '@nextcloud/dialogs'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -334,6 +352,7 @@ import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionText from '@nextcloud/vue/components/NcActionText'
+import ArchiveArrowDownOutlineIcon from 'vue-material-design-icons/ArchiveArrowDownOutline.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
@@ -409,6 +428,35 @@ const props = defineProps({
 	onRestoreStack: {
 		type: Function,
 		default: null,
+	},
+	/**
+	 * Async fn (stackId) → Promise<{ ok: number[], skipped: object[] }> - archives
+	 * every card this column currently renders (#10430). The parent owns the
+	 * "which cards" question (this component only ever sees `cards`, the already
+	 * filtered set) and returns the archived ids so the undo toast below can put
+	 * them back. Null when the current user may not edit the board - the menu
+	 * entry is then not rendered at all.
+	 */
+	onArchiveAllCards: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Async fn (cardIds) → Promise - un-archives the ids handed back by
+	 * onArchiveAllCards. Required for the undo affordance on the archive-all toast.
+	 */
+	onUnarchiveCards: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Whether a board filter is currently narrowing `cards` (#10430). Only affects
+	 * wording: "Archive all cards" is a lie when a filter is hiding some of them,
+	 * so the entry then names the visible count instead.
+	 */
+	filterActive: {
+		type: Boolean,
+		default: false,
 	},
 	/**
 	 * Async fn (stackId, title) → Promise - renames the column. When provided,
@@ -556,6 +604,10 @@ const canEditBoard = useBoardCanEdit()
 // ── Inline column-title editing ─────────────────────────────────────────────
 const editingTitle = ref(false)
 const titleDraft = ref('')
+// Archive-all in flight (#10430). A multi-chunk run leaves the column looking
+// untouched until the last chunk lands, so without this a second click re-sends
+// the same ids (a duplicate change row + push per card, and a stale undo toast).
+const archivingAll = ref(false)
 const titleInputRef = ref(null)
 const titleEditReady = ref(false)
 
@@ -884,6 +936,31 @@ async function handleDeleteStack() {
 		})
 	} catch {
 		// Parent is responsible for surfacing deletion errors
+	}
+}
+
+/**
+ * Archive every card the column currently shows (#10430) - the one-action
+ * replacement for "select multiple → select all → archive selected". No confirm
+ * dialog: the action is reversible and the toast below offers the undo.
+ */
+async function handleArchiveAllCards() {
+	if (!props.onArchiveAllCards || archivingAll.value) return
+	const stackId = props.stack.id
+	archivingAll.value = true
+	try {
+		const result = await props.onArchiveAllCards(stackId)
+		const archivedIds = result?.ok ?? []
+		if (archivedIds.length === 0) return
+		showUndo(n('kanso', '%n card archived', '%n cards archived', archivedIds.length), () => {
+			if (props.onUnarchiveCards) {
+				props.onUnarchiveCards(archivedIds)
+			}
+		})
+	} catch {
+		// Parent is responsible for surfacing the failure (board error banner)
+	} finally {
+		archivingAll.value = false
 	}
 }
 

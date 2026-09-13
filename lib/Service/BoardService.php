@@ -331,7 +331,16 @@ class BoardService {
 	}
 
 	/**
-	 * Soft-deletes the board (sets deleted_at).
+	 * Deletes the board. Writes a `deleted_at` tombstone, which takes the board
+	 * out of every read path at once - the delete is immediate and final from
+	 * the user's point of view (the reversible case is the separate `archived`
+	 * flag, and there is no restore).
+	 *
+	 * The tombstone is not the end of it: {@see BoardPurgeService} removes the
+	 * rows and the attachment bytes once the retention window has passed, driven
+	 * by {@see \OCA\Kanso\Cron\PurgeDeletedBoards}. The window is a safety margin
+	 * against a mistaken delete being irreversible the same second, not a trash
+	 * the user can browse.
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board

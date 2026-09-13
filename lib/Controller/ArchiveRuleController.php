@@ -63,7 +63,16 @@ class ArchiveRuleController extends Controller {
 		?int $thresholdSeconds = null,
 		?bool $enabled = null,
 	): JSONResponse {
-		$stackIdProvided = $this->request->getParam('stackId', '__absent__') !== '__absent__';
+		// Whether the client actually sent `stackId`. It has to come from the raw
+		// request body: once the dispatcher has filled the argument above, an
+		// omitted key and an explicit `null` are the same value, yet they mean
+		// opposite things here - "leave the scope alone" vs "scope this rule to the
+		// whole board". `array_key_exists` (not `isset`, and not
+		// IRequest::getParam()'s sentinel-default trick, which is `isset`-based and
+		// so reports an explicit null as absent - and can be spoofed by a client
+		// sending the sentinel string itself) is what keeps a sent-but-null key
+		// visible here.
+		$stackIdProvided = array_key_exists('stackId', $this->request->getParams());
 		return $this->respond(function () use ($id, $stackId, $stackIdProvided, $condition, $thresholdSeconds, $enabled): JSONResponse {
 			return new JSONResponse(
 				$this->archiveService->update(

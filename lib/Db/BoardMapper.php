@@ -39,6 +39,51 @@ class BoardMapper extends QBMapper {
 	}
 
 	/**
+	 * Ids of soft-deleted boards whose tombstone is older than $deletedBefore -
+	 * the reaping work list for the purge job. Oldest deletion first, so a
+	 * backlog drains in the order it accumulated.
+	 *
+	 * Deliberately NOT filtered on `deleted_at = 0` like every other read path:
+	 * this is the one query whose subject IS the deleted board.
+	 *
+	 * @return list<int> at most $limit ids
+	 * @throws Exception
+	 */
+	public function findPurgeableIds(int $deletedBefore, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->gt('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lt('deleted_at', $qb->createNamedParameter($deletedBefore, IQueryBuilder::PARAM_INT)))
+			->orderBy('deleted_at', 'ASC')
+			->setMaxResults($limit);
+
+		$ids = [];
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$ids[] = (int)$row['id'];
+		}
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
+	 * Hard-deletes the board row by id - the LAST step of a board purge, run
+	 * once every dependent table has been emptied. Irreversible.
+	 *
+	 * @return int number of deleted rows
+	 * @throws Exception
+	 */
+	public function deleteById(int $id): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Every non-deleted board across the whole instance, oldest id first - the
 	 * system-wide work list for instance-level cron jobs (e.g. the scheduled
 	 * backup sweep). Not user-scoped: the caller runs as the system.

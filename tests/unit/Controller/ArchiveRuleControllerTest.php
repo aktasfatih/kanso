@@ -14,6 +14,7 @@ use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -22,24 +23,59 @@ use PHPUnit\Framework\TestCase;
 
 class ArchiveRuleControllerTest extends TestCase {
 	private IRequest&MockObject $request;
+	private IUserSession&MockObject $userSession;
 	private ArchiveService&MockObject $archiveService;
 	private ArchiveRuleController $controller;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->request = $this->createMock(IRequest::class);
-		$userSession = $this->createMock(IUserSession::class);
+		$this->userSession = $this->createMock(IUserSession::class);
 		$this->archiveService = $this->createMock(ArchiveService::class);
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('alice');
-		$userSession->method('getUser')->willReturn($user);
+		$this->userSession->method('getUser')->willReturn($user);
 
 		$this->controller = new ArchiveRuleController(
 			'kanso',
 			$this->request,
-			$userSession,
+			$this->userSession,
 			$this->archiveService,
+		);
+	}
+
+	/**
+	 * PATCH /api/archive-rules/{id} the way a real client does: $body IS the
+	 * request body, so a key it omits is genuinely absent rather than a defaulted
+	 * null. That distinction is the whole contract of this endpoint - calling
+	 * update() with positional nulls would prove nothing, because an omitted
+	 * `stackId` and an explicit `stackId: null` look identical by then.
+	 *
+	 * @param array<string, mixed> $body
+	 */
+	private function patch(int $id, array $body): JSONResponse {
+		$params = ['id' => $id] + $body;
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn($params);
+		// Faithful to the real Request::getParam(), which is isset()-based - so a
+		// sent-but-null key reads back as the default. Stubbing it accurately is
+		// what makes these tests able to fail if the presence check ever regresses
+		// to that accessor; a bare mock would hand back null and pass either way.
+		$request->method('getParam')->willReturnCallback(
+			static fn (string $key, $default = null) => $params[$key] ?? $default
+		);
+		$controller = new ArchiveRuleController('kanso', $request, $this->userSession, $this->archiveService);
+		// The dispatcher casts a non-null value to the parameter's declared type
+		// before the method sees it; mirror that so a junk `stackId` arrives the
+		// way it really would.
+		$stackId = ($body['stackId'] ?? null) === null ? null : (int)$body['stackId'];
+		return $controller->update(
+			$id,
+			$stackId,
+			$body['condition'] ?? null,
+			$body['thresholdSeconds'] ?? null,
+			$body['enabled'] ?? null,
 		);
 	}
 
@@ -96,33 +132,75 @@ class ArchiveRuleControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 
-	public function testUpdatePassesStackIdProvidedTrueWhenKeyPresent(): void {
-		$this->request->method('getParam')->with('stackId', '__absent__')->willReturn(null);
+	/**
+	 * The re-scope-to-the-whole-board action the endpoint promises: an explicit
+	 * `stackId: null` must reach the service as "provided", or a rule pinned to a
+	 * column can never be widened again.
+	 */
+	public function testUpdateRescopesToWholeBoardOnExplicitNullStackId(): void {
 		$this->archiveService->expects(self::once())
 			->method('update')
 			->with(3, null, true, null, 3600, null, 'alice')
 			->willReturn($this->rule());
 
-		$response = $this->controller->update(3, null, null, 3600, null);
+		$response = $this->patch(3, ['stackId' => null, 'thresholdSeconds' => 3600]);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 	}
 
-	public function testUpdatePassesStackIdProvidedFalseWhenKeyAbsent(): void {
-		$this->request->method('getParam')->with('stackId', '__absent__')->willReturn('__absent__');
+	public function testUpdatePassesStackIdProvidedTrueWhenScopedToAStack(): void {
+		$this->archiveService->expects(self::once())
+			->method('update')
+			->with(3, 7, true, null, 3600, null, 'alice')
+			->willReturn($this->rule());
+
+		$response = $this->patch(3, ['stackId' => 7, 'thresholdSeconds' => 3600]);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	public function testUpdateLeavesScopeUntouchedWhenKeyAbsent(): void {
 		$this->archiveService->expects(self::once())
 			->method('update')
 			->with(3, null, false, null, 3600, null, 'alice')
 			->willReturn($this->rule());
 
-		$response = $this->controller->update(3, null, null, 3600, null);
+		$response = $this->patch(3, ['thresholdSeconds' => 3600]);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 	}
 
+	/**
+	 * Presence is read off the raw body, so no magic value a client can put in
+	 * `stackId` makes the key look absent. (The previous sentinel-default check
+	 * treated a literal '__absent__' string as "not sent".)
+	 */
+	public function testUpdateTreatsLiteralSentinelStringAsAPresentKey(): void {
+		$this->archiveService->expects(self::once())
+			->method('update')
+			->with(3, 0, true, null, null, null, 'alice')
+			->willReturn($this->rule());
+
+		$response = $this->patch(3, ['stackId' => '__absent__']);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	/**
+	 * Re-scoping is a board mutation, so a user without MANAGE gets 403 - the
+	 * service is the gate, and the controller must surface its refusal.
+	 */
+	public function testUpdateMapsNotPermittedTo403(): void {
+		$this->archiveService->expects(self::once())
+			->method('update')
+			->with(3, null, true, null, null, null, 'alice')
+			->willThrowException(new NotPermittedException());
+
+		$response = $this->patch(3, ['stackId' => null]);
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		self::assertArrayHasKey('error', $response->getData());
+	}
+
 	public function testUpdateMapsNotFoundTo404(): void {
-		$this->request->method('getParam')->willReturn('__absent__');
 		$this->archiveService->method('update')->willThrowException(new DoesNotExistException('gone'));
 
-		$response = $this->controller->update(3, null, null, 3600, null);
+		$response = $this->patch(3, ['thresholdSeconds' => 3600]);
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
 	}
 
