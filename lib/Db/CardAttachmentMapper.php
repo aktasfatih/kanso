@@ -72,6 +72,29 @@ class CardAttachmentMapper extends QBMapper {
 	}
 
 	/**
+	 * Total stored attachment bytes across the WHOLE instance - the aggregate
+	 * the optional instance-wide storage cap is measured against
+	 * ({@see \OCA\Kanso\Service\CardAttachmentService::assertStorageHeadroom()}).
+	 *
+	 * One `SUM(size)` over the table, never a row scan in PHP, and the caller
+	 * only reaches it when an admin has actually configured a cap - an install
+	 * with no cap (the default) never runs this query at all.
+	 *
+	 * @throws Exception
+	 */
+	public function totalSize(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectAlias($qb->func()->sum('size'), 'total')
+			->from($this->getTableName());
+
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		// SUM over an empty table is NULL, not 0.
+		return (int)($row['total'] ?? 0);
+	}
+
+	/**
 	 * Number of attachments on a card - powers the card-detail count without
 	 * loading the rows.
 	 *

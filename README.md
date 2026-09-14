@@ -224,6 +224,37 @@ sudo -u www-data php occ app:enable kanso
 - **Realtime updates** use the [High Performance Backend (`notify_push`)](https://github.com/nextcloud/notify_push)
   when it's installed; otherwise Kanso falls back to polling automatically.
 
+### Admin settings (`occ`)
+
+A few instance-wide knobs live in Kanso's app config rather than a settings page.
+All are **optional** — unset means the behaviour described as the default.
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `attachment_storage_limit` | unset — **no limit** | Total bytes Kanso may store in its own app data, across the whole instance. |
+| `mail_intake_allow_private_hosts` | `no` | Lets board mailboxes point at private/LAN addresses — see [email intake](docs/email-intake.md). |
+
+Card attachments are kept in the app's own storage, not in the uploader's Files,
+so they don't count against anyone's Nextcloud quota. On an instance where every
+account is trusted that's usually what you want. If it isn't, set a ceiling in
+bytes:
+
+```sh
+# Allow Kanso a total of 10 GiB of attachments instance-wide
+sudo -u www-data php occ config:app:set kanso attachment_storage_limit --value 10737418240
+
+# Remove the ceiling again
+sudo -u www-data php occ config:app:delete kanso attachment_storage_limit
+```
+
+Once the total is reached, new uploads (and "attach from Files" copies) are
+refused with **413**, and a Deck import skips the attachments that no longer fit
+(reporting them as skipped) rather than failing the whole import. Existing
+attachments can still be listed, downloaded and deleted, so users can free space
+themselves. Restoring a board from a Kanso export is exempt — an archive is
+already bounded by its own size limit, and stopping a restore midway would leave
+a half-restored board.
+
 ### Offline data on the device
 
 Kanso is an installable PWA: a service worker caches the app shell, and the

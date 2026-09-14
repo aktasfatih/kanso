@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\AppInfo\Application;
+use OCA\Kanso\Service\UserSettingsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -16,6 +17,7 @@ use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\AppFramework\Services\IInitialState;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\Util;
@@ -24,6 +26,9 @@ class PageController extends Controller {
 	public function __construct(
 		string $appName,
 		IRequest $request,
+		private ?string $userId,
+		private UserSettingsService $userSettings,
+		private IInitialState $initialState,
 		private IURLGenerator $urlGenerator,
 	) {
 		parent::__construct($appName, $request);
@@ -32,8 +37,43 @@ class PageController extends Controller {
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse {
-		Util::addScript(Application::APP_ID, Application::APP_ID . '-main');
+		$this->provideUserSettings();
+		$this->addMainScript();
 		return new TemplateResponse(Application::APP_ID, 'main');
+	}
+
+	/**
+	 * Queues the SPA bundle for the app shell. A seam, mirroring
+	 * {@see DeepLinkController::addMainScript()}: Util::addScript needs the full
+	 * server (\OC) at runtime, so the unit test overrides this no-op-style.
+	 */
+	protected function addMainScript(): void {
+		Util::addScript(Application::APP_ID, Application::APP_ID . '-main');
+	}
+
+	/**
+	 * Embeds the user's view preferences in the app shell (#10460).
+	 *
+	 * Without this the SPA mounts with the hardcoded defaults and only learns the
+	 * user's real choices when the async GET /api/settings resolves - so a card
+	 * opened by link visibly snapped from the default layout to the chosen one.
+	 * The preferences are plain `IConfig::getUserValue` reads (one preferences
+	 * load, already part of the request), so this adds no round-trip.
+	 *
+	 * The seed is a head start, NOT the source of truth: the SPA still fetches
+	 * /api/settings and reconciles. That matters because the service worker
+	 * caches the app shell under one stable key, so an offline boot can carry the
+	 * preferences as of the last online load. Only view preferences travel here -
+	 * no board or card data - so a stale shell is at worst the wrong layout for
+	 * one paint, which the fetch then corrects.
+	 */
+	private function provideUserSettings(): void {
+		if ($this->userId === null) {
+			// Unreachable behind #[NoAdminRequired] (the auth middleware redirects
+			// first); the SPA falls back to its defaults + the settings fetch.
+			return;
+		}
+		$this->initialState->provideInitialState('settings', $this->userSettings->readAll($this->userId));
 	}
 
 	/**

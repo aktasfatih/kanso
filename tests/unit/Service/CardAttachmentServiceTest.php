@@ -21,6 +21,7 @@ use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\StorageLimitException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -29,9 +30,11 @@ use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
+use OCP\IConfig;
 use OCP\Security\ISecureRandom;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 class CardAttachmentServiceTest extends TestCase {
 	private CardAttachmentMapper&MockObject $attachmentMapper;
@@ -45,7 +48,15 @@ class CardAttachmentServiceTest extends TestCase {
 	private ISimpleFolder&MockObject $folder;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ChangeDetailMapper&MockObject $changeDetailMapper;
+	private IConfig&MockObject $config;
 	private CardAttachmentService $service;
+
+	/**
+	 * The raw `attachment_storage_limit` app value the mocked config hands back.
+	 * '' is what an UNSET key returns - i.e. the shipped default, no cap - and
+	 * every test inherits it unless it opts a limit in.
+	 */
+	private string $storageLimitValue = '';
 
 	/** @var string[] Temp files created for upload tests, cleaned up in tearDown. */
 	private array $tmpFiles = [];
@@ -75,6 +86,20 @@ class CardAttachmentServiceTest extends TestCase {
 		$change = new Change();
 		$change->setId(77);
 		$this->changeNotifier->method('notify')->willReturn($change);
+
+		// Mirrors a real IConfig: an unset app value yields the caller's default,
+		// so the suite runs against the SHIPPED state (no storage cap) unless a
+		// test sets $storageLimitValue.
+		$this->config = $this->createMock(IConfig::class);
+		$this->config->method('getAppValue')->willReturnCallback(
+			function (string $app, string $key, string $default = ''): string {
+				if ($app === 'kanso' && $key === CardAttachmentService::KEY_ATTACHMENT_STORAGE_LIMIT) {
+					return $this->storageLimitValue;
+				}
+				return $default;
+			}
+		);
+
 		$this->service = new CardAttachmentService(
 			$this->attachmentMapper,
 			$this->cardMapper,
@@ -86,6 +111,8 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->rootFolder,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->config,
+			$this->createMock(LoggerInterface::class),
 		);
 	}
 
@@ -716,6 +743,8 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->rootFolder,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->config,
+			$this->createMock(LoggerInterface::class),
 		);
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
 
@@ -872,5 +901,199 @@ class CardAttachmentServiceTest extends TestCase {
 
 		$this->expectException(DoesNotExistException::class);
 		$this->service->attachFromFileNode(9, 42, 'bob');
+	}
+
+	// ---- instance-wide attachment storage cap -----------------------------
+
+	/**
+	 * THE property the whole feature rests on: with no `attachment_storage_limit`
+	 * app value set - the shipped default - an upload behaves exactly as it did
+	 * before the cap existed, and the aggregate `SUM(size)` is never even run. An
+	 * install that has not opted in pays nothing and sees nothing change.
+	 */
+	public function testUploadWithNoConfiguredLimitStoresTheFileAndRunsNoAggregateQuery(): void {
+		$this->expectCardLoaded();
+		$this->attachmentMapper->expects(self::never())->method('totalSize');
+		$this->folder->expects(self::once())
+			->method('newFile')
+			->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->expects(self::once())->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(7);
+				return $a;
+			}
+		);
+
+		self::assertSame(7, $this->service->upload(9, $this->upload(), 'bob')->getId());
+	}
+
+	/**
+	 * The same for the "attach from Files" copy - no cap configured, no query, no
+	 * behaviour change.
+	 */
+	public function testAttachFromFileWithNoConfiguredLimitStoresTheFileAndRunsNoAggregateQuery(): void {
+		$this->expectCardLoaded();
+		$this->expectUserFolderById(42, [$this->fileNode(42, 11, 'notes.txt', 'text/plain')]);
+		$this->attachmentMapper->expects(self::never())->method('totalSize');
+		$this->folder->expects(self::once())
+			->method('newFile')
+			->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->expects(self::once())->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(12);
+				return $a;
+			}
+		);
+
+		self::assertSame(12, $this->service->attachFromFileNode(9, 42, 'bob')->getId());
+	}
+
+	/**
+	 * Anything that is not a positive number means "no cap" - a cleared value, an
+	 * explicit 0, a negative, or a typo. None of them may start rejecting uploads.
+	 *
+	 * @dataProvider noCapValues
+	 */
+	public function testStorageLimitTreatsNonPositiveValuesAsNoCap(string $configured): void {
+		$this->storageLimitValue = $configured;
+		self::assertSame(0, $this->service->storageLimit());
+	}
+
+	/**
+	 * @return array<string, array{string}>
+	 */
+	public static function noCapValues(): array {
+		return [
+			'unset' => [''],
+			'blank' => ['   '],
+			'zero' => ['0'],
+			'negative' => ['-1'],
+			'not a number' => ['plenty'],
+		];
+	}
+
+	public function testStorageLimitReadsAConfiguredByteCount(): void {
+		$this->storageLimitValue = '10737418240';
+		self::assertSame(10737418240, $this->service->storageLimit());
+	}
+
+	public function testUploadUnderTheStorageLimitStillSucceeds(): void {
+		$this->expectCardLoaded();
+		$this->storageLimitValue = '1000';
+		// 100 bytes stored + an 11-byte upload is comfortably under the cap.
+		$this->attachmentMapper->expects(self::once())->method('totalSize')->willReturn(100);
+		$this->folder->expects(self::once())
+			->method('newFile')
+			->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->expects(self::once())->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(7);
+				return $a;
+			}
+		);
+
+		self::assertSame(7, $this->service->upload(9, $this->upload(), 'bob')->getId());
+	}
+
+	/**
+	 * The boundary is inclusive: a file that fits EXACTLY is stored. Pinned so
+	 * the comparison cannot quietly drift to `>=` and start refusing the upload
+	 * that lands the instance precisely on its limit.
+	 */
+	public function testUploadThatFitsTheStorageLimitExactlyIsStored(): void {
+		$this->expectCardLoaded();
+		$this->storageLimitValue = '100';
+		// 89 stored + 11 incoming = exactly 100.
+		$this->attachmentMapper->method('totalSize')->willReturn(89);
+		$this->folder->expects(self::once())
+			->method('newFile')
+			->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->expects(self::once())->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(7);
+				return $a;
+			}
+		);
+
+		self::assertSame(7, $this->service->upload(9, $this->upload(), 'bob')->getId());
+	}
+
+	public function testUploadOverTheStorageLimitIsRejectedBeforeAnyBytesAreWritten(): void {
+		$this->expectCardLoaded();
+		$this->storageLimitValue = '100';
+		// 95 stored + 11 incoming = 106 > 100.
+		$this->attachmentMapper->method('totalSize')->willReturn(95);
+		$this->folder->expects(self::never())->method('newFile');
+		$this->attachmentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(StorageLimitException::class);
+		$this->service->upload(9, $this->upload(), 'bob');
+	}
+
+	public function testAttachFromFileUnderTheStorageLimitStillSucceeds(): void {
+		$this->expectCardLoaded();
+		$this->expectUserFolderById(42, [$this->fileNode(42, 11, 'notes.txt', 'text/plain')]);
+		$this->storageLimitValue = '1000';
+		$this->attachmentMapper->expects(self::once())->method('totalSize')->willReturn(100);
+		$this->folder->expects(self::once())
+			->method('newFile')
+			->willReturn($this->createMock(ISimpleFile::class));
+		$this->attachmentMapper->expects(self::once())->method('insert')->willReturnCallback(
+			static function (CardAttachment $a): CardAttachment {
+				$a->setId(12);
+				return $a;
+			}
+		);
+
+		self::assertSame(12, $this->service->attachFromFileNode(9, 42, 'bob')->getId());
+	}
+
+	/**
+	 * The door that is easiest to forget: "attach from Files" copies the SAME
+	 * bytes into the SAME app-data as an upload, so the cap has to hold here too,
+	 * and it has to hold before the source node is ever opened.
+	 */
+	public function testAttachFromFileOverTheStorageLimitIsRejectedBeforeStreaming(): void {
+		$this->expectCardLoaded();
+		$node = $this->createMock(File::class);
+		$node->method('getSize')->willReturn(11);
+		$node->expects(self::never())->method('fopen');
+		$this->expectUserFolderById(42, [$node]);
+
+		$this->storageLimitValue = '100';
+		$this->attachmentMapper->method('totalSize')->willReturn(95);
+		$this->folder->expects(self::never())->method('newFile');
+		$this->attachmentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(StorageLimitException::class);
+		$this->service->attachFromFileNode(9, 42, 'bob');
+	}
+
+	/**
+	 * An instance already over the cap must not be bricked: listing, downloading
+	 * and deleting all keep working, so the way back under the line stays open.
+	 * They are read/remove paths, so they never run the aggregate query either.
+	 */
+	public function testAnOverCapInstanceCanStillListDownloadAndDelete(): void {
+		$this->expectCardLoaded();
+		$this->storageLimitValue = '100';
+		$this->attachmentMapper->expects(self::never())->method('totalSize');
+
+		$stored = $this->attachment(3, 'cccc');
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([$stored]);
+		$this->attachmentMapper->method('find')->with(3)->willReturn($stored);
+
+		$file = $this->createMock(ISimpleFile::class);
+		$file->method('getContent')->willReturn('hello world');
+		$this->folder->method('getFile')->with('cccc')->willReturn($file);
+
+		self::assertCount(1, $this->service->listForCard(9, 'bob'));
+
+		[$meta, $bytes] = $this->service->download(9, 3, 'bob');
+		self::assertSame(3, $meta->getId());
+		self::assertSame('hello world', $bytes);
+
+		$this->attachmentMapper->expects(self::once())->method('delete')->with($stored);
+		$this->service->delete(9, 3, 'bob');
 	}
 }

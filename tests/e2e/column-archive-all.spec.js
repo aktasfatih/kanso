@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// #10430 — "Archive all cards" in the column ⋯ menu: the one-action replacement
+// #10430 — the bulk archive entry in the column ⋯ menu: the one-action replacement
 // for select-multiple → select-all → archive-selected. It archives what the
 // column currently SHOWS, reuses the existing /api/cards/bulk endpoint, and is
 // undoable (the bulk endpoint gained an `unarchive` action for exactly that).
@@ -48,9 +48,10 @@ test.describe('Archive every card in a column (#10430)', () => {
 		await page.goto(state.boardUrl)
 		await expect(page.locator('.card-tile')).toHaveCount(3, { timeout: 15_000 })
 
-		// With no filter on, the entry says "all" — it is the truth here.
+		// The entry never says "all" — it names the count it will archive, which
+		// is what it delivers whether or not a filter or visibility narrows it.
 		const menu = await openColumnMenu(page)
-		const archiveAll = menu.getByRole('button', { name: 'Archive all cards' })
+		const archiveAll = menu.getByRole('button', { name: 'Archive 3 cards' })
 		await expect(archiveAll).toBeVisible({ timeout: 8_000 })
 		await archiveAll.click()
 
@@ -80,7 +81,7 @@ test.describe('Archive every card in a column (#10430)', () => {
 		await expect(page.locator('.card-tile')).toHaveCount(3, { timeout: 15_000 })
 
 		const menu = await openColumnMenu(page)
-		await menu.getByRole('button', { name: 'Archive all cards' }).click()
+		await menu.getByRole('button', { name: 'Archive 3 cards' }).click()
 		await expect(page.locator('.card-tile')).toHaveCount(0, { timeout: 15_000 })
 
 		// showUndo renders a .toast-undo toastify toast whose label carries the
@@ -139,6 +140,8 @@ test.describe('Archive every card in a column (#10430)', () => {
 		const menu = await openColumnMenu(page)
 		await expect(menu.getByRole('button', { name: 'Archive 1 visible card' }))
 			.toBeVisible({ timeout: 8_000 })
-		await expect(menu.getByRole('button', { name: 'Archive all cards' })).toHaveCount(0)
+		// Not the unfiltered wording, and never a claim over the whole column.
+		await expect(menu.getByRole('button', { name: 'Archive 3 cards' })).toHaveCount(0)
+		await expect(menu.getByRole('button', { name: /^Archive all/ })).toHaveCount(0)
 	})
 })

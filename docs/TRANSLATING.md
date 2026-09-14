@@ -111,6 +111,16 @@ browser profile) picks up the new `l10n/<lang>.js`.
   <!-- l10n:count -->ten<!-- /l10n:count --> languages to merge it. The check
   asks only that the catalogues know the string exists; an empty `msgstr`
   renders the English source (see step 3 above).
+- **`appinfo/info.xml` is outside this pipeline.** Its `<summary>` and
+  `<description>` blocks — the English pair plus one `lang="…"` block per
+  language — are the **App Store listing text**, hand-maintained XML rather than
+  `.pot` strings. `l10n:extract`/`sync`/`compile` never see them, `l10n:check`
+  never diffs them, and `npm run lint:info-xml` only validates the file against
+  the store's schema, never its content. So when you change the English summary
+  or description, **update every `lang="…"` block in the same commit** — nothing
+  will warn you, and a stale block ships a stale listing to everyone whose
+  Nextcloud is in that language. (That is how the translated descriptions came
+  to name only GitHub for months after Forgejo support shipped.)
 - CI also runs `npm run l10n:lint` on every `translationfiles/<lang>/kanso.po`:
   it rejects malformed PO syntax and a `Plural-Forms` header that doesn't match
   the `msgstr[n]` forms actually supplied, and — the main point — diffs the

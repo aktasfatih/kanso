@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Tests\Unit\Controller;
 
 use OCA\Kanso\Controller\SettingsController;
+use OCA\Kanso\Service\UserSettingsService;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IRequest;
@@ -50,7 +51,16 @@ class SettingsControllerTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->config = $this->createMock(IConfig::class);
-		$this->controller = new SettingsController('kanso', $this->createMock(IRequest::class), $this->sessionFor('alice'), $this->config);
+		$this->controller = new SettingsController('kanso', $this->createMock(IRequest::class), $this->sessionFor('alice'), $this->settingsService());
+	}
+
+	/**
+	 * The real storage service over the mocked user config. Deliberately not a
+	 * mock: these tests are about what actually lands in (and comes back out of)
+	 * the user-config row, and the service is the thing that decides that.
+	 */
+	private function settingsService(): UserSettingsService {
+		return new UserSettingsService($this->config);
 	}
 
 	/**
@@ -94,7 +104,7 @@ class SettingsControllerTest extends TestCase {
 	private function put(array $body, ?string $uid = 'alice'): JSONResponse {
 		$request = $this->createMock(IRequest::class);
 		$request->method('getParams')->willReturn($body);
-		$controller = new SettingsController('kanso', $request, $this->sessionFor($uid), $this->config);
+		$controller = new SettingsController('kanso', $request, $this->sessionFor($uid), $this->settingsService());
 		return $controller->update(
 			$body['defaultBoardId'] ?? null,
 			$body['collapsedBoardGroups'] ?? null,
@@ -446,7 +456,7 @@ class SettingsControllerTest extends TestCase {
 	}
 
 	public function testReadIsDeniedWithoutASession(): void {
-		$anonymous = new SettingsController('kanso', $this->createMock(IRequest::class), $this->sessionFor(null), $this->config);
+		$anonymous = new SettingsController('kanso', $this->createMock(IRequest::class), $this->sessionFor(null), $this->settingsService());
 		$this->config->expects(self::never())->method('getUserValue');
 
 		$response = $anonymous->index();

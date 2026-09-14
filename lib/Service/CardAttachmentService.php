@@ -21,7 +21,9 @@ use OCP\Files\IAppData;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFolder;
+use OCP\IConfig;
 use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
 
 /**
  * File attachments on a card (#3526). Bytes live in Kanso's OWN app-data
@@ -40,6 +42,9 @@ use OCP\Security\ISecureRandom;
  *    another board's bytes by guessing ids.
  *  - Size is capped ({@see self::MAX_SIZE}); an empty/oversized upload is
  *    rejected before anything is written.
+ *  - An administrator can additionally cap the TOTAL bytes the app stores
+ *    ({@see self::KEY_ATTACHMENT_STORAGE_LIMIT}) - see
+ *    {@see self::assertStorageHeadroom()}. Off unless configured.
  *
  * Add/delete reuse the card's ENTITY_CARD / ACTION_UPDATE change row so the
  * existing realtime/delta-sync + ETag path reflects the new attachment count.
@@ -51,6 +56,28 @@ use OCP\Security\ISecureRandom;
 class CardAttachmentService {
 	/** Hard cap on a single upload. Oversized uploads are rejected. */
 	public const MAX_SIZE = AttachmentSanitizer::MAX_SIZE;
+
+	public const APP_ID = 'kanso';
+
+	/**
+	 * OPTIONAL, admin-only, instance-wide cap on the TOTAL bytes Kanso stores in
+	 * its own app-data, in bytes:
+	 *
+	 *     occ config:app:set kanso attachment_storage_limit --value 10737418240
+	 *
+	 * **Off by default.** Absent, empty, zero or negative means NO cap, which is
+	 * exactly the behaviour of every release before this one - an existing
+	 * install must be completely unaffected until an admin opts in.
+	 *
+	 * It exists because attachment bytes live in app-data, NOT in the uploader's
+	 * Files, and are therefore outside their Nextcloud quota: without a cap the
+	 * only bound on what an authenticated user can write is the host disk.
+	 *
+	 * Deliberately instance-wide, not per user or per board: Nextcloud already
+	 * owns the per-user quota concept and a second one alongside it would only
+	 * disagree with it.
+	 */
+	public const KEY_ATTACHMENT_STORAGE_LIMIT = 'attachment_storage_limit';
 
 	/** Per-card app-data subfolder holding that card's attachment objects. */
 	private const FOLDER_PREFIX = 'card-';
@@ -72,6 +99,8 @@ class CardAttachmentService {
 		private IRootFolder $rootFolder,
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
+		private IConfig $config,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -103,6 +132,7 @@ class CardAttachmentService {
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
 	 * @throws InvalidInputException if the upload is missing, errored, empty, or oversized
+	 * @throws StorageLimitException if an admin-configured instance-wide storage cap has no room left
 	 */
 	public function upload(int $cardId, ?array $upload, string $actorUid): CardAttachment {
 		$card = $this->loadCard($cardId);
@@ -143,6 +173,9 @@ class CardAttachmentService {
 		if ($size > self::MAX_SIZE) {
 			throw new InvalidInputException('File too large');
 		}
+		// Instance-wide storage cap, if an admin configured one. Checked BEFORE a
+		// single byte is written.
+		$this->assertStorageHeadroom($size);
 
 		$stream = @fopen($tmpName, 'rb');
 		if ($stream === false) {
@@ -212,6 +245,7 @@ class CardAttachmentService {
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
 	 * @throws InvalidInputException if the fileId is not a readable file of the actor, empty, or oversized
+	 * @throws StorageLimitException if an admin-configured instance-wide storage cap has no room left
 	 */
 	public function attachFromFileNode(int $cardId, int $fileId, string $actorUid): CardAttachment {
 		$card = $this->loadCard($cardId);
@@ -243,6 +277,10 @@ class CardAttachmentService {
 		if ($size > self::MAX_SIZE) {
 			throw new InvalidInputException('File too large');
 		}
+		// The SAME instance-wide storage cap as upload() - this path copies the
+		// same bytes into the same app-data, so leaving it out would just be the
+		// open door next to the closed one.
+		$this->assertStorageHeadroom($size);
 
 		$stream = $node->fopen('rb');
 		if ($stream === false) {
@@ -487,6 +525,80 @@ class CardAttachmentService {
 		}
 
 		return $failures;
+	}
+
+	/**
+	 * The instance-wide attachment storage cap in bytes, or 0 for "no cap".
+	 *
+	 * Absent, empty, non-numeric, zero or negative all mean the SAME thing: the
+	 * cap is off and nothing below it ever runs. That is the default, and it is
+	 * what keeps this whole feature inert on an install whose admin has not
+	 * opted in.
+	 */
+	public function storageLimit(): int {
+		$raw = trim($this->config->getAppValue(self::APP_ID, self::KEY_ATTACHMENT_STORAGE_LIMIT, ''));
+		if ($raw === '' || $raw === '0') {
+			return 0;
+		}
+		if (!ctype_digit($raw) || (int)$raw <= 0) {
+			// An admin who typed `10G` (or `10 GB`, or a negative) meant to cap
+			// this instance and did NOT. Failing open is the right direction - a
+			// typo must not start refusing uploads - but failing open SILENTLY
+			// would leave them believing the cap is on, so say so.
+			$this->logger->warning(
+				'Kanso: ignoring an unusable ' . self::KEY_ATTACHMENT_STORAGE_LIMIT
+				. ' app value - it must be a plain positive number of BYTES, so no attachment storage limit is in force',
+				['value' => $raw]
+			);
+			return 0;
+		}
+		return (int)$raw;
+	}
+
+	/**
+	 * Refuses a write that would push the instance past the configured storage
+	 * cap. Called by BOTH write paths ({@see self::upload()} and
+	 * {@see self::attachFromFileNode()}) before any bytes are written.
+	 *
+	 * With no cap configured this returns immediately and, crucially, issues NO
+	 * QUERY: the `SUM(size)` only happens on an instance that actually opted in,
+	 * so the default install pays nothing for a feature it is not using.
+	 *
+	 * An already-over-cap instance keeps working in every direction except
+	 * adding: listing, downloading and deleting are untouched, so an admin (or
+	 * the users themselves) can always delete their way back under the line.
+	 *
+	 * The check is a ceiling, not a lock: concurrent uploads can each read the
+	 * same total and each be admitted, so the real figure may overshoot by up to
+	 * (concurrent writes x {@see self::MAX_SIZE}). Reserving rows to close that
+	 * would cost every upload a write; the point here is to bound unlimited
+	 * growth, and an overshoot of a few files does that.
+	 *
+	 * Deliberately NOT applied to the ARCHIVE import writer
+	 * ({@see ImportService}): one archive is already bounded by
+	 * {@see ImportArchiveReader::MAX_TOTAL_BYTES} plus the import endpoint's own
+	 * per-user rate limit, and failing halfway through a restore would leave a
+	 * partially-restored board. That bypass is a decision, not an oversight.
+	 * Deck import is NOT exempt - its bytes come from Deck's own storage and so
+	 * have no archive bound at all; it honours the same cap by skipping the
+	 * attachments that no longer fit ({@see DeckImportService}).
+	 *
+	 * @throws StorageLimitException if the instance has no room for $incomingBytes
+	 */
+	private function assertStorageHeadroom(int $incomingBytes): void {
+		$limit = $this->storageLimit();
+		if ($limit <= 0) {
+			// No cap configured - behave exactly as every release before this one.
+			return;
+		}
+
+		$used = $this->attachmentMapper->totalSize();
+		if ($used + $incomingBytes > $limit) {
+			throw new StorageLimitException(
+				'Attachment storage is full on this server. An administrator can free space or '
+				. 'raise the attachment_storage_limit app setting.'
+			);
+		}
 	}
 
 	/**

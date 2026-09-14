@@ -687,9 +687,13 @@ class PublicShareService {
 	 * fetches that separately via {@see self::getPublicBoard()}). Keeps the
 	 * unauthenticated page route from doing two full board builds per load.
 	 *
+	 * Returns the validated board so the caller can title the page with its name
+	 * (#10446) without a second lookup - the row is already in hand here.
+	 *
+	 * @return Board the live, non-expired board the token resolves to
 	 * @throws DoesNotExistException if the token is unknown, disabled, or expired
 	 */
-	public function assertTokenValid(string $token): void {
+	public function assertTokenValid(string $token): Board {
 		$board = $this->boardMapper->findByPublicToken($token);
 		if (($board->getPublicShareToken() ?? '') === '') {
 			throw new DoesNotExistException('Public share is disabled');
@@ -698,6 +702,7 @@ class PublicShareService {
 		if ($expiresAt !== null && $expiresAt > 0 && $expiresAt <= time()) {
 			throw new DoesNotExistException('Public share has expired');
 		}
+		return $board;
 	}
 
 	/**

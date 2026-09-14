@@ -61,8 +61,10 @@ class CardAttachmentController extends Controller {
 	 * is deliberately looser than board import's - bulk-attaching a few dozen
 	 * screenshots in one sitting is ordinary use, and the e2e suite uploads as one
 	 * shared admin across parallel workers - while still bounding a scripted loop.
-	 * It bounds request COUNT, not bytes; the aggregate storage question is its own
-	 * card.
+	 * It bounds request COUNT, not bytes; the aggregate BYTES are bounded
+	 * separately, and only where an admin asked for it, by the optional
+	 * instance-wide cap ({@see CardAttachmentService::KEY_ATTACHMENT_STORAGE_LIMIT}),
+	 * which answers 413 through {@see ApiErrorTrait} when it is full.
 	 */
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: 120, period: 3600)]

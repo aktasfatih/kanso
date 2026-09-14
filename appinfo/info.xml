@@ -24,17 +24,29 @@ cards with instant drag & drop, optimistic updates and payloads sized for large
 boards (2,000+ cards). Realtime updates via notify_push, with a polling fallback.
 
 Rich cards with markdown, labels, due dates, assignees, priorities, checklists,
-parent/child cards and threaded comments with @mentions and watchers. Board
-sharing with per-user and per-group access control.
+parent/child cards and threaded comments with @mentions and watchers. File
+attachments (up to 100 MiB each), custom fields per board (text, number, date or
+a select list), time tracking with a per-card total, and private reminders on a
+card or a single comment. Board sharing with per-user and per-group access
+control, plus an optional read-only public link that needs no Nextcloud account.
 
 A review workflow (request review, approve / request changes, customizable
 review types, and an optional done-gate). A cross-board My Work hub (my tasks,
 reviews, inbox), cross-board Projects, and per-board and per-project analytics
-(velocity, cycle time, throughput). Board, List and Timeline (Gantt) views.
+(velocity, cycle time, throughput). Board, List and Timeline (Gantt) views, with
+swimlanes, saved filters and display sort.
 
 Recurring cards on RRULE schedules, auto-archive rules, WIP limits and stack
-roles, a command palette with full-text search, trash with restore, GitHub and
-Forgejo links and webhooks, and one-click Import from Deck.
+roles, card templates, a command palette with full-text search, and trash with
+restore.
+
+Every board you can read also appears as a read-only CalDAV task list of its
+due-dated cards, with an optional per-board .ics feed. Email intake turns mail in
+an IMAP folder into cards in a column you choose, and GitHub and Forgejo links
+and webhooks keep cards in step with pull requests and issues. One-click Import
+from Deck, import from a Trello JSON export or a CSV, board export and re-import
+as a zip with attachments, board duplication, and scheduled periodic backups of
+every board for administrators.
 	]]></description>
 	<description lang="de"><![CDATA[
 Kanso ist eine Kanban-Board-App für Nextcloud, entwickelt für Geschwindigkeit.
@@ -45,20 +57,34 @@ Rückfallebene.
 
 Umfangreiche Karten mit Markdown, Labels, Fälligkeitsdaten, Zuständigen,
 Prioritäten, Checklisten, übergeordneten/untergeordneten Karten und
-verschachtelten Kommentaren mit @-Erwähnungen und Beobachtern. Board-Freigabe
-mit Zugriffskontrolle pro Benutzer und Gruppe.
+verschachtelten Kommentaren mit @-Erwähnungen und Beobachtern. Dateianhänge
+(bis zu 100 MiB pro Datei), eigene Kartenfelder pro Board (Text, Zahl, Datum
+oder Auswahlliste), Zeiterfassung mit Summe pro Karte und private Erinnerungen
+zu einer Karte oder einem einzelnen Kommentar. Board-Freigabe mit
+Zugriffskontrolle pro Benutzer und Gruppe sowie ein optionaler
+schreibgeschützter öffentlicher Link, der kein Nextcloud-Konto erfordert.
 
 Ein Review-Workflow (Review anfordern, genehmigen / Änderungen anfordern,
 anpassbare Review-Typen und ein optionales Fertig-Gate). Ein
 board-übergreifendes „Meine Arbeit“-Zentrum (meine Aufgaben, Reviews,
 Posteingang), board-übergreifende Projekte sowie Analysen pro Board und
 Projekt (Velocity, Durchlaufzeit, Durchsatz). Board-, Listen- und
-Timeline-Ansicht (Gantt).
+Timeline-Ansicht (Gantt), mit Swimlanes, gespeicherten Filtern und
+Anzeigesortierung.
 
 Wiederkehrende Karten nach RRULE-Zeitplänen, Regeln zum automatischen
-Archivieren, WIP-Limits und Spaltenrollen, eine Befehlspalette mit
-Volltextsuche, Papierkorb mit Wiederherstellung, GitHub-Verknüpfungen und
-Webhook sowie Import aus Deck mit einem Klick.
+Archivieren, WIP-Limits und Spaltenrollen, Kartenvorlagen, eine Befehlspalette
+mit Volltextsuche und ein Papierkorb mit Wiederherstellung.
+
+Jedes Board mit Lesezugriff erscheint zudem als schreibgeschützte
+CalDAV-Aufgabenliste seiner Karten mit Fälligkeitsdatum, wahlweise mit einem
+.ics-Feed pro Board. Der E-Mail-Eingang macht aus Nachrichten in einem
+IMAP-Ordner Karten in einer wählbaren Spalte, und GitHub- und
+Forgejo-Verknüpfungen samt Webhooks halten Karten im Takt mit Pull Requests und
+Issues. Import aus Deck mit einem Klick, Import aus einem Trello-JSON-Export
+oder einer CSV-Datei, Export und erneuter Import eines Boards als ZIP samt
+Anhängen, Duplizieren von Boards sowie geplante regelmäßige Sicherungen aller
+Boards für Administratoren.
 	]]></description>
 	<description lang="es"><![CDATA[
 Kanso es una aplicación de tableros kanban para Nextcloud, creada pensando en
@@ -69,20 +95,35 @@ con consulta periódica como alternativa.
 
 Tarjetas completas con Markdown, etiquetas, fechas de vencimiento, personas
 asignadas, prioridades, listas de tareas, tarjetas principales y subtarjetas, y
-comentarios en hilos con menciones @ y observadores. Tableros compartidos con
-control de acceso por usuario y por grupo.
+comentarios en hilos con menciones @ y observadores. Archivos adjuntos (hasta
+100 MiB cada uno), campos personalizados por tablero (texto, número, fecha o
+lista de selección), registro de tiempo con el total por tarjeta y recordatorios
+privados para una tarjeta o un comentario concreto. Tableros compartidos con
+control de acceso por usuario y por grupo, y un enlace público de solo lectura
+opcional que no necesita una cuenta de Nextcloud.
 
 Un flujo de revisión (solicitar una revisión, aprobar o solicitar cambios,
 tipos de revisión personalizables y un bloqueo opcional de la columna
 Terminado). Un espacio «Mi trabajo» común a todos los tableros (mis tareas,
 revisiones, bandeja de entrada), proyectos que abarcan varios tableros y
 estadísticas por tablero y por proyecto (velocidad, tiempo de ciclo,
-rendimiento). Vistas de tablero, lista y cronología (Gantt).
+rendimiento). Vistas de tablero, lista y cronología (Gantt), con carriles
+(swimlanes), filtros guardados y orden de visualización.
 
 Tarjetas recurrentes con reglas RRULE, reglas de archivado automático, límites
-WIP y roles de columna, una paleta de comandos con búsqueda de texto completo,
-papelera con restauración, enlaces de GitHub y webhook, e importación desde
-Deck con un solo clic.
+WIP y roles de columna, plantillas de tarjeta, una paleta de comandos con
+búsqueda de texto completo y papelera con restauración.
+
+Cada tablero con acceso de lectura aparece además como una lista de tareas
+CalDAV de solo lectura con sus tarjetas que tienen fecha de vencimiento, y
+opcionalmente publica un canal .ics por tablero. La entrada por correo convierte
+los mensajes de una carpeta IMAP en tarjetas de la columna elegida, y los
+enlaces y webhooks de GitHub y Forgejo mantienen las tarjetas al día con las
+solicitudes de incorporación de cambios y las incidencias. Importación desde
+Deck con un solo clic, importación desde una exportación JSON de Trello o desde
+un CSV, exportación y reimportación de un tablero como ZIP con sus adjuntos,
+duplicación de tableros y copias de seguridad periódicas programadas de todos
+los tableros para administradores.
 	]]></description>
 	<description lang="fr"><![CDATA[
 Kanso est une application de tableau kanban pour Nextcloud, conçue pour la
@@ -93,20 +134,34 @@ l'interrogation périodique.
 
 Cartes riches avec markdown, étiquettes, dates d'échéance, personnes
 assignées, priorités, listes de tâches, cartes parent/enfant et commentaires
-en fil de discussion avec mentions @ et observateurs. Partage de tableaux
-avec contrôle d'accès par utilisateur et par groupe.
+en fil de discussion avec mentions @ et observateurs. Pièces jointes (jusqu'à
+100 Mio chacune), champs personnalisés par tableau (texte, nombre, date ou
+liste de choix), suivi du temps avec un total par carte, et rappels privés sur
+une carte ou sur un seul commentaire. Partage de tableaux avec contrôle d'accès
+par utilisateur et par groupe, ainsi qu'un lien public en lecture seule
+facultatif, qui ne nécessite aucun compte Nextcloud.
 
 Un flux de revue (demander une revue, approuver / demander des modifications,
 types de revue personnalisables et une porte de validation optionnelle). Un
 espace « Mon travail » multi-tableaux (mes tâches, revues, boîte de
 réception), des projets multi-tableaux, et des statistiques par tableau et
 par projet (vélocité, temps de cycle, débit). Vues Tableau, Liste et
-Chronologie (Gantt).
+Chronologie (Gantt), avec couloirs (swimlanes), filtres enregistrés et tri
+d'affichage.
 
 Cartes récurrentes selon des règles RRULE, archivage automatique, limites de
-travail en cours et rôles de colonne, une palette de commandes avec
-recherche plein texte, corbeille avec restauration, liens GitHub et webhook,
-et import depuis Deck en un clic.
+travail en cours et rôles de colonne, modèles de cartes, une palette de
+commandes avec recherche plein texte et une corbeille avec restauration.
+
+Chaque tableau accessible en lecture apparaît aussi comme une liste de tâches
+CalDAV en lecture seule regroupant ses cartes datées, avec un flux .ics
+facultatif par tableau. La réception d'e-mails transforme les messages d'un
+dossier IMAP en cartes dans une colonne choisie, et les liens et webhooks
+GitHub et Forgejo gardent les cartes au diapason des demandes de fusion et des
+tickets. Import depuis Deck en un clic, import depuis un export JSON de Trello
+ou un CSV, export et réimport d'un tableau sous forme d'archive zip avec ses
+pièces jointes, duplication de tableau, et sauvegardes périodiques planifiées
+de tous les tableaux pour les administrateurs.
 	]]></description>
 	<description lang="it"><![CDATA[
 Kanso è un'app di bacheche kanban per Nextcloud, progettata per la velocità.
@@ -117,20 +172,34 @@ l'interrogazione periodica come alternativa.
 
 Schede complete con Markdown, etichette, scadenze, assegnatari, priorità,
 liste di controllo, schede principali e sotto-schede, e commenti in
-discussioni con menzioni @ e osservatori. Condivisione delle bacheche con
-controllo degli accessi per utente e per gruppo.
+discussioni con menzioni @ e osservatori. Allegati (fino a 100 MiB ciascuno),
+campi personalizzati per bacheca (testo, numero, data o elenco a scelta),
+registrazione del tempo con il totale per scheda e promemoria privati su una
+scheda o su un singolo commento. Condivisione delle bacheche con controllo
+degli accessi per utente e per gruppo e un collegamento pubblico di sola
+lettura facoltativo, che non richiede un account Nextcloud.
 
 Un flusso di revisione (richiesta di revisione, approvazione o richiesta di
 modifiche, tipi di revisione personalizzabili e un blocco facoltativo sul
 completamento). Uno spazio «Il mio lavoro» comune a tutte le bacheche (le mie
 attività, revisioni, posta in arrivo), progetti trasversali alle bacheche e
 statistiche per bacheca e per progetto (velocità, tempo di ciclo,
-produttività). Viste Bacheca, Elenco e Linea del tempo (Gantt).
+produttività). Viste Bacheca, Elenco e Linea del tempo (Gantt), con corsie
+(swimlane), filtri salvati e ordinamento di visualizzazione.
 
 Schede ricorrenti con pianificazioni RRULE, regole di archiviazione
-automatica, limiti WIP e ruoli delle colonne, una palette dei comandi con
-ricerca a testo completo, cestino con ripristino, collegamenti GitHub e
-webhook, e importazione da Deck con un solo clic.
+automatica, limiti WIP e ruoli delle colonne, modelli di scheda, una palette
+dei comandi con ricerca a testo completo e cestino con ripristino.
+
+Ogni bacheca con accesso in lettura compare anche come elenco di attività
+CalDAV di sola lettura con le sue schede con scadenza, con un feed .ics
+facoltativo per bacheca. La ricezione e-mail trasforma i messaggi di una
+cartella IMAP in schede in una colonna scelta, mentre collegamenti e webhook di
+GitHub e Forgejo mantengono le schede allineate a pull request e segnalazioni.
+Importazione da Deck con un solo clic, importazione da un'esportazione JSON di
+Trello o da un CSV, esportazione e reimportazione di una bacheca come archivio
+zip con i suoi allegati, duplicazione delle bacheche e backup periodici
+pianificati di tutte le bacheche per gli amministratori.
 	]]></description>
 	<description lang="nl"><![CDATA[
 Kanso is een kanbanbord-app voor Nextcloud, gebouwd op snelheid. Borden,
@@ -140,20 +209,31 @@ updates via notify_push, met periodiek ophalen als terugval.
 
 Uitgebreide kaarten met Markdown, labels, einddata, toegewezen personen,
 prioriteiten, checklists, hoofdkaarten en subkaarten, en reacties in threads
-met @-vermeldingen en volgers. Borden delen met toegangsrechten per gebruiker
-en per groep.
+met @-vermeldingen en volgers. Bijlagen (tot 100 MiB per bestand), eigen
+kaartvelden per bord (tekst, getal, datum of keuzelijst), tijdregistratie met
+een totaal per kaart en privéherinneringen voor een kaart of één losse reactie.
+Borden delen met toegangsrechten per gebruiker en per groep, plus een optionele
+openbare alleen-lezen link waarvoor geen Nextcloud-account nodig is.
 
 Een reviewworkflow (review aanvragen, goedkeuren of wijzigingen vragen,
 aanpasbare reviewtypen en een optionele vergrendeling van de kolom Klaar). Een
 overzicht «Mijn werk» over alle borden heen (mijn taken, reviews, postvak),
 projecten die borden overstijgen en statistieken per bord en per project
 (velocity, doorlooptijd, doorvoer). Weergaven voor bord, lijst en tijdlijn
-(Gantt).
+(Gantt), met swimlanes, opgeslagen filters en weergavesortering.
 
 Terugkerende kaarten volgens RRULE-schema's, regels voor automatisch
-archiveren, WIP-limieten en kolomrollen, een opdrachtenpalet met
-volledige-tekstzoeken, een prullenbak met herstel, GitHub-koppelingen en
-webhook, en importeren uit Deck met één klik.
+archiveren, WIP-limieten en kolomrollen, kaartsjablonen, een opdrachtenpalet
+met volledige-tekstzoeken en een prullenbak met herstel.
+
+Elk bord met leesrechten verschijnt ook als een alleen-lezen CalDAV-takenlijst
+met zijn kaarten die een einddatum hebben, optioneel met een .ics-feed per
+bord. E-mailverwerking maakt van berichten in een IMAP-map kaarten in een
+gekozen kolom, en GitHub- en Forgejo-koppelingen en webhooks houden kaarten
+gelijk met pull requests en issues. Importeren uit Deck met één klik,
+importeren uit een Trello-JSON-export of een CSV, een bord exporteren en
+terugzetten als zip met bijlagen, borden dupliceren en geplande periodieke
+back-ups van alle borden voor beheerders.
 	]]></description>
 	<description lang="pl"><![CDATA[
 Kanso to aplikacja z tablicami kanban dla Nextcloud, zbudowana z myślą o
@@ -164,20 +244,32 @@ notify_push, z odpytywaniem jako rozwiązaniem awaryjnym.
 
 Rozbudowane karty z Markdownem, etykietami, terminami, osobami przypisanymi,
 priorytetami, listami kontrolnymi, kartami nadrzędnymi i podkartami oraz
-wątkowanymi komentarzami z @wzmiankami i obserwującymi. Udostępnianie tablic z
-kontrolą dostępu dla poszczególnych użytkowników i grup.
+wątkowanymi komentarzami z @wzmiankami i obserwującymi. Załączniki (do 100 MiB
+każdy), własne pola kart dla każdej tablicy (tekst, liczba, data lub lista
+wyboru), rejestrowanie czasu z sumą dla karty oraz prywatne przypomnienia o
+karcie lub o pojedynczym komentarzu. Udostępnianie tablic z kontrolą dostępu
+dla poszczególnych użytkowników i grup oraz opcjonalny publiczny odnośnik tylko
+do odczytu, który nie wymaga konta Nextcloud.
 
 Przepływ recenzji (poproś o recenzję, zatwierdź lub poproś o zmiany,
 konfigurowalne typy recenzji i opcjonalna bramka ukończenia). Wspólne dla
 wszystkich tablic centrum „Moja praca” (moje zadania, recenzje, skrzynka
 odbiorcza), projekty zbierające karty z wielu tablic oraz statystyki tablic i
 projektów (prędkość, czas cyklu, przepustowość). Widoki: tablica, lista i oś
-czasu (Gantt).
+czasu (Gantt), z torami (swimlane), zapisanymi filtrami i sortowaniem widoku.
 
 Karty cykliczne według harmonogramów RRULE, reguły autoarchiwizacji, limity WIP
-i role kolumn, paleta poleceń z wyszukiwaniem pełnotekstowym, kosz z
-przywracaniem, odnośniki do GitHuba i webhook oraz import z Deck jednym
-kliknięciem.
+i role kolumn, szablony kart, paleta poleceń z wyszukiwaniem pełnotekstowym
+oraz kosz z przywracaniem.
+
+Każda tablica z prawem odczytu pojawia się także jako lista zadań CalDAV tylko
+do odczytu z kartami, które mają termin, opcjonalnie z kanałem .ics dla
+tablicy. Odbiór poczty zamienia wiadomości z folderu IMAP w karty w wybranej
+kolumnie, a odnośniki i webhooki GitHuba oraz Forgejo utrzymują karty w zgodzie
+z pull requestami i zgłoszeniami. Import z Deck jednym kliknięciem, import z
+eksportu JSON z Trello lub z pliku CSV, eksport tablicy do archiwum zip razem z
+załącznikami i ponowny import, duplikowanie tablic oraz zaplanowane okresowe
+kopie zapasowe wszystkich tablic dla administratorów.
 	]]></description>
 	<description lang="pt-br"><![CDATA[
 O Kanso é um aplicativo de quadros kanban para Nextcloud, feito para ser
@@ -188,20 +280,32 @@ periódica como alternativa.
 
 Cartões completos com markdown, etiquetas, datas de vencimento, responsáveis,
 prioridades, checklists, cartões pai/filho e comentários em conversas com
-menções @ e observadores. Compartilhamento de quadros com controle de acesso
-por usuário e por grupo.
+menções @ e observadores. Anexos (até 100 MiB cada), campos personalizados por
+quadro (texto, número, data ou lista de seleção), registro de tempo com o total
+por cartão e lembretes privados para um cartão ou um único comentário.
+Compartilhamento de quadros com controle de acesso por usuário e por grupo, e
+um link público somente leitura opcional, que não exige conta no Nextcloud.
 
 Um fluxo de revisão (solicitar revisão, aprovar / solicitar alterações, tipos
 de revisão personalizáveis e uma trava opcional de conclusão). Um espaço Meu
 trabalho que abrange todos os quadros (minhas tarefas, revisões, caixa de
 entrada), Projetos entre quadros e análises por quadro e por projeto
 (velocidade, tempo de ciclo, vazão). Visualizações em quadro, lista e linha do
-tempo (Gantt).
+tempo (Gantt), com raias (swimlanes), filtros salvos e ordenação de exibição.
 
 Cartões recorrentes com agendamentos RRULE, regras de arquivamento automático,
-limites de WIP e papéis de coluna, uma paleta de comandos com busca de texto
-completo, lixeira com restauração, links e webhook do GitHub e importação do
-Deck com um clique.
+limites de WIP e papéis de coluna, modelos de cartão, uma paleta de comandos
+com busca de texto completo e lixeira com restauração.
+
+Todo quadro com acesso de leitura também aparece como uma lista de tarefas
+CalDAV somente leitura com seus cartões que têm data de vencimento, e
+opcionalmente publica um feed .ics por quadro. A entrada por e-mail transforma
+as mensagens de uma pasta IMAP em cartões na coluna escolhida, e os links e
+webhooks do GitHub e do Forgejo mantêm os cartões em dia com pull requests e
+issues. Importação do Deck com um clique, importação de uma exportação JSON do
+Trello ou de um CSV, exportação e reimportação de um quadro como zip com os
+anexos, duplicação de quadros e backups periódicos agendados de todos os
+quadros para administradores.
 	]]></description>
 	<description lang="ru"><![CDATA[
 Kanso — приложение канбан-досок для Nextcloud, созданное ради скорости. Доски,
@@ -211,18 +315,32 @@ Kanso — приложение канбан-досок для Nextcloud, соз�
 
 Насыщенные карточки с Markdown, метками, сроками выполнения, исполнителями,
 приоритетами, чек-листами, родительскими и дочерними карточками, а также
-обсуждениями в ветках с @упоминаниями и наблюдателями. Общий доступ к доске с
-разграничением прав по пользователям и группам.
+обсуждениями в ветках с @упоминаниями и наблюдателями. Вложения (до 100 МиБ
+каждое), собственные поля карточек для каждой доски (текст, число, дата или
+список выбора), учёт времени с итогом по карточке и личные напоминания о
+карточке или об отдельном комментарии. Общий доступ к доске с разграничением
+прав по пользователям и группам, а также необязательная публичная ссылка только
+для чтения, не требующая учётной записи Nextcloud.
 
 Процесс проверки (запрос проверки, одобрение или запрос изменений, настраиваемые
 типы проверки и необязательный контроль готовности). Раздел «Моя работа» по всем
 доскам (мои задачи, проверки, входящие), сквозные проекты, а также аналитика по
 доскам и проектам (скорость, время цикла, пропускная способность). Виды «Доска»,
-«Список» и «Шкала времени» (диаграмма Ганта).
+«Список» и «Шкала времени» (диаграмма Ганта) с дорожками, сохранёнными фильтрами
+и сортировкой отображения.
 
 Повторяющиеся карточки по расписанию RRULE, правила автоархивации, лимиты WIP и
-роли колонок, командная палитра с полнотекстовым поиском, корзина с
-восстановлением, ссылки и webhook GitHub, а также импорт из Deck в один клик.
+роли колонок, шаблоны карточек, командная палитра с полнотекстовым поиском,
+корзина с восстановлением.
+
+Каждая доступная для чтения доска отображается также как список задач CalDAV
+только для чтения с её карточками, у которых указан срок, и при желании
+публикует ленту .ics для доски. Приём почты превращает письма из папки IMAP в
+карточки в выбранной колонке, а ссылки и webhook GitHub и Forgejo поддерживают
+карточки в согласии с пул-реквестами и задачами. Импорт из Deck в один клик,
+импорт из JSON-экспорта Trello или из CSV, экспорт доски в zip вместе с
+вложениями и обратный импорт, дублирование досок, а также запланированное
+регулярное резервное копирование всех досок для администраторов.
 	]]></description>
 	<description lang="tr"><![CDATA[
 Kanso, Nextcloud için hız odaklı geliştirilmiş bir kanban pano uygulamasıdır.
@@ -232,19 +350,32 @@ gerçek zamanlı güncellemeler, yoklamaya geri düşme seçeneğiyle.
 
 Markdown, etiketler, bitiş tarihleri, atananlar, öncelikler, kontrol
 listeleri, üst/alt kartlar ve @bahsetme ile izleyicileri destekleyen konu
-başlıklı yorumlarla zengin kartlar. Kullanıcı ve grup bazında erişim
-denetimiyle pano paylaşımı.
+başlıklı yorumlarla zengin kartlar. Her biri 100 MiB'ye kadar dosya ekleri,
+pano başına özel kart alanları (metin, sayı, tarih veya seçim listesi), kart
+başına toplamı gösteren zaman kaydı ve bir kart ya da tek bir yorum için özel
+hatırlatıcılar. Kullanıcı ve grup bazında erişim denetimiyle pano paylaşımı ve
+Nextcloud hesabı gerektirmeyen, isteğe bağlı salt okunur herkese açık bağlantı.
 
 Bir inceleme akışı (inceleme isteme, onaylama / değişiklik isteme,
 özelleştirilebilir inceleme türleri ve isteğe bağlı bir tamamlanma kapısı).
 Panolar arası bir "İşlerim" merkezi (görevlerim, incelemeler, gelen kutusu),
 panolar arası Projeler ve pano ile proje bazında analitik (hız, döngü süresi,
-iş çıktısı). Pano, Liste ve Zaman Çizelgesi (Gantt) görünümleri.
+iş çıktısı). Pano, Liste ve Zaman Çizelgesi (Gantt) görünümleri; kulvarlar
+(swimlane), kayıtlı filtreler ve görüntüleme sıralaması.
 
 RRULE zamanlamalarına göre yinelenen kartlar, otomatik arşivleme kuralları,
-WIP sınırları ve sütun rolleri, tam metin aramalı bir komut paleti, geri
-yükleme destekli çöp kutusu, GitHub bağlantıları ve webhook ile tek tıkla
-Deck'ten içe aktarma.
+WIP sınırları ve sütun rolleri, kart şablonları, tam metin aramalı bir komut
+paleti ve geri yükleme destekli çöp kutusu.
+
+Okuma erişimi olan her pano, bitiş tarihi olan kartlarıyla birlikte salt okunur
+bir CalDAV görev listesi olarak da görünür; pano başına isteğe bağlı bir .ics
+akışı da yayımlanabilir. E-posta alımı, bir IMAP klasörüne gelen iletileri
+seçilen sütunda karta dönüştürür; GitHub ve Forgejo bağlantıları ile
+webhook'lar kartları pull request ve issue'larla uyumlu tutar. Tek tıkla
+Deck'ten içe aktarma, Trello JSON dışa aktarımından veya bir CSV dosyasından
+içe aktarma, bir panonun ekleriyle birlikte zip olarak dışa aktarılıp geri
+alınması, pano çoğaltma ve yöneticiler için tüm panoların zamanlanmış düzenli
+yedeklenmesi.
 	]]></description>
 	<description lang="zh-hans"><![CDATA[
 Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片支持即时拖放和乐观
@@ -252,15 +383,24 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 轮询作为后备方案。
 
 功能丰富的卡片，支持 Markdown、标签、截止日期、负责人、优先级、清单、父子卡片，
-以及带 @提及 和关注者的话题式评论。看板共享支持按用户和按群组的访问控制。
+以及带 @提及 和关注者的话题式评论。卡片附件（每个文件最大 100 MiB）、按看板
+定义的自定义字段（文本、数字、日期或下拉列表）、带单卡合计的工时记录，以及
+针对卡片或单条评论的私人提醒。看板共享支持按用户和按群组的访问控制，还可选择
+开启无需 Nextcloud 账号的只读公开链接。
 
 完整的评审流程（请求评审、通过或请求修改、可自定义的评审类型，以及可选的完成
 门禁）。跨看板的“我的工作”中心（我的任务、评审、收件箱）、跨看板的项目，以及
 按看板和按项目的分析（速率、周期时间、吞吐量）。提供看板、列表和时间轴（甘特图）
-三种视图。
+三种视图，并支持泳道、已保存的筛选条件和显示排序。
 
-按 RRULE 计划重复的卡片、自动归档规则、WIP 限制和列角色、带全文搜索的命令面板、
-可恢复的回收站、GitHub 链接与 webhook，以及一键从 Deck 导入。
+按 RRULE 计划重复的卡片、自动归档规则、WIP 限制和列角色、卡片模板、带全文搜索
+的命令面板，以及可恢复的回收站。
+
+每个有读取权限的看板还会以只读 CalDAV 任务列表的形式呈现其设有截止日期的卡片，
+并可按看板发布可选的 .ics 订阅源。邮件收取可将 IMAP 文件夹中的来信转为指定列中
+的卡片；GitHub 与 Forgejo 链接和 webhook 让卡片随合并请求和工单的进展保持同步。
+支持一键从 Deck 导入，也可从 Trello 的 JSON 导出或 CSV 导入，将看板连同附件
+导出为 zip 并重新导入，复制看板，管理员还可定期备份全部看板。
 	]]></description>
 	<version>0.31.0</version>
 	<licence>agpl</licence>

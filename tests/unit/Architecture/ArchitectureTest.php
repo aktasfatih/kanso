@@ -120,7 +120,13 @@ class ArchitectureTest extends TestCase {
 	 *                                      unreachable orphans
 	 * - Service/BulkCardService.php ...... delegates every mutation to per-card
 	 *                                      services, which gate visibility and
-	 *                                      convert hidden → skipped
+	 *                                      convert hidden → skipped. Its one raw
+	 *                                      read (the archived-flag pre-read that
+	 *                                      decides ok vs `unchanged`, #10437)
+	 *                                      never leaves the closure: its verdict
+	 *                                      is only consulted AFTER the gated
+	 *                                      update() returned, so a hidden card
+	 *                                      still reports not_found
 	 * - Service/CalendarFeedService.php .. anonymous feed; the PUBLIC-ONLY
 	 *                                      scope is applied inside
 	 *                                      CardMapper::findWithDuedateByBoard

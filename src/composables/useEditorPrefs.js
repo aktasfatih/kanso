@@ -6,8 +6,11 @@
  * instance across the app reacts to changes from the settings dialog without
  * any prop-drilling or additional query layer.
  *
- * App.vue seeds the value from getSettings() on mount and updates it on each
- * toggle. CardDetail.vue reads it via :show-toolbar.
+ * Seeded twice, on purpose (#10460): main.js sets it SYNCHRONOUSLY from the
+ * server-rendered initial state before the app mounts, so the first editor paint
+ * already matches the user's choice instead of flashing the toolbar; App.vue
+ * then reconciles it from getSettings() on mount and updates it on each toggle.
+ * CardDetail.vue reads it via :show-toolbar.
  */
 import { ref } from 'vue'
 

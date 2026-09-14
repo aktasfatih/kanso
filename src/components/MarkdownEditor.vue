@@ -161,7 +161,7 @@ Emits:
 						:size="22"
 						:hide-status="true"
 						:disable-tooltip="true" />
-					<span class="kanso-md-editor__mention-name">{{ item.displayName }}</span>
+					<span class="kanso-md-editor__mention-name" :title="item.displayName">{{ item.displayName }}</span>
 				</li>
 			</ul>
 		</Teleport>

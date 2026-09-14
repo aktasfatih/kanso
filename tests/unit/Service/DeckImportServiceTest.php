@@ -22,6 +22,7 @@ use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AttachmentSanitizer;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\DeckImportService;
 use OCA\Kanso\Service\DeckReader;
@@ -60,7 +61,14 @@ class DeckImportServiceTest extends TestCase {
 	private ISecureRandom&MockObject $secureRandom;
 	private IRootFolder&MockObject $rootFolder;
 	private LoggerInterface&MockObject $logger;
+	private CardAttachmentService&MockObject $attachmentService;
 	private DeckImportService $service;
+
+	/**
+	 * The instance-wide attachment storage cap in force. 0 - no cap - is the
+	 * shipped default and what every test inherits.
+	 */
+	private int $storageLimit = 0;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -80,6 +88,10 @@ class DeckImportServiceTest extends TestCase {
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		// No storage cap configured - the shipped default - so an import behaves
+		// exactly as it did before the cap existed. Tests that care opt one in.
+		$this->attachmentService = $this->createMock(CardAttachmentService::class);
+		$this->attachmentService->method('storageLimit')->willReturnCallback(fn (): int => $this->storageLimit);
 		$this->service = new DeckImportService(
 			$this->deckReader,
 			$this->boardService,
@@ -98,6 +110,7 @@ class DeckImportServiceTest extends TestCase {
 			$this->secureRandom,
 			$this->rootFolder,
 			$this->logger,
+			$this->attachmentService,
 		);
 	}
 
@@ -1076,5 +1089,77 @@ class DeckImportServiceTest extends TestCase {
 		$filenames = array_map(static fn (CardAttachment $a): string => $a->getFilename(), $captured);
 		self::assertContains('upload.pdf', $filenames);
 		self::assertContains('ref.pdf', $filenames);
+	}
+
+	// ---- instance-wide attachment storage cap -----------------------------
+
+	/**
+	 * With no cap configured - the shipped default - an import is exactly what it
+	 * was before the cap existed, and never runs the instance-wide `SUM(size)`.
+	 */
+	public function testImportRunsNoStorageAggregateQueryWhenNoLimitIsConfigured(): void {
+		$this->stubDeckFileAttachmentImport();
+		$this->cardAttachmentMapper->expects(self::never())->method('totalSize');
+		$this->cardAttachmentMapper->expects(self::once())->method('insert')
+			->willReturnCallback(static function (CardAttachment $a): CardAttachment {
+				$a->setId(1);
+				return $a;
+			});
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame(1, $result['attachments']);
+		self::assertSame(0, $result['skippedAttachments']);
+	}
+
+	/**
+	 * Deck import copies bytes into the SAME app-data as an upload, and unlike an
+	 * archive restore nothing else bounds how much - so it honours the cap too.
+	 * An attachment that no longer fits is skipped and counted, never written,
+	 * and never fatal to the rest of the import.
+	 */
+	public function testImportSkipsAttachmentsThatWouldExceedTheStorageLimit(): void {
+		$kansoFolder = $this->stubDeckFileAttachmentImport();
+		// 95 bytes stored against a 100-byte cap leaves no room for the 8-byte
+		// source.
+		$this->storageLimit = 100;
+		$this->cardAttachmentMapper->expects(self::once())->method('totalSize')->willReturn(95);
+		$kansoFolder->expects(self::never())->method('newFile');
+		$this->cardAttachmentMapper->expects(self::never())->method('insert');
+
+		$result = $this->service->importBoard(2, 'alice');
+
+		self::assertSame(0, $result['attachments']);
+		self::assertSame(1, $result['skippedAttachments']);
+	}
+
+	/**
+	 * One `deck_file` attachment (8 bytes) ready to import onto card 500.
+	 *
+	 * @return ISimpleFolder&MockObject the Kanso app-data folder it would be written to
+	 */
+	private function stubDeckFileAttachmentImport(): ISimpleFolder&MockObject {
+		$this->stubOneCardBoard();
+		$this->deckReader->method('readComments')->willReturn([]);
+		$this->deckReader->method('readFileReferenceAttachments')->willReturn([]);
+		$this->deckReader->method('readAttachments')->willReturn([
+			['id' => 31, 'cardId' => 21, 'type' => 'deck_file', 'data' => 'report.pdf', 'createdBy' => 'bob', 'createdAt' => 333],
+		]);
+		$this->userManager->method('userExists')->willReturn(true);
+		$this->secureRandom->method('generate')->willReturn('objkey123');
+
+		$sourceFile = $this->createMock(ISimpleFile::class);
+		$sourceFile->method('getContent')->willReturn('PDFBYTES');
+		$sourceFile->method('getMimeType')->willReturn('application/pdf');
+		$sourceFile->method('getSize')->willReturn(8);
+		$deckFolder = $this->createMock(ISimpleFolder::class);
+		$deckFolder->method('getFile')->with('report.pdf')->willReturn($sourceFile);
+		$deckAppData = $this->createMock(IAppData::class);
+		$deckAppData->method('getFolder')->with('file-card-21')->willReturn($deckFolder);
+		$this->appDataFactory->method('get')->with('deck')->willReturn($deckAppData);
+
+		$kansoFolder = $this->createMock(ISimpleFolder::class);
+		$this->appData->method('getFolder')->with('card-500')->willReturn($kansoFolder);
+		return $kansoFolder;
 	}
 }

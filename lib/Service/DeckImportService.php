@@ -78,8 +78,21 @@ class DeckImportService {
 		private ISecureRandom $secureRandom,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
+		private CardAttachmentService $attachmentService,
 	) {
 	}
+
+	/**
+	 * Bytes still available under the optional instance-wide attachment storage
+	 * cap ({@see CardAttachmentService::KEY_ATTACHMENT_STORAGE_LIMIT}) for the
+	 * import in progress.
+	 *
+	 * `null` until the first attachment of an import asks, and `PHP_INT_MAX`
+	 * once it is known that no cap is configured - so an instance that has not
+	 * opted in never runs the aggregate query, and an instance that has runs it
+	 * ONCE per import rather than once per attachment.
+	 */
+	private ?int $storageBudget = null;
 
 	/**
 	 * The Deck boards the user can import (owned or directly shared), or an empty
@@ -124,6 +137,9 @@ class DeckImportService {
 		// here and best-effort cleaned up if the import throws after it landed.
 		/** @var list<array{cardId: int, storageKey: string}> $writtenObjects */
 		$writtenObjects = [];
+		// Each import measures the instance's stored bytes afresh (and only if an
+		// admin configured a cap at all).
+		$this->storageBudget = null;
 		$this->db->beginTransaction();
 		try {
 			// BoardService::create() validates the title and would throw on a
@@ -417,7 +433,7 @@ class DeckImportService {
 				continue;
 			}
 
-			$this->storeAttachment(
+			$stored = $this->storeAttachment(
 				$newCardId,
 				$bytes,
 				$sourceName,
@@ -428,6 +444,12 @@ class DeckImportService {
 				$actorUid,
 				$writtenObjects,
 			);
+			if (!$stored) {
+				// No room under the instance storage cap - skipped, like any other
+				// unusable source, so the rest of the import still lands.
+				$skipped++;
+				continue;
+			}
 			$count++;
 		}
 		return [$count, $skipped];
@@ -494,7 +516,7 @@ class DeckImportService {
 			}
 
 			$filename = $ref['filename'] !== '' ? $ref['filename'] : $node->getName();
-			$this->storeAttachment(
+			$stored = $this->storeAttachment(
 				$newCardId,
 				$bytes,
 				AttachmentSanitizer::filename($filename),
@@ -505,6 +527,12 @@ class DeckImportService {
 				$actorUid,
 				$writtenObjects,
 			);
+			if (!$stored) {
+				// No room under the instance storage cap - skipped, like any other
+				// unusable source, so the rest of the import still lands.
+				$skipped++;
+				continue;
+			}
 			$imported++;
 		}
 		return [$imported, $skipped];
@@ -545,7 +573,16 @@ class DeckImportService {
 	 * Shared by both attachment kinds so the store/tracking logic never diverges.
 	 * The author uid falls back to the importer when the source uid is gone.
 	 *
+	 * Honours the optional instance-wide storage cap. Deck's bytes come from
+	 * Deck's own storage, so - unlike an archive restore - nothing else bounds
+	 * how much one import can copy in, and this endpoint is exactly the "loop it
+	 * until the disk fills" door the cap exists to close. Over the cap, the
+	 * attachment is LOGGED AND SKIPPED rather than fatal: that is how this
+	 * importer already treats a missing, unreadable or oversized source, and it
+	 * keeps a mostly-good import from being thrown away over its last few files.
+	 *
 	 * @param list<array{cardId: int, storageKey: string}> $writtenObjects tracked, by-reference
+	 * @return bool false when the storage cap had no room and the attachment was skipped
 	 */
 	private function storeAttachment(
 		int $newCardId,
@@ -557,7 +594,15 @@ class DeckImportService {
 		int $createdAt,
 		string $actorUid,
 		array &$writtenObjects,
-	): void {
+	): bool {
+		if (!$this->claimStorage($size)) {
+			$this->logger->warning(
+				'Kanso Deck import: skipping attachment - the instance-wide attachment storage limit has no room left',
+				['kansoCardId' => $newCardId, 'filename' => $filename, 'size' => $size]
+			);
+			return false;
+		}
+
 		$card = $this->cardMapper->find($newCardId);
 		$boardId = $card->getBoardId();
 
@@ -586,6 +631,37 @@ class DeckImportService {
 		$attachment->setUploadedBy($author);
 		$attachment->setCreatedAt($createdAt > 0 ? $createdAt : time());
 		$this->cardAttachmentMapper->insert($attachment);
+
+		return true;
+	}
+
+	/**
+	 * Takes $size bytes out of this import's storage budget, or reports that
+	 * there is no room.
+	 *
+	 * The budget is established on FIRST use: no cap configured (the default)
+	 * means an unlimited budget and - the point - no `SUM(size)` query at all,
+	 * so an instance that never opted in pays nothing for an import. A cap
+	 * configured means one aggregate query for the whole import, after which the
+	 * running total is kept here rather than re-queried per attachment.
+	 */
+	private function claimStorage(int $size): bool {
+		if ($this->storageBudget === null) {
+			$limit = $this->attachmentService->storageLimit();
+			$this->storageBudget = $limit <= 0
+				? PHP_INT_MAX
+				: max(0, $limit - $this->cardAttachmentMapper->totalSize());
+		}
+
+		if ($this->storageBudget === PHP_INT_MAX) {
+			return true;
+		}
+		if ($size > $this->storageBudget) {
+			return false;
+		}
+
+		$this->storageBudget -= $size;
+		return true;
 	}
 
 	/**
