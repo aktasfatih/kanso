@@ -351,6 +351,28 @@ and [CONTRIBUTING.md](CONTRIBUTING.md).
 (`<summary>` / `<description>`) still match the shipped feature set — verify
 against the code, and don't claim anything that isn't actually wired up.
 
+## Supporting Kanso
+
+Kanso is built and maintained by one person, and the whole app is free for
+everyone under the AGPL. That isn't going to change: there is no paid tier, no
+license key, and no feature held back for people who pay.
+
+What sponsorship buys is **priority**. Feature requests go into a queue, and the
+queue is longer than the week — sponsoring moves yours up it. Whatever gets built
+still ships to everyone in the next release.
+
+- **[GitHub Sponsors](https://github.com/sponsors/aktasfatih)** — monthly or
+  one-off. If a specific issue is what you care about, say so and it gets
+  scheduled next.
+- **[Rate the app](https://apps.nextcloud.com/apps/kanso)** — costs nothing, and
+  it does more for Kanso's reach than a small donation does.
+- **[Commercial licensing](#commercial-licensing)** — for organizations that
+  can't take on AGPL obligations.
+
+### Sponsors
+
+Thank you to [@dbmtrde](https://github.com/dbmtrde) for sponsoring Kanso.
+
 ## License
 
 Kanso is free and open source under the [AGPL-3.0-or-later](LICENSE), and always

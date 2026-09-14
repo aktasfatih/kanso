@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: Bug report
+description: Something in Kanso is broken or behaves wrongly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Bugs jump the queue ahead of feature requests —
+        a broken thing gets fixed before a missing thing gets built.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that triggers it. If it only happens on a particular board or card shape, say so.
+      placeholder: |
+        1. Open a board with ...
+        2. Drag a card to ...
+        3. The card ...
+    validations:
+      required: true
+
+  - type: input
+    id: kanso-version
+    attributes:
+      label: Kanso version
+      description: Nextcloud → Apps → Kanso, or the bottom of the app's settings.
+      placeholder: "0.31.0"
+    validations:
+      required: true
+
+  - type: input
+    id: nextcloud-version
+    attributes:
+      label: Nextcloud version
+      placeholder: "34.0.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - PostgreSQL
+        - MySQL / MariaDB
+        - SQLite
+        - Not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: errors
+    attributes:
+      label: Errors
+      description: |
+        Anything from the browser console (F12) and your Nextcloud log
+        (`data/nextcloud.log`, or Settings → Administration → Logging).
+        Please redact usernames, URLs and tokens before pasting.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I'm on a supported version (Nextcloud 32–34, PHP 8.2–8.3)
+          required: false
+        - label: I searched the existing issues and this isn't already reported
+          required: true
