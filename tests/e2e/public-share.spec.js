@@ -215,6 +215,29 @@ test.describe('Public read-only board share', () => {
 		await expect(page.locator('.public-card__title')).toHaveCount(1)
 	})
 
+	// #10446: the public page used to get no <title> of its own, so core's public
+	// layout fell through to the instance name alone and EVERY public link on the
+	// server shared one identical tab title — indistinguishable in a tab strip, a
+	// bookmark or browser history.
+	test('the public page carries the board name in the tab title', async ({ page }) => {
+		const live = await ensureToken()
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${live}`)
+
+		// "<board> - <instance>", using core's own separator. The instance name is
+		// themable so it is matched loosely; the board name is the load-bearing part.
+		await expect(page).toHaveTitle(/^\s*Public Share E2E - \S/)
+		// Never a stray/empty prefix or a stringified undefined.
+		await expect(page).not.toHaveTitle(/undefined|^\s*-\s/)
+
+		// Server-rendered, not painted in later by the Vue app: the title is already
+		// in the raw HTML, so the tab is right at first paint (this is the page most
+		// likely to be opened cold on a slow connection) and with JS disabled. This
+		// also pins WHERE the fix lives — the public entry point is deliberately
+		// router-free and must stay that way.
+		const html = await (await fetch(`${BASE}/index.php/apps/kanso/p/${live}`)).text()
+		expect(html).toMatch(/<title>\s*Public Share E2E - \S/)
+	})
+
 	test('no mutation is possible via the public routes', async () => {
 		// There is no public write route; a POST to the data route is a 404
 		// (route only registered for GET), and the authenticated mutation routes

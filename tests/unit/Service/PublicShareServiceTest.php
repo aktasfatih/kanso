@@ -322,8 +322,10 @@ class PublicShareServiceTest extends TestCase {
 		// No exception = valid. It must NOT build the payload (no stack/card reads).
 		$this->stackMapper->expects(self::never())->method('findByBoard');
 		$this->cardMapper->expects(self::never())->method('findPublicByBoard');
-		$this->service->assertTokenValid(self::TOKEN);
-		$this->addToAssertionCount(1);
+		$board = $this->service->assertTokenValid(self::TOKEN);
+		// It hands back the board it already loaded, so the page renderer can title
+		// the tab with the board's name (#10446) without a second lookup.
+		self::assertSame('Roadmap', $board->getTitle());
 	}
 
 	public function testAssertTokenValidRejectsExpired(): void {

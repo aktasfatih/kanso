@@ -131,7 +131,7 @@ class PublicShareController extends Controller {
 			// A lightweight existence check (not a full payload build) so the
 			// unauthenticated page route can't be used to amplify board queries;
 			// the client fetches the real payload via data() once the shell loads.
-			$this->publicShareService->assertTokenValid($token);
+			$board = $this->publicShareService->assertTokenValid($token);
 		} catch (DoesNotExistException) {
 			$response = new TemplateResponse(
 				Application::APP_ID,
@@ -147,10 +147,26 @@ class PublicShareController extends Controller {
 		Util::addScript(Application::APP_ID, Application::APP_ID . '-public');
 		// RENDER_AS_PUBLIC: the guest/public layout - no authenticated app
 		// navigation, no user menu, no board chrome that assumes a session.
+		//
+		// `pageTitle` gives this page a <title> of its own (#10446). Without it
+		// core's public layout falls through to the instance name alone, so EVERY
+		// public link on the server shares one identical tab title and collides
+		// with every other guest page - useless in a tab strip, a bookmark or
+		// browser history. The layout renders it as "<board> - <instance>", and it
+		// is set SERVER-side rather than from the Vue app so the tab is right at
+		// first paint (this is the page most likely to be opened cold, on a slow
+		// connection) and stays right with JS disabled. The public entry point is
+		// deliberately router-free, so there is no client-side navigation that
+		// could later invalidate a server-rendered title.
+		//
+		// This discloses nothing new: the board name is already rendered in the
+		// page body to this exact audience, and the URL that lands in the
+		// recipient's history carries the share token, which is strictly more
+		// sensitive than the name.
 		return new TemplateResponse(
 			Application::APP_ID,
 			'public',
-			['token' => $token],
+			['token' => $token, 'pageTitle' => $board->getTitle()],
 			TemplateResponse::RENDER_AS_PUBLIC
 		);
 	}
