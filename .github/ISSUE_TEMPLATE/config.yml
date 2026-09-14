@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+blank_issues_enabled: true
+contact_links:
+  - name: Support Kanso
+    url: https://github.com/sponsors/aktasfatih
+    about: Kanso is built by one person. Sponsorship funds the work and moves requests up the queue.
+  - name: Commercial licensing
+    url: https://github.com/aktasfatih/kanso#commercial-licensing
+    about: Need to use Kanso without AGPL obligations? A separate commercial license is available.

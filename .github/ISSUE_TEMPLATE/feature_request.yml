@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+name: Feature request
+description: Suggest something Kanso should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest this.
+
+        Kanso is built and maintained by one person. Every request is read, and
+        good ones get built — but they go into a queue, and the queue is longer
+        than the week. Telling me honestly how much this matters to you is the
+        most useful thing you can do here.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem?
+      description: Describe what you're trying to do and where Kanso gets in the way. Focus on the situation, not the solution.
+      placeholder: When I ... I have to ... because Kanso doesn't ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like it to do instead?
+      description: If you have a specific idea, describe it. If you don't, that's fine — leave this blank.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How much does this matter to you?
+      description: |
+        This decides where it lands in the queue, so please be straight about it.
+        Whatever gets built ships to everyone under the AGPL — sponsoring changes
+        *when* something happens, never *whether* you can have it.
+      options:
+        - Nice to have — I'd use it, but I'm fine without it
+        - Important — it slows my workflow down regularly
+        - Blocking — my team can't fully use Kanso without it
+        - Blocking, and we'd sponsor this to get it prioritized
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Screenshots, how many people this affects, how you work around it today.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this isn't already requested
+          required: true
