@@ -74,15 +74,92 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 				else localStorage.removeItem(ck)
 			} catch (e) { /* localStorage unavailable */ }
 		}, [COLLAPSED_KEY, collapsed])
+		await recordFirstPaintClass(page)
+		await holdSettingsFetchUntilFirstPaint(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal__body', { timeout: 20_000 })
-		// The placement comes from GET /api/settings, which resolves after mount —
-		// wait for the class the setting drives rather than racing it.
-		const root = page.locator('.card-modal')
+		await expectFirstPaintPlacement(page, position)
+	}
+
+	/**
+	 * Capture the class list the card modal carried the very FIRST time it entered
+	 * the DOM. The placement is a server-side setting, so it used to arrive with
+	 * GET /api/settings *after* mount and the card visibly snapped from the
+	 * default layout to the chosen one (#10460); it is now embedded in the page as
+	 * initial state and read synchronously before mount.
+	 *
+	 * A retrying `toHaveClass` could never catch that — it would go green on the
+	 * post-fetch class either way. Recording the first inserted node is the only
+	 * assertion that distinguishes "right on first paint" from "right eventually".
+	 *
+	 * @param {import('@playwright/test').Page} page the page
+	 */
+	async function recordFirstPaintClass(page) {
+		await page.addInitScript(() => {
+			window.__kansoFirstCardModalClass = null
+			const observer = new MutationObserver((records) => {
+				for (const record of records) {
+					for (const node of record.addedNodes) {
+						if (node.nodeType !== 1) continue
+						const el = node.classList.contains('card-modal') ? node : node.querySelector('.card-modal')
+						if (el) {
+							window.__kansoFirstCardModalClass = el.className
+							observer.disconnect()
+							return
+						}
+					}
+				}
+			})
+			// `document`, not `document.documentElement`: this runs at document-start,
+			// where the root element does not exist yet.
+			observer.observe(document, { childList: true, subtree: true })
+		})
+	}
+
+	/**
+	 * Hold GET /api/settings open until the card modal has painted.
+	 *
+	 * Without this the assertion below is VACUOUS: the card view is a lazily
+	 * imported chunk, and on a fast stack that chunk lands *after* the settings
+	 * fetch has already answered — so the first paint is correct whether or not
+	 * the placement was embedded in the page (measured: modal at ~700ms, settings
+	 * long done). Making the fetch answer only after the modal exists pins the
+	 * exact ordering the bug is about, and it is the real-world ordering too:
+	 * any latency on that request puts the card on screen first.
+	 *
+	 * GET only — the settings the spec WRITES (setPosition, and the toggle in the
+	 * settings dialog) must not be delayed.
+	 *
+	 * @param {import('@playwright/test').Page} page the page
+	 */
+	async function holdSettingsFetchUntilFirstPaint(page) {
+		await page.route(/\/apps\/kanso\/api\/settings(\?|$)/, async (route) => {
+			if (route.request().method() !== 'GET') {
+				await route.continue()
+				return
+			}
+			await page.waitForFunction(
+				() => window.__kansoFirstCardModalClass !== null,
+				null,
+				{ timeout: 30_000 },
+			).catch(() => { /* no card modal on this navigation - answer anyway */ })
+			await route.continue()
+		})
+	}
+
+	/**
+	 * No wait, deliberately — see recordFirstPaintClass.
+	 *
+	 * @param {import('@playwright/test').Page} page the page
+	 * @param {string} position 'side' | 'bottom' — the stored preference
+	 */
+	async function expectFirstPaintPlacement(page, position) {
+		const firstPaint = await page.evaluate(() => window.__kansoFirstCardModalClass)
+		expect(firstPaint, 'the card modal never entered the DOM').not.toBeNull()
 		if (position === 'bottom') {
-			await expect(root).toHaveClass(/card-modal--discussion-bottom/, { timeout: 10_000 })
+			expect(firstPaint, 'the stored placement must be applied on the FIRST paint, not after the settings fetch').toContain('card-modal--discussion-bottom')
 		} else {
-			await expect(root).not.toHaveClass(/card-modal--discussion-bottom/, { timeout: 10_000 })
+			expect(firstPaint).not.toContain('card-modal--discussion-bottom')
 		}
 	}
 
@@ -269,7 +346,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		await page.reload()
 		await page.waitForSelector('.card-modal__body', { timeout: 20_000 })
 		const root = page.locator('.card-modal')
-		await expect(root).toHaveClass(/card-modal--discussion-bottom/, { timeout: 10_000 })
+		await expectFirstPaintPlacement(page, 'bottom')
 		// The flag really did survive — otherwise this test proves nothing.
 		await expect(root).toHaveClass(/card-modal--discussion-collapsed/)
 		expect(await page.evaluate((k) => localStorage.getItem(k), COLLAPSED_KEY)).toBe('1')
@@ -288,7 +365,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		await setPosition('side')
 		await page.reload()
 		await page.waitForSelector('.card-modal__body', { timeout: 20_000 })
-		await expect(root).not.toHaveClass(/card-modal--discussion-bottom/, { timeout: 10_000 })
+		await expectFirstPaintPlacement(page, 'side')
 		await expect(page.locator('.card-modal__discussion')).toBeHidden()
 	})
 

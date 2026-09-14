@@ -14,6 +14,8 @@ import { syncBoardDelta, onBoardChangesApplied } from './composables/useBoardDel
 import { invalidateMyWork } from './composables/queryKeys.js'
 import { registerServiceWorker } from './services/pwa.js'
 import { restoreQueryCache, initOfflineCache } from './services/offlineCache.js'
+import { useEditorPrefs } from './composables/useEditorPrefs.js'
+import { useCardPrefs } from './composables/useCardPrefs.js'
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -24,30 +26,60 @@ const queryClient = new QueryClient({
 	},
 })
 
-// Fragment-free deep link handoff (#3744): the server route /card/{id}
-// validated access and left the target in the `openCard` initial state
-// (a base64-JSON <input> NC renders into the page). The SPA is hash-routed,
-// so we translate the server target into the card-modal hash route before
-// the first paint. Hand-rolled reader (the element is trivial) - no extra
-// @nextcloud/initial-state dependency for one key.
-function readOpenCardState() {
-	const el = document.getElementById('initial-state-kanso-openCard')
+// Server-rendered initial state: NC renders each provideInitialState() key as a
+// base64-JSON <input>. Hand-rolled reader (the elements are trivial) - no extra
+// @nextcloud/initial-state dependency for two keys.
+function readInitialState(key) {
+	const el = document.getElementById(`initial-state-kanso-${key}`)
 	if (!el) {
 		return null
 	}
 	try {
-		const state = JSON.parse(atob(el.value))
-		const boardId = Number(state?.boardId)
-		const cardId = Number(state?.cardId)
-		// Positive integers only - a malformed blob must not produce a junk
-		// route like /board/undefined/card/NaN.
-		return Number.isInteger(boardId) && boardId > 0 && Number.isInteger(cardId) && cardId > 0
-			? { boardId, cardId }
-			: null
+		return JSON.parse(atob(el.value))
 	} catch {
 		return null
 	}
 }
+
+// Fragment-free deep link handoff (#3744): the server route /card/{id}
+// validated access and left the target in the `openCard` initial state.
+// The SPA is hash-routed, so we translate the server target into the
+// card-modal hash route before the first paint.
+function readOpenCardState() {
+	const state = readInitialState('openCard')
+	if (!state) {
+		return null
+	}
+	const boardId = Number(state.boardId)
+	const cardId = Number(state.cardId)
+	// Positive integers only - a malformed blob must not produce a junk
+	// route like /board/undefined/card/NaN.
+	return Number.isInteger(boardId) && boardId > 0 && Number.isInteger(cardId) && cardId > 0
+		? { boardId, cardId }
+		: null
+}
+
+// View preferences, seeded SYNCHRONOUSLY from the page before the app mounts
+// (#10460). These two are server-side per-user settings, so until the async
+// GET /api/settings resolved the app rendered its hardcoded defaults and then
+// snapped to the user's real choice - most visibly on a card deep link, where a
+// whole discussion panel jumped from beside the card to underneath it. The
+// server now embeds the same payload in the shell, so the first paint is right.
+//
+// Deliberately NOT authoritative: App.vue still fetches /api/settings and
+// reconciles, because the service worker caches the app shell under one stable
+// key and an offline boot therefore carries the preferences as of the last
+// online load. Stale-but-real beats a hardcoded default, and the fetch fixes it.
+function seedUserSettings() {
+	const settings = readInitialState('settings')
+	if (!settings) {
+		return
+	}
+	useEditorPrefs().setEditorToolbarHidden(settings.editorToolbarHidden === true)
+	// The setter allow-lists the value, so a junk blob degrades to the default.
+	useCardPrefs().setDiscussionPosition(settings.cardDiscussionPosition)
+}
+seedUserSettings()
 
 // The PWA layer (service worker + offline query-cache persistence) is disabled
 // under automated browsers. It intercepts and caches every request and persists

@@ -11,9 +11,11 @@ use OCA\Kanso\Controller\DeepLinkController;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\UserSettingsService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Services\IInitialState;
+use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -28,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 class DeepLinkControllerTest extends TestCase {
 	private IRequest&MockObject $request;
 	private CardService&MockObject $cardService;
+	private IConfig&MockObject $config;
 	private IInitialState&MockObject $initialState;
 	private IURLGenerator&MockObject $urlGenerator;
 
@@ -35,6 +38,7 @@ class DeepLinkControllerTest extends TestCase {
 		parent::setUp();
 		$this->request = $this->createMock(IRequest::class);
 		$this->cardService = $this->createMock(CardService::class);
+		$this->config = $this->createMock(IConfig::class);
 		$this->initialState = $this->createMock(IInitialState::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
 		$this->urlGenerator->method('linkToRoute')->willReturn('/apps/kanso/');
@@ -43,7 +47,8 @@ class DeepLinkControllerTest extends TestCase {
 	private function controller(?string $userId): DeepLinkController {
 		// Anonymous subclass overriding the addMainScript() seam:
 		// Util::addScript needs the full \OC server, absent in unit tests.
-		$args = ['kanso', $this->request, $userId, $this->cardService, $this->initialState, $this->urlGenerator];
+		$settings = new UserSettingsService($this->config);
+		$args = ['kanso', $this->request, $userId, $this->cardService, $settings, $this->initialState, $this->urlGenerator];
 		return new class(...$args) extends DeepLinkController {
 			#[\Override]
 			protected function addMainScript(): void {
@@ -58,14 +63,56 @@ class DeepLinkControllerTest extends TestCase {
 		$card->setBoardId(3);
 		// The card load runs the full API authorization (READ + visibility).
 		$this->cardService->expects(self::once())->method('find')->with(9, 'bob')->willReturn($card);
-		$this->initialState->expects(self::once())
-			->method('provideInitialState')
-			->with('openCard', ['boardId' => 3, 'cardId' => 9]);
+		// No preferences stored: every key reads back as its own default.
+		$this->config->method('getUserValue')->willReturnArgument(3);
+		$provided = $this->captureInitialState();
 
 		$response = $this->controller('bob')->card(9);
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame('main', $response->getTemplateName());
+		self::assertSame(['boardId' => 3, 'cardId' => 9], $provided['openCard'] ?? null);
+	}
+
+	/**
+	 * A deep-linked card opens immediately, so it is the loudest case of the
+	 * settings flash (#10460): the SPA used to mount with the hardcoded layout
+	 * defaults and snap to the user's real choice once GET /api/settings
+	 * resolved. The shell carries the preferences so the first paint is right.
+	 */
+	public function testVisibleCardAlsoSeedsTheUsersViewPreferences(): void {
+		$card = new Card();
+		$card->setId(9);
+		$card->setBoardId(3);
+		$this->cardService->method('find')->willReturn($card);
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default): string {
+				self::assertSame('bob', $uid);
+				return $key === 'card_discussion_position' ? 'bottom' : $default;
+			});
+		$provided = $this->captureInitialState();
+
+		$this->controller('bob')->card(9);
+
+		self::assertSame('bottom', $provided['settings']['cardDiscussionPosition'] ?? null);
+		self::assertFalse($provided['settings']['editorToolbarHidden'] ?? null);
+	}
+
+	/**
+	 * Records every provideInitialState() call by key into an object the test can
+	 * read after the controller has run (the controller provides more than one
+	 * key now, so `->with(...)` on a single expectation no longer fits).
+	 *
+	 * @return \ArrayObject<string, mixed>
+	 */
+	private function captureInitialState(): \ArrayObject {
+		/** @var \ArrayObject<string, mixed> $provided */
+		$provided = new \ArrayObject();
+		$this->initialState->method('provideInitialState')
+			->willReturnCallback(static function (string $key, mixed $value) use ($provided): void {
+				$provided[$key] = $value;
+			});
+		return $provided;
 	}
 
 	public function testMissingCardRendersNotFoundPage(): void {

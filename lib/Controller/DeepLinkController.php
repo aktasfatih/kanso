@@ -10,6 +10,7 @@ namespace OCA\Kanso\Controller;
 use OCA\Kanso\AppInfo\Application;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\UserSettingsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -45,6 +46,7 @@ class DeepLinkController extends Controller {
 		IRequest $request,
 		private ?string $userId,
 		private CardService $cardService,
+		private UserSettingsService $userSettings,
 		private IInitialState $initialState,
 		private IURLGenerator $urlGenerator,
 	) {
@@ -74,6 +76,12 @@ class DeepLinkController extends Controller {
 			'boardId' => $card->getBoardId(),
 			'cardId' => $card->getId(),
 		]);
+		// The user's view preferences travel with the shell too (#10460), exactly
+		// as they do from PageController: this route is THE case that made the
+		// flash obvious - the card opens immediately, so a layout picked from the
+		// hardcoded defaults snapped to the real one the moment GET /api/settings
+		// resolved. Only on the success path; the 404 page runs no SPA.
+		$this->initialState->provideInitialState('settings', $this->userSettings->readAll($this->userId));
 		$this->addMainScript();
 		return new TemplateResponse(Application::APP_ID, 'main');
 	}

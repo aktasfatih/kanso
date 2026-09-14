@@ -9,8 +9,12 @@
  * The value is a *server-side* per-user preference (NC user config, via
  * GET/PUT /api/settings), unlike the card view's split width and collapse flag
  * which stay in localStorage: the whole point of this one is that it follows the
- * user across devices. App.vue seeds it from getSettings() on mount and writes
- * it back on each toggle; CardDetail.vue reads it to pick its layout.
+ * user across devices. CardDetail.vue reads it to pick its layout.
+ *
+ * Seeded twice, on purpose (#10460): main.js sets it SYNCHRONOUSLY from the
+ * server-rendered initial state before the app mounts, so the first paint uses
+ * the right layout instead of flashing the default; App.vue then reconciles it
+ * from getSettings() on mount and writes it back on each toggle.
  */
 import { computed, ref } from 'vue'
 
