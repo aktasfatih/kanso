@@ -2530,6 +2530,7 @@ import { useChecklist } from '../composables/useChecklist.js'
 import { useComments, buildCommentTree, REACTION_EMOJI } from '../composables/useComments.js'
 import { buildCardPrompt } from '../utils/cardPrompt.js'
 import { allDayInputValue, timedInputValue, formatCardDate, exactTimeLabel, exactTimeTitle, hasRelativeLabel, isoTimestamp, RELATIVE_LABEL_MAX_DAYS } from '../utils/dateDisplay.js'
+import { scrollBehavior } from '../utils/motion.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from '../composables/queryKeys.js'
 import { useCardMove } from '../composables/useCardMove.js'
@@ -4763,7 +4764,7 @@ async function scrollToTargetComment() {
 	// expands, the layout shifts, and the element ends up off-screen.
 	await new Promise((r) => requestAnimationFrame(r))
 	await new Promise((r) => requestAnimationFrame(r))
-	el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+	el.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
 	pinTargetWhileThreadSettles(el)
 	highlightedCommentId.value = id
 	if (highlightTimer) clearTimeout(highlightTimer)
@@ -6298,7 +6299,7 @@ function toggleDiscussionCollapsed() {
 function scrollToDiscussion() {
 	const pane = bodyRef.value?.querySelector('.card-modal__discussion')
 	if (!pane) return
-	pane.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+	pane.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' })
 	pane.focus?.({ preventScroll: true })
 }
 

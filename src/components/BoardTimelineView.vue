@@ -336,6 +336,7 @@ import { updateCard as apiUpdateCard } from '../services/api.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { cssColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
+import { scrollBehavior } from '../utils/motion.js'
 
 const props = defineProps({
 	/** Filtered, non-archived cards (start_date/duedate carried in the summary). */
@@ -1092,7 +1093,7 @@ function jumpToToday() {
 			? xForMs(today)
 			: LEFT_PAD
 		const target = x - track.clientWidth / 2
-		body.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+		body.scrollTo({ left: Math.max(0, target), behavior: scrollBehavior() })
 	})
 }
 
