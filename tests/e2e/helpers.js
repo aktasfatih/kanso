@@ -139,6 +139,44 @@ export async function ncLogin(page, { user = ADMIN.user, pass = ADMIN.pass } = {
 	}
 }
 
+/**
+ * Every shape of toast @nextcloud/dialogs has shipped, described the way ARIA
+ * describes it rather than the way this release happens to render it.
+ *
+ * 7.5 dropped toastify-js and rebuilt toasts on @nextcloud/vue, so `.toastify`,
+ * `.toast-success`, `.toast-warning` and `.toast-undo` all vanished in a patch
+ * of a minor — they are the library's internals, not a contract. What survives
+ * a rewrite is that a toast has to be an ARIA live region to be announced at
+ * all: 7.5+ gives the toast element `role="status"` (polite) or `role="alert"`
+ * (assertive, i.e. errors and undos), and ≤7.4 puts `aria-live` on the toast
+ * element itself.
+ *
+ * 7.5+ additionally mounts two screen-reader-only regions that repeat every
+ * message ("Success: …") next to the toast. They are excluded, so a spec can
+ * never pass on the announcement alone with no toast ever shown.
+ */
+const TOAST = [
+	'[role="status"]',
+	'[role="alert"]',
+	'[aria-live]',
+].map((sel) => `${sel}:not(.hidden-visually)`).join(', ')
+
+/**
+ * The toast showing `text`.
+ *
+ * The message is required and is the real assertion: ARIA cannot express a
+ * toast's severity (a success and a warning are both `role="status"`), so only
+ * the message separates "Card copied as prompt." from "…hidden by the current
+ * filter". Asserting on a bare toast would pass on any toast at all.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string|RegExp} text the message the toast must carry
+ * @return {import('@playwright/test').Locator}
+ */
+export function toast(page, text) {
+	return page.locator(TOAST).filter({ hasText: text })
+}
+
 /** Kanso's own front-end assets. The dev + CI stack bind-mounts the app at
  * /custom_apps/kanso, an app-store install lands at /apps/kanso; both match. */
 const KANSO_SOURCE = /\/(?:custom_)?apps\/kanso\//

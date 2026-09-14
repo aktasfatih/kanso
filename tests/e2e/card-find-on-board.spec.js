@@ -9,7 +9,7 @@
 // starts collapsed in one case, and an active filter that excludes the card must
 // TELL the user rather than scroll nowhere.
 
-import { test, expect, BASE, api, ncLogin } from './helpers.js'
+import { test, expect, BASE, api, ncLogin, toast } from './helpers.js'
 
 test.describe('Find the card on board (#10062)', () => {
 	const TOTAL = 60
@@ -118,7 +118,7 @@ test.describe('Find the card on board (#10062)', () => {
 		await openCardMenu(page, cardUrl(state.targetId, '?fp=4'))
 		await findAction(page).click()
 
-		await expect(page.locator('.toastify.toast-warning')).toContainText(/hidden by the current filter/i, { timeout: 10_000 })
+		await expect(toast(page, /hidden by the current filter/i)).toBeVisible({ timeout: 10_000 })
 		await expect(targetTile(page)).toHaveCount(0)
 	})
 

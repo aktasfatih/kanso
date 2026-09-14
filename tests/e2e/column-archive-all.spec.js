@@ -6,7 +6,7 @@
 // column currently SHOWS, reuses the existing /api/cards/bulk endpoint, and is
 // undoable (the bulk endpoint gained an `unarchive` action for exactly that).
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, toast, BASE } from './helpers.js'
 
 /**
  * Open the ⋯ NcActions menu for the first column on the page and return the
@@ -84,17 +84,17 @@ test.describe('Archive every card in a column (#10430)', () => {
 		await menu.getByRole('button', { name: 'Archive 3 cards' }).click()
 		await expect(page.locator('.card-tile')).toHaveCount(0, { timeout: 15_000 })
 
-		// showUndo renders a .toast-undo toastify toast whose label carries the
-		// count — 10-100x the blast radius of a single archive is exactly why this
-		// action needs a real undo rather than a confirm dialog.
+		// showUndo renders a toast whose label carries the count — 10-100x the blast
+		// radius of a single archive is exactly why this action needs a real undo
+		// rather than a confirm dialog. It is located by role + that label (see
+		// toast() in helpers.js), not by @nextcloud/dialogs' own class names.
 		// @nextcloud/dialogs gives an undo toast a 10s life, so assert on it with a
 		// budget UNDER that — a longer one would report "not visible" for a toast
 		// that appeared and simply expired, which reads as the wrong failure.
-		const undoToast = page.locator('.toast-undo')
+		const undoToast = toast(page, '3 cards archived')
 		await expect(undoToast).toBeVisible({ timeout: 8_000 })
-		await expect(undoToast).toContainText('3 cards archived')
 
-		const undoBtn = undoToast.locator('button').filter({ hasText: 'Undo' })
+		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
 		await expect(undoBtn).toBeVisible({ timeout: 5_000 })
 		await undoBtn.click()
 

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, toast, BASE } from './helpers.js'
 
 // ── Test suite ───────────────────────────────────────────────────────────────
 
@@ -66,16 +66,14 @@ test.describe('Undo toasts', () => {
 		// Modal should have closed.
 		await expect(page.locator('.card-modal')).not.toBeVisible({ timeout: 8_000 })
 
-		// The undo toast should appear - @nextcloud/dialogs uses toastify-js which
-		// renders toasts with class .toast-undo (ToastType.UNDO).
-		const undoToast = page.locator('.toast-undo')
+		// The undo toast should appear, saying the card was deleted. Located by
+		// role + message (see toast() in helpers.js) — never by @nextcloud/dialogs'
+		// own class names, which change from release to release.
+		const undoToast = toast(page, 'Card deleted')
 		await expect(undoToast).toBeVisible({ timeout: 8_000 })
 
-		// The toast should contain text indicating the card was deleted.
-		await expect(undoToast).toContainText('deleted')
-
 		// Click the Undo button inside the toast.
-		const undoBtn = undoToast.locator('button').filter({ hasText: 'Undo' })
+		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
 		await expect(undoBtn).toBeVisible({ timeout: 5_000 })
 		await undoBtn.click()
 
