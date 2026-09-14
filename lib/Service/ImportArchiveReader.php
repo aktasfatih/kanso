@@ -74,6 +74,15 @@ final class ImportArchiveReader {
 	 * at all. Together with the per-user rate limit on the import endpoint
 	 * ({@see \OCA\Kanso\Controller\BoardPortabilityController::import()}) this is
 	 * what bounds how much an account can push into app-data per hour.
+	 *
+	 * This pair is ALSO why an ARCHIVE import is deliberately exempt from the
+	 * optional instance-wide storage cap
+	 * ({@see CardAttachmentService::KEY_ATTACHMENT_STORAGE_LIMIT}): the archive
+	 * writer is already bounded here, and aborting a restore halfway through
+	 * because the cap was reached mid-archive would leave a partially-restored
+	 * board rather than a clean refusal. The exemption covers THIS reader only -
+	 * Deck import reads from Deck's own storage, never from an archive, so it
+	 * gets no bound from this constant and honours the cap itself.
 	 */
 	public const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 

@@ -10,6 +10,7 @@ namespace OCA\Kanso\Controller;
 use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\StorageLimitException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -27,6 +28,14 @@ trait ApiErrorTrait {
 			return $callback();
 		} catch (InvalidInputException $e) {
 			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (StorageLimitException $e) {
+			// The instance-wide attachment storage cap an admin opted into is full.
+			// The request was well-formed and the actor was allowed to make it -
+			// there is simply no room left - so this is 413, not 400 or 403.
+			return new JSONResponse(
+				['error' => $e->getMessage()],
+				Http::STATUS_REQUEST_ENTITY_TOO_LARGE
+			);
 		} catch (NotPermittedException) {
 			return new JSONResponse(['error' => 'Access denied'], Http::STATUS_FORBIDDEN);
 		} catch (DoesNotExistException) {

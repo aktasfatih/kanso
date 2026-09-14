@@ -9,6 +9,8 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Db\CardAttachment;
 use OCA\Kanso\Service\CardAttachmentService;
+use OCA\Kanso\Service\StorageLimitException;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\IRequest;
 use OCP\IUser;
@@ -111,6 +113,27 @@ class CardAttachmentControllerTest extends TestCase {
 		$body = $this->controller($service, $this->userManager(['alice' => 'Alice Adams']))->create(9)->getData();
 
 		self::assertSame('Alice Adams', $body['uploadedByName']);
+	}
+
+	/**
+	 * A full instance answers 413, not 400/403/500: the request was well-formed
+	 * and allowed, the server simply has no room. Both write paths must answer
+	 * the same way - a client that only learned about one would silently retry
+	 * into the other.
+	 *
+	 * @dataProvider writePaths
+	 */
+	public function testAFullInstanceAnswersRequestEntityTooLarge(string $method): void {
+		$service = $this->createMock(CardAttachmentService::class);
+		$serviceMethod = $method === 'create' ? 'upload' : 'attachFromFileNode';
+		$service->method($serviceMethod)
+			->willThrowException(new StorageLimitException('Attachment storage is full on this server.'));
+
+		$controller = $this->controller($service, $this->userManager([]));
+		$response = $method === 'create' ? $controller->create(9) : $controller->createFromFile(9, 42);
+
+		self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
+		self::assertSame('Attachment storage is full on this server.', $response->getData()['error']);
 	}
 
 	private function attachment(int $id, string $filename, string $uploadedBy): CardAttachment {
