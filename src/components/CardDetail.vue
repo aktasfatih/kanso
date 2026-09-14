@@ -302,7 +302,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:size="24"
 										:hide-status="true"
 										:disable-tooltip="true" />
-									<span class="card-modal__watch-row-name">{{ participantName(uid) }}</span>
+									<span class="card-modal__watch-row-name" :title="participantName(uid)">{{ participantName(uid) }}</span>
 									<button
 										v-if="canEdit"
 										class="card-modal__pill-x"
@@ -332,7 +332,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:size="24"
 											:hide-status="true"
 											:disable-tooltip="true" />
-										<span>{{ p.displayName }}</span>
+										<span :title="p.displayName">{{ p.displayName }}</span>
 									</button>
 								</template>
 								<span v-if="watcherError" class="card-modal__save-error">{{ watcherError }}</span>
@@ -854,7 +854,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:size="24"
 									:hide-status="true"
 									:disable-tooltip="true" />
-								<span>{{ p.displayName }}</span>
+								<span :title="p.displayName">{{ p.displayName }}</span>
 							</button>
 						</div>
 					</div>
@@ -912,7 +912,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:hide-status="true"
 												:disable-tooltip="true" />
 											<span class="card-modal__contact-option-text">
-												<span>{{ c.displayName }}</span>
+												<span :title="c.displayName">{{ c.displayName }}</span>
 												<span v-if="c.email" class="card-modal__contact-email">{{ c.email }}</span>
 											</span>
 										</button>
@@ -1139,7 +1139,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:size="24"
 										:hide-status="true"
 										:disable-tooltip="true" />
-									<span>{{ p.displayName }}</span>
+									<span :title="p.displayName">{{ p.displayName }}</span>
 								</button>
 							</div>
 						</div>
@@ -1397,7 +1397,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:size="24"
 												:hide-status="true"
 												:disable-tooltip="true" />
-											<span>{{ p.displayName }}</span>
+											<span :title="p.displayName">{{ p.displayName }}</span>
 										</button>
 									</div>
 									<div v-if="isStepMenuOpen(item, 'due')" class="card-modal__popover card-modal__popover--pad card-modal__step-popover">

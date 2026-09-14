@@ -46,6 +46,8 @@ test.describe('Collaborator name is not covered by the avatar tooltip (#126)', (
 		state.cardId = (await api.post('/cards', { stackId: state.stackId, title: `Tooltip card ${ts}` })).id
 		// Assigning the peer is what renders the card modal's assignee pill.
 		await api.put(`/cards/${state.cardId}/assignees/${peer.user}`)
+		// …and subscribing them is what puts a row in the watchers panel.
+		await api.put(`/cards/${state.cardId}/subscription/${peer.user}`)
 	})
 
 	test.afterAll(async () => {
@@ -91,6 +93,60 @@ test.describe('Collaborator name is not covered by the avatar tooltip (#126)', (
 		expect(await avatar.getAttribute('title')).toBeNull()
 
 		const name = pill.locator('.card-modal__assignee-name')
+		await expect(name).toBeVisible()
+		const text = (await name.innerText()).trim()
+		expect(text.length).toBeGreaterThan(0)
+		expect(await name.getAttribute('title')).toBe(text)
+	})
+
+	// The watchers panel row is one of the two rows that genuinely ellipsize:
+	// `.card-modal__watch-row-name` is `text-overflow: ellipsis` inside a
+	// max-width popover, so without a `title` a long name is unreadable.
+	test('watchers panel row: the avatar carries no title, the name span carries its own', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cardId}`)
+		await page.waitForSelector('.card-modal__content', { timeout: 15_000 })
+
+		// The caret beside the Watch button opens the watchers popover.
+		await page.locator('.card-modal__watch-caret').click()
+		const panel = page.locator('.card-modal__watch-panel')
+		await expect(panel).toBeVisible({ timeout: 8_000 })
+
+		const row = panel.locator('.card-modal__watch-row').first()
+		await expect(row).toBeVisible({ timeout: 8_000 })
+
+		const avatar = row.locator('.avatardiv')
+		await expect(avatar).toBeVisible()
+		expect(await avatar.getAttribute('title')).toBeNull()
+
+		const name = row.locator('.card-modal__watch-row-name')
+		await expect(name).toBeVisible()
+		const text = (await name.innerText()).trim()
+		expect(text.length).toBeGreaterThan(0)
+		expect(await name.getAttribute('title')).toBe(text)
+	})
+
+	// The @-mention dropdown is the other genuinely-ellipsizing row
+	// (`.kanso-md-editor__mention-name`, a fixed-width floating list).
+	test('@-mention dropdown: the avatar carries no title, the name span carries its own', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cardId}`)
+		await page.waitForSelector('.card-modal__content', { timeout: 15_000 })
+
+		// Typing `@` in the new-thread composer opens the suggestion list.
+		const prose = page.locator('.card-modal__composer .kanso-md-editor .ProseMirror').first()
+		await expect(prose).toBeVisible({ timeout: 10_000 })
+		await prose.click()
+		await page.keyboard.type('@')
+
+		const item = page.locator('.kanso-md-editor__mention-item').first()
+		await expect(item).toBeVisible({ timeout: 8_000 })
+
+		const avatar = item.locator('.avatardiv')
+		await expect(avatar).toBeVisible()
+		expect(await avatar.getAttribute('title')).toBeNull()
+
+		const name = item.locator('.kanso-md-editor__mention-name')
 		await expect(name).toBeVisible()
 		const text = (await name.innerText()).trim()
 		expect(text.length).toBeGreaterThan(0)
