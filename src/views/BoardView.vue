@@ -2427,6 +2427,21 @@ function warnOnSkipped(summary) {
  * throwing them away: the undo is the whole reason this action ships without a
  * confirm dialog, and the Archived page only restores one card at a time.
  *
+ * DESIGN DECISION (#10438) — scoped to what the actor can see, on purpose, and
+ * the hidden remainder is NOT reported. `cardsForStack` derives from
+ * `boardData.cards`, which BoardController already filtered through
+ * CardMapper::findSummariesByBoard(…, $viewer); cards the actor may not see
+ * never enter this request, so they appear in neither `ok` nor `skipped`. That
+ * is correct, not a hole — a forged hidden id is refused by CardVisibilityGuard
+ * and comes back as `not_found`, never `forbidden`.
+ *
+ * Telling the user "and N more you can't see" is REFUSED: that count is exactly
+ * the existence oracle the visibility rule exists to deny, and
+ * tests/unit/Service/LeakMatrixTest.php pins it in as many words ("a count is a
+ * leak surface of its own", testVisibleCountsPerViewerMatchTheMatrix). Honesty
+ * is bought in the label instead — the menu entry names the number it will
+ * archive rather than claiming "all" — so do not re-propose a hidden-card count.
+ *
  * @param {number} stackId - the column to empty
  * @return {Promise<{ok: number[], skipped: object[]}>} merged summary
  */

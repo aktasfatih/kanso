@@ -163,9 +163,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActionButton>
 				</template>
 
-				<!-- Archive every card the column currently SHOWS (#10430). With a
-				     filter on that is a subset, so the label says so rather than
-				     silently archiving less than "all". Undoable, hence no confirm. -->
+				<!-- Archive every card the column currently SHOWS (#10430). Never
+				     "all": what the column shows is already narrowed by the board
+				     filter AND by card visibility, so the label names the count it
+				     will actually archive instead of promising the whole column.
+				     Undoable, hence no confirm. -->
 				<template v-if="onArchiveAllCards && cards.length > 0">
 					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor" />
 					<NcActionButton
@@ -177,7 +179,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</template>
 						{{ filterActive
 							? n('kanso', 'Archive %n visible card', 'Archive %n visible cards', cards.length)
-							: t('kanso', 'Archive all cards') }}
+							: n('kanso', 'Archive %n card', 'Archive %n cards', cards.length) }}
 					</NcActionButton>
 				</template>
 
@@ -451,8 +453,8 @@ const props = defineProps({
 	},
 	/**
 	 * Whether a board filter is currently narrowing `cards` (#10430). Only affects
-	 * wording: "Archive all cards" is a lie when a filter is hiding some of them,
-	 * so the entry then names the visible count instead.
+	 * wording: the entry always names the count it will archive, and adds
+	 * "visible" when a filter is the reason that count is a subset.
 	 */
 	filterActive: {
 		type: Boolean,

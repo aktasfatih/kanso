@@ -277,7 +277,7 @@ msgstr[0] "%n karta"
 msgstr[1] "%n karty"
 msgstr[2] "%n kart"
 
-#: src/components/StackColumn.vue:955
+#: src/components/StackColumn.vue:957
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -641,16 +641,19 @@ msgstr "Zatwierdzone"
 msgid "Archive"
 msgstr "Zarchiwizuj"
 
-#: src/components/StackColumn.vue:179
+#: src/components/StackColumn.vue:182
+msgid "Archive %n card"
+msgid_plural "Archive %n cards"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: src/components/StackColumn.vue:181
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
-
-#: src/components/StackColumn.vue
-msgid "Archive all cards"
-msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue

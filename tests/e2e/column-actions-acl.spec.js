@@ -74,9 +74,13 @@ test.describe('Column actions and card drag are editors only (#9897)', () => {
 			await expect(page.locator('.stack-column__actions')).toHaveCount(0)
 			await expect(page.getByRole('button', { name: 'Column actions' })).toHaveCount(0)
 			await expect(page.locator('.stack-column__title--editable')).toHaveCount(0)
-			// Including "Archive all cards" (#10430) — the column has a card, so the
-			// entry would render for an editor; a viewer must not reach it at all.
-			await expect(page.getByRole('button', { name: /^Archive (all cards|\d+ visible cards?)$/ }))
+			// Including the bulk archive entry (#10430) — the column has a card, so
+			// the entry would render for an editor; a viewer must not reach it at
+			// all. The pattern matches on the SHAPE of that label ("Archive " + a
+			// count, #10438) rather than its exact wording, so a future rewording
+			// cannot quietly turn this negative assertion into a no-op — while still
+			// excluding the board header's "Archived cards (N)", which is not gated.
+			await expect(page.getByRole('button', { name: /^Archive \d/ }))
 				.toHaveCount(0)
 			// Neither the tile nor the column header is a drag source: pragmatic
 			// drag-and-drop marks a registered draggable with draggable="true".
@@ -123,7 +127,8 @@ test.describe('Column actions and card drag stay available to editors (#9897)', 
 		await page.locator('.stack-column__actions button').first().click()
 		await expect(page.getByRole('button', { name: 'Delete column' })).toBeVisible({ timeout: 8_000 })
 		// …and the bulk archive entry (#10430), which the viewer above does not get.
-		await expect(page.getByRole('button', { name: 'Archive all cards' })).toBeVisible()
+		// One card in the column, so the entry names exactly that (#10438).
+		await expect(page.getByRole('button', { name: 'Archive 1 card' })).toBeVisible()
 		await page.keyboard.press('Escape')
 
 		// Tile and column header are both real drag sources.
