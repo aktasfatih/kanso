@@ -68,8 +68,15 @@ class BulkCardService {
 	 * per-card services. Returns a per-card summary:
 	 *   [ 'ok' => int[], 'skipped' => list<array{id:int, reason:string}> ]
 	 * where a skip is a card the caller may not edit, a card that no longer
-	 * exists, or a card the action's own validation rejected (e.g. a label from
-	 * another board) - none of which fail the whole request.
+	 * exists, a card the action's own validation rejected (e.g. a label from
+	 * another board), or a card the action did not actually move (reason
+	 * `unchanged`) - none of which fail the whole request.
+	 *
+	 * `ok` means the action CHANGED that card, not merely that the write did not
+	 * throw (#10437). Archiving an already-archived card is a no-op in
+	 * CardService::update, and reporting it as changed made the client's undo
+	 * offer to un-archive a card this action never archived - i.e. it would undo
+	 * somebody else's archive that landed inside the stale-cache window.
 	 *
 	 * The action parameters live in $params, validated up-front (a malformed
 	 * request is a 400 for the WHOLE call - it is the caller's mistake, not a
@@ -122,8 +129,13 @@ class BulkCardService {
 		$skipped = [];
 		foreach ($ids as $id) {
 			try {
-				$op($id);
-				$ok[] = $id;
+				if ($op($id)) {
+					$ok[] = $id;
+				} else {
+					// The write was permitted and committed but moved nothing -
+					// the card was already in the state the action asks for.
+					$skipped[] = ['id' => $id, 'reason' => 'unchanged'];
+				}
 			} catch (NotPermittedException) {
 				// The caller may not edit THIS card's board - skip, don't fail.
 				$skipped[] = ['id' => $id, 'reason' => 'forbidden'];
@@ -147,12 +159,17 @@ class BulkCardService {
 
 	/**
 	 * Resolves the fixed action + its params into a single-argument closure
-	 * `fn(int $cardId): void` that calls exactly one existing per-card service
+	 * `fn(int $cardId): bool` that calls exactly one existing per-card service
 	 * method. Parameter validation happens here (once), so a malformed request
 	 * surfaces as a whole-request 400 before the loop starts.
 	 *
+	 * The bool answers "did this card actually TRANSITION?" (#10437). Only the
+	 * two idempotent flag actions can no-op, so everything else returns true
+	 * unconditionally: a move/label/assign/date/status/delete that returns
+	 * without throwing did its work.
+	 *
 	 * @param array<string, mixed> $params
-	 * @return callable(int): void
+	 * @return callable(int): bool
 	 * @throws InvalidInputException on missing/invalid action params
 	 */
 	private function resolveOperation(string $action, array $params, string $uid): callable {
@@ -165,10 +182,11 @@ class BulkCardService {
 				// Append to the END of the target stack: resolve the current tail per
 				// card (a prior card in the same bulk move becomes the new tail, so the
 				// selection lands in order). null afterCardId would put it on TOP.
-				return function (int $cardId) use ($targetStackId, $uid): void {
+				return function (int $cardId) use ($targetStackId, $uid): bool {
 					$last = $this->cardMapper->findLastInStack($targetStackId);
 					$afterCardId = ($last !== null && $last->getId() !== $cardId) ? $last->getId() : null;
 					$this->cardService->move($cardId, $targetStackId, $afterCardId, $uid);
+					return true;
 				};
 
 			case self::ACTION_ADD_LABEL:
@@ -176,8 +194,9 @@ class BulkCardService {
 				if ($labelId <= 0) {
 					throw new InvalidInputException('A label is required');
 				}
-				return function (int $cardId) use ($labelId, $uid): void {
+				return function (int $cardId) use ($labelId, $uid): bool {
 					$this->labelService->assign($cardId, $labelId, $uid);
+					return true;
 				};
 
 			case self::ACTION_REMOVE_LABEL:
@@ -185,8 +204,9 @@ class BulkCardService {
 				if ($labelId <= 0) {
 					throw new InvalidInputException('A label is required');
 				}
-				return function (int $cardId) use ($labelId, $uid): void {
+				return function (int $cardId) use ($labelId, $uid): bool {
 					$this->labelService->unassign($cardId, $labelId, $uid);
+					return true;
 				};
 
 			case self::ACTION_ASSIGN_USER:
@@ -194,8 +214,9 @@ class BulkCardService {
 				if ($userId === '') {
 					throw new InvalidInputException('A user is required');
 				}
-				return function (int $cardId) use ($userId, $uid): void {
+				return function (int $cardId) use ($userId, $uid): bool {
 					$this->assigneeService->assign($cardId, $userId, $uid);
+					return true;
 				};
 
 			case self::ACTION_SET_DUE_DATE:
@@ -204,8 +225,9 @@ class BulkCardService {
 				// fine - the value is the same for every card, so it either fits all or
 				// none, but keeping it per-card avoids a second date parser here).
 				$duedate = (string)($params['duedate'] ?? '');
-				return function (int $cardId) use ($duedate, $uid): void {
+				return function (int $cardId) use ($duedate, $uid): bool {
 					$this->cardService->update($cardId, null, null, $duedate, null, null, $uid);
+					return true;
 				};
 
 			case self::ACTION_SET_STATUS:
@@ -222,25 +244,44 @@ class BulkCardService {
 				if ($status !== 'done') {
 					throw new InvalidInputException('Unsupported status: ' . $status);
 				}
-				return function (int $cardId) use ($uid): void {
+				return function (int $cardId) use ($uid): bool {
 					$this->cardService->update($cardId, null, null, null, true, null, $uid);
+					return true;
 				};
 
 			case self::ACTION_ARCHIVE:
-				return function (int $cardId) use ($uid): void {
-					$this->cardService->update($cardId, null, null, null, null, true, $uid);
-				};
-
 			case self::ACTION_UNARCHIVE:
-				// The exact inverse of ACTION_ARCHIVE, so the client can offer a real
-				// undo for an archive that touched many cards at once (#10430).
-				return function (int $cardId) use ($uid): void {
-					$this->cardService->update($cardId, null, null, null, null, false, $uid);
+				// Unarchive is the exact inverse of archive, so the client can offer a
+				// real undo for an archive that touched many cards at once (#10430) -
+				// which is precisely why these two must report whether they actually
+				// MOVED the flag (#10437). CardService::update sets `archived`
+				// unconditionally and returns normally on a no-op, so without this
+				// check a card somebody else archived inside the caller's stale-cache
+				// window rides along in `ok` and the undo un-archives THEIR archive.
+				// ArchiveService dodges the same trap structurally, by only ever
+				// selecting cards that are not archived yet
+				// ({@see ArchiveService::findEligibleCards}).
+				$targetArchived = $action === self::ACTION_ARCHIVE;
+				return function (int $cardId) use ($targetArchived, $uid): bool {
+					// Read the flag BEFORE the write - afterwards it is the value we
+					// just set, so it can no longer answer "did this change anything?".
+					// One point read per card; NOT batched through
+					// findSummariesByIds(), which is scoped to a single board while a
+					// bulk selection can span several.
+					$wasArchived = $this->cardMapper->find($cardId)->getArchived() ?? false;
+					// The pre-read is only TRUSTED once update() has returned, i.e.
+					// once it has asserted EDIT on the board AND the card's visibility.
+					// A card the caller may not touch, or may not see, must keep
+					// reporting `forbidden` / `not_found` - answering `unchanged`
+					// would turn the reason string into an existence oracle.
+					$this->cardService->update($cardId, null, null, null, null, $targetArchived, $uid);
+					return $wasArchived !== $targetArchived;
 				};
 
 			case self::ACTION_DELETE:
-				return function (int $cardId) use ($uid): void {
+				return function (int $cardId) use ($uid): bool {
 					$this->cardService->delete($cardId, $uid);
+					return true;
 				};
 
 			default:

@@ -40,10 +40,20 @@ class BulkCardServiceTest extends TestCase {
 		);
 	}
 
-	private function card(int $id): Card {
+	private function card(int $id, bool $archived = false): Card {
 		$card = new Card();
 		$card->setId($id);
+		$card->setArchived($archived);
 		return $card;
+	}
+
+	/**
+	 * Stubs the pre-read the archive/unarchive ops use to decide whether a card
+	 * actually transitioned (#10437): every id starts out with $archived.
+	 */
+	private function stubArchivedStateIs(bool $archived): void {
+		$this->cardMapper->method('find')
+			->willReturnCallback(fn (int $id): Card => $this->card($id, $archived));
 	}
 
 	// ── Happy paths (one per action) ────────────────────────────────────────────
@@ -217,6 +227,7 @@ class BulkCardServiceTest extends TestCase {
 	}
 
 	public function testBulkArchiveCallsUpdateWithArchivedTrue(): void {
+		$this->stubArchivedStateIs(false);
 		$this->cardService->expects(self::exactly(2))->method('update')
 			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid) {
 				self::assertTrue($arch);
@@ -226,12 +237,30 @@ class BulkCardServiceTest extends TestCase {
 
 		$result = $this->service->apply([11, 12], BulkCardService::ACTION_ARCHIVE, [], 'alice');
 		self::assertSame([11, 12], $result['ok']);
+		self::assertSame([], $result['skipped']);
+	}
+
+	public function testBulkArchiveReportsAnAlreadyArchivedCardAsUnchangedNotOk(): void {
+		// #10437. Card 12 was archived by somebody else inside this client's
+		// stale-cache window. update() sets the flag unconditionally and returns
+		// normally, so without the transition check it would ride along in `ok` -
+		// and the archive-all undo toast, which replays exactly `ok`, would
+		// un-archive a card THIS action never archived.
+		$this->cardMapper->method('find')
+			->willReturnCallback(fn (int $id): Card => $this->card($id, $id === 12));
+		$this->cardService->method('update')->willReturnCallback(fn (int $id) => $this->card($id));
+
+		$result = $this->service->apply([11, 12, 13], BulkCardService::ACTION_ARCHIVE, [], 'alice');
+
+		self::assertSame([11, 13], $result['ok'], 'only the cards this action actually archived');
+		self::assertSame([['id' => 12, 'reason' => 'unchanged']], $result['skipped']);
 	}
 
 	public function testBulkUnarchiveCallsUpdateWithArchivedFalse(): void {
 		// The inverse of archive (#10430) - what the archive-all undo toast posts.
 		// `false` (not null) is what actually un-archives: CardService::update only
 		// touches the flag when the argument is non-null.
+		$this->stubArchivedStateIs(true);
 		$this->cardService->expects(self::exactly(2))->method('update')
 			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid) {
 				self::assertFalse($arch);
@@ -244,12 +273,54 @@ class BulkCardServiceTest extends TestCase {
 		self::assertSame([], $result['skipped']);
 	}
 
+	public function testBulkUnarchiveReportsANotArchivedCardAsUnchangedNotOk(): void {
+		// #10437, the other direction: an undo replay that arrives after somebody
+		// already restored card 12 must not claim it restored it.
+		$this->cardMapper->method('find')
+			->willReturnCallback(fn (int $id): Card => $this->card($id, $id !== 12));
+		$this->cardService->method('update')->willReturnCallback(fn (int $id) => $this->card($id));
+
+		$result = $this->service->apply([11, 12, 13], BulkCardService::ACTION_UNARCHIVE, [], 'alice');
+
+		self::assertSame([11, 13], $result['ok']);
+		self::assertSame([['id' => 12, 'reason' => 'unchanged']], $result['skipped']);
+	}
+
+	public function testUnchangedNeverMasksForbiddenOrNotFound(): void {
+		// The transition check must not become an existence oracle: the pre-read
+		// runs before update(), but its verdict is only used once update() has
+		// asserted EDIT and visibility. A card the caller may not edit (12) or may
+		// not see / that is gone (13) keeps its own reason even though the
+		// pre-read says it is already in the target state.
+		$this->stubArchivedStateIs(true);
+		$this->cardService->method('update')
+			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid): Card {
+				if ($id === 12) {
+					throw new NotPermittedException('nope');
+				}
+				if ($id === 13) {
+					throw new DoesNotExistException('gone');
+				}
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12, 13], BulkCardService::ACTION_ARCHIVE, [], 'alice');
+
+		self::assertSame([], $result['ok']);
+		self::assertSame([
+			['id' => 11, 'reason' => 'unchanged'],
+			['id' => 12, 'reason' => 'forbidden'],
+			['id' => 13, 'reason' => 'not_found'],
+		], $result['skipped']);
+	}
+
 	public function testUnarchiveIsAcceptedByActionValidation(): void {
 		// Pins the wire value the client posts: an action missing from ACTIONS is a
 		// whole-request 400, so this would fail loudly if the enum entry regressed.
 		self::assertSame('unarchive', BulkCardService::ACTION_UNARCHIVE);
 		self::assertContains(BulkCardService::ACTION_UNARCHIVE, BulkCardService::ACTIONS);
 
+		$this->stubArchivedStateIs(true);
 		$this->cardService->expects(self::once())->method('update')
 			->willReturn($this->card(11));
 		$result = $this->service->apply([11], 'unarchive', [], 'alice');
@@ -259,6 +330,7 @@ class BulkCardServiceTest extends TestCase {
 	public function testUnarchiveSkipsANonEditableCardInsteadOfFailingTheRequest(): void {
 		// An undo of an archive-all can span boards the caller lost EDIT on in the
 		// meantime; that must skip the one card, not lose the whole undo.
+		$this->stubArchivedStateIs(true);
 		$this->cardService->method('update')
 			->willReturnCallback(function (int $id, $t, $d, $due, $done, $arch, string $uid): Card {
 				if ($id === 12) {
@@ -374,6 +446,7 @@ class BulkCardServiceTest extends TestCase {
 		// 400, so the value is pinned rather than left to a comment.
 		self::assertSame(100, BulkCardService::MAX_CARDS);
 		// …and a full chunk is accepted: the guard is `> MAX_CARDS`, not `>=`.
+		$this->stubArchivedStateIs(false);
 		$this->cardService->expects(self::exactly(100))->method('update')
 			->willReturnCallback(fn (int $id) => $this->card($id));
 		$result = $this->service->apply(
