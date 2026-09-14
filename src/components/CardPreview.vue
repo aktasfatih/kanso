@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 			<div
 				v-else-if="renderedDescription"
-				class="card-preview__desc-rendered"
+				class="card-preview__desc-rendered kanso-md"
 				v-html="renderedDescription" />
 			<p v-else class="card-preview__desc-empty">{{ t('kanso', 'No description.') }}</p>
 		</div>
@@ -492,8 +492,9 @@ body.theme--dark .card-preview,
 .card-preview__desc-rendered :deep(h1),
 .card-preview__desc-rendered :deep(h2),
 .card-preview__desc-rendered :deep(h3) { margin: 0.6em 0 0.3em; }
+/* Indent + markers come from the shared `.kanso-md` rules (src/styles/markdown.css). */
 .card-preview__desc-rendered :deep(ul),
-.card-preview__desc-rendered :deep(ol) { margin: 0.4em 0; padding-left: 1.4em; }
+.card-preview__desc-rendered :deep(ol) { margin: 0.4em 0; }
 .card-preview__desc-rendered :deep(code) {
 	font-family: var(--font-face-monospace, monospace);
 	background: var(--color-background-dark);

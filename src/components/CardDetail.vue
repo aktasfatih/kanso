@@ -1242,7 +1242,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									class="card-modal__desc-view"
 									@click="startDescriptionEdit">
 									<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-									<div class="card-modal__desc-rendered" v-html="renderedDescription" @click="handleRefClick" />
+									<div class="card-modal__desc-rendered kanso-md" v-html="renderedDescription" @click="handleRefClick" />
 								</div>
 								<button
 									v-else
@@ -2071,7 +2071,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												</div>
 											</template>
 											<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-											<div v-else class="card-modal__comment-body" v-html="renderedComments.get(topComment.id)" @click="handleRefClick" />
+											<div v-else class="card-modal__comment-body kanso-md" v-html="renderedComments.get(topComment.id)" @click="handleRefClick" />
 
 											<div class="card-modal__comment-controls">
 												<button
@@ -2202,7 +2202,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													</div>
 												</template>
 												<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-												<div v-else class="card-modal__comment-body" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
+												<div v-else class="card-modal__comment-body kanso-md" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
 												<div v-if="canEdit" class="card-modal__comment-controls">
 													<button

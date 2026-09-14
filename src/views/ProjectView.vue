@@ -93,7 +93,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div v-if="showInlinePreview" class="project-view__desc-preview">
 						<span class="project-view__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
 						<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-						<div class="project-view__desc-rendered" v-html="renderMarkdown(draftDescription)" />
+						<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(draftDescription)" />
 					</div>
 					<div class="project-view__desc-actions">
 						<NcButton type="primary" :disabled="updateMutation.isPending.value" @mousedown.prevent @click="saveDescription">
@@ -117,7 +117,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						@click="startDescriptionEdit"
 						@keydown.enter="startDescriptionEdit">
 						<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-						<div class="project-view__desc-rendered" v-html="renderMarkdown(project.description)" />
+						<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(project.description)" />
 					</div>
 					<button
 						v-else
@@ -268,7 +268,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									</div>
 								</template>
 								<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-								<div v-else class="project-view__comment-body project-view__desc-rendered" v-html="renderMarkdown(topComment.body)" />
+								<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(topComment.body)" />
 
 								<div class="project-view__comment-controls">
 									<button
@@ -329,7 +329,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										</div>
 									</template>
 									<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-									<div v-else class="project-view__comment-body project-view__desc-rendered" v-html="renderMarkdown(reply.body)" />
+									<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(reply.body)" />
 
 									<div class="project-view__comment-controls">
 										<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
@@ -411,7 +411,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<div v-if="showDescPreview" class="project-view__desc-preview">
 					<span class="project-view__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
 					<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-					<div class="project-view__desc-rendered" v-html="renderMarkdown(editDescription)" />
+					<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(editDescription)" />
 				</div>
 
 				<label class="project-view__form-label">{{ t('kanso', 'Color') }}</label>
@@ -960,8 +960,9 @@ async function handleDeleteComment(comment) {
 .project-view__desc-rendered :deep(h1:first-child),
 .project-view__desc-rendered :deep(h2:first-child),
 .project-view__desc-rendered :deep(h3:first-child) { margin-top: 0; }
+/* Indent + markers come from the shared `.kanso-md` rules (src/styles/markdown.css). */
 .project-view__desc-rendered :deep(ul),
-.project-view__desc-rendered :deep(ol) { margin: 0 0 0.7em; padding-left: 1.4em; }
+.project-view__desc-rendered :deep(ol) { margin: 0 0 0.7em; }
 .project-view__desc-rendered :deep(li) { margin: 0.15em 0; }
 .project-view__desc-rendered :deep(blockquote) {
 	margin: 0 0 0.7em;

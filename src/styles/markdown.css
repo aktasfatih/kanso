@@ -1,0 +1,77 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+/*
+ * Typography for RENDERED markdown (#139).
+ *
+ * Nextcloud injects `core/css/server.css` on every page, and it carries two
+ * unscoped bare-element rules from core's `styles.scss`: a Meyer-style reset
+ * (`margin: 0; padding: 0; border: 0` on `ol, ul, li, blockquote, h1`-`h6`) and
+ * a bare `ul { list-style: none }`. Together they strip a saved description of
+ * everything that makes a list look like a list: `ul` loses BOTH its marker and
+ * its indent, `ol` keeps the UA `decimal` marker but loses the ~40px indent, so
+ * the numbers hang flush against the container edge. The markdown pipeline is
+ * innocent — markdown-it emits real `<ul>/<ol>/<li>` and DOMPurify allowlists
+ * them (src/services/markdown.js). Only the CSS is missing. The editor looked
+ * right the whole time because MarkdownEditor.vue re-declares these rules for
+ * its own `.ProseMirror` node; every read-only surface had nothing.
+ *
+ * Scoped under one class ON PURPOSE. Un-resetting bare `ul`/`ol` anywhere
+ * broader — even `#app-content ul` — would put bullets and indents inside
+ * @nextcloud/vue internals (NcActions, NcAppNavigation, NcListItem) and inside
+ * Kanso's own card columns, all of which rely on core's reset. `.kanso-md` is
+ * only ever put on a container whose entire content is `v-html` output from
+ * renderMarkdown(), so no descendant selector here can reach a component's
+ * internals.
+ *
+ * Logical properties (`padding-inline-start`, `border-inline-start`) rather
+ * than `padding-left`/`border-left`: markers then stay inside the content box
+ * in RTL too, instead of being clipped outside the scroll container.
+ *
+ * Deliberately low specificity (one class + one element). Per-surface styles
+ * that want different spacing — CardDetail's description, ProjectView's
+ * comments — keep overriding these from their own scoped blocks.
+ */
+
+.kanso-md ul,
+.kanso-md ol {
+	padding-inline-start: 1.5em;
+	margin: 0.4em 0;
+}
+
+.kanso-md ul { list-style-type: disc; }
+.kanso-md ol { list-style-type: decimal; }
+
+/* Nested levels stay visually distinct (core's reset flattened them all). */
+.kanso-md ul ul { list-style-type: circle; }
+.kanso-md ul ul ul { list-style-type: square; }
+
+/* A nested list belongs to its parent item, not to the block flow. */
+.kanso-md li > ul,
+.kanso-md li > ol {
+	margin-block: 0.15em;
+}
+
+.kanso-md li { margin: 0.15em 0; }
+
+/* The reset zeroes blockquote too, which leaves a quote indistinguishable
+ * from a plain paragraph. */
+.kanso-md blockquote {
+	margin: 0.4em 0;
+	padding-inline-start: 0.85em;
+	border-inline-start: 3px solid var(--color-border, #ddd);
+	color: var(--color-text-maxcontrast, #767676);
+}
+
+/* core/css/apps.scss re-styles h2-h6 globally but deliberately skips h1, so a
+ * markdown `# Heading` renders as body text without this. */
+.kanso-md h1 {
+	font-size: 1.4em;
+	font-weight: 700;
+	line-height: 1.3;
+	margin: 0.6em 0 0.3em;
+}
+
+.kanso-md h1:first-child { margin-top: 0; }

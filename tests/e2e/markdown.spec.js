@@ -8,11 +8,15 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		boardId: 0,
 		stackId: 0,
 		cardId: 0,
+		listCardId: 0,
 		boardUrl: '',
 		cardUrl: '',
+		listCardUrl: '',
 	}
 
 	const DESCRIPTION = '# Heading\n\n**bold** and [a link](https://example.com)\n\n<script>alert(1)</script>'
+	// Its own card so the description-mutating tests above can't race it.
+	const LIST_DESCRIPTION = '# List heading\n\n- alpha\n- beta\n\n1. one\n2. two'
 
 	test.beforeAll(async () => {
 		// Clean up any leftover test board
@@ -36,8 +40,13 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		// PATCH the card description with markdown + XSS payload
 		await api.patch(`/cards/${card.id}`, { description: DESCRIPTION })
 
+		const listCard = await api.post('/cards', { stackId: stack.id, title: 'MD List Card' })
+		state.listCardId = listCard.id
+		await api.patch(`/cards/${listCard.id}`, { description: LIST_DESCRIPTION })
+
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
+		state.listCardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${listCard.id}`
 		console.log('Setup complete - cardUrl:', state.cardUrl)
 	})
 
@@ -174,5 +183,53 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 		const descHtml = await page.locator('.card-modal__desc-rendered').innerHTML()
 		expect(descHtml).not.toMatch(/<script[\s>]/i)
+	})
+
+	// #139: a saved description rendered its lists as unmarked, unindented text.
+	// The renderer was never at fault — Nextcloud's core/css/server.css resets
+	// `ul, ol, li` to no margin/padding and `ul` to `list-style: none`, and the
+	// display container declared nothing to put back. So this asserts the
+	// COMPUTED style, not just the markup: the markup half passed the whole time
+	// the bug was live. Deliberately not a screenshot — there is no visual-diff
+	// harness here, and computed values say exactly which half regressed.
+	test('renders lists with markers and indentation (not just list markup)', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.listCardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal__desc-rendered ul', { timeout: 10_000 })
+
+		const container = page.locator('.card-modal__desc-rendered')
+		const ul = container.locator('ul')
+		const ol = container.locator('ol')
+
+		// Renderer half: the sanitiser kept real list markup.
+		await expect(ul.locator('li')).toHaveCount(2)
+		await expect(ol.locator('li')).toHaveCount(2)
+
+		// Styling half: markers are actually drawn.
+		expect(await ul.evaluate((el) => getComputedStyle(el).listStyleType)).toBe('disc')
+		expect(await ol.evaluate((el) => getComputedStyle(el).listStyleType)).toBe('decimal')
+
+		// ...and both lists are indented, via the LOGICAL property so the markers
+		// stay inside the content box in RTL too.
+		const ulPad = await ul.evaluate((el) => parseFloat(getComputedStyle(el).paddingInlineStart))
+		const olPad = await ol.evaluate((el) => parseFloat(getComputedStyle(el).paddingInlineStart))
+		expect(ulPad).toBeGreaterThan(0)
+		expect(olPad).toBeGreaterThan(0)
+
+		// The reported symptom was ordered-list numbers hanging flush against the
+		// container edge. A marker is painted OUTSIDE the li's box, so the li must
+		// start measurably inside the container or the number is clipped away.
+		const containerLeft = await container.evaluate((el) => el.getBoundingClientRect().left)
+		const firstOlItemLeft = await ol.locator('li').first().evaluate((el) => el.getBoundingClientRect().left)
+		const firstUlItemLeft = await ul.locator('li').first().evaluate((el) => el.getBoundingClientRect().left)
+		expect(firstOlItemLeft - containerLeft).toBeGreaterThan(8)
+		expect(firstUlItemLeft - containerLeft).toBeGreaterThan(8)
+
+		// core/css/apps.scss re-styles h2-h6 but skips h1, so `# Heading` used to
+		// render at body size.
+		const h1Size = await container.locator('h1').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+		const pSize = await container.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+		expect(h1Size).toBeGreaterThan(pSize)
 	})
 })

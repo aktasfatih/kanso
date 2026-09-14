@@ -60,7 +60,17 @@ html, body { height: 100%; }
 /* Rendered-markdown description: keep block spacing sane inside the modal. */
 .public-detail__desc p { margin: 0 0 10px; }
 .public-detail__desc p:last-child { margin-bottom: 0; }
-.public-detail__desc ul, .public-detail__desc ol { margin: 0 0 10px; padding-left: 22px; }
+/* list-style is re-declared here because core/css/server.css resets `ul, ol, li`
+   to no margin/padding and `ul` to `list-style: none` (#139). The public bundle
+   (src/public.js) imports no CSS, so it cannot use src/styles/markdown.css —
+   this inline sheet is the public share's only styling surface. Logical
+   properties so markers stay inside the modal in RTL. */
+.public-detail__desc ul, .public-detail__desc ol { margin: 0 0 10px; padding-inline-start: 22px; }
+.public-detail__desc ul { list-style-type: disc; }
+.public-detail__desc ol { list-style-type: decimal; }
+.public-detail__desc ul ul { list-style-type: circle; }
+.public-detail__desc ul ul ul { list-style-type: square; }
+.public-detail__desc li { margin: 2px 0; }
 .public-detail__desc h1, .public-detail__desc h2, .public-detail__desc h3,
 .public-detail__desc h4, .public-detail__desc h5, .public-detail__desc h6 { margin: 12px 0 6px; line-height: 1.3; }
 .public-detail__desc pre { background: var(--color-background-dark, #f0f0f0); padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
@@ -85,5 +95,14 @@ html, body { height: 100%; }
 .public-comment__body p:last-child { margin-bottom: 0; }
 .public-comment__body a { color: var(--color-primary-element, #0082c9); }
 .public-comment__body code { background: var(--color-background-dark, #f0f0f0); padding: 1px 4px; border-radius: 4px; font-size: 0.92em; }
+/* Same core-reset problem as the description above (#139): without these a
+   markdown list in a comment loses its markers and its indent. Scoped to
+   __body so the comment/reply <ul> scaffolding above keeps `list-style: none`. */
+.public-comment__body ul, .public-comment__body ol { margin: 0 0 8px; padding-inline-start: 22px; }
+.public-comment__body ul { list-style-type: disc; }
+.public-comment__body ol { list-style-type: decimal; }
+.public-comment__body ul ul { list-style-type: circle; }
+.public-comment__body li { margin: 2px 0; }
+.public-comment__body blockquote { margin: 0 0 8px; padding-inline-start: 12px; border-inline-start: 3px solid var(--color-border, #ddd); color: var(--color-text-maxcontrast, #666); }
 </style>
 <div id="kanso-public" data-token="<?php p($_['token'] ?? ''); ?>"></div>

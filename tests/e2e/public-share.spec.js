@@ -292,7 +292,11 @@ test.describe('Public board is interactive read-only', () => {
 	// is a meaningful assertion (the tail only appears in the expanded detail).
 	// It leads with markdown (a **bold** run) so the detail can assert the body is
 	// rendered as HTML, not printed as raw markdown source.
-	const LONG_DESC = 'HEAD_MARKER **BOLD_MARKER_7788** ' + 'lorem ipsum dolor sit amet '.repeat(20) + 'TAIL_MARKER_UNIQUE_9317'
+	// It ends with a markdown list: templates/public.php is a SEPARATE css surface
+	// from the app bundle's src/styles/markdown.css, so the #139 list fix has to be
+	// asserted here too or the public share can regress on its own.
+	const LONG_DESC = 'HEAD_MARKER **BOLD_MARKER_7788** ' + 'lorem ipsum dolor sit amet '.repeat(20)
+		+ 'TAIL_MARKER_UNIQUE_9317\n\n- LIST_ITEM_ALPHA\n- LIST_ITEM_BETA'
 	const COVER = '31CC31'
 	// A token from the board's 'hours' estimate scale (set in beforeAll).
 	const ESTIMATE = '4'
@@ -351,6 +355,15 @@ test.describe('Public board is interactive read-only', () => {
 		// becomes a <strong>, and the raw asterisks are gone.
 		await expect(detail.locator('.public-detail__desc strong')).toHaveText('BOLD_MARKER_7788')
 		await expect(detail.locator('.public-detail__desc')).not.toContainText('**BOLD_MARKER_7788**')
+
+		// ...and a list is drawn AS a list (#139). Core's server.css resets `ul` to
+		// `list-style: none` with no padding on every Nextcloud page, this one
+		// included, so the computed style is what proves the markers survived —
+		// the markup alone passed all through the bug.
+		const shareUl = detail.locator('.public-detail__desc ul')
+		await expect(shareUl.locator('li')).toHaveCount(2)
+		expect(await shareUl.evaluate((el) => getComputedStyle(el).listStyleType)).toBe('disc')
+		expect(await shareUl.evaluate((el) => parseFloat(getComputedStyle(el).paddingInlineStart))).toBeGreaterThan(0)
 
 		// The richer NON-person attributes render (#3951): a cover-colour band, the
 		// start date and the estimate. No person data is shown.
