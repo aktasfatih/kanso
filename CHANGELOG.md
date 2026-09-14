@@ -11,6 +11,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.32.0](https://github.com/aktasfatih/kanso/compare/v0.31.0...v0.32.0) (2026-09-14)
+
+
+### Bug Fixes
+
+* **a11y:** make the card and timeline jumps instant when you ask for reduced motion ([e3dac7b](https://github.com/aktasfatih/kanso/commit/e3dac7b9174c317f8414d2011f09be442a1e840c)), closes [#10475](https://github.com/aktasfatih/kanso/issues/10475)
+* **board:** stop the column archive action calling itself "archive all cards" ([4ebda61](https://github.com/aktasfatih/kanso/commit/4ebda61a2d9fffcebe8d119c43ca1aa46d7ad1fd))
+* **bulk:** only report the cards a bulk archive or unarchive actually moved ([43cd530](https://github.com/aktasfatih/kanso/commit/43cd5300f09314e246b2d3a3b31ede61d27a92d1))
+* **card:** let a truncated collaborator name be read on hover ([5ceb8b2](https://github.com/aktasfatih/kanso/commit/5ceb8b215547192d1d29c8b3d68ba009df018cf7)), closes [#10439](https://github.com/aktasfatih/kanso/issues/10439)
+* **card:** show your chosen card layout right away instead of flashing the default ([f63713a](https://github.com/aktasfatih/kanso/commit/f63713a987575a9b749681052606bcae91dc786e))
+* **public-share:** give a public board link a tab title of its own ([adbfeab](https://github.com/aktasfatih/kanso/commit/adbfeabb3b9d981f717e946d840d9aa6afb8dc2f))
+
+
+### Features
+
+* **attachments:** let an admin cap how much attachment storage the whole instance may use ([8c0f27c](https://github.com/aktasfatih/kanso/commit/8c0f27c12a0052aa5d177b4e6bcf0c1f2ca6ec28))
+
 # [0.31.0](https://github.com/aktasfatih/kanso/compare/v0.30.0...v0.31.0) (2026-09-13)
 
 
