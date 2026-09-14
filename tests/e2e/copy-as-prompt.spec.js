@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, toast, BASE } from './helpers.js'
 import { buildCardPrompt, formatPromptDate } from '../../src/utils/cardPrompt.js'
 
 // ── Unit coverage for the pure buildCardPrompt helper (no browser needed) ──────
@@ -133,8 +133,10 @@ test.describe('Copy as prompt', () => {
 		await expect(copyItem).toBeVisible({ timeout: 5000 })
 		await copyItem.click()
 
-		// A success toast should confirm the copy.
-		await expect(page.locator('.toast-success, .toastify.toast-success')).toBeVisible({ timeout: 6000 })
+		// A success toast should confirm the copy. Its MESSAGE is the assertion —
+		// "a toast appeared" would also be satisfied by the error toast this very
+		// action raises when the clipboard is unavailable.
+		await expect(toast(page, 'Card copied as prompt.')).toBeVisible({ timeout: 6000 })
 
 		// Read the clipboard back and assert it contains the title + comment body.
 		const clip = await page.evaluate(() => navigator.clipboard.readText())

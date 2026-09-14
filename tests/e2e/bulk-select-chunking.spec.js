@@ -13,7 +13,7 @@
 // under test. Only the 105 cards themselves are seeded over the API, since
 // typing them into the composer would cost minutes for no extra coverage.
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, toast, BASE } from './helpers.js'
 
 // One chunk boundary plus a remainder: 100 + 5. Two requests, sequentially.
 const CARD_COUNT = 105
@@ -92,8 +92,8 @@ test.describe('Bulk action over a >100-card selection (#10435)', () => {
 
 		// The summary is the MERGED one across both chunks, so the count is the
 		// whole selection — not 100, and not a failure banner.
-		await expect(page.locator('.toastify.toast-success'))
-			.toContainText(`${CARD_COUNT} cards updated`, { timeout: 60_000 })
+		await expect(toast(page, `${CARD_COUNT} cards updated`))
+			.toBeVisible({ timeout: 60_000 })
 		await expect(page.getByText('Bulk action failed.')).toHaveCount(0)
 
 		// Every card lands in the target column — both chunks committed.
