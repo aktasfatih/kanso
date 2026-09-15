@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardFeatures;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
@@ -48,8 +49,20 @@ use OCP\Security\ISecureRandom;
  *    NEVER touches assignees, watchers, activity/changes, ACL/members, owner
  *    uids, reviews, or the webhook config. Only board title + stacks + per-card
  *    {title, description, labels, dates, cover colour, estimate, checklist
- *    counts, priority, status, human id} are exposed - nothing that identifies a
- *    person or leaks internal metadata. Archived stacks/cards are omitted.
+ *    counts AND items, sub-card ids, priority, status, human id} are exposed -
+ *    nothing that identifies a person or leaks internal metadata. Archived
+ *    stacks/cards are omitted.
+ *  - The checklist ITEMS (#135) are a hand-written {title, done} pair, NOT
+ *    {@see \OCA\Kanso\Db\ChecklistItem::jsonSerialize()}, which would carry
+ *    `assignedUser` (a login uid) and `assignedRole` (the internal
+ *    EXTERNAL/INTERNAL side). Scoped by the same PUBLIC-ONLY join as the counts,
+ *    so a hidden card's steps are never even read.
+ *  - The sub-card edges (#135) are ids ONLY, and they are derived from the cards
+ *    that survived this method's own filters - never from
+ *    {@see CardMapper::findChildren()} / findVisibleChildren(), which bypass the
+ *    public-only scope. So a `childIds` entry always addresses a card the visitor
+ *    already holds in full, and an archived / templated / internal / private
+ *    child can not be named at all.
  *  - The ONE opt-in exception (#3949): a MANAGE user may DELIBERATELY widen the
  *    link with the `public_share_comments` toggle (OFF by default). When ON, and
  *    only then, each public card also carries a read-only comment thread - author
@@ -202,7 +215,7 @@ class PublicShareService {
 	 * @return array{
 	 *   board: array{title: ?string, color: ?string, prefix: string, commentsEnabled: bool, cardFeatures: array<string, bool>},
 	 *   stacks: list<array{id: int, title: ?string, color: ?string}>,
-	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, coverColor: ?string, startDate: ?string, estimate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}, comments?: list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>}>
+	 *   cards: list<array{id: int, stackId: ?int, title: ?string, description: ?string, labels: list<array{name: ?string, color: ?string}>, duedate: ?string, coverColor: ?string, startDate: ?string, estimate: ?string, allDay: bool, priority: int, type: string, status: string, humanId: ?string, checklist: array{total: int, done: int}, checklistItems: list<array{title: ?string, done: bool}>, childIds: list<int>, comments?: list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>}>
 	 * }
 	 * @throws DoesNotExistException if the token is unknown, disabled, or expired
 	 */
@@ -233,6 +246,12 @@ class PublicShareService {
 		// only (#3743) - never fetch a hidden card's rows just to discard them.
 		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoardPublicOnly($boardId);
 		$checklistByCard = $this->checklistItemMapper->progressByBoardPublicOnly($boardId);
+		// The checklist ITEMS behind those counts (#135). The public share has no
+		// per-card endpoint (appinfo/routes.php only exposes the SPA shell and this
+		// one payload), so anything the read-only detail can ever render has to be
+		// here - a bare "1/2" was all an anonymous reader could see. Same board-wide,
+		// PUBLIC-ONLY join as the counts, so a hidden card's steps are never fetched.
+		$checklistItemsByCard = $this->checklistItemMapper->findByBoardPublicOnly($boardId);
 
 		// Comments opt-in (#3949): ONLY fetch (and only ever expose) comments when
 		// the MANAGE user deliberately enabled the toggle for this share. Also over
@@ -271,6 +290,15 @@ class PublicShareService {
 
 		$prefix = $board->jsonSerialize()['prefix'];
 		$cards = [];
+		// parentCardId => ids of its children, collected from the SURVIVING cards
+		// only (#135). Derived from this loop rather than from
+		// CardMapper::findChildren()/findVisibleChildren() on purpose: both of those
+		// bypass applyPublicOnly, so an archived / templated / internal / private
+		// child could be named as a sub-card of a public one. Building it here means
+		// a child can only be referenced if the anonymous reader already has its
+		// whole card object in `cards` - zero extra queries, zero new exposure.
+		/** @var array<int, list<int>> $childIdsByParent */
+		$childIdsByParent = [];
 		foreach ($this->cardMapper->findPublicByBoard($boardId) as $card) {
 			/** @var Card $card */
 			if ($card->getArchived()) {
@@ -282,6 +310,10 @@ class PublicShareService {
 			}
 
 			$cardId = (int)$card->getId();
+			$parentCardId = $card->getParentCardId();
+			if ($parentCardId !== null) {
+				$childIdsByParent[(int)$parentCardId][] = $cardId;
+			}
 			$labels = [];
 			foreach ($labelIdsByCard[$cardId] ?? [] as $labelId) {
 				$label = $labelsById[(int)$labelId] ?? null;
@@ -322,6 +354,24 @@ class PublicShareService {
 				'status' => ($card->getDoneAt() ?? 0) > 0 ? 'done' : (($card->getStartedAt() ?? 0) > 0 ? 'in_progress' : 'not_started'),
 				'humanId' => $seq !== null ? $prefix . '-' . $seq : null,
 				'checklist' => $checklistByCard[$cardId] ?? ['total' => 0, 'done' => 0],
+				// The steps themselves (#135), as a HAND-WRITTEN {title, done} shape.
+				// Never ChecklistItem::jsonSerialize(): that emits `assignedUser` (a raw
+				// login uid) and `assignedRole` (the internal EXTERNAL/INTERNAL side),
+				// which is exactly the person data this payload exists to keep out.
+				// `dueDate`/`doneAt`/`sortKey`/`id` are dropped too - the read-only view
+				// renders a title and a tick, and nothing else is board content a
+				// visitor needs.
+				'checklistItems' => array_map(
+					static fn (ChecklistItem $item): array => [
+						'title' => $item->getTitle(),
+						'done' => $item->getDone() ?? false,
+					],
+					$checklistItemsByCard[$cardId] ?? [],
+				),
+				// Sub-card references (#135), filled in after the loop from the cards
+				// that actually SURVIVED the filters above. Declared here so the key
+				// set of a card object is this one literal, as the leak guards assume.
+				'childIds' => [],
 			];
 
 			if ($commentsEnabled) {
@@ -330,6 +380,18 @@ class PublicShareService {
 
 			$cards[] = $cardPayload;
 		}
+
+		// Attach the sub-card edges. Only ids: the child's own card object is
+		// already in `cards` (that is precisely why it is safe to name), so the
+		// client resolves the title from there and no second, looser serialization
+		// of a card is introduced. A parent whose children were all filtered out
+		// keeps the empty list it was built with.
+		$withChildren = [];
+		foreach ($cards as $cardPayload) {
+			$cardPayload['childIds'] = $childIdsByParent[$cardPayload['id']] ?? [];
+			$withChildren[] = $cardPayload;
+		}
+		$cards = $withChildren;
 
 		return [
 			'board' => [

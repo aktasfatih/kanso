@@ -64,8 +64,12 @@ class ChecklistItemMapperTest extends TestCase {
 
 		usort($indexed, static function (array $a, array $b) use ($ordering): int {
 			foreach ($ordering as $column) {
-				$left = $a['row'][$column] ?? null;
-				$right = $b['row'][$column] ?? null;
+				// A joined query orders by `alias.column`; the fed rows are keyed by
+				// the bare column name, so strip the alias or every comparison would
+				// silently read null and the ordering would never be exercised.
+				$key = str_contains($column, '.') ? substr($column, strpos($column, '.') + 1) : $column;
+				$left = $a['row'][$key] ?? null;
+				$right = $b['row'][$key] ?? null;
 				$cmp = \is_int($left) && \is_int($right)
 					? $left <=> $right
 					: strcmp((string)$left, (string)$right);
@@ -85,11 +89,12 @@ class ChecklistItemMapperTest extends TestCase {
 	 *
 	 * @param list<array<string, mixed>> $rows
 	 */
-	private function orderingQb(array $rows): IQueryBuilder&MockObject {
+	private function orderingQb(array $rows, ?array &$boundParams = null): IQueryBuilder&MockObject {
 		$qb = $this->createMock(IQueryBuilder::class);
-		foreach (['select', 'from', 'where', 'andWhere', 'setMaxResults'] as $method) {
+		foreach (['select', 'from', 'where', 'andWhere', 'innerJoin', 'setMaxResults'] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
+		$boundParams = [];
 
 		$ordering = [];
 		$record = function (string $column, ?string $direction = null) use (&$ordering, &$qb): IQueryBuilder {
@@ -99,7 +104,14 @@ class ChecklistItemMapperTest extends TestCase {
 		$qb->method('orderBy')->willReturnCallback($record);
 		$qb->method('addOrderBy')->willReturnCallback($record);
 		$qb->method('expr')->willReturn(self::exprSink());
-		$qb->method('createNamedParameter')->willReturn('?');
+		// Record what the query BINDS, so a test can prove a filter was applied at
+		// all - the expression sink above swallows the WHERE structure itself.
+		$qb->method('createNamedParameter')->willReturnCallback(
+			static function (mixed $value) use (&$boundParams): string {
+				$boundParams[] = $value;
+				return '?';
+			}
+		);
 
 		$result = $this->createMock(IResult::class);
 		$queue = null;
@@ -135,5 +147,42 @@ class ChecklistItemMapperTest extends TestCase {
 			$ids,
 			'checklist items tied on sort_key must come back in a stable, id-ascending order'
 		);
+	}
+
+	/**
+	 * The anonymous board read (#135): one query for the whole board, grouped by
+	 * card, each group in the same display order findByCard() produces - and
+	 * scoped to PUBLIC cards, which is what keeps a hidden card's steps from ever
+	 * being fetched on an unauthenticated endpoint.
+	 */
+	public function testFindByBoardPublicOnlyGroupsByCardInDisplayOrder(): void {
+		$params = null;
+		$this->db->method('getQueryBuilder')->willReturn($this->orderingQb([
+			// Deliberately interleaved and out of order: only a real ORDER BY on
+			// sort_key (with the id tiebreaker) produces the expected sequence.
+			['id' => 7, 'card_id' => 3, 'title' => 'B third', 'sort_key' => 'mm', 'done' => false],
+			['id' => 2, 'card_id' => 9, 'title' => 'A first', 'sort_key' => 'aa', 'done' => true],
+			['id' => 4, 'card_id' => 3, 'title' => 'B first', 'sort_key' => 'ab', 'done' => true],
+			['id' => 6, 'card_id' => 3, 'title' => 'B second', 'sort_key' => 'mm', 'done' => false],
+		], $params));
+
+		$map = $this->mapper->findByBoardPublicOnly(1);
+
+		$cardIds = array_keys($map);
+		sort($cardIds);
+		self::assertSame([3, 9], $cardIds);
+		self::assertSame(
+			['B first', 'B second', 'B third'],
+			array_map(static fn ($item): ?string => $item->getTitle(), $map[3]),
+			'items of one card must come back in sort_key order, ties broken by id'
+		);
+		self::assertSame(['A first'], array_map(static fn ($item): ?string => $item->getTitle(), $map[9]));
+		self::assertTrue($map[9][0]->getDone());
+
+		// The PUBLIC-ONLY visibility scope really is applied: 'public' is bound as
+		// a query parameter. Without it this method would read a private card's
+		// steps on an endpoint that has no session at all.
+		self::assertContains('public', $params, 'findByBoardPublicOnly must bind the public-only visibility scope');
+		self::assertContains(1, $params, 'and the board it was asked for');
 	}
 }

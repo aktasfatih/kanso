@@ -1189,6 +1189,7 @@ msgstr ""
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
+#: src/views/PublicBoard.vue
 msgid "Checklist"
 msgstr "清单"
 
@@ -4935,6 +4936,7 @@ msgstr "子卡片进度"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/PublicBoard.vue
 msgid "Sub-cards"
 msgstr "子卡片"
 

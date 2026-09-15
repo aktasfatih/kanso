@@ -79,6 +79,23 @@ html, body { height: 100%; }
 .public-detail__desc blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--color-border, #ddd); color: var(--color-text-maxcontrast, #666); }
 .public-detail__desc a { color: var(--color-primary-element, #0082c9); }
 .public-detail__desc img { max-width: 100%; height: auto; border-radius: 6px; }
+/* Read-only checklist steps and sub-card references (#135). `list-style: none`
+   is deliberate here (unlike the markdown lists above): these are UI lists with
+   their own tick / chip, not prose. */
+.public-checklist, .public-subcards { margin-top: 18px; border-top: 1px solid var(--color-border, #ddd); padding-top: 14px; }
+.public-checklist__title, .public-subcards__title { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--color-main-text, #222); }
+.public-checklist__list, .public-subcards__list { list-style: none; margin: 0; padding: 0; }
+.public-checklist__item { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; line-height: 1.5; margin: 4px 0; color: var(--color-main-text, #222); }
+.public-checklist__item--done .public-checklist__label { text-decoration: line-through; color: var(--color-text-maxcontrast, #888); }
+.public-checklist__box { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 4px; border: 2px solid var(--color-border-dark, #aaa); border-radius: 3px; box-sizing: border-box; }
+.public-checklist__box--done { background: var(--color-success, #2d7b2d); border-color: var(--color-success, #2d7b2d); }
+.public-checklist__label { word-break: break-word; }
+.public-subcard { display: flex; gap: 6px; align-items: baseline; padding: 6px 8px; margin: 4px 0; border: 1px solid var(--color-border, #e0e0e0); border-radius: 6px; cursor: pointer; }
+.public-subcard:hover { border-color: var(--color-primary-element, #0082c9); }
+.public-subcard:focus-visible { outline: 2px solid var(--color-primary-element, #0082c9); outline-offset: 1px; }
+.public-subcard--done { opacity: 0.6; }
+.public-subcard__id { font-size: 11px; color: var(--color-text-maxcontrast, #888); font-weight: 600; flex: 0 0 auto; }
+.public-subcard__title { font-size: 13px; word-break: break-word; }
 /* Read-only comments (#3949): shown only when the owner opted in. */
 .public-comments { margin-top: 18px; border-top: 1px solid var(--color-border, #ddd); padding-top: 14px; }
 .public-comments__title { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--color-main-text, #222); }

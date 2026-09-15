@@ -134,7 +134,11 @@ class ArchitectureTest extends TestCase {
 	 * - Service/DeckImportService.php .... importer, creates cards only
 	 * - Service/PublicShareService.php ... anonymous snapshot; PUBLIC-ONLY is
 	 *                                      applied inside findPublicByBoard /
-	 *                                      progressByBoardPublicOnly
+	 *                                      progressByBoardPublicOnly /
+	 *                                      findByBoardPublicOnly, and the
+	 *                                      sub-card edges (#135) are derived
+	 *                                      from that already-filtered card list
+	 *                                      rather than from findChildren()
 	 * - Service/TrelloImportService.php .. importer, creates cards only
 	 *
 	 * Shrunk by #3760: Notification/Notifier.php (render-time audience gate),
