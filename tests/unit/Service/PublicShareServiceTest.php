@@ -20,9 +20,11 @@ use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\MentionService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\PublicShareExpiredException;
 use OCA\Kanso\Service\PublicShareService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IL10N;
@@ -233,6 +235,176 @@ class PublicShareServiceTest extends TestCase {
 		self::assertTrue($config['enabled']);
 		self::assertSame(self::TOKEN, $config['token']);
 		self::assertSame('https://nc/p/tok', $config['url']);
+	}
+
+	// ── expiry (MANAGE) ────────────────────────────────────────────────────
+	//
+	// #10466: `public_share_expires_at` was persisted and ENFORCED but nothing
+	// could ever set it, so the enforcement branch was live code that could never
+	// fire. These cases cover the write half AND, at the bottom, prove the branch
+	// really does fire once something sets the field.
+
+	public function testSetExpiryStoresTheTimestampAndReportsItBack(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+		$when = time() + 86400;
+		$this->boardMapper->expects(self::once())->method('update')
+			->willReturnCallback(static function (Board $b) use ($when): Board {
+				self::assertSame($when, $b->getPublicShareExpiresAt());
+				return $b;
+			});
+
+		$config = $this->service->setExpiry(1, $when, 'alice');
+		self::assertSame($when, $config['expiresAt']);
+		// The expiry does not touch the token: the link is the same link.
+		self::assertSame(self::TOKEN, $config['token']);
+	}
+
+	/**
+	 * The permission denial the ship bar asks for: setting an expiry is gated by
+	 * exactly the same MANAGE assertion as minting, rotating, revoking and the
+	 * comments opt-in. A non-manager gets NotPermittedException and NO write.
+	 */
+	public function testSetExpiryDeniedWithoutManage(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with(self::anything(), 'mallory', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->setExpiry(1, time() + 86400, 'mallory');
+	}
+
+	public function testSetExpiryWithNullClearsIt(): void {
+		$board = $this->board(1, self::TOKEN, time() + 86400);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+		$this->boardMapper->expects(self::once())->method('update')
+			->willReturnCallback(static function (Board $b): Board {
+				self::assertNull($b->getPublicShareExpiresAt());
+				return $b;
+			});
+
+		$config = $this->service->setExpiry(1, null, 'alice');
+		self::assertNull($config['expiresAt']);
+		// Clearing the expiry must never disturb the link itself.
+		self::assertTrue($config['enabled']);
+		self::assertSame(self::TOKEN, $config['token']);
+	}
+
+	/**
+	 * 0 is the other "never" spelling the column has always allowed, and rows
+	 * written before this field had a UI can hold it. Clearing an already-clear
+	 * expiry must therefore be a no-op, not a write on every call.
+	 */
+	public function testSetExpiryIsANoOpWhenNothingChanges(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, self::TOKEN, 0));
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+		$this->boardMapper->expects(self::never())->method('update');
+
+		self::assertNull($this->service->setExpiry(1, null, 'alice')['expiresAt']);
+	}
+
+	/**
+	 * The classic client bug: milliseconds where seconds were expected. Rejected
+	 * rather than stored, so it cannot read back as "never, practically".
+	 */
+	public function testSetExpiryRejectsAnOutOfRangeTimestamp(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->setExpiry(1, 4102444800000, 'alice');
+	}
+
+	/**
+	 * The fail-OPEN path this guards against: a malformed `expiresAt` must not be
+	 * read as "no expiry". A declared `?int` controller param would have cast
+	 * `'garbage'` to 0 and answered 200 while REMOVING the expiry from a live
+	 * public link - a parse failure resolving toward more exposure.
+	 *
+	 * @dataProvider malformedExpiryProvider
+	 */
+	public function testSetExpiryRejectsAMalformedValueInsteadOfClearingIt(mixed $raw): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, self::TOKEN, time() + 3600));
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->setExpiry(1, $raw, 'alice');
+	}
+
+	/**
+	 * @return array<string, array{mixed}>
+	 */
+	public static function malformedExpiryProvider(): array {
+		return [
+			'non-numeric string' => ['garbage'],
+			'date string' => ['2030-12-31'],
+			'float' => [1.5],
+			'bool' => [true],
+			'array' => [[1799999999]],
+		];
+	}
+
+	/**
+	 * A numeric STRING is still accepted - an OCS/form client legitimately sends
+	 * one, and it is unambiguous. Only genuinely unreadable input is refused.
+	 */
+	public function testSetExpiryAcceptsANumericString(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+		$this->boardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		self::assertSame(1799999999, $this->service->setExpiry(1, '1799999999', 'alice')['expiresAt']);
+	}
+
+	/**
+	 * An explicit empty value IS a clear - the one way to remove an expiry, kept
+	 * distinct from "could not read that".
+	 */
+	public function testSetExpiryTreatsAnEmptyStringAsAClear(): void {
+		$board = $this->board(1, self::TOKEN, time() + 3600);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+		$this->boardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		self::assertNull($this->service->setExpiry(1, '', 'alice')['expiresAt']);
+	}
+
+	/**
+	 * A PAST timestamp is accepted on purpose - it is the "revoke as of" action,
+	 * and an expiry can only ever narrow access.
+	 *
+	 * This is also the case that proves the enforcement branch at
+	 * {@see PublicShareService::getPublicBoard()} actually FIRES now that
+	 * something can set the field: the mappers hand back the SAME Board instance
+	 * setExpiry() just wrote to, so the anonymous read below sees the real stored
+	 * value rather than a hand-primed fixture.
+	 */
+	public function testAnExpiryInThePastImmediatelyRefusesAnonymousReaders(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->urlGenerator->method('linkToRouteAbsolute')->willReturn('https://nc/p/tok');
+
+		// Before: the link resolves.
+		self::assertSame('Roadmap', $this->service->assertTokenValid(self::TOKEN)->getTitle());
+
+		$past = time() - 1;
+		self::assertSame($past, $this->service->setExpiry(1, $past, 'alice')['expiresAt']);
+
+		// After: both public entry points refuse, with the reason-bearing subclass.
+		try {
+			$this->service->assertTokenValid(self::TOKEN);
+			self::fail('assertTokenValid accepted an expired token');
+		} catch (PublicShareExpiredException) {
+			// expected
+		}
+		$this->expectException(PublicShareExpiredException::class);
+		$this->service->getPublicBoard(self::TOKEN);
 	}
 
 	// ── public read (unauthenticated) ──────────────────────────────────────

@@ -95,10 +95,27 @@ use OCP\Security\ISecureRandom;
  *    no mention to fix.
  *  - An unknown/disabled/rotated/expired token raises DoesNotExistException,
  *    which the controller maps to a throttled 404 (no oracle beyond the throttle,
- *    and no distinction between "wrong token" and "disabled board").
+ *    and no distinction between "wrong token" and "disabled board"). The ONE
+ *    refinement (#10466): an EXPIRED link raises the
+ *    {@see PublicShareExpiredException} subclass, so the HTML page route can say
+ *    "expired" rather than leaving a legitimate recipient to re-check the URL.
+ *    Still a throttled 404, still one uniform answer on the JSON payload route,
+ *    and only reachable by presenting the board's real current token.
+ *  - The expiry itself is MANAGE-only ({@see self::setExpiry()}) and can only ever
+ *    narrow a link's life, never extend a link that already stopped resolving.
  */
 class PublicShareService {
 	private const TOKEN_LENGTH = 64;
+
+	/**
+	 * Upper bound on a stored expiry, in unix SECONDS: 9999-12-31T23:59:59Z.
+	 *
+	 * Not a security control - an expiry can only ever NARROW access, so a silly
+	 * far-future value is harmless - but a sanity bound keeps a fat-fingered
+	 * milliseconds-instead-of-seconds value (the classic client bug) out of a
+	 * BIGINT column where it would silently read back as "never, practically".
+	 */
+	private const MAX_EXPIRES_AT = 253402300799;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -192,6 +209,93 @@ class PublicShareService {
 	}
 
 	/**
+	 * Sets (or clears) the public link's expiry instant. Requires MANAGE, exactly
+	 * like every other public-link operation - minting, rotating, revoking and the
+	 * comments opt-in all go through the same `assertPermission(..., MANAGE)` gate,
+	 * and this one is no different.
+	 *
+	 * `$expiresAt` is an ABSOLUTE unix timestamp in SECONDS - the instant the link
+	 * stops resolving. This service does NO timezone arithmetic and stores no
+	 * calendar day: turning "expires on the 31st" into an instant is the caller's
+	 * job, because only the caller knows whose day it is (the UI resolves the picked
+	 * date to the end of that day in the BROWSER's zone, so the owner setting the
+	 * expiry gets their own midnight, not the server's). Keeping the stored value a
+	 * bare instant is what makes the boundary unambiguous for every reader.
+	 *
+	 * `null` (and, defensively, any value <= 0) clears the expiry - the "never"
+	 * state, matching how the column ships and how {@see self::disable()} resets it.
+	 *
+	 * A timestamp in the PAST is accepted on purpose: it is the "revoke as of"
+	 * action, and an expiry can only ever narrow access, never widen it. Independent
+	 * of enable/disable, like the comments opt-in: it can be pre-set, it survives a
+	 * rotate, and disabling the link clears it along with the token.
+	 *
+	 * A value that is neither null nor a whole number is REJECTED rather than read
+	 * as "never": clearing is an explicit action, and a parse failure that silently
+	 * leaves a public link open is the wrong way for this to fail.
+	 *
+	 * @param mixed $expiresAt unix timestamp in seconds, or null/0 to never expire
+	 * @return array{enabled: bool, token: ?string, url: ?string, expiresAt: ?int, commentsEnabled: bool}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not manage the board
+	 * @throws InvalidInputException if the timestamp is malformed or out of range
+	 */
+	public function setExpiry(int $boardId, mixed $expiresAt, string $actorUid): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+
+		$next = $this->normalizeExpiry($this->parseExpiry($expiresAt));
+		if ($next !== null && $next > self::MAX_EXPIRES_AT) {
+			throw new InvalidInputException('Expiry timestamp is out of range');
+		}
+
+		// Rows written before this field had a UI can hold 0 rather than NULL, and
+		// both mean "never" to the enforcement check below - so normalise the CURRENT
+		// value too, or clearing an already-cleared expiry would write on every call.
+		if ($this->normalizeExpiry($board->getPublicShareExpiresAt()) !== $next) {
+			$board->setPublicShareExpiresAt($next);
+			$this->boardMapper->update($board);
+		}
+
+		return $this->configPayload($board);
+	}
+
+	/**
+	 * A request's raw `expiresAt` as an int, or null when it is genuinely absent.
+	 *
+	 * The distinction this draws is the point: `null` (absent / JSON null) is an
+	 * explicit "clear the expiry", but anything ELSE that is not a whole number is
+	 * a malformed request and must NOT be laundered into a clear. A declared `?int`
+	 * controller param would have cast `'garbage'` to 0 and answered 200 while
+	 * REMOVING the expiry from a live public link - a parse failure resolving
+	 * toward more exposure. Numeric strings are accepted because an OCS/form client
+	 * legitimately sends them.
+	 *
+	 * @throws InvalidInputException if the value is present but not a whole number
+	 */
+	private function parseExpiry(mixed $expiresAt): ?int {
+		if ($expiresAt === null || $expiresAt === '') {
+			return null;
+		}
+		if (is_int($expiresAt)) {
+			return $expiresAt;
+		}
+		if (is_string($expiresAt) && preg_match('/^-?\d{1,19}$/', $expiresAt) === 1) {
+			return (int)$expiresAt;
+		}
+		throw new InvalidInputException('Expiry must be a unix timestamp in seconds, or null');
+	}
+
+	/**
+	 * The stored "no expiry" state, spelled one way: NULL. The column has always
+	 * allowed 0 to mean the same thing, and both enforcement points treat it that
+	 * way ({@see self::getPublicBoard()}, {@see self::assertTokenValid()}).
+	 */
+	private function normalizeExpiry(?int $expiresAt): ?int {
+		return ($expiresAt === null || $expiresAt <= 0) ? null : $expiresAt;
+	}
+
+	/**
 	 * The STRIPPED, read-only public snapshot of the board a token points at.
 	 * This is the ONLY method that runs without a session, so it is deliberately
 	 * conservative: it builds its own narrow payload and never reads comments (until
@@ -228,9 +332,11 @@ class PublicShareService {
 		if (($board->getPublicShareToken() ?? '') === '') {
 			throw new DoesNotExistException('Public share is disabled');
 		}
-		$expiresAt = $board->getPublicShareExpiresAt();
-		if ($expiresAt !== null && $expiresAt > 0 && $expiresAt <= time()) {
-			throw new DoesNotExistException('Public share has expired');
+		if ($this->hasExpired($board)) {
+			// A SUBCLASS of DoesNotExistException, so this endpoint's caller still
+			// answers one uniform, throttled 404 - only the HTML page route tells the
+			// visitor why. See {@see PublicShareExpiredException}.
+			throw new PublicShareExpiredException('Public share has expired');
 		}
 
 		$boardId = (int)$board->getId();
@@ -760,11 +866,27 @@ class PublicShareService {
 		if (($board->getPublicShareToken() ?? '') === '') {
 			throw new DoesNotExistException('Public share is disabled');
 		}
-		$expiresAt = $board->getPublicShareExpiresAt();
-		if ($expiresAt !== null && $expiresAt > 0 && $expiresAt <= time()) {
-			throw new DoesNotExistException('Public share has expired');
+		if ($this->hasExpired($board)) {
+			throw new PublicShareExpiredException('Public share has expired');
 		}
 		return $board;
+	}
+
+	/**
+	 * Whether the board's public link has passed its expiry instant.
+	 *
+	 * The comparison is between two ABSOLUTE instants - the stored unix timestamp
+	 * and `time()` - so no timezone is involved on this side at all, on the server
+	 * or anywhere else. NULL and 0 both mean "never".
+	 *
+	 * The boundary is `<=`: the link is dead AT the stored second, not one second
+	 * later. The UI resolves a picked calendar day to 23:59:59 in the setter's own
+	 * zone, so "expires on the 31st" means the link survives every second of the
+	 * 31st there and dies as that day ends.
+	 */
+	private function hasExpired(Board $board): bool {
+		$expiresAt = $this->normalizeExpiry($board->getPublicShareExpiresAt());
+		return $expiresAt !== null && $expiresAt <= time();
 	}
 
 	/**
@@ -777,7 +899,10 @@ class PublicShareService {
 			'enabled' => $enabled,
 			'token' => $enabled ? $token : null,
 			'url' => $enabled ? $this->publicUrl((string)$token) : null,
-			'expiresAt' => $board->getPublicShareExpiresAt(),
+			// Normalised, so "never" is ONE value on the wire (null) rather than two:
+			// the column has always allowed 0 as well, and a client that only checks
+			// for null would otherwise render a 1970 expiry on such a row.
+			'expiresAt' => $this->normalizeExpiry($board->getPublicShareExpiresAt()),
 			// The opt-in state rides the MANAGE config so the settings UI can render
 			// the toggle; it persists independent of enable/disable.
 			'commentsEnabled' => $board->getPublicShareComments() ?? false,

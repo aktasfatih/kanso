@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nessuno —"
 
-#: src/components/BoardSettingsModal.vue:4404
+#: src/components/BoardSettingsModal.vue:4502
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n volta"
@@ -1276,6 +1276,10 @@ msgstr ""
 msgid "Chore"
 msgstr "Manutenzione"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Clear"
+msgstr ""
+
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Clear due date"
@@ -1597,6 +1601,10 @@ msgid "Could not set up the starter board."
 msgstr "Impossibile creare la bacheca iniziale."
 
 #: src/components/BoardSettingsModal.vue
+msgid "Could not update the public link expiry."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link options."
 msgstr "Impossibile aggiornare le opzioni del collegamento pubblico."
 
@@ -1737,7 +1745,7 @@ msgstr "Zona pericolosa"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:2110
+#: src/components/BoardSettingsModal.vue:2145
 #: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
@@ -2235,25 +2243,25 @@ msgstr "ogni"
 msgid "Every"
 msgstr "Ogni"
 
-#: src/components/BoardSettingsModal.vue:4384
+#: src/components/BoardSettingsModal.vue:4482
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Ogni giorno"
 msgstr[1] "Ogni %n giorni"
 
-#: src/components/BoardSettingsModal.vue:4394
+#: src/components/BoardSettingsModal.vue:4492
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Ogni mese"
 msgstr[1] "Ogni %n mesi"
 
-#: src/components/BoardSettingsModal.vue:4386
+#: src/components/BoardSettingsModal.vue:4484
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Ogni settimana"
 msgstr[1] "Ogni %n settimane"
 
-#: src/components/BoardSettingsModal.vue:4396
+#: src/components/BoardSettingsModal.vue:4494
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Ogni anno"
@@ -3295,6 +3303,14 @@ msgstr "Collegamento attivo"
 msgid "Link contact"
 msgstr "Collega un contatto"
 
+#: templates/public-expired.php
+msgid "Link expired"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Link expires on"
+msgstr ""
+
 #: templates/public-notfound.php
 msgid "Link not available"
 msgstr "Collegamento non disponibile"
@@ -3421,7 +3437,7 @@ msgstr "Modalità"
 msgid "Mon"
 msgstr "Lun"
 
-#: src/components/BoardSettingsModal.vue:2112
+#: src/components/BoardSettingsModal.vue:2147
 #: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
@@ -3758,6 +3774,10 @@ msgstr "Nessuna descrizione."
 #: src/views/MyCardsView.vue
 msgid "No due date"
 msgstr "Senza scadenza"
+
+#: src/components/BoardSettingsModal.vue
+msgid "No expiry — the link works until you disable or rotate it."
+msgstr ""
 
 #: src/components/BoardTileMenu.vue
 msgid "No folders yet"
@@ -5071,6 +5091,10 @@ msgid "That card is not on this board any more."
 msgstr "Questa scheda non è più in questa bacheca."
 
 #: src/components/BoardSettingsModal.vue
+msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "Il collegamento alla chat deve essere un URL http:// o https://."
 
@@ -5100,6 +5124,10 @@ msgstr "La lista di app consentite di Guests è disattivata: gli ospiti possono 
 
 #: src/views/BoardList.vue
 msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -5142,9 +5170,17 @@ msgstr "Questa scheda non esiste più: potrebbe essere stata eliminata."
 msgid "This card powers a recurring series. Delete just this card, or also stop the recurrence?"
 msgstr "Questa scheda alimenta una serie ricorrente. Eliminare solo questa scheda oppure interrompere anche la ricorrenza?"
 
+#: src/components/BoardSettingsModal.vue
+msgid "This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
 msgstr "Questo collegamento non è valido oppure è stato disattivato."
+
+#: templates/public-expired.php
+msgid "This public board link has expired. Ask whoever shared the board for a new link."
+msgstr ""
 
 #: templates/public-notfound.php
 msgid "This public board link is invalid or has been disabled."
@@ -5485,7 +5521,7 @@ msgstr "Webhook attivo"
 msgid "Wed"
 msgstr "Mer"
 
-#: src/components/BoardSettingsModal.vue:2111
+#: src/components/BoardSettingsModal.vue:2146
 #: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
@@ -5566,7 +5602,7 @@ msgstr "Scrivi una risposta…"
 msgid "wrote"
 msgstr "ha scritto"
 
-#: src/components/BoardSettingsModal.vue:2113
+#: src/components/BoardSettingsModal.vue:2148
 #: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"

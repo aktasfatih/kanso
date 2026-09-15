@@ -1126,6 +1126,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										{{ t('kanso', 'Copy') }}
 									</NcButton>
 								</div>
+								<!-- Link expiry (#10466). A calendar day, resolved to the end
+								     of that day in THIS browser's timezone — so the boundary
+								     belongs to whoever sets it, and the hint says so out loud
+								     rather than leaving an off-by-a-day to support. -->
+								<label class="github-webhook__label" :for="`public-share-expiry-${boardId}`">
+									{{ t('kanso', 'Link expires on') }}
+								</label>
+								<div class="github-webhook__row">
+									<input
+										:id="`public-share-expiry-${boardId}`"
+										v-model="publicShareExpiryInput"
+										type="date"
+										class="github-webhook__input"
+										:disabled="publicShareBusy"
+										@change="handlePublicShareExpiryChange">
+									<NcButton
+										:disabled="publicShareBusy || !publicShare.expiresAt"
+										@click="clearPublicShareExpiry">
+										{{ t('kanso', 'Clear') }}
+									</NcButton>
+								</div>
+								<!-- Say the boundary OUT LOUD, both ways: the day belongs to the
+								     time zone it was set from, and the exact instant is spelled
+								     out in the reader's own zone. A second manager elsewhere
+								     would otherwise see a day one off from what was typed and
+								     have no way to tell which of them is right. -->
+								<p class="github-webhook__hint">
+									{{ publicShare.expiresAt
+										? t('kanso', 'The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry.', { when: publicShareExpiryExact })
+										: t('kanso', 'No expiry — the link works until you disable or rotate it.') }}
+								</p>
+								<p v-if="publicShareExpired" class="label-settings__error">
+									{{ t('kanso', 'This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it.') }}
+								</p>
+
 								<div class="github-webhook__actions">
 									<NcButton :disabled="publicShareBusy" @click="handleRotatePublicShare">
 										{{ t('kanso', 'Rotate link') }}
@@ -2483,6 +2518,7 @@ import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { parseRecurRrule, buildRecurRrule, isCustomRrule } from '../utils/rrule.js'
+import { exactTimeTitle, expiryHasPassed, expiryInputValue, expiryTimestampFromInput } from '../utils/dateDisplay.js'
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
@@ -2504,6 +2540,7 @@ import {
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
 	setPublicShareComments as apiSetPublicShareComments,
+	setPublicShareExpiry as apiSetPublicShareExpiry,
 	fetchCalendarFeedConfig,
 	enableCalendarFeed as apiEnableCalendarFeed,
 	disableCalendarFeed as apiDisableCalendarFeed,
@@ -2963,9 +3000,30 @@ async function handleDisableForgejo() {
 }
 
 // ── Public / read-only share link (MANAGE) ───────────────────────────────────
-const publicShare = ref({ enabled: false, url: null, commentsEnabled: false })
+const publicShare = ref({ enabled: false, url: null, commentsEnabled: false, expiresAt: null })
 const publicShareError = ref('')
 const publicShareBusy = ref(false)
+
+// Link expiry (#10466). The picker holds a calendar DAY; the wire value is the
+// absolute instant that day ENDS in this browser's timezone, which is what makes
+// "expires on the 31st" mean the same thing to the person who typed it and to the
+// server comparing timestamps. Kept as its own ref (not a computed writer) so a
+// rejected request can leave the field showing what the server actually stored.
+const publicShareExpiryInput = ref('')
+
+// Whether the stored expiry has already passed — the link is live in the config
+// but dead to visitors, which the owner needs to be told outright.
+const publicShareExpired = computed(() => expiryHasPassed(publicShare.value.expiresAt))
+
+// The stored instant, spelled out in the READER's locale and zone. The picker
+// can only show a calendar day, and a day read back in another zone is not
+// necessarily the day that was typed — so the unambiguous value is printed next
+// to it rather than left for anyone to work out.
+const publicShareExpiryExact = computed(() => exactTimeTitle(publicShare.value.expiresAt))
+
+function syncPublicShareExpiryInput() {
+	publicShareExpiryInput.value = expiryInputValue(publicShare.value.expiresAt)
+}
 
 // The "what's exposed" note reflects the enabled opt-in toggles (#3949): with
 // comments OFF the person-free baseline holds; with comments ON the note says so.
@@ -2980,6 +3038,7 @@ async function loadPublicShareConfig() {
 	if (!canManage.value) return
 	try {
 		publicShare.value = await fetchPublicShareConfig(props.boardId)
+		syncPublicShareExpiryInput()
 		// An active public link should be visible without a click.
 		if (publicShare.value.enabled) {
 			automationGroups.value.publicLink = true
@@ -3002,6 +3061,9 @@ async function enablePublicLink() {
 	publicShareBusy.value = true
 	try {
 		publicShare.value = await apiEnablePublicShare(props.boardId)
+		// A rotate keeps the expiry (it is a property of the share, not of the
+		// token), so re-read it from the response rather than assuming.
+		syncPublicShareExpiryInput()
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not enable the public link.')
 	} finally {
@@ -3019,7 +3081,9 @@ async function disablePublicLink() {
 	publicShareBusy.value = true
 	try {
 		await apiDisablePublicShare(props.boardId)
-		publicShare.value = { enabled: false, url: null, commentsEnabled: false }
+		// Disabling clears the expiry server-side too, so mirror that locally.
+		publicShare.value = { enabled: false, url: null, commentsEnabled: false, expiresAt: null }
+		syncPublicShareExpiryInput()
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not disable the public link.')
 	} finally {
@@ -3033,11 +3097,45 @@ async function togglePublicShareComments(checked) {
 	publicShareBusy.value = true
 	try {
 		publicShare.value = await apiSetPublicShareComments(props.boardId, checked)
+		syncPublicShareExpiryInput()
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not update the public link options.')
 	} finally {
 		publicShareBusy.value = false
 	}
+}
+
+// Set / change / clear the link's expiry (#10466). An empty field clears it.
+//
+// The picked DAY becomes the instant that day ends in THIS browser's timezone
+// (expiryTimestampFromInput), so the owner's "the 31st" is their own 31st. On
+// failure the field is resynced from the last config the server confirmed, so it
+// never shows a date that was not actually stored.
+async function handlePublicShareExpiryChange() {
+	publicShareError.value = ''
+	const expiresAt = expiryTimestampFromInput(publicShareExpiryInput.value)
+	if (expiresAt === undefined) {
+		// Unreadable is NOT "no expiry": sending null here would clear a live
+		// expiry and leave the link open, which is the wrong way for this to fail.
+		// (Reachable from the real control — a date input accepts years past 9999.)
+		publicShareError.value = t('kanso', 'That is not a date we can use. Pick a day, or clear the field for no expiry.')
+		syncPublicShareExpiryInput()
+		return
+	}
+	publicShareBusy.value = true
+	try {
+		publicShare.value = await apiSetPublicShareExpiry(props.boardId, expiresAt)
+	} catch (e) {
+		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not update the public link expiry.')
+	} finally {
+		syncPublicShareExpiryInput()
+		publicShareBusy.value = false
+	}
+}
+
+async function clearPublicShareExpiry() {
+	publicShareExpiryInput.value = ''
+	await handlePublicShareExpiryChange()
 }
 
 // ── Calendar feed (read-only ICS of card due dates) (#3541) ───────────────────

@@ -524,6 +524,12 @@ export const disablePublicShare = (boardId) =>
 export const setPublicShareComments = (boardId, enabled) =>
 	axios.put(url(`/api/boards/${boardId}/public-share/comments`), { enabled }).then((r) => r.data)
 
+// Set or clear the public link's expiry (#10466). `expiresAt` is an ABSOLUTE unix
+// timestamp in SECONDS — the caller resolves the picked day to an instant in the
+// viewer's own timezone (src/utils/dateDisplay.js) — and null means "never".
+export const setPublicShareExpiry = (boardId, expiresAt) =>
+	axios.put(url(`/api/boards/${boardId}/public-share/expiry`), { expiresAt }).then((r) => r.data)
+
 // Read-only iCal / ICS feed of card due dates (board-level, MANAGE)
 export const fetchCalendarFeedConfig = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/calendar-feed`)).then((r) => r.data)

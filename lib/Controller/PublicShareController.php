@@ -9,6 +9,7 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\AppInfo\Application;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\PublicShareExpiredException;
 use OCA\Kanso\Service\PublicShareService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -33,7 +34,9 @@ use OCP\Util;
  *
  * Both public endpoints are `#[PublicPage] #[NoCSRFRequired]` with
  * `#[BruteForceProtection]`; an unknown/disabled/rotated/expired token is a
- * throttled 404 so the token space can't be enumerated. The config endpoints are
+ * throttled 404 so the token space can't be enumerated. The one distinction the
+ * page route draws (#10466) is EXPIRED vs everything-else, and only in the
+ * rendered message - status and throttle are identical. The config endpoints are
  * `#[NoAdminRequired]` (a normal authenticated route) and are gated by MANAGE in
  * the service - they are NEVER public.
  */
@@ -95,6 +98,31 @@ class PublicShareController extends Controller {
 		});
 	}
 
+	/**
+	 * Sets (or clears) the public link's expiry (#10466). MANAGE-only, like every
+	 * other public-link operation.
+	 *
+	 * `expiresAt` is an ABSOLUTE unix timestamp in SECONDS; `null` clears it. The
+	 * client resolves the picked calendar day to the end of that day in the
+	 * BROWSER's timezone, so the boundary belongs to whoever set it - the server
+	 * only ever compares two instants.
+	 *
+	 * Declared `mixed`, NOT `?int`, on purpose: the AppFramework dispatcher casts
+	 * a declared `int` param, and `(int)'garbage'` is 0, which this service reads
+	 * as "no expiry". A malformed request would then answer 200 and CLEAR a live
+	 * expiry - a parse failure that leaves a public link open. Taking the raw value
+	 * and validating it in the service ({@see PublicShareService::setExpiry()})
+	 * makes that a 400 instead.
+	 */
+	#[NoAdminRequired]
+	public function setExpiry(int $id, mixed $expiresAt = null): JSONResponse {
+		return $this->respond(function () use ($id, $expiresAt): JSONResponse {
+			return new JSONResponse(
+				$this->publicShareService->setExpiry($id, $expiresAt, $this->currentUserId())
+			);
+		});
+	}
+
 	// ── Public read-only (unauthenticated) ────────────────────────────────────
 
 	/**
@@ -132,6 +160,25 @@ class PublicShareController extends Controller {
 			// unauthenticated page route can't be used to amplify board queries;
 			// the client fetches the real payload via data() once the shell loads.
 			$board = $this->publicShareService->assertTokenValid($token);
+		} catch (PublicShareExpiredException) {
+			// #10466: an expired link used to be indistinguishable from a wrong URL,
+			// so a recipient whose link simply ran out would go back to the owner
+			// asking them to re-check the address. Name the cause instead. Reaching
+			// this page requires the board's real, current token (a rotated or
+			// disabled one resolves to nothing and still gets the generic page), so
+			// it tells nobody anything they were not already handed - but keep the
+			// 404 status and the throttle, unchanged, so the token space stays as
+			// un-enumerable as it was. MUST stay above the DoesNotExistException arm:
+			// it is a subclass, and PHP matches catch arms in order.
+			$response = new TemplateResponse(
+				Application::APP_ID,
+				'public-expired',
+				[],
+				TemplateResponse::RENDER_AS_GUEST
+			);
+			$response->setStatus(Http::STATUS_NOT_FOUND);
+			$response->throttle(['action' => 'kansoPublicShare']);
+			return $response;
 		} catch (DoesNotExistException) {
 			$response = new TemplateResponse(
 				Application::APP_ID,

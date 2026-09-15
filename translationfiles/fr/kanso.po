@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— aucun —"
 
-#: src/components/BoardSettingsModal.vue:4404
+#: src/components/BoardSettingsModal.vue:4502
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n fois"
@@ -1276,6 +1276,10 @@ msgstr ""
 msgid "Chore"
 msgstr "Maintenance"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Clear"
+msgstr ""
+
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
 msgid "Clear due date"
@@ -1597,6 +1601,10 @@ msgid "Could not set up the starter board."
 msgstr "Impossible de créer le tableau de démarrage."
 
 #: src/components/BoardSettingsModal.vue
+msgid "Could not update the public link expiry."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link options."
 msgstr "Impossible de mettre à jour les options du lien public."
 
@@ -1737,7 +1745,7 @@ msgstr "Zone de danger"
 msgid "Date"
 msgstr "Date"
 
-#: src/components/BoardSettingsModal.vue:2110
+#: src/components/BoardSettingsModal.vue:2145
 #: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
@@ -2235,25 +2243,25 @@ msgstr "tous les"
 msgid "Every"
 msgstr "Tous les"
 
-#: src/components/BoardSettingsModal.vue:4384
+#: src/components/BoardSettingsModal.vue:4482
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Tous les jours"
 msgstr[1] "Tous les %n jours"
 
-#: src/components/BoardSettingsModal.vue:4394
+#: src/components/BoardSettingsModal.vue:4492
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Tous les mois"
 msgstr[1] "Tous les %n mois"
 
-#: src/components/BoardSettingsModal.vue:4386
+#: src/components/BoardSettingsModal.vue:4484
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Toutes les semaines"
 msgstr[1] "Toutes les %n semaines"
 
-#: src/components/BoardSettingsModal.vue:4396
+#: src/components/BoardSettingsModal.vue:4494
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Tous les ans"
@@ -3295,6 +3303,14 @@ msgstr "Lien actif"
 msgid "Link contact"
 msgstr "Lier un contact"
 
+#: templates/public-expired.php
+msgid "Link expired"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Link expires on"
+msgstr ""
+
 #: templates/public-notfound.php
 msgid "Link not available"
 msgstr "Lien non disponible"
@@ -3421,7 +3437,7 @@ msgstr "Mode"
 msgid "Mon"
 msgstr "Lun"
 
-#: src/components/BoardSettingsModal.vue:2112
+#: src/components/BoardSettingsModal.vue:2147
 #: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
@@ -3758,6 +3774,10 @@ msgstr "Aucune description."
 #: src/views/MyCardsView.vue
 msgid "No due date"
 msgstr "Sans date d'échéance"
+
+#: src/components/BoardSettingsModal.vue
+msgid "No expiry — the link works until you disable or rotate it."
+msgstr ""
 
 #: src/components/BoardTileMenu.vue
 msgid "No folders yet"
@@ -5071,6 +5091,10 @@ msgid "That card is not on this board any more."
 msgstr "Cette carte n'est plus sur ce tableau."
 
 #: src/components/BoardSettingsModal.vue
+msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "Le lien de discussion doit être une URL http:// ou https://."
 
@@ -5100,6 +5124,10 @@ msgstr "La liste blanche de l'application Guests est désactivée — les invit�
 
 #: src/views/BoardList.vue
 msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -5142,9 +5170,17 @@ msgstr "Cette carte n'existe plus — elle a peut-être été supprimée."
 msgid "This card powers a recurring series. Delete just this card, or also stop the recurrence?"
 msgstr "Cette carte alimente une série récurrente. Supprimer uniquement cette carte, ou aussi arrêter la récurrence ?"
 
+#: src/components/BoardSettingsModal.vue
+msgid "This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
 msgstr "Ce lien est invalide ou a été désactivé."
+
+#: templates/public-expired.php
+msgid "This public board link has expired. Ask whoever shared the board for a new link."
+msgstr ""
 
 #: templates/public-notfound.php
 msgid "This public board link is invalid or has been disabled."
@@ -5485,7 +5521,7 @@ msgstr "Webhook actif"
 msgid "Wed"
 msgstr "Mer"
 
-#: src/components/BoardSettingsModal.vue:2111
+#: src/components/BoardSettingsModal.vue:2146
 #: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
@@ -5566,7 +5602,7 @@ msgstr "Écrivez une réponse…"
 msgid "wrote"
 msgstr "a écrit"
 
-#: src/components/BoardSettingsModal.vue:2113
+#: src/components/BoardSettingsModal.vue:2148
 #: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"
