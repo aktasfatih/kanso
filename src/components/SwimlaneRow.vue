@@ -16,8 +16,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Stacks row for this lane. Each StackColumn keeps its own TanStack
 		     Virtual instance, so virtualization is preserved per lane per column.
-		     Stack drag/rename/settings are intentionally omitted inside lanes —
-		     lanes are a view over a shared board; only card DnD survives here. -->
+
+		     This binding list is the FULL StackColumn prop surface minus a set of
+		     deliberate omissions — a column rendered in a lane must not silently
+		     lose card-level affordances just because nobody re-bound them (#10476:
+		     card templates were unreachable in swimlane mode for exactly that
+		     reason). When StackColumn gains a prop, decide here, explicitly,
+		     whether a lane gets it, and if not say why below.
+
+		     Deliberately NOT forwarded:
+		     - onRenameStack / onDeleteStack / onRestoreStack / onSetRole /
+		       onSetWip / onSetColor — stack-level edits. A stack is one board
+		       column rendered once per lane, so these would appear N times for a
+		       single column and edit shared state from a lane-local affordance.
+		       Column structure is edited on the flat board. (Stack drag is
+		       likewise disabled in lanes, via the laneKey guard in StackColumn.)
+		     - onArchiveAllCards / onUnarchiveCards / filterActive — the archive-all
+		       entry names the count it will archive ("Archive 3 cards"), and in a
+		       lane that count is the lane's slice, not the column's. Offering a
+		       destructive bulk action whose label reads as the whole column would
+		       be worse than not offering it; a lane-aware wording is its own piece
+		       of work. filterActive only feeds that wording, so it follows.
+		     - selectionMode / selectedIds / onCardSelect — multi-select in
+		       swimlanes is a larger separate piece (the selection is board-wide
+		       while lanes slice it), so lanes stay single-select for now. -->
 		<div class="swimlane__stacks">
 			<StackColumn
 				v-for="stack in stacks"
@@ -29,7 +51,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:board-prefix="boardPrefix"
 				:lane-key="lane.key"
 				:compact="compact"
+				:new-cards-on-top="newCardsOnTop"
 				:on-create-card="onCreateCard"
+				:on-fetch-templates="onFetchTemplates"
+				:on-create-from-template="onCreateFromTemplate"
+				:on-manage-templates="onManageTemplates"
 				:on-card-focus="onCardFocus"
 				:on-card-hover="onCardHover"
 				:collapsed="collapsedStacks.has(stack.id)"
@@ -74,6 +100,32 @@ const props = defineProps({
 	 * its composer rather than offering a create the server would reject.
 	 */
 	onCreateCard: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Board's "new cards on top" preference — forwarded because the inline
+	 * composer IS rendered in lanes, and it decides the create order of a
+	 * multi-line paste so the pasted lines read top-to-bottom.
+	 */
+	newCardsOnTop: {
+		type: Boolean,
+		default: false,
+	},
+	/**
+	 * Card-template wiring (#3409), forwarded so the composer's "From template"
+	 * picker and its "Manage templates…" entry exist in swimlane mode too — they
+	 * are card-level affordances, and grouping a board should not remove them.
+	 */
+	onFetchTemplates: {
+		type: Function,
+		default: null,
+	},
+	onCreateFromTemplate: {
+		type: Function,
+		default: null,
+	},
+	onManageTemplates: {
 		type: Function,
 		default: null,
 	},
