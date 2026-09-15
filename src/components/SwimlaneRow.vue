@@ -37,9 +37,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		       destructive bulk action whose label reads as the whole column would
 		       be worse than not offering it; a lane-aware wording is its own piece
 		       of work. filterActive only feeds that wording, so it follows.
-		     - selectionMode / selectedIds / onCardSelect — multi-select in
-		       swimlanes is a larger separate piece (the selection is board-wide
-		       while lanes slice it), so lanes stay single-select for now. -->
+		     - selectionMode / selectedIds / onCardSelect / onSelectAllCards —
+		       multi-select in swimlanes is a larger separate piece (the selection
+		       is board-wide while lanes slice it), so lanes stay single-select for
+		       now. onSelectAllCards (#10485) arrived after this audit was written
+		       and belongs to the same omission: it turns multi-select ON and adds
+		       the column's cards, which from a lane would mean a lane's slice. -->
 		<div class="swimlane__stacks">
 			<StackColumn
 				v-for="stack in stacks"

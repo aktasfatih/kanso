@@ -3422,6 +3422,7 @@ msgstr "Управление"
 msgid "Manage card templates"
 msgstr "Управление шаблонами карточек"
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Manage templates…"
 msgstr "Управление шаблонами…"

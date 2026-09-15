@@ -3391,6 +3391,7 @@ msgstr "Yönet"
 msgid "Manage card templates"
 msgstr "Kart şablonlarını yönet"
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Manage templates…"
 msgstr "Şablonları yönet…"

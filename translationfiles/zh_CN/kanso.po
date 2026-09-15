@@ -3360,6 +3360,7 @@ msgstr "管理"
 msgid "Manage card templates"
 msgstr "管理卡片模板"
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Manage templates…"
 msgstr "管理模板…"

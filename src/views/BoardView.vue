@@ -446,7 +446,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- List view - a virtualized, stack-grouped table over the same filtered
-		     cards. Read-oriented: rows open the card modal. -->
+		     cards. Read-oriented: rows open the card modal.
+
+		     This binding list is the FULL BoardListView prop surface minus the
+		     deliberate omissions named below — the list re-implements the column
+		     composer, so a callback nobody re-binds here silently removes an
+		     affordance the list already draws the UI for (#10503: the template
+		     picker rendered while "Manage templates…" did not, because only two of
+		     the three template callbacks were passed). When BoardListView gains a
+		     prop, decide here, explicitly, whether the board's list view gets it,
+		     and if not say why.
+
+		     Deliberately NOT passed:
+		     - groups — the cross-board Views row model (ViewPage.vue), where rows
+		       are arbitrary groups with no stack behind them. A board drives the
+		       list from stacks + cardsByStack instead, and passing both would make
+		       groups win and drop every per-stack affordance.
+		     - @open — only a surface that owns its own card-detail overlay handles
+		       it (again ViewPage). Inside a board, a row opens the card-modal child
+		       route, which is the deep-linkable behaviour we want here. -->
 		<BoardListView
 			v-if="viewMode === 'list' && boardData"
 			ref="listViewRef"
@@ -459,6 +477,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:on-create-card="canEditBoard ? handleCreateCard : null"
 			:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
 			:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
+			:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
 			:on-create-stack="canEditBoard ? handleCreateStack : null"
 			:sort-mode="sortMode" />
 

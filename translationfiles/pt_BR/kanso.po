@@ -3391,6 +3391,7 @@ msgstr "Gerenciar"
 msgid "Manage card templates"
 msgstr "Gerenciar modelos de cartão"
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Manage templates…"
 msgstr "Gerenciar modelos…"
