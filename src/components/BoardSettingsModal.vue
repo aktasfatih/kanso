@@ -4837,6 +4837,23 @@ async function doDeleteAutoRule(rule) {
 </script>
 
 <style scoped>
+/* ── General pane rhythm ──────────────────────────────────────────────────── */
+/* Without these the pane is one undifferentiated block: every hint rendered at
+   body size in the default text colour, indistinguishable from the setting it
+   explains. Keep each hint tight to its own control and put the breathing room
+   after it, so a setting + its explanation read as one group. */
+.board-settings__general {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.board-settings__general-hint {
+	margin: 0 0 10px;
+	font-size: 0.8125rem;
+	line-height: 1.35;
+	color: var(--color-text-maxcontrast);
+}
+
 /* ── Card ID prefix field ─────────────────────────────────────────────────── */
 .board-settings__prefix-label {
 	display: block;
@@ -4854,6 +4871,18 @@ async function doDeleteAutoRule(rule) {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	font-family: var(--font-face-monospace, monospace);
+}
+
+/* The board name reuses the prefix row's layout, but it is free-form text up to
+   100 characters — so it takes the whole row and drops the prefix field's
+   fixed width, uppercasing and monospace. */
+.board-settings__name-input {
+	flex: 1;
+	width: auto;
+	min-width: 0;
+	text-transform: none;
+	letter-spacing: normal;
+	font-family: inherit;
 }
 
 /* ── Project chat link (#3748) ────────────────────────────────────────────── */
