@@ -34,15 +34,44 @@ afterwards. The pins support Nextcloud **34** only, so on a stack booted with
 `NC_VERSION=30..33` the script skips itself and those two specs stay red —
 that's expected, not a regression.
 
-One more spec depends on an optional app: [`realtime.spec.js`](./realtime.spec.js)'s
-push test needs `notify_push`, which `dev/setup.sh` side-loads from a pinned
-release tarball (falling back to the appstore only when that download fails).
-The pin has to match the `icewind1991/notify_push` image tag in
-`dev/docker-compose.yml` — `notify_push:self-test` compares the two versions and
-fails on a skew. The install is best-effort — if the boot printed a
-`WARNING: could not set up notify_push`, push is unavailable and the test **fails
-rather than skips**. Run the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and
-exercise only the delta-poll fallback.
+## Realtime push (`notify_push`)
+
+[`realtime.spec.js`](./realtime.spec.js)'s push test needs `notify_push`, which
+`dev/setup.sh` side-loads from a pinned release tarball (falling back to the
+appstore only when that download fails). The pin has to match the
+`icewind1991/notify_push` image tag in `dev/docker-compose.yml` —
+`notify_push:self-test` compares the two versions and fails on a skew. The
+install is best-effort — if the boot printed a `WARNING: could not set up
+notify_push`, push is unavailable and the test **fails rather than skips**. Run
+the suite with `KANSO_SKIP_NOTIFY_PUSH=1` to skip it and exercise only the
+delta-poll fallback.
+
+**Which CI check covers push.** Not this suite. The required `e2e` job sets
+`KANSO_SKIP_NOTIFY_PUSH=1` (a tarball download has no business on the critical
+path of a ~1.5h required check), so the push-positive test **skips there**.
+A separate, smaller `e2e-push` job boots the same stack *with* push and runs
+this one spec; it runs in parallel, so it adds nothing to the `e2e` wall-clock.
+Until that job has a few green runs it is **not** a required check — so a red
+`e2e-push` on a PR is a real signal to read, not a merge blocker.
+
+**"Advertised but dead" is asserted before any spec runs.** Nextcloud advertises
+the notify_push capability from a database row written by `notify_push:setup`
+and never retracts it, so a stack whose daemon died — or whose apache `/push`
+proxy vanished on a container recreate, which is what happened in #10443 — keeps
+telling clients to use push while no frame can arrive. Nothing re-runs
+`notify_push:self-test` on a plain `docker compose up -d`, so
+[`push-health.js`](./push-health.js) runs in Playwright's global setup instead:
+if push is advertised, its advertised websocket endpoint must complete a real
+handshake, or the run aborts with one message naming the cause (404 → the proxy
+is missing from the container; 5xx → the daemon behind it is down). It is silent
+on a stack that simply has no push, which is the supported fallback and what CI's
+`e2e` job runs.
+
+```sh
+npm run check:push                  # same check, standalone, against a booted stack
+KANSO_REQUIRE_NOTIFY_PUSH=1 …       # also fail when push isn't advertised at all
+KANSO_SKIP_PUSH_HEALTHCHECK=1 …     # bypass the check
+```
 
 ## Shared helpers — use these, don't re-roll them
 

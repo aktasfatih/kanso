@@ -232,11 +232,16 @@ fi
 ./install-optional-apps.sh
 
 # --- notify_push (realtime push) ---------------------------------------------
-# Optional: the app falls back to delta-polling without it, and the e2e suite
-# doesn't need realtime. CI sets KANSO_SKIP_NOTIFY_PUSH=1 to skip the whole
-# block (no appstore reachable there anyway); when it isn't set, a failed
-# install only warns — see the guard below. Only wired for postgres (the
-# notify_push service only runs under the postgres profile).
+# Optional: the app falls back to delta-polling without it, and most of the e2e
+# suite doesn't need realtime. CI's big `e2e` job sets KANSO_SKIP_NOTIFY_PUSH=1
+# to skip the whole block, so that a release download is not on the critical
+# path of a ~1.5h required check; the smaller `e2e-push` job deliberately does
+# NOT skip it and runs tests/e2e/realtime.spec.js against a live daemon. (The
+# side-load below needs github.com from the HOST, not an appstore from inside
+# the container — same mechanism as install-optional-apps.sh, which CI already
+# depends on.) When the flag isn't set, a failed install only warns — see the
+# guard below. Only wired for postgres (the notify_push service only runs under
+# the postgres profile).
 #
 # Do NOT make skipping the default to line local timings up with CI: this block
 # is the only place the push path is exercised anywhere, so a skipping default
