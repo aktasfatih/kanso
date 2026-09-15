@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4502
+#: src/components/BoardSettingsModal.vue:4576
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -1770,7 +1770,7 @@ msgstr "Опасная зона"
 msgid "Date"
 msgstr "Дата"
 
-#: src/components/BoardSettingsModal.vue:2145
+#: src/components/BoardSettingsModal.vue:2162
 #: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
@@ -2269,28 +2269,28 @@ msgstr "каждые"
 msgid "Every"
 msgstr "Каждые"
 
-#: src/components/BoardSettingsModal.vue:4482
+#: src/components/BoardSettingsModal.vue:4556
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
 msgstr[1] "Каждые %n дня"
 msgstr[2] "Каждые %n дней"
 
-#: src/components/BoardSettingsModal.vue:4492
+#: src/components/BoardSettingsModal.vue:4566
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4484
+#: src/components/BoardSettingsModal.vue:4558
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4494
+#: src/components/BoardSettingsModal.vue:4568
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -3468,7 +3468,7 @@ msgstr "Режим"
 msgid "Mon"
 msgstr "Пн"
 
-#: src/components/BoardSettingsModal.vue:2147
+#: src/components/BoardSettingsModal.vue:2164
 #: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
@@ -5556,7 +5556,7 @@ msgstr "Webhook активен"
 msgid "Wed"
 msgstr "Ср"
 
-#: src/components/BoardSettingsModal.vue:2146
+#: src/components/BoardSettingsModal.vue:2163
 #: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
@@ -5638,7 +5638,7 @@ msgstr "Напишите ответ…"
 msgid "wrote"
 msgstr "написал"
 
-#: src/components/BoardSettingsModal.vue:2148
+#: src/components/BoardSettingsModal.vue:2165
 #: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"

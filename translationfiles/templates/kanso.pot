@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4502
+#: src/components/BoardSettingsModal.vue:4576
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -1744,7 +1744,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2145
+#: src/components/BoardSettingsModal.vue:2162
 #: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
@@ -2242,25 +2242,25 @@ msgstr ""
 msgid "Every"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4482
+#: src/components/BoardSettingsModal.vue:4556
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4492
+#: src/components/BoardSettingsModal.vue:4566
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4484
+#: src/components/BoardSettingsModal.vue:4558
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4494
+#: src/components/BoardSettingsModal.vue:4568
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3436,7 +3436,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2147
+#: src/components/BoardSettingsModal.vue:2164
 #: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
@@ -5520,7 +5520,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2146
+#: src/components/BoardSettingsModal.vue:2163
 #: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
@@ -5601,7 +5601,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2148
+#: src/components/BoardSettingsModal.vue:2165
 #: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"

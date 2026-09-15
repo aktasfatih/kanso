@@ -198,6 +198,46 @@ class ArchiveServiceTest extends TestCase {
 		self::assertNull($updated->getStackId());
 	}
 
+	/**
+	 * The board-settings edit form sends scope, condition and threshold in a
+	 * single PATCH. Widening to the whole board has to apply *alongside* the
+	 * other two, not instead of them.
+	 */
+	public function testUpdateWidensToWholeBoardAlongsideConditionAndThreshold(): void {
+		$rule = $this->rule(stackId: 5);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->ruleMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		$updated = $this->service->update(3, null, true, ArchiveRule::CONDITION_DONE_AND_AGE, 604800, null, 'alice');
+		self::assertNull($updated->getStackId());
+		self::assertSame(ArchiveRule::CONDITION_DONE_AND_AGE, $updated->getCondition());
+		self::assertSame(604800, $updated->getThresholdSeconds());
+	}
+
+	/**
+	 * Denial path for that same edit: without MANAGE nothing is written and the
+	 * rule keeps the column scope it had.
+	 */
+	public function testWidenToWholeBoardWithoutManageThrows403AndLeavesRuleUntouched(): void {
+		$rule = $this->rule(stackId: 5);
+		$this->ruleMapper->method('find')->with(3)->willReturn($rule);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('assertPermission')
+			->willThrowException(new NotPermittedException());
+		$this->ruleMapper->expects(self::never())->method('update');
+
+		try {
+			$this->service->update(3, null, true, ArchiveRule::CONDITION_DONE_AND_AGE, 604800, null, 'bob');
+			self::fail('Expected NotPermittedException');
+		} catch (NotPermittedException) {
+			// expected
+		}
+		self::assertSame(5, $rule->getStackId());
+		self::assertSame(ArchiveRule::CONDITION_DONE_FOR, $rule->getCondition());
+		self::assertSame(86400, $rule->getThresholdSeconds());
+	}
+
 	public function testUpdateWithoutManageThrows403(): void {
 		$rule = $this->rule();
 		$board = $this->board();

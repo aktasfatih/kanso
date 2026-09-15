@@ -1805,6 +1805,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ t('kanso', 'Archived {n} cards', { n: archiveNowResults[rule.id] }) }}
 								</span>
 
+								<!-- Edit button: loads the rule into the form below, which doubles
+								     as the editor - same controls, not a second set. -->
+								<button
+									class="automation__archive-now-btn"
+									:title="t('kanso', 'Edit rule')"
+									@click="startEditRule(rule)">
+									<PencilIcon :size="14" />
+									{{ t('kanso', 'Edit') }}
+								</button>
+
 								<!-- Delete button -->
 								<button
 									class="label-settings__action-btn label-settings__action-btn--danger"
@@ -1842,7 +1852,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Add rule form (MANAGE only) -->
 					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateRule">
-						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+						<h4 class="label-settings__create-heading">{{ isEditingRule ? t('kanso', 'Edit rule') : t('kanso', 'Add rule') }}</h4>
 
 						<!-- Scope selector -->
 						<div class="automation__form-row">
@@ -1896,7 +1906,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="label-settings__create-btn automation__create-btn"
 							type="submit"
 							:disabled="isCreatingRule || newRuleDays === '' || newRuleDays === null || newRuleDays < 0">
-							{{ isCreatingRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+							{{ isCreatingRule ? (isEditingRule ? t('kanso', 'Saving…') : t('kanso', 'Adding…')) : (isEditingRule ? t('kanso', 'Save rule') : t('kanso', 'Add rule')) }}
+						</button>
+						<button
+							v-if="isEditingRule"
+							class="label-settings__action-btn"
+							type="button"
+							@click="cancelEditRule">
+							{{ t('kanso', 'Cancel') }}
 						</button>
 
 						<span v-if="createRuleError" class="label-settings__error">{{ createRuleError }}</span>
@@ -4312,12 +4329,42 @@ function resolveStackName(stackId) {
 	return stack?.title ?? String(stackId)
 }
 
-// ── Create rule form state ────────────────────────────────────────────────────
+// ── Create/edit rule form state ───────────────────────────────────────────────
+// One form serves both: null editingRuleId = create mode, an id = edit mode.
 const newRuleStackId = ref(null)   // null = whole board
 const newRuleCondition = ref(0)    // 0 = done for ≥N, 1 = done AND created ≥N
 const newRuleDays = ref(0)
 const isCreatingRule = ref(false)
 const createRuleError = ref('')
+const editingRuleId = ref(null)
+const isEditingRule = computed(() => editingRuleId.value !== null)
+// The rule's threshold exactly as stored, plus the whole-day value the days
+// input was seeded with. secondsToDays() rounds, so a rule whose threshold is
+// not a whole number of days (only reachable via the REST API) would otherwise
+// be silently re-quantised by an edit that never touched the days field.
+const editingRuleThresholdSeconds = ref(0)
+const editingRuleDaysSeed = ref(0)
+
+/** Load a saved rule into the form below, which becomes its editor. */
+function startEditRule(rule) {
+	editingRuleId.value = rule.id
+	createRuleError.value = ''
+	newRuleStackId.value = rule.stackId ?? null
+	newRuleCondition.value = rule.condition
+	editingRuleThresholdSeconds.value = rule.thresholdSeconds
+	editingRuleDaysSeed.value = secondsToDays(rule.thresholdSeconds)
+	newRuleDays.value = editingRuleDaysSeed.value
+}
+
+/** Drop back to create mode, resetting the shared form. */
+function cancelEditRule() {
+	editingRuleId.value = null
+	editingRuleThresholdSeconds.value = 0
+	editingRuleDaysSeed.value = 0
+	newRuleStackId.value = null
+	newRuleCondition.value = 0
+	newRuleDays.value = 0
+}
 
 async function submitCreateRule() {
 	// Reject a blank field ('' * 86400 === 0) so a rule that archives every
@@ -4326,9 +4373,32 @@ async function submitCreateRule() {
 	isCreatingRule.value = true
 	createRuleError.value = ''
 	try {
+		// Keep a sub-day threshold byte-for-byte when the days field was not
+		// touched; otherwise the field is authoritative.
+		const thresholdSeconds = isEditingRule.value && newRuleDays.value === editingRuleDaysSeed.value
+			? editingRuleThresholdSeconds.value
+			: newRuleDays.value * 86400
+
+		if (isEditingRule.value) {
+			// PATCH always sends `stackId`, null included: the controller keys off
+			// the key being PRESENT to tell "scope this to the whole board" from
+			// "leave the scope alone", so omitting it would make widening a rule
+			// back to the whole board impossible.
+			await updateRule.mutateAsync({
+				id: editingRuleId.value,
+				data: {
+					stackId: newRuleStackId.value,
+					condition: newRuleCondition.value,
+					thresholdSeconds,
+				},
+			})
+			cancelEditRule()
+			return
+		}
+
 		const data = {
 			condition: newRuleCondition.value,
-			thresholdSeconds: newRuleDays.value * 86400,
+			thresholdSeconds,
 			enabled: true,
 		}
 		// Only include stackId when a specific stack is selected.
@@ -4342,7 +4412,8 @@ async function submitCreateRule() {
 		newRuleCondition.value = 0
 		newRuleDays.value = 0
 	} catch (err) {
-		createRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+		createRuleError.value = err?.response?.data?.error
+			|| (isEditingRule.value ? t('kanso', 'Failed to update rule.') : t('kanso', 'Failed to create rule.'))
 	} finally {
 		isCreatingRule.value = false
 	}
@@ -4409,6 +4480,9 @@ async function doDeleteRule(rule) {
 	try {
 		await deleteRule.mutateAsync(rule.id)
 		confirmDeleteRuleId.value = null
+		// Deleting the rule that is open in the editor would otherwise leave the
+		// form bound to a dead id, with "Save rule" PATCHing it.
+		if (editingRuleId.value === rule.id) cancelEditRule()
 	} catch (err) {
 		deleteRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
 	} finally {
