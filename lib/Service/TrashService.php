@@ -35,6 +35,29 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * path too. A new card-scoped table cannot be forgotten HERE while being
  * remembered in the board purge, because there is only one list to remember.
  *
+ * The purge also sweeps the card's Nextcloud NOTIFICATIONS, through the same
+ * supported route the board purge uses ({@see NotificationService::dismissAllForObjects()},
+ * i.e. `IManager::markProcessed()`, never a write into `oc_notifications`). Both
+ * object keys have to go: card notifications are keyed by card id, but
+ * `step_assigned` is keyed by CHECKLIST-ITEM id (#3745), so a card-id-only sweep
+ * would leave the step entries behind. The residue is invisible rather than
+ * wrong-looking - {@see \OCA\Kanso\Notification\Notifier::prepare()} throws once
+ * the card is gone, so nothing renders - but the rows keep counting toward the
+ * unread badge, which the user can then never clear because there is nothing
+ * left to click.
+ *
+ * It runs FIRST, ahead of every destructive step, for two reasons. A
+ * notification is found by its object id, so once the checklist rows are gone
+ * there is nothing left to enumerate them by; and a failure there must not leave
+ * a half-purged card. Unlike the board purge - cron, retried on its tombstone -
+ * this path is interactive, so a sweep failure PROPAGATES and the purge simply
+ * does not happen: the card stays in the trash, intact and re-purgeable, and the
+ * user is told the delete failed. The alternative (log the failure, purge
+ * anyway) would hand back a success while creating exactly the permanent,
+ * unclearable badge inflation this sweep exists to prevent - and it is
+ * unreachable in practice anyway, since the notification backend and the rows
+ * below it share one database.
+ *
  * Restore/purge only ever act on an ALREADY-trashed card (deleted_at > 0); a
  * live card is rejected as invalid input - but only once the caller has cleared
  * the board permission AND the card-visibility guard, in that order, so the
@@ -52,6 +75,7 @@ class TrashService {
 		private CardAttachmentService $cardAttachmentService,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
+		private NotificationService $notificationService,
 	) {
 	}
 
@@ -109,11 +133,15 @@ class TrashService {
 
 	/**
 	 * Permanently deletes a trashed card and everything hanging off it (labels,
-	 * assignees, checklist items, comments). Requires MANAGE. Irreversible.
+	 * assignees, checklist items, comments) plus its Nextcloud notifications.
+	 * Requires MANAGE. Irreversible.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist, or the board is deleted
 	 * @throws NotPermittedException if the actor may not manage the board
 	 * @throws InvalidInputException if the card is not in the trash
+	 * @throws \OCP\DB\Exception if the notification sweep fails - deliberately
+	 *                           BEFORE anything is deleted, so the card is left
+	 *                           whole in the trash and the caller can retry
 	 */
 	public function purge(int $cardId, string $actorUid): void {
 		$card = $this->cardMapper->find($cardId);
@@ -122,6 +150,24 @@ class TrashService {
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 		// Access first, trash state second - see restore().
 		$this->assertTrashed($card);
+
+		// Nextcloud's own notification rows go first, while the objects that key
+		// them still exist. Only THIS card's id and the checklist items resolved
+		// from it: the sweep matches on app + object type + object id with no
+		// user, so every id named here clears that object's bell entries for
+		// every recipient, and a foreign id would wipe a live card's. Sub-cards
+		// are deliberately absent - CardService::delete() detaches children
+		// (parent_card_id cleared) before the soft-delete, so a trashed card has
+		// none and the purge below cascades to no other card; sweeping child ids
+		// would be exactly the foreign-id mistake.
+		$this->notificationService->dismissAllForObjects(
+			NotificationService::OBJECT_CARD,
+			[$cardId],
+		);
+		$this->notificationService->dismissAllForObjects(
+			NotificationService::OBJECT_CHECKLIST_ITEM,
+			$this->cascade->idsIn('kanso_checklist_items', 'card_id', [$cardId]),
+		);
 
 		// Grandchildren first: a reaction hangs off comment_id, so it has to go
 		// BEFORE the comments that locate it are hard-deleted, or the rows are
