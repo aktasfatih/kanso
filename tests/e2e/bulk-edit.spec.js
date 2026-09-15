@@ -115,4 +115,134 @@ test.describe('Bulk edit cards (multi-select)', () => {
 			.poll(() => stackTitles(state.boardId, state.todoId), { timeout: 10_000 })
 			.toEqual(['Charlie'])
 	})
+
+	// #10485 — "select every card in this column" from the column ⋯ menu, so a whole
+	// column no longer has to be ticked card by card. Mirrors the shipped
+	// archive-all entry (#10430): same column-scoped set, same filter-aware label
+	// that names a count rather than promising "all", same empty-column guard.
+	test.describe('Select every card in a column (#10485)', () => {
+		// Comfortably more than the virtualizer mounts at once (overscan 6 around a
+		// ~8-row window), so "selects the cards that are not even in the DOM" is a
+		// real assertion rather than a coincidence.
+		const CARD_COUNT = 45
+		const titleFor = (i) => `Select Card ${String(i).padStart(3, '0')}`
+		const sel = { boardId: 0, sprintId: 0, sideId: 0, labelId: 0, boardUrl: '' }
+
+		/**
+		 * Open the ⋯ menu of the named column and return the teleported panel
+		 * (NcActions teleports its popover to <body>).
+		 *
+		 * @param {import('@playwright/test').Page} page - the page under test
+		 * @param {string} name - the column title
+		 * @return {Promise<import('@playwright/test').Locator>} the menu panel
+		 */
+		async function openColumnMenu(page, name) {
+			await page.locator('.stack-column').filter({ hasText: name })
+				.locator('.stack-column__actions button').first().click()
+			const dialog = page.locator('[role="dialog"]').first()
+			await expect(dialog).toBeVisible({ timeout: 6_000 })
+			return dialog
+		}
+
+		test.beforeAll(async () => {
+			const board = await api.post('/boards', { title: `Select All E2E ${Date.now()}` })
+			sel.boardId = board.id
+			sel.sprintId = (await api.post('/stacks', { boardId: board.id, title: 'Sprint' })).id
+			sel.sideId = (await api.post('/stacks', { boardId: board.id, title: 'Side' })).id
+			await api.post('/stacks', { boardId: board.id, title: 'Empty' })
+			for (let i = 1; i <= CARD_COUNT; i++) {
+				await api.post('/cards', { stackId: sel.sprintId, title: titleFor(i) })
+			}
+			await api.post('/cards', { stackId: sel.sideId, title: 'Side Card' })
+			// One labelled card, so a label filter narrows the column to a strict subset.
+			const label = await api.post('/labels', { boardId: board.id, title: 'Keep', color: '31CC7C' })
+			sel.labelId = label.id
+			const full = await api.get(`/boards/${board.id}`)
+			const one = full.cards.find((c) => c.title === titleFor(1))
+			await api.put(`/cards/${one.id}/labels/${label.id}`)
+			sel.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+		})
+
+		test.afterAll(async () => {
+			if (sel.boardId) await api.delete(`/boards/${sel.boardId}`).catch(() => {})
+			sel.boardId = 0
+		})
+
+		test('the column entry arms multi-select and selects every card, including the ones outside the virtualized window', async ({ page }) => {
+			await ncLogin(page)
+			await page.goto(sel.boardUrl)
+			await page.waitForSelector('.stack-column', { timeout: 20_000 })
+			await expect(page.locator('.card-tile', { hasText: titleFor(1) }))
+				.toBeVisible({ timeout: 15_000 })
+
+			// Selection mode is OFF — the action has to turn it on by itself.
+			await expect(page.locator('.bulk-action-bar')).toHaveCount(0)
+
+			// THE subtle failure mode: only a slice of the column is mounted. A
+			// select-all driven off the DOM would quietly take just these.
+			const mounted = await page.locator('.card-tile').count()
+			expect(mounted).toBeLessThan(CARD_COUNT)
+
+			const menu = await openColumnMenu(page, 'Sprint')
+			const selectAll = menu.getByRole('button', { name: `Select ${CARD_COUNT} cards` })
+			await expect(selectAll).toBeVisible({ timeout: 8_000 })
+			await selectAll.click()
+
+			// Multi-select is now on and the WHOLE column is selected.
+			await expect(page.locator('.bulk-action-bar'))
+				.toContainText(`${CARD_COUNT} selected`, { timeout: 10_000 })
+		})
+
+		test('an existing selection elsewhere on the board is extended, not replaced', async ({ page }) => {
+			await ncLogin(page)
+			await page.goto(sel.boardUrl)
+			await page.waitForSelector('.stack-column', { timeout: 20_000 })
+			await expect(page.locator('.card-tile', { hasText: 'Side Card' }))
+				.toBeVisible({ timeout: 15_000 })
+
+			await page.getByRole('button', { name: 'More' }).click()
+			await page.getByRole('menuitem', { name: 'Select multiple cards' }).click()
+			await page.locator('.card-tile', { hasText: 'Side Card' }).click()
+			await expect(page.locator('.bulk-action-bar'))
+				.toContainText('1 selected', { timeout: 10_000 })
+
+			const menu = await openColumnMenu(page, 'Sprint')
+			await menu.getByRole('button', { name: `Select ${CARD_COUNT} cards` }).click()
+
+			// Union, matching shift-range semantics — the Side Card survives.
+			await expect(page.locator('.bulk-action-bar'))
+				.toContainText(`${CARD_COUNT + 1} selected`, { timeout: 10_000 })
+		})
+
+		test('the entry is hidden on an empty column and names the visible count under a filter', async ({ page }) => {
+			await ncLogin(page)
+			await page.goto(sel.boardUrl)
+			await page.waitForSelector('.stack-column', { timeout: 20_000 })
+			await expect(page.locator('.card-tile', { hasText: titleFor(1) }))
+				.toBeVisible({ timeout: 15_000 })
+
+			// Nothing to select, so no entry at all.
+			const emptyMenu = await openColumnMenu(page, 'Empty')
+			await expect(emptyMenu.getByRole('button', { name: /^Select / })).toHaveCount(0)
+			await page.keyboard.press('Escape')
+			await expect(emptyMenu).toBeHidden({ timeout: 6_000 })
+
+			// Filter to the one labelled card (straight from the URL, the shareable
+			// form the filter bar writes): the entry must name the VISIBLE count …
+			await page.goto(`${sel.boardUrl}?fl=${sel.labelId}`)
+			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+			await expect(page.locator('.card-tile')).toHaveCount(1, { timeout: 10_000 })
+
+			const menu = await openColumnMenu(page, 'Sprint')
+			const visibleEntry = menu.getByRole('button', { name: 'Select 1 visible card' })
+			await expect(visibleEntry).toBeVisible({ timeout: 8_000 })
+			await expect(menu.getByRole('button', { name: `Select ${CARD_COUNT} cards` })).toHaveCount(0)
+			await expect(menu.getByRole('button', { name: /^Select all/ })).toHaveCount(0)
+
+			// … and select exactly that set, not the whole column behind the filter.
+			await visibleEntry.click()
+			await expect(page.locator('.bulk-action-bar'))
+				.toContainText('1 selected', { timeout: 10_000 })
+		})
+	})
 })

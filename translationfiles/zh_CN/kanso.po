@@ -269,7 +269,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:957
+#: src/components/StackColumn.vue:983
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -595,12 +595,12 @@ msgstr "已通过"
 msgid "Archive"
 msgstr "归档"
 
-#: src/components/StackColumn.vue:182
+#: src/components/StackColumn.vue:196
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 
-#: src/components/StackColumn.vue:181
+#: src/components/StackColumn.vue:195
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -4654,6 +4654,16 @@ msgstr "密钥（请立即复制，只显示一次）"
 #: src/components/BoardSettingsModal.vue
 msgid "Select"
 msgstr "下拉选择"
+
+#: src/components/StackColumn.vue:184
+msgid "Select %n card"
+msgid_plural "Select %n cards"
+msgstr[0] ""
+
+#: src/components/StackColumn.vue:183
+msgid "Select %n visible card"
+msgid_plural "Select %n visible cards"
+msgstr[0] ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Select a card…"

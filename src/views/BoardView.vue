@@ -365,6 +365,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-delete-stack="canEditBoard ? handleDeleteStack : null"
 					:on-restore-stack="canEditBoard ? handleRestoreStack : null"
 					:on-archive-all-cards="canEditBoard ? handleArchiveAllInStack : null"
+					:on-select-all-cards="canEditBoard ? handleSelectAllInStack : null"
 					:on-unarchive-cards="canEditBoard ? handleUnarchiveCards : null"
 					:filter-active="filterActive"
 					:on-rename-stack="canEditBoard ? handleRenameStack : null"
@@ -2464,6 +2465,29 @@ async function handleArchiveAllInStack(stackId) {
 		// undo still covers them. The banner above already reports the failure.
 		return partial
 	}
+}
+
+/**
+ * Select every card the column currently SHOWS (#10485) — the column-scoped
+ * counterpart to archive-all, and the answer to "I don't want to tick 40 cards
+ * one at a time". Same source of truth: `cardsForStack` is the filter-visible,
+ * non-archived set, so a filtered column selects exactly what it displays, and
+ * cards outside the virtualized window are included (the virtualizer only
+ * indexes into this array — it never shortens it).
+ *
+ * Arms multi-select mode first so the action works straight from the ⋯ menu;
+ * today the only other way in is the board's ⋯ More menu.
+ *
+ * ADDITIVE on purpose: a selection already built elsewhere on the board is
+ * extended, not replaced — the same semantics as a shift-range.
+ *
+ * @param {number} stackId - the column whose visible cards to select
+ */
+function handleSelectAllInStack(stackId) {
+	const cardIds = cardsForStack(stackId).map((c) => c.id)
+	if (cardIds.length === 0) return
+	bulk.enterMode()
+	bulk.addMany(cardIds)
 }
 
 /**

@@ -272,7 +272,7 @@ msgid_plural "%n cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/StackColumn.vue:957
+#: src/components/StackColumn.vue:983
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -617,13 +617,13 @@ msgstr ""
 msgid "Archive"
 msgstr ""
 
-#: src/components/StackColumn.vue:182
+#: src/components/StackColumn.vue:196
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/StackColumn.vue:181
+#: src/components/StackColumn.vue:195
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -4685,6 +4685,18 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "Select"
 msgstr ""
+
+#: src/components/StackColumn.vue:184
+msgid "Select %n card"
+msgid_plural "Select %n cards"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/StackColumn.vue:183
+msgid "Select %n visible card"
+msgid_plural "Select %n visible cards"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Select a card…"

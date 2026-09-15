@@ -88,6 +88,27 @@ export function useBulkSelect(boardId, queryClient) {
 		lastSelectedId.value = numId
 	}
 
+	/**
+	 * Add a whole list of card ids to the selection in one go (#10485) — what the
+	 * column-level "select every card in this column" action runs through.
+	 *
+	 * ADDITIVE, exactly like selectRange: a selection the user already built
+	 * elsewhere on the board is extended, never replaced. The last id becomes the
+	 * shift-click anchor so a following shift-click still ranges from a card the
+	 * user just selected rather than from wherever they happened to click last.
+	 *
+	 * @param {number[]} ids - card ids to add to the selection
+	 */
+	function addMany(ids) {
+		if (!ids || ids.length === 0) return
+		const s = new Set(selected.value)
+		for (const id of ids) {
+			s.add(Number(id))
+		}
+		selected.value = s
+		lastSelectedId.value = Number(ids[ids.length - 1])
+	}
+
 	/** Clear the entire selection. */
 	function clear() {
 		selected.value = new Set()
@@ -182,6 +203,7 @@ export function useBulkSelect(boardId, queryClient) {
 		isSelected,
 		toggle,
 		selectRange,
+		addMany,
 		clear,
 		enterMode,
 		exitMode,
