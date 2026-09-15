@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\BoardPurgeService;
 use OCA\Kanso\Service\CardAttachmentService;
+use OCA\Kanso\Service\NotificationService;
 use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -23,6 +24,7 @@ class BoardPurgeServiceTest extends TestCase {
 	private CardMapper&MockObject $cardMapper;
 	private BoardCascade&MockObject $cascade;
 	private CardAttachmentService&MockObject $attachments;
+	private NotificationService&MockObject $notifications;
 	private LoggerInterface&MockObject $logger;
 	private BoardPurgeService $service;
 
@@ -36,6 +38,7 @@ class BoardPurgeServiceTest extends TestCase {
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->cascade = $this->createMock(BoardCascade::class);
 		$this->attachments = $this->createMock(CardAttachmentService::class);
+		$this->notifications = $this->createMock(NotificationService::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->service = new BoardPurgeService(
 			$this->db,
@@ -43,6 +46,7 @@ class BoardPurgeServiceTest extends TestCase {
 			$this->cardMapper,
 			$this->cascade,
 			$this->attachments,
+			$this->notifications,
 			$this->logger,
 		);
 	}
@@ -74,7 +78,17 @@ class BoardPurgeServiceTest extends TestCase {
 			});
 		$this->cascade->method('idsIn')
 			->willReturnCallback(static function (string $table): array {
-				return $table === 'kanso_card_attachments' ? [5] : [501];
+				return match ($table) {
+					'kanso_card_attachments' => [5],
+					// The board's checklist steps - notifications for these are
+					// keyed by ITEM id, not by card id.
+					'kanso_checklist_items' => [61, 62],
+					default => [501],
+				};
+			});
+		$this->notifications->method('dismissAllForObjects')
+			->willReturnCallback(function (string $objectType, array $ids): void {
+				$this->steps[] = 'notifications:' . $objectType . ':' . implode(',', $ids);
 			});
 		$this->cascade->method('deleteIn')
 			->willReturnCallback(function (string $table, string $column, array $ids): int {
@@ -124,6 +138,12 @@ class BoardPurgeServiceTest extends TestCase {
 				// board: the foreign id 99 must not survive the intersection, or
 				// the purge would delete a live board's attachment bytes.
 				'storage:6,5',
+				// Then Nextcloud's own notification rows, still outside the
+				// transaction and still while the ids that key them can be
+				// enumerated - cards AND checklist steps, because a step
+				// notification renders the card's title too.
+				'notifications:card:5,6',
+				'notifications:checklist_item:61,62',
 				'begin',
 				// Grandchildren before the parents whose ids located them.
 				'deleteIn:kanso_comment_reactions:501',
@@ -147,10 +167,50 @@ class BoardPurgeServiceTest extends TestCase {
 		$this->cascade->expects(self::never())->method('deleteByBoardId');
 		$this->cardMapper->expects(self::never())->method('deleteByBoard');
 		$this->boardMapper->expects(self::never())->method('deleteById');
+		// Nothing Nextcloud-side is touched either: the board is still there, so
+		// its notifications are still live entries, not residue.
+		$this->notifications->expects(self::never())->method('dismissAllForObjects');
 		$this->logger->expects(self::once())->method('warning');
 
 		self::assertFalse($this->service->purge(42));
 		self::assertSame(['storage:6,5'], $this->steps);
+	}
+
+	public function testNotificationSweepNamesOnlyThisBoardsOwnObjects(): void {
+		// The one way this sweep could destroy someone else's data: naming an
+		// object id that is not this board's. markProcessed() matches on app +
+		// object type + object id with no user, so every id passed here deletes
+		// that object's notifications for EVERY user - a foreign card id would
+		// silently clear a live board's bell entries.
+		$swept = [];
+		$this->cardMapper->method('findAllIdsByBoard')->willReturn([5, 6]);
+		$this->attachments->method('deleteObjectsForCards')->willReturn(0);
+		$this->cascade->method('idsByBoardId')->willReturn([]);
+		$this->cascade->method('idsIn')
+			->willReturnCallback(static fn (string $table): array => $table === 'kanso_checklist_items'
+				? [61, 62]
+				: []);
+		$this->cascade->method('deleteIn')->willReturn(0);
+		$this->cascade->method('deleteByCardIds')->willReturn(0);
+		$this->cascade->method('deleteByBoardId')->willReturn(0);
+		$this->cardMapper->method('deleteByBoard')->willReturn(0);
+		$this->boardMapper->method('deleteById')->willReturn(1);
+		$this->notifications->method('dismissAllForObjects')
+			->willReturnCallback(function (string $objectType, array $ids) use (&$swept): void {
+				$swept[$objectType] = $ids;
+			});
+
+		self::assertTrue($this->service->purge(42));
+
+		// Exactly the board's own card set, and exactly the checklist items
+		// resolved from that card set - nothing wider.
+		self::assertSame(
+			[
+				NotificationService::OBJECT_CARD => [5, 6],
+				NotificationService::OBJECT_CHECKLIST_ITEM => [61, 62],
+			],
+			$swept,
+		);
 	}
 
 	public function testTheByteSweepNeverLeavesTheBoardsOwnCards(): void {
