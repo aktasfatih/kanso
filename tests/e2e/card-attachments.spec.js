@@ -340,6 +340,48 @@ test.describe('Card file attachments', () => {
 		}
 	})
 
+	// #10480 — when the instance-wide attachment cap is full the server answers
+	// the from-file endpoint with 413 and a body that EXPLAINS it; the upload
+	// button has always shown that body, and "Choose from Files" must too, or an
+	// admin sets a cap and the user is told only that something went wrong.
+	// The cap is off by default, so the 413 is injected at the route rather than
+	// by filling a real instance.
+	test('a storage-full 413 from Choose from Files shows the server’s explanation', async ({ page }) => {
+		const name = `kanso-413-${Date.now()}.txt`
+		await putUserFile(name, 'too big for the cap')
+		const serverMessage = 'Attachment storage is full on this instance, ask an administrator for more room'
+
+		try {
+			await ncLogin(page)
+			await page.route('**/attachments/from-file', (route) =>
+				route.fulfill({
+					status: 413,
+					contentType: 'application/json',
+					body: JSON.stringify({ error: serverMessage }),
+				}))
+
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
+			await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+			await page.locator('.card-modal__attachment-from-files').click()
+			await expect(page.locator('.file-picker')).toBeVisible({ timeout: 10_000 })
+			await page.locator('.file-picker__filter-input input').fill(name)
+			const pickerRow = page.locator('[data-testid="file-list-row"]', { hasText: name })
+			await expect(pickerRow).toHaveCount(1, { timeout: 10_000 })
+			await pickerRow.click()
+			await page.getByRole('button', { name: 'Attach a copy' }).click()
+
+			// The server's own sentence, not "Failed to attach the file."
+			const err = page.locator('.card-modal__save-error')
+			await expect(err).toHaveText(serverMessage, { timeout: 10_000 })
+
+			// ...and nothing was attached.
+			await expect(page.locator('.card-modal__link-row', { hasText: name })).toHaveCount(0)
+		} finally {
+			await deleteUserFile(name)
+		}
+	})
+
 	// #119 — "when did this file reach this card?" had no answer anywhere: the
 	// row printed only name + size, and the change log had no attachment verb, so
 	// an upload rendered as a bare "updated this card" and a REMOVAL left no trace
