@@ -62,14 +62,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ t('kanso', 'Trello (.json)') }}
 				</NcActionButton>
+				<!-- CSV does NOT create a board — it maps rows onto a board and column
+				     you pick in the modal, so it gets its own caption rather than
+				     sitting under "Import a board" (#10478). -->
+				<NcActionCaption :name="t('kanso', 'Add cards to an existing board')" />
 				<NcActionButton close-after-click @click="showCsvImport = true">
 					<template #icon>
 						<TableLargeIcon :size="20" />
 					</template>
 					{{ t('kanso', 'CSV file') }}
-				</NcActionButton>
-				<NcActionButton :disabled="true">
-					{{ t('kanso', 'GitHub Projects (coming soon)') }}
 				</NcActionButton>
 			</NcActions>
 

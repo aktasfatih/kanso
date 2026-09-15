@@ -633,7 +633,6 @@ OC.L10N.register(
     "General" : "常规",
     "GitHub" : "GitHub",
     "GitHub label name" : "GitHub 标签名称",
-    "GitHub Projects (coming soon)" : "GitHub Projects（即将推出）",
     "Go to boards" : "前往看板列表",
     "Green" : "绿色",
     "Group" : "群组",

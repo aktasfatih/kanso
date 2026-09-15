@@ -10,6 +10,7 @@
 import { chromium, request } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { checkPushHealth } from './push-health.js'
 
 const BASE = 'http://localhost:8891'
 const AUTH = 'Basic ' + Buffer.from('admin:admin').toString('base64')
@@ -61,4 +62,27 @@ export default async function globalSetup() {
 
 		await browser.close()
 	} catch { /* best-effort */ }
+
+	// The one assertion in here that is NOT best-effort.
+	//
+	// Everything above warms caches; this decides whether the stack is even
+	// telling the truth about realtime. Nextcloud advertises notify_push from a
+	// database row and never retracts it, so a dead daemon or a missing /push
+	// proxy is invisible until specs start timing out — that is how the dev
+	// stack silently lost its proxy (#10443). Assert it once, up front, and fail
+	// the whole run with one message that names the cause instead of leaving six
+	// specs to go red for reasons none of them can explain.
+	//
+	// It costs one capabilities request plus one websocket handshake (~ms), and
+	// it is silent on a stack that simply has no push: the fallback poll is a
+	// supported configuration, and it is the one CI runs (KANSO_SKIP_NOTIFY_PUSH
+	// =1 means notify_push is never installed there, so nothing is advertised).
+	if (process.env.KANSO_SKIP_PUSH_HEALTHCHECK !== '1') {
+		const verdict = await checkPushHealth()
+		console.log(`[global-setup] push health: ${verdict.state} — ${verdict.summary}`)
+		if (!verdict.ok) {
+			// Throwing from globalSetup aborts the run before the first spec.
+			throw new Error('\n\n' + verdict.message + '\n')
+		}
+	}
 }

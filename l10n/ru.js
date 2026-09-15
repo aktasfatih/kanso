@@ -633,7 +633,6 @@ OC.L10N.register(
     "General" : "Общие",
     "GitHub" : "GitHub",
     "GitHub label name" : "Название метки GitHub",
-    "GitHub Projects (coming soon)" : "GitHub Projects (скоро)",
     "Go to boards" : "К доскам",
     "Green" : "Зеленый",
     "Group" : "Группа",

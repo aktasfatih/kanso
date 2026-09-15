@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, RATE_LIMIT_MESSAGE } from './helpers.js'
 
 // A small but representative Trello board export: two lists (one out of pos
 // order), cards with labels + a checklist, plus a `dueComplete` card.
@@ -99,5 +99,30 @@ test.describe('Import from Trello', () => {
 		// state:complete → done.
 		const design = items.find((i) => i.title === 'design')
 		expect(design.done).toBe(true)
+	})
+
+	// #10505 — the import is capped at `#[UserRateLimit(60, 3600)]`, and a tripped
+	// cap returns `DataResponse([], 429)`: zero bytes. The generic fallback,
+	// "Could not import that Trello file.", reads as a bad export and sends a user
+	// mid-migration straight back to re-picking the same file. Asserted on an
+	// import because that is where the wrong advice costs the most.
+	test('a rate-limited import says so instead of blaming the file', async ({ page }) => {
+		await ncLogin(page)
+		// Empty body — the exact shape RateLimitingMiddleware produces.
+		await page.route('**/api/trello-import', (route) =>
+			route.fulfill({ status: 429, contentType: 'application/json', body: '' }))
+
+		await page.goto(`${BASE}/index.php/apps/kanso#/`)
+		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
+		await page.setInputFiles('[data-test="trello-import-file"]', {
+			name: 'trello.json',
+			mimeType: 'application/json',
+			buffer: Buffer.from(JSON.stringify(trelloFixture(stamp + 1))),
+		})
+
+		await expect(page.locator('[data-test="trello-import-error"]'))
+			.toHaveText(RATE_LIMIT_MESSAGE, { timeout: 15_000 })
+		// No board was created, and the view did not navigate away.
+		expect(page.url()).not.toMatch(/#\/board\/\d+/)
 	})
 })

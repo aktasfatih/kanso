@@ -633,7 +633,6 @@ OC.L10N.register(
     "General" : "Genel",
     "GitHub" : "GitHub",
     "GitHub label name" : "GitHub etiket adı",
-    "GitHub Projects (coming soon)" : "GitHub Projects (yakında)",
     "Go to boards" : "Panolara git",
     "Green" : "Yeşil",
     "Group" : "Grup",

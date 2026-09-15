@@ -147,6 +147,24 @@ class ArchiveRuleControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 	}
 
+	/**
+	 * The exact body the board-settings edit form PATCHes when a rule is widened
+	 * from a column to the whole board: scope, condition and threshold together.
+	 */
+	public function testUpdateWidensScopeAlongsideConditionAndThreshold(): void {
+		$this->archiveService->expects(self::once())
+			->method('update')
+			->with(3, null, true, ArchiveRule::CONDITION_DONE_AND_AGE, 604800, null, 'alice')
+			->willReturn($this->rule());
+
+		$response = $this->patch(3, [
+			'stackId' => null,
+			'condition' => ArchiveRule::CONDITION_DONE_AND_AGE,
+			'thresholdSeconds' => 604800,
+		]);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
 	public function testUpdatePassesStackIdProvidedTrueWhenScopedToAStack(): void {
 		$this->archiveService->expects(self::once())
 			->method('update')

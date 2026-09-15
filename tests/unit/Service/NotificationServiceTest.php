@@ -100,4 +100,41 @@ class NotificationServiceTest extends TestCase {
 
 		$this->service->dismissCardAssigned(9, 'bob');
 	}
+
+	public function testDismissAllForObjectsClearsOneObjectPerCallForEveryUser(): void {
+		// The board-purge sweep: app + object type + object id is the ENTIRE
+		// predicate. No user (every recipient's copy has to go) and no subject
+		// (every kind of notification for that object has to go) - but the app
+		// and the id pin it to Kanso's own objects, which is what keeps it from
+		// reaching another app's or another board's notifications.
+		$built = [];
+		$this->manager->method('createNotification')
+			->willReturnCallback(function () use (&$built): INotification {
+				$n = $this->createMock(INotification::class);
+				$n->expects(self::once())->method('setApp')->with('kanso')->willReturnSelf();
+				$n->expects(self::once())->method('setObject')
+					->willReturnCallback(function (string $type, string $id) use ($n, &$built): INotification {
+						$built[] = $type . '/' . $id;
+						return $n;
+					});
+				$n->expects(self::never())->method('setUser');
+				$n->expects(self::never())->method('setSubject');
+				return $n;
+			});
+		$this->manager->expects(self::exactly(3))->method('markProcessed');
+		$this->manager->expects(self::never())->method('notify');
+
+		$this->service->dismissAllForObjects(NotificationService::OBJECT_CARD, [9, 10, 11]);
+
+		self::assertSame(['card/9', 'card/10', 'card/11'], $built);
+	}
+
+	public function testDismissAllForObjectsIsANoOpForAnEmptyIdSet(): void {
+		// A board with no cards must not fire a user-less, id-less
+		// markProcessed() - that would match every Kanso notification there is.
+		$this->manager->expects(self::never())->method('createNotification');
+		$this->manager->expects(self::never())->method('markProcessed');
+
+		$this->service->dismissAllForObjects(NotificationService::OBJECT_CARD, []);
+	}
 }

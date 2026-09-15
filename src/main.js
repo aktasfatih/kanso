@@ -11,7 +11,6 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'
 import { router } from './router/index.js'
 import { initRealtime } from './services/realtime.js'
-import { isBoardMovePending } from './composables/useCardMove.js'
 import { syncBoardDelta, onBoardChangesApplied } from './composables/useBoardDelta.js'
 import { invalidateMyWork } from './composables/queryKeys.js'
 import { registerServiceWorker } from './services/pwa.js'
@@ -189,13 +188,17 @@ onBoardChangesApplied(invalidateMyWorkThrottled)
 // on a resync signal or error it falls back to a full board invalidate, and it
 // re-checks the move-pending guard internally so it never clobbers an optimistic
 // move (the move queue's drain invalidate reconciles afterwards).
+//
+// That last clause is why this handler carries no move-pending check of its own
+// (#10293): it used to, and a duplicated defensive check is worse than no check
+// at all - the pair makes BOTH copies unfalsifiable, since deleting either one
+// leaves the other refusing and every test green. That is how syncBoardDelta's
+// entry check stayed unpinned for so long (#10292). One copy, at the point of
+// use, pinned by tests/unit/deltaMidFlightMove.test.mjs.
 initRealtime((boardId) => {
 	// The push body names a board, but the my-work feeds are cross-board and
 	// need no cursor: refresh them even when the board itself was never opened
 	// this session (syncBoardDelta would early-return without a cursor) (#3768).
 	invalidateMyWorkThrottled()
-	if (isBoardMovePending(boardId)) {
-		return
-	}
 	syncBoardDelta(queryClient, boardId)
 })

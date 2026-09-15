@@ -11,7 +11,10 @@ use OCA\Kanso\Db\BoardCascade;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The anti-rot guard for the board purge.
+ * The anti-rot guard for the board purge - and, since #10456, for the per-card
+ * trash purge too: {@see \OCA\Kanso\Service\TrashService::purge()} reads the
+ * same {@see BoardCascade} registry instead of a hand-written copy of it, so
+ * everything asserted here holds for both destructive paths.
  *
  * Kanso's schema declares ZERO foreign keys, so a board purge cascades only to
  * the tables it names. That list is exactly the kind of thing that rots
@@ -167,6 +170,61 @@ class BoardCascadeCompletenessTest extends TestCase {
 				);
 			}
 		}
+	}
+
+	/**
+	 * Columns holding a CARD id that {@see BoardCascade::BY_CARD_ID} deliberately
+	 * does not sweep. Exactly one, and it is the card table's own sub-card link:
+	 * a card purge deletes that row rather than clearing a pointer to it, and the
+	 * board purge empties the whole table through the card mapper.
+	 *
+	 * @var array<string, list<string>>
+	 */
+	private const CARD_COLUMNS_NOT_SWEPT = [
+		'kanso_cards' => ['parent_card_id'],
+	];
+
+	/**
+	 * The guard that now covers BOTH purge paths (#10456).
+	 *
+	 * {@see \OCA\Kanso\Service\TrashService::purge()} used to carry its own
+	 * hand-written copy of the card-scoped table list - a second list, with no
+	 * guard of its own, that could silently forget a table the board cascade
+	 * remembered. It consumes {@see BoardCascade::BY_CARD_ID} directly now, so
+	 * this single check keeps a purged CARD and a purged BOARD honest at once.
+	 *
+	 * The check is deliberately derived from the SCHEMA rather than from the
+	 * registry: every column the migrations add whose name ends in `card_id` is
+	 * a way to reach rows from a card, so each one must be either swept by the
+	 * registry or excused above. Dropping an entry from BY_CARD_ID therefore
+	 * fails here as well as in the classification test - it cannot be "fixed" by
+	 * editing the list the code reads.
+	 */
+	public function testEveryCardScopedColumnInTheSchemaIsSwept(): void {
+		$unswept = [];
+		foreach (self::schemaInMigrations() as $table => $columns) {
+			foreach ($columns as $column) {
+				if (!str_ends_with($column, 'card_id')) {
+					continue;
+				}
+				if (in_array($column, BoardCascade::BY_CARD_ID[$table] ?? [], true)
+					|| in_array($column, self::CARD_COLUMNS_NOT_SWEPT[$table] ?? [], true)) {
+					continue;
+				}
+				$unswept[] = $table . '.' . $column;
+			}
+		}
+
+		self::assertSame(
+			[],
+			$unswept,
+			'A column holding a card id is swept by neither purge path. Purging a single '
+			. 'card from the trash and purging the whole board both delete rows through '
+			. 'BoardCascade::BY_CARD_ID, so a table reachable by card id that is missing '
+			. 'from it leaks rows on EVERY card purge, forever. Register the column there '
+			. '- or, if the rows genuinely must outlive the card, excuse it in '
+			. 'CARD_COLUMNS_NOT_SWEPT and say why.',
+		);
 	}
 
 	public function testEveryGrandchildParentIsItselfPurged(): void {

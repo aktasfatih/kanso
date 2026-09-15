@@ -917,3 +917,131 @@ test.describe('Public payload redacts @mention uids', () => {
 		expect(JSON.stringify(comments)).toContain(`@${mentioned}`)
 	})
 })
+
+// Public-link EXPIRY (#10466). `public_share_expires_at` was persisted and
+// enforced from the start, but nothing could ever set it — the enforcement
+// branch was live code that had never executed. Now the owner can set, change
+// and clear it, so this is where that branch is actually exercised end to end.
+//
+// Two things are asserted together, because either one alone is a half-feature:
+//  - a link past its expiry REFUSES an anonymous visitor, and
+//  - it says WHY. A visitor who cannot tell "expired" from "wrong address" goes
+//    back to the owner asking them to re-check a URL that was always correct.
+test.describe('Public link expiry', () => {
+	// MANDATORY: the assertions below are about what an ANONYMOUS visitor gets.
+	// The suite reuses one global admin storageState for speed, and a page that
+	// inherits it is not anonymous — an expired-link assertion would then be
+	// testing the admin's session, not the share, and could false-pass. The
+	// `api()` helper above carries its own Authorization header, so the owner-side
+	// calls in this block are unaffected by opting out.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	// Each case here writes the expiry the next one reads, so the order is load-
+	// bearing. Say so, instead of leaning on the default single-worker-per-file
+	// behaviour: in serial mode a failure stops the chain rather than cascading
+	// into four confusing follow-on failures.
+	test.describe.configure({ mode: 'serial' })
+
+	let boardId = 0
+	let token = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Expiry E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		await api('POST', '/cards', { stackId, title: 'Card behind an expiring link' })
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	// Prove the page is anonymous, so every refusal assertion below means what it
+	// says. Without the test.use() above this is the case that would go red.
+	test('the visitor really is anonymous (storageState opt-out is in effect)', async ({ page }) => {
+		const state = await page.context().storageState()
+		expect(state.cookies).toHaveLength(0)
+		// And the board is genuinely reachable for an anonymous reader right now,
+		// so a later 404 is the expiry talking and not a broken fixture.
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Expiry E2E')
+	})
+
+	test('an expiry in the future leaves the link working', async () => {
+		const future = Math.floor(Date.now() / 1000) + 3600
+		const cfg = (await api('PUT', `/boards/${boardId}/public-share/expiry`, { expiresAt: future })).body
+		expect(cfg.expiresAt).toBe(future)
+		// The link itself is untouched — an expiry is not a rotate.
+		expect(cfg.token).toBe(token)
+		expect((await fetchPublic(token)).status).toBe(200)
+	})
+
+	test('an expiry in the PAST refuses the anonymous visitor, and says why', async ({ page }) => {
+		const past = Math.floor(Date.now() / 1000) - 60
+		expect((await api('PUT', `/boards/${boardId}/public-share/expiry`, { expiresAt: past })).body.expiresAt).toBe(past)
+
+		// The payload route: refused, with the same uniform 404 every other
+		// rejection gets (deliberately no reason on the machine-readable surface).
+		expect((await fetchPublic(token)).status).toBe(404)
+
+		// The PAGE route: refused too, and this one names the cause. The board
+		// content must be nowhere on it.
+		const response = await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		expect(response.status()).toBe(404)
+		await expect(page.locator('body')).toContainText(/expired/i)
+		await expect(page.locator('body')).not.toContainText('Card behind an expiring link')
+		await expect(page.locator('.public-board__title')).toHaveCount(0)
+	})
+
+	test('a wrong token still gets the indistinguishable page, not the expiry one', async ({ page }) => {
+		// The expired page must not become an enumeration oracle: a token that
+		// never existed has to keep getting the generic message.
+		const response = await page.goto(`${BASE}/index.php/apps/kanso/p/a-token-that-never-existed-10466`)
+		expect(response.status()).toBe(404)
+		await expect(page.locator('body')).not.toContainText(/expired/i)
+	})
+
+	test('a malformed expiry is refused, never read as "no expiry"', async () => {
+		// The dangerous direction: if a value the server cannot read were treated
+		// as a clear, a garbage request would answer 200 and leave a link that was
+		// supposed to be closed wide open. Set a real expiry, then try to break it.
+		const future = Math.floor(Date.now() / 1000) + 3600
+		expect((await api('PUT', `/boards/${boardId}/public-share/expiry`, { expiresAt: future })).body.expiresAt).toBe(future)
+
+		for (const bad of ['garbage', '2031-01-15', 1.5, true]) {
+			const res = await api('PUT', `/boards/${boardId}/public-share/expiry`, { expiresAt: bad })
+			expect(res.status, `expected 400 for ${JSON.stringify(bad)}`).toBe(400)
+		}
+		// Untouched.
+		expect((await api('GET', `/boards/${boardId}/public-share`)).body.expiresAt).toBe(future)
+	})
+
+	test('clearing the expiry reopens the link', async ({ page }) => {
+		const cfg = (await api('PUT', `/boards/${boardId}/public-share/expiry`, { expiresAt: null })).body
+		expect(cfg.expiresAt).toBeFalsy()
+		expect((await fetchPublic(token)).status).toBe(200)
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Expiry E2E')
+	})
+
+	test('setting an expiry needs MANAGE, like every other public-link operation', async () => {
+		const outsider = `kanso-expiry-outsider-${Date.now()}`
+		await provisionUser(outsider, 'Outsider-pw-10466!')
+		try {
+			const res = await fetch(`${API}/boards/${boardId}/public-share/expiry`, {
+				method: 'PUT',
+				headers: {
+					...HEADERS,
+					Authorization: 'Basic ' + Buffer.from(`${outsider}:Outsider-pw-10466!`).toString('base64'),
+				},
+				body: JSON.stringify({ expiresAt: Math.floor(Date.now() / 1000) - 60 }),
+			})
+			expect([403, 404]).toContain(res.status)
+			// And the link is still live — the denied write changed nothing.
+			expect((await fetchPublic(token)).status).toBe(200)
+		} finally {
+			await deleteUser(outsider)
+		}
+	})
+})

@@ -250,4 +250,41 @@ class NotificationService {
 
 		$this->manager->markProcessed($notification);
 	}
+
+	/**
+	 * Removes EVERY Kanso notification still pointing at the given objects, for
+	 * every recipient and every subject. This is the notification half of a
+	 * board purge ({@see BoardPurgeService}): the objects are about to stop
+	 * existing, so no user may be left holding a bell entry for them.
+	 *
+	 * Unlike the targeted dismissals above, this deliberately sets NO user and
+	 * NO subject. The notification backend builds its predicate from the fields
+	 * that ARE set and leaves the rest out of the WHERE clause, so app + object
+	 * type + object id is the whole scope - which is also the safety property:
+	 * the app is pinned to `kanso` and each id comes from the purged board's own
+	 * object set, so no other app's notification and no surviving board's
+	 * notification can match. Widening this (dropping the app, or passing ids
+	 * that were not read from the board being purged) would delete other
+	 * people's notifications, so both are non-negotiable.
+	 *
+	 * One call per object, because {@see IManager::markProcessed()} takes one
+	 * notification at a time and there is no bulk form. A purge is a background
+	 * job, so the round-trips are affordable - and the alternative, a DELETE
+	 * written by hand against `oc_notifications`, is an unsupported write into
+	 * another app's table that would rot at the next Nextcloud upgrade.
+	 *
+	 * Idempotent: an object with no notifications matches nothing.
+	 *
+	 * @param string $objectType one of the `OBJECT_*` constants
+	 * @param list<int> $ids
+	 */
+	public function dismissAllForObjects(string $objectType, array $ids): void {
+		foreach ($ids as $id) {
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setObject($objectType, (string)$id);
+
+			$this->manager->markProcessed($notification);
+		}
+	}
 }

@@ -89,7 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</span>
 				<!-- Stack actions menu - rendered whenever at least one edit action is wired -->
 			<NcActions
-				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip || onArchiveAllCards"
+				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip || onArchiveAllCards || onSelectAllCards"
 				class="stack-column__actions"
 				:force-menu="true"
 				:aria-label="t('kanso', 'Column actions')">
@@ -163,14 +163,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActionButton>
 				</template>
 
-				<!-- Archive every card the column currently SHOWS (#10430). Never
-				     "all": what the column shows is already narrowed by the board
-				     filter AND by card visibility, so the label names the count it
-				     will actually archive instead of promising the whole column.
-				     Undoable, hence no confirm. -->
-				<template v-if="onArchiveAllCards && cards.length > 0">
+				<!-- Column-scoped bulk actions: select-all (#10485) and archive-all
+				     (#10430). Both run over what the column currently SHOWS — a set
+				     already narrowed by the board filter AND by card visibility — so
+				     neither label ever says "all": each names the count it will
+				     actually act on instead of promising the whole column. Both are
+				     hidden outright when the column shows nothing.
+				     Archive-all is undoable, hence no confirm. -->
+				<template v-if="cards.length > 0 && (onSelectAllCards || onArchiveAllCards)">
 					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor" />
 					<NcActionButton
+						v-if="onSelectAllCards"
+						:close-after-click="true"
+						@click="handleSelectAllCards">
+						<template #icon>
+							<SelectMultipleIcon :size="20" />
+						</template>
+						{{ filterActive
+							? n('kanso', 'Select %n visible card', 'Select %n visible cards', cards.length)
+							: n('kanso', 'Select %n card', 'Select %n cards', cards.length) }}
+					</NcActionButton>
+					<NcActionButton
+						v-if="onArchiveAllCards"
 						:close-after-click="true"
 						:disabled="archivingAll"
 						@click="handleArchiveAllCards">
@@ -185,7 +199,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 				<!-- Delete -->
 				<template v-if="onDeleteStack">
-					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor || (onArchiveAllCards && cards.length > 0)" />
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor || ((onArchiveAllCards || onSelectAllCards) && cards.length > 0)" />
 					<NcActionButton
 						:close-after-click="true"
 						@click="handleDeleteStack">
@@ -355,6 +369,7 @@ import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionText from '@nextcloud/vue/components/NcActionText'
 import ArchiveArrowDownOutlineIcon from 'vue-material-design-icons/ArchiveArrowDownOutline.vue'
+import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
@@ -440,6 +455,17 @@ const props = defineProps({
 	 * entry is then not rendered at all.
 	 */
 	onArchiveAllCards: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * (stackId) → void - puts the board in multi-select mode (if it isn't already)
+	 * and adds every card this column currently renders to the selection (#10485).
+	 * As with onArchiveAllCards the parent owns the "which cards" question — this
+	 * component only ever sees `cards`, the already-filtered set. Null when the
+	 * current user may not edit the board: the menu entry is then not rendered.
+	 */
+	onSelectAllCards: {
 		type: Function,
 		default: null,
 	},
@@ -964,6 +990,16 @@ async function handleArchiveAllCards() {
 	} finally {
 		archivingAll.value = false
 	}
+}
+
+/**
+ * Select every card the column currently shows (#10485) - the column-scoped
+ * counterpart to archive-all, so a whole column no longer has to be ticked card
+ * by card. The parent arms multi-select mode itself, so this works straight from
+ * the ⋯ menu without first turning selection on from the board's More menu.
+ */
+function handleSelectAllCards() {
+	props.onSelectAllCards?.(props.stack.id)
 }
 
 /** Toggle this column's collapsed state (#3677). */

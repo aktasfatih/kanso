@@ -13,6 +13,9 @@
  *     the exact wall-clock stamp shown next to a relative label ("5 days ago")
  *     in the card's activity feed. Those take a unix timestamp in SECONDS, the
  *     shape the API emits (ActivityService returns the raw epoch integer).
+ *  3. Public-link expiry (`expiryInputValue`, `expiryTimestampFromInput`,
+ *     `expiryHasPassed`) - the one place the UI turns a picked calendar DAY into
+ *     the absolute instant a share stops working. See the note at the bottom.
  *
  * ── All-day card dates ───────────────────────────────────────────────────────
  * All-day dates are STORED at UTC midnight (`new Date("YYYY-MM-DD").toISOString()`,
@@ -215,4 +218,83 @@ export function exactTimeTitle(tsSeconds) {
 export function isoTimestamp(tsSeconds) {
 	const d = eventDate(tsSeconds)
 	return d ? d.toISOString() : ''
+}
+
+// ── Public-link expiry (#10466) ──────────────────────────────────────────────
+//
+// The share's expiry is stored as ONE absolute unix timestamp in seconds; the
+// server never does calendar arithmetic with it, it only compares instants. The
+// UI, however, asks for a DAY ("this link stops working on the 31st"), and a day
+// is not an instant until you say whose day it is.
+//
+// The answer here is: the day belongs to the person setting it, in the timezone
+// of the BROWSER they set it from. A picked date resolves to 23:59:59.999 LOCAL
+// on that date, so the link survives every second of that day where the owner
+// lives and dies as that day ends. Reading it back uses the same local
+// components, so the picker always shows the day that was typed — which is the
+// off-by-one this pair exists to prevent (the all-day card dates above solve the
+// mirror-image problem with UTC, because those are stored as a calendar day, not
+// as a deadline).
+//
+// Consequence, stated so it is not mistaken for a bug: a viewer in another zone
+// may see the link die at a wall-clock time that is not their own midnight. That
+// is correct — an expiry is one instant, and it is the one the owner chose.
+
+/**
+ * `YYYY-MM-DD` for a `<input type="date">`, in the viewer's LOCAL zone.
+ *
+ * @param {number|string|null|undefined} tsSeconds stored expiry, unix seconds
+ * @returns {string} '' when there is no expiry set
+ */
+export function expiryInputValue(tsSeconds) {
+	const d = eventDate(tsSeconds)
+	if (!d) return ''
+	const pad = (n) => String(n).padStart(2, '0')
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
+ * A picked `YYYY-MM-DD` as the unix SECONDS the link should stop working at:
+ * the very end of that day in the viewer's LOCAL zone.
+ *
+ * THREE outcomes, and the difference between the last two matters on a sharing
+ * surface: `null` means the field is EMPTY, which is a deliberate "never
+ * expires"; `undefined` means the value could not be read at all, which must
+ * NOT be silently treated as "never expires" — that direction of failure leaves
+ * a link open. Callers send `null` and refuse to send `undefined`.
+ *
+ * Unreadable is reachable from the real control, not just from a hand-crafted
+ * request: `<input type="date">` accepts years past 9999, which this rejects.
+ *
+ * @param {string|null|undefined} dateStr value of a `<input type="date">`
+ * @returns {number|null|undefined} instant, null (= no expiry), or undefined (= unreadable)
+ */
+export function expiryTimestampFromInput(dateStr) {
+	if (!dateStr) return null
+	const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+	if (!m) return undefined
+	const [y, mo, day] = [Number(m[1]), Number(m[2]) - 1, Number(m[3])]
+	// Local components, NOT Date.parse('YYYY-MM-DD') — that parses as UTC midnight
+	// and would land the deadline on the wrong day west of Greenwich.
+	const d = new Date(y, mo, day, 23, 59, 59, 999)
+	if (Number.isNaN(d.getTime())) return undefined
+	// The Date constructor ROLLS OVER an impossible date (month 13 → next January,
+	// 31 Feb → early March) instead of rejecting it, so a malformed value would
+	// otherwise become a real, silently wrong deadline. Reject anything that did
+	// not come back as the day that was asked for.
+	if (d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) return undefined
+	return Math.floor(d.getTime() / 1000)
+}
+
+/**
+ * Whether a stored expiry is already in the past (the link is dead).
+ *
+ * @param {number|string|null|undefined} tsSeconds stored expiry, unix seconds
+ * @param {number} [nowMs] reference "now" in ms, for testing
+ * @returns {boolean} false when nothing is set
+ */
+export function expiryHasPassed(tsSeconds, nowMs = Date.now()) {
+	const d = eventDate(tsSeconds)
+	// `<=` mirrors the server's own boundary (PublicShareService::hasExpired()).
+	return d !== null && d.getTime() <= nowMs
 }

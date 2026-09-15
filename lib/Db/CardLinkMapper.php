@@ -143,18 +143,4 @@ class CardLinkMapper extends QBMapper {
 		$result->closeCursor();
 		return $row !== false;
 	}
-
-	/**
-	 * Removes every link of a card - cascade for a card purge.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
-	}
 }

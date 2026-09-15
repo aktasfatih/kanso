@@ -65,20 +65,6 @@ class ProjectCardMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes a card from every project it belongs to - the cascade for a card
-	 * purge.
-	 *
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		$qb->executeStatement();
-	}
-
-	/**
 	 * Removes every membership of a project - the cascade for a project delete
 	 * (the cards themselves are untouched).
 	 *

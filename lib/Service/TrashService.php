@@ -9,25 +9,11 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardCascade;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
-use OCA\Kanso\Db\CardAssigneeMapper;
-use OCA\Kanso\Db\CardContactMapper;
-use OCA\Kanso\Db\CardFieldValueMapper;
-use OCA\Kanso\Db\CardLabelMapper;
-use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
-use OCA\Kanso\Db\CardRelationMapper;
-use OCA\Kanso\Db\CardReviewMapper;
-use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChecklistItemMapper;
-use OCA\Kanso\Db\CommentMapper;
-use OCA\Kanso\Db\CommentReactionMapper;
-use OCA\Kanso\Db\ProjectCardMapper;
-use OCA\Kanso\Db\RecurRuleMapper;
-use OCA\Kanso\Db\ReminderMapper;
-use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -42,6 +28,36 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *     cascading to the card's labels, assignees, reviews, checklist items,
  *     comments and file attachments (both the app-data objects and the rows).
  *
+ * That cascade names no tables of its own: it reads the SAME registry the board
+ * purge reads ({@see BoardCascade::BY_CARD_ID}, plus the card-scoped half of
+ * {@see BoardCascade::BY_PARENT_ID}), so the anti-rot guard over that registry -
+ * BoardCascadeCompletenessTest, which re-scans every migration - covers this
+ * path too. A new card-scoped table cannot be forgotten HERE while being
+ * remembered in the board purge, because there is only one list to remember.
+ *
+ * The purge also sweeps the card's Nextcloud NOTIFICATIONS, through the same
+ * supported route the board purge uses ({@see NotificationService::dismissAllForObjects()},
+ * i.e. `IManager::markProcessed()`, never a write into `oc_notifications`). Both
+ * object keys have to go: card notifications are keyed by card id, but
+ * `step_assigned` is keyed by CHECKLIST-ITEM id (#3745), so a card-id-only sweep
+ * would leave the step entries behind. The residue is invisible rather than
+ * wrong-looking - {@see \OCA\Kanso\Notification\Notifier::prepare()} throws once
+ * the card is gone, so nothing renders - but the rows keep counting toward the
+ * unread badge, which the user can then never clear because there is nothing
+ * left to click.
+ *
+ * It runs FIRST, ahead of every destructive step, for two reasons. A
+ * notification is found by its object id, so once the checklist rows are gone
+ * there is nothing left to enumerate them by; and a failure there must not leave
+ * a half-purged card. Unlike the board purge - cron, retried on its tombstone -
+ * this path is interactive, so a sweep failure PROPAGATES and the purge simply
+ * does not happen: the card stays in the trash, intact and re-purgeable, and the
+ * user is told the delete failed. The alternative (log the failure, purge
+ * anyway) would hand back a success while creating exactly the permanent,
+ * unclearable badge inflation this sweep exists to prevent - and it is
+ * unreachable in practice anyway, since the notification backend and the rows
+ * below it share one database.
+ *
  * Restore/purge only ever act on an ALREADY-trashed card (deleted_at > 0); a
  * live card is rejected as invalid input - but only once the caller has cleared
  * the board permission AND the card-visibility guard, in that order, so the
@@ -55,25 +71,11 @@ class TrashService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
-		private CardLabelMapper $cardLabelMapper,
-		private CardAssigneeMapper $cardAssigneeMapper,
-		private CardContactMapper $cardContactMapper,
-		private CardReviewMapper $cardReviewMapper,
-		private ChecklistItemMapper $checklistItemMapper,
-		private CommentMapper $commentMapper,
-		private CommentReactionMapper $commentReactionMapper,
-		private SubscriptionMapper $subscriptionMapper,
-		private CardLinkMapper $cardLinkMapper,
-		private CardRelationMapper $cardRelationMapper,
-		private ProjectCardMapper $projectCardMapper,
+		private BoardCascade $cascade,
 		private CardAttachmentService $cardAttachmentService,
-		private CardTimeEntryService $cardTimeEntryService,
-		private CardRunningTimerMapper $cardRunningTimerMapper,
-		private CardFieldValueMapper $cardFieldValueMapper,
-		private ReminderMapper $reminderMapper,
-		private RecurRuleMapper $recurRuleMapper,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
+		private NotificationService $notificationService,
 	) {
 	}
 
@@ -131,11 +133,15 @@ class TrashService {
 
 	/**
 	 * Permanently deletes a trashed card and everything hanging off it (labels,
-	 * assignees, checklist items, comments). Requires MANAGE. Irreversible.
+	 * assignees, checklist items, comments) plus its Nextcloud notifications.
+	 * Requires MANAGE. Irreversible.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist, or the board is deleted
 	 * @throws NotPermittedException if the actor may not manage the board
 	 * @throws InvalidInputException if the card is not in the trash
+	 * @throws \OCP\DB\Exception if the notification sweep fails - deliberately
+	 *                           BEFORE anything is deleted, so the card is left
+	 *                           whole in the trash and the caller can retry
 	 */
 	public function purge(int $cardId, string $actorUid): void {
 		$card = $this->cardMapper->find($cardId);
@@ -145,40 +151,39 @@ class TrashService {
 		// Access first, trash state second - see restore().
 		$this->assertTrashed($card);
 
-		$this->cardLabelMapper->deleteByCard($cardId);
-		$this->cardAssigneeMapper->deleteByCard($cardId);
-		$this->cardContactMapper->deleteByCard($cardId);
-		$this->cardReviewMapper->deleteByCard($cardId);
-		$this->checklistItemMapper->deleteByCard($cardId);
-		// Reactions hang off comment_id, so drop them BEFORE the comments they
-		// point at are hard-deleted, otherwise the rows would be orphaned (#3550).
-		$this->commentReactionMapper->deleteByComments($this->commentMapper->idsByCard($cardId));
-		$this->commentMapper->deleteByCard($cardId);
-		$this->subscriptionMapper->deleteByCard($cardId);
-		$this->cardLinkMapper->deleteByCard($cardId);
-		$this->cardRelationMapper->deleteByCard($cardId);
-		$this->projectCardMapper->deleteByCard($cardId);
-		// Attachments are stored as app-data OBJECTS plus rows, so the cascade
-		// goes through the service (it removes both) rather than a plain mapper
-		// deleteByCard - otherwise a purge would leak the bytes on disk (#3526).
+		// Nextcloud's own notification rows go first, while the objects that key
+		// them still exist. Only THIS card's id and the checklist items resolved
+		// from it: the sweep matches on app + object type + object id with no
+		// user, so every id named here clears that object's bell entries for
+		// every recipient, and a foreign id would wipe a live card's. Sub-cards
+		// are deliberately absent - CardService::delete() detaches children
+		// (parent_card_id cleared) before the soft-delete, so a trashed card has
+		// none and the purge below cascades to no other card; sweeping child ids
+		// would be exactly the foreign-id mistake.
+		$this->notificationService->dismissAllForObjects(
+			NotificationService::OBJECT_CARD,
+			[$cardId],
+		);
+		$this->notificationService->dismissAllForObjects(
+			NotificationService::OBJECT_CHECKLIST_ITEM,
+			$this->cascade->idsIn('kanso_checklist_items', 'card_id', [$cardId]),
+		);
+
+		// Grandchildren first: a reaction hangs off comment_id, so it has to go
+		// BEFORE the comments that locate it are hard-deleted, or the rows are
+		// orphaned with nothing left to find them by (#3550).
+		$this->purgeGrandchildren($cardId);
+		// Then the bytes. Attachments are app-data OBJECTS plus rows, so the
+		// cascade goes through the service (it removes both) and has to run while
+		// the rows naming the storage keys are still there - otherwise a purge
+		// leaks the bytes on disk forever (#3526).
 		$this->cardAttachmentService->deleteAllForCard($cardId);
-		// Manual time-tracking entries (#3536) are plain rows scoped by card_id;
-		// drop them too so a purged card strands no time entries.
-		$this->cardTimeEntryService->deleteAllForCard($cardId);
-		// A running timer (#73) is a single plain row scoped by card_id; drop it so
-		// a purged card strands no dangling running-timer state.
-		$this->cardRunningTimerMapper->deleteByCard($cardId);
-		// Custom-field values (#3537) are plain rows scoped by card_id; drop them
-		// so a purged card strands no field values.
-		$this->cardFieldValueMapper->deleteByCard($cardId);
-		// Personal reminders (#3816) are plain per-user rows scoped by card_id;
-		// drop them so a purged card strands no pending reminders.
-		$this->reminderMapper->deleteByCard($cardId);
-		// Recurrence rules anchored on this card (#4123): a rule whose template is
-		// hard-deleted can never spawn again - each cron pass would read the missing
-		// template, throw, and log a failed spawn forever. Drop them so the purge
-		// leaves no orphan schedule behind.
-		$this->recurRuleMapper->deleteByTemplateCardId($cardId);
+		// Then every card-scoped table, straight from the shared registry: labels,
+		// assignees, contacts, reviews, checklist items, comments, subscriptions,
+		// links, relations (both ends), project memberships, running timers,
+		// time entries, custom-field values, reminders and the recurrence rules
+		// anchored on this card as a template.
+		$this->cascade->deleteByCardIds([$cardId]);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(
@@ -188,6 +193,39 @@ class TrashService {
 			Change::ACTION_DELETE,
 			$actorUid
 		);
+	}
+
+	/**
+	 * Empties the card-scoped half of {@see BoardCascade::BY_PARENT_ID}: tables
+	 * with neither a board_id nor a card_id, reachable only through the id of a
+	 * row that itself hangs off the card (today: comment reactions, via the
+	 * card's comments). The board purge does the same walk for the board's whole
+	 * card set - see {@see BoardPurgeService::purgeGrandchildren()}.
+	 *
+	 * Entries whose parent is reached by board_id (change details, seen-mail
+	 * markers) are skipped: a card purge never deletes their parent, so sweeping
+	 * them here would destroy rows of a board that is still very much alive.
+	 *
+	 * @throws \OCP\DB\Exception
+	 */
+	private function purgeGrandchildren(int $cardId): void {
+		$cardScoped = [];
+		foreach (BoardCascade::BY_CARD_ID as $table => $columns) {
+			foreach ($columns as $column) {
+				$cardScoped[$table . '.' . $column] = true;
+			}
+		}
+
+		foreach (BoardCascade::BY_PARENT_ID as $table => [$column, $parentTable, $parentLink]) {
+			if (!isset($cardScoped[$parentTable . '.' . $parentLink])) {
+				continue;
+			}
+			$this->cascade->deleteIn(
+				$table,
+				$column,
+				$this->cascade->idsIn($parentTable, $parentLink, [$cardId]),
+			);
+		}
 	}
 
 	/**

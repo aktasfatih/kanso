@@ -15,12 +15,17 @@ const HEADERS = {
 	'Content-Type': 'application/json',
 }
 
-// The CI runner sets KANSO_SKIP_NOTIFY_PUSH=1: notify_push is never installed
-// there, so the enable/disable dance is both unnecessary and a hard-failure
-// source (`app:enable notify_push` exits non-zero → the whole spec dies before
-// it can test the poll fallback). When the flag is set we skip the toggling
-// entirely; otherwise we still run occ but never let its failure abort a test
-// that is specifically about the push-OFF poll path.
+// CI's big `e2e` job sets KANSO_SKIP_NOTIFY_PUSH=1: notify_push is never
+// installed there, so the enable/disable dance is both unnecessary and a
+// hard-failure source (`app:enable notify_push` exits non-zero → the whole spec
+// dies before it can test the poll fallback). When the flag is set we skip the
+// toggling entirely; otherwise we still run occ but never let its failure abort
+// a test that is specifically about the push-OFF poll path.
+//
+// The push-positive test below therefore skips in that job. It is covered by
+// the dedicated `e2e-push` CI job, which boots the stack WITH push and runs
+// exactly this spec — and by tests/e2e/push-health.js, which refuses to start a
+// run whose stack advertises push it cannot deliver.
 const SKIP_NOTIFY_PUSH = process.env.KANSO_SKIP_NOTIFY_PUSH === '1'
 
 function occ(command) {

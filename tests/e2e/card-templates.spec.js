@@ -98,4 +98,35 @@ test.describe('Card templates (per-board)', () => {
 		const board = await api.get(`/boards/${state.boardId}`)
 		expect(board.cards.some((c) => c.id === state.tplId)).toBe(false)
 	})
+
+	// #10476 — SwimlaneRow renders StackColumn too, but used to drop the template
+	// props on the floor, so grouping a board silently removed card templates.
+	test('the "from template" picker is reachable with swimlanes on', async ({ page }) => {
+		// An unlabelled live card guarantees at least one lane exists whatever the
+		// earlier tests in this file left behind.
+		await api.post('/cards', { stackId: state.todoId, title: 'Lane anchor' })
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		// Group the board by label → the flat stacks row is replaced by lanes.
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'Label', exact: true }).click()
+		await page.keyboard.press('Escape')
+		await expect(page.locator('.swimlane').first()).toBeVisible()
+
+		const liveBefore = (await stackTitles(state.boardId, state.todoId)).length
+
+		// The picker must exist INSIDE a lane's column, not just on the flat board.
+		const lane = page.locator('.swimlane', { has: page.locator('.card-composer__templates') }).first()
+		await lane.locator('.card-composer__templates button').first().click()
+		// "Manage templates…" is part of the same menu and equally lane-gated.
+		await expect(page.getByRole('menuitem', { name: 'Manage templates…' })).toBeVisible()
+		await page.getByRole('menuitem', { name: 'Bug report' }).click()
+
+		await expect
+			.poll(() => stackTitles(state.boardId, state.todoId).then((t) => t.length), { timeout: 8_000 })
+			.toBe(liveBefore + 1)
+	})
 })

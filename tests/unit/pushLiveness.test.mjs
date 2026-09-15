@@ -285,9 +285,10 @@ test('the poll survives ticks it skips: a mid-drag board still polls afterwards'
 	// duplicate is gone; if the entry check ever leaves syncBoardDelta, this reddens.
 	//
 	// Its post-fetch sibling (a move that STARTS while the delta is in flight) is a
-	// different guard and is still unpinned — deleting it leaves this green, because
-	// the entry check already refused. Not this card's scope; noted so the next
-	// reader does not mistake this assertion for cover.
+	// different guard, and deleting it still leaves this assertion green — the entry
+	// check already refused, so nothing here ever reaches it. It has its own file
+	// since #10293: tests/unit/deltaMidFlightMove.test.mjs. Do not read this
+	// assertion as cover for it.
 	for (let skipped = 0; skipped < 2; skipped++) {
 		tick(cadence)
 		await flush()

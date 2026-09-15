@@ -199,7 +199,19 @@ class BoardController extends Controller {
 	 *
 	 * The cursor is ALWAYS the board's latest change id (even on an empty delta or
 	 * a resync), so the client advances and a subsequent poll starts from there.
-	 * No ETag: the request is already conditional via `since`.
+	 * No ETag: the request is already conditional via `since`. #10279 asked for one
+	 * anyway, so that an empty window could answer 304, and the measurement said no.
+	 * The only work a 304 could skip here is `getOldestChangeId` + `findSince`;
+	 * everything above it - Nextcloud's bootstrap, the ACL gate, the validator's own
+	 * `getLatestChangeId` - a conditional request still pays, because the request
+	 * still happens. Timed on the dev stack over 40 samples with 12 224
+	 * `kanso_changes` rows: an empty tick is 45ms and the skippable part of it is
+	 * 6ms (the `since=0` branch, which short-circuits after exactly the work a 304
+	 * path would do, is 39ms; a no-op OCS capabilities call on the same box is
+	 * 43ms). 13% of a request that is not removed is not worth a second
+	 * conditional-request mechanism on the client - `show()`'s is the one Kanso
+	 * has. The client-side numbers that go with this live on `useBoard`'s delta
+	 * poll.
 	 */
 	#[NoAdminRequired]
 	public function changes(int $id, int $since = 0): JSONResponse {

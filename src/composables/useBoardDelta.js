@@ -281,7 +281,12 @@ export async function syncBoardDelta(queryClient, boardId) {
 	}
 
 	// A move may have STARTED while the delta was in flight - re-check before
-	// patching so we never clobber an optimistic placement mid-drag.
+	// patching so we never clobber an optimistic placement mid-drag. The entry
+	// check above cannot answer this: the window was fetched before the drag
+	// existed, so it still carries the card's pre-move stackId/sortKey. Note the
+	// cursor is deliberately NOT advanced on this path - the declined rows are
+	// re-read by the next tick rather than skipped. Pinned by
+	// tests/unit/deltaMidFlightMove.test.mjs (#10293).
 	if (isBoardMovePending(boardId)) {
 		return
 	}

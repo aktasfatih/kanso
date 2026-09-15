@@ -97,4 +97,29 @@ test.describe('Manage card templates (#3634)', () => {
 			.not.toContain('Renamed template')
 		await expect(page.locator('.manage-templates__row')).toHaveCount(1)
 	})
+
+	// #10503 — list view rendered the "from template" picker but not the
+	// "Manage templates…" entry, because BoardView forwarded only two of the three
+	// template callbacks. Half a menu reads as a broken one.
+	test('the template manager is reachable from list view', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+
+		// Switch to List view.
+		await page.locator('.board-view__display-menu button').first().click()
+		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
+		await page.keyboard.press('Escape')
+		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+
+		// The picker must be the list's own, not a leftover kanban column.
+		const picker = page.locator('.board-list-table .card-composer__templates button').first()
+		await expect(picker).toBeVisible({ timeout: 8_000 })
+		await picker.click()
+
+		// …and it must carry the route to the manager, which must actually open.
+		await page.getByRole('menuitem', { name: 'Manage templates…' }).click()
+		await page.waitForSelector('.manage-templates', { timeout: 8_000 })
+		await expect(page.locator('.manage-templates__row')).toHaveCount(1)
+	})
 })

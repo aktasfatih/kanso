@@ -213,6 +213,9 @@ return [
 		['name' => 'publicShare#disable', 'url' => '/api/boards/{id}/public-share', 'verb' => 'DELETE'],
 		// "Show comments (read-only)" opt-in for the public link (#3949). MANAGE-only.
 		['name' => 'publicShare#setComments', 'url' => '/api/boards/{id}/public-share/comments', 'verb' => 'PUT'],
+		// Link expiry (#10466): an absolute unix timestamp in seconds, or null to
+		// clear it. MANAGE-only, like every other public-link operation.
+		['name' => 'publicShare#setExpiry', 'url' => '/api/boards/{id}/public-share/expiry', 'verb' => 'PUT'],
 
 		// Calendar-feed config (MANAGE, authenticated). Nested under a board id,
 		// distinct from board#show. Enable/rotate = POST, disable = DELETE.

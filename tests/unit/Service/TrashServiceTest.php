@@ -10,30 +10,16 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardCascade;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
-use OCA\Kanso\Db\CardAssigneeMapper;
-use OCA\Kanso\Db\CardContactMapper;
-use OCA\Kanso\Db\CardFieldValueMapper;
-use OCA\Kanso\Db\CardLabelMapper;
-use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
-use OCA\Kanso\Db\CardRelationMapper;
-use OCA\Kanso\Db\CardReviewMapper;
-use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChecklistItemMapper;
-use OCA\Kanso\Db\CommentMapper;
-use OCA\Kanso\Db\CommentReactionMapper;
-use OCA\Kanso\Db\ProjectCardMapper;
-use OCA\Kanso\Db\RecurRuleMapper;
-use OCA\Kanso\Db\ReminderMapper;
-use OCA\Kanso\Db\SubscriptionMapper;
 use OCA\Kanso\Service\CardAttachmentService;
-use OCA\Kanso\Service\CardTimeEntryService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\TrashService;
@@ -46,26 +32,15 @@ class TrashServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
-	private CardLabelMapper&MockObject $cardLabelMapper;
-	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
-	private CardContactMapper&MockObject $cardContactMapper;
-	private CardReviewMapper&MockObject $cardReviewMapper;
-	private ChecklistItemMapper&MockObject $checklistItemMapper;
-	private CommentMapper&MockObject $commentMapper;
-	private CommentReactionMapper&MockObject $commentReactionMapper;
-	private SubscriptionMapper&MockObject $subscriptionMapper;
-	private CardLinkMapper&MockObject $cardLinkMapper;
-	private CardRelationMapper&MockObject $cardRelationMapper;
-	private ProjectCardMapper&MockObject $projectCardMapper;
+	private BoardCascade&MockObject $cascade;
 	private CardAttachmentService&MockObject $cardAttachmentService;
-	private CardTimeEntryService&MockObject $cardTimeEntryService;
-	private CardRunningTimerMapper&MockObject $cardRunningTimerMapper;
-	private CardFieldValueMapper&MockObject $cardFieldValueMapper;
-	private ReminderMapper&MockObject $reminderMapper;
-	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private NotificationService&MockObject $notifications;
 	private TrashService $service;
+
+	/** @var list<string> ordered log of the destructive steps taken */
+	private array $steps = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -73,54 +48,66 @@ class TrashServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
-		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
-		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
-		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
-		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
-		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
-		$this->commentMapper = $this->createMock(CommentMapper::class);
-		$this->commentReactionMapper = $this->createMock(CommentReactionMapper::class);
-		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
-		$this->cardLinkMapper = $this->createMock(CardLinkMapper::class);
-		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
-		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
+		$this->cascade = $this->createMock(BoardCascade::class);
 		$this->cardAttachmentService = $this->createMock(CardAttachmentService::class);
-		$this->cardTimeEntryService = $this->createMock(CardTimeEntryService::class);
-		$this->cardRunningTimerMapper = $this->createMock(CardRunningTimerMapper::class);
-		$this->cardFieldValueMapper = $this->createMock(CardFieldValueMapper::class);
-		$this->reminderMapper = $this->createMock(ReminderMapper::class);
-		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->boardAccess->method('contextFor')->willReturnCallback(
 			static fn (Board $board, string $uid): ViewerContext => ViewerContext::forMember($uid, (int)$board->getId(), ViewerContext::ROLE_INTERNAL, true),
 		);
 		// Default: every card is visible to the actor (assertVisible passes).
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->notifications = $this->createMock(NotificationService::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->cardLabelMapper,
-			$this->cardAssigneeMapper,
-			$this->cardContactMapper,
-			$this->cardReviewMapper,
-			$this->checklistItemMapper,
-			$this->commentMapper,
-			$this->commentReactionMapper,
-			$this->subscriptionMapper,
-			$this->cardLinkMapper,
-			$this->cardRelationMapper,
-			$this->projectCardMapper,
+			$this->cascade,
 			$this->cardAttachmentService,
-			$this->cardTimeEntryService,
-			$this->cardRunningTimerMapper,
-			$this->cardFieldValueMapper,
-			$this->reminderMapper,
-			$this->recurRuleMapper,
 			$this->boardAccess,
 			$this->visibilityGuard,
+			$this->notifications,
 		);
+	}
+
+	/**
+	 * Wires every destructive collaborator to append to {@see $steps}, so the
+	 * ORDER of the purge - grandchildren before the parents that locate them,
+	 * bytes before the rows naming them, the card row last - is assertable
+	 * rather than assumed.
+	 */
+	private function recordSteps(): void {
+		$this->cascade->method('idsIn')
+			->willReturnCallback(static fn (string $table): array => match ($table) {
+				'kanso_comments' => [50, 51],
+				// The card's checklist steps - `step_assigned` notifications are
+				// keyed by ITEM id, not by card id (#3745).
+				'kanso_checklist_items' => [61, 62],
+				default => [],
+			});
+		$this->notifications->method('dismissAllForObjects')
+			->willReturnCallback(function (string $objectType, array $ids): void {
+				$this->steps[] = 'notifications:' . $objectType . ':' . implode(',', $ids);
+			});
+		$this->cascade->method('deleteIn')
+			->willReturnCallback(function (string $table, string $column, array $ids): int {
+				$this->steps[] = 'deleteIn:' . $table . ':' . $column . ':' . implode(',', $ids);
+				return count($ids);
+			});
+		$this->cardAttachmentService->method('deleteAllForCard')
+			->willReturnCallback(function (int $cardId): void {
+				$this->steps[] = 'storage:' . $cardId;
+			});
+		$this->cascade->method('deleteByCardIds')
+			->willReturnCallback(function (array $ids): int {
+				$this->steps[] = 'card-scoped:' . implode(',', $ids);
+				return 0;
+			});
+		$this->cardMapper->method('delete')
+			->willReturnCallback(function (Card $card): Card {
+				$this->steps[] = 'card:' . $card->getId();
+				return $card;
+			});
 	}
 
 	private function board(int $id = 1): Board {
@@ -270,50 +257,71 @@ class TrashServiceTest extends TestCase {
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
 			->with(self::anything(), 'alice', PermissionService::PERMISSION_MANAGE);
-
-		$this->cardLabelMapper->expects(self::once())->method('deleteByCard')->with(9);
-		$this->cardAssigneeMapper->expects(self::once())->method('deleteByCard')->with(9);
-		$this->cardContactMapper->expects(self::once())->method('deleteByCard')->with(9);
-		$this->checklistItemMapper->expects(self::once())->method('deleteByCard')->with(9);
-		// Reactions are dropped by comment id BEFORE the comments themselves (#3550).
-		$this->commentMapper->expects(self::once())->method('idsByCard')->with(9)->willReturn([50, 51]);
-		$this->commentReactionMapper->expects(self::once())->method('deleteByComments')->with([50, 51]);
-		$this->commentMapper->expects(self::once())->method('deleteByCard')->with(9);
-		$this->subscriptionMapper->expects(self::once())->method('deleteByCard')->with(9);
-		// Attachments cascade through the service (objects + rows), not a mapper.
-		$this->cardAttachmentService->expects(self::once())->method('deleteAllForCard')->with(9);
-		// Manual time-tracking entries are cascaded too (#3536).
-		$this->cardTimeEntryService->expects(self::once())->method('deleteAllForCard')->with(9);
-		// Custom-field values are cascaded too (#3537).
-		$this->cardFieldValueMapper->expects(self::once())->method('deleteByCard')->with(9);
-		// Personal reminders are cascaded too (#3816).
-		$this->reminderMapper->expects(self::once())->method('deleteByCard')->with(9);
-		// Recurrence rules anchored on the purged card are cascaded too (#4123),
-		// so no orphan schedule keeps failing to spawn every cron pass.
-		$this->recurRuleMapper->expects(self::once())->method('deleteByTemplateCardId')->with(9);
-		$this->cardMapper->expects(self::once())->method('delete')->with($card);
+		$this->recordSteps();
 		$this->changeNotifier->expects(self::once())
 			->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_DELETE, 'alice')
 			->willReturn(new Change());
 
 		$this->service->purge(9, 'alice');
+
+		self::assertSame(
+			[
+				// Nextcloud's own notification rows go first, while the objects
+				// that key them still exist - the card AND its checklist steps,
+				// because `step_assigned` is keyed by item id. Ahead of every
+				// destructive step, so a sweep failure leaves the card whole.
+				'notifications:card:9',
+				'notifications:checklist_item:61,62',
+				// Reactions are dropped by comment id BEFORE the comments that
+				// located them are hard-deleted (#3550).
+				'deleteIn:kanso_comment_reactions:comment_id:50,51',
+				// Then the bytes, while the rows naming the storage keys are
+				// still there (#3526).
+				'storage:9',
+				// Then every card-scoped table in one registry-driven sweep.
+				'card-scoped:9',
+				'card:9',
+			],
+			$this->steps,
+		);
 	}
 
-	public function testPurgeDropsRecurrenceRulesAnchoredOnTheCard(): void {
-		// #4123: a rule whose template card is purged can never spawn again - its
-		// template read throws every cron pass and logs a failed spawn forever.
-		// Purge must drop the card's recurrence rule(s) symmetric with the other
-		// cascade deleteByCard calls.
+	public function testPurgeSweepsEveryCardScopedTableThroughTheSharedRegistry(): void {
+		// The whole point of the collapse (#10456): the per-card purge no longer
+		// carries its own copy of the card-scoped table list, so it cannot drift
+		// from the board cascade's. What it sweeps is exactly what
+		// BoardCascade::BY_CARD_ID declares - the list the migration-scanning
+		// guard (BoardCascadeCompletenessTest) keeps complete.
 		$card = $this->trashedCard(9);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-
-		$this->recurRuleMapper->expects(self::once())
-			->method('deleteByTemplateCardId')
-			->with(9);
+		$this->cascade->expects(self::once())
+			->method('deleteByCardIds')
+			->with([9])
+			->willReturn(0);
 
 		$this->service->purge(9, 'alice');
+
+		// The tables the hand-written cascade had grown one bug report at a time
+		// must all still be reachable from the registry, or the collapse dropped
+		// a sweep: running timers (#73), time entries (#3536), field values
+		// (#3537), reminders (#3816) and template-anchored recurrence rules
+		// (#4123) - the last keyed by template_card_id, not card_id, so an
+		// orphan schedule cannot keep failing to spawn every cron pass.
+		foreach ([
+			'kanso_card_running_timers' => 'card_id',
+			'kanso_card_time_entries' => 'card_id',
+			'kanso_card_field_values' => 'card_id',
+			'kanso_reminders' => 'card_id',
+			'kanso_recur_rules' => 'template_card_id',
+		] as $table => $column) {
+			self::assertContains(
+				$column,
+				BoardCascade::BY_CARD_ID[$table] ?? [],
+				$table . ' is no longer swept by card id, so purging a card strands its rows.',
+			);
+		}
 	}
 
 	public function testPurgeCleansUpAttachmentsBeforeHardDeletingCard(): void {
@@ -330,6 +338,90 @@ class TrashServiceTest extends TestCase {
 		$this->service->purge(9, 'alice');
 	}
 
+	public function testNotificationSweepNamesOnlyThisCardsOwnObjects(): void {
+		// The one way this sweep could destroy someone else's data: naming an
+		// object id that is not this card's. dismissAllForObjects() matches on
+		// app + object type + object id with NO user, so every id passed here
+		// clears that object's bell entries for EVERY recipient - a foreign card
+		// id would silently wipe a live card's notifications.
+		//
+		// Sub-cards are absent on purpose, and that absence is the same safety
+		// property read the other way: CardService::delete() detaches children
+		// (parent_card_id cleared) before the soft-delete, so a trashed card has
+		// none and this purge cascades to no other card. A child id here would
+		// be a foreign id.
+		$swept = [];
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cascade->method('idsIn')
+			->willReturnCallback(static fn (string $table): array => $table === 'kanso_checklist_items'
+				? [61, 62]
+				: []);
+		$this->cascade->method('deleteIn')->willReturn(0);
+		$this->cascade->method('deleteByCardIds')->willReturn(0);
+		$this->notifications->method('dismissAllForObjects')
+			->willReturnCallback(function (string $objectType, array $ids) use (&$swept): void {
+				$swept[$objectType] = $ids;
+			});
+
+		$this->service->purge(9, 'alice');
+
+		// Exactly the purged card, and exactly the checklist items resolved from
+		// it - nothing wider.
+		self::assertSame(
+			[
+				NotificationService::OBJECT_CARD => [9],
+				NotificationService::OBJECT_CHECKLIST_ITEM => [61, 62],
+			],
+			$swept,
+		);
+	}
+
+	public function testNotificationSweepResolvesStepsFromThisCardAlone(): void {
+		// The checklist half is load-bearing (#3745: `step_assigned` is keyed by
+		// ITEM id, not card id) AND is the sweep's second chance to name a
+		// foreign object - it takes whatever the lookup returns. Pin the lookup
+		// itself to this card's id.
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cascade->expects(self::atLeastOnce())
+			->method('idsIn')
+			->willReturnCallback(static function (string $table, string $column, array $ids): array {
+				if ($table === 'kanso_checklist_items') {
+					self::assertSame('card_id', $column);
+					self::assertSame([9], $ids);
+					return [61];
+				}
+				return [];
+			});
+
+		$this->service->purge(9, 'alice');
+	}
+
+	public function testPurgeStopsAndKeepsTheCardWhenTheNotificationSweepFails(): void {
+		// Interactive path, unlike the cron-driven board purge: a bell backend
+		// that cannot be swept must NOT yield a "permanently deleted" card with
+		// permanent badge residue. The sweep runs ahead of every destructive
+		// step, so its failure propagates with the card still whole in the trash
+		// - the user sees the delete fail and can retry it.
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->notifications->method('dismissAllForObjects')
+			->willThrowException(new \OCP\DB\Exception('notifications unavailable'));
+
+		$this->cascade->expects(self::never())->method('deleteIn');
+		$this->cascade->expects(self::never())->method('deleteByCardIds');
+		$this->cardAttachmentService->expects(self::never())->method('deleteAllForCard');
+		$this->cardMapper->expects(self::never())->method('delete');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(\OCP\DB\Exception::class);
+		$this->service->purge(9, 'alice');
+	}
+
 	public function testPurgeHiddenCardReadsAsMissing(): void {
 		// Same 404 semantics on the hard delete: no cascade may fire for a card
 		// the actor cannot see.
@@ -340,6 +432,10 @@ class TrashServiceTest extends TestCase {
 			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
 		$this->cardMapper->expects(self::never())->method('delete');
 		$this->cardAttachmentService->expects(self::never())->method('deleteAllForCard');
+		$this->cascade->expects(self::never())->method('deleteByCardIds');
+		// Including the bell: a card the actor cannot see must not have its
+		// notifications cleared for everyone else either.
+		$this->notifications->expects(self::never())->method('dismissAllForObjects');
 
 		$this->expectException(DoesNotExistException::class);
 		$this->service->purge(9, 'mallory');
@@ -351,6 +447,9 @@ class TrashServiceTest extends TestCase {
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->cardMapper->expects(self::never())->method('delete');
+		// A live card keeps its notifications - they are current entries, not
+		// residue.
+		$this->notifications->expects(self::never())->method('dismissAllForObjects');
 
 		$this->expectException(InvalidInputException::class);
 		$this->service->purge(9, 'alice');
@@ -396,8 +495,10 @@ class TrashServiceTest extends TestCase {
 			->with(self::anything(), 'editor', PermissionService::PERMISSION_MANAGE)
 			->willThrowException(new NotPermittedException());
 		$this->cardMapper->expects(self::never())->method('delete');
-		$this->commentMapper->expects(self::never())->method('deleteByCard');
+		$this->cascade->expects(self::never())->method('deleteByCardIds');
+		$this->cascade->expects(self::never())->method('deleteIn');
 		$this->cardAttachmentService->expects(self::never())->method('deleteAllForCard');
+		$this->notifications->expects(self::never())->method('dismissAllForObjects');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->purge(9, 'editor');

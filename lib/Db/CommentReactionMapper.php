@@ -94,24 +94,4 @@ class CommentReactionMapper extends QBMapper {
 
 		return $rows;
 	}
-
-	/**
-	 * Hard-deletes every reaction on the given comments - cascade for a card /
-	 * comment purge. Empty id set → 0.
-	 *
-	 * @param int[] $commentIds
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByComments(array $commentIds): int {
-		if ($commentIds === []) {
-			return 0;
-		}
-
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->in('comment_id', $qb->createNamedParameter($commentIds, IQueryBuilder::PARAM_INT_ARRAY)));
-
-		return $qb->executeStatement();
-	}
 }

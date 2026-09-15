@@ -223,6 +223,32 @@ class BoardPortabilityControllerTest extends TestCase {
 		self::assertGreaterThan(0, $limit->getPeriod());
 	}
 
+	/**
+	 * Duplicate writes exactly what import writes - a whole board of rows, plus the
+	 * card graph when asked - but needs no uploaded document at all, so it must
+	 * carry a limit too or it is just the open door beside the closed one. Asserted
+	 * on the attribute, and only that a limit exists, so the number stays tunable.
+	 */
+	public function testDuplicateCarriesAPerUserRateLimit(): void {
+		$method = new \ReflectionMethod(BoardPortabilityController::class, 'duplicate');
+		$attributes = $method->getAttributes(UserRateLimit::class);
+
+		self::assertCount(1, $attributes, 'duplicate() must declare a UserRateLimit');
+		$limit = $attributes[0]->newInstance();
+		self::assertGreaterThan(0, $limit->getLimit());
+		self::assertGreaterThan(0, $limit->getPeriod());
+	}
+
+	/**
+	 * The limit belongs on the WRITE paths only: export just streams a board the
+	 * caller may already read, and a user legitimately re-downloads backups.
+	 */
+	public function testExportIsNotRateLimited(): void {
+		$method = new \ReflectionMethod(BoardPortabilityController::class, 'export');
+
+		self::assertCount(0, $method->getAttributes(UserRateLimit::class), 'export() must stay unlimited');
+	}
+
 	// ── whole-board egress is internal-only (#3744) ───────────────────────────
 
 	public function testExportIsForbiddenForExternalMembers(): void {

@@ -3,6 +3,70 @@
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
+// #10478 — the Import menu captioned every entry "Import a board", but CSV does
+// not create one: it maps rows onto a board + column you already have. The menu
+// also shipped a disabled "GitHub Projects (coming soon)" entry with nothing
+// behind it. Assert the menu now says what each entry actually does, and that no
+// "coming soon" affordance renders.
+test.describe('Import menu describes what each entry does', () => {
+	const stamp = Math.floor(Date.now() / 1000)
+	const state = {}
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: 'CSV Menu ' + stamp })
+		state.boardId = board.id
+		state.boardTitle = board.title
+		await api.post('/stacks', { boardId: board.id, title: 'Inbox' })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('groups CSV under its own caption and sends it to a destination picker', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/`)
+		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
+
+		await page.getByRole('button', { name: 'Import' }).click()
+
+		// The whole menu, in order. The board importers sit under "Import a board";
+		// CSV sits under its own caption because it does something else. This one
+		// assertion also pins that nothing extra (e.g. a "coming soon" item) renders.
+		const caption = page.locator('li.app-navigation-caption', { hasText: 'Import a board' })
+		await expect(caption).toBeVisible({ timeout: 6_000 })
+		const entries = (await caption.locator('xpath=..').locator('> li').allInnerTexts())
+			.map((s) => s.trim())
+			.filter(Boolean)
+		expect(entries).toEqual([
+			'Import a board',
+			'Nextcloud Deck',
+			'Kanso export (.zip)',
+			'Trello (.json)',
+			'Add cards to an existing board',
+			'CSV file',
+		])
+
+		// Belt-and-braces: no disabled "coming soon" promise anywhere in the menu.
+		await expect(page.getByText(/coming soon/i)).toHaveCount(0)
+
+		// And the CSV entry really does lead to a destination picker over boards that
+		// already exist — not a create-a-board flow.
+		await page.getByText('CSV file', { exact: true }).click()
+		await page.locator('[data-test="csv-import-paste"]').fill('title\nA row')
+		await page.locator('[data-test="csv-import-next"]').click()
+
+		const boardSelect = page.locator('[data-test="csv-import-board"]')
+		await expect(boardSelect).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('[data-test="csv-import-stack"]')).toBeVisible()
+		// The board we created up-front is offered as a target, which is only true
+		// of a picker over existing boards.
+		await boardSelect.selectOption({ label: state.boardTitle })
+		await expect(page.locator('[data-test="csv-import-stack"]').locator('option', { hasText: 'Inbox' }))
+			.toHaveCount(1, { timeout: 10_000 })
+	})
+})
+
 // #3678 — Import cards from a CSV into an EXISTING board's stack via the
 // board-list Import menu, then assert the mapped cards landed on that stack.
 test.describe('Import cards from CSV', () => {

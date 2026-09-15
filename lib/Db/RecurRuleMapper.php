@@ -69,10 +69,28 @@ class RecurRuleMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function findTemplateCardIdsByBoard(int $boardId): array {
+		return $this->findTemplateCardIdsByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::findTemplateCardIdsByBoard()} (#10298):
+	 * the same id list over MANY boards in ONE query, for the cross-board Views
+	 * feed - whose enrichment must not scale with how many boards the user can
+	 * read. Card ids are globally unique, so the union needs no per-board
+	 * nesting; the enabled-only gate is unchanged.
+	 *
+	 * @param int[] $boardIds
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function findTemplateCardIdsByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('template_card_id')
 			->from($this->getTableName())
-			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('enabled', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
 
 		$result = $qb->executeQuery();
@@ -123,23 +141,6 @@ class RecurRuleMapper extends QBMapper {
 			->where($qb->expr()->eq('template_card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
 
 		return $this->findEntities($qb);
-	}
-
-	/**
-	 * Removes every recurrence rule anchored on a template card - the cascade for
-	 * a card purge. A rule whose template is hard-deleted can never spawn again
-	 * (its template read throws), so purging the card must drop its rules too;
-	 * otherwise an enabled orphan rule makes every cron pass log a failed spawn.
-	 *
-	 * @return int number of deleted rows (0 when the card anchored no rules)
-	 * @throws Exception
-	 */
-	public function deleteByTemplateCardId(int $templateCardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('template_card_id', $qb->createNamedParameter($templateCardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
 	}
 
 	/**

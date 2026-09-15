@@ -45,12 +45,36 @@ class LabelMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function findByBoard(int $boardId): array {
+		return $this->findByBoards([$boardId])[$boardId] ?? [];
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::findByBoard()} (#10298): the labels of
+	 * MANY boards in ONE query, for the cross-board Views feed - whose label
+	 * union must not cost one query per readable board. Grouped BY BOARD (label
+	 * ids are only unique per board) and each group still in creation order, so
+	 * a caller walking its board list emits exactly the sequence the per-board
+	 * loop did. Boards with no labels are absent from the map.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, Label[]> map of boardId => labels in creation order
+	 * @throws Exception
+	 */
+	public function findByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->orderBy('id', 'ASC');
 
-		return $this->findEntities($qb);
+		$map = [];
+		foreach ($this->findEntities($qb) as $label) {
+			$map[(int)$label->getBoardId()][] = $label;
+		}
+
+		return $map;
 	}
 }

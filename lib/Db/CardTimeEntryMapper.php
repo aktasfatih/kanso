@@ -55,21 +55,6 @@ class CardTimeEntryMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every time-entry ROW of a card - the cascade when a card is
-	 * permanently purged.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
-	}
-
-	/**
 	 * Total seconds logged on a card - powers the card-detail `timeSpent` total
 	 * without loading the rows. A card with no entries sums to 0.
 	 *
