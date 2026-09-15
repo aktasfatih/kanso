@@ -346,7 +346,7 @@ function openCard(card) {
 }
 
 .my-cards-view__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 16px 0;
 }
 
@@ -367,7 +367,7 @@ function openCard(card) {
 }
 
 .my-cards-view__section-title--overdue {
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .my-cards-view__count {
@@ -439,7 +439,7 @@ function openCard(card) {
 }
 
 .my-cards-view__due--overdue {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-weight: 600;
 }
 

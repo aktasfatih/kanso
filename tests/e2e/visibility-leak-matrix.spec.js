@@ -412,11 +412,52 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		await api(ADMIN, 'PATCH', `/cards/${state.cards.PUB.id}`, { duedate: '2027-01-01T12:00:00Z' })
 		await api(ADMIN, 'PATCH', `/cards/${state.cards.PROV.id}`, { duedate: '2027-01-01T12:00:00Z' })
 
+		// #135 widened the anonymous payload with the checklist ITEMS and the
+		// parent→child edges. Both are new ways a hidden card could ride out, and
+		// public-share.spec.js cannot catch either — it never creates a non-`public`
+		// card. So give PUB a PRIVATE child and a checklist here, where the whole
+		// visibility matrix already exists.
+		const privateChild = await api(ADMIN, 'POST', '/cards', {
+			stackId: state.stackId, title: title('PUBCHILD'),
+		})
+		await api(ADMIN, 'PUT', `/cards/${privateChild.id}/parent`, { parentCardId: state.cards.PUB.id })
+		await api(ADMIN, 'PATCH', `/cards/${privateChild.id}`, { visibility: 'private' })
+		await api(ADMIN, 'POST', `/cards/${state.cards.PUB.id}/checklist`, { title: `PUBSTEP ${token}` })
+		await api(ADMIN, 'POST', `/cards/${privateChild.id}/checklist`, { title: `PRIVSTEP ${token}` })
+
 		const share = await api(ADMIN, 'POST', `/boards/${state.boardId}/public-share`)
 		const pub = await fetch(`${API}/public/${share.token}`, { headers: { 'OCS-APIREQUEST': 'true' } })
 		expect(pub.ok).toBe(true)
 		const snapshot = await pub.json()
 		expectTitles(snapshot.cards, ['PUB'])
+
+		const anonPub = snapshot.cards.find((c) => c.id === state.cards.PUB.id)
+		expect(anonPub).toBeTruthy()
+		// The public card's OWN steps are served — otherwise the two assertions
+		// below could pass simply because the feature did nothing.
+		expect(anonPub.checklistItems.map((i) => i.title)).toEqual([`PUBSTEP ${token}`])
+		// THE leak assertions. The private child must not be named as a sub-card
+		// (the edge alone would disclose that a card the visitor cannot see
+		// exists), and its step must not arrive with the board's other steps.
+		//
+		// Verified by mutation, and the two are NOT symmetric. The childIds one
+		// goes red on its own the moment the edge is taken from an unfiltered
+		// source (CardMapper::findChildren) instead of the post-filter card list.
+		// The step one is a SECOND line: checklist items pass through
+		// ChecklistItemMapper::findByBoardPublicOnly's public-only scope AND are
+		// consumed per surviving card, so a private step only surfaces if BOTH
+		// fail — remove either alone and this stays green. The first line has its
+		// own guard at tests/unit/Db/ChecklistItemMapperTest.php (it asserts the
+		// query really binds the 'public' scope), so the pair is covered.
+		expect(anonPub.childIds).toEqual([])
+		const json = JSON.stringify(snapshot)
+		expect(json).not.toContain('PRIVSTEP')
+		expect(json).not.toContain(title('PUBCHILD'))
+
+		// Clean up so the trash/stat assertions later in this serial file keep
+		// their exact counts.
+		await api(ADMIN, 'DELETE', `/cards/${privateChild.id}`)
+		await api(ADMIN, 'DELETE', `/cards/${privateChild.id}/purge`)
 
 		const feed = await api(ADMIN, 'POST', `/boards/${state.boardId}/calendar-feed`)
 		const ics = await fetch(`${BASE}/index.php/apps/kanso/feed/${feed.token}.ics`)

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import '@nextcloud/dialogs/style.css'
+import './styles/status-tokens.css'
 import './styles/kanso-page-header.css'
+import './styles/markdown.css'
 import './styles/mobile.css'
 import { createApp } from 'vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'

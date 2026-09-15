@@ -616,20 +616,10 @@ const extraAssigneeCount = computed(() => {
 }
 
 .card-tile {
-	/* Legible status colours for small foreground elements (bug icon, overdue
-	 * date, urgent priority, blocked chip, warning/amber review + priority chips).
-	 * NC's --color-error / --color-warning dark shades are near black on the dark
-	 * tile surface (#3905/#4054); brighten them under dark themes while keeping
-	 * the stock values in light mode. Scoped to the tile so they can't leak. */
-	--kanso-error-legible: var(--color-error, #e30000);
-	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
-	--kanso-warning-legible: var(--color-warning, #e07b00);
-	/* Legible success green twin: stock --color-success in light, a brighter
-	 * green (#3fb950) under dark so "complete"/"approved"/"feature" pills stay
-	 * readable on the dark tile surface. */
-	--kanso-success-legible: var(--color-success, #46ba61);
-	--kanso-success-legible-rgb: 70, 186, 97;
-
+	/* Status colours for small foreground elements (bug icon, overdue date,
+	 * urgent priority, blocked chip, warning/amber review + priority chips) come
+	 * from the shared --kanso-*-legible tokens in src/styles/status-tokens.css,
+	 * which are theme-aware in both light and dark. */
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
@@ -642,29 +632,6 @@ const extraAssigneeCount = computed(() => {
 	cursor: pointer;
 	text-align: left;
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* Explicit dark themes (theme picker) + auto (prefers-color-scheme) dark.
- * #ff6b6b reads clearly on the dark surface and still passes AA as border/icon. */
-body.theme--dark .card-tile,
-[data-theme-dark] .card-tile,
-[data-themes*='dark'] .card-tile {
-	--kanso-error-legible: #ff6b6b;
-	--kanso-error-legible-rgb: 255, 107, 107;
-	--kanso-warning-legible: #d29922;
-	--kanso-success-legible: #3fb950;
-	--kanso-success-legible-rgb: 63, 185, 80;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .card-tile,
-	body:not(.theme--light):not(.theme--dark) .card-tile {
-		--kanso-error-legible: #ff6b6b;
-		--kanso-error-legible-rgb: 255, 107, 107;
-		--kanso-warning-legible: #d29922;
-		--kanso-success-legible: #3fb950;
-		--kanso-success-legible-rgb: 63, 185, 80;
-	}
 }
 
 .card-tile:hover {
@@ -750,13 +717,13 @@ body.theme--dark .card-tile,
 .card-tile__due--overdue {
 	color: var(--kanso-error-legible);
 	border-color: var(--kanso-error-legible);
-	background: rgba(var(--kanso-error-legible-rgb), 0.08);
+	background: color-mix(in srgb, var(--kanso-error-legible) 8%, transparent);
 }
 
 .card-tile__due--soon {
 	color: var(--kanso-warning-legible);
 	border-color: var(--kanso-warning-legible);
-	background: rgba(240, 168, 68, 0.08);
+	background: color-mix(in srgb, var(--kanso-warning-legible) 8%, transparent);
 }
 
 /* Label chips */
@@ -832,7 +799,7 @@ body.theme--dark .card-tile,
 .card-tile__checklist--complete {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.1);
+	background: var(--kanso-success-tint);
 }
 
 /* Child-progress badge */
@@ -850,7 +817,7 @@ body.theme--dark .card-tile,
 .card-tile__children--complete {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.1);
+	background: var(--kanso-success-tint);
 }
 
 /* Comment count badge */
@@ -893,14 +860,14 @@ body.theme--dark .card-tile,
 .card-tile__priority--1 {
 	color: var(--color-text-maxcontrast, #767676);
 	border-color: var(--color-text-maxcontrast, #767676);
-	background: rgba(136, 136, 136, 0.1);
+	background: color-mix(in srgb, var(--kanso-neutral-legible) 12%, transparent);
 }
 
 /* Medium: blue */
 .card-tile__priority--2 {
 	color: var(--color-primary-element, #0082c9);
 	border-color: var(--color-primary-element, #0082c9);
-	background: rgba(0, 130, 201, 0.1);
+	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, transparent);
 }
 
 /* High: orange — --kanso-warning-legible keeps ≥4.5:1 text contrast in both
@@ -908,14 +875,14 @@ body.theme--dark .card-tile,
 .card-tile__priority--3 {
 	color: var(--kanso-warning-legible);
 	border-color: var(--kanso-warning-legible);
-	background: rgba(224, 123, 0, 0.1);
+	background: var(--kanso-warning-tint);
 }
 
 /* Urgent: red */
 .card-tile__priority--4 {
 	color: var(--kanso-error-legible);
 	border-color: var(--kanso-error-legible);
-	background: rgba(var(--kanso-error-legible-rgb), 0.1);
+	background: var(--kanso-error-tint);
 }
 
 /* Review state chip */
@@ -933,19 +900,19 @@ body.theme--dark .card-tile,
 .card-tile__review--pending {
 	color: var(--kanso-warning-legible);
 	border-color: var(--kanso-warning-legible);
-	background: rgba(240, 168, 68, 0.08);
+	background: color-mix(in srgb, var(--kanso-warning-legible) 8%, transparent);
 }
 
 .card-tile__review--approved {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.1);
+	background: var(--kanso-success-tint);
 }
 
 .card-tile__review--changes_requested {
 	color: var(--kanso-error-legible);
 	border-color: var(--kanso-error-legible);
-	background: rgba(var(--kanso-error-legible-rgb), 0.1);
+	background: var(--kanso-error-tint);
 }
 
 /* Visibility badge (#3743) - neutral lock chip for internal/private cards */
@@ -973,7 +940,7 @@ body.theme--dark .card-tile,
 	border-radius: 8px;
 	color: var(--kanso-error-legible);
 	border: 1px solid var(--kanso-error-legible);
-	background: rgba(var(--kanso-error-legible-rgb), 0.08);
+	background: color-mix(in srgb, var(--kanso-error-legible) 8%, transparent);
 }
 
 /* Waiting-on-client chip (#3746) - amber "ball is with the client" signal.
@@ -990,7 +957,7 @@ body.theme--dark .card-tile,
 	border-radius: 8px;
 	color: var(--kanso-warning-legible);
 	border: 1px solid var(--kanso-warning-legible);
-	background: rgba(240, 168, 68, 0.1);
+	background: var(--kanso-warning-tint);
 }
 
 /* Sub-card marker - a muted ↳ glyph in the same neutral vocabulary as the

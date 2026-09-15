@@ -1213,6 +1213,7 @@ msgstr ""
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
+#: src/views/PublicBoard.vue
 msgid "Checklist"
 msgstr ""
 
@@ -4967,6 +4968,7 @@ msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/PublicBoard.vue
 msgid "Sub-cards"
 msgstr ""
 

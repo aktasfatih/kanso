@@ -170,10 +170,10 @@ const fullTime = computed(() => {
 }
 
 .board-tile__badge--review {
-	color: var(--color-warning, #c98600);
+	color: var(--color-warning-text, #c98600);
 }
 
 .board-tile__badge--overdue {
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 </style>

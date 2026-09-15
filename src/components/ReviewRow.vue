@@ -122,33 +122,14 @@ const relativeTime = computed(() => {
 
 <style scoped>
 .review-row {
-	/* Legible success green for the approved badge: stock green in light,
-	 * brighter #3fb950 under dark so text/tint stay readable. */
-	--kanso-success-legible: var(--color-success, #46ba61);
-	--kanso-success-legible-rgb: 70, 186, 97;
-
+	/* The approved badge uses the shared --kanso-success-legible token from
+	 * src/styles/status-tokens.css. */
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	padding: 12px 14px;
 	cursor: pointer;
 	border-radius: var(--border-radius-large, 8px);
-}
-
-/* Brighten success green under dark themes (explicit picker + auto). */
-body.theme--dark .review-row,
-[data-theme-dark] .review-row,
-[data-themes*='dark'] .review-row {
-	--kanso-success-legible: #3fb950;
-	--kanso-success-legible-rgb: 63, 185, 80;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .review-row,
-	body:not(.theme--light):not(.theme--dark) .review-row {
-		--kanso-success-legible: #3fb950;
-		--kanso-success-legible-rgb: 63, 185, 80;
-	}
 }
 
 .review-row__content {
@@ -224,7 +205,7 @@ body.theme--dark .review-row,
 
 .review-row__state-badge--approved {
 	color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.1);
+	background: var(--kanso-success-tint);
 }
 
 /* ── Responsive: stack the row on phones ─────────────────────────────────────

@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
@@ -129,6 +130,22 @@ class PublicShareServiceTest extends TestCase {
 		return $c;
 	}
 
+	private function checklistItem(int $id, int $cardId, string $title, bool $done): ChecklistItem {
+		$item = new ChecklistItem();
+		$item->setId($id);
+		$item->setCardId($cardId);
+		$item->setTitle($title);
+		$item->setDone($done);
+		$item->setSortKey('m' . $id);
+		// The person data a checklist item carries. Set DELIBERATELY on every
+		// fixture item so the "{title, done} only" assertions below cannot pass
+		// vacuously: if the payload ever delegated to ChecklistItem::jsonSerialize()
+		// these would ride an anonymous link.
+		$item->setAssignedUser('stepowner');
+		$item->setAssignedRole('external');
+		return $item;
+	}
+
 	private function label(int $id, string $title, string $color): Label {
 		$l = new Label();
 		$l->setId($id);
@@ -241,6 +258,13 @@ class PublicShareServiceTest extends TestCase {
 		$this->checklistItemMapper->method('progressByBoardPublicOnly')->with(1)->willReturn([
 			100 => ['total' => 3, 'done' => 1],
 		]);
+		$this->checklistItemMapper->method('findByBoardPublicOnly')->with(1)->willReturn([
+			100 => [
+				$this->checklistItem(1, 100, 'Step one', true),
+				$this->checklistItem(2, 100, 'Step two', false),
+				$this->checklistItem(3, 100, 'Step three', false),
+			],
+		]);
 	}
 
 	public function testGetPublicBoardReturnsStrippedPayload(): void {
@@ -295,8 +319,12 @@ class PublicShareServiceTest extends TestCase {
 		// label/cover - no PII, no internal identifier), so it is a permitted key.
 		// `coverColor`, `startDate` and `estimate` (#3951) are presentational,
 		// non-person card content too - they carry no assignee/comment/member data.
+		// `checklistItems` and `childIds` (#135) are the read-only card detail's
+		// missing content: step {title, done} pairs and the ids of sub-cards the
+		// same payload already carries in full. Neither adds a person field - the
+		// narrow shapes are pinned by their own tests below.
 		self::assertSame(
-			['allDay', 'checklist', 'coverColor', 'description', 'duedate', 'estimate', 'humanId', 'id', 'labels', 'priority', 'stackId', 'startDate', 'status', 'title', 'type'],
+			['allDay', 'checklist', 'checklistItems', 'childIds', 'coverColor', 'description', 'duedate', 'estimate', 'humanId', 'id', 'labels', 'priority', 'stackId', 'startDate', 'status', 'title', 'type'],
 			$cardKeys
 		);
 
@@ -310,10 +338,121 @@ class PublicShareServiceTest extends TestCase {
 		// ('comment' is intentionally NOT in this list: the public-safe boolean
 		// gate `commentsEnabled` contains that substring; the OFF-state absence of
 		// any comment data is asserted directly above.)
+		//
+		// 'assigned' is listed SEPARATELY from 'assignee' on purpose: a checklist
+		// item's person fields are `assignedUser` / `assignedRole` (#135), and
+		// neither contains the substring 'assignee', so the older entry would not
+		// have caught them.
 		$json = json_encode($payload);
-		foreach (['owner', 'assignee', 'acl', 'webhook', 'subscriber', 'watcher', 'reviewState', 'activity', 'waiting'] as $forbidden) {
+		foreach (['owner', 'assignee', 'assigned', 'acl', 'webhook', 'subscriber', 'watcher', 'reviewState', 'activity', 'waiting'] as $forbidden) {
 			self::assertStringNotContainsStringIgnoringCase($forbidden, $json, "public payload leaked '$forbidden'");
 		}
+	}
+
+	// ── checklist items + sub-card references (#135) ───────────────────────
+	//
+	// The public share has NO per-card endpoint (appinfo/routes.php exposes only
+	// the SPA shell and this one payload), so everything the read-only detail can
+	// render has to ride this snapshot. It used to carry checklist COUNTS and no
+	// child linkage at all, which is why an anonymous reader saw "1/2" and no
+	// steps, and no sub-cards whatsoever.
+
+	public function testChecklistItemsAreExposedAsTitleAndDoneOnly(): void {
+		$this->primePublicBoard();
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		$items = $payload['cards'][0]['checklistItems'];
+		self::assertSame(
+			[
+				['title' => 'Step one', 'done' => true],
+				['title' => 'Step two', 'done' => false],
+				['title' => 'Step three', 'done' => false],
+			],
+			$items
+		);
+		// The EXACT key set of one item, so `assignedUser` (a raw login uid) and
+		// `assignedRole` (the internal EXTERNAL/INTERNAL side) can never drift back
+		// in behind a delegated ChecklistItem::jsonSerialize(). Both are set on
+		// every fixture item, so this is not vacuous.
+		self::assertSame(['title', 'done'], array_keys($items[0]));
+		$json = (string)json_encode($payload);
+		self::assertStringNotContainsString('stepowner', $json, 'a checklist step assignee uid leaked');
+		self::assertStringNotContainsString('external', $json, 'a checklist step role leaked');
+		// The counts still ride alongside, unchanged.
+		self::assertSame(['total' => 3, 'done' => 1], $payload['cards'][0]['checklist']);
+	}
+
+	public function testChildIdsAreScopedToTheCardsTheAnonymousReaderAlreadyHolds(): void {
+		$parent = $this->card(100, 10, 'Parent card');
+		$child = $this->card(101, 10, 'Child card');
+		$child->setParentCardId(100);
+		$this->primeCards([$this->stack(10, 'To do')], [$parent, $child]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertCount(2, $payload['cards']);
+		self::assertSame([101], $payload['cards'][0]['childIds']);
+		// The child itself is an ordinary top-level card on this board (the kanban
+		// surface has no levels), and it names no children of its own.
+		self::assertSame([], $payload['cards'][1]['childIds']);
+	}
+
+	public function testAChildFilteredOUTOfTheSnapshotIsNeverNamedAsASubCard(): void {
+		// The whole point of deriving the edges from the POST-filter card list: a
+		// child that the anonymous reader does not receive must not be referenced
+		// either, or the edge itself discloses that a hidden card exists.
+		$parent = $this->card(100, 10, 'Parent card');
+		$archivedChild = $this->card(101, 10, 'Archived child', true);
+		$archivedChild->setParentCardId(100);
+		$childInArchivedStack = $this->card(102, 11, 'Child in archived stack');
+		$childInArchivedStack->setParentCardId(100);
+		$this->primeCards(
+			[$this->stack(10, 'To do'), $this->stack(11, 'Archived col', true)],
+			[$parent, $archivedChild, $childInArchivedStack],
+		);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+
+		self::assertCount(1, $payload['cards']);
+		self::assertSame([], $payload['cards'][0]['childIds']);
+		$json = (string)json_encode($payload);
+		self::assertStringNotContainsString('Archived child', $json);
+		self::assertStringNotContainsString('Child in archived stack', $json);
+	}
+
+	public function testChildIdsCostNoExtraCardQuery(): void {
+		// The edges come out of the list this method already walks, so the
+		// "constant query count" property of the endpoint holds: the child lookups
+		// CardMapper offers (findChildren / findVisibleChildren) are not merely
+		// unused here, they bypass applyPublicOnly and must never be reachable
+		// from the anonymous path.
+		$parent = $this->card(100, 10, 'Parent card');
+		$child = $this->card(101, 10, 'Child card');
+		$child->setParentCardId(100);
+		$this->cardMapper->expects(self::never())->method('findChildren');
+		$this->cardMapper->expects(self::never())->method('findVisibleChildren');
+		$this->primeCards([$this->stack(10, 'To do')], [$parent, $child]);
+
+		self::assertSame([101], $this->service->getPublicBoard(self::TOKEN)['cards'][0]['childIds']);
+	}
+
+	/**
+	 * A public board built from an explicit stack + card list, with every
+	 * enrichment map empty. Deliberately thinner than primePublicBoard() so a
+	 * nesting fixture owns exactly the rows it asserts on.
+	 *
+	 * @param Stack[] $stacks
+	 * @param Card[] $cards
+	 */
+	private function primeCards(array $stacks, array $cards): void {
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN));
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn($stacks);
+		$this->cardMapper->method('findPublicByBoard')->with(1)->willReturn($cards);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('findByBoardPublicOnly')->willReturn([]);
 	}
 
 	public function testAssertTokenValidPassesForLiveToken(): void {

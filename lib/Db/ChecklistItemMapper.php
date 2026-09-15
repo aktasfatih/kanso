@@ -131,6 +131,47 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The ITEMS behind {@see self::progressByBoardPublicOnly()} (#135): every
+	 * checklist item of a board's PUBLIC cards, grouped by card and in display
+	 * order - the anonymous twin of {@see self::findByCard()}.
+	 *
+	 * ONE query for the whole board (same join and the same
+	 * {@see CardVisibilityScope::applyPublicOnly()} restriction as the count
+	 * query), so the public snapshot keeps its constant query count however many
+	 * cards carry a checklist. Cards with no items are absent from the map.
+	 *
+	 * Ordering matches findByCard(): `sort_key` with an `id` tiebreaker, because
+	 * checklist items carry no unique index on their sort key and two of them can
+	 * legitimately share one.
+	 *
+	 * The ENTITIES are returned, not a narrowed shape - a checklist item carries
+	 * `assigned_user` / `assigned_role`, so the caller building the anonymous
+	 * payload MUST hand-pick the fields it emits and never delegate to
+	 * {@see ChecklistItem::jsonSerialize()} (see PublicShareService).
+	 *
+	 * @return array<int, list<ChecklistItem>> map of cardId => items, in display order
+	 * @throws Exception
+	 */
+	public function findByBoardPublicOnly(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.*')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('ci.sort_key', 'ASC')
+			->addOrderBy('ci.id', 'ASC');
+		$this->visibilityScope->applyPublicOnly($qb, 'c');
+
+		$map = [];
+		foreach ($this->findEntities($qb) as $item) {
+			$map[(int)$item->getCardId()][] = $item;
+		}
+
+		return $map;
+	}
+
+	/**
 	 * Item counts grouped by card for a board's PUBLIC cards only - the
 	 * anonymous half of {@see self::countByBoard()}.
 	 *

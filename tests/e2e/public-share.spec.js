@@ -62,10 +62,18 @@ async function fetchPublic(token) {
 // past it whenever its value doesn't collide with one. An exact key set fails on
 // the drift itself, whatever the value turns out to be.
 const PUBLIC_CARD_KEYS = [
-	'allDay', 'checklist', 'coverColor', 'description', 'duedate', 'estimate',
-	'humanId', 'id', 'labels', 'priority', 'stackId', 'startDate', 'status',
-	'title', 'type',
+	'allDay', 'checklist', 'checklistItems', 'childIds', 'coverColor',
+	'description', 'duedate', 'estimate', 'humanId', 'id', 'labels', 'priority',
+	'stackId', 'startDate', 'status', 'title', 'type',
 ].sort()
+
+// And the key set of one checklist ITEM (#135). The steps used to reach the
+// anonymous reader as a bare "1/2" count; now they ship as content, which is
+// the one place on this payload where a person field could newly land — a
+// ChecklistItem row carries `assignedUser` (a login uid) and `assignedRole`
+// (the internal EXTERNAL/INTERNAL side). The server hand-writes {title, done};
+// this pins it so a future switch to the entity serializer fails here.
+const PUBLIC_CHECKLIST_ITEM_KEYS = ['done', 'title'].sort()
 
 // Likewise for one stack (PublicShareService.php:218-222): presentational only,
 // and never the internal board id.
@@ -292,10 +300,16 @@ test.describe('Public board is interactive read-only', () => {
 	// is a meaningful assertion (the tail only appears in the expanded detail).
 	// It leads with markdown (a **bold** run) so the detail can assert the body is
 	// rendered as HTML, not printed as raw markdown source.
-	const LONG_DESC = 'HEAD_MARKER **BOLD_MARKER_7788** ' + 'lorem ipsum dolor sit amet '.repeat(20) + 'TAIL_MARKER_UNIQUE_9317'
+	// It ends with a markdown list: templates/public.php is a SEPARATE css surface
+	// from the app bundle's src/styles/markdown.css, so the #139 list fix has to be
+	// asserted here too or the public share can regress on its own.
+	const LONG_DESC = 'HEAD_MARKER **BOLD_MARKER_7788** ' + 'lorem ipsum dolor sit amet '.repeat(20)
+		+ 'TAIL_MARKER_UNIQUE_9317\n\n- LIST_ITEM_ALPHA\n- LIST_ITEM_BETA'
 	const COVER = '31CC31'
 	// A token from the board's 'hours' estimate scale (set in beforeAll).
 	const ESTIMATE = '4'
+	const PARENT_TITLE = 'Parent with a sub-card'
+	const CHILD_TITLE = 'The sub-card itself'
 
 	let boardId = 0
 	let token = ''
@@ -319,11 +333,54 @@ test.describe('Public board is interactive read-only', () => {
 			startDate: '2026-03-04T00:00:00+00:00',
 			estimate: ESTIMATE,
 		})
+		// A nested pair (#135): the public payload used to carry no parent/child
+		// linkage at all, so a shared card's sub-cards were invisible on the link.
+		const parentId = (await api('POST', '/cards', { stackId, title: PARENT_TITLE })).body.id
+		const childId = (await api('POST', '/cards', { stackId, title: CHILD_TITLE })).body.id
+		expect((await api('PUT', `/cards/${childId}/parent`, { parentCardId: parentId })).status).toBe(200)
 		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
 	})
 
 	test.afterAll(async () => {
 		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('a card detail lists its sub-cards, resolved from the cards the visitor already holds', async ({ page }) => {
+		const res = await fetchPublic(token)
+		expect(res.status).toBe(200)
+		const parent = res.body.cards.find((c) => c.title === PARENT_TITLE)
+		const child = res.body.cards.find((c) => c.title === CHILD_TITLE)
+		expect(parent).toBeTruthy()
+		expect(child).toBeTruthy()
+		// IDs only, and every id addresses a card this same snapshot carries in
+		// full — which is exactly why naming the edge discloses nothing new.
+		expect(parent.childIds).toEqual([child.id])
+		// The child is an ordinary tile on the board too (the kanban surface draws
+		// no levels), and names no children of its own.
+		expect(child.childIds).toEqual([])
+		// A new permitted key, nothing more: the field list is still exactly the
+		// public one.
+		expect(Object.keys(parent).sort()).toEqual(PUBLIC_CARD_KEYS)
+
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: PARENT_TITLE })
+		await tile.scrollIntoViewIfNeeded()
+		await tile.click()
+		const detail = page.locator('.public-detail')
+		await expect(detail).toBeVisible()
+		const subs = detail.locator('.public-subcards')
+		await expect(subs).toBeVisible()
+		await expect(subs.locator('.public-subcard')).toHaveCount(1)
+		await expect(subs).toContainText(CHILD_TITLE)
+		// Still read-only: a reference, not an editor.
+		await expect(subs.locator('input, textarea')).toHaveCount(0)
+
+		// Clicking a reference opens THAT card's own read-only detail…
+		await subs.locator('.public-subcard').click()
+		await expect(detail.locator('.public-detail__title')).toHaveText(CHILD_TITLE)
+		// …which has none of its own, so the section is absent there rather than
+		// rendered empty.
+		await expect(detail.locator('.public-subcards')).toHaveCount(0)
 	})
 
 	test('scrolls vertically and opens a read-only card detail with full description', async ({ page }) => {
@@ -351,6 +408,15 @@ test.describe('Public board is interactive read-only', () => {
 		// becomes a <strong>, and the raw asterisks are gone.
 		await expect(detail.locator('.public-detail__desc strong')).toHaveText('BOLD_MARKER_7788')
 		await expect(detail.locator('.public-detail__desc')).not.toContainText('**BOLD_MARKER_7788**')
+
+		// ...and a list is drawn AS a list (#139). Core's server.css resets `ul` to
+		// `list-style: none` with no padding on every Nextcloud page, this one
+		// included, so the computed style is what proves the markers survived —
+		// the markup alone passed all through the bug.
+		const shareUl = detail.locator('.public-detail__desc ul')
+		await expect(shareUl.locator('li')).toHaveCount(2)
+		expect(await shareUl.evaluate((el) => getComputedStyle(el).listStyleType)).toBe('disc')
+		expect(await shareUl.evaluate((el) => parseFloat(getComputedStyle(el).paddingInlineStart))).toBeGreaterThan(0)
 
 		// The richer NON-person attributes render (#3951): a cover-colour band, the
 		// start date and the estimate. No person data is shown.
@@ -619,6 +685,18 @@ test.describe('Public board honours the hidden card sections', () => {
 		await expect(detail.locator('.public-detail__cover')).toBeVisible()
 		// The checklist is this card's ONLY meta, so the whole row reads '1/2'.
 		await expect(meta).toHaveText('1/2')
+		// …and the steps THEMSELVES are readable (#135), in their own section below
+		// the meta row — the bare count was all an anonymous visitor ever got, which
+		// is the bug. Read-only: a styled tick, never an <input>.
+		const steps = detail.locator('.public-checklist')
+		await expect(steps).toBeVisible()
+		await expect(steps.locator('.public-checklist__item')).toHaveCount(2)
+		await expect(steps).toContainText('Step one')
+		await expect(steps).toContainText('Step two')
+		await expect(steps.locator('input, textarea')).toHaveCount(0)
+		// The ticked one is marked done, so "1 of 2" is legible as more than a number.
+		await expect(steps.locator('.public-checklist__item--done')).toHaveCount(1)
+		await expect(steps.locator('.public-checklist__item--done')).toContainText('Step one')
 		await detail.locator('.public-detail__close').click()
 		await expect(detail).toHaveCount(0)
 
@@ -658,6 +736,12 @@ test.describe('Public board honours the hidden card sections', () => {
 		// `hasMeta` guard.
 		await expect(meta).toHaveCount(0)
 		await expect(detail).not.toContainText('1/2')
+		// The step LIST follows the same switch as the count it belongs to (#135):
+		// gone, not merely emptied, and no step title survives anywhere in the
+		// detail.
+		await expect(detail.locator('.public-checklist')).toHaveCount(0)
+		await expect(detail).not.toContainText('Step one')
+		await expect(detail).not.toContainText('Step two')
 		// Still the same read-only detail otherwise.
 		await expect(detail.locator('.public-detail__title')).toHaveText(CARD_TITLE)
 		await detail.locator('.public-detail__close').click()
@@ -684,6 +768,15 @@ test.describe('Public board honours the hidden card sections', () => {
 		const payloadCard = res.body.cards.find((c) => c.title === CARD_TITLE)
 		expect(payloadCard).toBeTruthy()
 		expect(payloadCard.checklist).toEqual({ total: 2, done: 1 })
+		// Same for the items (#135) — still served while the section is hidden, and
+		// still {title, done} ONLY. The key-set assertion is the leak guard: a
+		// checklist row also carries `assignedUser` / `assignedRole`, which the
+		// hand-written shape drops and a delegated serializer would not.
+		expect(payloadCard.checklistItems).toEqual([
+			{ title: 'Step one', done: true },
+			{ title: 'Step two', done: false },
+		])
+		expect(Object.keys(payloadCard.checklistItems[0]).sort()).toEqual(PUBLIC_CHECKLIST_ITEM_KEYS)
 		expect(payloadCard.coverColor).toBe(COVER)
 		expect(res.body.board.cardFeatures.checklist).toBe(false)
 		expect(res.body.board.cardFeatures.coverColor).toBe(false)

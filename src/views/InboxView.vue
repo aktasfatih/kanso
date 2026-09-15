@@ -214,7 +214,7 @@ function relativeTime(createdAt) {
 }
 
 .inbox-view__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 16px 0;
 }
 

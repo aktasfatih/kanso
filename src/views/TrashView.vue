@@ -405,7 +405,7 @@ function formatDeletedAt(deletedAt) {
 }
 
 .trash-view__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 24px 32px;
 }
 
@@ -525,7 +525,7 @@ function formatDeletedAt(deletedAt) {
 
 .trash-view__confirm-text {
 	font-size: 0.8rem;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-weight: 600;
 }
 
@@ -534,7 +534,7 @@ function formatDeletedAt(deletedAt) {
 	flex-shrink: 0;
 	padding: 8px 24px;
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.875rem;
 }
 </style>

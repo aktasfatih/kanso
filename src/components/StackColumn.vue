@@ -1066,10 +1066,8 @@ async function createFromTemplate(templateId) {
    sunken board canvas. --color-main-background + a soft shadow gives the "raised"
    read against the board-view__stacks-wrap sunken background. */
 .stack-column {
-	/* Legible success green for the "Done" role chip: stock green in light,
-	 * brighter #3fb950 under dark so the tinted chip text stays readable. */
-	--kanso-success-legible: var(--color-success, #46ba61);
-
+	/* The "Done" role chip uses the shared --kanso-success-legible token from
+	 * src/styles/status-tokens.css. */
 	position: relative;
 	/* Fluid width (#68): grow to fill spare board width, but never narrower than
 	   280px (usability floor) or wider than 420px (readability ceiling on ultrawide).
@@ -1088,20 +1086,6 @@ async function createFromTemplate(templateId) {
 	padding: 12px;
 	max-height: calc(100vh - 140px);
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-/* Brighten success green under dark themes (explicit picker + auto). */
-body.theme--dark .stack-column,
-[data-theme-dark] .stack-column,
-[data-themes*='dark'] .stack-column {
-	--kanso-success-legible: #3fb950;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .stack-column,
-	body:not(.theme--light):not(.theme--dark) .stack-column {
-		--kanso-success-legible: #3fb950;
-	}
 }
 
 .stack-column--dragging {
@@ -1341,13 +1325,14 @@ body.theme--dark .stack-column,
 }
 
 .stack-column__badge--over-limit {
-	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
+	color: color-mix(in srgb, var(--kanso-warning-legible) 85%, var(--color-main-text));
 	font-weight: 600;
 }
 
 /* WIP meter - a 2px track under the header. Neutral track by default; with a
    limit the fill tracks the ratio and shifts to the warning colour at/over it.
-   Mirrors the --kanso-tint-* color-mix fallback pattern used elsewhere. */
+   Mixed from --kanso-warning-legible (src/styles/status-tokens.css), not the
+   bare --color-warning, which is a near-white tint on NC 32+. */
 .stack-column__wip-meter {
 	position: relative;
 	height: 2px;
@@ -1369,18 +1354,18 @@ body.theme--dark .stack-column,
 	transition: width 0.2s ease;
 }
 .stack-column__wip-meter--at .stack-column__wip-fill {
-	background: color-mix(in srgb, var(--color-warning, #eca700) 90%, transparent);
+	background: color-mix(in srgb, var(--kanso-warning-legible) 90%, transparent);
 }
 .stack-column__wip-meter--over {
-	background: var(--kanso-tint-warning, color-mix(in srgb, var(--color-warning, #eca700) 20%, transparent));
+	background: color-mix(in srgb, var(--kanso-warning-legible) 20%, transparent);
 }
 .stack-column__wip-meter--over .stack-column__wip-fill {
-	background: var(--color-warning, #eca700);
+	background: var(--kanso-warning-legible);
 }
 .stack-column__wip-caption {
 	margin-top: 6px;
 	font-size: 0.7rem;
-	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
+	color: color-mix(in srgb, var(--kanso-warning-legible) 85%, var(--color-main-text));
 }
 
 /* Card composer */
@@ -1420,7 +1405,7 @@ body.theme--dark .stack-column,
 }
 
 .card-composer__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.75rem;
 	margin: 0;
 }
@@ -1523,8 +1508,8 @@ body.theme--dark .stack-column,
 
 /* Review - warning */
 .stack-column__role-chip--4 {
-	background: color-mix(in srgb, var(--color-warning, #eca700) 18%, transparent);
-	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
+	background: color-mix(in srgb, var(--kanso-warning-legible) 18%, transparent);
+	color: color-mix(in srgb, var(--kanso-warning-legible) 85%, var(--color-main-text));
 }
 
 /* Done - success */
@@ -1535,8 +1520,8 @@ body.theme--dark .stack-column,
 
 /* WIP badge over-limit warning */
 .stack-column__badge--over-limit {
-	background: color-mix(in srgb, var(--color-warning, #eca700) 25%, transparent);
-	color: color-mix(in srgb, var(--color-warning, #eca700) 85%, var(--color-main-text));
-	outline: 1px solid color-mix(in srgb, var(--color-warning, #eca700) 50%, transparent);
+	background: color-mix(in srgb, var(--kanso-warning-legible) 25%, transparent);
+	color: color-mix(in srgb, var(--kanso-warning-legible) 85%, var(--color-main-text));
+	outline: 1px solid color-mix(in srgb, var(--kanso-warning-legible) 50%, transparent);
 }
 </style>

@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 			<div
 				v-else-if="renderedDescription"
-				class="card-preview__desc-rendered"
+				class="card-preview__desc-rendered kanso-md"
 				v-html="renderedDescription" />
 			<p v-else class="card-preview__desc-empty">{{ t('kanso', 'No description.') }}</p>
 		</div>
@@ -295,18 +295,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .card-preview {
-	/* Legible status colours for the priority + overdue chips. Mirrors CardTile
-	 * (#3905/#4054): stock values in light, brighter under dark where the stock
-	 * error red / warning amber / neutral grey go too dim on the dark surface. */
-	--kanso-error-legible: var(--color-error, #e30000);
-	--kanso-error-legible-rgb: var(--color-error-rgb, 227, 0, 0);
-	--kanso-warning-legible: var(--color-warning, #e07b00);
-	--kanso-neutral-legible: var(--color-text-maxcontrast, #767676);
-	/* Legible success green twin for the "checklist complete" chip: stock green in
-	 * light, brighter #3fb950 under dark so it stays readable on the dark surface. */
-	--kanso-success-legible: var(--color-success, #46ba61);
-	--kanso-success-legible-rgb: 70, 186, 97;
-
+	/* Status colours for the priority + overdue chips come from the shared
+	 * --kanso-*-legible tokens in src/styles/status-tokens.css. */
 	position: fixed;
 	z-index: 2100;
 	display: flex;
@@ -318,29 +308,6 @@ onBeforeUnmount(() => {
 	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
 	overflow: hidden;
 	cursor: pointer;
-}
-
-body.theme--dark .card-preview,
-[data-theme-dark] .card-preview,
-[data-themes*='dark'] .card-preview {
-	--kanso-error-legible: #ff6b6b;
-	--kanso-error-legible-rgb: 255, 107, 107;
-	--kanso-warning-legible: #d29922;
-	--kanso-neutral-legible: #8b949e;
-	--kanso-success-legible: #3fb950;
-	--kanso-success-legible-rgb: 63, 185, 80;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .card-preview,
-	body:not(.theme--light):not(.theme--dark) .card-preview {
-		--kanso-error-legible: #ff6b6b;
-		--kanso-error-legible-rgb: 255, 107, 107;
-		--kanso-warning-legible: #d29922;
-		--kanso-neutral-legible: #8b949e;
-		--kanso-success-legible: #3fb950;
-		--kanso-success-legible-rgb: 63, 185, 80;
-	}
 }
 
 .card-preview__head {
@@ -413,27 +380,27 @@ body.theme--dark .card-preview,
 	border-color: currentColor;
 }
 
-.card-preview__priority--1 { color: var(--kanso-neutral-legible); border-color: var(--kanso-neutral-legible); background: rgba(136, 136, 136, 0.1); }
-.card-preview__priority--2 { color: var(--color-primary-element, #0082c9); border-color: var(--color-primary-element, #0082c9); background: rgba(0, 130, 201, 0.1); }
-.card-preview__priority--3 { color: var(--kanso-warning-legible); border-color: var(--kanso-warning-legible); background: rgba(224, 123, 0, 0.1); }
-.card-preview__priority--4 { color: var(--kanso-error-legible); border-color: var(--kanso-error-legible); background: rgba(var(--kanso-error-legible-rgb), 0.1); }
+.card-preview__priority--1 { color: var(--kanso-neutral-legible); border-color: var(--kanso-neutral-legible); background: color-mix(in srgb, var(--kanso-neutral-legible) 12%, transparent); }
+.card-preview__priority--2 { color: var(--color-primary-element, #0082c9); border-color: var(--color-primary-element, #0082c9); background: color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, transparent); }
+.card-preview__priority--3 { color: var(--kanso-warning-legible); border-color: var(--kanso-warning-legible); background: var(--kanso-warning-tint); }
+.card-preview__priority--4 { color: var(--kanso-error-legible); border-color: var(--kanso-error-legible); background: var(--kanso-error-tint); }
 
 .card-preview__due--overdue {
 	color: var(--kanso-error-legible);
 	border-color: var(--kanso-error-legible);
-	background: rgba(var(--kanso-error-legible-rgb), 0.08);
+	background: color-mix(in srgb, var(--kanso-error-legible) 8%, transparent);
 }
 
 .card-preview__due--soon {
-	color: var(--color-warning, #f0a844);
-	border-color: var(--color-warning, #f0a844);
-	background: rgba(240, 168, 68, 0.08);
+	color: var(--color-warning-text, #f0a844);
+	border-color: var(--color-warning-text, #f0a844);
+	background: color-mix(in srgb, var(--kanso-warning-legible) 8%, transparent);
 }
 
 .card-preview__checklist--complete {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.1);
+	background: var(--kanso-success-tint);
 }
 
 .card-preview__assignees {
@@ -492,8 +459,9 @@ body.theme--dark .card-preview,
 .card-preview__desc-rendered :deep(h1),
 .card-preview__desc-rendered :deep(h2),
 .card-preview__desc-rendered :deep(h3) { margin: 0.6em 0 0.3em; }
+/* Indent + markers come from the shared `.kanso-md` rules (src/styles/markdown.css). */
 .card-preview__desc-rendered :deep(ul),
-.card-preview__desc-rendered :deep(ol) { margin: 0.4em 0; padding-left: 1.4em; }
+.card-preview__desc-rendered :deep(ol) { margin: 0.4em 0; }
 .card-preview__desc-rendered :deep(code) {
 	font-family: var(--font-face-monospace, monospace);
 	background: var(--color-background-dark);

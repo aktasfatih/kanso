@@ -128,6 +128,51 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'No description') }}
 				</p>
 
+				<!-- Checklist steps (#135). The payload only ever carried the count,
+				     so an anonymous reader saw "1/2" and no way to learn what the two
+				     steps were. Gated on the same board switch as the count above, and
+				     rendered BELOW the meta row so the count keeps its place. Titles
+				     are interpolated as plain text - a step title is not a markdown
+				     surface anywhere in the app - and the tick is a styled span, never
+				     an <input>, because this detail is strictly read-only. -->
+				<section v-if="checklistEnabled && checklistItems.length" class="public-checklist">
+					<h3 class="public-checklist__title">{{ t('kanso', 'Checklist') }}</h3>
+					<ul class="public-checklist__list">
+						<li
+							v-for="(item, i) in checklistItems"
+							:key="i"
+							class="public-checklist__item"
+							:class="{ 'public-checklist__item--done': item.done }">
+							<span class="public-checklist__box" :class="{ 'public-checklist__box--done': item.done }" aria-hidden="true" />
+							<span class="public-checklist__label">{{ item.title }}</span>
+						</li>
+					</ul>
+				</section>
+
+				<!-- Sub-cards (#135). Ids only reach the client; each one is resolved
+				     against the cards already loaded, so a reference can never name a
+				     card this visitor does not otherwise hold. Clicking opens that
+				     card's own read-only detail. -->
+				<section v-if="subCards.length" class="public-subcards">
+					<h3 class="public-subcards__title">{{ t('kanso', 'Sub-cards') }}</h3>
+					<ul class="public-subcards__list">
+						<li
+							v-for="child in subCards"
+							:key="child.id"
+							class="public-subcard"
+							:class="{ 'public-subcard--done': child.status === 'done' }"
+							tabindex="0"
+							role="button"
+							:aria-label="t('kanso', 'Open card details')"
+							@click="openCard(child)"
+							@keydown.enter.prevent="openCard(child)"
+							@keydown.space.prevent="openCard(child)">
+							<span v-if="child.humanId" class="public-subcard__id">{{ child.humanId }}</span>
+							<span class="public-subcard__title">{{ child.title }}</span>
+						</li>
+					</ul>
+				</section>
+
 				<!-- Read-only comments (#3949): shown ONLY when the board owner opted
 				     in. Author DISPLAY NAME + an initials avatar (no NcAvatar / no uid),
 				     markdown body, one-level threads. No reply box, no reactions. -->
@@ -211,6 +256,24 @@ export default {
 			if (!c) return false
 			return c.priority >= 4 || !!c.startDate || !!c.duedate || !!c.estimate
 				|| (this.checklistEnabled && c.checklist.total > 0)
+		},
+		// The open card's checklist steps ({title, done} only — the server emits
+		// nothing else). Tolerates an older server that ships no such key.
+		checklistItems() {
+			return (this.selectedCard && this.selectedCard.checklistItems) || []
+		},
+		// The open card's sub-cards, resolved from `childIds` against the cards
+		// already loaded. An id with no match is dropped rather than rendered as a
+		// placeholder: the payload is one snapshot, so a miss can only mean an
+		// older server or a card filtered out of this view.
+		subCards() {
+			const ids = (this.selectedCard && this.selectedCard.childIds) || []
+			if (!ids.length) return []
+			const byId = {}
+			for (const card of this.cards) {
+				byId[card.id] = card
+			}
+			return ids.map((id) => byId[id]).filter(Boolean)
 		},
 		// The open card's flat comment list nested one level by parentCommentId:
 		// top-level comments in order, each with its direct replies (also in order).

@@ -409,7 +409,7 @@ function formatDue(duedate) {
 }
 
 .archived-view__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 24px 32px;
 }
 
@@ -548,8 +548,8 @@ function formatDue(duedate) {
 	background: var(--color-background-dark);
 }
 
-.archived-view__priority--4 { color: var(--color-error); }
-.archived-view__priority--3 { color: var(--color-warning, #c98600); }
+.archived-view__priority--4 { color: var(--color-error-text); }
+.archived-view__priority--3 { color: var(--color-warning-text, #c98600); }
 
 .archived-view__due {
 	display: inline-flex;
@@ -563,7 +563,7 @@ function formatDue(duedate) {
 	flex-shrink: 0;
 	padding: 8px 24px;
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.875rem;
 }
 </style>
