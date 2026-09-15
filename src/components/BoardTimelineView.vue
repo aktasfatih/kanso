@@ -1320,11 +1320,11 @@ onBeforeUnmount(() => {
 }
 
 .timeline__legend-swatch--overdue {
-	background: var(--color-error);
+	background: var(--color-error-text);
 }
 
 .timeline__legend-swatch--done {
-	background: var(--color-success);
+	background: var(--color-success-text);
 }
 
 .timeline__legend-swatch--milestone {
@@ -1475,7 +1475,7 @@ onBeforeUnmount(() => {
 
 .timeline__pane-status--not_started { background: transparent; }
 .timeline__pane-status--in_progress { background: var(--color-primary-element); border-color: var(--color-primary-element); }
-.timeline__pane-status--done { background: var(--color-success, #2fb344); border-color: var(--color-success, #2fb344); }
+.timeline__pane-status--done { background: var(--color-success-text, #1a6b2a); border-color: var(--color-success-text, #1a6b2a); }
 
 .timeline__pane-id {
 	flex: 0 0 auto;
@@ -1587,7 +1587,7 @@ onBeforeUnmount(() => {
 	top: 48px;
 	bottom: 0;
 	width: 2px;
-	background: var(--color-error);
+	background: var(--color-error-text);
 	opacity: 0.7;
 	/* Above the dependency-arrow overlay (also z-index 3, but later in DOM order,
 	 * so it would otherwise paint over this marker). */
@@ -1604,7 +1604,7 @@ onBeforeUnmount(() => {
 	height: 8px;
 	transform: translateX(-50%);
 	border-radius: 50%;
-	background: var(--color-error);
+	background: var(--color-error-text);
 }
 
 /* ── Two-tier axis ── */
@@ -1695,12 +1695,12 @@ onBeforeUnmount(() => {
 }
 
 .timeline__bar--done {
-	background: var(--color-success);
+	background: var(--color-success-text);
 	color: var(--color-primary-element-text);
 }
 
 .timeline__bar--overdue {
-	background: var(--color-error);
+	background: var(--color-error-text);
 	color: var(--color-primary-element-text);
 }
 
@@ -1719,11 +1719,11 @@ onBeforeUnmount(() => {
 }
 
 .timeline__milestone.timeline__bar--done {
-	background: var(--color-success);
+	background: var(--color-success-text);
 }
 
 .timeline__milestone.timeline__bar--overdue {
-	background: var(--color-error);
+	background: var(--color-error-text);
 }
 
 .timeline__label {
@@ -1834,12 +1834,12 @@ onBeforeUnmount(() => {
 
 /* Violated dependency: the blocked card starts before its blocker finishes. */
 .timeline__dep--violated .timeline__dep-line {
-	stroke: var(--color-error);
+	stroke: var(--color-error-text);
 	stroke-width: 2;
 }
 
 .timeline__dep--violated .timeline__dep-head {
-	fill: var(--color-error);
+	fill: var(--color-error-text);
 }
 
 /* Hovering either bar (or the connector itself) brings its arrows forward. */
@@ -1856,13 +1856,13 @@ onBeforeUnmount(() => {
 
 .timeline__dep--violated.timeline__dep--active .timeline__dep-line,
 .timeline__dep--violated:hover .timeline__dep-line {
-	stroke: var(--color-error);
+	stroke: var(--color-error-text);
 	stroke-width: 3;
 }
 
 .timeline__dep--violated.timeline__dep--active .timeline__dep-head,
 .timeline__dep--violated:hover .timeline__dep-head {
-	fill: var(--color-error);
+	fill: var(--color-error-text);
 }
 
 .timeline__deps-btn--active {

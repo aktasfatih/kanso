@@ -23,7 +23,7 @@ html, body { height: 100%; }
 .public-board__title { font-size: 24px; font-weight: 700; margin: 0; }
 .public-board__badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; background: var(--color-background-dark, #ededed); color: var(--color-text-maxcontrast, #666); }
 .public-board__state { color: var(--color-text-maxcontrast, #666); padding: 32px 0; }
-.public-board__state--error { color: var(--color-error, #c33); }
+.public-board__state--error { color: var(--color-error-text, #c33); }
 .public-board__columns { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
 .public-col { flex: 0 0 300px; max-width: 300px; max-height: calc(100vh - 180px); display: flex; flex-direction: column; background: var(--color-background-hover, #f5f5f5); border-radius: 10px; padding: 10px; box-sizing: border-box; }
 .public-col__title { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; margin: 4px 4px 12px; padding-bottom: 6px; border-bottom: 2px solid var(--color-border, #ddd); }
@@ -40,7 +40,7 @@ html, body { height: 100%; }
 .public-card__title { font-weight: 500; word-break: break-word; }
 .public-card__desc { margin: 6px 0 0; font-size: 13px; color: var(--color-text-maxcontrast, #666); white-space: pre-wrap; word-break: break-word; }
 .public-card__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-maxcontrast, #888); }
-.public-card__prio { color: var(--color-error, #c33); font-weight: 600; }
+.public-card__prio { color: var(--color-error-text, #c33); font-weight: 600; }
 .public-board__footer { margin-top: 32px; text-align: center; font-size: 12px; color: var(--color-text-maxcontrast, #999); }
 
 /* Read-only card detail modal (#3945). Self-contained; no edit affordances. */
@@ -54,7 +54,7 @@ html, body { height: 100%; }
 .public-detail__label { font-size: 12px; padding: 2px 10px; border-radius: 10px; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, 0.4); }
 .public-detail__cover { height: 8px; border-radius: 6px; margin: -8px 0 14px; }
 .public-detail__meta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--color-text-maxcontrast, #666); }
-.public-detail__prio { color: var(--color-error, #c33); font-weight: 600; }
+.public-detail__prio { color: var(--color-error-text, #c33); font-weight: 600; }
 .public-detail__desc { font-size: 14px; line-height: 1.5; word-break: break-word; color: var(--color-main-text, #222); }
 .public-detail__desc--empty { color: var(--color-text-maxcontrast, #888); font-style: italic; }
 /* Rendered-markdown description: keep block spacing sane inside the modal. */
@@ -88,7 +88,7 @@ html, body { height: 100%; }
 .public-checklist__item { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; line-height: 1.5; margin: 4px 0; color: var(--color-main-text, #222); }
 .public-checklist__item--done .public-checklist__label { text-decoration: line-through; color: var(--color-text-maxcontrast, #888); }
 .public-checklist__box { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 4px; border: 2px solid var(--color-border-dark, #aaa); border-radius: 3px; box-sizing: border-box; }
-.public-checklist__box--done { background: var(--color-success, #2d7b2d); border-color: var(--color-success, #2d7b2d); }
+.public-checklist__box--done { background: var(--color-success-text, #2d7b2d); border-color: var(--color-success-text, #2d7b2d); }
 .public-checklist__label { word-break: break-word; }
 .public-subcard { display: flex; gap: 6px; align-items: baseline; padding: 6px 8px; margin: 4px 0; border: 1px solid var(--color-border, #e0e0e0); border-radius: 6px; cursor: pointer; }
 .public-subcard:hover { border-color: var(--color-primary-element, #0082c9); }

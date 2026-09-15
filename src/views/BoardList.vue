@@ -1286,13 +1286,13 @@ button.board-tile:hover,
 
 .new-board-form__error {
 	width: 100%;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 	margin: 0;
 }
 
 .board-list-error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 16px;
 }
 
@@ -1308,7 +1308,7 @@ button.board-tile:hover,
 
 .board-list__import-error {
 	width: 100%;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 	margin: 0;
 }
@@ -1355,7 +1355,7 @@ button.board-tile:hover,
 }
 
 .deck-import__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding-top: 8px;
 }
 

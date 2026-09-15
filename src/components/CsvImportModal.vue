@@ -369,7 +369,7 @@ async function doImport() {
 }
 
 .csv-import__field em {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-style: normal;
 }
 
@@ -384,7 +384,7 @@ async function doImport() {
 }
 
 .csv-import__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.85rem;
 	margin: 0;
 }

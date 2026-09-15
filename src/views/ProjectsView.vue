@@ -239,7 +239,7 @@ function openProject(project) {
 }
 
 .projects-view__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 16px 0;
 }
 
@@ -324,7 +324,7 @@ function openProject(project) {
 }
 
 .projects-view__required {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	margin-left: 2px;
 }
 
@@ -380,7 +380,7 @@ function openProject(project) {
 }
 
 .projects-view__form-error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.85rem;
 }
 </style>

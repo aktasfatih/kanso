@@ -1,0 +1,40 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Kanso status colour tokens (#136).
+ *
+ * Nextcloud 32 redefined its status variables: --color-error / --color-warning /
+ * --color-success stopped being FOREGROUND colours and became pale BACKGROUND
+ * TINTS (#FFE7E7 / #FFEEC5 / #D8F3DA in light), with --color-*-text taking over
+ * as the readable foreground pair. Anything that keeps using the bare token as
+ * text or a border renders at roughly 1.2:1 on a light background - invisible.
+ *
+ * These four tokens are the single place Kanso resolves "a status colour I can
+ * read". They point at the *-text pair, which Nextcloud already defines legibly
+ * in BOTH themes (light #8A0000 / #664700 / #005416 at 8.5-10:1 on white; dark
+ * #FFCCCC / #FFEEC5 / #D5F2DC at 12-15:1 on #171717), so there is deliberately
+ * no dark-mode override here - the theme supplies one. The fallback chain drops
+ * back to the pre-32 bare token, which was itself a foreground colour, rather
+ * than to a hardcoded hex that would be wrong in one of the two themes.
+ *
+ * The matching *-tint values are for pale status washes (row highlights, chip
+ * backgrounds) that sit UNDER one of the legible colours.
+ *
+ * Imported from src/main.js only. The build folds every entry's CSS into the
+ * MAIN bundle (see the note in templates/public.php), so importing this from
+ * src/public.js or src/files.js would put nothing on those pages; the public
+ * share page carries its own inline stylesheet and is fixed there directly.
+ */
+
+:root {
+	--kanso-error-legible: var(--color-error-text, var(--color-error));
+	--kanso-warning-legible: var(--color-warning-text, var(--color-warning));
+	--kanso-success-legible: var(--color-success-text, var(--color-success));
+	/* Already 5.3:1 in both themes, so it needs no pairing token of its own. */
+	--kanso-neutral-legible: var(--color-text-maxcontrast, #6b6b6b);
+
+	--kanso-error-tint: color-mix(in srgb, var(--kanso-error-legible) 12%, transparent);
+	--kanso-warning-tint: color-mix(in srgb, var(--kanso-warning-legible) 12%, transparent);
+	--kanso-success-tint: color-mix(in srgb, var(--kanso-success-legible) 12%, transparent);
+}

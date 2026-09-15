@@ -879,7 +879,7 @@ watch(saveName, () => { saveError.value = '' })
 }
 
 .board-filter-bar__save-error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 	margin: 4px 12px;
 }

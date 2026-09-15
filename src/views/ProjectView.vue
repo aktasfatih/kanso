@@ -1036,7 +1036,7 @@ async function handleDeleteComment(comment) {
 }
 
 .project-view__desc-error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.85rem;
 }
 
@@ -1063,13 +1063,13 @@ async function handleDeleteComment(comment) {
 }
 
 .project-view__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 16px 0;
 }
 
 .project-view__action-error {
 	display: block;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.85rem;
 	margin-bottom: 12px;
 }
@@ -1197,7 +1197,7 @@ async function handleDeleteComment(comment) {
 }
 
 .project-view__required {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	margin-left: 2px;
 }
 
@@ -1253,7 +1253,7 @@ async function handleDeleteComment(comment) {
 }
 
 .project-view__form-error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.85rem;
 }
 
@@ -1471,7 +1471,7 @@ async function handleDeleteComment(comment) {
 }
 
 .project-view__comment-icon-btn--danger:hover {
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .project-view__discussion-empty {

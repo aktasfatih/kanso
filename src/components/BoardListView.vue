@@ -1189,40 +1189,13 @@ defineExpose({ focusAddColumn })
 
 <style scoped>
 .board-list-table {
-	/* Legible status colours for the row chips (priority, overdue, review). NC's
-	 * base --color-error / --color-warning / --color-success dark shades are near
-	 * black (#552121 / #3D3010 / #11321A) and vanish as text on the dark list
-	 * surface; brighten them under dark themes while keeping the stock values in
-	 * light mode (#3905/#4054 pattern). Scoped so they can't leak. */
-	--kanso-error-legible: var(--color-error, #e30000);
-	--kanso-warning-legible: var(--color-warning, #c98600);
-	--kanso-success-legible: var(--color-success, #2fb344);
-
-
+	/* Status colours for the row chips (priority, overdue, review) come from the
+	 * shared --kanso-*-legible tokens in src/styles/status-tokens.css. */
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
 	padding: 8px 24px 24px 52px;
 }
-
-/* Explicit dark themes (theme picker) + auto (prefers-color-scheme) dark. */
-body.theme--dark .board-list-table,
-[data-theme-dark] .board-list-table,
-[data-themes*='dark'] .board-list-table {
-	--kanso-error-legible: #ff6b6b;
-	--kanso-warning-legible: #d29922;
-	--kanso-success-legible: #5ad07f;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .board-list-table,
-	body:not(.theme--light):not(.theme--dark) .board-list-table {
-		--kanso-error-legible: #ff6b6b;
-		--kanso-warning-legible: #d29922;
-		--kanso-success-legible: #5ad07f;
-	}
-}
-
 
 .board-list-table__host {
 	position: relative;

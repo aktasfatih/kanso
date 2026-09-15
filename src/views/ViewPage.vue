@@ -615,7 +615,7 @@ async function onSaveFromBar(name) {
 }
 
 .view-page__state--error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .view-page__capped {

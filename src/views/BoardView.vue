@@ -2592,7 +2592,7 @@ async function handleUnarchiveCards(cardIds) {
 }
 
 .board-view__filter-error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 	flex-shrink: 0;
 }
@@ -2606,7 +2606,7 @@ async function handleUnarchiveCards(cardIds) {
 .board-view__error {
 	padding: 40px 24px;
 	text-align: center;
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .board-view__error-msg {
@@ -2628,7 +2628,7 @@ async function handleUnarchiveCards(cardIds) {
 	justify-content: space-between;
 	padding: 8px 24px;
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.875rem;
 	flex-shrink: 0;
 }
@@ -2636,7 +2636,7 @@ async function handleUnarchiveCards(cardIds) {
 .board-view__move-error-dismiss {
 	background: none;
 	border: none;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	cursor: pointer;
 	font-size: 1.2rem;
 	line-height: 1;
@@ -2762,7 +2762,7 @@ async function handleUnarchiveCards(cardIds) {
 }
 
 .add-stack__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 	margin: 4px 0 0;
 }

@@ -6543,47 +6543,15 @@ async function handleToggleProject(projectId) {
 
 /* ── Modal shell ─────────────────────────────────────────────────────────── */
 .card-modal {
-	/* Legible status colours for small chip text/border. NC's stock error red,
-	 * warning amber, neutral grey, and success green are too dim on the dark
-	 * modal surface (#3905/#4054); brighten them under dark themes while keeping
-	 * the stock values in light mode. Scoped to the modal so they can't leak. */
-	--kanso-error-legible: var(--color-error, #e30000);
-	--kanso-warning-legible: var(--color-warning, #e07b00);
-	--kanso-neutral-legible: var(--color-text-maxcontrast, #767676);
-	--kanso-success-legible: var(--color-success, #46ba61);
-	--kanso-success-legible-rgb: 70, 186, 97;
-
-
+	/* Status colours for chip text/border come from the shared
+	 * --kanso-*-legible tokens in src/styles/status-tokens.css, which are
+	 * theme-aware in both light and dark. */
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 15px;
-}
-
-/* Explicit dark themes (theme picker) + auto (prefers-color-scheme) dark.
- * These brighter values read clearly on the dark surface and still pass AA
- * as chip text/border. */
-body.theme--dark .card-modal,
-[data-theme-dark] .card-modal,
-[data-themes*='dark'] .card-modal {
-	--kanso-error-legible: #ff6b6b;
-	--kanso-warning-legible: #d29922;
-	--kanso-neutral-legible: #8b949e;
-	--kanso-success-legible: #3fb950;
-	--kanso-success-legible-rgb: 63, 185, 80;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .card-modal,
-	body:not(.theme--light):not(.theme--dark) .card-modal {
-		--kanso-error-legible: #ff6b6b;
-		--kanso-warning-legible: #d29922;
-		--kanso-neutral-legible: #8b949e;
-		--kanso-success-legible: #3fb950;
-		--kanso-success-legible-rgb: 63, 185, 80;
-	}
 }
 
 
@@ -6641,7 +6609,7 @@ body.theme--dark .card-modal,
 .card-modal__error {
 	padding: 40px 24px;
 	text-align: center;
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .card-modal__error-msg {
@@ -6789,7 +6757,7 @@ body.theme--dark .card-modal,
 }
 .card-modal__status-chip--done {
 	background: var(--color-success);
-	border-color: var(--color-success);
+	border-color: var(--color-success-text);
 	color: var(--color-success-text);
 }
 .card-modal__status-wrap {
@@ -6868,7 +6836,7 @@ body.theme--dark .card-modal,
 .card-modal__done-btn--done {
 	border-color: var(--kanso-success-legible);
 	color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.1);
+	background: var(--kanso-success-tint);
 }
 /* Watch control: a single split-button pill — the watch toggle (left half) and
    the watchers caret (right half) sit flush, sharing one border with a thin 1px
@@ -7108,8 +7076,8 @@ body.theme--dark .card-modal,
 	cursor: pointer;
 }
 .card-modal__pill-x:hover {
-	background: var(--color-error);
-	color: #fff;
+	background: var(--color-error-text);
+	color: var(--color-main-background);
 }
 .card-modal__label-chip {
 	display: inline-flex;
@@ -7141,7 +7109,7 @@ body.theme--dark .card-modal,
 	font-size: 0.75rem;
 }
 .card-modal__review-pill--pending { border-color: var(--color-warning-text); background: rgba(236, 167, 0, 0.08); }
-.card-modal__review-pill--approved { border-color: var(--kanso-success-legible); background: rgba(var(--kanso-success-legible-rgb), 0.08); }
+.card-modal__review-pill--approved { border-color: var(--kanso-success-legible); background: color-mix(in srgb, var(--kanso-success-legible) 8%, transparent); }
 .card-modal__review-pill--changes_requested { border-color: var(--color-error-text); background: rgba(233, 50, 45, 0.08); }
 /* A gated (deferred) review reads as inert: greyed out, dashed border, muted
    colours. The lock icon + hover tooltip explain it's waiting on an earlier
@@ -8025,8 +7993,8 @@ body.theme--dark .card-modal,
 	cursor: pointer;
 }
 .card-modal__checklist-item-delete:hover:not(:disabled) {
-	background: var(--color-error);
-	color: #fff;
+	background: var(--color-error-text);
+	color: var(--color-main-background);
 }
 .card-modal__checklist-item-delete:disabled {
 	cursor: default;
@@ -8187,8 +8155,8 @@ body.theme--dark .card-modal,
 	flex-shrink: 0;
 }
 .card-modal__child-remove:hover {
-	background: var(--color-error);
-	color: #fff;
+	background: var(--color-error-text);
+	color: var(--color-main-background);
 }
 .card-modal__dashed-input {
 	height: 34px;
@@ -8337,8 +8305,8 @@ body.theme--dark .card-modal,
 	margin-top: 6px;
 	padding: 4px 8px;
 	border-radius: var(--border-radius);
-	background: rgba(var(--kanso-success-legible-rgb, 70, 186, 97), 0.08);
-	border: 1px solid rgba(var(--kanso-success-legible-rgb, 70, 186, 97), 0.25);
+	background: color-mix(in srgb, var(--kanso-success-legible) 8%, transparent);
+	border: 1px solid color-mix(in srgb, var(--kanso-success-legible) 25%, transparent);
 	font-size: 0.8rem;
 }
 .card-modal__timer-running-icon {
@@ -8618,16 +8586,16 @@ body.theme--dark .card-modal,
 	min-width: 0;
 }
 .card-modal__activity-diff-line--removed {
-	background: color-mix(in srgb, var(--color-error) 15%, transparent);
+	background: color-mix(in srgb, var(--kanso-error-legible) 15%, transparent);
 }
 .card-modal__activity-diff-line--removed .card-modal__activity-diff-sign {
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 .card-modal__activity-diff-line--added {
-	background: color-mix(in srgb, var(--color-success) 15%, transparent);
+	background: color-mix(in srgb, var(--kanso-success-legible) 15%, transparent);
 }
 .card-modal__activity-diff-line--added .card-modal__activity-diff-sign {
-	color: var(--color-success);
+	color: var(--color-success-text);
 }
 .card-modal__activity-text {
 	flex: 1;
@@ -8731,7 +8699,7 @@ body.theme--dark .card-modal,
 }
 .card-modal__thread-summary-icon {
 	flex-shrink: 0;
-	color: var(--color-success, var(--color-primary-element));
+	color: var(--color-success-text, var(--color-primary-element));
 }
 .card-modal__thread-summary-author {
 	font-weight: 600;
@@ -8841,7 +8809,7 @@ body.theme--dark .card-modal,
 	cursor: pointer;
 }
 .card-modal__comment-icon-btn:hover { background: var(--color-background-hover); }
-.card-modal__comment-icon-btn--danger:hover { background: var(--color-error); color: #fff; }
+.card-modal__comment-icon-btn--danger:hover { background: var(--color-error-text); color: var(--color-main-background); }
 
 /* Emoji reactions on comments (#3550) */
 .card-modal__reactions {
@@ -8999,7 +8967,7 @@ body.theme--dark .card-modal,
 .card-modal__desc-conflict {
 	margin-top: 10px;
 	padding: 12px;
-	border: 1px solid var(--color-warning, var(--color-border-dark));
+	border: 1px solid var(--color-warning-text, var(--color-border-dark));
 	border-radius: var(--border-radius-large, 8px);
 	background: var(--color-background-hover);
 }
@@ -9030,7 +8998,7 @@ body.theme--dark .card-modal,
 /* ── Shared error text ───────────────────────────────────────────────────── */
 .card-modal__save-error {
 	font-size: 0.8rem;
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 .card-modal__action-error {
 	padding: 0 24px 8px;

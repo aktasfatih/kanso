@@ -513,7 +513,7 @@ function goBack() {
 }
 
 .board-stats__error {
-	color: var(--color-error);
+	color: var(--color-error-text);
 	padding: 24px 32px;
 }
 
@@ -682,7 +682,7 @@ function goBack() {
 	vertical-align: middle;
 }
 
-.board-stats__trend--up { color: #5ec269; }
+.board-stats__trend--up { color: var(--color-success-text, #276b39); }
 .board-stats__trend--down { color: #d0332a; }
 .board-stats__trend--flat { color: var(--color-text-maxcontrast); }
 

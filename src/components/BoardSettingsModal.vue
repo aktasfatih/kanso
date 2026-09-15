@@ -5120,7 +5120,7 @@ async function doDeleteAutoRule(rule) {
 
 .label-settings__action-btn--danger:hover {
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .label-settings__confirm {
@@ -5139,8 +5139,8 @@ async function doDeleteAutoRule(rule) {
 	padding: 3px 10px;
 	border-radius: var(--border-radius);
 	border: none;
-	background: var(--color-error);
-	color: #fff;
+	background: var(--color-error-text);
+	color: var(--color-main-background);
 	cursor: pointer;
 }
 
@@ -5161,7 +5161,7 @@ async function doDeleteAutoRule(rule) {
 
 .label-settings__error {
 	width: 100%;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 }
 
@@ -5326,7 +5326,7 @@ async function doDeleteAutoRule(rule) {
 
 .sharing__error {
 	display: block;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.8rem;
 	margin-top: 4px;
 }
@@ -5460,7 +5460,7 @@ async function doDeleteAutoRule(rule) {
 
 .sharing__remove-btn:hover:not(:disabled) {
 	background: rgba(var(--color-error-rgb, 227, 0, 0), 0.1);
-	color: var(--color-error);
+	color: var(--color-error-text);
 }
 
 .sharing__remove-btn:disabled {
@@ -5478,9 +5478,9 @@ async function doDeleteAutoRule(rule) {
 	height: 36px;
 	padding: 0 14px;
 	border-radius: var(--border-radius);
-	border: 1px solid var(--color-error);
+	border: 1px solid var(--color-error-text);
 	background: transparent;
-	color: var(--color-error);
+	color: var(--color-error-text);
 	font-size: 0.875rem;
 	font-weight: 600;
 	cursor: pointer;
@@ -6013,7 +6013,7 @@ async function doDeleteAutoRule(rule) {
    red - but it must not read as ordinary muted hint text either. */
 .github-webhook__hint--warning {
 	color: var(--color-warning-text, var(--color-text-maxcontrast));
-	border-inline-start: 3px solid var(--color-warning, var(--color-border));
+	border-inline-start: 3px solid var(--color-warning-text, var(--color-border));
 	padding-inline-start: 8px;
 }
 
@@ -6032,12 +6032,8 @@ async function doDeleteAutoRule(rule) {
 /* ── Board settings modal shell (replaces NcAppSidebar) ─────────────────────── */
 
 .bs-modal {
-	/* Legible success green for "active"/"enabled" status badges (e.g. "Link
-	 * active"): stock --color-success in light, a brighter green (#3fb950) under
-	 * dark so the badge text/border stays readable on the dark surface. */
-	--kanso-success-legible: var(--color-success, #46ba61);
-	--kanso-success-legible-rgb: 70, 186, 97;
-
+	/* "active"/"enabled" status badges (e.g. "Link active") use the shared
+	 * --kanso-success-legible token from src/styles/status-tokens.css. */
 	position: absolute;
 	/* Dock BELOW the board toolbar so the gear button that toggles this panel
 	   stays clickable — a second gear click must be able to close it. BoardView
@@ -6054,23 +6050,6 @@ async function doDeleteAutoRule(rule) {
 	border-left: 1px solid var(--color-border);
 	box-shadow: var(--shadow-dropdown, 0 0 12px rgba(0, 0, 0, 0.12));
 	box-sizing: border-box;
-}
-
-/* Brighten success green under dark themes (explicit picker + auto) so status
- * badges clear WCAG AA on the dark surface. Mirrors the CardTile error token. */
-body.theme--dark .bs-modal,
-[data-theme-dark] .bs-modal,
-[data-themes*='dark'] .bs-modal {
-	--kanso-success-legible: #3fb950;
-	--kanso-success-legible-rgb: 63, 185, 80;
-}
-
-@media (prefers-color-scheme: dark) {
-	body.theme--default .bs-modal,
-	body:not(.theme--light):not(.theme--dark) .bs-modal {
-		--kanso-success-legible: #3fb950;
-		--kanso-success-legible-rgb: 63, 185, 80;
-	}
 }
 
 .bs-modal__header {
@@ -6261,9 +6240,9 @@ body.theme--dark .bs-modal,
 .board-actions__danger {
 	margin-top: 20px;
 	padding: 4px 16px 12px;
-	border: 1px solid var(--color-error);
+	border: 1px solid var(--color-error-text);
 	border-radius: var(--border-radius-large);
-	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 6%, transparent));
+	background: color-mix(in srgb, var(--kanso-error-legible) 6%, transparent);
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
@@ -6295,9 +6274,9 @@ body.theme--dark .bs-modal,
 .bs-delete-confirm {
 	margin: 16px 16px 0;
 	padding: 16px;
-	border: 1px solid var(--color-error);
+	border: 1px solid var(--color-error-text);
 	border-radius: var(--border-radius-large);
-	background: var(--kanso-tint-error, color-mix(in srgb, var(--color-error) 8%, transparent));
+	background: color-mix(in srgb, var(--kanso-error-legible) 8%, transparent);
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
@@ -6406,7 +6385,7 @@ body.theme--dark .bs-modal,
 	border: 1px solid var(--kanso-success-legible);
 	border-radius: 10px;
 	color: var(--kanso-success-legible);
-	background: rgba(var(--kanso-success-legible-rgb), 0.12);
+	background: var(--kanso-success-tint);
 	font-size: 0.75rem;
 	font-weight: 600;
 }
