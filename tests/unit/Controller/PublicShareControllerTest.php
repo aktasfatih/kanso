@@ -82,4 +82,49 @@ class PublicShareControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
 		self::assertTrue($response->isThrottled());
 	}
+
+	/**
+	 * #10379 item A. The JSON payload route's REJECTION is throttled - the same
+	 * defence of the token space the two page cases above pin, on the route an
+	 * enumerator would actually script, and previously pinned nowhere.
+	 */
+	public function testARejectedAnonymousPayloadReadIsThrottled(): void {
+		$this->publicShareService->method('getPublicBoard')
+			->willThrowException(new DoesNotExistException('no such token'));
+
+		$response = $this->controller->data('totally-made-up-token');
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		self::assertTrue($response->isThrottled());
+	}
+
+	/**
+	 * And the other half of that decision, which is the one at risk of being
+	 * "fixed" the wrong way: a SUCCESSFUL anonymous read must NOT be throttled.
+	 *
+	 * `#[BruteForceProtection]` is a failure counter, not a rate limiter. Calling
+	 * `throttle()` here would have BruteForceMiddleware register an attempt per
+	 * successful VIEW, and Nextcloud's throttler answers the 5th attempt from an
+	 * address with a ~3s sleep, the 8th with the 25s cap and the 11th inside 30
+	 * minutes with a flat 429 - against readers of a link they were handed, who
+	 * behind one NAT share one address. The reasoning is on
+	 * {@see PublicShareController::data()}; this is the guard.
+	 *
+	 * It lives in PHPUnit rather than the e2e suite on purpose: the dev stack and
+	 * CI both run with `auth.bruteforce.protection.enabled=false` (dev/setup.sh),
+	 * so a browser-level "many reads in a row still answer 200" assertion would
+	 * pass with the throttle call present and prove nothing. `isThrottled()` is
+	 * the controller's own decision and is readable whatever the instance config.
+	 */
+	public function testASuccessfulAnonymousReadIsNotThrottled(): void {
+		$this->publicShareService->method('getPublicBoard')
+			->willReturn(['board' => [], 'stacks' => [], 'cards' => []]);
+
+		$response = $this->controller->data('a-real-live-token');
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertFalse(
+			$response->isThrottled(),
+			'A successful public-share read must not register a brute-force attempt - '
+			. 'it would rate-limit legitimate viewers of a popular shared board.',
+		);
+	}
 }

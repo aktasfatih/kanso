@@ -608,6 +608,35 @@ class PublicShareService {
 	 * per-distinct-uid shape this endpoint already had, not a new one - but it is
 	 * NOT free, and it is not a directory-silent gate either.
 	 *
+	 * MEASURED (#10379 item B), because "not free" was the whole of what was known
+	 * and a batched one-board/many-subjects resolver mirroring
+	 * {@see PermissionService::getPermissionsForBoards()} was queued on the strength
+	 * of it. Dev stack, Postgres, anonymous read, 20 timed samples per shape, DB
+	 * statements counted from `log_statement=all`:
+	 *
+	 *   200-card board, no mentions, group-shared ....  29ms /   11 statements
+	 *   200-card board, 600 mentions of a 10-person
+	 *     team (10 DISTINCT uids), group-shared .....   34ms /  127 statements
+	 *   20-card board, 1000 DISTINCT junk @tokens,
+	 *     group-shared ...............................  395ms / 3011 statements
+	 *   the same 1000 tokens, USER-shared board ......  132ms / 1010 statements
+	 *
+	 * The memoisation is what decides this, and it holds exactly: cost tracks the
+	 * number of DISTINCT people named, not the volume of text naming them, and the
+	 * number of distinct people on a real board is team-sized. The realistic
+	 * mention-heavy case is +5ms on a 171KB payload - 3 DB round-trips per distinct
+	 * uid on a group-shared board, 1 on a user-shared one. So: no batched resolver.
+	 * Note too that it would have fixed the smaller half - the two group-shared /
+	 * user-shared rows above differ by 263ms of the 371ms worst-case overhead, and
+	 * that difference is the per-uid DIRECTORY lookup, which batching the ACL read
+	 * does not touch.
+	 *
+	 * The 395ms row is not a board anybody has; it needs an EDIT member to stuff 20
+	 * descriptions with 50 distinct junk `@tokens` each, it is linear with no
+	 * amplification (one request in, one board out), and that member could spend
+	 * the same effort on the authenticated read. If a real board ever gets near it,
+	 * the number to beat is in this block.
+	 *
 	 * @param array<string, bool> $members uid => holds READ, request-scoped cache
 	 */
 	private function isBoardMember(Board $board, string $uid, array &$members): bool {

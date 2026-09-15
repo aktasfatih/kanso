@@ -129,6 +129,58 @@ class PublicShareController extends Controller {
 	 * The STRIPPED read-only board payload for a token. No session. An unknown /
 	 * disabled / rotated / expired token is a throttled 404 so the token space
 	 * can't be brute-forced or enumerated (same failure shape for every reason).
+	 *
+	 * The SUCCESS arm is deliberately NOT throttled, and deliberately carries no
+	 * ETag. Both were proposed (#10302 item 2, #10379 item A) on the reading that
+	 * an unauthenticated endpoint should not serve a full board build for free.
+	 * Both were measured and argued down; this is the record, because the naive
+	 * reading of each is attractive enough to be "fixed" back in.
+	 *
+	 * NO THROTTLE ON SUCCESS. `#[BruteForceProtection]` is not a rate limiter, it
+	 * is a FAILURE counter: `$response->throttle()` makes BruteForceMiddleware
+	 * call `IThrottler::registerAttempt()`, and the next request from that address
+	 * sleeps `0.1 * 2^attempts` seconds (`Throttler::calculateDelay`), capped at
+	 * `IThrottler::MAX_DELAY` = 25s, with a hard `TooManyRequestsResponse` once
+	 * `MAX_ATTEMPTS` = 10 is passed inside 30 minutes. Registering a SUCCESSFUL
+	 * read there would therefore make the 5th view of a shared board from one
+	 * address sleep ~3s, the 8th sleep the full 25s, and the 11th inside half an
+	 * hour a flat 429 - for visitors doing nothing but reading a link they were
+	 * given. A NAT'd office, a school, a conference wifi and a single recipient
+	 * reloading all share one address, so the throttle would fire on exactly the
+	 * audience the link exists for. The counter belongs on the 404 arm and only
+	 * there: it defends the TOKEN SPACE, which is the thing an attacker can
+	 * actually probe. Reaching the success arm already requires the board's real
+	 * 64-char ISecureRandom token, and the owner can rotate or revoke it.
+	 *
+	 * NO ETAG. Conditional reads pay where a client replays the validator - the
+	 * ICS feed ({@see CalendarFeedController::feed()}), where calendar clients
+	 * poll on a schedule and send `If-None-Match` natively, and the authenticated
+	 * board read, where `fetchBoard` in src/services/api.js replays it off the
+	 * cached payload. This route has no such caller and cannot cheaply grow one:
+	 * the public SPA fetches once in `mounted()` (src/views/PublicBoard.vue) and
+	 * holds no cross-load cache, and Nextcloud's `Response` ships
+	 * `Cache-Control: no-cache, no-store, must-revalidate` by default, so the
+	 * browser never caches this JSON and so never revalidates it on its own. A
+	 * validator nobody sends is answered by nobody, and it would not blunt the
+	 * loop-reader the proposal was aimed at either - that caller simply omits the
+	 * header.
+	 *
+	 * Worse, the obvious validator would be WRONG here. The board's latest
+	 * `kanso_changes` id covers the authenticated payload, but this one also
+	 * carries data that log does not describe: the comments opt-in and the expiry
+	 * are written straight through `BoardMapper` ({@see PublicShareService} takes
+	 * no ChangeNotifier at all, so it cannot append a row), and every display name
+	 * this payload substitutes for a `@mention` or a comment byline lives in the
+	 * user backend. Verified on the dev stack: renaming a mentioned member changed
+	 * the anonymous payload while the board's latest change id stayed put, i.e. a
+	 * change-id ETag would have served a stale 304 for as long as the board sat
+	 * idle. Getting it right means a composite validator plus a display-name
+	 * window - real machinery, for a caller that does not exist.
+	 *
+	 * What the read actually costs, measured on the dev stack (Postgres, 20
+	 * samples): 29ms and 11 DB statements for a 200-card board, 34ms and 127
+	 * statements for the same board with 600 mentions of a 10-person team. That is
+	 * the number any future proposal here has to beat.
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
