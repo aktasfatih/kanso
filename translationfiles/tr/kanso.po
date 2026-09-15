@@ -303,13 +303,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4370
+#: src/components/CardDetail.vue:4385
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
 msgstr[1] "%n gün önce"
 
-#: src/components/CardDetail.vue:4368
+#: src/components/CardDetail.vue:4383
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -333,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4366
+#: src/components/CardDetail.vue:4381
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -363,7 +363,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2029
+#: src/components/CardDetail.vue:2044
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -735,6 +735,10 @@ msgstr "İliştir"
 #: src/components/AddToKansoDialog.vue
 msgid "Attach “{file}” to a card. A copy is stored on the card."
 msgstr "“{file}” dosyasını bir karta iliştir. Kartta bir kopyası saklanır."
+
+#: src/components/CardDetail.vue
+msgid "Attach a copy"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "attached {value}"
@@ -1252,9 +1256,21 @@ msgstr "Bir sütun seç…"
 msgid "Choose a CSV file"
 msgstr "Bir CSV dosyası seç"
 
+#: src/components/CardDetail.vue
+msgid "Choose a file to attach"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Choose from Files"
+msgstr ""
+
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
 msgstr "Sol kenar çubuğunda hangi bölümlerin görüneceğini seç."
+
+#: src/components/CardDetail.vue
+msgid "Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it."
+msgstr ""
 
 #: src/composables/useCardType.js
 msgid "Chore"
@@ -1722,7 +1738,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4559
+#: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2303,6 +2319,10 @@ msgstr "Süre kaydı eklenemedi."
 #: src/components/CardDetail.vue
 msgid "Failed to assign step."
 msgstr "Adım atanamadı."
+
+#: src/components/CardDetail.vue
+msgid "Failed to attach the file."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Failed to cancel reminder."
@@ -3115,7 +3135,7 @@ msgstr "İtalik"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6287
+#: src/components/CardDetail.vue:6344
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3402,7 +3422,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4561
+#: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4799,7 +4819,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6293
+#: src/components/CardDetail.vue:6350
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5466,7 +5486,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4560
+#: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5547,7 +5567,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4562
+#: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

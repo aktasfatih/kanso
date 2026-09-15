@@ -17,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
 	fetchCardAttachments,
 	uploadCardAttachment as apiUpload,
+	attachCardFileFromFiles as apiAttachFromFiles,
 	deleteCardAttachment as apiDelete,
 } from '../services/api.js'
 
@@ -43,6 +44,15 @@ export function useCardAttachments(cardId) {
 		onSettled: () => queryClient.invalidateQueries({ queryKey: key.value }),
 	})
 
+	// "Choose from Files": the server COPIES the picked Files node's bytes into
+	// the card's app-data, so the result is an ordinary attachment row - same
+	// invalidation as an upload, no optimistic row (the filename/size/mime are
+	// the server's, not the picker's).
+	const attachFromFiles = useMutation({
+		mutationFn: (fileId) => apiAttachFromFiles(resolvedId.value, fileId),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: key.value }),
+	})
+
 	const removeAttachment = useMutation({
 		mutationFn: (attachmentId) => apiDelete(resolvedId.value, attachmentId),
 		onMutate: async (attachmentId) => {
@@ -61,5 +71,5 @@ export function useCardAttachments(cardId) {
 		onSettled: () => queryClient.invalidateQueries({ queryKey: key.value }),
 	})
 
-	return { ...query, attachments: query.data, uploadAttachment, removeAttachment }
+	return { ...query, attachments: query.data, uploadAttachment, attachFromFiles, removeAttachment }
 }

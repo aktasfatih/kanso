@@ -294,12 +294,12 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4370
+#: src/components/CardDetail.vue:4385
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4368
+#: src/components/CardDetail.vue:4383
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -319,7 +319,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] ""
 
-#: src/components/CardDetail.vue:4366
+#: src/components/CardDetail.vue:4381
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -344,7 +344,7 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2029
+#: src/components/CardDetail.vue:2044
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -710,6 +710,10 @@ msgstr "附加"
 #: src/components/AddToKansoDialog.vue
 msgid "Attach “{file}” to a card. A copy is stored on the card."
 msgstr "把“{file}”附加到卡片。卡片上会保存一份副本。"
+
+#: src/components/CardDetail.vue
+msgid "Attach a copy"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "attached {value}"
@@ -1227,9 +1231,21 @@ msgstr "选择列…"
 msgid "Choose a CSV file"
 msgstr "选择 CSV 文件"
 
+#: src/components/CardDetail.vue
+msgid "Choose a file to attach"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Choose from Files"
+msgstr ""
+
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
 msgstr "选择在左侧边栏中显示哪些分区。"
+
+#: src/components/CardDetail.vue
+msgid "Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it."
+msgstr ""
 
 #: src/composables/useCardType.js
 msgid "Chore"
@@ -1697,7 +1713,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4559
+#: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2273,6 +2289,10 @@ msgstr "添加工时记录失败。"
 #: src/components/CardDetail.vue
 msgid "Failed to assign step."
 msgstr "指派步骤失败。"
+
+#: src/components/CardDetail.vue
+msgid "Failed to attach the file."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Failed to cancel reminder."
@@ -3085,7 +3105,7 @@ msgstr "斜体"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6287
+#: src/components/CardDetail.vue:6344
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3371,7 +3391,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4561
+#: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4765,7 +4785,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6293
+#: src/components/CardDetail.vue:6350
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5431,7 +5451,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4560
+#: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5511,7 +5531,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4562
+#: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

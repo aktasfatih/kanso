@@ -1,10 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, ncLogin, BASE, currentAuth } from './helpers.js'
+import { test, expect, ncLogin, BASE, currentAuth, me } from './helpers.js'
 
 const API = BASE + '/index.php/apps/kanso/api'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
+
+// DAV root of the CURRENT user's own Files. Built at call time so it reads the
+// live `me` binding (a module-level snapshot would capture 'admin' before the
+// per-worker rebind under E2E_ISOLATE).
+const davUrl = () => BASE + '/remote.php/dav/files/' + me
+
+async function putUserFile(name, content) {
+	const r = await fetch(`${davUrl()}/${name}`, {
+		method: 'PUT',
+		headers: { Authorization: currentAuth },
+		body: content,
+	})
+	if (!r.ok && r.status !== 201 && r.status !== 204) {
+		throw new Error(`PUT ${name} failed: ${r.status}`)
+	}
+}
+
+async function deleteUserFile(name) {
+	await fetch(`${davUrl()}/${name}`, {
+		method: 'DELETE',
+		headers: { Authorization: currentAuth },
+	}).catch(() => {})
+}
 
 // Kept local: this client returns { ok, status, body } (never throws) so the
 // tests can assert on non-2xx statuses; the shared api throws. uploadFile /
@@ -262,6 +285,59 @@ test.describe('Card file attachments', () => {
 		await row.locator('.card-modal__child-remove').click()
 		await expect(page.locator('.card-modal__link-row', { hasText: 'ui-upload.txt' }))
 			.toHaveCount(0, { timeout: 8000 })
+	})
+
+	// #10467 — the from-Files endpoint shipped live and routed with no way to
+	// reach it from a card: the Attachments section offered Upload and nothing
+	// else. This drives the whole new path (button → Nextcloud file picker →
+	// endpoint → row) and, crucially, pins the SEMANTICS the UI now promises:
+	// the bytes are COPIED, so deleting the original in Files leaves the card's
+	// attachment downloadable. A "link" implementation would fail that last leg.
+	test('attach an existing Files item through the picker, and it survives deleting the original', async ({ page }) => {
+		const name = `kanso-picked-${Date.now()}.txt`
+		await putUserFile(name, 'picked from Files')
+
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
+			await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+			// The copy-not-link semantics are stated in the section itself, not
+			// left to the code or to whoever opens the dialog.
+			await expect(page.locator('.card-modal__attachment-hint')).toContainText('copy')
+
+			await page.locator('.card-modal__attachment-from-files').click()
+			await expect(page.locator('.file-picker')).toBeVisible({ timeout: 10_000 })
+
+			// Narrow the list to the seeded file, select it, confirm.
+			await page.locator('.file-picker__filter-input input').fill(name)
+			const pickerRow = page.locator('[data-testid="file-list-row"]', { hasText: name })
+			await expect(pickerRow).toHaveCount(1, { timeout: 10_000 })
+			await pickerRow.click()
+			await page.getByRole('button', { name: 'Attach a copy' }).click()
+
+			// It lands as an ordinary attachment row served by Kanso's own endpoint.
+			const row = page.locator('.card-modal__link-row', { hasText: name })
+			await expect(row).toHaveCount(1, { timeout: 15_000 })
+			const href = await row.locator('a.card-modal__link').getAttribute('href')
+			expect(href).toContain(`/cards/${cardId}/attachments/`)
+			const url = href.startsWith('http') ? href : BASE + href
+			const dl = await page.request.get(url)
+			expect(dl.status()).toBe(200)
+			expect(await dl.text()).toBe('picked from Files')
+
+			// COPY, not link: the source node goes away and the card keeps its bytes.
+			await deleteUserFile(name)
+			const after = await page.request.get(url)
+			expect(after.status(), 'the attachment must survive deleting the source file').toBe(200)
+			expect(await after.text()).toBe('picked from Files')
+
+			// Leave the shared card as we found it.
+			await row.locator('.card-modal__child-remove').click()
+			await expect(page.locator('.card-modal__link-row', { hasText: name })).toHaveCount(0, { timeout: 8000 })
+		} finally {
+			await deleteUserFile(name)
+		}
 	})
 
 	// #119 — "when did this file reach this card?" had no answer anywhere: the

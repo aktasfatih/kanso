@@ -9,6 +9,7 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Db\CardAttachment;
 use OCA\Kanso\Service\CardAttachmentService;
+use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\StorageLimitException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\UserRateLimit;
@@ -134,6 +135,28 @@ class CardAttachmentControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
 		self::assertSame('Attachment storage is full on this server.', $response->getData()['error']);
+	}
+
+	/**
+	 * #10467 gave "attach from Files" a button in the card, so the DENIAL that
+	 * was previously only reachable by hand-rolling the request is now one click
+	 * away for a viewer on a read-only board. A reader who may not edit the card
+	 * must get 403 from the copy path - and, as with 413 above, BOTH write paths
+	 * must answer identically, or the new button would surface a different
+	 * failure from the Upload button beside it.
+	 *
+	 * @dataProvider writePaths
+	 */
+	public function testADeniedWriteAnswersForbidden(string $method): void {
+		$service = $this->createMock(CardAttachmentService::class);
+		$serviceMethod = $method === 'create' ? 'upload' : 'attachFromFileNode';
+		$service->method($serviceMethod)
+			->willThrowException(new NotPermittedException('Not allowed'));
+
+		$controller = $this->controller($service, $this->userManager([]));
+		$response = $method === 'create' ? $controller->create(9) : $controller->createFromFile(9, 42);
+
+		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 
 	private function attachment(int $id, string $filename, string $uploadedBy): CardAttachment {

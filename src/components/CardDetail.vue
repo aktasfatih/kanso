@@ -1626,8 +1626,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="triggerAttachmentPick">
 										{{ uploadAttachment.isPending.value ? t('kanso', 'Uploading…') : t('kanso', 'Upload') }}
 									</NcButton>
+									<!-- #10467 — the from-Files endpoint existed with no way to reach
+									     it from a card. The server COPIES the picked node's bytes, so
+									     the button says "a copy" and the hint below spells out what
+									     that means for the original. Same canEdit gate as Upload; the
+									     server re-checks board EDIT either way. -->
+									<NcButton
+										type="secondary"
+										class="card-modal__attachment-from-files"
+										:disabled="attachFromFiles.isPending.value"
+										@click="pickAttachmentFromFiles">
+										{{ attachFromFiles.isPending.value ? t('kanso', 'Copying…') : t('kanso', 'Choose from Files') }}
+									</NcButton>
 								</template>
 							</div>
+							<p v-if="canEdit" class="card-modal__attachment-hint">
+								{{ t('kanso', 'Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it.') }}
+							</p>
 							<ul v-if="cardAttachments.length > 0" class="card-modal__links-list">
 								<li v-for="att in cardAttachments" :key="att.id" class="card-modal__link-row">
 									<div class="card-modal__attachment">
@@ -2440,7 +2455,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
 import { generateUrl } from '@nextcloud/router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
-import { showUndo, showSuccess, showError } from '@nextcloud/dialogs'
+import { showUndo, showSuccess, showError, getFilePickerBuilder, FilePickerClosed } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -5771,7 +5786,7 @@ async function copyBranchName() {
 }
 
 // ── File attachments (#3526) ─────────────────────────────────────────────────
-const { attachments: cardAttachmentsData, uploadAttachment, removeAttachment } = useCardAttachments(computed(() => props.cardId))
+const { attachments: cardAttachmentsData, uploadAttachment, attachFromFiles, removeAttachment } = useCardAttachments(computed(() => props.cardId))
 const cardAttachments = computed(() => cardAttachmentsData.value ?? [])
 const attachmentInput = ref(null)
 const attachmentError = ref('')
@@ -5815,6 +5830,48 @@ async function handleAttachmentPick(event) {
 		await uploadAttachment.mutateAsync(file)
 	} catch (e) {
 		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to upload attachment.')
+	}
+}
+
+// "Choose from Files" (#10467). Opens Nextcloud's own file picker and posts the
+// picked node's id to the from-file endpoint, which COPIES its bytes into the
+// card - the card never references the user's node, so a later rename/delete of
+// the original leaves the attachment intact. The picker's confirm button says
+// "Attach a copy" for exactly that reason; the section hint repeats it for
+// anyone who never opens the dialog.
+//
+// Dismissing the picker rejects with FilePickerClosed - that is a cancel, not a
+// failure, so it must not paint an error under the section.
+async function pickAttachmentFromFiles() {
+	attachmentError.value = ''
+	let nodes = []
+	try {
+		nodes = await getFilePickerBuilder(t('kanso', 'Choose a file to attach'))
+			.setMultiSelect(false)
+			.allowDirectories(false)
+			.addButton({
+				label: t('kanso', 'Attach a copy'),
+				variant: 'primary',
+				// pickNodes() resolves with the selection itself; the button only
+				// needs to exist for the dialog to have a confirm affordance.
+				callback: () => {},
+			})
+			.build()
+			.pickNodes()
+	} catch (e) {
+		if (!(e instanceof FilePickerClosed)) {
+			attachmentError.value = t('kanso', 'Failed to attach the file.')
+		}
+		return
+	}
+
+	const fileId = Number(nodes?.[0]?.fileid)
+	if (!Number.isInteger(fileId) || fileId <= 0) return
+
+	try {
+		await attachFromFiles.mutateAsync(fileId)
+	} catch (e) {
+		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to attach the file.')
 	}
 }
 
@@ -8283,6 +8340,15 @@ async function handleToggleProject(projectId) {
 	color: var(--color-text-maxcontrast);
 	font-size: 0.8125rem;
 	white-space: nowrap;
+}
+/* #10467 — "Choose from Files" copies rather than links, and that difference is
+ * only visible once the original is renamed or deleted. The hint states it up
+ * front, next to the button, instead of leaving it to the dialog alone. */
+.card-modal__attachment-hint {
+	margin: 4px 0 0;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.8125rem;
+	line-height: 1.3;
 }
 /* #119 — the attachment row carries a second line (uploader + upload time), so
  * the link and its meta stack in a column while the remove button stays beside
