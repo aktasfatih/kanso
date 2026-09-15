@@ -1,7 +1,71 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, API } from './helpers.js'
+import { deflateSync } from 'node:zlib'
+
+/**
+ * A real PNG of exactly `w`×`h` (solid black, 8-bit greyscale).
+ *
+ * #147 is about an image's NATURAL size, so the fixture has to carry real
+ * dimensions — the 1×1 PNG the other specs use would satisfy `max-width: 100%`
+ * no matter what the CSS said. Hand-rolled rather than checked in as a binary:
+ * a generator states the dimensions the assertions depend on right here, and
+ * `zlib.crc32` is deliberately avoided (added in Node 20.15, and CI pins no
+ * minor).
+ *
+ * @param {number} w width in pixels
+ * @param {number} h height in pixels
+ * @return {Buffer} the encoded PNG
+ */
+function makePng(w, h) {
+	const table = new Int32Array(256)
+	for (let n = 0; n < 256; n++) {
+		let c = n
+		for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1)
+		table[n] = c
+	}
+	const crc32 = (buf) => {
+		let c = -1
+		for (let i = 0; i < buf.length; i++) c = table[(c ^ buf[i]) & 0xFF] ^ (c >>> 8)
+		return (c ^ -1) >>> 0
+	}
+	const chunk = (type, data) => {
+		const len = Buffer.alloc(4)
+		len.writeUInt32BE(data.length, 0)
+		const body = Buffer.concat([Buffer.from(type, 'ascii'), data])
+		const crc = Buffer.alloc(4)
+		crc.writeUInt32BE(crc32(body), 0)
+		return Buffer.concat([len, body, crc])
+	}
+	const ihdr = Buffer.alloc(13)
+	ihdr.writeUInt32BE(w, 0)
+	ihdr.writeUInt32BE(h, 4)
+	ihdr[8] = 8 // bit depth
+	ihdr[9] = 0 // colour type: greyscale
+	// Each scanline is a filter byte (0 = none) followed by w samples; all-zero
+	// bytes are a valid, fully black image.
+	const idat = deflateSync(Buffer.alloc((w + 1) * h))
+	return Buffer.concat([
+		Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+		chunk('IHDR', ihdr),
+		chunk('IDAT', idat),
+		chunk('IEND', Buffer.alloc(0)),
+	])
+}
+
+/** Upload a generated PNG as a card attachment; returns the attachment record. */
+async function uploadPng(cardId, filename, w, h) {
+	const form = new FormData()
+	form.append('file', new Blob([makePng(w, h)], { type: 'image/png' }), filename)
+	const r = await fetch(API + `/cards/${cardId}/attachments`, {
+		method: 'POST',
+		headers: { 'OCS-APIREQUEST': 'true', Authorization: api.auth },
+		body: form,
+	})
+	if (!r.ok) throw new Error(`upload ${filename} → ${r.status}: ${await r.text()}`)
+	return r.json()
+}
 
 test.describe('Markdown card descriptions - render and XSS safety', () => {
 	const state = {
@@ -9,10 +73,19 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		stackId: 0,
 		cardId: 0,
 		listCardId: 0,
+		imgCardId: 0,
+		wideSrc: '',
+		smallSrc: '',
 		boardUrl: '',
 		cardUrl: '',
 		listCardUrl: '',
+		imgCardUrl: '',
 	}
+
+	// Deliberately wider than any description column the app renders, so the
+	// natural width alone would overflow every surface under test.
+	const WIDE_PX = 1600
+	const SMALL_PX = 24
 
 	const DESCRIPTION = '# Heading\n\n**bold** and [a link](https://example.com)\n\n<script>alert(1)</script>'
 	// Its own card so the description-mutating tests above can't race it.
@@ -44,9 +117,23 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		state.listCardId = listCard.id
 		await api.patch(`/cards/${listCard.id}`, { description: LIST_DESCRIPTION })
 
+		// #147: its own card again — the image test needs the description and a
+		// comment to stay put while the tests above rewrite `cardId`'s.
+		const imgCard = await api.post('/cards', { stackId: stack.id, title: 'MD Image Card' })
+		state.imgCardId = imgCard.id
+		const wide = await uploadPng(imgCard.id, 'wide.png', WIDE_PX, 60)
+		const small = await uploadPng(imgCard.id, 'small.png', SMALL_PX, SMALL_PX)
+		state.wideSrc = `/apps/kanso/api/cards/${imgCard.id}/attachments/${wide.id}/inline`
+		state.smallSrc = `/apps/kanso/api/cards/${imgCard.id}/attachments/${small.id}/inline`
+		await api.patch(`/cards/${imgCard.id}`, {
+			description: `![wide](${state.wideSrc})\n\n![small](${state.smallSrc})`,
+		})
+		await api.post(`/cards/${imgCard.id}/comments`, { body: `![wide](${state.wideSrc})` })
+
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 		state.listCardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${listCard.id}`
+		state.imgCardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${imgCard.id}`
 		console.log('Setup complete - cardUrl:', state.cardUrl)
 	})
 
@@ -231,5 +318,66 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		const h1Size = await container.locator('h1').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
 		const pSize = await container.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
 		expect(h1Size).toBeGreaterThan(pSize)
+	})
+
+	// #147: a wide attachment image rendered at its natural pixel width once the
+	// description was SAVED, blowing past the description box and the card. The
+	// editor was fine the whole time (MarkdownEditor.vue constrains its own
+	// .ProseMirror images), so — exactly like the list bug above — this is a
+	// styling gap on the read-only surfaces, and the assertions are on measured
+	// geometry, not on markup that never regressed.
+	test('clamps a wide image to the description width without upscaling a small one', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.imgCardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+		await page.waitForSelector('.card-modal__desc-rendered img', { timeout: 10_000 })
+
+		const container = page.locator('.card-modal__desc-rendered')
+		const wide = container.locator(`img[src*="${state.wideSrc}"]`)
+		const small = container.locator(`img[src*="${state.smallSrc}"]`)
+		await expect(wide).toBeVisible({ timeout: 5000 })
+		await expect(small).toBeVisible({ timeout: 5000 })
+
+		// The sanitiser sets loading="lazy", so wait for the bytes to actually
+		// arrive — an undecoded img has naturalWidth 0 and would fake a pass.
+		const decoded = (loc) => expect.poll(
+			async () => loc.evaluate((el) => el.complete && el.naturalWidth),
+			{ timeout: 10_000 },
+		)
+		await decoded(wide).toBe(WIDE_PX)
+		await decoded(small).toBe(SMALL_PX)
+
+		const box = async (loc) => (await loc.boundingBox()) || { width: 0, height: 0 }
+		const containerBox = await box(container)
+		const wideBox = await box(wide)
+		const smallBox = await box(small)
+
+		// Guard against a vacuous pass: the fixture must really be too wide for
+		// this container, or clamping proves nothing.
+		expect(WIDE_PX).toBeGreaterThan(containerBox.width)
+
+		// The fix: clamped to the container, and the aspect ratio preserved
+		// (1600×60 scaled down is far shorter than its natural 60px).
+		expect(wideBox.width).toBeLessThanOrEqual(containerBox.width + 1)
+		expect(wideBox.height).toBeCloseTo(wideBox.width * (60 / WIDE_PX), 0)
+
+		// ...and nothing overflows horizontally — neither the description box nor
+		// the modal body scrolls sideways.
+		expect(await container.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
+
+		// `max-width`, not `width`: a small image keeps its natural size.
+		expect(Math.round(smallBox.width)).toBe(SMALL_PX)
+		expect(Math.round(smallBox.height)).toBe(SMALL_PX)
+
+		// Same renderer, same shared rule — a comment body clamps too (#147 listed
+		// comments, the quick preview, the project view and the public share as
+		// carrying the identical defect).
+		const commentImg = page.locator(`.card-modal__comment-body img[src*="${state.wideSrc}"]`).first()
+		await expect(commentImg).toBeVisible({ timeout: 10_000 })
+		await decoded(commentImg).toBe(WIDE_PX)
+		const commentBody = page.locator('.card-modal__comment-body').first()
+		const commentImgBox = await box(commentImg)
+		const commentBodyBox = await box(commentBody)
+		expect(commentImgBox.width).toBeLessThanOrEqual(commentBodyBox.width + 1)
 	})
 })

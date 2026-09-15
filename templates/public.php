@@ -121,5 +121,9 @@ html, body { height: 100%; }
 .public-comment__body ul ul { list-style-type: circle; }
 .public-comment__body li { margin: 2px 0; }
 .public-comment__body blockquote { margin: 0 0 8px; padding-inline-start: 12px; border-inline-start: 3px solid var(--color-border, #ddd); color: var(--color-text-maxcontrast, #666); }
+/* #147: the description above already clamped images; a comment body did not,
+   so a wide one overflowed the detail pane. max-width (not width) leaves a
+   small image at its natural size. */
+.public-comment__body img { max-width: 100%; height: auto; border-radius: 6px; }
 </style>
 <div id="kanso-public" data-token="<?php p($_['token'] ?? ''); ?>"></div>
