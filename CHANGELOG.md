@@ -11,6 +11,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.32.1](https://github.com/aktasfatih/kanso/compare/v0.32.0...v0.32.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* make priority, type, due-date and error colours readable in light mode ([ed3520c](https://github.com/aktasfatih/kanso/commit/ed3520cefd591a2995479e046183e5583022515d)), closes [#10483](https://github.com/aktasfatih/kanso/issues/10483) [#136](https://github.com/aktasfatih/kanso/issues/136)
+* show bullets and indentation on lists in saved card descriptions ([c2a8c18](https://github.com/aktasfatih/kanso/commit/c2a8c18072033c46fba9f1ec0d7c3e316c52dd58)), closes [#139](https://github.com/aktasfatih/kanso/issues/139)
+* show checklist items and sub-cards when opening a card on a public board link ([6f75fe2](https://github.com/aktasfatih/kanso/commit/6f75fe27938ff5543e721fcccbf42b91d6b2b3ad)), closes [#135](https://github.com/aktasfatih/kanso/issues/135)
+
 # [0.32.0](https://github.com/aktasfatih/kanso/compare/v0.31.0...v0.32.0) (2026-09-14)
 
 
