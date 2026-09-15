@@ -5242,6 +5242,10 @@ msgstr "切换清单项的完成状态"
 msgid "Toggle preview"
 msgstr "切换预览"
 
+#: src/services/api.js
+msgid "Too many requests in a short time — this action is rate-limited. Wait a while, then try again."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Top of the column"
 msgstr "列的顶部"

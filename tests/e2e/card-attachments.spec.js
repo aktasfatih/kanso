@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, ncLogin, BASE, currentAuth, me } from './helpers.js'
+import { test, expect, ncLogin, BASE, currentAuth, me, RATE_LIMIT_MESSAGE } from './helpers.js'
 
 const API = BASE + '/index.php/apps/kanso/api'
 const HEADERS = { 'OCS-APIREQUEST': 'true', 'Content-Type': 'application/json' }
@@ -376,6 +376,65 @@ test.describe('Card file attachments', () => {
 			await expect(err).toHaveText(serverMessage, { timeout: 10_000 })
 
 			// ...and nothing was attached.
+			await expect(page.locator('.card-modal__link-row', { hasText: name })).toHaveCount(0)
+		} finally {
+			await deleteUserFile(name)
+		}
+	})
+
+	// #10505 — the one non-2xx the server cannot explain for itself. Nextcloud's
+	// RateLimitingMiddleware answers a tripped `#[UserRateLimit]` with
+	// `new DataResponse([], 429)` — a ZERO-BYTE body — so the
+	// `e?.response?.data?.error || <fallback>` read every call site makes finds
+	// nothing and paints "Failed to upload attachment." / "Failed to attach the
+	// file.": text that reads as a transient glitch and invites the immediate
+	// retry that is precisely wrong while a limit is in force.
+	//
+	// Both attachment call sites share the same `#[UserRateLimit(120, 3600)]`, so
+	// both legs are asserted. The 429 is injected at the route with an EMPTY body
+	// — the exact shape the framework produces — rather than by firing 120 real
+	// uploads; a fulfilment carrying `{error: …}` would prove nothing, since that
+	// is the shape that already worked.
+	test('a 429 with an empty body tells the user they are rate-limited, on both attachment paths', async ({ page }) => {
+		const name = `kanso-429-${Date.now()}.txt`
+		await putUserFile(name, 'rate limited')
+		const err = page.locator('.card-modal__save-error')
+
+		try {
+			await ncLogin(page)
+
+			// Upload POSTs and from-file POSTs 429 with nothing in the body. The
+			// GET that lists attachments shares the upload URL, so only POST is
+			// intercepted — otherwise the section never renders.
+			await page.route('**/api/cards/*/attachments', (route) =>
+				route.request().method() === 'POST'
+					? route.fulfill({ status: 429, contentType: 'application/json', body: '' })
+					: route.fallback())
+			await page.route('**/attachments/from-file', (route) =>
+				route.fulfill({ status: 429, contentType: 'application/json', body: '' }))
+
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
+			await page.waitForSelector('.card-modal', { timeout: 10_000 })
+
+			// (a) Upload button.
+			await page.setInputFiles('.card-modal__file-input', {
+				name: 'rate-limited.txt',
+				mimeType: 'text/plain',
+				buffer: Buffer.from('nope'),
+			})
+			await expect(err).toHaveText(RATE_LIMIT_MESSAGE, { timeout: 10_000 })
+			await expect(page.locator('.card-modal__link-row', { hasText: 'rate-limited.txt' })).toHaveCount(0)
+
+			// (b) Choose from Files — same cap, same endpoint family, same advice.
+			await page.locator('.card-modal__attachment-from-files').click()
+			await expect(page.locator('.file-picker')).toBeVisible({ timeout: 10_000 })
+			await page.locator('.file-picker__filter-input input').fill(name)
+			const pickerRow = page.locator('[data-testid="file-list-row"]', { hasText: name })
+			await expect(pickerRow).toHaveCount(1, { timeout: 10_000 })
+			await pickerRow.click()
+			await page.getByRole('button', { name: 'Attach a copy' }).click()
+
+			await expect(err).toHaveText(RATE_LIMIT_MESSAGE, { timeout: 10_000 })
 			await expect(page.locator('.card-modal__link-row', { hasText: name })).toHaveCount(0)
 		} finally {
 			await deleteUserFile(name)

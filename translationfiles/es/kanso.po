@@ -5277,6 +5277,10 @@ msgstr "Alternar el estado terminado del elemento"
 msgid "Toggle preview"
 msgstr "Alternar la vista previa"
 
+#: src/services/api.js
+msgid "Too many requests in a short time — this action is rate-limited. Wait a while, then try again."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Top of the column"
 msgstr "Principio de la columna"

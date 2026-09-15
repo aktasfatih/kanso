@@ -5276,6 +5276,10 @@ msgstr ""
 msgid "Toggle preview"
 msgstr ""
 
+#: src/services/api.js
+msgid "Too many requests in a short time — this action is rate-limited. Wait a while, then try again."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Top of the column"
 msgstr ""
