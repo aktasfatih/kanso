@@ -633,7 +633,6 @@ OC.L10N.register(
     "General" : "Generale",
     "GitHub" : "GitHub",
     "GitHub label name" : "Nome dell'etichetta GitHub",
-    "GitHub Projects (coming soon)" : "GitHub Projects (in arrivo)",
     "Go to boards" : "Vai alle bacheche",
     "Green" : "Verde",
     "Group" : "Gruppo",

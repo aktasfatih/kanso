@@ -251,21 +251,21 @@ msgstr "%1$s ha solicitado tu revisión en %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s ha compartido %2$s contigo"
 
-#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:217
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardList.vue:223
+#: src/views/BoardList.vue:224
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] ""
 msgstr[1] ""
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:213
-#: src/views/BoardList.vue:256
+#: src/views/BoardList.vue:214
+#: src/views/BoardList.vue:257
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -285,13 +285,13 @@ msgid_plural "%n cards created"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardList.vue:212
+#: src/views/BoardList.vue:213
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:216
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] ""
@@ -315,7 +315,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "hace %n hora"
 msgstr[1] "hace %n horas"
 
-#: src/views/BoardList.vue:214
+#: src/views/BoardList.vue:215
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] ""
@@ -466,6 +466,10 @@ msgstr "Añadir tarjeta"
 #: src/components/StackColumn.vue
 msgid "Add card…"
 msgstr "Añadir tarjeta…"
+
+#: src/views/BoardList.vue
+msgid "Add cards to an existing board"
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Add column"
@@ -2938,10 +2942,6 @@ msgstr "GitHub"
 #: src/components/BoardSettingsModal.vue
 msgid "GitHub label name"
 msgstr "Nombre de la etiqueta de GitHub"
-
-#: src/views/BoardList.vue
-msgid "GitHub Projects (coming soon)"
-msgstr "GitHub Projects (próximamente)"
 
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue

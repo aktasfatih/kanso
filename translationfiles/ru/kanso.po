@@ -252,14 +252,14 @@ msgstr "%1$s запросил вашу проверку %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s поделился с вами %2$s"
 
-#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:217
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/views/BoardList.vue:223
+#: src/views/BoardList.vue:224
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] ""
@@ -267,8 +267,8 @@ msgstr[1] ""
 msgstr[2] ""
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:213
-#: src/views/BoardList.vue:256
+#: src/views/BoardList.vue:214
+#: src/views/BoardList.vue:257
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -291,14 +291,14 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/views/BoardList.vue:212
+#: src/views/BoardList.vue:213
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:216
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] ""
@@ -326,7 +326,7 @@ msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardList.vue:214
+#: src/views/BoardList.vue:215
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] ""
@@ -489,6 +489,10 @@ msgstr "Добавить карточку"
 #: src/components/StackColumn.vue
 msgid "Add card…"
 msgstr "Добавить карточку…"
+
+#: src/views/BoardList.vue
+msgid "Add cards to an existing board"
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Add column"
@@ -2968,10 +2972,6 @@ msgstr "GitHub"
 #: src/components/BoardSettingsModal.vue
 msgid "GitHub label name"
 msgstr "Название метки GitHub"
-
-#: src/views/BoardList.vue
-msgid "GitHub Projects (coming soon)"
-msgstr "GitHub Projects (скоро)"
 
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
