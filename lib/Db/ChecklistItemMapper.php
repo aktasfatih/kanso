@@ -110,6 +110,33 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The BOARD-SET twin of {@see self::progressByBoard()} (#10298): the same
+	 * per-card progress over MANY boards as a fixed TWO queries, for the
+	 * cross-board Views feed - which must not pay two queries per readable
+	 * board. Card ids are globally unique, so the union needs no per-board
+	 * nesting.
+	 *
+	 * Visibility is the cross-board mode of the scope (per-board role from the
+	 * map), so a card hidden on ITS board never contributes a count - including
+	 * for a viewer who is internal on one board and external on another.
+	 *
+	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return array<int, array{total: int, done: int}> map of cardId => counts
+	 * @throws Exception
+	 */
+	public function progressByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
+		$totals = $this->countByBoards($boardIds, false, $uid, $rolesByBoard);
+		$done = $this->countByBoards($boardIds, true, $uid, $rolesByBoard);
+
+		$map = [];
+		foreach ($totals as $cardId => $count) {
+			$map[$cardId] = ['total' => $count, 'done' => $done[$cardId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
 	 * The anonymous-share twin of {@see self::progressByBoard()} (#3743): the
 	 * same per-card progress map, restricted to PUBLIC cards only - the
 	 * public snapshot has no viewer and must never count a hidden card's
@@ -263,6 +290,44 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The BOARD-SET twin of {@see self::countByBoard()} (#10298) - same
+	 * grouping and same dialect-safe boolean filter, over a board set with the
+	 * cross-board visibility mode.
+	 *
+	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard
+	 * @return array<int, int> map of cardId => count
+	 * @throws Exception
+	 */
+	private function countByBoards(array $boardIds, bool $doneOnly, string $uid, array $rolesByBoard): array {
+		if ($boardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
+
+		if ($doneOnly) {
+			$qb->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+		}
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * Item counts grouped by card for a board, optionally restricted to done
 	 * items.
 	 *
@@ -332,6 +397,49 @@ class ChecklistItemMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('ci.assigned_role', $qb->createNamedParameter($role)))
 			->groupBy('ci.card_id');
 		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = $row['waiting_since'] !== null ? (int)$row['waiting_since'] : null;
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::waitingByBoard()} (#10298): the same
+	 * derived wait map over MANY boards in ONE query, for the cross-board Views
+	 * feed - which must not pay a query per readable board. Card ids are
+	 * globally unique, so the union needs no per-board nesting.
+	 *
+	 * Visibility is the cross-board mode of the scope (per-board role from the
+	 * map), so a card hidden on ITS board never appears - including for a
+	 * viewer who is internal on one board and external on another. The role the
+	 * wait is DERIVED from ($role) is the step's frozen side and stays
+	 * board-independent, exactly like the single-board twin.
+	 *
+	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return array<int, ?int> map of cardId => oldest open matching step's assigned_at
+	 * @throws Exception
+	 */
+	public function waitingByBoards(array $boardIds, string $uid, array $rolesByBoard, string $role = ViewerContext::ROLE_EXTERNAL): array {
+		if ($boardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->min('ci.assigned_at'), 'waiting_since')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('ci.assigned_role', $qb->createNamedParameter($role)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();
 		$map = [];

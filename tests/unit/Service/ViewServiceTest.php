@@ -37,7 +37,7 @@ class ViewServiceTest extends TestCase {
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		// Default: no labels on any board unless a test says otherwise.
-		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->labelMapper->method('findByBoards')->willReturn([]);
 		$this->service = new ViewService(
 			$this->boardService,
 			$this->cardMapper,
@@ -47,11 +47,11 @@ class ViewServiceTest extends TestCase {
 		);
 	}
 
-	private function board(int $id, string $title, ?string $prefix = null): Board {
+	private function board(int $id, string $title, ?string $prefix = null, string $owner = 'alice'): Board {
 		$board = new Board();
 		$board->setId($id);
 		$board->setTitle($title);
-		$board->setOwner('alice');
+		$board->setOwner($owner);
 		$board->setPrefix($prefix);
 		return $board;
 	}
@@ -71,26 +71,56 @@ class ViewServiceTest extends TestCase {
 		return $card;
 	}
 
+	/**
+	 * Wire up a readable board per entry of $rowsByBoard (boardId => summary rows),
+	 * so a test can describe the feed it wants in one line.
+	 *
+	 * The service resolves the whole readable set in ONE batched pass (#10298):
+	 * one rolesFor(), one findSummariesByBoards(), one serializeForBoards() - so
+	 * the mocks hand back the union of every board's rows, each row carrying the
+	 * `boardId` the real serializer copies off the card entity.
+	 *
+	 * @param array<int, array{title?: string, prefix?: string|null, owner?: string, role?: string, rows: list<array<string, mixed>>}> $rowsByBoard
+	 * @return list<Board>
+	 */
+	private function seedFeed(array $rowsByBoard, string $uid = 'alice'): array {
+		$boards = [];
+		$roles = [];
+		$cards = [];
+		$rows = [];
+		foreach ($rowsByBoard as $boardId => $spec) {
+			$boards[] = $this->board(
+				$boardId,
+				$spec['title'] ?? ('Board ' . $boardId),
+				$spec['prefix'] ?? null,
+				$spec['owner'] ?? $uid,
+			);
+			$roles[$boardId] = $spec['role'] ?? ViewerContext::ROLE_INTERNAL;
+			foreach ($spec['rows'] as $row) {
+				$cards[] = $this->summaryCard((int)$row['id'], $boardId);
+				$rows[] = $row + ['boardId' => $boardId];
+			}
+		}
+		$this->boardService->method('findAllActive')->with($uid)->willReturn($boards);
+		$this->boardAccess->method('rolesFor')->willReturn($roles);
+		$this->cardMapper->method('findSummariesByBoards')->willReturn($cards);
+		$this->cardSummaryService->method('serializeForBoards')->willReturn($rows);
+		return $boards;
+	}
+
+	/**
+	 * @param array<string, mixed> $result
+	 * @return list<int>
+	 */
+	private function idsOf(array $result): array {
+		return array_map(static fn (array $c): int => (int)$c['id'], $result['cards']);
+	}
+
 	public function testFindMineReturnsCardsFromEveryReadableBoardTaggedWithBoardIdentity(): void {
-		$b3 = $this->board(3, 'Alpha');
-		$b9 = $this->board(9, 'Beta');
-		$this->boardService->expects(self::once())
-			->method('findAllActive')->with('alice')->willReturn([$b3, $b9]);
-
-		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
-		$ctx9 = ViewerContext::forMember('alice', 9, ViewerContext::ROLE_EXTERNAL, false);
-		$this->boardAccess->method('contextFor')->willReturnMap([
-			[$b3, 'alice', $ctx3],
-			[$b9, 'alice', $ctx9],
+		$this->seedFeed([
+			3 => ['title' => 'Alpha', 'rows' => [['id' => 11]]],
+			9 => ['title' => 'Beta', 'role' => ViewerContext::ROLE_EXTERNAL, 'rows' => [['id' => 22]]],
 		]);
-
-		// The summary query runs per readable board under that board's viewer ctx.
-		$this->cardMapper->method('findSummariesByBoard')
-			->willReturnCallback(fn (int $boardId): array => [$this->summaryCard($boardId === 3 ? 11 : 22, $boardId)]);
-		// The shared enrichment is exercised (mocked here); it returns the summary
-		// arrays the client filters/groups over, keyed off the board it ran for.
-		$this->cardSummaryService->method('serialize')
-			->willReturnCallback(fn (int $boardId): array => [['id' => $boardId === 3 ? 11 : 22]]);
 
 		$result = $this->service->findMine('alice');
 
@@ -111,35 +141,130 @@ class ViewServiceTest extends TestCase {
 		self::assertSame('Beta', $rows[1]['boardTitle']);
 	}
 
+	// ── The batching contract (#10298) ───────────────────────────────────────────
+
+	/**
+	 * THE performance contract this feed used to be the sole violator of: the
+	 * cross-board read is a FIXED number of queries, not one enrichment pass per
+	 * readable board. {@see BoardAccess} says it in its own docblock - "batch via
+	 * rolesFor() … never per-board queries" - and every sibling feed (My Cards,
+	 * Inbox, Search, My Steps, Reviews) obeys it.
+	 *
+	 * Pinned by CALL COUNT over a 3-board set: one ACL resolve, one summary
+	 * query, one enrichment pass, one label fetch - and NOT ONE per-board
+	 * contextFor(). Re-introducing the loop makes every one of these go red.
+	 */
+	public function testFindMineResolvesTheWholeBoardSetInOneBatchedPass(): void {
+		$b3 = $this->board(3, 'Alpha');
+		$b9 = $this->board(9, 'Beta');
+		$b12 = $this->board(12, 'Gamma');
+		$boards = [$b3, $b9, $b12];
+		$roles = [
+			3 => ViewerContext::ROLE_INTERNAL,
+			9 => ViewerContext::ROLE_EXTERNAL,
+			12 => ViewerContext::ROLE_INTERNAL,
+		];
+		$this->boardService->method('findAllActive')->with('alice')->willReturn($boards);
+
+		$this->boardAccess->expects(self::once())
+			->method('rolesFor')->with($boards, 'alice')->willReturn($roles);
+		// The per-board resolver is NOT reachable from this feed any more.
+		$this->boardAccess->expects(self::never())->method('contextFor');
+
+		$this->cardMapper->expects(self::once())
+			->method('findSummariesByBoards')
+			->with([3, 9, 12], 'alice', $roles)
+			->willReturn([$this->summaryCard(11, 3), $this->summaryCard(22, 9), $this->summaryCard(33, 12)]);
+		$this->cardSummaryService->expects(self::once())
+			->method('serializeForBoards')
+			->with([3, 9, 12], self::anything(), 'alice', $roles)
+			->willReturn([
+				['id' => 11, 'boardId' => 3],
+				['id' => 22, 'boardId' => 9],
+				['id' => 33, 'boardId' => 12],
+			]);
+
+		$labelMapper = $this->createMock(LabelMapper::class);
+		$labelMapper->expects(self::once())->method('findByBoards')->with([3, 9, 12])->willReturn([]);
+		$labelMapper->expects(self::never())->method('findByBoard');
+		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper);
+
+		self::assertSame([11, 22, 33], $this->idsOf($service->findMine('alice')));
+	}
+
+	/**
+	 * Batching must not flatten the ROLE. A viewer is routinely internal on one
+	 * board and external on another (provider side here, client side there), and
+	 * the #3743 masking is per board - so the map handed to the card query has to
+	 * carry each board's own side, verbatim from BoardAccess. A single "the
+	 * viewer's role" would silently widen the client-side boards.
+	 */
+	public function testFindMineCarriesEachBoardsOwnRoleForAMixedRoleViewer(): void {
+		$owned = $this->board(3, 'Owned', null, 'alice');
+		$provider = $this->board(9, 'Provider side', null, 'bob');
+		$client = $this->board(12, 'Client side', null, 'bob');
+		$roles = [
+			3 => ViewerContext::ROLE_INTERNAL,
+			9 => ViewerContext::ROLE_INTERNAL,
+			12 => ViewerContext::ROLE_EXTERNAL,
+		];
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$owned, $provider, $client]);
+		$this->boardAccess->method('rolesFor')->with([$owned, $provider, $client], 'alice')->willReturn($roles);
+
+		$seen = [];
+		$this->cardMapper->method('findSummariesByBoards')
+			->willReturnCallback(function (array $boardIds, string $uid, array $rolesByBoard) use (&$seen): array {
+				$seen[] = [$boardIds, $uid, $rolesByBoard];
+				return [];
+			});
+		$this->cardSummaryService->method('serializeForBoards')
+			->willReturnCallback(function (array $boardIds, array $cards, string $uid, array $rolesByBoard) use (&$seen): array {
+				$seen[] = [$boardIds, $uid, $rolesByBoard];
+				return [];
+			});
+
+		$this->service->findMine('alice');
+
+		// Both viewer-scoped reads got the SAME per-board role map - internal on
+		// the two provider-side boards, external on the client-side one.
+		self::assertCount(2, $seen);
+		foreach ($seen as $call) {
+			self::assertSame([3, 9, 12], $call[0]);
+			self::assertSame('alice', $call[1]);
+			self::assertSame($roles, $call[2]);
+			self::assertSame(ViewerContext::ROLE_EXTERNAL, $call[2][12]);
+		}
+	}
+
 	/**
 	 * Tile parity (#3950): each card carries its board's human-id prefix and the
 	 * envelope carries the union of label metadata across the readable boards, so
 	 * the client can render card refs (e.g. "KAN-123") and label COLOURS matching
 	 * the board tiles - all from this one feed with no extra request.
+	 *
+	 * The union is now ONE query for the whole board set, walked in board order -
+	 * so the emitted sequence is exactly what the old per-board loop produced.
 	 */
 	public function testFindMineEnrichesCardsWithBoardPrefixAndUnionsLabels(): void {
-		$b3 = $this->board(3, 'Alpha', 'ALP');
-		// A board with no explicit prefix falls back to the shared default.
-		$b9 = $this->board(9, 'Beta', null);
-		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3, $b9]);
-
-		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
-		$ctx9 = ViewerContext::forMember('alice', 9, ViewerContext::ROLE_INTERNAL, true);
-		$this->boardAccess->method('contextFor')->willReturnMap([
-			[$b3, 'alice', $ctx3],
-			[$b9, 'alice', $ctx9],
+		$this->seedFeed([
+			3 => ['title' => 'Alpha', 'prefix' => 'ALP', 'rows' => [['id' => 11]]],
+			// A board with no explicit prefix falls back to the shared default.
+			9 => ['title' => 'Beta', 'rows' => [['id' => 22]]],
 		]);
 
-		$this->cardMapper->method('findSummariesByBoard')
-			->willReturnCallback(fn (int $boardId): array => [$this->summaryCard($boardId === 3 ? 11 : 22, $boardId)]);
-		$this->cardSummaryService->method('serialize')
-			->willReturnCallback(fn (int $boardId): array => [['id' => $boardId === 3 ? 11 : 22]]);
-
-		// Board 3 has two labels, board 9 one; the envelope unions them.
+		// Board 3 has one label, board 9 two; the envelope unions them.
+		//
+		// The label ids are deliberately INVERTED against the board order - the
+		// FIRST board owns the HIGHEST id - and the map comes back keyed in the
+		// order the real `id ASC` query groups it (board 9 first, because it
+		// owns the lower ids), NOT in board order. So the expected sequence
+		// below can only come from walking $boardIds; iterating the batched map
+		// itself would give [1, 2, 5] and fail.
 		$labelMapper = $this->createMock(LabelMapper::class);
-		$labelMapper->method('findByBoard')->willReturnCallback(fn (int $boardId): array => $boardId === 3
-			? [$this->label(1, 'Bug', '#ff0000'), $this->label(2, 'Chore', null)]
-			: [$this->label(5, 'Idea', '#00ff00')]);
+		$labelMapper->method('findByBoards')->with([3, 9])->willReturn([
+			9 => [$this->label(1, 'Bug', '#ff0000'), $this->label(2, 'Chore', null)],
+			3 => [$this->label(5, 'Idea', '#00ff00')],
+		]);
 		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper);
 
 		$result = $service->findMine('alice');
@@ -149,9 +274,11 @@ class ViewServiceTest extends TestCase {
 		self::assertSame('ALP', $rows[0]['boardPrefix']);
 		self::assertSame('KAN', $rows[1]['boardPrefix']);
 
-		// Label union across boards, id/title/color preserved for the client lookup.
+		// Label union across boards, id/title/color preserved for the client lookup,
+		// in BOARD order then per-board creation order.
 		$labels = $result['labels'];
 		self::assertCount(3, $labels);
+		self::assertSame([5, 1, 2], array_column($labels, 'id'));
 		$byId = [];
 		foreach ($labels as $l) {
 			$byId[$l['id']] = $l;
@@ -166,7 +293,7 @@ class ViewServiceTest extends TestCase {
 	 * The scale guard (#3892): the feed is a SINGLE unbounded payload, so it is
 	 * hard-capped. Whatever the set size, `cards` never exceeds MAX_CARDS, `total`
 	 * reports the true pre-cap count, and `capped` is honest - the cap is applied
-	 * AFTER the per-board ACL loop, so it moves no leak boundary.
+	 * AFTER the ACL + #3743 masking, so it moves no leak boundary.
 	 *
 	 * Post-filter semantics (#9862): `total` counts MATCHING rows, so with no
 	 * filter - as here - it is still the whole readable-set count. The filtered
@@ -175,19 +302,10 @@ class ViewServiceTest extends TestCase {
 	 */
 	public function testFindMineCapsThePayloadAndReportsTotalWhenReadableSetIsHuge(): void {
 		$overCap = ViewService::MAX_CARDS + 250;
-
-		// One readable board whose (viewer-gated) summary set exceeds the cap.
-		$b1 = $this->board(1, 'Huge');
-		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b1]);
-		$ctx1 = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
-		$this->boardAccess->method('contextFor')->with($b1, 'alice')->willReturn($ctx1);
-
-		// The mapper/serializer still run once per board (ACL gate intact); they
-		// return the whole viewer-scoped set, which the cap then slices.
-		$this->cardMapper->method('findSummariesByBoard')
-			->willReturn(array_map(fn (int $i): Card => $this->summaryCard($i, 1), range(1, $overCap)));
-		$this->cardSummaryService->method('serialize')
-			->willReturn(array_map(static fn (int $i): array => ['id' => $i], range(1, $overCap)));
+		$this->seedFeed([1 => ['title' => 'Huge', 'rows' => array_map(
+			static fn (int $i): array => ['id' => $i],
+			range(1, $overCap),
+		)]]);
 
 		$result = $this->service->findMine('alice');
 
@@ -200,28 +318,30 @@ class ViewServiceTest extends TestCase {
 
 	/**
 	 * The ACL boundary (#3815, REQUIRED leak-denial): a View run by user A must
-	 * NEVER surface a card from a board A cannot read. findAll() is the single
-	 * readable-set gate - the service must query ONLY the boards it returns and
-	 * never touch a board absent from that set, so an unreadable board's cards
-	 * can never enter the feed.
+	 * NEVER surface a card from a board A cannot read. findAllActive() is the
+	 * single readable-set gate - the batched query is handed EXACTLY that board
+	 * set and exactly those roles, so an unreadable board is neither queried nor
+	 * reachable through the role map (a board absent from the map contributes no
+	 * internal branch at all).
 	 */
 	public function testFindMineNeverQueriesABoardOutsideTheReadableSet(): void {
 		// alice can read board 3 only; board 7 (which she cannot read) exists in
-		// the system but is absent from findAll()'s readable set.
+		// the system but is absent from findAllActive()'s readable set.
 		$b3 = $this->board(3, 'Readable');
 		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
+		$this->boardAccess->method('rolesFor')->with([$b3], 'alice')
+			->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 
-		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
-		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
-
-		// The query is asked ONLY for board 3, and with board 3's viewer context -
-		// never for the unreadable board 7 under any context.
+		// The query is asked ONLY for board 3, with board 3's role - never for
+		// the unreadable board 7 under any role.
 		$this->cardMapper->expects(self::once())
-			->method('findSummariesByBoard')
-			->with(3, $ctx3)
+			->method('findSummariesByBoards')
+			->with([3], 'alice', [3 => ViewerContext::ROLE_INTERNAL])
 			->willReturn([$this->summaryCard(11, 3)]);
-		$this->cardSummaryService->method('serialize')
-			->willReturn([['id' => 11, 'title' => 'Only mine']]);
+		$this->cardSummaryService->expects(self::once())
+			->method('serializeForBoards')
+			->with([3], self::anything(), 'alice', [3 => ViewerContext::ROLE_INTERNAL])
+			->willReturn([['id' => 11, 'boardId' => 3, 'title' => 'Only mine']]);
 
 		$rows = $this->service->findMine('alice')['cards'];
 
@@ -232,36 +352,28 @@ class ViewServiceTest extends TestCase {
 	}
 
 	/**
-	 * Wire up a readable board per entry of $rowsByBoard (boardId => summary rows),
-	 * so a sort test can describe the feed it wants in one line.
-	 *
-	 * @param array<int, array{title?: string, rows: list<array<string, mixed>>}> $rowsByBoard
+	 * Defence in depth on the same boundary: even if a row for an unreadable
+	 * board ever reached the assembly loop (it cannot - the query is restricted
+	 * to the readable set), it is DROPPED rather than shipped with a blank board
+	 * identity. The masking fails closed, not open.
 	 */
-	private function seedFeed(array $rowsByBoard): void {
-		$boards = [];
-		$contexts = [];
-		foreach ($rowsByBoard as $boardId => $spec) {
-			$board = $this->board($boardId, $spec['title'] ?? ('Board ' . $boardId));
-			$boards[] = $board;
-			$contexts[] = [$board, 'alice', ViewerContext::forMember('alice', $boardId, ViewerContext::ROLE_INTERNAL, true)];
-		}
-		$this->boardService->method('findAllActive')->with('alice')->willReturn($boards);
-		$this->boardAccess->method('contextFor')->willReturnMap($contexts);
-		$this->cardMapper->method('findSummariesByBoard')
-			->willReturnCallback(fn (int $boardId): array => array_map(
-				fn (array $row): Card => $this->summaryCard((int)$row['id'], $boardId),
-				$rowsByBoard[$boardId]['rows'],
-			));
-		$this->cardSummaryService->method('serialize')
-			->willReturnCallback(static fn (int $boardId): array => $rowsByBoard[$boardId]['rows']);
-	}
+	public function testFindMineDropsARowWhoseBoardIsNotInTheReadableSet(): void {
+		$b3 = $this->board(3, 'Readable');
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
+		$this->cardMapper->method('findSummariesByBoards')->willReturn([$this->summaryCard(11, 3)]);
+		$this->cardSummaryService->method('serializeForBoards')->willReturn([
+			['id' => 11, 'boardId' => 3, 'owner' => 'alice'],
+			// A row claiming a board outside the readable set.
+			['id' => 99, 'boardId' => 7, 'owner' => 'mallory', 'assigneeIds' => ['mallory']],
+		]);
 
-	/**
-	 * @param array<string, mixed> $result
-	 * @return list<int>
-	 */
-	private function idsOf(array $result): array {
-		return array_map(static fn (array $c): int => (int)$c['id'], $result['cards']);
+		$result = $this->service->findMine('alice');
+
+		self::assertSame([11], $this->idsOf($result));
+		self::assertSame(1, $result['total']);
+		// …and its people never enter the facet vocabulary either.
+		self::assertSame(['alice'], $result['participants']);
 	}
 
 	/**
@@ -370,22 +482,21 @@ class ViewServiceTest extends TestCase {
 	}
 
 	/**
-	 * Sorting must run strictly AFTER the per-board ACL / #3743 masking loop, never
-	 * as a shortcut around it: with a sort active the readable set is still the ONLY
-	 * thing queried, so no unreadable board's card can be sorted into the feed.
+	 * Sorting must run strictly AFTER the ACL / #3743 masking, never as a shortcut
+	 * around it: with a sort active the readable set is still the ONLY thing
+	 * queried, so no unreadable board's card can be sorted into the feed.
 	 */
 	public function testFindMineWithASortStillNeverQueriesABoardOutsideTheReadableSet(): void {
 		$b3 = $this->board(3, 'Readable');
 		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
-		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
-		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 
 		$this->cardMapper->expects(self::once())
-			->method('findSummariesByBoard')
-			->with(3, $ctx3)
+			->method('findSummariesByBoards')
+			->with([3], 'alice', [3 => ViewerContext::ROLE_INTERNAL])
 			->willReturn([$this->summaryCard(11, 3)]);
-		$this->cardSummaryService->method('serialize')
-			->willReturn([['id' => 11, 'title' => 'Only mine']]);
+		$this->cardSummaryService->method('serializeForBoards')
+			->willReturn([['id' => 11, 'boardId' => 3, 'title' => 'Only mine']]);
 
 		$rows = $this->service->findMine('alice', 'title', 'asc')['cards'];
 
@@ -457,11 +568,10 @@ class ViewServiceTest extends TestCase {
 	}
 
 	/**
-	 * The facet-collapse guard. `participants` is accumulated in the per-board loop
-	 * BEFORE the filter, so the client's assignee/owner facets keep offering
-	 * everyone however narrow the filter gets - including at ZERO matches, where a
-	 * row-derived facet would vanish outright and leave no way to add a second
-	 * person back.
+	 * The facet-collapse guard. `participants` is accumulated BEFORE the filter, so
+	 * the client's assignee/owner facets keep offering everyone however narrow the
+	 * filter gets - including at ZERO matches, where a row-derived facet would
+	 * vanish outright and leave no way to add a second person back.
 	 */
 	public function testFindMineShipsTheWholeParticipantVocabularyEvenAtZeroMatches(): void {
 		$this->seedFeed([1 => ['rows' => [
@@ -516,26 +626,25 @@ class ViewServiceTest extends TestCase {
 
 	/**
 	 * The ACL boundary again, this time with a filter active (REQUIRED leak-denial).
-	 * Filtering must never become a shortcut around the per-board permission
-	 * masking: it runs strictly AFTER that loop, over rows the viewer may already
-	 * see, so it can only ever REMOVE rows - never surface one from a board outside
-	 * the readable set, however the filter is spelled.
+	 * Filtering must never become a shortcut around the permission masking: it runs
+	 * strictly AFTER it, over rows the viewer may already see, so it can only ever
+	 * REMOVE rows - never surface one from a board outside the readable set,
+	 * however the filter is spelled.
 	 */
 	public function testFindMineWithAFilterStillNeverQueriesABoardOutsideTheReadableSet(): void {
-		// alice can read board 3 only. Board 7 exists but is absent from findAll().
+		// alice can read board 3 only. Board 7 exists but is absent from findAllActive().
 		$b3 = $this->board(3, 'Readable');
 		$this->boardService->method('findAllActive')->with('alice')->willReturn([$b3]);
-		$ctx3 = ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true);
-		$this->boardAccess->method('contextFor')->with($b3, 'alice')->willReturn($ctx3);
+		$this->boardAccess->method('rolesFor')->willReturn([3 => ViewerContext::ROLE_INTERNAL]);
 
-		// Asked ONLY for board 3, under board 3's viewer context - the filter does
-		// not widen, re-run or bypass the query.
+		// Asked ONLY for board 3, with board 3's role - the filter does not widen,
+		// re-run or bypass the query.
 		$this->cardMapper->expects(self::once())
-			->method('findSummariesByBoard')
-			->with(3, $ctx3)
+			->method('findSummariesByBoards')
+			->with([3], 'alice', [3 => ViewerContext::ROLE_INTERNAL])
 			->willReturn([$this->summaryCard(11, 3)]);
-		$this->cardSummaryService->method('serialize')
-			->willReturn([['id' => 11, 'owner' => 'mallory', 'assigneeIds' => ['mallory']]]);
+		$this->cardSummaryService->method('serializeForBoards')
+			->willReturn([['id' => 11, 'boardId' => 3, 'owner' => 'mallory', 'assigneeIds' => ['mallory']]]);
 
 		// A filter deliberately shaped to describe the unreadable board's card.
 		$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery([
@@ -569,7 +678,7 @@ class ViewServiceTest extends TestCase {
 
 	/**
 	 * The filter runs BEFORE the sort, so the sort orders the matching set. Both
-	 * still run after the ACL loop.
+	 * still run after the ACL masking.
 	 *
 	 * The rows are deliberately seeded so the sorted answer REVERSES fixture order:
 	 * alice owns 1:'cherry' and 3:'apple', so an unsorted (or mis-sorted) pass
@@ -598,9 +707,9 @@ class ViewServiceTest extends TestCase {
 	 * inflate `total`/`capped`, so the "showing the first N of M" banner would lie
 	 * about cards the user can never see in the View.
 	 *
-	 * The exclusion deliberately does NOT live in CardMapper::findSummariesByBoard()
-	 * - BoardController::show() shares that query and ships archived rows on purpose
-	 * (the archived-cards page and its counter are built on them).
+	 * The exclusion deliberately does NOT live in CardMapper::findSummariesByBoards()
+	 * - its board-scoped twin backs BoardController::show(), which ships archived
+	 * rows on purpose (the archived-cards page and its counter are built on them).
 	 */
 	public function testFindMineExcludesArchivedCardsFromBothTheRowsAndTheTotal(): void {
 		$this->seedFeed([1 => ['rows' => [
@@ -698,18 +807,32 @@ class ViewServiceTest extends TestCase {
 		$shelved->setArchived(true);
 		$this->boardService->method('findAll')->with('alice')->willReturn([$active, $shelved]);
 		$this->boardService->method('findAllActive')->with('alice')->willReturn([$active]);
-		$this->boardAccess->method('contextFor')->willReturnMap([
-			[$active, 'alice', ViewerContext::forMember('alice', 3, ViewerContext::ROLE_INTERNAL, true)],
-			[$shelved, 'alice', ViewerContext::forMember('alice', 9, ViewerContext::ROLE_INTERNAL, true)],
-		]);
-		$this->cardMapper->method('findSummariesByBoard')
-			->willReturnCallback(fn (int $boardId): array => [$this->summaryCard($boardId === 3 ? 11 : 22, $boardId)]);
+		// The role resolver answers for whatever board set it is handed - so a
+		// service reverted to findAll() would still resolve board 9 and query it.
+		$this->boardAccess->method('rolesFor')->willReturnCallback(
+			static fn (array $boards): array => array_combine(
+				array_map(static fn (Board $b): int => (int)$b->getId(), $boards),
+				array_fill(0, count($boards), ViewerContext::ROLE_INTERNAL),
+			),
+		);
+		$this->cardMapper->method('findSummariesByBoards')->willReturnCallback(
+			fn (array $boardIds): array => array_map(
+				fn (int $boardId): Card => $this->summaryCard($boardId === 3 ? 11 : 22, $boardId),
+				$boardIds,
+			),
+		);
 		// The archived board's card is NOT itself archived - exactly the reported
 		// case: a shelved board whose cards were never archived one by one.
-		$this->cardSummaryService->method('serialize')
-			->willReturnCallback(static fn (int $boardId): array => [
-				['id' => $boardId === 3 ? 11 : 22, 'archived' => false],
-			]);
+		$this->cardSummaryService->method('serializeForBoards')->willReturnCallback(
+			static fn (array $boardIds): array => array_map(
+				static fn (int $boardId): array => [
+					'id' => $boardId === 3 ? 11 : 22,
+					'boardId' => $boardId,
+					'archived' => false,
+				],
+				$boardIds,
+			),
+		);
 
 		foreach (['default' => [], 'include' => ['far' => 'include'], 'only' => ['far' => 'only']] as $label => $query) {
 			$result = $this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery($query));
@@ -726,12 +849,19 @@ class ViewServiceTest extends TestCase {
 
 	public function testFindMineEmptyWhenNoReadableBoards(): void {
 		$this->boardService->method('findAllActive')->with('bob')->willReturn([]);
+		// Nothing readable means nothing resolved and nothing queried - not even
+		// an empty-set round trip.
+		$this->boardAccess->expects(self::never())->method('rolesFor');
 		$this->boardAccess->expects(self::never())->method('contextFor');
-		$this->cardMapper->expects(self::never())->method('findSummariesByBoard');
+		$this->cardMapper->expects(self::never())->method('findSummariesByBoards');
+		$this->cardSummaryService->expects(self::never())->method('serializeForBoards');
 
 		$result = $this->service->findMine('bob');
 		self::assertSame([], $result['cards']);
+		self::assertSame([], $result['labels']);
+		self::assertSame([], $result['participants']);
 		self::assertFalse($result['capped']);
 		self::assertSame(0, $result['total']);
+		self::assertSame(ViewService::MAX_CARDS, $result['limit']);
 	}
 }

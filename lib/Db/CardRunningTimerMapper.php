@@ -48,10 +48,28 @@ class CardRunningTimerMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function findCardIdsByBoard(int $boardId): array {
+		return $this->findCardIdsByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::findCardIdsByBoard()} (#10298): the
+	 * same id list over MANY boards in ONE query, for the cross-board Views
+	 * feed - whose enrichment must not scale with how many boards the user can
+	 * read. Card ids are globally unique, so the union needs no per-board
+	 * nesting.
+	 *
+	 * @param int[] $boardIds
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function findCardIdsByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('card_id')
 			->from($this->getTableName())
-			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)));
 
 		$result = $qb->executeQuery();
 		$ids = [];

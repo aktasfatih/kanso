@@ -220,6 +220,51 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * The BOARD-SET twin of {@see self::findSummariesByBoard()} (#10298): the
+	 * same summary rows over MANY boards in ONE query, for the cross-board
+	 * Views feed - which must not issue one summary query per readable board.
+	 *
+	 * Visibility (#3743) is the CROSS-BOARD mode of the scope, exactly as
+	 * {@see self::searchInBoards()} and {@see self::findAssignedInBoards()} use
+	 * it: the viewer's role is applied per board through the role map, so a
+	 * user who is internal on one board and external on another gets each
+	 * board's own masking - in one query, with no ACL join. The board
+	 * restriction stays this query's own `board_id IN (...)` (cross-board mode
+	 * deliberately adds none), so the readable set is still the only thing
+	 * queried.
+	 *
+	 * DELIBERATELY UNORDERED, unlike the single-board twin. That twin's
+	 * (stack_id, sort_key) order IS the board's display order and ships
+	 * straight to the client; this one feeds
+	 * {@see \OCA\Kanso\Service\ViewService::findMine()}, which re-sorts the
+	 * whole set by the View's saved sort with a TOTAL comparator ((boardId, id)
+	 * breaks every tie), so no byte of a SQL ordering could survive into the
+	 * payload. Sorting here would mean sorting the whole uncapped readable set
+	 * on a string sort key for nothing - the exact cost this batching exists to
+	 * remove. A caller that needs an order must impose its own.
+	 *
+	 * @param int[] $boardIds the viewer's readable board set
+	 * @param array<int, string> $rolesByBoard the viewer's effective role per
+	 *                                         board id, from {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return Card[] in no defined order
+	 * @throws Exception
+	 */
+	public function findSummariesByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
+		if ($boardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Summaries (no description) of the given non-deleted, NON-TEMPLATE cards of a
 	 * board - the delta-sync counterpart of {@see self::findSummariesByBoard()},
 	 * restricted to an explicit id set (the cards a `?since=` window touched). Same
@@ -826,6 +871,40 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * The BOARD-SET twin of {@see self::childProgressByBoard()} (#10298): the
+	 * same per-parent counts over MANY boards as a fixed TWO queries, for the
+	 * cross-board Views feed. Card ids are globally unique, so the union needs
+	 * no per-board nesting.
+	 *
+	 * Visibility is the cross-board mode of the scope (per-board role from the
+	 * map), so the same "a private child never betrays its existence through a
+	 * parent's count" guarantee holds per board - including for a viewer who is
+	 * internal on one board and external on another.
+	 *
+	 * One scope difference to know about: the twin counts children on ONE
+	 * board, this counts children anywhere in the board SET and groups by
+	 * parent. The two agree because a parent/child link can not cross a board -
+	 * {@see \OCA\Kanso\Service\CardService::setParent()} rejects a parent on
+	 * another board and moveToBoard() detaches children on the way out - so
+	 * every child counted here is on its parent's own board anyway.
+	 *
+	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return array<int, array{total: int, done: int}> map of parentCardId => counts
+	 * @throws Exception
+	 */
+	public function childProgressByBoards(array $boardIds, string $uid, array $rolesByBoard): array {
+		$totals = $this->countChildrenByBoards($boardIds, false, $uid, $rolesByBoard);
+		$done = $this->countChildrenByBoards($boardIds, true, $uid, $rolesByBoard);
+
+		$map = [];
+		foreach ($totals as $parentId => $count) {
+			$map[$parentId] = ['total' => $count, 'done' => $done[$parentId] ?? 0];
+		}
+		return $map;
+	}
+
+	/**
 	 * Child counts grouped by parent for a board, optionally restricted to done
 	 * children (`done_at > 0`). Only non-deleted children with a parent are
 	 * counted.
@@ -843,6 +922,44 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('parent_card_id');
 		$this->visibilityScope->applyForViewer($qb, '', $viewer);
+
+		if ($doneOnly) {
+			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		}
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['parent_card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::countChildrenByBoard()} (#10298) -
+	 * same grouping and same filters, over a board set with the cross-board
+	 * visibility mode.
+	 *
+	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard
+	 * @return array<int, int> map of parentCardId => count
+	 * @throws Exception
+	 */
+	private function countChildrenByBoards(array $boardIds, bool $doneOnly, string $uid, array $rolesByBoard): array {
+		if ($boardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('parent_card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName())
+			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->isNotNull('parent_card_id'))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->groupBy('parent_card_id');
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		if ($doneOnly) {
 			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));

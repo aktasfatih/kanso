@@ -127,12 +127,29 @@ class CommentMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function countsByBoard(int $boardId): array {
+		return $this->countsByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::countsByBoard()} (#10298): the same map
+	 * over MANY boards in ONE grouped query, for the cross-board Views feed -
+	 * whose enrichment must not scale with how many boards the user can read.
+	 * Card ids are globally unique, so the union needs no per-board nesting.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, int> map of cardId => count
+	 * @throws Exception
+	 */
+	public function countsByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('cm.card_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
 			->from($this->getTableName(), 'cm')
 			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
-			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('cm.card_id');

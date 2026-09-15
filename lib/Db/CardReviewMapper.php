@@ -52,11 +52,29 @@ class CardReviewMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function reviewStatesByBoard(int $boardId): array {
+		return $this->reviewStatesByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::reviewStatesByBoard()} (#10298): the
+	 * same aggregate over MANY boards in ONE query, for the cross-board Views
+	 * feed - whose enrichment must not scale with how many boards the user can
+	 * read. Card ids are globally unique, so the union needs no per-board
+	 * nesting and the urgency fold is unchanged.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, string> map of cardId => aggregate state
+	 * @throws Exception
+	 */
+	public function reviewStatesByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('r.card_id', 'r.state')
 			->from($this->getTableName(), 'r')
 			->innerJoin('r', 'kanso_cards', 'c', $qb->expr()->eq('r.card_id', 'c.id'))
-			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 
 		$result = $qb->executeQuery();
