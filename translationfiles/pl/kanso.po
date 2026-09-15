@@ -3145,7 +3145,7 @@ msgstr "Kursywa"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6266
+#: src/components/CardDetail.vue:6287
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -4819,7 +4819,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6272
+#: src/components/CardDetail.vue:6293
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"

@@ -5368,6 +5368,19 @@ function goToBoards() {
 	router.push({ name: 'board-list' })
 }
 
+// Set for the rest of the current Escape keystroke once onRootEscape below has
+// acted on it, so the modal shell's deferred requestClose() does not spend the same
+// key press twice (#146). NcModal's own Escape hotkey listens on `window` in the
+// CAPTURE phase, so it reaches the shell BEFORE this component's root handler; the
+// shell defers by a task to let this handler go first, and this flag tells it the
+// keystroke is already spoken for. Without it, an Escape meant only to dismiss an
+// open attribute popover would also close the whole card, and an Escape on a card
+// with unsaved work would raise the confirm twice. Released on the next task —
+// after the shell's own deferred call, which was queued first (during capture) —
+// so it never outlives the keystroke that set it. Mouse closes (the X, the
+// backdrop) never set it, so they are unaffected.
+let escapeClaimed = false
+
 // Escape at the card root: an open attribute popover takes precedence — close
 // it, not the whole card (which would discard an in-progress edit). Inline edits
 // (title/description/comment) stop propagation themselves, so they never reach here.
@@ -5375,6 +5388,10 @@ function goToBoards() {
 // to on Escape (the browser back / the explicit back-to-board button own that), so
 // Escape only ever dismisses an open popover.
 function onRootEscape() {
+	escapeClaimed = true
+	setTimeout(() => {
+		escapeClaimed = false
+	}, 0)
 	if (openPicker.value !== null) {
 		openPicker.value = null
 		return
@@ -5454,6 +5471,10 @@ onBeforeUnmount(() => {
 // left this surface, and asking to keep drafts for a card you just deleted would
 // be nonsense.
 function requestClose() {
+	// onRootEscape already spent this key press (see escapeClaimed above).
+	if (escapeClaimed) {
+		return
+	}
 	if (openPicker.value !== null) {
 		openPicker.value = null
 		return
