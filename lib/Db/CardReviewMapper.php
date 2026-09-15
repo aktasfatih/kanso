@@ -310,20 +310,6 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes every review of a card - cascade for a card purge.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
-	}
-
-	/**
 	 * Urgency precedence for the board aggregate: changes_requested beats
 	 * pending beats approved. $current may be null (first row seen).
 	 */

@@ -232,13 +232,7 @@ class CardTimeEntryServiceTest extends TestCase {
 		$this->service->delete(9, 5, 'bob');
 	}
 
-	// ---- deleteAllForCard (cascade on purge) ------------------------------
-
-	public function testDeleteAllForCardDropsRowsWithoutGateOrNotify(): void {
-		$this->timeEntryMapper->expects(self::once())->method('deleteByCard')->with(9);
-		$this->permissionService->expects(self::never())->method('assertPermission');
-		$this->changeNotifier->expects(self::never())->method('notify');
-
-		$this->service->deleteAllForCard(9);
-	}
+	// The purge cascade used to come through this service (deleteAllForCard);
+	// `kanso_card_time_entries` is swept from BoardCascade::BY_CARD_ID now, by
+	// both the board purge and the per-card trash purge (#10456).
 }

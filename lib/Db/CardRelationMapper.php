@@ -242,21 +242,4 @@ class CardRelationMapper extends QBMapper {
 		$result->closeCursor();
 		return $ids;
 	}
-
-	/**
-	 * Removes every relation touching a card (either side) - cascade for a card
-	 * purge.
-	 *
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->orX(
-				$qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)),
-				$qb->expr()->eq('other_card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)),
-			));
-
-		return $qb->executeStatement();
-	}
 }

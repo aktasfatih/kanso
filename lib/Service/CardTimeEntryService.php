@@ -139,19 +139,6 @@ class CardTimeEntryService {
 	}
 
 	/**
-	 * Cascade cleanup when a card is PERMANENTLY removed (trash purge). Drops
-	 * every time-entry row of the card in a single statement.
-	 *
-	 * No permission check and no change notification: this is an internal
-	 * cascade invoked by callers ({@see TrashService::purge()}) that have
-	 * already authorized the destructive card removal and emit their own card
-	 * DELETE change row. Safe to call for a card with zero entries.
-	 */
-	public function deleteAllForCard(int $cardId): void {
-		$this->timeEntryMapper->deleteByCard($cardId);
-	}
-
-	/**
 	 * Loads an entry and asserts it belongs to $cardId - the IDOR guard. A
 	 * mismatch is a 404 (not found on THIS card), never a leak.
 	 *

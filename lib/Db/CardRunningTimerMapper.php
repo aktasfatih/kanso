@@ -81,21 +81,6 @@ class CardRunningTimerMapper extends QBMapper {
 	}
 
 	/**
-	 * Removes the running timer of a card - the cascade when a card is purged and
-	 * the normal drop when a timer is stopped. Safe when no timer is running.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
-	}
-
-	/**
 	 * Removes every running timer of a board - cascade for a board purge.
 	 *
 	 * @return int number of deleted rows

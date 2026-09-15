@@ -9,25 +9,11 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardCascade;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
-use OCA\Kanso\Db\CardAssigneeMapper;
-use OCA\Kanso\Db\CardContactMapper;
-use OCA\Kanso\Db\CardFieldValueMapper;
-use OCA\Kanso\Db\CardLabelMapper;
-use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
-use OCA\Kanso\Db\CardRelationMapper;
-use OCA\Kanso\Db\CardReviewMapper;
-use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\Change;
-use OCA\Kanso\Db\ChecklistItemMapper;
-use OCA\Kanso\Db\CommentMapper;
-use OCA\Kanso\Db\CommentReactionMapper;
-use OCA\Kanso\Db\ProjectCardMapper;
-use OCA\Kanso\Db\RecurRuleMapper;
-use OCA\Kanso\Db\ReminderMapper;
-use OCA\Kanso\Db\SubscriptionMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -42,6 +28,13 @@ use OCP\AppFramework\Db\DoesNotExistException;
  *     cascading to the card's labels, assignees, reviews, checklist items,
  *     comments and file attachments (both the app-data objects and the rows).
  *
+ * That cascade names no tables of its own: it reads the SAME registry the board
+ * purge reads ({@see BoardCascade::BY_CARD_ID}, plus the card-scoped half of
+ * {@see BoardCascade::BY_PARENT_ID}), so the anti-rot guard over that registry -
+ * BoardCascadeCompletenessTest, which re-scans every migration - covers this
+ * path too. A new card-scoped table cannot be forgotten HERE while being
+ * remembered in the board purge, because there is only one list to remember.
+ *
  * Restore/purge only ever act on an ALREADY-trashed card (deleted_at > 0); a
  * live card is rejected as invalid input - but only once the caller has cleared
  * the board permission AND the card-visibility guard, in that order, so the
@@ -55,23 +48,8 @@ class TrashService {
 		private BoardMapper $boardMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
-		private CardLabelMapper $cardLabelMapper,
-		private CardAssigneeMapper $cardAssigneeMapper,
-		private CardContactMapper $cardContactMapper,
-		private CardReviewMapper $cardReviewMapper,
-		private ChecklistItemMapper $checklistItemMapper,
-		private CommentMapper $commentMapper,
-		private CommentReactionMapper $commentReactionMapper,
-		private SubscriptionMapper $subscriptionMapper,
-		private CardLinkMapper $cardLinkMapper,
-		private CardRelationMapper $cardRelationMapper,
-		private ProjectCardMapper $projectCardMapper,
+		private BoardCascade $cascade,
 		private CardAttachmentService $cardAttachmentService,
-		private CardTimeEntryService $cardTimeEntryService,
-		private CardRunningTimerMapper $cardRunningTimerMapper,
-		private CardFieldValueMapper $cardFieldValueMapper,
-		private ReminderMapper $reminderMapper,
-		private RecurRuleMapper $recurRuleMapper,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
 	) {
@@ -145,40 +123,21 @@ class TrashService {
 		// Access first, trash state second - see restore().
 		$this->assertTrashed($card);
 
-		$this->cardLabelMapper->deleteByCard($cardId);
-		$this->cardAssigneeMapper->deleteByCard($cardId);
-		$this->cardContactMapper->deleteByCard($cardId);
-		$this->cardReviewMapper->deleteByCard($cardId);
-		$this->checklistItemMapper->deleteByCard($cardId);
-		// Reactions hang off comment_id, so drop them BEFORE the comments they
-		// point at are hard-deleted, otherwise the rows would be orphaned (#3550).
-		$this->commentReactionMapper->deleteByComments($this->commentMapper->idsByCard($cardId));
-		$this->commentMapper->deleteByCard($cardId);
-		$this->subscriptionMapper->deleteByCard($cardId);
-		$this->cardLinkMapper->deleteByCard($cardId);
-		$this->cardRelationMapper->deleteByCard($cardId);
-		$this->projectCardMapper->deleteByCard($cardId);
-		// Attachments are stored as app-data OBJECTS plus rows, so the cascade
-		// goes through the service (it removes both) rather than a plain mapper
-		// deleteByCard - otherwise a purge would leak the bytes on disk (#3526).
+		// Grandchildren first: a reaction hangs off comment_id, so it has to go
+		// BEFORE the comments that locate it are hard-deleted, or the rows are
+		// orphaned with nothing left to find them by (#3550).
+		$this->purgeGrandchildren($cardId);
+		// Then the bytes. Attachments are app-data OBJECTS plus rows, so the
+		// cascade goes through the service (it removes both) and has to run while
+		// the rows naming the storage keys are still there - otherwise a purge
+		// leaks the bytes on disk forever (#3526).
 		$this->cardAttachmentService->deleteAllForCard($cardId);
-		// Manual time-tracking entries (#3536) are plain rows scoped by card_id;
-		// drop them too so a purged card strands no time entries.
-		$this->cardTimeEntryService->deleteAllForCard($cardId);
-		// A running timer (#73) is a single plain row scoped by card_id; drop it so
-		// a purged card strands no dangling running-timer state.
-		$this->cardRunningTimerMapper->deleteByCard($cardId);
-		// Custom-field values (#3537) are plain rows scoped by card_id; drop them
-		// so a purged card strands no field values.
-		$this->cardFieldValueMapper->deleteByCard($cardId);
-		// Personal reminders (#3816) are plain per-user rows scoped by card_id;
-		// drop them so a purged card strands no pending reminders.
-		$this->reminderMapper->deleteByCard($cardId);
-		// Recurrence rules anchored on this card (#4123): a rule whose template is
-		// hard-deleted can never spawn again - each cron pass would read the missing
-		// template, throw, and log a failed spawn forever. Drop them so the purge
-		// leaves no orphan schedule behind.
-		$this->recurRuleMapper->deleteByTemplateCardId($cardId);
+		// Then every card-scoped table, straight from the shared registry: labels,
+		// assignees, contacts, reviews, checklist items, comments, subscriptions,
+		// links, relations (both ends), project memberships, running timers,
+		// time entries, custom-field values, reminders and the recurrence rules
+		// anchored on this card as a template.
+		$this->cascade->deleteByCardIds([$cardId]);
 		$this->cardMapper->delete($card);
 
 		$this->changeNotifier->notify(
@@ -188,6 +147,39 @@ class TrashService {
 			Change::ACTION_DELETE,
 			$actorUid
 		);
+	}
+
+	/**
+	 * Empties the card-scoped half of {@see BoardCascade::BY_PARENT_ID}: tables
+	 * with neither a board_id nor a card_id, reachable only through the id of a
+	 * row that itself hangs off the card (today: comment reactions, via the
+	 * card's comments). The board purge does the same walk for the board's whole
+	 * card set - see {@see BoardPurgeService::purgeGrandchildren()}.
+	 *
+	 * Entries whose parent is reached by board_id (change details, seen-mail
+	 * markers) are skipped: a card purge never deletes their parent, so sweeping
+	 * them here would destroy rows of a board that is still very much alive.
+	 *
+	 * @throws \OCP\DB\Exception
+	 */
+	private function purgeGrandchildren(int $cardId): void {
+		$cardScoped = [];
+		foreach (BoardCascade::BY_CARD_ID as $table => $columns) {
+			foreach ($columns as $column) {
+				$cardScoped[$table . '.' . $column] = true;
+			}
+		}
+
+		foreach (BoardCascade::BY_PARENT_ID as $table => [$column, $parentTable, $parentLink]) {
+			if (!isset($cardScoped[$parentTable . '.' . $parentLink])) {
+				continue;
+			}
+			$this->cascade->deleteIn(
+				$table,
+				$column,
+				$this->cascade->idsIn($parentTable, $parentLink, [$cardId]),
+			);
+		}
 	}
 
 	/**
