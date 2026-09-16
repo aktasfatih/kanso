@@ -261,7 +261,7 @@ jobs:
         # pinned to an exact release deliberately and needs a manual bump.
         # Do not "simplify" it to @v10 — that tag does not exist and the job
         # then fails to start with "unable to find version".
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           # Don't depend on whatever Python the runner image happens to ship —
           # uv fetches its own managed interpreter (pyproject needs >=3.11).
