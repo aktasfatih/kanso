@@ -75,6 +75,11 @@ class BoardCascade {
 	 * side is not left dangling), and a recurrence rule points at its template
 	 * card.
 	 *
+	 * This is also what the PER-CARD purge sweeps ({@see \OCA\Kanso\Service\TrashService::purge()}),
+	 * for the single card it removes: one declared list, two consumers, so the
+	 * completeness guard over it covers both destructive paths and a new
+	 * card-scoped table cannot be remembered by one and forgotten by the other.
+	 *
 	 * None of these predicates can reach a SURVIVING board's row, which is what
 	 * makes them safe on a destructive path: every write that sets one of these
 	 * columns rejects a cross-board value up front - a relation

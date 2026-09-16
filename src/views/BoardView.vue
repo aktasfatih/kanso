@@ -365,6 +365,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-delete-stack="canEditBoard ? handleDeleteStack : null"
 					:on-restore-stack="canEditBoard ? handleRestoreStack : null"
 					:on-archive-all-cards="canEditBoard ? handleArchiveAllInStack : null"
+					:on-select-all-cards="canEditBoard ? handleSelectAllInStack : null"
 					:on-unarchive-cards="canEditBoard ? handleUnarchiveCards : null"
 					:filter-active="filterActive"
 					:on-rename-stack="canEditBoard ? handleRenameStack : null"
@@ -427,7 +428,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:labels-by-id="labelsById"
 					:board-prefix="boardData.board.prefix"
 					:register-column-ref="registerLaneColumnRef"
+					:new-cards-on-top="boardData.board.newCardsOnTop === true"
 					:on-create-card="canEditBoard ? handleCreateCard : null"
+					:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
+					:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
+					:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:collapsed-stacks="collapsedStacks"
@@ -441,7 +446,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- List view - a virtualized, stack-grouped table over the same filtered
-		     cards. Read-oriented: rows open the card modal. -->
+		     cards. Read-oriented: rows open the card modal.
+
+		     This binding list is the FULL BoardListView prop surface minus the
+		     deliberate omissions named below — the list re-implements the column
+		     composer, so a callback nobody re-binds here silently removes an
+		     affordance the list already draws the UI for (#10503: the template
+		     picker rendered while "Manage templates…" did not, because only two of
+		     the three template callbacks were passed). When BoardListView gains a
+		     prop, decide here, explicitly, whether the board's list view gets it,
+		     and if not say why.
+
+		     Deliberately NOT passed:
+		     - groups — the cross-board Views row model (ViewPage.vue), where rows
+		       are arbitrary groups with no stack behind them. A board drives the
+		       list from stacks + cardsByStack instead, and passing both would make
+		       groups win and drop every per-stack affordance.
+		     - @open — only a surface that owns its own card-detail overlay handles
+		       it (again ViewPage). Inside a board, a row opens the card-modal child
+		       route, which is the deep-linkable behaviour we want here. -->
 		<BoardListView
 			v-if="viewMode === 'list' && boardData"
 			ref="listViewRef"
@@ -454,6 +477,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:on-create-card="canEditBoard ? handleCreateCard : null"
 			:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
 			:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
+			:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
 			:on-create-stack="canEditBoard ? handleCreateStack : null"
 			:sort-mode="sortMode" />
 
@@ -2464,6 +2488,29 @@ async function handleArchiveAllInStack(stackId) {
 		// undo still covers them. The banner above already reports the failure.
 		return partial
 	}
+}
+
+/**
+ * Select every card the column currently SHOWS (#10485) — the column-scoped
+ * counterpart to archive-all, and the answer to "I don't want to tick 40 cards
+ * one at a time". Same source of truth: `cardsForStack` is the filter-visible,
+ * non-archived set, so a filtered column selects exactly what it displays, and
+ * cards outside the virtualized window are included (the virtualizer only
+ * indexes into this array — it never shortens it).
+ *
+ * Arms multi-select mode first so the action works straight from the ⋯ menu;
+ * today the only other way in is the board's ⋯ More menu.
+ *
+ * ADDITIVE on purpose: a selection already built elsewhere on the board is
+ * extended, not replaced — the same semantics as a shift-range.
+ *
+ * @param {number} stackId - the column whose visible cards to select
+ */
+function handleSelectAllInStack(stackId) {
+	const cardIds = cardsForStack(stackId).map((c) => c.id)
+	if (cardIds.length === 0) return
+	bulk.enterMode()
+	bulk.addMany(cardIds)
 }
 
 /**

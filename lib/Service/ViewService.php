@@ -32,11 +32,22 @@ use OCA\Kanso\Db\LabelMapper;
  *
  * ACL is enforced by restricting to the boards
  * {@see BoardService::findAllActive()} returns (the readable, non-archived set)
- * and running each board's summary query under the
- * viewer's own per-board {@see \OCA\Kanso\Access\ViewerContext} - so a card on a
+ * and running the summary query under the viewer's OWN ROLE ON EACH of those
+ * boards ({@see \OCA\Kanso\Access\BoardAccess::rolesFor()}) - so a card on a
  * board the user cannot read, or a card hidden from the viewer's board side
  * (#3743), is never returned. A View run by user A can never surface a card from
  * a board A cannot read (covered by ViewServiceTest's leak-denial test).
+ *
+ * The whole feed is a FIXED number of queries, independent of how many boards
+ * the user can read (#10298). It used to resolve one ViewerContext and run a
+ * full per-board enrichment inside a loop over every readable board - ~15
+ * queries per board, re-issued every minute by the client's poll - which made a
+ * 30-board account cost ~450 queries a minute. It now batches exactly like every
+ * sibling cross-board feed (My Cards, Inbox, Search, My Steps, Reviews): ONE
+ * `rolesFor()` ACL fetch for the whole board set, and board-set-scoped
+ * enrichment queries that carry each board's own role. That is batching, NOT
+ * caching - the roles are resolved fresh on every request, so a revoked
+ * membership never lingers (see the BoardAccess docblock).
  */
 class ViewService {
 	/**
@@ -73,15 +84,15 @@ class ViewService {
 	 *   ['cards' => …, 'labels' => …, 'participants' => …, 'capped' => bool, 'total' => int, 'limit' => int]
 	 * where `total` is the pre-cap count of MATCHING rows (#9862 - the filter runs
 	 * before the cap) and `cards` is capped to at most {@see self::MAX_CARDS} rows.
-	 * The cap is applied AFTER the per-board ACL + #3743 masking loop, so every row
-	 * is still gated before the slice.
+	 * The cap is applied AFTER the ACL + #3743 masking, so every row is still
+	 * gated before the slice.
 	 *
 	 * `participants` is the union of assignee uids + card owners across the readable
-	 * boards, accumulated in the per-board loop BEFORE the filter and BEFORE the cap.
+	 * boards, accumulated in the assembly pass BEFORE the filter and BEFORE the cap.
 	 * It ships SEPARATELY from the rows on purpose: the client's assignee/owner facets
 	 * are built from it, so filtering to one person must not collapse the facet to the
 	 * survivors (which would make the facet vanish at zero matches and leave no way to
-	 * add a second person). Accumulating it in the existing loop costs no extra query.
+	 * add a second person). Accumulating it in the assembly pass costs no extra query.
 	 *
 	 * Each card additionally carries `boardPrefix` (its board's human-id prefix) and
 	 * `labels` is the union of each readable board's serialized labels (the label's
@@ -108,11 +119,12 @@ class ViewService {
 
 		// Archived cards are excluded from the feed by DEFAULT, and only the
 		// `archived` facet ('include' / 'only') opts them back in. The exclusion
-		// happens here rather than in CardMapper::findSummariesByBoard() because
-		// BoardController::show() shares that query and DELIBERATELY ships archived
-		// rows - the board drops them client-side, and the archived-cards page plus
-		// its counter are built on them. Filtering at the mapper would break that
-		// page. It also happens here rather than inside ViewFilter::matches(), which
+		// happens here rather than in CardMapper::findSummariesByBoards() because
+		// that query is the board-set twin of the one BoardController::show() runs,
+		// which DELIBERATELY ships archived rows - the board drops them
+		// client-side, and the archived-cards page plus its counter are built on
+		// them. Filtering at the mapper would fork the two and break that page.
+		// It also happens here rather than inside ViewFilter::matches(), which
 		// can only ever narrow: an empty filter must stay empty (see
 		// ViewFilter::isEmpty()), so "no archived cards" cannot be a filter value.
 		//
@@ -121,64 +133,113 @@ class ViewService {
 		// MAX_CARDS budget and inflate `total` / `capped` in the envelope below.
 		$includeArchived = $filter !== null && $filter->includesArchived();
 
+		if ($boards === []) {
+			// Nothing readable, so nothing to query - returning here keeps the
+			// "never touch a mapper outside the readable set" boundary literal
+			// rather than relying on each batched mapper's empty-set guard.
+			return [
+				'cards' => [],
+				'labels' => [],
+				'participants' => [],
+				'capped' => false,
+				'total' => 0,
+				'limit' => self::MAX_CARDS,
+			];
+		}
+
+		$boardIds = [];
+		$boardsById = [];
+		foreach ($boards as $board) {
+			$boardId = (int)$board->getId();
+			$boardIds[] = $boardId;
+			$boardsById[$boardId] = $board;
+		}
+
+		// ONE batched ACL fetch for the WHOLE readable set (#10298), the way
+		// every other cross-board feed resolves its viewer - see
+		// MyCardsService / SearchService / InboxService. Batching is NOT
+		// caching: the map is built per request and never memoized, so a
+		// revoked membership is gone on the very next read (BoardAccess's
+		// docblock spells out why that matters).
+		//
+		// rolesFor() folds exactly what contextFor() folded (owner => internal,
+		// internal-wins across group rows) over the SAME ACL rows, so no board
+		// changes side. It only reports differently for a board with no
+		// matching row at all: contextFor() threw NotAMemberException, this
+		// simply omits the board from the map - which drops its internal branch
+		// and leaves that board contributing public + the viewer's own private
+		// cards. findAllForUser() builds the readable set from owner + those
+		// same ACL rows, so the case is unreachable; if it ever were reached it
+		// now degrades closed instead of 500-ing the whole feed.
+		$rolesByBoard = $this->boardAccess->rolesFor($boards, $uid);
+		// The viewer's resolved side on EACH board scopes every card row
+		// (#3743) - the per-board role travels with the row set instead of
+		// with a per-board query, so a user internal on one board and external
+		// on another gets each board's own masking, in one query.
+		$cards = $this->cardSummaryService->serializeForBoards(
+			$boardIds,
+			$this->cardMapper->findSummariesByBoards($boardIds, $uid, $rolesByBoard),
+			$uid,
+			$rolesByBoard,
+		);
+
 		$out = [];
 		$labels = [];
 		$participants = [];
-		foreach ($boards as $board) {
-			$boardId = (int)$board->getId();
-			// The viewer's resolved side on THIS board scopes every card row
-			// (#3743). findAllActive() already returned only member boards, so
-			// contextFor() resolves without throwing.
-			$viewer = $this->boardAccess->contextFor($board, $uid);
-			$cards = $this->cardSummaryService->serialize(
-				$boardId,
-				$this->cardMapper->findSummariesByBoard($boardId, $viewer),
-				$viewer,
-			);
-			$boardTitle = (string)$board->getTitle();
-			$boardPrefix = (string)($board->getPrefix() ?? BoardPrefix::DEFAULT);
-			foreach ($cards as $card) {
-				// Archived rows never reach the feed unless the facet asked for them
-				// - before the participant vocabulary too, so a board's archive does
-				// not repopulate the assignee/owner facets with people who no longer
-				// appear in any visible row.
-				if (!$includeArchived && !empty($card['archived'])) {
-					continue;
-				}
-				// Carry the board identity so the client can group by board and
-				// deep-link back without a per-card board lookup.
-				$card['boardId'] = $boardId;
-				$card['boardTitle'] = $boardTitle;
-				// The board's human-id prefix, so a card tile can render its real
-				// reference (prefix + '-' + boardSeq), same as the board tiles.
-				$card['boardPrefix'] = $boardPrefix;
-				// Facet VOCABULARY, accumulated before the filter and before the cap
-				// so the assignee/owner facets keep offering everyone even when the
-				// filter narrows the rows to one person - or to none (#9862).
-				foreach ($card['assigneeIds'] ?? [] as $assignee) {
-					if (is_string($assignee) && $assignee !== '') {
-						$participants[$assignee] = true;
-					}
-				}
-				$owner = $card['owner'] ?? null;
-				if (is_string($owner) && $owner !== '') {
-					$participants[$owner] = true;
-				}
-				$out[] = $card;
+		foreach ($cards as $card) {
+			// Archived rows never reach the feed unless the facet asked for them
+			// - before the participant vocabulary too, so a board's archive does
+			// not repopulate the assignee/owner facets with people who no longer
+			// appear in any visible row.
+			if (!$includeArchived && !empty($card['archived'])) {
+				continue;
 			}
-			// Union the readable board's labels so the client can colour the card
-			// label chips. Labels are board-scoped and ids are unique per board's
-			// creation table; across boards ids can collide, but a View's tiles only
-			// reference a card's own labelIds against a single lookup — collisions are
-			// acceptable for chip colouring (the same trade-off the board makes with
-			// its per-board labelsById). Keyed by id keeps the payload deduplicated.
-			foreach ($this->labelMapper->findByBoard($boardId) as $label) {
+			$board = $boardsById[(int)($card['boardId'] ?? 0)] ?? null;
+			if ($board === null) {
+				// Unreachable - the query is restricted to $boardIds - but a row
+				// whose board is not in the readable set is DROPPED rather than
+				// shipped with a blank board identity. Fail closed.
+				continue;
+			}
+			// Carry the board identity so the client can group by board and
+			// deep-link back without a per-card board lookup.
+			$card['boardId'] = (int)$board->getId();
+			$card['boardTitle'] = (string)$board->getTitle();
+			// The board's human-id prefix, so a card tile can render its real
+			// reference (prefix + '-' + boardSeq), same as the board tiles.
+			$card['boardPrefix'] = (string)($board->getPrefix() ?? BoardPrefix::DEFAULT);
+			// Facet VOCABULARY, accumulated before the filter and before the cap
+			// so the assignee/owner facets keep offering everyone even when the
+			// filter narrows the rows to one person - or to none (#9862).
+			foreach ($card['assigneeIds'] ?? [] as $assignee) {
+				if (is_string($assignee) && $assignee !== '') {
+					$participants[$assignee] = true;
+				}
+			}
+			$owner = $card['owner'] ?? null;
+			if (is_string($owner) && $owner !== '') {
+				$participants[$owner] = true;
+			}
+			$out[] = $card;
+		}
+
+		// Union the readable boards' labels so the client can colour the card
+		// label chips - ONE query for the whole set, walked in board order so the
+		// payload keeps the exact sequence the old per-board loop emitted. Labels
+		// are board-scoped and ids are unique per board's creation table; across
+		// boards ids can collide, but a View's tiles only reference a card's own
+		// labelIds against a single lookup — collisions are acceptable for chip
+		// colouring (the same trade-off the board makes with its per-board
+		// labelsById). Keyed by id keeps the payload deduplicated.
+		$labelsByBoard = $this->labelMapper->findByBoards($boardIds);
+		foreach ($boardIds as $boardId) {
+			foreach ($labelsByBoard[$boardId] ?? [] as $label) {
 				$labels[(int)$label->getId()] = $label->jsonSerialize();
 			}
 		}
 
-		// Apply the View's filter (#9862) strictly AFTER the per-board ACL / #3743
-		// masking loop and strictly BEFORE the sort + cap. After, because filtering
+		// Apply the View's filter (#9862) strictly AFTER the ACL / #3743 masking
+		// above and strictly BEFORE the sort + cap. After, because filtering
 		// must never become a shortcut around the permission masking - it only drops
 		// rows the viewer may already see, it can never add one. Before, because the
 		// whole point is that the cap slices the MATCHING set: otherwise a narrow
@@ -197,7 +258,7 @@ class ViewService {
 		// Order the WHOLE matching set before the cap slices it, so the cap always
 		// takes the true first N rows of the requested order (never the first N of
 		// an arbitrary window) and repeats the same window across requests. Runs
-		// strictly AFTER the per-board ACL / #3743 masking loop above, so it moves
+		// strictly AFTER the ACL / #3743 masking above, so it moves
 		// no leak boundary - it only reorders rows the viewer may already see.
 		$out = self::sortRows($out, $sortMode, $sortDir);
 

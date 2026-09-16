@@ -618,7 +618,15 @@ jobs:
     timeout-minutes: 180
     env:
       # Realtime push isn't needed for the UI specs (they poll); skip it so a
-      # flaky appstore release can't fail the boot.
+      # flaky release download can't fail the boot of the ~1.5h required check.
+      #
+      # The cost of that is stated plainly rather than left implicit: with this
+      # set, `tests/e2e/realtime.spec.js`'s push-positive test SKIPS here, so
+      # this job — the one required check that runs a browser — proves nothing
+      # about the notify_push path. That is deliberate and it is covered
+      # elsewhere: the `e2e-push` job below boots the same stack WITH push and
+      # runs that one spec. Don't "fix" this by dropping the flag; it would put
+      # a network download on the critical path of the longest required check.
       KANSO_SKIP_NOTIFY_PUSH: '1'
       # setup.sh's default anyway, but stated explicitly: the deck/contacts pins
       # in dev/install-optional-apps.sh support NC 34 only, and the script skips
@@ -746,5 +754,156 @@ jobs:
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev --tail 200 || true
+          docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true
+
+  # THE REALTIME PUSH PATH. Realtime is one of the app's named architectural
+  # bets, and until this job it was the one bet no gate protected: the `e2e` job
+  # above sets KANSO_SKIP_NOTIFY_PUSH=1, which makes realtime.spec.js's
+  # push-positive test skip, so that test only ever ran on a developer's machine.
+  # That is precisely why the dev stack could silently lose its /push reverse
+  # proxy and nothing anywhere noticed.
+  #
+  # Hosting the daemon costs this workflow nothing new: `notify_push` carries
+  # `profiles: ["postgres"]` in dev/docker-compose.yml, so the daemon container
+  # is ALREADY started by every postgres boot in CI (the e2e job included). The
+  # only thing KANSO_SKIP_NOTIFY_PUSH skips is the Nextcloud-SIDE app, and
+  # dev/setup.sh installs that from a pinned GitHub tarball downloaded on the
+  # runner host and `docker cp`-ed in — the same mechanism
+  # dev/install-optional-apps.sh already uses for deck/contacts in the e2e job.
+  # No appstore, no container egress.
+  #
+  # A SEPARATE job rather than dropping the flag from `e2e`, on purpose:
+  #   * it cannot extend the ~1.5h required check's wall-clock by a second, and
+  #     it runs in parallel with it, so the critical path is unchanged;
+  #   * it cannot redden that check either. A tarball download is a network
+  #     fetch, and the e2e job is the one place in this workflow where a
+  #     transient network failure is most expensive.
+  # Cost is one extra Nextcloud first-boot (same shape as one install-matrix
+  # leg) plus two tests.
+  #
+  # ONE spec (tests/e2e/realtime.spec.js) rather than the suite: its two tests
+  # are the whole contract — a frame arrives near-instantly with push on, and
+  # the 5s delta poll carries realtime with push off. Everything else in the
+  # suite is UI behaviour the e2e job already covers over polling.
+  #
+  # KANSO_REQUIRE_NOTIFY_PUSH=1 makes the run assert the thing this job exists
+  # for: tests/e2e/push-health.js runs in Playwright's global setup and fails
+  # the run with one clear message if push is not advertised (a failed boot
+  # install) or is advertised but does not handshake (a dead daemon / missing
+  # proxy) — rather than letting a 4s expect() time out and read like a product
+  # regression.
+  #
+  # NOT in the required-checks list (that is a repo setting, not a file): add
+  # `e2e-push` there once it has a few green runs, same as `upgrade`.
+  e2e-push:
+    runs-on: kanso-runners
+    # Dominated by the Nextcloud first-boot, like one install-matrix leg (30m
+    # cap there), plus a browser install and two tests. 45 leaves runaway-guard
+    # headroom for a saturated runner without approaching the e2e job's 180.
+    timeout-minutes: 45
+    name: e2e (realtime push path)
+    env:
+      NC_VERSION: '34'
+      # The point of the job: do NOT set KANSO_SKIP_NOTIFY_PUSH here.
+      # Require it instead, so a boot that failed to install push fails loudly
+      # at global setup instead of as a mystery assertion timeout.
+      KANSO_REQUIRE_NOTIFY_PUSH: '1'
+      # realtime.spec.js needs neither deck nor contacts; skipping spares this
+      # job two downloads it has no use for.
+      KANSO_SKIP_OPTIONAL_APPS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # js/ + css/ are gitignored and mounted from the checkout — build before
+      # the stack boots (same reason as the e2e job).
+      - name: Build frontend
+        run: npm run build
+
+      - name: Ensure docker compose plugin
+        run: |
+          if ! docker compose version >/dev/null 2>&1; then
+            mkdir -p ~/.docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o ~/.docker/cli-plugins/docker-compose
+            chmod +x ~/.docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
+      # See install-matrix above for why this step exists and why it cannot fail
+      # the job. No KANSO_DB is set, so the profile is setup.sh's postgres
+      # default — which is also the only profile the notify_push daemon runs in.
+      - name: Pre-pull dev stack images (with retry)
+        working-directory: dev
+        continue-on-error: true
+        run: |
+          set -u
+          [ -f .db.env ] || : > .db.env
+
+          profile="${KANSO_DB:-postgres}"
+          if [ "$profile" = "mariadb" ]; then profile=mysql; fi
+
+          pulled=0
+          for attempt in 1 2 3; do
+            echo "Pre-pull attempt ${attempt}/3 (profile=${profile}, NC_VERSION=${NC_VERSION:-34})"
+            if docker compose --profile "$profile" pull; then
+              pulled=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Pull attempt ${attempt} failed; retrying in 15s"
+              sleep 15
+            fi
+          done
+
+          if [ "$pulled" = 1 ]; then
+            echo "Dev stack images are in the local cache."
+          else
+            echo "Pre-pull did not succeed after 3 attempts — continuing anyway;"
+            echo "dev/setup.sh's own 'docker compose up -d' will retry the pull."
+          fi
+          exit 0
+
+      # Boots the stack INCLUDING the notify_push half: side-loads the pinned
+      # app tarball, `occ notify_push:setup`, then `notify_push:self-test`.
+      - name: Boot dev Nextcloud stack with realtime push
+        run: ./dev/setup.sh
+
+      # Independent of the boot's own self-test, and the check that a developer
+      # gets locally too: does the ADVERTISED websocket endpoint actually
+      # handshake? Cheap, and it names the cause when it doesn't.
+      - name: Assert the advertised push endpoint handshakes
+        run: npm run check:push
+
+      # Only chromium: realtime.spec.js is a desktop-project spec, so webkit
+      # would be a pure download.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the realtime spec against a live push daemon
+        run: npx playwright test tests/e2e/realtime.spec.js --project=desktop
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-push
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Dump push + Nextcloud logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs kanso-dev-push --tail 200 || true
+          docker exec -u www-data kanso-dev php occ notify_push:self-test || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true

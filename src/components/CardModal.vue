@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:name="modalName"
 		size="large"
 		class="card-modal-modal"
-		@close="onModalClose">
+		@update:show="onShowUpdate">
 		<CardDetail
 			ref="detailRef"
 			mode="modal"
@@ -77,11 +77,38 @@ const modalName = computed(() => modalTitle.value || t('kanso', 'Card'))
 // than flashing a placeholder.
 usePageTitle(modalTitle)
 
-// The X button (NcModal @close) mirrors an Escape at the card root: if an
-// attribute popover is open, dismiss it first rather than closing the whole card.
-// CardDetail owns that popover-first precedence, so route the X through it.
-function onModalClose() {
-	detailRef.value?.requestClose?.()
+// The X button mirrors an Escape at the card root: if an attribute popover is
+// open, dismiss it first rather than closing the whole card. CardDetail owns that
+// popover-first precedence (and the unsaved-work prompt), so route the X through it.
+//
+// Why `@update:show` and not `@close` (#146): NcModal's own close handler sets its
+// `show` model to false immediately and only emits `close` 300ms later. Asking the
+// user about unsaved work from `@close` therefore raised the prompt over a card that
+// had ALREADY vanished — and cancelling it left the dialog hidden forever, because
+// `show` is the literal `true` here and can never change back to un-hide it.
+//
+// `:show` + `@update:show` makes that binding a real two-way model: Vue's `useModel`
+// only writes its own LOCAL value when the prop is passed WITHOUT an `onUpdate:show`
+// listener (`hasVModel === false`). With this listener attached it just emits, the
+// prop stays `true`, and NcModal never hides itself — this component decides. A
+// cancelled `requestClose()` therefore leaves the card visible with zero flash, and
+// a confirmed one navigates away and unmounts the whole dialog. That subtlety is why
+// tests/e2e/card-unsaved-guard.spec.js pins the X-button path.
+//
+// The `setTimeout` is for the OTHER thing NcModal funnels in here: its Escape
+// hotkey, which listens on `window` in the CAPTURE phase and so runs BEFORE
+// CardDetail's own root Escape handler. Acting straight away would let the shell
+// close the card out from under an Escape that CardDetail was about to spend on
+// dismissing an open attribute popover. Yielding to the task queue (a microtask is
+// NOT enough — the browser drains those between listeners, still mid-dispatch) puts
+// this after the whole event has been dispatched, so CardDetail's handler goes first
+// and requestClose() declines a keystroke it has already claimed. A mouse-driven
+// close (the X, the backdrop) claims nothing, so it just runs a tick later.
+function onShowUpdate(value) {
+	if (value) {
+		return
+	}
+	setTimeout(() => detailRef.value?.requestClose?.(), 0)
 }
 
 // CardDetail decided the card should actually close (Escape with no popover open,

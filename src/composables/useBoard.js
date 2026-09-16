@@ -193,6 +193,35 @@ export function useBoard(id) {
 	// otherwise hits /changes forever, and that tick is NOT free: the endpoint
 	// has no ETag/304 path (BoardController::changes), so every empty poll still
 	// costs a request, an ACL check and a findSince.
+	//
+	// #10279 asked whether the cost that SURVIVES this guard is worth removing,
+	// either by 304-ing the empty tick or by sharing one poll across the several
+	// useBoard() consumers a board can have at once. Measured on the dev stack
+	// (push-silent, so the pessimistic 5s cadence; requests to /changes counted
+	// off the browser's own network events over 60s windows):
+	//
+	//   board only .......................... 12/min
+	//   board + open card modal ............. 24/min
+	//   board + card modal + settings ....... 36/min
+	//   hidden tab .......................... 0/min
+	//
+	// So the fan-out is real and exactly linear in live consumers - and the
+	// population #10279 named as paying for it (read-only viewers, dashboards,
+	// parked tabs) now pays nothing at all: this guard took it to zero. What is
+	// left is a FOREGROUND tab whose user is looking at it, and only until their
+	// first mutation proves push live and relaxes every one of those loops to 30s.
+	//
+	// The empty tick is also far cheaper than "a request, an ACL check and a
+	// findSince" makes it sound. Timed against this same stack (app-token auth,
+	// 40 samples each, 12 224 kanso_changes rows): an empty tick is 45ms, of which
+	// the part a 304 could skip - getOldestChangeId + findSince - is 6ms (the same
+	// call with `since=0`, which short-circuits after exactly the work a 304 path
+	// would do, is 39ms). The other 39ms is Nextcloud bootstrap plus the ACL gate,
+	// which a conditional request still pays; for scale, a no-op OCS capabilities
+	// call on the same box is 43ms. So an ETag on /changes buys ~13% of a request
+	// that still happens, at the price of a second bespoke conditional-request
+	// mechanism on the client. Not built, deliberately. Don't re-propose it
+	// without a workload where that 6ms is the thing that hurts.
 	// Read as `visibilityState`, the same bit main.js:invalidateMyWorkThrottled and
 	// TanStack's own focusManager test, so the whole app agrees on one definition
 	// of "hidden". `typeof document` because the unit rig stubs `window` without a
@@ -268,9 +297,12 @@ export function useBoard(id) {
 	// the transition TO visible does work. And, like the loop above, this is per
 	// useBoard instance - CardDetail's is alive on top of BoardView's while a card
 	// modal is open - so a return costs one delta read per live consumer, all in
-	// one event dispatch with the same cursor. That is the fan-out #10279 measures:
-	// the loop already has it (staggered by mount time instead), it is not made
-	// worse here, and it is not fixed here either.
+	// one event dispatch with the same cursor. That is the fan-out #10279 measured
+	// (numbers above): the loop already has it (staggered by mount time instead),
+	// it is not made worse here, and it is not fixed here either - a ref-counted
+	// per-board poller was the other half #10279 weighed, and 12/24/36 per minute
+	// on a foreground tab did not justify the teardown races it would introduce
+	// across consumers that mount and unmount on every card open.
 	const onVisibilityChange = () => {
 		if (shouldSync()) {
 			syncBoardDelta(queryClient, id)

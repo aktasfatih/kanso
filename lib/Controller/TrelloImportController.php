@@ -11,6 +11,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\TrelloImportService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -36,8 +37,18 @@ class TrelloImportController extends Controller {
 	/**
 	 * Imports a Trello board export into a brand-new board owned by the caller.
 	 * Any logged-in user may import their own upload.
+	 *
+	 * Carries the same per-user rate limit as the other document-body imports
+	 * ({@see \OCA\Kanso\Controller\BoardPortabilityController::import()} and
+	 * {@see \OCA\Kanso\Controller\CsvImportController::import()}): one request
+	 * turns one client-supplied document into a whole board of rows, so the
+	 * per-request size cap in {@see \OCA\Kanso\Service\TrelloImportService} wants
+	 * the same companion bound over time. 60/hour is far above any human import
+	 * session and leaving it off would just be the open door beside the closed
+	 * ones.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 3600)]
 	public function import(string $document = ''): JSONResponse {
 		return $this->respond(function () use ($document): JSONResponse {
 			return new JSONResponse(

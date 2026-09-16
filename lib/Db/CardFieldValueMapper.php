@@ -85,18 +85,4 @@ class CardFieldValueMapper extends QBMapper {
 
 		return $qb->executeStatement();
 	}
-
-	/**
-	 * Removes every field value of a card - the cascade for a card purge.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
-	}
 }

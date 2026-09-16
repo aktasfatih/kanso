@@ -117,6 +117,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="(templatesLoadedByStack[rows[vRow.index].stackId] ?? false) && (templatesByStack[rows[vRow.index].stackId] ?? []).length === 0">
 							{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 						</NcActionText>
+						<!-- Entry to the board-scoped template manager, exactly as the kanban
+						     column's picker offers it (#10503). Templates are hidden from the
+						     board, so this menu is the only way to reach them — a list view
+						     that offers the picker but not the manager is a half-present
+						     feature, which reads as a broken menu. -->
+						<template v-if="props.onManageTemplates">
+							<NcActionSeparator />
+							<NcActionButton
+								:close-after-click="true"
+								@click="props.onManageTemplates">
+								<template #icon>
+									<CogOutlineIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Manage templates…') }}
+							</NcActionButton>
+						</template>
 					</NcActions>
 
 					<!-- Inline error, scoped per stack -->
@@ -360,6 +376,7 @@ import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActionText from '@nextcloud/vue/components/NcActionText'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import CheckboxMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMarkedOutline.vue'
@@ -370,6 +387,7 @@ import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
@@ -422,6 +440,13 @@ const props = defineProps({
 	 * Async fn (stackId, templateId) → Promise - creates a card from a template.
 	 */
 	onCreateFromTemplate: { type: Function, default: null },
+	/**
+	 * Fn () → void - opens the board-scoped "Manage templates" surface (#10503).
+	 * Belongs with the two above: they are one menu, and the picker without the
+	 * manager leaves templates un-manageable from this view. When omitted (the
+	 * cross-board Views path, or a viewer) the entry is hidden.
+	 */
+	onManageTemplates: { type: Function, default: null },
 	/**
 	 * Async fn (title) → Promise - creates a column (#9853). When provided (and
 	 * props.groups is absent) an "Add column…" composer renders at the end of the

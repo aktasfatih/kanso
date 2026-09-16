@@ -36,11 +36,29 @@ class CardLabelMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function findLabelIdsByBoard(int $boardId): array {
+		return $this->findLabelIdsByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::findLabelIdsByBoard()} (#10298): the
+	 * same map over MANY boards in ONE query, for the cross-board Views feed -
+	 * whose enrichment must not scale with how many boards the user can read.
+	 * Card ids are globally unique, so the union needs no per-board nesting and
+	 * the map is consumed exactly like the single-board one.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, int[]> map of cardId => labelIds in assignment order
+	 * @throws Exception
+	 */
+	public function findLabelIdsByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('cl.card_id', 'cl.label_id')
 			->from($this->getTableName(), 'cl')
 			->innerJoin('cl', 'kanso_cards', 'c', $qb->expr()->eq('cl.card_id', 'c.id'))
-			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->orderBy('cl.id', 'ASC');
 
@@ -219,20 +237,6 @@ class CardLabelMapper extends QBMapper {
 		$qb->delete($this->getTableName())
 			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('label_id', $qb->createNamedParameter($labelId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
-	}
-
-	/**
-	 * Removes every label assignment of a card - cascade for a card purge.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
 
 		return $qb->executeStatement();
 	}

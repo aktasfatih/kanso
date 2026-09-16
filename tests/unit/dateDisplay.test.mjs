@@ -23,7 +23,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { exactTimeLabel, exactTimeTitle, hasRelativeLabel, isoTimestamp } from '../../src/utils/dateDisplay.js'
+import {
+	exactTimeLabel,
+	exactTimeTitle,
+	expiryHasPassed,
+	expiryInputValue,
+	expiryTimestampFromInput,
+	hasRelativeLabel,
+	isoTimestamp,
+} from '../../src/utils/dateDisplay.js'
 
 // Local Fri 28 Aug 2026, 14:32 — the reference "now" for every case below.
 const NOW = new Date(2026, 7, 28, 14, 32, 0)
@@ -278,4 +286,114 @@ test('the title spells out the stamp the short label abbreviates', () => {
 	// where they surface.
 	assert.match(title, /:30\b/, `expected seconds in "${title}"`)
 	assert.ok(title.length > exactTimeLabel(ts, NOW_MS).length, 'the title must be the longer form')
+})
+
+// ── Public-link expiry (#10466) ──────────────────────────────────────────────
+//
+// The share's expiry is one absolute instant, but the UI asks for a calendar
+// DAY — and a day is not an instant until you say whose day it is. The answer
+// this pins: the day belongs to whoever SET it, in their own browser's zone.
+//
+// These cases exist because the obvious implementation is wrong in a way that
+// only shows up on somebody else's machine. `new Date('2026-12-31')` parses as
+// UTC midnight, so a manager in New York picking the 31st would have stored an
+// instant that is still the 30th where they are — the link dies a day early,
+// and it dies silently. So the round-trip is run under REAL timezones in a
+// child node process (TZ is read once at startup and cannot be changed in
+// process), west and east of Greenwich plus a half-hour offset.
+
+const TZ_CASES = [
+	'America/Los_Angeles', // UTC-8/-7 — where a UTC-midnight bug loses a day
+	'UTC',
+	'Europe/Berlin', // UTC+1/+2
+	'Asia/Kolkata', // UTC+5:30 — a half-hour offset, which trips naive hour math
+	'Pacific/Kiritimati', // UTC+14 — the extreme east
+]
+
+/**
+ * `expiryTimestampFromInput(date)` and what it reads back as, under a forced
+ * timezone.
+ *
+ * @param {string} tz IANA timezone id
+ * @param {string} date `YYYY-MM-DD` as typed into the picker
+ * @returns {{ts: number, readBack: string, localEnd: string}}
+ */
+function expiryRoundTripIn(tz, date) {
+	const src = `import { expiryTimestampFromInput, expiryInputValue } from ${JSON.stringify(MODULE_URL)}\n`
+		+ `const ts = expiryTimestampFromInput(${JSON.stringify(date)})\n`
+		+ 'const d = new Date(ts * 1000)\n'
+		+ 'const pad = (n) => String(n).padStart(2, \'0\')\n'
+		+ 'process.stdout.write(JSON.stringify({\n'
+		+ '  ts,\n'
+		+ '  readBack: expiryInputValue(ts),\n'
+		+ '  localEnd: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,\n'
+		+ '}))'
+	return JSON.parse(execFileSync(process.execPath, ['--input-type=module', '--eval', src], {
+		encoding: 'utf8',
+		env: { ...process.env, TZ: tz },
+	}))
+}
+
+test('a picked expiry day round-trips to the SAME day in every timezone', () => {
+	for (const tz of TZ_CASES) {
+		const { readBack } = expiryRoundTripIn(tz, '2026-12-31')
+		assert.equal(readBack, '2026-12-31', `picker showed a different day back in ${tz}`)
+	}
+})
+
+test('the expiry instant is the END of the picked day, locally', () => {
+	for (const tz of TZ_CASES) {
+		const { localEnd } = expiryRoundTripIn(tz, '2026-12-31')
+		// The link survives every second of the 31st where it was set, and dies
+		// as that day ends — not at UTC midnight, and not at the server's.
+		assert.equal(localEnd, '23:59:59', `expiry did not land at local end-of-day in ${tz}`)
+	}
+})
+
+test('the naive UTC parse this avoids really would lose a day', () => {
+	// Not a test of our code — a test that the bug being prevented is real, so
+	// nobody "simplifies" expiryTimestampFromInput back into Date.parse().
+	const naive = execFileSync(process.execPath, ['--input-type=module', '--eval',
+		'const d = new Date(\'2026-12-31\')\n'
+		+ 'process.stdout.write(String(d.getDate()))'],
+	{ encoding: 'utf8', env: { ...process.env, TZ: 'America/Los_Angeles' } })
+	assert.equal(naive, '30', 'expected UTC-midnight parsing to read back as the 30th in Los Angeles')
+	// Ours does not.
+	assert.equal(expiryRoundTripIn('America/Los_Angeles', '2026-12-31').readBack, '2026-12-31')
+})
+
+test('an EMPTY picker value means "never expires"', () => {
+	assert.equal(expiryTimestampFromInput(''), null)
+	assert.equal(expiryTimestampFromInput(null), null)
+	assert.equal(expiryTimestampFromInput(undefined), null)
+})
+
+test('an UNREADABLE value is not "never expires" — it is refused', () => {
+	// The distinction the caller depends on. Folding these into null would send a
+	// "clear the expiry" to the server on a parse failure, i.e. a public link that
+	// stays OPEN because the date could not be read. Fail the other way.
+	assert.equal(expiryTimestampFromInput('not-a-date'), undefined)
+	assert.equal(expiryTimestampFromInput('2026-13-40'), undefined, 'an impossible date must not roll over into a real instant')
+	// Reachable from the real control: <input type="date"> accepts years past 9999.
+	assert.equal(expiryTimestampFromInput('275760-09-13'), undefined)
+})
+
+test('no stored expiry renders an empty picker, never 1 Jan 1970', () => {
+	// The API sends null for "never"; a row written before this field had a UI
+	// can still hold 0, and the server normalises that to null — but the client
+	// must degrade safely either way.
+	assert.equal(expiryInputValue(null), '')
+	assert.equal(expiryInputValue(undefined), '')
+	assert.equal(expiryInputValue(0), '')
+	assert.equal(expiryInputValue(''), '')
+})
+
+test('expiryHasPassed matches the server boundary', () => {
+	const now = Date.UTC(2026, 11, 31, 12, 0, 0)
+	assert.equal(expiryHasPassed(null, now), false, 'no expiry is never "passed"')
+	assert.equal(expiryHasPassed(0, now), false)
+	assert.equal(expiryHasPassed(Math.floor(now / 1000) - 1, now), true)
+	assert.equal(expiryHasPassed(Math.floor(now / 1000) + 1, now), false)
+	// The server uses `<=`: the link is dead AT the stored second.
+	assert.equal(expiryHasPassed(Math.floor(now / 1000), now), true)
 })

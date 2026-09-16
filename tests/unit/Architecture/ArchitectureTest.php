@@ -217,6 +217,47 @@ class ArchitectureTest extends TestCase {
 		);
 	}
 
+	/**
+	 * Cross-board batching ratchet (#10298). {@see \OCA\Kanso\Access\BoardAccess}
+	 * says it on itself: "Batch via rolesFor() instead (mirrors
+	 * PermissionService::getPermissionsForBoards - ONE ACL fetch per board set,
+	 * never per-board queries)." A cross-board feed is any lib/ class that
+	 * resolves its board set through `boardService->findAllActive(` - and such a
+	 * class must NOT also reach for the single-board resolver
+	 * `boardAccess->contextFor(`, because the only way to use a per-board
+	 * ViewerContext over a board SET is a loop, and a loop around contextFor()
+	 * drags the whole per-board enrichment (~15 queries a board) with it.
+	 *
+	 * ViewService was the sole violator: ~15 queries per readable board, re-run
+	 * by the client's one-minute poll. Every sibling feed (My Cards, My Steps,
+	 * Inbox, Search, Reviews, Projects, Boards) already batched. The allowlist
+	 * is EMPTY and must stay that way - a new per-board loop inside a
+	 * cross-board feed fails here rather than shipping an O(boards) read.
+	 *
+	 * This is a batching rule, not a caching one: rolesFor() re-reads the ACL on
+	 * every request, so a revoked membership still disappears immediately.
+	 */
+	private const CROSS_BOARD_PER_BOARD_CONTEXT_ALLOWLIST = [];
+
+	public function testCrossBoardFeedsBatchTheirRoleResolutionInsteadOfLoopingContextFor(): void {
+		$actual = self::scanLib(
+			static fn (string $content): bool => str_contains($content, 'boardService->findAllActive(')
+				&& str_contains($content, 'boardAccess->contextFor('),
+		);
+
+		self::assertSame(
+			self::CROSS_BOARD_PER_BOARD_CONTEXT_ALLOWLIST,
+			$actual,
+			'A cross-board feed (it resolves its boards with BoardService::findAllActive()) '
+			. 'also calls BoardAccess::contextFor(), the SINGLE-board resolver - which over a '
+			. 'board set can only mean a per-board loop, and with it a per-board enrichment '
+			. 'pass. Resolve the whole set once with BoardAccess::rolesFor() and pass the '
+			. 'role map to the board-set (*ByBoards) mapper twins instead - see '
+			. 'MyCardsService, SearchService or ViewService for the shape (#10298). '
+			. 'Batching is not caching: rolesFor() still re-reads the ACL every request.',
+		);
+	}
+
 	public function testViewerContextIsMintedOnlyByBoardAccess(): void {
 		$expected = [
 			'Access/BoardAccess.php',

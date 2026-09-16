@@ -299,6 +299,16 @@ export function boardUrl(boardId) {
 }
 
 /**
+ * The sentence the app substitutes for a rate-limited request's missing body
+ * (#10505). Nextcloud's RateLimitingMiddleware returns `DataResponse([], 429)`
+ * — zero bytes — so the client synthesises this in one response interceptor
+ * (src/services/api.js). Kept here so every spec that pins it pins the SAME
+ * string, and a reword breaks the assertions rather than silently drifting.
+ */
+export const RATE_LIMIT_MESSAGE =
+	'Too many requests in a short time — this action is rate-limited. Wait a while, then try again.'
+
+/**
  * Provision (idempotently) a Nextcloud user via the OCS provisioning API,
  * using admin. Returns { user, pass, auth, api }. Safe to call repeatedly —
  * a 102 "already exists" is treated as success.

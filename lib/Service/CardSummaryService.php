@@ -37,6 +37,12 @@ use OCA\Kanso\Db\RecurRuleMapper;
  * and cheap. Every enrichment query is viewer-scoped where visibility matters
  * (checklist/waiting/childProgress), so a card hidden from the viewer never
  * enters the result and no hidden card's signal leaks through the maps.
+ *
+ * Two entry points, ONE row assembler ({@see self::decorate()}):
+ * {@see self::serialize()} enriches ONE board under a resolved
+ * {@see ViewerContext}, {@see self::serializeForBoards()} enriches a whole
+ * BOARD SET under the viewer's per-board role map - the same fixed query count
+ * for 30 boards as for one (#10298).
  */
 class CardSummaryService {
 	public function __construct(
@@ -58,42 +64,103 @@ class CardSummaryService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function serialize(int $boardId, array $cards, ViewerContext $viewer): array {
-		$labelIdsByCard = $this->cardLabelMapper->findLabelIdsByBoard($boardId);
-		$assigneesByCard = $this->cardAssigneeMapper->findUserIdsByBoard($boardId);
-		$contactsByCard = $this->cardContactMapper->findContactsByBoard($boardId);
-		$checklistByCard = $this->checklistItemMapper->progressByBoard($boardId, $viewer);
-		// Derived "waiting on client" (#3746): cardId => oldest open external
-		// step's assigned_at. Presence = waiting; never stored, always computed.
-		$waitingByCard = $this->checklistItemMapper->waitingByBoard($boardId, $viewer);
-		$childProgressByCard = $this->cardMapper->childProgressByBoard($boardId, $viewer);
-		$commentCountByCard = $this->commentMapper->countsByBoard($boardId);
-		$reviewStateByCard = $this->cardReviewMapper->reviewStatesByBoard($boardId);
-		// Card ids blocked by a not-done card - drives the tile "blocked" badge.
-		$blockedIds = array_flip($this->cardRelationMapper->blockedCardIdsByBoard($boardId));
-		// Template card ids with a live (enabled) recurrence rule - drives the
-		// tile "recurring" badge. Only the boolean presence ships to the summary;
-		// the rrule/rule object stays out of the board payload.
-		$recurringIds = array_flip($this->recurRuleMapper->findTemplateCardIdsByBoard($boardId));
-		// Card ids with an active running timer (#73) - drives the tile
-		// "timer running" badge. One boolean per card; the timer row stays out.
-		$runningTimerIds = array_flip($this->runningTimerMapper->findCardIdsByBoard($boardId));
+		return $this->decorate($cards, [
+			'labelIds' => $this->cardLabelMapper->findLabelIdsByBoard($boardId),
+			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoard($boardId),
+			'contacts' => $this->cardContactMapper->findContactsByBoard($boardId),
+			'checklist' => $this->checklistItemMapper->progressByBoard($boardId, $viewer),
+			// Derived "waiting on client" (#3746): cardId => oldest open external
+			// step's assigned_at. Presence = waiting; never stored, always computed.
+			'waiting' => $this->checklistItemMapper->waitingByBoard($boardId, $viewer),
+			'childProgress' => $this->cardMapper->childProgressByBoard($boardId, $viewer),
+			'commentCount' => $this->commentMapper->countsByBoard($boardId),
+			'reviewState' => $this->cardReviewMapper->reviewStatesByBoard($boardId),
+			// Card ids blocked by a not-done card - drives the tile "blocked" badge.
+			'blocked' => array_flip($this->cardRelationMapper->blockedCardIdsByBoard($boardId)),
+			// Template card ids with a live (enabled) recurrence rule - drives the
+			// tile "recurring" badge. Only the boolean presence ships to the summary;
+			// the rrule/rule object stays out of the board payload.
+			'recurring' => array_flip($this->recurRuleMapper->findTemplateCardIdsByBoard($boardId)),
+			// Card ids with an active running timer (#73) - drives the tile
+			// "timer running" badge. One boolean per card; the timer row stays out.
+			'timerRunning' => array_flip($this->runningTimerMapper->findCardIdsByBoard($boardId)),
+		]);
+	}
 
+	/**
+	 * The BOARD-SET twin of {@see self::serialize()} (#10298) - the identical
+	 * card shape for cards spanning MANY boards, built from the SAME fixed
+	 * number of enrichment queries as one board costs. The cross-board Views
+	 * feed used to call serialize() once per readable board, which made its
+	 * enrichment O(boards) - 13 queries each - even though every one of these
+	 * maps is keyed by a GLOBALLY unique card id and so unions for free.
+	 *
+	 * Visibility (#3743) is the cross-board mode of the scope: the viewer's
+	 * role is applied PER BOARD through $rolesByBoard, so a user who is
+	 * internal on one board and external on another gets each board's own
+	 * masking - the same per-board answer the per-board loop produced, in one
+	 * query. Callers still pass only boards the viewer may read.
+	 *
+	 * @param int[] $boardIds the boards $cards were read from (the readable set)
+	 * @param Card[] $cards the (already visibility-scoped) summary cards across those boards
+	 * @param array<int, string> $rolesByBoard {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return list<array<string, mixed>>
+	 */
+	public function serializeForBoards(array $boardIds, array $cards, string $uid, array $rolesByBoard): array {
+		return $this->decorate($cards, [
+			'labelIds' => $this->cardLabelMapper->findLabelIdsByBoards($boardIds),
+			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoards($boardIds),
+			'contacts' => $this->cardContactMapper->findContactsByBoards($boardIds),
+			'checklist' => $this->checklistItemMapper->progressByBoards($boardIds, $uid, $rolesByBoard),
+			'waiting' => $this->checklistItemMapper->waitingByBoards($boardIds, $uid, $rolesByBoard),
+			'childProgress' => $this->cardMapper->childProgressByBoards($boardIds, $uid, $rolesByBoard),
+			'commentCount' => $this->commentMapper->countsByBoards($boardIds),
+			'reviewState' => $this->cardReviewMapper->reviewStatesByBoards($boardIds),
+			'blocked' => array_flip($this->cardRelationMapper->blockedCardIdsByBoards($boardIds)),
+			'recurring' => array_flip($this->recurRuleMapper->findTemplateCardIdsByBoards($boardIds)),
+			'timerRunning' => array_flip($this->runningTimerMapper->findCardIdsByBoards($boardIds)),
+		]);
+	}
+
+	/**
+	 * The ONE place a summary row is assembled - shared by the board-scoped and
+	 * board-set entry points above so the two can not drift into different card
+	 * shapes. Every map is keyed by card id; the per-card lookups just index
+	 * into them, so passing a subset (or a cross-board union) is safe.
+	 *
+	 * @param Card[] $cards
+	 * @param array{
+	 *     labelIds: array<int, int[]>,
+	 *     assignees: array<int, string[]>,
+	 *     contacts: array<int, list<array{contactUri: string, displayName: string}>>,
+	 *     checklist: array<int, array{total: int, done: int}>,
+	 *     waiting: array<int, ?int>,
+	 *     childProgress: array<int, array{total: int, done: int}>,
+	 *     commentCount: array<int, int>,
+	 *     reviewState: array<int, string>,
+	 *     blocked: array<int, int>,
+	 *     recurring: array<int, int>,
+	 *     timerRunning: array<int, int>,
+	 * } $maps
+	 * @return list<array<string, mixed>>
+	 */
+	private function decorate(array $cards, array $maps): array {
 		// array_values so the result is a genuine list (Card[] may be keyed by the
 		// mapper); the consumer serializes it as a JSON array.
 		return array_values(array_map(
 			static fn (Card $card): array => $card->jsonSerializeSummary()
-				+ ['labelIds' => $labelIdsByCard[$card->getId()] ?? []]
-				+ ['assigneeIds' => $assigneesByCard[$card->getId()] ?? []]
-				+ ['contacts' => $contactsByCard[$card->getId()] ?? []]
-				+ ['checklist' => $checklistByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
-				+ ['waitingOnExternal' => \array_key_exists($card->getId(), $waitingByCard)]
-				+ ['waitingSince' => $waitingByCard[$card->getId()] ?? null]
-				+ ['childProgress' => $childProgressByCard[$card->getId()] ?? ['total' => 0, 'done' => 0]]
-				+ ['commentCount' => $commentCountByCard[$card->getId()] ?? 0]
-				+ ['reviewState' => $reviewStateByCard[$card->getId()] ?? null]
-				+ ['blocked' => isset($blockedIds[$card->getId()])]
-				+ ['recurring' => isset($recurringIds[$card->getId()])]
-				+ ['timerRunning' => isset($runningTimerIds[$card->getId()])],
+				+ ['labelIds' => $maps['labelIds'][$card->getId()] ?? []]
+				+ ['assigneeIds' => $maps['assignees'][$card->getId()] ?? []]
+				+ ['contacts' => $maps['contacts'][$card->getId()] ?? []]
+				+ ['checklist' => $maps['checklist'][$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['waitingOnExternal' => \array_key_exists($card->getId(), $maps['waiting'])]
+				+ ['waitingSince' => $maps['waiting'][$card->getId()] ?? null]
+				+ ['childProgress' => $maps['childProgress'][$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				+ ['commentCount' => $maps['commentCount'][$card->getId()] ?? 0]
+				+ ['reviewState' => $maps['reviewState'][$card->getId()] ?? null]
+				+ ['blocked' => isset($maps['blocked'][$card->getId()])]
+				+ ['recurring' => isset($maps['recurring'][$card->getId()])]
+				+ ['timerRunning' => isset($maps['timerRunning'][$card->getId()])],
 			$cards
 		));
 	}

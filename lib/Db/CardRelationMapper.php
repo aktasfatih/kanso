@@ -207,11 +207,29 @@ class CardRelationMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function blockedCardIdsByBoard(int $boardId): array {
+		return $this->blockedCardIdsByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::blockedCardIdsByBoard()} (#10298): the
+	 * same id list over MANY boards in ONE query, for the cross-board Views
+	 * feed - whose enrichment must not scale with how many boards the user can
+	 * read. Card ids are globally unique, so the union needs no per-board
+	 * nesting.
+	 *
+	 * @param int[] $boardIds
+	 * @return int[]
+	 * @throws Exception
+	 */
+	public function blockedCardIdsByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('r.other_card_id')
 			->from($this->getTableName(), 'r')
 			->innerJoin('r', 'kanso_cards', 'blocker', $qb->expr()->eq('r.card_id', 'blocker.id'))
-			->where($qb->expr()->eq('r.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('r.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
 			->andWhere($qb->expr()->eq('blocker.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('blocker.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
@@ -223,22 +241,5 @@ class CardRelationMapper extends QBMapper {
 		}
 		$result->closeCursor();
 		return $ids;
-	}
-
-	/**
-	 * Removes every relation touching a card (either side) - cascade for a card
-	 * purge.
-	 *
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->orX(
-				$qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)),
-				$qb->expr()->eq('other_card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)),
-			));
-
-		return $qb->executeStatement();
 	}
 }

@@ -75,3 +75,23 @@
 }
 
 .kanso-md h1:first-child { margin-top: 0; }
+
+/*
+ * Inline attachment images (#147). Same asymmetry as the lists above: the
+ * EDITOR constrained images all along (MarkdownEditor.vue's `.ProseMirror & img`
+ * block), every read-only surface declared nothing, so a saved description
+ * rendered a wide screenshot at its natural pixel width and pushed the card
+ * modal / preview / project pane into horizontal overflow. `max-width`, not
+ * `width`: a small image must keep its natural size, never be blown up to fill
+ * the column. `height: auto` overrides the intrinsic height so the aspect ratio
+ * follows the clamped width instead of squashing.
+ *
+ * The declarations mirror MarkdownEditor.vue exactly, so a description looks
+ * the same before and after it is saved.
+ */
+.kanso-md img {
+	max-width: 100%;
+	height: auto;
+	border-radius: 4px;
+	display: block;
+}

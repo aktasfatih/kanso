@@ -127,6 +127,113 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		expect(fresh.description || '').toBe('')
 	})
 
+	// #146 — the same question asked from the X button used to be asked too LATE:
+	// NcModal hid itself the moment the X was clicked and only emitted `close`
+	// 300ms later, so the prompt appeared over a card that had already vanished and
+	// Cancel left the dialog hidden forever. Because the board renders the card
+	// through an unkeyed <router-view>, that one hidden NcModal instance was reused
+	// for every card opened afterwards — the board looked dead until a reload.
+	test('the X button asks BEFORE closing: Cancel keeps the card up and the board alive', async ({ page }) => {
+		const cardA = await makeCard('X close source A')
+		const cardB = await makeCard('X close target B')
+		const dialogs = trackDialogs(page)
+		await openCard(page, cardA)
+
+		await page.locator('.card-modal__desc-placeholder').click()
+		const prose = descProse(page)
+		await expect(prose).toBeVisible({ timeout: 8_000 })
+		await prose.click()
+		await page.keyboard.type('draft typed before hitting X')
+		await expect(prose).toContainText('draft typed before hitting X')
+
+		// Watch for the dialog being hidden at any point — v-show writes
+		// `display: none` inline, so a single style mutation is the whole tell.
+		// This is what makes "no flash" testable: the card must never blink out
+		// while the question is on screen, not merely come back afterwards.
+		await page.evaluate(() => {
+			window.__kansoModalHidden = false
+			const observer = new MutationObserver((records) => {
+				for (const record of records) {
+					const el = record.target
+					if (el instanceof HTMLElement
+						&& el.matches('.modal-mask, .modal-wrapper, .modal-container')
+						&& el.style.display === 'none') {
+						window.__kansoModalHidden = true
+					}
+				}
+			})
+			observer.observe(document.body, { attributes: true, attributeFilter: ['style'], subtree: true })
+		})
+
+		dialogs.accept = false
+		await page.locator('.card-modal-modal .modal-container__close').click()
+
+		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		expect(dialogs.messages[0]).toContain('unsaved changes')
+
+		// Cancelled → the card is still up, never flashed away, draft intact.
+		await expect(page).toHaveURL(new RegExp(`/card/${cardA.id}`))
+		await expect(page.locator('.card-modal-modal .modal-container')).toBeVisible()
+		await expect(descProse(page)).toContainText('draft typed before hitting X')
+		expect(await page.evaluate(() => window.__kansoModalHidden)).toBe(false)
+
+		// …and the board behind it is still alive: opening a DIFFERENT card renders
+		// that card, rather than navigating into a permanently hidden dialog.
+		await page.goto(cardB.url)
+		await expect(page.locator('.card-modal__title')).toHaveText('X close target B', { timeout: 15_000 })
+		await expect(page.locator('.card-modal-modal .modal-container')).toBeVisible()
+	})
+
+	// The other half of the X path: confirming really does close, and leaves the
+	// board able to open the next card.
+	test('the X button closes the card once the discard is confirmed', async ({ page }) => {
+		const cardA = await makeCard('X confirm source A')
+		const cardB = await makeCard('X confirm target B')
+		const dialogs = trackDialogs(page)
+		await openCard(page, cardA)
+
+		await page.locator('.card-modal__desc-placeholder').click()
+		await expect(descProse(page)).toBeVisible({ timeout: 8_000 })
+		await descProse(page).click()
+		await page.keyboard.type('draft that gets discarded')
+
+		dialogs.accept = true
+		await page.locator('.card-modal-modal .modal-container__close').click()
+
+		await expect(page).not.toHaveURL(new RegExp(`/card/${cardA.id}`), { timeout: 8_000 })
+		expect(dialogs.messages.length).toBe(1)
+		const fresh = await api.get(`/cards/${cardA.id}`)
+		expect(fresh.description || '').toBe('')
+
+		// Board is interactive again — the next card opens normally.
+		await page.goto(cardB.url)
+		await expect(page.locator('.card-modal__title')).toHaveText('X confirm target B', { timeout: 15_000 })
+		await expect(page.locator('.card-modal-modal .modal-container')).toBeVisible()
+	})
+
+	// Escape reaches BOTH the card root and NcModal's own Escape hotkey. Routing the
+	// X through `update:show` makes that hotkey synchronous too, so the question must
+	// still be asked exactly once — not twice, and not at all on a clean card.
+	test('Escape closes a clean card exactly once and leaves the board usable', async ({ page }) => {
+		const cardA = await makeCard('Escape source A')
+		const cardB = await makeCard('Escape target B')
+		const dialogs = trackDialogs(page)
+		dialogs.accept = true
+		await openCard(page, cardA)
+
+		// No click first: focus sits on the modal's own focus-trap element, so this
+		// is the NcModal Escape hotkey path — the one that now runs through
+		// `update:show` instead of the delayed `close` emit.
+		await page.keyboard.press('Escape')
+
+		await expect(page).not.toHaveURL(new RegExp(`/card/${cardA.id}`), { timeout: 8_000 })
+		expect(dialogs.messages).toEqual([])
+
+		await page.goto(cardB.url)
+		await expect(page.locator('.card-modal__title')).toHaveText('Escape target B', { timeout: 15_000 })
+		await expect(page.locator('.card-modal-modal .modal-container')).toBeVisible()
+	})
+
 	test('a reply draft is confirmed too (the owner named replies explicitly)', async ({ page }) => {
 		const card = await makeCard('Reply draft card')
 		await api.post(`/cards/${card.id}/comments`, { body: 'Thread to answer' })

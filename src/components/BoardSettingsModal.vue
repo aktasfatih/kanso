@@ -1126,6 +1126,41 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										{{ t('kanso', 'Copy') }}
 									</NcButton>
 								</div>
+								<!-- Link expiry (#10466). A calendar day, resolved to the end
+								     of that day in THIS browser's timezone — so the boundary
+								     belongs to whoever sets it, and the hint says so out loud
+								     rather than leaving an off-by-a-day to support. -->
+								<label class="github-webhook__label" :for="`public-share-expiry-${boardId}`">
+									{{ t('kanso', 'Link expires on') }}
+								</label>
+								<div class="github-webhook__row">
+									<input
+										:id="`public-share-expiry-${boardId}`"
+										v-model="publicShareExpiryInput"
+										type="date"
+										class="github-webhook__input"
+										:disabled="publicShareBusy"
+										@change="handlePublicShareExpiryChange">
+									<NcButton
+										:disabled="publicShareBusy || !publicShare.expiresAt"
+										@click="clearPublicShareExpiry">
+										{{ t('kanso', 'Clear') }}
+									</NcButton>
+								</div>
+								<!-- Say the boundary OUT LOUD, both ways: the day belongs to the
+								     time zone it was set from, and the exact instant is spelled
+								     out in the reader's own zone. A second manager elsewhere
+								     would otherwise see a day one off from what was typed and
+								     have no way to tell which of them is right. -->
+								<p class="github-webhook__hint">
+									{{ publicShare.expiresAt
+										? t('kanso', 'The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry.', { when: publicShareExpiryExact })
+										: t('kanso', 'No expiry — the link works until you disable or rotate it.') }}
+								</p>
+								<p v-if="publicShareExpired" class="label-settings__error">
+									{{ t('kanso', 'This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it.') }}
+								</p>
+
 								<div class="github-webhook__actions">
 									<NcButton :disabled="publicShareBusy" @click="handleRotatePublicShare">
 										{{ t('kanso', 'Rotate link') }}
@@ -1770,6 +1805,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ t('kanso', 'Archived {n} cards', { n: archiveNowResults[rule.id] }) }}
 								</span>
 
+								<!-- Edit button: loads the rule into the form below, which doubles
+								     as the editor - same controls, not a second set. -->
+								<button
+									class="automation__archive-now-btn"
+									:title="t('kanso', 'Edit rule')"
+									@click="startEditRule(rule)">
+									<PencilIcon :size="14" />
+									{{ t('kanso', 'Edit') }}
+								</button>
+
 								<!-- Delete button -->
 								<button
 									class="label-settings__action-btn label-settings__action-btn--danger"
@@ -1807,7 +1852,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Add rule form (MANAGE only) -->
 					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateRule">
-						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
+						<h4 class="label-settings__create-heading">{{ isEditingRule ? t('kanso', 'Edit rule') : t('kanso', 'Add rule') }}</h4>
 
 						<!-- Scope selector -->
 						<div class="automation__form-row">
@@ -1861,7 +1906,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="label-settings__create-btn automation__create-btn"
 							type="submit"
 							:disabled="isCreatingRule || newRuleDays === '' || newRuleDays === null || newRuleDays < 0">
-							{{ isCreatingRule ? t('kanso', 'Adding…') : t('kanso', 'Add rule') }}
+							{{ isCreatingRule ? (isEditingRule ? t('kanso', 'Saving…') : t('kanso', 'Adding…')) : (isEditingRule ? t('kanso', 'Save rule') : t('kanso', 'Add rule')) }}
+						</button>
+						<button
+							v-if="isEditingRule"
+							class="label-settings__action-btn"
+							type="button"
+							@click="cancelEditRule">
+							{{ t('kanso', 'Cancel') }}
 						</button>
 
 						<span v-if="createRuleError" class="label-settings__error">{{ createRuleError }}</span>
@@ -2483,6 +2535,7 @@ import { useArchiveRules } from '../composables/useArchiveRules.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useAutomationRules } from '../composables/useAutomationRules.js'
 import { parseRecurRrule, buildRecurRrule, isCustomRrule } from '../utils/rrule.js'
+import { exactTimeTitle, expiryHasPassed, expiryInputValue, expiryTimestampFromInput } from '../utils/dateDisplay.js'
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
@@ -2504,6 +2557,7 @@ import {
 	enablePublicShare as apiEnablePublicShare,
 	disablePublicShare as apiDisablePublicShare,
 	setPublicShareComments as apiSetPublicShareComments,
+	setPublicShareExpiry as apiSetPublicShareExpiry,
 	fetchCalendarFeedConfig,
 	enableCalendarFeed as apiEnableCalendarFeed,
 	disableCalendarFeed as apiDisableCalendarFeed,
@@ -2963,9 +3017,30 @@ async function handleDisableForgejo() {
 }
 
 // ── Public / read-only share link (MANAGE) ───────────────────────────────────
-const publicShare = ref({ enabled: false, url: null, commentsEnabled: false })
+const publicShare = ref({ enabled: false, url: null, commentsEnabled: false, expiresAt: null })
 const publicShareError = ref('')
 const publicShareBusy = ref(false)
+
+// Link expiry (#10466). The picker holds a calendar DAY; the wire value is the
+// absolute instant that day ENDS in this browser's timezone, which is what makes
+// "expires on the 31st" mean the same thing to the person who typed it and to the
+// server comparing timestamps. Kept as its own ref (not a computed writer) so a
+// rejected request can leave the field showing what the server actually stored.
+const publicShareExpiryInput = ref('')
+
+// Whether the stored expiry has already passed — the link is live in the config
+// but dead to visitors, which the owner needs to be told outright.
+const publicShareExpired = computed(() => expiryHasPassed(publicShare.value.expiresAt))
+
+// The stored instant, spelled out in the READER's locale and zone. The picker
+// can only show a calendar day, and a day read back in another zone is not
+// necessarily the day that was typed — so the unambiguous value is printed next
+// to it rather than left for anyone to work out.
+const publicShareExpiryExact = computed(() => exactTimeTitle(publicShare.value.expiresAt))
+
+function syncPublicShareExpiryInput() {
+	publicShareExpiryInput.value = expiryInputValue(publicShare.value.expiresAt)
+}
 
 // The "what's exposed" note reflects the enabled opt-in toggles (#3949): with
 // comments OFF the person-free baseline holds; with comments ON the note says so.
@@ -2980,6 +3055,7 @@ async function loadPublicShareConfig() {
 	if (!canManage.value) return
 	try {
 		publicShare.value = await fetchPublicShareConfig(props.boardId)
+		syncPublicShareExpiryInput()
 		// An active public link should be visible without a click.
 		if (publicShare.value.enabled) {
 			automationGroups.value.publicLink = true
@@ -3002,6 +3078,9 @@ async function enablePublicLink() {
 	publicShareBusy.value = true
 	try {
 		publicShare.value = await apiEnablePublicShare(props.boardId)
+		// A rotate keeps the expiry (it is a property of the share, not of the
+		// token), so re-read it from the response rather than assuming.
+		syncPublicShareExpiryInput()
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not enable the public link.')
 	} finally {
@@ -3019,7 +3098,9 @@ async function disablePublicLink() {
 	publicShareBusy.value = true
 	try {
 		await apiDisablePublicShare(props.boardId)
-		publicShare.value = { enabled: false, url: null, commentsEnabled: false }
+		// Disabling clears the expiry server-side too, so mirror that locally.
+		publicShare.value = { enabled: false, url: null, commentsEnabled: false, expiresAt: null }
+		syncPublicShareExpiryInput()
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not disable the public link.')
 	} finally {
@@ -3033,11 +3114,45 @@ async function togglePublicShareComments(checked) {
 	publicShareBusy.value = true
 	try {
 		publicShare.value = await apiSetPublicShareComments(props.boardId, checked)
+		syncPublicShareExpiryInput()
 	} catch (e) {
 		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not update the public link options.')
 	} finally {
 		publicShareBusy.value = false
 	}
+}
+
+// Set / change / clear the link's expiry (#10466). An empty field clears it.
+//
+// The picked DAY becomes the instant that day ends in THIS browser's timezone
+// (expiryTimestampFromInput), so the owner's "the 31st" is their own 31st. On
+// failure the field is resynced from the last config the server confirmed, so it
+// never shows a date that was not actually stored.
+async function handlePublicShareExpiryChange() {
+	publicShareError.value = ''
+	const expiresAt = expiryTimestampFromInput(publicShareExpiryInput.value)
+	if (expiresAt === undefined) {
+		// Unreadable is NOT "no expiry": sending null here would clear a live
+		// expiry and leave the link open, which is the wrong way for this to fail.
+		// (Reachable from the real control — a date input accepts years past 9999.)
+		publicShareError.value = t('kanso', 'That is not a date we can use. Pick a day, or clear the field for no expiry.')
+		syncPublicShareExpiryInput()
+		return
+	}
+	publicShareBusy.value = true
+	try {
+		publicShare.value = await apiSetPublicShareExpiry(props.boardId, expiresAt)
+	} catch (e) {
+		publicShareError.value = e?.response?.data?.error || t('kanso', 'Could not update the public link expiry.')
+	} finally {
+		syncPublicShareExpiryInput()
+		publicShareBusy.value = false
+	}
+}
+
+async function clearPublicShareExpiry() {
+	publicShareExpiryInput.value = ''
+	await handlePublicShareExpiryChange()
 }
 
 // ── Calendar feed (read-only ICS of card due dates) (#3541) ───────────────────
@@ -4214,12 +4329,42 @@ function resolveStackName(stackId) {
 	return stack?.title ?? String(stackId)
 }
 
-// ── Create rule form state ────────────────────────────────────────────────────
+// ── Create/edit rule form state ───────────────────────────────────────────────
+// One form serves both: null editingRuleId = create mode, an id = edit mode.
 const newRuleStackId = ref(null)   // null = whole board
 const newRuleCondition = ref(0)    // 0 = done for ≥N, 1 = done AND created ≥N
 const newRuleDays = ref(0)
 const isCreatingRule = ref(false)
 const createRuleError = ref('')
+const editingRuleId = ref(null)
+const isEditingRule = computed(() => editingRuleId.value !== null)
+// The rule's threshold exactly as stored, plus the whole-day value the days
+// input was seeded with. secondsToDays() rounds, so a rule whose threshold is
+// not a whole number of days (only reachable via the REST API) would otherwise
+// be silently re-quantised by an edit that never touched the days field.
+const editingRuleThresholdSeconds = ref(0)
+const editingRuleDaysSeed = ref(0)
+
+/** Load a saved rule into the form below, which becomes its editor. */
+function startEditRule(rule) {
+	editingRuleId.value = rule.id
+	createRuleError.value = ''
+	newRuleStackId.value = rule.stackId ?? null
+	newRuleCondition.value = rule.condition
+	editingRuleThresholdSeconds.value = rule.thresholdSeconds
+	editingRuleDaysSeed.value = secondsToDays(rule.thresholdSeconds)
+	newRuleDays.value = editingRuleDaysSeed.value
+}
+
+/** Drop back to create mode, resetting the shared form. */
+function cancelEditRule() {
+	editingRuleId.value = null
+	editingRuleThresholdSeconds.value = 0
+	editingRuleDaysSeed.value = 0
+	newRuleStackId.value = null
+	newRuleCondition.value = 0
+	newRuleDays.value = 0
+}
 
 async function submitCreateRule() {
 	// Reject a blank field ('' * 86400 === 0) so a rule that archives every
@@ -4228,9 +4373,32 @@ async function submitCreateRule() {
 	isCreatingRule.value = true
 	createRuleError.value = ''
 	try {
+		// Keep a sub-day threshold byte-for-byte when the days field was not
+		// touched; otherwise the field is authoritative.
+		const thresholdSeconds = isEditingRule.value && newRuleDays.value === editingRuleDaysSeed.value
+			? editingRuleThresholdSeconds.value
+			: newRuleDays.value * 86400
+
+		if (isEditingRule.value) {
+			// PATCH always sends `stackId`, null included: the controller keys off
+			// the key being PRESENT to tell "scope this to the whole board" from
+			// "leave the scope alone", so omitting it would make widening a rule
+			// back to the whole board impossible.
+			await updateRule.mutateAsync({
+				id: editingRuleId.value,
+				data: {
+					stackId: newRuleStackId.value,
+					condition: newRuleCondition.value,
+					thresholdSeconds,
+				},
+			})
+			cancelEditRule()
+			return
+		}
+
 		const data = {
 			condition: newRuleCondition.value,
-			thresholdSeconds: newRuleDays.value * 86400,
+			thresholdSeconds,
 			enabled: true,
 		}
 		// Only include stackId when a specific stack is selected.
@@ -4244,7 +4412,8 @@ async function submitCreateRule() {
 		newRuleCondition.value = 0
 		newRuleDays.value = 0
 	} catch (err) {
-		createRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to create rule.')
+		createRuleError.value = err?.response?.data?.error
+			|| (isEditingRule.value ? t('kanso', 'Failed to update rule.') : t('kanso', 'Failed to create rule.'))
 	} finally {
 		isCreatingRule.value = false
 	}
@@ -4311,6 +4480,9 @@ async function doDeleteRule(rule) {
 	try {
 		await deleteRule.mutateAsync(rule.id)
 		confirmDeleteRuleId.value = null
+		// Deleting the rule that is open in the editor would otherwise leave the
+		// form bound to a dead id, with "Save rule" PATCHing it.
+		if (editingRuleId.value === rule.id) cancelEditRule()
 	} catch (err) {
 		deleteRuleError.value = err?.response?.data?.error || t('kanso', 'Failed to delete rule.')
 	} finally {
@@ -4837,6 +5009,23 @@ async function doDeleteAutoRule(rule) {
 </script>
 
 <style scoped>
+/* ── General pane rhythm ──────────────────────────────────────────────────── */
+/* Without these the pane is one undifferentiated block: every hint rendered at
+   body size in the default text colour, indistinguishable from the setting it
+   explains. Keep each hint tight to its own control and put the breathing room
+   after it, so a setting + its explanation read as one group. */
+.board-settings__general {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.board-settings__general-hint {
+	margin: 0 0 10px;
+	font-size: 0.8125rem;
+	line-height: 1.35;
+	color: var(--color-text-maxcontrast);
+}
+
 /* ── Card ID prefix field ─────────────────────────────────────────────────── */
 .board-settings__prefix-label {
 	display: block;
@@ -4854,6 +5043,18 @@ async function doDeleteAutoRule(rule) {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	font-family: var(--font-face-monospace, monospace);
+}
+
+/* The board name reuses the prefix row's layout, but it is free-form text up to
+   100 characters — so it takes the whole row and drops the prefix field's
+   fixed width, uppercasing and monospace. */
+.board-settings__name-input {
+	flex: 1;
+	width: auto;
+	min-width: 0;
+	text-transform: none;
+	letter-spacing: normal;
+	font-family: inherit;
 }
 
 /* ── Project chat link (#3748) ────────────────────────────────────────────── */

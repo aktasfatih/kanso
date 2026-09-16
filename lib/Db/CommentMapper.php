@@ -127,12 +127,29 @@ class CommentMapper extends QBMapper {
 	 * @throws Exception
 	 */
 	public function countsByBoard(int $boardId): array {
+		return $this->countsByBoards([$boardId]);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::countsByBoard()} (#10298): the same map
+	 * over MANY boards in ONE grouped query, for the cross-board Views feed -
+	 * whose enrichment must not scale with how many boards the user can read.
+	 * Card ids are globally unique, so the union needs no per-board nesting.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, int> map of cardId => count
+	 * @throws Exception
+	 */
+	public function countsByBoards(array $boardIds): array {
+		if ($boardIds === []) {
+			return [];
+		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('cm.card_id')
 			->selectAlias($qb->func()->count('*'), 'cnt')
 			->from($this->getTableName(), 'cm')
 			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
-			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->groupBy('cm.card_id');
@@ -350,44 +367,5 @@ class CommentMapper extends QBMapper {
 		$result->closeCursor();
 
 		return $count;
-	}
-
-	/**
-	 * The ids of every comment on a card (including soft-deleted ones) - used to
-	 * cascade a purge over child rows keyed on comment_id (e.g. reactions) before
-	 * the comments themselves are hard-deleted.
-	 *
-	 * @return int[]
-	 * @throws Exception
-	 */
-	public function idsByCard(int $cardId): array {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('id')
-			->from($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		$result = $qb->executeQuery();
-		$ids = [];
-		while (($row = $result->fetch()) !== false) {
-			$ids[] = (int)$row['id'];
-		}
-		$result->closeCursor();
-
-		return $ids;
-	}
-
-	/**
-	 * Hard-deletes every comment of a card (all threads) - cascade for a card
-	 * purge.
-	 *
-	 * @return int number of deleted rows
-	 * @throws Exception
-	 */
-	public function deleteByCard(int $cardId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->delete($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement();
 	}
 }

@@ -3,9 +3,47 @@
 
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { translate as t } from '@nextcloud/l10n'
 import { toMyCardsFeed, toRecentlyDoneFeed } from './myCardsFeed.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
+
+// A rate-limited request answers with NOTHING to show the user.
+//
+// Every endpoint carrying `#[UserRateLimit]` — attachment upload and
+// attach-from-Files, and the Deck / Trello / CSV / board-file imports and board
+// duplicate — is capped by Nextcloud's RateLimitingMiddleware, and when the cap
+// is hit that middleware returns `new DataResponse([], 429)`: a zero-byte body.
+// Its own 'Rate limit exceeded' text never reaches the wire, so the
+// `e?.response?.data?.error || <fallback>` expression every caller in this app
+// uses finds nothing and paints the generic fallback — "Failed to attach the
+// file.", "Could not import that Trello file." Those read as a transient glitch
+// and invite an immediate retry, which fails again, at the one moment when the
+// correct advice is to wait.
+//
+// Every request in the app goes out through this module's axios instance, so
+// one response interceptor is the single place that branch has to exist —
+// synthesising the `error` key the framework omitted. Each of the ~180 call
+// sites then surfaces it through the expression it already has, unchanged.
+//
+// The message deliberately quotes no duration: the client is not told the limit
+// or the window, and NC sends no `Retry-After` on a 429 (the only `Retry-After`
+// in the server is maintenance mode's 503), so any number here would be made up.
+//
+// A body that DOES carry `error` wins — if a future endpoint answers 429 with a
+// real explanation, that explanation is shown instead of this generic line.
+axios.interceptors.response.use(undefined, (error) => {
+	const response = error?.response
+	if (response?.status === 429 && !response.data?.error) {
+		response.data = {
+			...(response.data && typeof response.data === 'object' && !(response.data instanceof Blob)
+				? response.data
+				: {}),
+			error: t('kanso', 'Too many requests in a short time — this action is rate-limited. Wait a while, then try again.'),
+		}
+	}
+	return Promise.reject(error)
+})
 
 // Boards
 export const fetchBoards = () =>
@@ -523,6 +561,12 @@ export const disablePublicShare = (boardId) =>
 // Opt in / out of showing read-only comments on the public board (#3949).
 export const setPublicShareComments = (boardId, enabled) =>
 	axios.put(url(`/api/boards/${boardId}/public-share/comments`), { enabled }).then((r) => r.data)
+
+// Set or clear the public link's expiry (#10466). `expiresAt` is an ABSOLUTE unix
+// timestamp in SECONDS — the caller resolves the picked day to an instant in the
+// viewer's own timezone (src/utils/dateDisplay.js) — and null means "never".
+export const setPublicShareExpiry = (boardId, expiresAt) =>
+	axios.put(url(`/api/boards/${boardId}/public-share/expiry`), { expiresAt }).then((r) => r.data)
 
 // Read-only iCal / ICS feed of card due dates (board-level, MANAGE)
 export const fetchCalendarFeedConfig = (boardId) =>

@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— keine —"
 
-#: src/components/BoardSettingsModal.vue:4404
+#: src/components/BoardSettingsModal.vue:4576
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n-mal"
@@ -251,21 +251,21 @@ msgstr "%1$s hat dich um ein Review von %2$s gebeten"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s hat %2$s mit dir geteilt"
 
-#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:217
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardList.vue:223
+#: src/views/BoardList.vue:224
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] ""
 msgstr[1] ""
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:213
-#: src/views/BoardList.vue:256
+#: src/views/BoardList.vue:214
+#: src/views/BoardList.vue:257
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -273,7 +273,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n Karte"
 msgstr[1] "%n Karten"
 
-#: src/components/StackColumn.vue:957
+#: src/components/StackColumn.vue:983
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -285,13 +285,13 @@ msgid_plural "%n cards created"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardList.vue:212
+#: src/views/BoardList.vue:213
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:216
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] ""
@@ -303,19 +303,19 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:4370
+#: src/components/CardDetail.vue:4385
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
 msgstr[1] "vor %n Tagen"
 
-#: src/components/CardDetail.vue:4368
+#: src/components/CardDetail.vue:4383
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
 msgstr[1] "vor %n Stunden"
 
-#: src/views/BoardList.vue:214
+#: src/views/BoardList.vue:215
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] ""
@@ -333,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4366
+#: src/components/CardDetail.vue:4381
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -363,7 +363,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n Projekt"
 msgstr[1] "%n Projekte"
 
-#: src/components/CardDetail.vue:2029
+#: src/components/CardDetail.vue:2044
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -466,6 +466,10 @@ msgstr "Karte hinzufügen"
 #: src/components/StackColumn.vue
 msgid "Add card…"
 msgstr "Karte hinzufügen…"
+
+#: src/views/BoardList.vue
+msgid "Add cards to an existing board"
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Add column"
@@ -618,13 +622,13 @@ msgstr "Genehmigt"
 msgid "Archive"
 msgstr "Archivieren"
 
-#: src/components/StackColumn.vue:182
+#: src/components/StackColumn.vue:196
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/StackColumn.vue:181
+#: src/components/StackColumn.vue:195
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -731,6 +735,10 @@ msgstr "Anhängen"
 #: src/components/AddToKansoDialog.vue
 msgid "Attach “{file}” to a card. A copy is stored on the card."
 msgstr "„{file}\" an eine Karte anhängen. Eine Kopie wird auf der Karte gespeichert."
+
+#: src/components/CardDetail.vue
+msgid "Attach a copy"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "attached {value}"
@@ -1248,13 +1256,29 @@ msgstr "Spalte auswählen…"
 msgid "Choose a CSV file"
 msgstr "CSV-Datei auswählen"
 
+#: src/components/CardDetail.vue
+msgid "Choose a file to attach"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Choose from Files"
+msgstr ""
+
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
 msgstr "Wähle aus, welche Abschnitte in der linken Seitenleiste erscheinen."
 
+#: src/components/CardDetail.vue
+msgid "Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it."
+msgstr ""
+
 #: src/composables/useCardType.js
 msgid "Chore"
 msgstr "Wartungsaufgabe"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Clear"
+msgstr ""
 
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
@@ -1577,6 +1601,10 @@ msgid "Could not set up the starter board."
 msgstr "Starter-Board konnte nicht eingerichtet werden."
 
 #: src/components/BoardSettingsModal.vue
+msgid "Could not update the public link expiry."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link options."
 msgstr "Optionen des öffentlichen Links konnten nicht aktualisiert werden."
 
@@ -1717,8 +1745,8 @@ msgstr "Gefahrenbereich"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:2110
-#: src/components/CardDetail.vue:4559
+#: src/components/BoardSettingsModal.vue:2162
+#: src/components/CardDetail.vue:4574
 msgid "day"
 msgid_plural "days"
 msgstr[0] "Tag"
@@ -2215,25 +2243,25 @@ msgstr "alle"
 msgid "Every"
 msgstr "Alle"
 
-#: src/components/BoardSettingsModal.vue:4384
+#: src/components/BoardSettingsModal.vue:4556
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Täglich"
 msgstr[1] "Alle %n Tage"
 
-#: src/components/BoardSettingsModal.vue:4394
+#: src/components/BoardSettingsModal.vue:4566
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Monatlich"
 msgstr[1] "Alle %n Monate"
 
-#: src/components/BoardSettingsModal.vue:4386
+#: src/components/BoardSettingsModal.vue:4558
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Wöchentlich"
 msgstr[1] "Alle %n Wochen"
 
-#: src/components/BoardSettingsModal.vue:4396
+#: src/components/BoardSettingsModal.vue:4568
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Jährlich"
@@ -2299,6 +2327,10 @@ msgstr "Zeiteintrag konnte nicht hinzugefügt werden."
 #: src/components/CardDetail.vue
 msgid "Failed to assign step."
 msgstr "Schritt konnte nicht zugewiesen werden."
+
+#: src/components/CardDetail.vue
+msgid "Failed to attach the file."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Failed to cancel reminder."
@@ -2939,10 +2971,6 @@ msgstr "GitHub"
 msgid "GitHub label name"
 msgstr "GitHub-Labelname"
 
-#: src/views/BoardList.vue
-msgid "GitHub Projects (coming soon)"
-msgstr "GitHub Projects (demnächst)"
-
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
 msgid "Go to boards"
@@ -3115,7 +3143,7 @@ msgstr "Kursiv"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6266
+#: src/components/CardDetail.vue:6344
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3275,6 +3303,14 @@ msgstr "Link aktiv"
 msgid "Link contact"
 msgstr "Kontakt verknüpfen"
 
+#: templates/public-expired.php
+msgid "Link expired"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Link expires on"
+msgstr ""
+
 #: templates/public-notfound.php
 msgid "Link not available"
 msgstr "Link nicht verfügbar"
@@ -3355,6 +3391,7 @@ msgstr "Verwalten"
 msgid "Manage card templates"
 msgstr "Kartenvorlagen verwalten"
 
+#: src/components/BoardListView.vue
 #: src/components/StackColumn.vue
 msgid "Manage templates…"
 msgstr "Vorlagen verwalten…"
@@ -3401,8 +3438,8 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "Mo"
 
-#: src/components/BoardSettingsModal.vue:2112
-#: src/components/CardDetail.vue:4561
+#: src/components/BoardSettingsModal.vue:2164
+#: src/components/CardDetail.vue:4576
 msgid "month"
 msgid_plural "months"
 msgstr[0] "Monat"
@@ -3738,6 +3775,10 @@ msgstr "Keine Beschreibung."
 #: src/views/MyCardsView.vue
 msgid "No due date"
 msgstr "Kein Fälligkeitsdatum"
+
+#: src/components/BoardSettingsModal.vue
+msgid "No expiry — the link works until you disable or rotate it."
+msgstr ""
 
 #: src/components/BoardTileMenu.vue
 msgid "No folders yet"
@@ -4687,6 +4728,18 @@ msgstr "Secret (jetzt kopieren, wird nur einmal angezeigt)"
 msgid "Select"
 msgstr "Auswahlliste"
 
+#: src/components/StackColumn.vue:184
+msgid "Select %n card"
+msgid_plural "Select %n cards"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/StackColumn.vue:183
+msgid "Select %n visible card"
+msgid_plural "Select %n visible cards"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Select a card…"
 msgstr "Karte auswählen…"
@@ -4787,7 +4840,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Diskussionsbereich anzeigen"
 
-#: src/components/CardDetail.vue:6272
+#: src/components/CardDetail.vue:6350
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
@@ -5039,6 +5092,10 @@ msgid "That card is not on this board any more."
 msgstr "Diese Karte ist nicht mehr auf diesem Board."
 
 #: src/components/BoardSettingsModal.vue
+msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "Der Chat-Link muss eine http:// oder https:// URL sein."
 
@@ -5068,6 +5125,10 @@ msgstr "Die Whitelist der Gäste-App ist deaktiviert – Gäste können Kanso ve
 
 #: src/views/BoardList.vue
 msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -5110,9 +5171,17 @@ msgstr "Diese Karte existiert nicht mehr – sie wurde möglicherweise gelöscht
 msgid "This card powers a recurring series. Delete just this card, or also stop the recurrence?"
 msgstr "Diese Karte steuert eine wiederkehrende Serie. Nur diese Karte löschen oder auch die Wiederholung beenden?"
 
+#: src/components/BoardSettingsModal.vue
+msgid "This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
 msgstr "Dieser Link ist ungültig oder wurde deaktiviert."
+
+#: templates/public-expired.php
+msgid "This public board link has expired. Ask whoever shared the board for a new link."
+msgstr ""
 
 #: templates/public-notfound.php
 msgid "This public board link is invalid or has been disabled."
@@ -5207,6 +5276,10 @@ msgstr "Element als erledigt markieren"
 #: src/views/ProjectView.vue
 msgid "Toggle preview"
 msgstr "Vorschau umschalten"
+
+#: src/services/api.js
+msgid "Too many requests in a short time — this action is rate-limited. Wait a while, then try again."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Top of the column"
@@ -5453,8 +5526,8 @@ msgstr "Webhook aktiv"
 msgid "Wed"
 msgstr "Mi"
 
-#: src/components/BoardSettingsModal.vue:2111
-#: src/components/CardDetail.vue:4560
+#: src/components/BoardSettingsModal.vue:2163
+#: src/components/CardDetail.vue:4575
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "Woche"
@@ -5534,8 +5607,8 @@ msgstr "Antwort schreiben…"
 msgid "wrote"
 msgstr "schrieb"
 
-#: src/components/BoardSettingsModal.vue:2113
-#: src/components/CardDetail.vue:4562
+#: src/components/BoardSettingsModal.vue:2165
+#: src/components/CardDetail.vue:4577
 msgid "year"
 msgid_plural "years"
 msgstr[0] "Jahr"

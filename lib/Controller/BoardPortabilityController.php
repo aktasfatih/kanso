@@ -134,8 +134,17 @@ class BoardPortabilityController extends Controller {
 	 * in-process, so it is the same whole-board egress). The new board's title
 	 * is "<original> (copy)". `withCards` also clones the card graph; when
 	 * false a structural-only clone (stacks/roles/labels/rules) is produced.
+	 *
+	 * Rate-limited at the same ceiling as {@see self::import()}, because it writes
+	 * the same thing: one whole board of rows per request, and with `withCards`
+	 * the entire card graph. It needs no uploaded document at all - a board id the
+	 * caller can already READ is enough - so leaving it open would be the cheapest
+	 * of the whole-board write paths to drive in a loop. 60/hour is far above any
+	 * believable human use (duplicating a handful of boards, and the e2e suite's
+	 * few calls per run) while a script is stopped.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 3600)]
 	public function duplicate(int $id, bool $withCards = false): JSONResponse {
 		return $this->respond(function () use ($id, $withCards): JSONResponse {
 			$uid = $this->currentUserId();

@@ -24,7 +24,7 @@ use Psr\Log\LoggerInterface;
  * passed. There is no restore: boards already have a separate `archived` flag
  * for the reversible case, and the delete dialog promises permanence.
  *
- * Two-phase, in this order, and the order is the whole design:
+ * Three phases, in this order, and the order is the whole design:
  *
  *  1. STORAGE. App-data objects live outside the database, so they cannot take
  *     part in its transaction. The per-card folders go first, tolerating a
@@ -34,7 +34,15 @@ use Psr\Log\LoggerInterface;
  *     its tombstone, and it is picked up again on the next run. So the outcome
  *     this phase guards against - rows gone with bytes stranded forever, and
  *     nothing left to find them by - cannot happen.
- *  2. ROWS. Everything registered in {@see BoardCascade}, then the cards, then
+ *  2. NOTIFICATIONS. Nextcloud's own notification rows for the board's cards
+ *     and checklist steps, through the supported
+ *     {@see NotificationService::dismissAllForObjects()} (which is
+ *     `IManager::markProcessed()`, never a write into `oc_notifications`).
+ *     Before the transaction, for the same reason as phase 1: a notification is
+ *     keyed by its object id, so once the cards are gone there is nothing left
+ *     to find them by. Outside the transaction too, because the notification
+ *     backend opens its own.
+ *  3. ROWS. Everything registered in {@see BoardCascade}, then the cards, then
  *     the board row - all inside one transaction, so a database error rolls the
  *     board back to its tombstoned state and the next run retries it.
  *
@@ -49,6 +57,23 @@ use Psr\Log\LoggerInterface;
  * app-data folder outside this board can be reached, whichever of the two keys
  * an attachment row's columns happen to disagree on.
  *
+ * KNOWN RESIDUE - the Activity stream. Kanso publishes coarse board events to
+ * the Nextcloud Activity app ({@see ActivityPublisher}), and those entries are
+ * NOT removed here, so a purged board's "created/moved/done" lines can still be
+ * listed - with the card title, which {@see \OCA\Kanso\Activity\Provider} reads
+ * straight out of the stored subject parameters rather than from the card. This
+ * is deliberate, not an oversight: `OCP\Activity\IManager` offers publishing
+ * only (generateEvent/publish/bulkPublish plus registration and formatting
+ * helpers) and `OCP\Activity\IEvent` has no removal either - there is no
+ * supported per-object, per-app delete anywhere in the Activity API. The only
+ * thing that can erase those rows is the Activity app's own retention sweep
+ * (`activity_expire_days`, default 365, run by its ExpireActivities job). The
+ * two unsupported alternatives - calling the Activity app's internal
+ * `OCA\Activity\Data::deleteActivities()`, a private class of an optional app,
+ * or writing to `oc_activity` directly - would both break silently on a
+ * Nextcloud upgrade, which is a worse trade than a documented residue that
+ * ages out. Revisit if Activity ever ships a public delete API.
+ *
  * Nothing here checks permissions: the MANAGE check happened when the board was
  * deleted, and the caller is cron running as the system. No change row is
  * written either - the board is gone, so there is no board-scoped log left to
@@ -61,6 +86,7 @@ class BoardPurgeService {
 		private CardMapper $cardMapper,
 		private BoardCascade $cascade,
 		private CardAttachmentService $cardAttachmentService,
+		private NotificationService $notificationService,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -80,8 +106,10 @@ class BoardPurgeService {
 	 * @return bool true when the board is gone; false when the storage sweep
 	 *              left bytes behind and the board was deliberately left
 	 *              tombstoned for the next run
-	 * @throws \OCP\DB\Exception if the row purge fails (the transaction is
-	 *                           rolled back first, so the board stays reapable)
+	 * @throws \OCP\DB\Exception if the notification sweep or the row purge fails
+	 *                           (the transaction is rolled back first, so the
+	 *                           board keeps its tombstone and stays reapable -
+	 *                           both phases are idempotent on the retry)
 	 */
 	public function purge(int $boardId): bool {
 		// Read the card set ONCE, before anything is deleted: it keys both
@@ -104,7 +132,21 @@ class BoardPurgeService {
 			return false;
 		}
 
-		// Phase 2 - the rows, atomically.
+		// Phase 2 - the Nextcloud-side notifications, while the objects they are
+		// keyed by can still be enumerated. Card notifications are keyed by card
+		// id; step notifications by checklist-item id (#3745), and those carry
+		// the card title too, so both sets have to go or "permanently deleted"
+		// is untrue in the one direction a user actually sees - the bell.
+		$this->notificationService->dismissAllForObjects(
+			NotificationService::OBJECT_CARD,
+			$cardIds,
+		);
+		$this->notificationService->dismissAllForObjects(
+			NotificationService::OBJECT_CHECKLIST_ITEM,
+			$this->cascade->idsIn('kanso_checklist_items', 'card_id', $cardIds),
+		);
+
+		// Phase 3 - the rows, atomically.
 		$this->db->beginTransaction();
 		try {
 			// Grandchildren first: once their parent row is gone, nothing can

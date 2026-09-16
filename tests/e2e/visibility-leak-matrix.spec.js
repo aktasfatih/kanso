@@ -524,3 +524,151 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		expect(restore.status).toBe(404)
 	})
 })
+
+// #10298 — the cross-board Views feed reads its WHOLE readable board set in one
+// batched pass (one `rolesFor()` ACL fetch + board-set-scoped queries) instead
+// of a per-board loop. The claim that batching makes load-bearing is that the
+// viewer's role is still applied PER BOARD: the same person is routinely
+// internal on one board (provider side) and external on another (client side),
+// and the #3743 masking must answer differently on each - in one query.
+//
+// This runs against real SQL, which is the point: the unit tests mock the
+// mappers, so a wrong alias or a flattened role map in the cross-board
+// CardVisibilityScope calls would pass them and only show up here.
+//
+// Fixture (three boards, one token):
+//   EXT board  - peer is an EXTERNAL member
+//       A_PUB   public,   by admin          → peer sees
+//       A_PROV  internal, by admin (provider side) → peer must NOT see
+//       A_CLI   internal, by peer  (client side)   → peer sees
+//       A_PRIV  private,  by admin          → peer must NOT see
+//       A_CHILD private,  by admin, child of A_PUB → peer's childProgress on
+//               A_PUB must stay 0/0 (a hidden child may not betray itself
+//               through a parent's count)
+//   INT board  - peer is an INTERNAL member
+//       B_PUB   public,   by admin          → peer sees
+//       B_PROV  internal, by admin (provider side) → peer SEES (same side here)
+//       B_PRIV  private,  by admin          → peer must NOT see
+//   OUT board  - peer is not a member at all
+//       C_PUB   public,   by admin          → peer must NOT see (readable-set denial)
+//
+// A flattened role map fails this in BOTH directions: all-internal leaks
+// A_PROV, all-external loses B_PROV.
+test.describe.serial('Cross-board Views feed: per-board role masking (#10298)', () => {
+	const token = 'vxr' + Math.floor(Date.now() / 1000)
+	const title = (name) => `${name} ${token}`
+	const state = { ext: 0, int: 0, out: 0, cards: {} }
+	let adminApi = null
+	let peerApi = null
+
+	const titlesIn = (cards) => cards.map((c) => c.title).filter((t) => t.includes(token)).sort()
+
+	test.beforeAll(async ({ peer }) => {
+		adminApi = makeApi(currentAuth)
+		peerApi = peer.api
+
+		const mkBoard = async (name, role) => {
+			const board = await adminApi.send('POST', '/boards', { title: `${name} ${token}` })
+			if (role) {
+				await adminApi.send('POST', `/boards/${board.id}/acl`, {
+					participant: peer.user,
+					participantType: 'user',
+					permission: 3,
+					role,
+				})
+			}
+			const stack = await adminApi.send('POST', '/stacks', { boardId: board.id, title: 'Lane' })
+			return { boardId: board.id, stackId: stack.id }
+		}
+		const mkCard = async (client, stackId, name, visibility) => {
+			const card = await client.send('POST', '/cards', { stackId, title: title(name) })
+			if (visibility !== 'public') {
+				await client.send('PATCH', `/cards/${card.id}`, { visibility })
+			}
+			state.cards[name] = card.id
+			return card.id
+		}
+
+		const ext = await mkBoard('EXT', 'external')
+		state.ext = ext.boardId
+		await mkCard(adminApi, ext.stackId, 'A_PUB', 'public')
+		await mkCard(adminApi, ext.stackId, 'A_PROV', 'internal')
+		await mkCard(peerApi, ext.stackId, 'A_CLI', 'internal')
+		await mkCard(adminApi, ext.stackId, 'A_PRIV', 'private')
+		await mkCard(adminApi, ext.stackId, 'A_CHILD', 'private')
+		await adminApi.send('PUT', `/cards/${state.cards.A_CHILD}/parent`, {
+			parentCardId: state.cards.A_PUB,
+		})
+
+		const int = await mkBoard('INT', 'internal')
+		state.int = int.boardId
+		await mkCard(adminApi, int.stackId, 'B_PUB', 'public')
+		await mkCard(adminApi, int.stackId, 'B_PROV', 'internal')
+		await mkCard(adminApi, int.stackId, 'B_PRIV', 'private')
+
+		const out = await mkBoard('OUT', null)
+		state.out = out.boardId
+		await mkCard(adminApi, out.stackId, 'C_PUB', 'public')
+	})
+
+	test.afterAll(async () => {
+		for (const id of [state.ext, state.int, state.out]) {
+			if (id) await adminApi.send('DELETE', `/boards/${id}`).catch(() => {})
+		}
+	})
+
+	test('each board contributes under the viewer\'s role ON THAT BOARD, in one feed', async () => {
+		const feed = await peerApi.send('GET', '/views/cards')
+
+		// Client side on EXT, provider side on INT - both answered correctly by
+		// the SAME request.
+		expect(titlesIn(feed.cards)).toEqual(
+			['A_PUB', 'A_CLI', 'B_PUB', 'B_PROV'].map(title).sort(),
+		)
+
+		const seen = titlesIn(feed.cards)
+		// The two directions a flattened role map would break, spelled out.
+		expect(seen).not.toContain(title('A_PROV'))
+		expect(seen).toContain(title('B_PROV'))
+		// Private cards owned by someone else are never anyone else's, on either board.
+		expect(seen).not.toContain(title('A_PRIV'))
+		expect(seen).not.toContain(title('B_PRIV'))
+		// …and a board the viewer is not a member of contributes nothing at all.
+		expect(seen).not.toContain(title('C_PUB'))
+		expect(feed.cards.map((c) => c.boardId)).not.toContain(state.out)
+	})
+
+	test('a hidden child never betrays itself through the parent\'s childProgress', async () => {
+		// The enrichment maps are batched over the board SET now; they are still
+		// viewer-scoped, so the private child counts for its owner and for nobody
+		// else. Counts are part of the leak surface.
+		const peerFeed = await peerApi.send('GET', '/views/cards')
+		const peerParent = peerFeed.cards.find((c) => c.id === state.cards.A_PUB)
+		expect(peerParent).toBeTruthy()
+		expect(peerParent.childProgress).toEqual({ total: 0, done: 0 })
+
+		const adminFeed = await adminApi.send('GET', '/views/cards')
+		const adminParent = adminFeed.cards.find((c) => c.id === state.cards.A_PUB)
+		expect(adminParent.childProgress).toEqual({ total: 1, done: 0 })
+	})
+
+	test('the owner sees their own set across the same boards', async () => {
+		const feed = await adminApi.send('GET', '/views/cards')
+		// Admin is internal everywhere (owner), so they see every card EXCEPT the
+		// peer-created client-side internal one - there is no owner backdoor.
+		expect(titlesIn(feed.cards)).toEqual(
+			['A_PUB', 'A_PROV', 'A_PRIV', 'A_CHILD', 'B_PUB', 'B_PROV', 'B_PRIV', 'C_PUB'].map(title).sort(),
+		)
+		expect(titlesIn(feed.cards)).not.toContain(title('A_CLI'))
+	})
+
+	test('the label union covers every readable board and stops at the readable set', async () => {
+		await adminApi.send('POST', '/labels', { boardId: state.ext, title: `lab-ext ${token}` })
+		await adminApi.send('POST', '/labels', { boardId: state.int, title: `lab-int ${token}` })
+		await adminApi.send('POST', '/labels', { boardId: state.out, title: `lab-out ${token}` })
+
+		const feed = await peerApi.send('GET', '/views/cards')
+		const labels = feed.labels.map((l) => l.title).filter((t) => t.includes(token)).sort()
+		expect(labels).toEqual([`lab-ext ${token}`, `lab-int ${token}`])
+	})
+})

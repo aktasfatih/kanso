@@ -51,5 +51,43 @@ test.describe('Board settings enable switches (public link + calendar feed)', ()
 		await expect(pubBody).toBeVisible()
 		await pubBody.getByText('Enable public link').click()
 		await expect(page.getByText('Link active')).toBeVisible({ timeout: 8_000 })
+
+		// --- Link expiry (#10466) ---
+		// The expiry column was persisted and ENFORCED from day one, but nothing
+		// could ever set it — exactly the dead-UI shape this spec exists to catch,
+		// one step further back (here the control did not exist at all). Drive the
+		// real picker and read the result back off the API.
+		const expiry = pubBody.locator('input[type="date"]')
+		await expect(expiry).toBeVisible()
+
+		await expiry.fill('2030-12-31')
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}/public-share`)).expiresAt)
+			.toBeTruthy()
+		let cfg = await api.get(`/boards/${state.boardId}/public-share`)
+		// The stored instant is the END of the picked day in THIS browser's
+		// timezone — the boundary belongs to whoever set it, so an owner who types
+		// "31 Dec" gets every second of their own 31st. The test runner and the
+		// browser share a host clock, so local components are the right comparison.
+		const stored = new Date(cfg.expiresAt * 1000)
+		expect([stored.getFullYear(), stored.getMonth() + 1, stored.getDate()]).toEqual([2030, 12, 31])
+		expect([stored.getHours(), stored.getMinutes(), stored.getSeconds()]).toEqual([23, 59, 59])
+		// And the link is still the same link — an expiry is not a rotate.
+		expect(cfg.enabled).toBe(true)
+
+		// Change it.
+		await expiry.fill('2031-01-15')
+		await expect.poll(async () => {
+			const d = new Date((await api.get(`/boards/${state.boardId}/public-share`)).expiresAt * 1000)
+			return [d.getFullYear(), d.getMonth() + 1, d.getDate()].join('-')
+		}).toBe('2031-1-15')
+
+		// Clear it.
+		await pubBody.getByRole('button', { name: /^Clear$/ }).click()
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}/public-share`)).expiresAt)
+			.toBeFalsy()
+		cfg = await api.get(`/boards/${state.boardId}/public-share`)
+		// Clearing the expiry must never disturb the link itself.
+		expect(cfg.enabled).toBe(true)
+		await expect(expiry).toHaveValue('')
 	})
 })
