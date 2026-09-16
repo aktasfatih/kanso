@@ -402,7 +402,7 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 支持一键从 Deck 导入，也可从 Trello 的 JSON 导出或 CSV 导入，将看板连同附件
 导出为 zip 并重新导入，复制看板，管理员还可定期备份全部看板。
 	]]></description>
-	<version>0.32.1</version>
+	<version>0.33.0</version>
 	<licence>agpl</licence>
 	<author mail="akfatih2@gmail.com">Fatih AKTAS</author>
 	<namespace>Kanso</namespace>

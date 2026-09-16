@@ -11,6 +11,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.33.0](https://github.com/aktasfatih/kanso/compare/v0.32.1...v0.33.0) (2026-09-16)
+
+
+### Bug Fixes
+
+* **board-settings:** make the board name field use the whole row in normal text ([aeabc7b](https://github.com/aktasfatih/kanso/commit/aeabc7bf1e0061d182c0c9720355636bb0826719))
+* **board:** clear leftover notifications when a deleted board is permanently removed ([b1d1748](https://github.com/aktasfatih/kanso/commit/b1d17484461bd25116d3f25b45afe349eb7685f8))
+* **board:** rate-limit duplicating a board like every other whole-board write ([cf7045e](https://github.com/aktasfatih/kanso/commit/cf7045e8b795c39e92de496da3021ff4d3c1ac75))
+* **board:** reach card templates while the board is grouped into swimlanes ([67dd8f3](https://github.com/aktasfatih/kanso/commit/67dd8f3ae919d309c38833a733f8cfa34a02fb45))
+* **board:** reach the card template manager from list view ([ba6dbb9](https://github.com/aktasfatih/kanso/commit/ba6dbb9cae2b6afd45f54fdbe5ca6524f4757772))
+* **card:** closing a card with the X while editing no longer freezes the board ([42c4122](https://github.com/aktasfatih/kanso/commit/42c4122a70ebc493e597b39c2d590e206890ee89)), closes [#146](https://github.com/aktasfatih/kanso/issues/146)
+* **card:** keep large images inside the card description instead of overflowing it ([cfa5e8e](https://github.com/aktasfatih/kanso/commit/cfa5e8e058af0f503c62637fc986694562dab9e6)), closes [#147](https://github.com/aktasfatih/kanso/issues/147)
+* **import:** rate-limit Deck and Trello imports like the other import paths ([36fea09](https://github.com/aktasfatih/kanso/commit/36fea09ed76fa1bdf45c5163c9d6cf063ddb286f))
+* **import:** say that CSV adds cards to a board you already have, and drop the "coming soon" entry ([0fa134c](https://github.com/aktasfatih/kanso/commit/0fa134cf9e568cdb53f4411dd0df26b0ce227d82))
+* say when an action was rate-limited instead of showing generic failure text ([3216f88](https://github.com/aktasfatih/kanso/commit/3216f8829c85712ec31b50c49f7d6f967e132c0d))
+* show Kanso's own icon on servers whose ImageMagick can't read SVG ([87e6fd9](https://github.com/aktasfatih/kanso/commit/87e6fd95f82542426d2439c21ec9947d90461202))
+* **trash:** clear a card's notifications when it is permanently deleted ([6462d0b](https://github.com/aktasfatih/kanso/commit/6462d0b53b0d79993f520f7afdc95972ebd066df)), closes [#10506](https://github.com/aktasfatih/kanso/issues/10506)
+
+
+### Features
+
+* **attachments:** attach a file you already have in Nextcloud Files to a card ([ccbb592](https://github.com/aktasfatih/kanso/commit/ccbb592fd1cf784dabdb6921307b9eaa454c8e06))
+* **board:** edit a saved auto-archive rule's scope, condition and threshold ([1a41035](https://github.com/aktasfatih/kanso/commit/1a41035489c57f6cf882007582da3aabd37bcae8))
+* **board:** select every card in a column from the column menu ([275dfac](https://github.com/aktasfatih/kanso/commit/275dfac4e9de2d6c94f88e1dc9b71c22205fbd2b))
+* **sharing:** set an expiry date on a public board link ([8f4ba7a](https://github.com/aktasfatih/kanso/commit/8f4ba7a998d92aa57572e8868dcf8ba07e04e06b))
+
+
+### Performance Improvements
+
+* **views:** load Views in a fixed number of queries instead of one batch per board ([8e1117a](https://github.com/aktasfatih/kanso/commit/8e1117a55bfa337a7d4244f29a38659ccd16ca7a))
+
 ## [0.32.1](https://github.com/aktasfatih/kanso/compare/v0.32.0...v0.32.1) (2026-09-15)
 
 
