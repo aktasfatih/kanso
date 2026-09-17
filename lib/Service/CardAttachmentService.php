@@ -386,6 +386,40 @@ class CardAttachmentService {
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
+		return $this->readInlineImage($cardId, $attachmentId);
+	}
+
+	/**
+	 * The same inline-image read as {@see self::inline()}, for a caller that has
+	 * ALREADY authorized the read by some means OTHER than a user session - today
+	 * only the public board share ({@see PublicShareService::getPublicInlineAttachment()}),
+	 * whose visitor is anonymous by definition and is instead gated on a board's
+	 * share TOKEN.
+	 *
+	 * It performs NO permission or visibility check of its own, so it must never
+	 * be called with a client-supplied card id that has not been resolved against
+	 * a share token first. What it DOES keep is everything that is not about WHO
+	 * is asking: the IDOR guard ({@see self::loadAttachmentOnCard()}, so an
+	 * attachment on another card cannot be fetched through this card's id) and the
+	 * raster-only allow-list ({@see self::INLINE_IMAGE_MIMES}, so an SVG or an HTML
+	 * attachment is a 404 here exactly as it is for an authenticated reader).
+	 *
+	 * @return array{0: CardAttachment, 1: string}
+	 * @throws DoesNotExistException if the attachment does not exist, is on another card, or is not an allow-listed raster image
+	 */
+	public function inlineForAuthorizedShare(int $cardId, int $attachmentId): array {
+		return $this->readInlineImage($cardId, $attachmentId);
+	}
+
+	/**
+	 * The WHO-agnostic half of the inline read: IDOR guard, raster allow-list,
+	 * bytes. Both public entry points above funnel through this so the two can
+	 * never drift on what an inline image is allowed to be.
+	 *
+	 * @return array{0: CardAttachment, 1: string}
+	 * @throws DoesNotExistException if the attachment does not exist, is on another card, or is not an allow-listed raster image
+	 */
+	private function readInlineImage(int $cardId, int $attachmentId): array {
 		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
 
 		// The gate: only bitmap images the browser cannot script are inlined.

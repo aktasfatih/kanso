@@ -352,6 +352,42 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * ONE card of a board's public snapshot, addressed by id (#152) - the gate in
+	 * front of the public share's inline-image route
+	 * ({@see \OCA\Kanso\Service\PublicShareService::getPublicInlineAttachment()}).
+	 *
+	 * Deliberately a narrowed copy of {@see self::findPublicByBoard()}, not a
+	 * `find()` plus a board comparison: the anonymous scope IS the WHERE clause
+	 * here, so a deleted, templated, internal or private card cannot be addressed
+	 * at all - it is not in the result set. `archived` is folded in too (the board
+	 * payload filters that one in PHP), because an archived card is not part of
+	 * the snapshot either and this route has no second pass to drop it.
+	 *
+	 * Returns null rather than throwing, so the caller answers ONE uniform,
+	 * throttled 404 for every "not part of this share" reason.
+	 *
+	 * @throws Exception
+	 */
+	public function findPublicByBoardAndId(int $boardId, int $cardId): ?Card {
+		$qb = $this->db->getQueryBuilder();
+		// `description` rides along (like findPublicByBoard's select): the caller
+		// admits an attachment only if this card's own public text actually
+		// references it, so the text IS the authorization input here.
+		$qb->select(array_merge(self::SUMMARY_COLUMNS, ['description']))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->setMaxResults(1);
+		$this->visibilityScope->applyPublicOnly($qb, '');
+
+		$rows = $this->findEntities($qb);
+		return $rows[0] ?? null;
+	}
+
+	/**
 	 * Summaries (no description) of the non-deleted, non-archived, non-template
 	 * cards on a board that HAVE a due date - the source for the read-only ICS /
 	 * iCal due-date feed (#3541). One board-scoped query (no N+1); a card without

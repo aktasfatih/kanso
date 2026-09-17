@@ -138,6 +138,7 @@ const ALLOWED_TAGS = [
 // but LOCK its `src` to the app's own inline-attachment endpoint — a SAME-ORIGIN,
 // path-only URL of the exact shape produced by cardAttachmentInlineUrl():
 //   [/<anything>]/apps/kanso/api/cards/<digits>/attachments/<digits>/inline
+// …or its token-gated public-share twin (see the second pattern below).
 // This deliberately allows NO external host (SSRF / tracking-pixel / exfil
 // surface), NO data: URI, NO svg, NO scheme at all. The `.../inline` server
 // endpoint itself only ever serves raster png/jpeg/gif/webp bytes; anything else
@@ -147,10 +148,25 @@ const ALLOWED_TAGS = [
 const INLINE_ATTACHMENT_SRC_RE =
 	/^\/(?:[^/\\][^\\]*\/)*apps\/kanso\/api\/cards\/\d+\/attachments\/\d+\/inline$/
 
+// The PUBLIC-SHARE twin of the path above (#152). A public-share visitor has no
+// session, so the authenticated endpoint 401s and the picture renders as a
+// broken box; the server re-points the srcs in the anonymous payload at the
+// token-gated route instead (PublicShareService::rewriteInlineImages), and this
+// is the shape it produces:
+//   [/<anything>]/apps/kanso/api/public/<token>/cards/<digits>/attachments/<digits>/inline
+// Same properties as its twin and no looser: anchored end-to-end, same-origin
+// path only, no scheme, no host, no query, no fragment. The token segment is
+// pinned to the generator's own charset — ISecureRandom::CHAR_ALPHANUMERIC, 64
+// chars (PublicShareService::TOKEN_LENGTH) — so this alternative cannot be used
+// to smuggle path segments, traversal or an extension past the check.
+const PUBLIC_INLINE_ATTACHMENT_SRC_RE =
+	/^\/(?:[^/\\][^\\]*\/)*apps\/kanso\/api\/public\/[A-Za-z0-9]{64}\/cards\/\d+\/attachments\/\d+\/inline$/
+
 /**
- * True iff `src` is a safe same-origin inline card-attachment path. Rejects
- * absolute/external URLs, protocol-relative `//host`, data:/javascript: URIs,
- * backslashes, query strings, and fragments — only the exact app path passes.
+ * True iff `src` is a safe same-origin inline card-attachment path — either the
+ * authenticated one or its public-share twin. Rejects absolute/external URLs,
+ * protocol-relative `//host`, data:/javascript: URIs, backslashes, query
+ * strings, and fragments — only the two exact app paths pass.
  *
  * @param {string} src the raw img src attribute value
  * @returns {boolean}
@@ -161,7 +177,7 @@ function isInlineAttachmentSrc(src) {
 	// Must be a server-relative path, not "//host" (protocol-relative) and not a
 	// scheme (http:, data:, javascript:). A single leading slash is required.
 	if (!s.startsWith('/') || s.startsWith('//')) return false
-	return INLINE_ATTACHMENT_SRC_RE.test(s)
+	return INLINE_ATTACHMENT_SRC_RE.test(s) || PUBLIC_INLINE_ATTACHMENT_SRC_RE.test(s)
 }
 
 // `class` is allowed through here so it can survive to the afterSanitizeAttributes

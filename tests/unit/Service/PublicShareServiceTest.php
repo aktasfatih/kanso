@@ -20,6 +20,7 @@ use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
+use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\MentionService;
 use OCA\Kanso\Service\NotPermittedException;
@@ -45,6 +46,7 @@ class PublicShareServiceTest extends TestCase {
 	private ChecklistItemMapper&MockObject $checklistItemMapper;
 	private LabelMapper&MockObject $labelMapper;
 	private CommentMapper&MockObject $commentMapper;
+	private CardAttachmentService&MockObject $attachmentService;
 	private PermissionService&MockObject $permissionService;
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
@@ -61,6 +63,7 @@ class PublicShareServiceTest extends TestCase {
 		$this->checklistItemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
+		$this->attachmentService = $this->createMock(CardAttachmentService::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
@@ -76,6 +79,7 @@ class PublicShareServiceTest extends TestCase {
 			$this->checklistItemMapper,
 			$this->labelMapper,
 			$this->commentMapper,
+			$this->attachmentService,
 			$this->permissionService,
 			$this->secureRandom,
 			$this->urlGenerator,
@@ -1246,5 +1250,243 @@ class PublicShareServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->setComments(1, true, 'mallory');
+	}
+
+	// ── inline images on a shared board (#152) ─────────────────────────────
+
+	/**
+	 * An image pasted into a description is stored as the AUTHENTICATED inline
+	 * path, which answers 401 to a visitor who has no session - that is the whole
+	 * bug. The anonymous payload therefore serves the token-gated path instead.
+	 * The surrounding text is byte-identical; only the src moves.
+	 */
+	public function testPayloadRepointsInlineImageSrcAtTheShareToken(): void {
+		$board = $this->board(1, self::TOKEN);
+		$card = $this->card(10, 5, 'Has a picture');
+		$card->setDescription(
+			"Look:\n\n![shot](/apps/kanso/api/cards/10/attachments/3/inline)\n\nEnd."
+		);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->stackMapper->method('findByBoard')->willReturn([$this->stack(5, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->willReturn([$card]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('findByBoardPublicOnly')->willReturn([]);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+		self::assertSame(
+			"Look:\n\n![shot](/apps/kanso/api/public/" . self::TOKEN . "/cards/10/attachments/3/inline)\n\nEnd.",
+			$payload['cards'][0]['description']
+		);
+	}
+
+	/**
+	 * THE rewrite's boundary. The pattern runs over free text, so without a left
+	 * boundary it also matches the PATH INSIDE an absolute URL - and the rewrite
+	 * would then splice the board's share token into an attacker-controlled
+	 * external link. Any EDIT member can type one of these into a description and
+	 * cannot otherwise read the token (getConfig is MANAGE-only), so one click by
+	 * any anonymous visitor would hand it to them. Every hostile shape must come
+	 * back BYTE-IDENTICAL.
+	 *
+	 * @dataProvider hostileImageSrcProvider
+	 */
+	public function testPayloadNeverSplicesTheTokenIntoAnAbsoluteUrl(string $hostile): void {
+		$board = $this->board(1, self::TOKEN);
+		$card = $this->card(10, 5, 'Hostile link');
+		$card->setDescription($hostile);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->stackMapper->method('findByBoard')->willReturn([$this->stack(5, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->willReturn([$card]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('findByBoardPublicOnly')->willReturn([]);
+
+		$out = $this->service->getPublicBoard(self::TOKEN)['cards'][0]['description'];
+		self::assertSame($hostile, $out);
+		self::assertStringNotContainsString(self::TOKEN, $out);
+	}
+
+	/** @return array<string, array{string}> */
+	public static function hostileImageSrcProvider(): array {
+		$tail = '/apps/kanso/api/cards/1/attachments/2/inline';
+		return [
+			'absolute https' => ['[click](https://evil.example' . $tail . ')'],
+			'protocol-relative' => ['[click](//evil.example' . $tail . ')'],
+			'userinfo authority' => ['[click](http://u:p@evil.example' . $tail . ')'],
+			'bare autolinked url' => ['see https://evil.example' . $tail . ' now'],
+			'schemeless host' => ['see evil.example' . $tail . ' now'],
+		];
+	}
+
+	/** The same rewrite reaches an opted-in comment body, not only the description. */
+	public function testPayloadRepointsInlineImageSrcInCommentBodies(): void {
+		$board = $this->board(1, self::TOKEN, null, true);
+		$card = $this->card(10, 5, 'Has a picture');
+		$card->setDescription('no image here');
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->stackMapper->method('findByBoard')->willReturn([$this->stack(5, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->willReturn([$card]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('findByBoardPublicOnly')->willReturn([]);
+		$this->commentMapper->method('findByBoardPublicOnly')->willReturn([
+			10 => [$this->comment(1, 10, 'alice', '![pic](/index.php/apps/kanso/api/cards/10/attachments/7/inline)')],
+		]);
+		$author = $this->createMock(IUser::class);
+		$author->method('getDisplayName')->willReturn('Alice A.');
+		$this->userManager->method('get')->willReturn($author);
+
+		$payload = $this->service->getPublicBoard(self::TOKEN);
+		self::assertSame(
+			'![pic](/index.php/apps/kanso/api/public/' . self::TOKEN . '/cards/10/attachments/7/inline)',
+			$payload['cards'][0]['comments'][0]['body']
+		);
+	}
+
+	/** A card carrying `![](…/cards/<id>/attachments/<aid>/inline)` in its description. */
+	private function cardEmbedding(int $id, int $stackId, int $attachmentId): Card {
+		$card = $this->card($id, $stackId, 'Has a picture');
+		$card->setDescription("Look:\n\n![shot](/apps/kanso/api/cards/{$id}/attachments/{$attachmentId}/inline)");
+		return $card;
+	}
+
+	private function pngAttachment(int $id, int $cardId): \OCA\Kanso\Db\CardAttachment {
+		$attachment = new \OCA\Kanso\Db\CardAttachment();
+		$attachment->setId($id);
+		$attachment->setCardId($cardId);
+		$attachment->setMime('image/png');
+		return $attachment;
+	}
+
+	/** The happy path: an image EMBEDDED in a shared card's description is served. */
+	public function testInlineAttachmentServesAnImageEmbeddedInAShareCard(): void {
+		$board = $this->board(1, self::TOKEN);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->cardMapper->expects(self::once())->method('findPublicByBoardAndId')
+			->with(1, 10)->willReturn($this->cardEmbedding(10, 5, 3));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do'));
+		$this->attachmentService->expects(self::once())->method('inlineForAuthorizedShare')
+			->with(10, 3)->willReturn([$this->pngAttachment(3, 10), 'PNGBYTES']);
+
+		[$meta, $bytes] = $this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+		self::assertSame('image/png', $meta->getMime());
+		self::assertSame('PNGBYTES', $bytes);
+	}
+
+	/**
+	 * An attachment merely UPLOADED to a shared card - never embedded in its text -
+	 * is not published by the share. Without this the route would hand out every
+	 * raster attachment of every public card to anyone counting `attachmentId` up
+	 * from 1, and attachments are not part of the public snapshot at all.
+	 */
+	public function testInlineAttachmentRefusesAnAttachmentTheTextNeverEmbeds(): void {
+		$board = $this->board(1, self::TOKEN);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		// Its description embeds attachment 3; the request asks for 4.
+		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)
+			->willReturn($this->cardEmbedding(10, 5, 3));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do'));
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 10, 4);
+	}
+
+	/**
+	 * An image embedded ONLY in a comment follows the comments opt-in: reachable
+	 * when the MANAGE user published the thread, refused when they did not.
+	 */
+	public function testInlineAttachmentServesACommentImageOnlyWhenCommentsAreOptedIn(): void {
+		$embedded = '![shot](/apps/kanso/api/cards/10/attachments/3/inline)';
+
+		// OFF: the body is not in the payload, so it cannot authorise anything.
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, false));
+		$card = $this->card(10, 5, 'Picture in a comment');
+		$card->setDescription('no image in the description');
+		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)->willReturn($card);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do'));
+		$this->commentMapper->method('findByCard')->with(10)
+			->willReturn([$this->comment(1, 10, 'alice', $embedded)]);
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+	}
+
+	/** …and the ON half of the pair, so the OFF case above cannot pass vacuously. */
+	public function testInlineAttachmentServesACommentImageWhenCommentsAreOn(): void {
+		$embedded = '![shot](/apps/kanso/api/cards/10/attachments/3/inline)';
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)
+			->willReturn($this->board(1, self::TOKEN, null, true));
+		$card = $this->card(10, 5, 'Picture in a comment');
+		$card->setDescription('no image in the description');
+		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)->willReturn($card);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do'));
+		$this->commentMapper->method('findByCard')->with(10)
+			->willReturn([$this->comment(1, 10, 'alice', $embedded)]);
+		$this->attachmentService->expects(self::once())->method('inlineForAuthorizedShare')
+			->with(10, 3)->willReturn([$this->pngAttachment(3, 10), 'PNGBYTES']);
+
+		[, $bytes] = $this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+		self::assertSame('PNGBYTES', $bytes);
+	}
+
+	/**
+	 * THE cross-board denial. A visitor holding board A's token asks for an
+	 * attachment on a card that lives on board B. The card id in the URL is
+	 * attacker-choosable - an EDIT member on A can even write that src into a
+	 * description - so the refusal has to come from the board-scoped lookup, not
+	 * from trusting the text. The attachment layer must never be reached at all.
+	 */
+	public function testInlineAttachmentRefusesACardOnAnotherBoard(): void {
+		$board = $this->board(1, self::TOKEN);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		// Card 999 lives on board 2; the board-scoped, public-only lookup finds
+		// nothing for (board 1, card 999).
+		$this->cardMapper->expects(self::once())->method('findPublicByBoardAndId')
+			->with(1, 999)->willReturn(null);
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 999, 3);
+	}
+
+	/** An EXPIRED link stops serving pictures the moment it stops serving the board. */
+	public function testInlineAttachmentRefusesAnExpiredShare(): void {
+		$board = $this->board(1, self::TOKEN, time() - 60);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->cardMapper->expects(self::never())->method('findPublicByBoardAndId');
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(PublicShareExpiredException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+	}
+
+	/** A disabled (token cleared) share is nothing but a 404 here too. */
+	public function testInlineAttachmentRefusesADisabledShare(): void {
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($this->board(1, ''));
+		$this->cardMapper->expects(self::never())->method('findPublicByBoardAndId');
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+	}
+
+	/** A card in an ARCHIVED stack is off the public board, so its images are too. */
+	public function testInlineAttachmentRefusesACardInAnArchivedStack(): void {
+		$board = $this->board(1, self::TOKEN);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)
+			->willReturn($this->cardEmbedding(10, 5, 3));
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do', true));
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
 	}
 }
