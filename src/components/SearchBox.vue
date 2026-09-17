@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:aria-expanded="dropdownOpen ? 'true' : 'false'"
 				aria-controls="search-box-results"
 				:aria-activedescendant="activeIndex >= 0 ? `search-result-${activeIndex}` : undefined"
-				@keydown.escape.prevent="close"
+				@keydown.escape.prevent="onEscape"
 				@keydown.arrow-down.prevent="moveActive(1)"
 				@keydown.arrow-up.prevent="moveActive(-1)"
 				@keydown.enter.prevent="selectActive"
@@ -239,6 +239,24 @@ function selectResult(result) {
 function close() {
 	term.value = ''
 	activeIndex.value = -1
+}
+
+// #10522 — Escape cancels the search: it clears the term (what it always did)
+// AND hands the keyboard back. Clearing alone left the caret in the field, so
+// every single-key board shortcut after it was swallowed as typing and the only
+// way out was clicking elsewhere. Clear-and-blur, not blur-only, keeps Escape
+// meaning the same thing it already means here and in the command palette
+// (CommandPalette.vue closes the whole palette on Escape).
+//
+// Ownership, deliberately: this stays a handler on the input itself, never a
+// document/window listener. The board shell's keydown handler bails on a typing
+// target (`target.closest('input, textarea, [contenteditable]')` in
+// src/views/BoardView.vue), so one Escape has exactly one owner, and an overlay
+// that claims Escape in the capture phase — NcModal, see 42c4122 — still wins
+// before the key ever reaches this input.
+function onEscape() {
+	close()
+	inputRef.value?.blur()
 }
 
 function clearSearch() {
