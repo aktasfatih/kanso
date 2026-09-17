@@ -119,6 +119,52 @@ test.describe('GitHub webhook ingest', () => {
 		expect(card.stackId).toBe(todoStackId)
 	})
 
+	// Label mirroring (#10491): a labeled/unlabeled delivery adds/removes the
+	// BOARD label of that name on every linked card. A name the board does not
+	// define is a silent no-op - a delivery must never mint a board label.
+	test('a signed labeled delivery adds the board label, unlabeled removes it', async () => {
+		const issueUrl = 'https://github.com/nextcloud/server/issues/4242'
+		const labelId = (await api('POST', '/labels', { boardId, title: 'Bug', color: 'ff0000' })).body.id
+		const labelCardId = (await api('POST', '/cards', { stackId: todoStackId, title: 'Labelled by GitHub' })).body.id
+		expect((await api('POST', `/cards/${labelCardId}/links`, { url: issueUrl })).ok).toBe(true)
+
+		const labelDelivery = (action, name) =>
+			JSON.stringify({
+				action,
+				label: { name },
+				issue: { html_url: issueUrl, state: 'open', title: 'Labelled by GitHub', labels: [] },
+			})
+
+		// labeled → the matching board label lands on the card (matched by title,
+		// case-insensitively: GitHub's `bug` finds the board's `Bug`).
+		let raw = labelDelivery('labeled', 'bug')
+		let res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(true)
+		expect((await api('GET', `/cards/${labelCardId}`)).body.labelIds).toContain(labelId)
+
+		// A name no board label carries: accepted, reported, and NOTHING created.
+		const labelsBefore = (await api('GET', `/boards/${boardId}`)).body.labels.length
+		raw = labelDelivery('labeled', 'good first issue')
+		res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.reason).toBe('no_label_match')
+		expect((await api('GET', `/boards/${boardId}`)).body.labels).toHaveLength(labelsBefore)
+
+		// unlabeled → the label comes back off, even though `issue.labels` no
+		// longer lists it (only the top-level `label` names the delta).
+		raw = labelDelivery('unlabeled', 'Bug')
+		res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect((await api('GET', `/cards/${labelCardId}`)).body.labelIds ?? []).not.toContain(labelId)
+
+		// Both mirrors went through LabelService, so each wrote its kanso_changes
+		// row - VERB_LABELED (6) / VERB_UNLABELED (7), carrying the label title.
+		const activity = (await api('GET', `/cards/${labelCardId}/activity`)).body
+		expect(activity.find((a) => a.verb === 6)?.detail?.to).toBe('Bug')
+		expect(activity.find((a) => a.verb === 7)?.detail?.from).toBe('Bug')
+	})
+
 	test('an issues delivery for an unlinked issue is an accepted no-op', async () => {
 		const raw = JSON.stringify({
 			action: 'closed',

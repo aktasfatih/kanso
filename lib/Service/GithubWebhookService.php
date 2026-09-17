@@ -130,6 +130,7 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 				state: $merged ? CardLink::STATE_MERGED : $this->mapState($pr['state'] ?? null),
 				merged: $merged,
 				urlCandidates: $this->urlCandidatesFor($htmlUrl),
+				changedLabel: $this->changedLabelName($payload['label'] ?? null),
 			);
 		}
 
@@ -156,6 +157,10 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 				state: $this->mapState($issue['state'] ?? null),
 				labels: $this->labelNames($issue['labels'] ?? null),
 				urlCandidates: $this->urlCandidates($owner, $repo, $number),
+				// The label the delivery ADDED or REMOVED rides at the TOP level,
+				// beside `issue` - and on `unlabeled` it is already gone from
+				// `issue.labels`, so only this field can express the delta.
+				changedLabel: $this->changedLabelName($payload['label'] ?? null),
 			);
 		}
 
@@ -170,6 +175,19 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 			'closed' => CardLink::STATE_CLOSED,
 			default => CardLink::STATE_UNKNOWN,
 		};
+	}
+
+	/**
+	 * The name carried by the payload's TOP-LEVEL `label` object - the single
+	 * label a `labeled`/`unlabeled` delivery changed (#10491). GitHub-specific:
+	 * Forgejo spells label changes differently and ships no such object (see
+	 * {@see ForgejoWebhookService}).
+	 */
+	private function changedLabelName(mixed $label): ?string {
+		if (!is_array($label) || !is_string($label['name'] ?? null)) {
+			return null;
+		}
+		return $label['name'];
 	}
 
 	/**

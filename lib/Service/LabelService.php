@@ -27,7 +27,12 @@ use OCP\IDBConnection;
  * card updates, so their change rows target the card.
  */
 class LabelService {
-	private const MAX_TITLE_LENGTH = 100;
+	/**
+	 * Longest a board-label title may be. Public because the forge-webhook label
+	 * mirror pins its own inbound cap to it - a delivered name longer than this
+	 * cannot match any stored title, and the two must not drift apart.
+	 */
+	public const MAX_TITLE_LENGTH = 100;
 
 	// Cap each stored detail string, consistent with CardService's description cap.
 	private const MAX_DETAIL_LENGTH = 10000;

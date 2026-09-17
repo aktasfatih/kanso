@@ -13,12 +13,14 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardLinkService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\ForgejoWebhookService;
+use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\IURLGenerator;
@@ -46,6 +48,8 @@ class ForgejoWebhookServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
+	private LabelService&MockObject $labelService;
+	private LabelMapper&MockObject $labelMapper;
 	private ForgejoWebhookService $service;
 
 	protected function setUp(): void {
@@ -60,6 +64,8 @@ class ForgejoWebhookServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
+		$this->labelService = $this->createMock(LabelService::class);
+		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->service = new ForgejoWebhookService(
 			$this->boardMapper,
 			$this->stackMapper,
@@ -71,6 +77,8 @@ class ForgejoWebhookServiceTest extends TestCase {
 			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->labelService,
+			$this->labelMapper,
 		);
 	}
 
@@ -476,6 +484,8 @@ class ForgejoWebhookServiceTest extends TestCase {
 			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->labelService,
+			$this->labelMapper,
 		);
 
 		$url = self::BASE . '/issues/12';
@@ -492,6 +502,37 @@ class ForgejoWebhookServiceTest extends TestCase {
 
 		self::assertTrue($result['moved']);
 		self::assertSame(0, $result['cardId']);
+	}
+
+	// ---- label mirroring (#10491) ------------------------------------------
+
+	/**
+	 * The label mirror lives in the shared base, but Forgejo deliveries never
+	 * reach it: Forgejo spells an issue label change `label_updated` /
+	 * `label_cleared` and ships no top-level `label` object, only the issue's
+	 * full post-change label set - no delta to mirror. So the normalizer leaves
+	 * `changedLabel` null and the delivery is the accepted no-op every
+	 * unrecognized action already is. Asserted here so the day someone wires
+	 * Forgejo up, they do it deliberately rather than by half-matching GitHub's
+	 * spelling.
+	 */
+	public function testForgejoLabelUpdatedDeliveryMirrorsNothing(): void {
+		$url = self::BASE . '/issues/12';
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(3, 9, $url)]);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$this->labelService->expects(self::never())->method('assign');
+		$this->labelService->expects(self::never())->method('unassign');
+		$this->labelService->expects(self::never())->method('create');
+
+		$body = json_encode([
+			'action' => 'label_updated',
+			'issue' => ['html_url' => $url, 'state' => 'open', 'title' => 'A bug', 'labels' => [['name' => 'Bug']]],
+		]);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertTrue($result['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_UNKNOWN_ACTION, $result['reason']);
 	}
 
 	// ---- issue intake -----------------------------------------------------
