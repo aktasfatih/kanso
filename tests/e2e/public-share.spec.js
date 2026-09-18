@@ -1045,3 +1045,120 @@ test.describe('Public link expiry', () => {
 		}
 	})
 })
+
+// Tile description excerpts are PLAIN TEXT (#10605). The tile used to interpolate
+// the raw markdown SOURCE, so every construct leaked as syntax — and an embedded
+// image was the worst case: its inline-attachment URL is longer than the whole
+// 240-char budget, so a card with a screenshot showed a wall of path and none of
+// its prose. The excerpt is now flattened through markdownToPlainText() (the same
+// markdown-it instance the detail view renders with), images dropped entirely,
+// and only THEN truncated — truncating first would let a stripped-away URL keep
+// eating the budget.
+test.describe('Public board tiles excerpt the description as plain text', () => {
+	// A true anonymous reader. Without this opt-out the page loads under the
+	// shared admin storageState and these assertions pass for the wrong reason.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	const IMAGE_TITLE = 'Card with a screenshot in the middle'
+	const IMAGE_ONLY_TITLE = 'Card that is nothing but a screenshot'
+	const MARKUP_TITLE = 'Card with mixed markdown'
+	const LONG_TITLE = 'Card with a screenshot and long prose'
+
+	// 260 chars of prose after the image, so the excerpt must truncate — and can
+	// only do so at 240 chars of PROSE if the image was stripped first.
+	const LONG_PROSE = 'PROSE_HEAD_10605 ' + 'the deploy notes go on and on. '.repeat(9)
+
+	let boardId = 0
+	let token = ''
+	let imageMarkdown = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Excerpt E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+
+		const imageCard = (await api('POST', '/cards', { stackId, title: IMAGE_TITLE })).body.id
+		// The exact shape a pasted image gets (cardAttachmentInlineUrl); the file
+		// itself need not exist — the tile must never render or fetch it.
+		imageMarkdown = `![image.png](/apps/kanso/api/cards/${imageCard}/attachments/42/inline)`
+		expect((await api('PATCH', `/cards/${imageCard}`, {
+			description: `Before the shot.\n\n${imageMarkdown}\n\nAfter the shot.`,
+		})).status).toBe(200)
+
+		const imageOnly = (await api('POST', '/cards', { stackId, title: IMAGE_ONLY_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${imageOnly}`, { description: imageMarkdown })).status).toBe(200)
+
+		const markupCard = (await api('POST', '/cards', { stackId, title: MARKUP_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${markupCard}`, {
+			description: '# HEADING_10605\n\n**BOLD_10605** and [LINK_LABEL_10605](https://example.invalid/a/very/long/url/nobody/wants/to/read)\n\n- ITEM_10605\n\n`CODE_10605`',
+		})).status).toBe(200)
+
+		const longCard = (await api('POST', '/cards', { stackId, title: LONG_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${longCard}`, {
+			description: `${imageMarkdown}\n\n${LONG_PROSE}`,
+		})).status).toBe(200)
+
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('an image is dropped and the surrounding prose survives', async ({ page }) => {
+		// The payload still ships the raw markdown (deliberately out of scope here):
+		// the stripping is a rendering contract, so pin that the source really does
+		// reach the browser, or the tile assertion could pass vacuously on a server
+		// that had already stripped it.
+		const payload = await fetchPublic(token)
+		expect(payload.status).toBe(200)
+		const raw = payload.body.cards.find((c) => c.title === IMAGE_TITLE).description
+		expect(raw).toContain(imageMarkdown)
+
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Excerpt E2E')
+
+		const desc = page.locator('.public-card').filter({ hasText: IMAGE_TITLE }).locator('.public-card__desc')
+		await expect(desc).toHaveText('Before the shot. After the shot.')
+		// No markdown syntax, no URL, and no empty brackets left behind.
+		await expect(desc).not.toContainText('![')
+		await expect(desc).not.toContainText('attachments')
+		await expect(desc).not.toContainText('image.png')
+		await expect(desc).not.toContainText('()')
+		// …and the tile draws no image either — a tile is text.
+		await expect(page.locator('.public-card').filter({ hasText: IMAGE_TITLE }).locator('img')).toHaveCount(0)
+	})
+
+	test('a description that is only an image renders no excerpt at all', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: IMAGE_ONLY_TITLE })
+		await expect(tile).toBeVisible()
+		// Absent, not an empty paragraph with stray punctuation in it.
+		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+	})
+
+	test('bold, links, headings, lists and code read as text, not source', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const desc = page.locator('.public-card').filter({ hasText: MARKUP_TITLE }).locator('.public-card__desc')
+		await expect(desc).toHaveText('HEADING_10605 BOLD_10605 and LINK_LABEL_10605 ITEM_10605 CODE_10605')
+		// The source characters themselves are gone, the link target included.
+		await expect(desc).not.toContainText('**')
+		await expect(desc).not.toContainText('#')
+		await expect(desc).not.toContainText('`')
+		await expect(desc).not.toContainText('example.invalid')
+		// Plain text, not rendered HTML: the tile is interpolation, never v-html.
+		await expect(desc.locator('strong, a, h1, li, code')).toHaveCount(0)
+	})
+
+	test('truncation applies to the stripped text, not the raw source', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const desc = page.locator('.public-card').filter({ hasText: LONG_TITLE }).locator('.public-card__desc')
+		const text = await desc.textContent()
+		// 240 chars of prose + the ellipsis. Truncating the RAW source instead would
+		// have spent ~60 of those characters on the image URL, so this length only
+		// comes out right when the strip runs first.
+		expect(text).toBe(LONG_PROSE.slice(0, 240) + '…')
+		expect(text.startsWith('PROSE_HEAD_10605')).toBe(true)
+		expect(text).not.toContain('attachments')
+	})
+})
