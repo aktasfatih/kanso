@@ -1046,6 +1046,202 @@ test.describe('Public link expiry', () => {
 	})
 })
 
+// Tile description excerpts are PLAIN TEXT (#10605). The tile used to interpolate
+// the raw markdown SOURCE, so every construct leaked as syntax — and an embedded
+// image was the worst case: its inline-attachment URL is longer than the whole
+// 240-char budget, so a card with a screenshot showed a wall of path and none of
+// its prose. The excerpt is now flattened through flattenMarkdown() (the same
+// markdown-it instance the detail view renders with), images dropped entirely,
+// and only THEN truncated — truncating first would let a stripped-away URL keep
+// eating the budget.
+//
+// Dropping the image left one hole: a description that is ONLY a picture flattens
+// to '', so the tile rendered title-and-meta and read as a card with no
+// description at all. Those tiles now carry an "Image" marker in the meta row —
+// a marker, never a thumbnail: tile height has to stay predictable while scanning
+// a column, and every drawn image would be another anonymous request through the
+// token-gated attachment route.
+test.describe('Public board tiles excerpt the description as plain text', () => {
+	// A true anonymous reader. Without this opt-out the page loads under the
+	// shared admin storageState and these assertions pass for the wrong reason.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	const IMAGE_TITLE = 'Card with a screenshot in the middle'
+	const IMAGE_ONLY_TITLE = 'Card that is nothing but a screenshot'
+	const MARKUP_TITLE = 'Card with mixed markdown'
+	const LONG_TITLE = 'Card with a screenshot and long prose'
+	const FENCE_TITLE = 'Card with image syntax inside a code fence'
+	const REF_IMAGE_TITLE = 'Card that is only a reference-style picture'
+	const NO_DESC_TITLE = 'Card with no description whatsoever'
+
+	// 260 chars of prose after the image, so the excerpt must truncate — and can
+	// only do so at 240 chars of PROSE if the image was stripped first.
+	const LONG_PROSE = 'PROSE_HEAD_10605 ' + 'the deploy notes go on and on. '.repeat(9)
+
+	let boardId = 0
+	let token = ''
+	let imageMarkdown = ''
+	let imageCardId = 0
+	// The same image markdown AS AN ANONYMOUS VISITOR RECEIVES IT (#152). The
+	// public payload re-points every inline src at the token-gated route
+	// (PublicShareService::rewriteInlineImages), so the source string that
+	// actually reaches the tile is this one, not `imageMarkdown`. Anything
+	// asserting on the raw source a public visitor sees must use this.
+	let publicImageMarkdown = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Excerpt E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+
+		const imageCard = (await api('POST', '/cards', { stackId, title: IMAGE_TITLE })).body.id
+		imageCardId = imageCard
+		// The exact shape a pasted image gets (cardAttachmentInlineUrl); the file
+		// itself need not exist — the tile must never render or fetch it.
+		imageMarkdown = `![image.png](/apps/kanso/api/cards/${imageCard}/attachments/42/inline)`
+		expect((await api('PATCH', `/cards/${imageCard}`, {
+			description: `Before the shot.\n\n${imageMarkdown}\n\nAfter the shot.`,
+		})).status).toBe(200)
+
+		const imageOnly = (await api('POST', '/cards', { stackId, title: IMAGE_ONLY_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${imageOnly}`, { description: imageMarkdown })).status).toBe(200)
+
+		const markupCard = (await api('POST', '/cards', { stackId, title: MARKUP_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${markupCard}`, {
+			description: '# HEADING_10605\n\n**BOLD_10605** and [LINK_LABEL_10605](https://example.invalid/a/very/long/url/nobody/wants/to/read)\n\n- ITEM_10605\n\n`CODE_10605`',
+		})).status).toBe(200)
+
+		const longCard = (await api('POST', '/cards', { stackId, title: LONG_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${longCard}`, {
+			description: `${imageMarkdown}\n\n${LONG_PROSE}`,
+		})).status).toBe(200)
+
+		// Image SYNTAX inside a fence is code, not an image: markdown-it emits no
+		// image token for it, so it must not claim the tile holds a picture. This
+		// is the case a `![` regex gets wrong.
+		const fenceCard = (await api('POST', '/cards', { stackId, title: FENCE_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${fenceCard}`, {
+			description: '```\n' + imageMarkdown + '\n```',
+		})).status).toBe(200)
+
+		// A reference-style image IS a real image — and the case a
+		// `!\[..\]\(..\)` regex misses, drift in the other direction. It flattens
+		// to '' like any other image, so it must get the marker.
+		const refCard = (await api('POST', '/cards', { stackId, title: REF_IMAGE_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${refCard}`, {
+			description: `![shot][shot-ref]\n\n[shot-ref]: /apps/kanso/api/cards/${refCard}/attachments/42/inline`,
+		})).status).toBe(200)
+
+		// No description at all — the tile an image-only card must stay
+		// distinguishable from, and which must gain nothing from this change.
+		await api('POST', '/cards', { stackId, title: NO_DESC_TITLE })
+
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+		expect(token).toBeTruthy()
+		publicImageMarkdown = `![image.png](/apps/kanso/api/public/${token}/cards/${imageCardId}/attachments/42/inline)`
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	test('an image is dropped and the surrounding prose survives', async ({ page }) => {
+		// The payload still ships the raw markdown (deliberately out of scope here):
+		// the stripping is a rendering contract, so pin that the source really does
+		// reach the browser, or the tile assertion could pass vacuously on a server
+		// that had already stripped it. The src is the token-gated one (#152) —
+		// still unstripped image SYNTAX, which is all this guard is about.
+		const payload = await fetchPublic(token)
+		expect(payload.status).toBe(200)
+		const raw = payload.body.cards.find((c) => c.title === IMAGE_TITLE).description
+		expect(raw).toContain(publicImageMarkdown)
+
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-board__title')).toHaveText('Public Excerpt E2E')
+
+		const desc = page.locator('.public-card').filter({ hasText: IMAGE_TITLE }).locator('.public-card__desc')
+		await expect(desc).toHaveText('Before the shot. After the shot.')
+		// No markdown syntax, no URL, and no empty brackets left behind.
+		await expect(desc).not.toContainText('![')
+		await expect(desc).not.toContainText('attachments')
+		await expect(desc).not.toContainText('image.png')
+		await expect(desc).not.toContainText('()')
+		// …and the tile draws no image either — a tile is text.
+		const tile = page.locator('.public-card').filter({ hasText: IMAGE_TITLE })
+		await expect(tile.locator('img')).toHaveCount(0)
+		// The marker is for tiles that would otherwise read as empty. This one has
+		// its prose, so it says nothing about the picture — intentionally.
+		await expect(tile.locator('.public-card__image')).toHaveCount(0)
+	})
+
+	test('a description that is only an image is marked, not left looking empty', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: IMAGE_ONLY_TITLE })
+		await expect(tile).toBeVisible()
+		// Absent, not an empty paragraph with stray punctuation in it.
+		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+		// Instead the meta row — the same row that carries Urgent / due / checklist
+		// — says there is a picture in here, without drawing it.
+		await expect(tile.locator('.public-card__meta .public-card__image')).toHaveText('Image')
+		await expect(tile.locator('img')).toHaveCount(0)
+	})
+
+	test('a reference-style image is a real image and is marked too', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: REF_IMAGE_TITLE })
+		await expect(tile).toBeVisible()
+		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+		// Only a parser knows this is an image; the marker comes from the same
+		// token walk that drops it, so the two can never disagree.
+		await expect(tile.locator('.public-card__image')).toHaveText('Image')
+	})
+
+	test('image syntax inside a code fence is code, and claims no picture', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: FENCE_TITLE })
+		await expect(tile).toBeVisible()
+		// The fence is the card's text, so it excerpts as code… (the src inside it
+		// is the token-gated rewrite, #152 — rewriteInlineImages runs over the
+		// whole description string, fenced code included.)
+		await expect(tile.locator('.public-card__desc')).toHaveText(publicImageMarkdown)
+		// …and there is no image anywhere in this card. A `![` regex would have
+		// counted one.
+		await expect(tile.locator('.public-card__image')).toHaveCount(0)
+	})
+
+	test('a card with no description at all is unchanged: no excerpt, no marker', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: NO_DESC_TITLE })
+		await expect(tile).toBeVisible()
+		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+		await expect(tile.locator('.public-card__image')).toHaveCount(0)
+	})
+
+	test('bold, links, headings, lists and code read as text, not source', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const desc = page.locator('.public-card').filter({ hasText: MARKUP_TITLE }).locator('.public-card__desc')
+		await expect(desc).toHaveText('HEADING_10605 BOLD_10605 and LINK_LABEL_10605 ITEM_10605 CODE_10605')
+		// The source characters themselves are gone, the link target included.
+		await expect(desc).not.toContainText('**')
+		await expect(desc).not.toContainText('#')
+		await expect(desc).not.toContainText('`')
+		await expect(desc).not.toContainText('example.invalid')
+		// Plain text, not rendered HTML: the tile is interpolation, never v-html.
+		await expect(desc.locator('strong, a, h1, li, code')).toHaveCount(0)
+	})
+
+	test('truncation applies to the stripped text, not the raw source', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const desc = page.locator('.public-card').filter({ hasText: LONG_TITLE }).locator('.public-card__desc')
+		const text = await desc.textContent()
+		// 240 chars of prose + the ellipsis. Truncating the RAW source instead would
+		// have spent ~60 of those characters on the image URL, so this length only
+		// comes out right when the strip runs first.
+		expect(text).toBe(LONG_PROSE.slice(0, 240) + '…')
+		expect(text.startsWith('PROSE_HEAD_10605')).toBe(true)
+		expect(text).not.toContain('attachments')
+	})
+})
+
 // Images embedded in a shared card (#152 / GitHub #152). An image pasted into a
 // description is stored as the AUTHENTICATED inline-attachment path, which needs
 // a session — so a public-share visitor saw a broken-image box on a board that

@@ -315,6 +315,92 @@ export function renderMarkdown(src, options = {}) {
 }
 
 /**
+ * Flatten a markdown source string to plain text, for a text-only excerpt
+ * (public board tiles). NOT a renderer: the output carries no markup at all, so
+ * it is interpolated as text, never v-html.
+ *
+ * It walks the SAME markdown-it instance's token stream as {@see renderMarkdown}
+ * rather than running a second set of regexes over the source — a regex strip
+ * would inevitably drift from what the renderer actually understands (nested
+ * emphasis, reference links, our own mention/card-ref rules, code fences), and
+ * the two would disagree about the same description.
+ *
+ * Constructs collapse to their readable text: emphasis/strikethrough to the
+ * words, `[label](url)` to the label, headings to the heading text, lists to the
+ * item text, code (inline and fenced) to the code's own text. **Images are
+ * dropped entirely** — alt text included: a tile excerpt is a text summary, and
+ * an alt of "image.png" is noise, while the URL is a wall of characters that
+ * eats the whole excerpt.
+ *
+ * Block boundaries become a single space, and all runs of whitespace collapse,
+ * so the result is one flat line ready to be truncated. Truncation MUST happen
+ * on `text`, not on the raw source — otherwise a stripped-away image URL still
+ * consumes the character budget.
+ *
+ * `hasImage` reports whether the walk actually met an image token, so a caller
+ * can tell "no description worth showing" apart from "a description that is
+ * nothing but a picture" (the tile marker, #10605). It comes from the SAME walk
+ * for the same reason the flattening does: a `![` regex would disagree with the
+ * flattener on reference-style images (which it would miss) and on image syntax
+ * inside a code fence (which it would wrongly count), and the two answers about
+ * one description have to agree.
+ *
+ * @param {string} src Raw markdown string (user-supplied, untrusted)
+ * @returns {{text: string, hasImage: boolean}} Plain text (whitespace-collapsed
+ *   and trimmed, '' if empty) plus whether the source contained a real image.
+ */
+export function flattenMarkdown(src) {
+	if (!src) return { text: '', hasImage: false }
+
+	const out = []
+	let hasImage = false
+
+	const walkInline = (children) => {
+		for (const token of children) {
+			switch (token.type) {
+			case 'image':
+				// Dropped whole — do NOT descend into the alt-text children.
+				hasImage = true
+				break
+			case 'text':
+			case 'text_special':
+			case 'code_inline':
+				out.push(token.content)
+				break
+			case 'kanso_mention':
+				out.push('@' + token.content)
+				break
+			case 'kanso_cardref':
+				out.push(token.content)
+				break
+			case 'softbreak':
+			case 'hardbreak':
+				out.push(' ')
+				break
+			default:
+				// Markup-only tokens (link_open, strong_close, …) contribute
+				// nothing themselves; their text lives in sibling text tokens.
+				if (token.children) walkInline(token.children)
+			}
+		}
+	}
+
+	for (const token of md.parse(String(src), {})) {
+		if (token.type === 'inline') {
+			walkInline(token.children || [])
+		} else if (token.type === 'fence' || token.type === 'code_block') {
+			out.push(token.content)
+		} else {
+			// A block boundary (paragraph/list-item/heading open or close, hr):
+			// keep the words on either side from running together.
+			out.push(' ')
+		}
+	}
+
+	return { text: out.join('').replace(/\s+/g, ' ').trim(), hasImage }
+}
+
+/**
  * Build the `refs` map {@see renderMarkdown} expects from a board's card
  * summaries and prefix (both already in the TanStack Query cache). Keys are the
  * uppercase `PREFIX-<boardSeq>` human id; values carry the numeric id + title.

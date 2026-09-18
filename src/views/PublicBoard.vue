@@ -48,8 +48,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="card.humanId" class="public-card__id">{{ card.humanId }}</span>
 							<span class="public-card__title">{{ card.title }}</span>
 						</div>
-						<p v-if="card.description" class="public-card__desc">{{ truncate(card.description) }}</p>
+						<p v-if="cardExcerpts[card.id]" class="public-card__desc">{{ cardExcerpts[card.id] }}</p>
 						<div class="public-card__meta">
+							<span v-if="cardImageOnly[card.id]" class="public-card__image">{{ t('kanso', 'Image') }}</span>
 							<span v-if="card.priority >= 4" class="public-card__prio">{{ t('kanso', 'Urgent') }}</span>
 							<span v-if="card.duedate" class="public-card__due">{{ formatDate(card.duedate) }}</span>
 							<span v-if="checklistEnabled && card.checklist.total > 0" class="public-card__check">
@@ -213,7 +214,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
-import { renderMarkdown } from '../services/markdown.js'
+import { renderMarkdown, flattenMarkdown } from '../services/markdown.js'
 
 export default {
 	name: 'PublicBoard',
@@ -243,6 +244,42 @@ export default {
 				(map[card.stackId] = map[card.stackId] || []).push(card)
 			}
 			return map
+		},
+		// What a tile says about its description (#10605), keyed by card id. A tile
+		// is a text summary, so the description is flattened to PLAIN TEXT first —
+		// markdown source used to be printed verbatim, and an embedded image's URL
+		// ate the whole excerpt. Images are dropped entirely (see flattenMarkdown);
+		// truncation runs on the stripped text, never the raw source, or a
+		// stripped-away URL would still consume the character budget.
+		//
+		// A description that is nothing but an image flattens to '', which would
+		// leave the tile looking exactly like a card with no description at all —
+		// so those get a small marker in the meta row instead. Deliberately ONLY
+		// when the excerpt is empty: the marker exists to stop a tile reading as
+		// blank, not to inventory what a card contains, so prose plus an image
+		// shows the prose and no marker. The image itself is never drawn: tile
+		// height has to stay predictable while scanning a column, and every tile
+		// image would be another anonymous request through the token-gated
+		// attachment route.
+		tileDescriptions() {
+			const excerpts = {}
+			const imageOnly = {}
+			for (const card of this.cards) {
+				if (!card.description) continue
+				const { text, hasImage } = flattenMarkdown(card.description)
+				if (text) {
+					excerpts[card.id] = this.truncate(text)
+				} else if (hasImage) {
+					imageOnly[card.id] = true
+				}
+			}
+			return { excerpts, imageOnly }
+		},
+		cardExcerpts() {
+			return this.tileDescriptions.excerpts
+		},
+		cardImageOnly() {
+			return this.tileDescriptions.imageOnly
 		},
 		// The open card's description rendered as sanitized markdown HTML. No refs
 		// map is passed: the public payload carries no card cross-reference data, so

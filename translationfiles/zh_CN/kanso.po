@@ -3020,6 +3020,10 @@ msgstr "小时"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: src/views/PublicBoard.vue
+msgid "Image"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "IMAP server"
 msgstr ""
