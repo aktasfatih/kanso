@@ -1050,10 +1050,17 @@ test.describe('Public link expiry', () => {
 // the raw markdown SOURCE, so every construct leaked as syntax — and an embedded
 // image was the worst case: its inline-attachment URL is longer than the whole
 // 240-char budget, so a card with a screenshot showed a wall of path and none of
-// its prose. The excerpt is now flattened through markdownToPlainText() (the same
+// its prose. The excerpt is now flattened through flattenMarkdown() (the same
 // markdown-it instance the detail view renders with), images dropped entirely,
 // and only THEN truncated — truncating first would let a stripped-away URL keep
 // eating the budget.
+//
+// Dropping the image left one hole: a description that is ONLY a picture flattens
+// to '', so the tile rendered title-and-meta and read as a card with no
+// description at all. Those tiles now carry an "Image" marker in the meta row —
+// a marker, never a thumbnail: tile height has to stay predictable while scanning
+// a column, and every drawn image would be another anonymous request through the
+// token-gated attachment route.
 test.describe('Public board tiles excerpt the description as plain text', () => {
 	// A true anonymous reader. Without this opt-out the page loads under the
 	// shared admin storageState and these assertions pass for the wrong reason.
@@ -1063,6 +1070,9 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 	const IMAGE_ONLY_TITLE = 'Card that is nothing but a screenshot'
 	const MARKUP_TITLE = 'Card with mixed markdown'
 	const LONG_TITLE = 'Card with a screenshot and long prose'
+	const FENCE_TITLE = 'Card with image syntax inside a code fence'
+	const REF_IMAGE_TITLE = 'Card that is only a reference-style picture'
+	const NO_DESC_TITLE = 'Card with no description whatsoever'
 
 	// 260 chars of prose after the image, so the excerpt must truncate — and can
 	// only do so at 240 chars of PROSE if the image was stripped first.
@@ -1097,6 +1107,26 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 			description: `${imageMarkdown}\n\n${LONG_PROSE}`,
 		})).status).toBe(200)
 
+		// Image SYNTAX inside a fence is code, not an image: markdown-it emits no
+		// image token for it, so it must not claim the tile holds a picture. This
+		// is the case a `![` regex gets wrong.
+		const fenceCard = (await api('POST', '/cards', { stackId, title: FENCE_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${fenceCard}`, {
+			description: '```\n' + imageMarkdown + '\n```',
+		})).status).toBe(200)
+
+		// A reference-style image IS a real image — and the case a
+		// `!\[..\]\(..\)` regex misses, drift in the other direction. It flattens
+		// to '' like any other image, so it must get the marker.
+		const refCard = (await api('POST', '/cards', { stackId, title: REF_IMAGE_TITLE })).body.id
+		expect((await api('PATCH', `/cards/${refCard}`, {
+			description: `![shot][shot-ref]\n\n[shot-ref]: /apps/kanso/api/cards/${refCard}/attachments/42/inline`,
+		})).status).toBe(200)
+
+		// No description at all — the tile an image-only card must stay
+		// distinguishable from, and which must gain nothing from this change.
+		await api('POST', '/cards', { stackId, title: NO_DESC_TITLE })
+
 		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
 		expect(token).toBeTruthy()
 	})
@@ -1126,15 +1156,52 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 		await expect(desc).not.toContainText('image.png')
 		await expect(desc).not.toContainText('()')
 		// …and the tile draws no image either — a tile is text.
-		await expect(page.locator('.public-card').filter({ hasText: IMAGE_TITLE }).locator('img')).toHaveCount(0)
+		const tile = page.locator('.public-card').filter({ hasText: IMAGE_TITLE })
+		await expect(tile.locator('img')).toHaveCount(0)
+		// The marker is for tiles that would otherwise read as empty. This one has
+		// its prose, so it says nothing about the picture — intentionally.
+		await expect(tile.locator('.public-card__image')).toHaveCount(0)
 	})
 
-	test('a description that is only an image renders no excerpt at all', async ({ page }) => {
+	test('a description that is only an image is marked, not left looking empty', async ({ page }) => {
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		const tile = page.locator('.public-card').filter({ hasText: IMAGE_ONLY_TITLE })
 		await expect(tile).toBeVisible()
 		// Absent, not an empty paragraph with stray punctuation in it.
 		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+		// Instead the meta row — the same row that carries Urgent / due / checklist
+		// — says there is a picture in here, without drawing it.
+		await expect(tile.locator('.public-card__meta .public-card__image')).toHaveText('Image')
+		await expect(tile.locator('img')).toHaveCount(0)
+	})
+
+	test('a reference-style image is a real image and is marked too', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: REF_IMAGE_TITLE })
+		await expect(tile).toBeVisible()
+		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+		// Only a parser knows this is an image; the marker comes from the same
+		// token walk that drops it, so the two can never disagree.
+		await expect(tile.locator('.public-card__image')).toHaveText('Image')
+	})
+
+	test('image syntax inside a code fence is code, and claims no picture', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: FENCE_TITLE })
+		await expect(tile).toBeVisible()
+		// The fence is the card's text, so it excerpts as code…
+		await expect(tile.locator('.public-card__desc')).toHaveText(imageMarkdown)
+		// …and there is no image anywhere in this card. A `![` regex would have
+		// counted one.
+		await expect(tile.locator('.public-card__image')).toHaveCount(0)
+	})
+
+	test('a card with no description at all is unchanged: no excerpt, no marker', async ({ page }) => {
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		const tile = page.locator('.public-card').filter({ hasText: NO_DESC_TITLE })
+		await expect(tile).toBeVisible()
+		await expect(tile.locator('.public-card__desc')).toHaveCount(0)
+		await expect(tile.locator('.public-card__image')).toHaveCount(0)
 	})
 
 	test('bold, links, headings, lists and code read as text, not source', async ({ page }) => {

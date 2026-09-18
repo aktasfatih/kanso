@@ -318,22 +318,33 @@ export function renderMarkdown(src, options = {}) {
  *
  * Block boundaries become a single space, and all runs of whitespace collapse,
  * so the result is one flat line ready to be truncated. Truncation MUST happen
- * on this output, not on the raw source — otherwise a stripped-away image URL
- * still consumes the character budget.
+ * on `text`, not on the raw source — otherwise a stripped-away image URL still
+ * consumes the character budget.
+ *
+ * `hasImage` reports whether the walk actually met an image token, so a caller
+ * can tell "no description worth showing" apart from "a description that is
+ * nothing but a picture" (the tile marker, #10605). It comes from the SAME walk
+ * for the same reason the flattening does: a `![` regex would disagree with the
+ * flattener on reference-style images (which it would miss) and on image syntax
+ * inside a code fence (which it would wrongly count), and the two answers about
+ * one description have to agree.
  *
  * @param {string} src Raw markdown string (user-supplied, untrusted)
- * @returns {string} Plain text, whitespace-collapsed and trimmed ('' if empty)
+ * @returns {{text: string, hasImage: boolean}} Plain text (whitespace-collapsed
+ *   and trimmed, '' if empty) plus whether the source contained a real image.
  */
-export function markdownToPlainText(src) {
-	if (!src) return ''
+export function flattenMarkdown(src) {
+	if (!src) return { text: '', hasImage: false }
 
 	const out = []
+	let hasImage = false
 
 	const walkInline = (children) => {
 		for (const token of children) {
 			switch (token.type) {
 			case 'image':
 				// Dropped whole — do NOT descend into the alt-text children.
+				hasImage = true
 				break
 			case 'text':
 			case 'text_special':
@@ -370,7 +381,7 @@ export function markdownToPlainText(src) {
 		}
 	}
 
-	return out.join('').replace(/\s+/g, ' ').trim()
+	return { text: out.join('').replace(/\s+/g, ' ').trim(), hasImage }
 }
 
 /**
