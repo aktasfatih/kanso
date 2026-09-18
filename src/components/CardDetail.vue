@@ -6841,17 +6841,27 @@ async function handleToggleProject(projectId) {
 .card-modal__status-wrap {
 	align-items: center;
 }
-/* Title row: the reference chip sits ahead of the title, which takes the rest. */
+/* Title row: the reference chip sits ahead of the title, which takes the rest.
+ *
+ * The chip and the title are vertically CENTRED against each other (#10523).
+ * This used to top-align the row and push the chip down with a fixed
+ * `margin-top: 6px`, computed against the chip's declared `height: 20px` — but
+ * the chip is a <button>, so Nextcloud core's global button min-height
+ * (--default-clickable-area) wins and it actually renders ~34px tall. The nudge
+ * was therefore ~8px off on a one-line title, and a fixed nudge is wrong by
+ * construction anyway: it can only ever suit one line count, and the mobile
+ * breakpoint below shrinks the title to 1.2rem on top of that.
+ *
+ * Centring is the rule for EVERY line count — the chip does not flip back to
+ * top-aligned for a 3+ line title, so the pairing reads the same everywhere. */
 .card-modal__title-row {
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	gap: 8px;
 	min-width: 0;
 }
 .card-modal__title-row .card-modal__ref {
 	flex: 0 0 auto;
-	/* Optically centre the 20px chip on the title's first line (1.5rem × 1.25). */
-	margin-top: 6px;
 }
 .card-modal__title-row .card-modal__title,
 .card-modal__title-row .card-modal__title-input {

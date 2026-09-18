@@ -13,6 +13,8 @@ use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Label;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\Forge\ForgeEvent;
@@ -52,6 +54,24 @@ use OCP\Security\ISecureRandom;
  * goes through CardService::move so sort keys, the transaction and the change
  * row all fire.
  *
+ * Label mirroring (#10491): an `issues`/`labeled` delivery adds the board's
+ * label of that name to every linked card, and `unlabeled` removes it. Matching
+ * is by TITLE, case-insensitively, against the labels this board already
+ * defines - a name with no counterpart here is a silent no-op
+ * ({@see self::REASON_NO_LABEL_MATCH}). A board label is NEVER auto-created
+ * from a delivery: minting one is a MANAGE operation, this endpoint is
+ * unauthenticated and acts as the board owner, so auto-creation would let
+ * anyone with push access to the linked repo invent labels on the board.
+ * Deliberately issues-only: pull-request labels are not mirrored. The mirror
+ * lives here rather than in a subclass because nothing about it is
+ * forge-specific, but only GitHub deliveries currently reach it - Forgejo
+ * spells a label change as `label_updated` with no per-label delta, so its
+ * normalizer leaves `changedLabel` null (see {@see ForgejoWebhookService}).
+ * Accepted cost: a sender who can label and unlabel a linked issue at will can
+ * churn one change row (and one realtime push) per linked card per action.
+ * Both directions are idempotent, so a redelivery is free; alternating is
+ * inherent to mirroring anything, and the endpoint is HMAC-gated per board.
+ *
  * Issue intake (#3752, opt-in): when a board configures an intake stack, an
  * `issues`/`opened` delivery for an issue not yet linked anywhere on the board
  * auto-creates a LINK-ONLY card there (title = issue title, the issue attached
@@ -87,6 +107,14 @@ abstract class AbstractForgeWebhookService {
 	protected const MAX_TITLE_REFS = 5;
 
 	/**
+	 * Longest delivered label name still worth comparing (#10491): a stored
+	 * board-label title can never exceed it, so anything longer cannot match and
+	 * is rejected before it is case-folded or compared at all. Pinned to the
+	 * write-side cap so the two cannot drift.
+	 */
+	protected const MAX_LABEL_NAME_LENGTH = LabelService::MAX_TITLE_LENGTH;
+
+	/**
 	 * Why a delivery did not move (or create) anything. A silent `handled: false`
 	 * is undiagnosable, and the forge's own delivery log - already where a repo
 	 * admin looks - is the natural place for the answer. These stay inside the
@@ -98,6 +126,17 @@ abstract class AbstractForgeWebhookService {
 	/** Neither the head branch nor any title reference named a card on this board. */
 	public const REASON_NO_CARD_MATCH = 'no_card_match';
 	public const REASON_NO_LINK_MATCH = 'no_link_match';
+	/**
+	 * A label add/remove naming a label this board does not define (#10491).
+	 * Carries no board content itself - no title, no id, not even the name that
+	 * missed. It is nonetheless the one reason whose presence/absence is a
+	 * one-bit answer ABOUT the board ("a label titled <what you sent> exists
+	 * here"), guessable one delivery at a time by someone holding the board's
+	 * webhook secret. That is a deliberate trade for a diagnosable delivery log:
+	 * without it, a board that simply spells its labels differently looks
+	 * identical to a broken hook.
+	 */
+	public const REASON_NO_LABEL_MATCH = 'no_label_match';
 	public const REASON_UNKNOWN_ACTION = 'unknown_action';
 	public const REASON_NO_TARGET_STACK = 'no_target_stack';
 	public const REASON_MOVE_BLOCKED = 'move_blocked';
@@ -118,6 +157,8 @@ abstract class AbstractForgeWebhookService {
 		protected CardVisibilityScope $visibilityScope,
 		protected ISecureRandom $secureRandom,
 		protected IURLGenerator $urlGenerator,
+		protected LabelService $labelService,
+		protected LabelMapper $labelMapper,
 	) {
 	}
 
@@ -291,6 +332,11 @@ abstract class AbstractForgeWebhookService {
 	 * A pull-request event: the card is named by the PR's `kanso-<id>` head
 	 * branch; the PR is recorded as a link and the card auto-moved per action.
 	 *
+	 * Labels are deliberately NOT mirrored here (#10491): a PR's labels describe
+	 * the change under review, not the card, and mirroring them would let a
+	 * branch name drag a board label onto work it does not describe. The delivery
+	 * still carries `changedLabel` - this path simply ignores it.
+	 *
 	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, reason?: string}
 	 */
 	protected function handlePullRequestEvent(Board $board, ForgeEvent $event): array {
@@ -432,6 +478,10 @@ abstract class AbstractForgeWebhookService {
 	 * the board configured an intake stack (and the issue passes the optional
 	 * label filter), a link-only card is auto-created for it.
 	 *
+	 * A `labeled`/`unlabeled` delivery mirrors that one label onto every matched
+	 * card (#10491) - resolved ONCE per delivery, not once per card, so a busy
+	 * issue costs one label read however many cards carry it.
+	 *
 	 * @return array{handled: bool, action?: string, cardId?: int, moved?: bool, created?: bool, reason?: string}
 	 */
 	protected function handleIssueEvent(Board $board, ForgeEvent $event): array {
@@ -447,6 +497,29 @@ abstract class AbstractForgeWebhookService {
 			$this->cacheLinkState($link, $event);
 		}
 
+		// The board label this delivery adds or removes, resolved once (#10491).
+		// $labelOutcome is '' when a mirror will happen (so the auto-move's
+		// `unknown_action` is not reported for a delivery that DID something),
+		// REASON_NO_LABEL_MATCH when the name matches no label of this board, and
+		// null when this is not a label delivery at all - then the auto-move's own
+		// reason stands, exactly as before.
+		$targetLabel = null;
+		$labelOutcome = null;
+		if ($this->isLabelAction($event->action)) {
+			try {
+				$targetLabel = $this->findBoardLabel($board->getId(), $event->changedLabel);
+				$labelOutcome = $targetLabel === null ? self::REASON_NO_LABEL_MATCH : '';
+			} catch (\Throwable) {
+				// The label READ failed (a DB error, say). Swallowed like every
+				// other business-level miss - a forge disables a hook that 5xxs -
+				// but NOT reported as REASON_NO_LABEL_MATCH: that would tell the
+				// delivery log "your board has no such label", which is an answer
+				// we do not actually have. The move's own reason stands instead.
+				$targetLabel = null;
+				$labelOutcome = null;
+			}
+		}
+
 		$moved = false;
 		$firstCardId = 0;
 		$lastReason = '';
@@ -459,11 +532,17 @@ abstract class AbstractForgeWebhookService {
 			if ($firstCardId === 0 && $this->isPublicCard($cardId)) {
 				$firstCardId = $cardId;
 			}
+			if ($targetLabel !== null) {
+				$this->applyLabelChange($cardId, $targetLabel->getId(), $event->action, $board->getOwner());
+			}
 			[$cardMoved, $reason] = $this->applyIssueAutoMove($board->getId(), $cardId, $event->action, $board->getOwner());
 			if ($cardMoved) {
 				$moved = true;
 			} else {
-				$lastReason = $reason;
+				// Reachable for a label delivery because no label action is also a
+				// move action - applyIssueAutoMove maps only closed/reopened - so a
+				// mirror never has its outcome hidden behind $moved.
+				$lastReason = $labelOutcome ?? $reason;
 			}
 		}
 
@@ -555,6 +634,66 @@ abstract class AbstractForgeWebhookService {
 			'moved' => false,
 			'created' => true,
 		];
+	}
+
+	// ---- label mirroring (#10491) ------------------------------------------
+
+	/** Whether the delivery's action is a single-label add or remove. */
+	protected function isLabelAction(string $action): bool {
+		return $action === 'labeled' || $action === 'unlabeled';
+	}
+
+	/**
+	 * The label of THIS board whose title matches the delivered name, compared
+	 * case-insensitively after trimming - null when the board defines no such
+	 * label (the silent no-op) or the name is unusable. A failed READ is NOT a
+	 * miss and is left to the caller to distinguish, so it throws.
+	 *
+	 * Resolution is a read, never a create: a label definition is minted only
+	 * through {@see LabelService::create()}, which is MANAGE-gated, and this
+	 * path runs unauthenticated as the board owner. Auto-creating here would
+	 * hand anyone who can push a label to the linked repo the ability to define
+	 * board labels - so an unknown name simply matches nothing.
+	 *
+	 * The name is attacker-controlled free text, so it is length-capped BEFORE
+	 * any case-folding and used for nothing but this comparison.
+	 */
+	protected function findBoardLabel(int $boardId, ?string $name): ?Label {
+		$name = trim($name ?? '');
+		if ($name === '' || mb_strlen($name) > self::MAX_LABEL_NAME_LENGTH) {
+			return null;
+		}
+		$needle = mb_strtolower($name);
+		foreach ($this->labelMapper->findByBoard($boardId) as $label) {
+			if (mb_strtolower(trim($label->getTitle())) === $needle) {
+				return $label;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Mirrors the delivery's single label change onto the card, as the board
+	 * owner and through {@see LabelService} - so the EDIT permission check, the
+	 * card-visibility guard, the cross-board label rejection and the
+	 * `kanso_changes` row (VERB_LABELED / VERB_UNLABELED, with the label title as
+	 * a detail) all fire exactly as they do for a human doing it in the UI.
+	 * Both directions are idempotent, so a redelivery changes nothing.
+	 *
+	 * Best-effort, like every other mutation on this path: a card hidden from the
+	 * owner, or a label deleted between resolution and assignment, is skipped
+	 * rather than failing the delivery.
+	 */
+	protected function applyLabelChange(int $cardId, int $labelId, string $action, string $actorUid): void {
+		try {
+			if ($action === 'labeled') {
+				$this->labelService->assign($cardId, $labelId, $actorUid);
+			} else {
+				$this->labelService->unassign($cardId, $labelId, $actorUid);
+			}
+		} catch (\Throwable) {
+			// Non-critical - the delivery is still accepted.
+		}
 	}
 
 	// ---- shared helpers ----------------------------------------------------

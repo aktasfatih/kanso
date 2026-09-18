@@ -18,6 +18,7 @@ use OCP\AppFramework\Http\Attribute\BruteForceProtection;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
@@ -268,6 +269,81 @@ class PublicShareController extends Controller {
 			['token' => $token, 'pageTitle' => $board->getTitle()],
 			TemplateResponse::RENDER_AS_PUBLIC
 		);
+	}
+
+	/**
+	 * Serves ONE inline image embedded in a shared card's description or comment
+	 * (#152), to an anonymous visitor holding the board's share token.
+	 *
+	 * The authenticated twin ({@see CardAttachmentController::inline()}) resolves
+	 * the reader from the session, so a public-share visitor's `<img>` request
+	 * answered 401 and the picture rendered as a broken box on a board that had
+	 * been deliberately shared. This route swaps the session gate for the TOKEN
+	 * gate and keeps everything else: {@see PublicShareService::getPublicInlineAttachment()}
+	 * refuses any card the token's own payload does not already carry, honours the
+	 * link's expiry, and still serves only the four allow-listed raster mimes.
+	 *
+	 * Response headers mirror the authenticated route exactly - the Content-Type
+	 * is the stored, allow-listed mime (never client-echoed), `inline` disposition,
+	 * and `nosniff` so the browser cannot re-read the bytes as a scriptable type.
+	 *
+	 * Every failure answers the SAME 404 with the same body, so this cannot be used
+	 * to distinguish "wrong token" from "card on another board" from "not an image"
+	 * - it is not an existence oracle for anything.
+	 *
+	 * WHAT IS AND IS NOT THROTTLED, and why the two arms are split. Only a TOKEN
+	 * that fails to resolve registers a brute-force attempt. `#[BruteForceProtection]`
+	 * is a FAILURE COUNTER shared with {@see self::show()} and {@see self::data()}
+	 * under one action name, and `IThrottler` sleeps then 429s the whole ADDRESS
+	 * once ten attempts land inside 30 minutes. Counting a card/attachment miss
+	 * there would hand any EDIT member a remote kill switch for the board: twenty
+	 * `![](…/cards/999999/attachments/1/inline)` references in one description fire
+	 * twenty throttled 404s on every anonymous page load, and the first visitor's
+	 * own browser would 429 them - and everyone else behind that address - straight
+	 * off the board page. A single deleted attachment still referenced by a
+	 * description would do the same, slowly, with nobody attacking anything. The
+	 * counter belongs on the token space, which is the only thing an attacker can
+	 * actually probe; reaching the second arm at all already requires the board's
+	 * real 64-char token. This is the same reasoning recorded on {@see self::data()},
+	 * and it binds harder here because ordinary readers can reach the failure arm.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'kansoPublicShare')]
+	public function inlineAttachment(string $token, int $cardId, int $attachmentId): Http\Response {
+		try {
+			// Arm 1: the token space. Unknown / disabled / rotated / expired all land
+			// here, and only here is the attempt counted.
+			$this->publicShareService->assertTokenValid($token);
+		} catch (DoesNotExistException) {
+			$response = new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
+			$response->throttle(['action' => 'kansoPublicShare']);
+			return $response;
+		}
+
+		try {
+			[$attachment, $bytes] = $this->publicShareService->getPublicInlineAttachment(
+				$token,
+				$cardId,
+				$attachmentId
+			);
+		} catch (DoesNotExistException) {
+			// Arm 2: a real token, but the card/attachment is not part of this share.
+			// Same 404, same body - NOT throttled (see above). Deliberately not a
+			// `\Throwable` catch: the service raises this one type for every refusal,
+			// so a broader catch would only turn a real server fault into a silent
+			// 404 and hide it from the log.
+			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
+		}
+
+		$response = new DataDisplayResponse(
+			$bytes,
+			Http::STATUS_OK,
+			['Content-Type' => $attachment->getMime()]
+		);
+		$response->addHeader('Content-Disposition', 'inline');
+		$response->addHeader('X-Content-Type-Options', 'nosniff');
+		return $response;
 	}
 
 	/**

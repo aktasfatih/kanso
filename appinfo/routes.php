@@ -30,6 +30,17 @@ return [
 		// token is a 404. The {token} is an opaque 64-char alnum string.
 		['name' => 'publicShare#show', 'url' => '/p/{token}', 'verb' => 'GET'],
 		['name' => 'publicShare#data', 'url' => '/api/public/{token}', 'verb' => 'GET'],
+		// The bytes behind an image embedded in a shared card's description or
+		// comment (#152). The authenticated inline route below
+		// (`cardAttachment#inline`) needs a session, so an anonymous visitor got a
+		// broken image on a board that was deliberately shared. This is the SAME
+		// raster-only inline serve, re-gated on the share TOKEN instead of a user:
+		// the token resolves to exactly one board, the card must be one the token's
+		// own payload already carries, the image must be one that card's PUBLIC TEXT
+		// actually embeds (an attachment nobody embedded was never published), and
+		// the board's expiry is honoured. It is therefore never an attachment oracle
+		// - not for another board, and not for the shared board either.
+		['name' => 'publicShare#inlineAttachment', 'url' => '/api/public/{token}/cards/{cardId}/attachments/{attachmentId}/inline', 'verb' => 'GET'],
 
 		// Read-only iCal / ICS feed of a board's card due dates (#3541).
 		// UNAUTHENTICATED: `/feed/{token}.ics` returns a `text/calendar` VCALENDAR

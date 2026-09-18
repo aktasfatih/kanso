@@ -437,6 +437,75 @@ test.describe('Card modal two-column layout', () => {
 		}
 	})
 
+	// #10523 — the human-id reference chip sits to the LEFT of the title and must be
+	// vertically CENTRED against the whole title block, whether the title occupies one
+	// line or wraps. The old rule top-aligned the row and nudged the chip down with a
+	// fixed `margin-top`, which can only ever be right for one particular line count
+	// (and the mobile breakpoint shrinks the title, so it was wrong there too).
+	// Deliberate rule: the chip centres on the ENTIRE title block for ANY line count —
+	// it does not switch to top-aligned for 3+ lines.
+	//
+	// Measured, not eyeballed: compare the two bounding-box vertical centres.
+	async function refVsTitleCentres(page, cardId) {
+		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${cardId}`
+		await page.goto(cardUrl)
+		await expect(page.locator('.card-modal__ref')).toBeVisible({ timeout: 15_000 })
+		const refBox = await page.locator('.card-modal__ref').boundingBox()
+		const titleBox = await page.locator('.card-modal__title').boundingBox()
+		expect(refBox).not.toBeNull()
+		expect(titleBox).not.toBeNull()
+		return {
+			refCentre: refBox.y + refBox.height / 2,
+			titleCentre: titleBox.y + titleBox.height / 2,
+			titleHeight: titleBox.height,
+			refHeight: refBox.height,
+		}
+	}
+
+	test('the reference chip is vertically centred on the title — one line AND two (#10523)', async ({ page }) => {
+		// A short title that cannot wrap, and a long one that certainly does at 1280px.
+		const shortCard = await api.post('/cards', { stackId: state.stackId, title: 'Short title' })
+		const longCard = await api.post('/cards', {
+			stackId: state.stackId,
+			title: 'Realign the reference chip against a card title that wraps onto a second line',
+		})
+		try {
+			await page.setViewportSize({ width: 1280, height: 800 })
+			await ncLogin(page)
+
+			// 1) One-line title: the chip's centre matches the title's centre.
+			const one = await refVsTitleCentres(page, shortCard.id)
+			expect(
+				Math.abs(one.refCentre - one.titleCentre),
+				`one-line: ref centre ${one.refCentre} vs title centre ${one.titleCentre} (title h=${one.titleHeight})`,
+			).toBeLessThanOrEqual(1)
+
+			// 2) Wrapped title: it really did wrap (≈2× the one-line box height), and the
+			//    chip centres on the WHOLE two-line block, not on its first line.
+			const two = await refVsTitleCentres(page, longCard.id)
+			expect(
+				two.titleHeight,
+				`long title did not wrap: h=${two.titleHeight} vs one-line h=${one.titleHeight}`,
+			).toBeGreaterThan(one.titleHeight * 1.6)
+			expect(
+				two.titleHeight,
+				`long title wrapped past two lines: h=${two.titleHeight} vs one-line h=${one.titleHeight}`,
+			).toBeLessThan(one.titleHeight * 2.6)
+			expect(
+				Math.abs(two.refCentre - two.titleCentre),
+				`two-line: ref centre ${two.refCentre} vs title centre ${two.titleCentre} (title h=${two.titleHeight})`,
+			).toBeLessThanOrEqual(1)
+
+			// 3) The row height is still driven by the title — the chip must not have
+			//    inflated it (no regression to row height).
+			const rowBox = await page.locator('.card-modal__title-row').boundingBox()
+			expect(rowBox.height).toBeLessThanOrEqual(two.titleHeight + 1)
+		} finally {
+			await api.delete(`/cards/${shortCard.id}`).catch(() => {})
+			await api.delete(`/cards/${longCard.id}`).catch(() => {})
+		}
+	})
+
 	test('a text-selection drag that ends on the backdrop does NOT close the modal (#3656)', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await ncLogin(page)
