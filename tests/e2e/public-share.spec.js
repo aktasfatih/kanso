@@ -1081,12 +1081,20 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 	let boardId = 0
 	let token = ''
 	let imageMarkdown = ''
+	let imageCardId = 0
+	// The same image markdown AS AN ANONYMOUS VISITOR RECEIVES IT (#152). The
+	// public payload re-points every inline src at the token-gated route
+	// (PublicShareService::rewriteInlineImages), so the source string that
+	// actually reaches the tile is this one, not `imageMarkdown`. Anything
+	// asserting on the raw source a public visitor sees must use this.
+	let publicImageMarkdown = ''
 
 	test.beforeAll(async () => {
 		boardId = (await api('POST', '/boards', { title: 'Public Excerpt E2E' })).body.id
 		const stackId = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
 
 		const imageCard = (await api('POST', '/cards', { stackId, title: IMAGE_TITLE })).body.id
+		imageCardId = imageCard
 		// The exact shape a pasted image gets (cardAttachmentInlineUrl); the file
 		// itself need not exist — the tile must never render or fetch it.
 		imageMarkdown = `![image.png](/apps/kanso/api/cards/${imageCard}/attachments/42/inline)`
@@ -1129,6 +1137,7 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 
 		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
 		expect(token).toBeTruthy()
+		publicImageMarkdown = `![image.png](/apps/kanso/api/public/${token}/cards/${imageCardId}/attachments/42/inline)`
 	})
 
 	test.afterAll(async () => {
@@ -1139,11 +1148,12 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 		// The payload still ships the raw markdown (deliberately out of scope here):
 		// the stripping is a rendering contract, so pin that the source really does
 		// reach the browser, or the tile assertion could pass vacuously on a server
-		// that had already stripped it.
+		// that had already stripped it. The src is the token-gated one (#152) —
+		// still unstripped image SYNTAX, which is all this guard is about.
 		const payload = await fetchPublic(token)
 		expect(payload.status).toBe(200)
 		const raw = payload.body.cards.find((c) => c.title === IMAGE_TITLE).description
-		expect(raw).toContain(imageMarkdown)
+		expect(raw).toContain(publicImageMarkdown)
 
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		await expect(page.locator('.public-board__title')).toHaveText('Public Excerpt E2E')
@@ -1189,8 +1199,10 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		const tile = page.locator('.public-card').filter({ hasText: FENCE_TITLE })
 		await expect(tile).toBeVisible()
-		// The fence is the card's text, so it excerpts as code…
-		await expect(tile.locator('.public-card__desc')).toHaveText(imageMarkdown)
+		// The fence is the card's text, so it excerpts as code… (the src inside it
+		// is the token-gated rewrite, #152 — rewriteInlineImages runs over the
+		// whole description string, fenced code included.)
+		await expect(tile.locator('.public-card__desc')).toHaveText(publicImageMarkdown)
 		// …and there is no image anywhere in this card. A `![` regex would have
 		// counted one.
 		await expect(tile.locator('.public-card__image')).toHaveCount(0)
