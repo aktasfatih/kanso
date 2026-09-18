@@ -103,7 +103,10 @@ your work, on your own Nextcloud, laid out plainly.
   `pull_request` and `issues` events, content type `application/json`) moves a
   card to your Review column when its PR opens and to Done when it merges.
   Closing an issue linked on a card moves that card to Done; reopening it moves
-  the card back to In progress. Opt-in **issue intake**: pick a column in the
+  the card back to In progress. Labelling an issue on GitHub adds the board
+  label of the same name to every card linked to it, and unlabelling takes it
+  back off — a name your board doesn't already define is simply ignored, never
+  created. Opt-in **issue intake**: pick a column in the
   board's webhook settings and every newly opened issue (optionally filtered to
   one label) becomes a linked card there — title plus issue link only, no body
   copy. No credentials, no OAuth. A board can run both webhooks at once; Gitea

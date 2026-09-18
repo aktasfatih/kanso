@@ -1045,3 +1045,203 @@ test.describe('Public link expiry', () => {
 		}
 	})
 })
+
+// Images embedded in a shared card (#152 / GitHub #152). An image pasted into a
+// description is stored as the AUTHENTICATED inline-attachment path, which needs
+// a session — so a public-share visitor saw a broken-image box on a board that
+// had been deliberately shared. The payload now re-points those srcs at a
+// token-gated route, and the route re-checks the token itself.
+test.describe('Public board serves the images embedded in a shared card', () => {
+	// True anonymous reader. Without this opt-out every assertion below runs
+	// under the shared admin session, where the ORIGINAL authenticated src would
+	// have loaded fine and the whole describe would false-pass.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	// A real 48×32 greyscale PNG. Real dimensions, not a 1×1: the assertions read
+	// naturalWidth/naturalHeight, and a 1×1 cannot distinguish "decoded" from
+	// "browser's broken-image placeholder".
+	const PNG_W = 48
+	const PNG_H = 32
+	const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAAAAABxv6TAAAAAFUlEQVR4nGNgGAWjYBSMglEwCjABAAYgAAFBC6YRAAAAAElFTkSuQmCC'
+
+	async function uploadPng(cardId, filename) {
+		const form = new FormData()
+		form.append('file', new Blob([Buffer.from(PNG_B64, 'base64')], { type: 'image/png' }), filename)
+		const r = await fetch(`${API}/cards/${cardId}/attachments`, {
+			method: 'POST',
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: currentAuth },
+			body: form,
+		})
+		if (!r.ok) throw new Error(`upload ${filename} → ${r.status}: ${await r.text()}`)
+		return r.json()
+	}
+
+	let sharedBoardId = 0
+	let otherBoardId = 0
+	let sharedCardId = 0
+	let otherCardId = 0
+	let otherAttachmentId = 0
+	let unembeddedAttachmentId = 0
+	let hiddenCardId = 0
+	let hiddenAttachmentId = 0
+	let shareToken = ''
+
+	test.beforeAll(async () => {
+		// The SHARED board: one card carrying the same image in its description and
+		// in a comment (the comment body is a rendered surface too).
+		sharedBoardId = (await api('POST', '/boards', { title: 'Public Share Images E2E' })).body.id
+		const stackId = (await api('POST', '/stacks', { boardId: sharedBoardId, title: 'To do' })).body.id
+		sharedCardId = (await api('POST', '/cards', { stackId, title: 'Card with a picture' })).body.id
+		const attachment = await uploadPng(sharedCardId, 'shared.png')
+		const src = `/apps/kanso/api/cards/${sharedCardId}/attachments/${attachment.id}/inline`
+		expect((await api('PATCH', `/cards/${sharedCardId}`, {
+			description: `Before\n\n![shot](${src})\n\nAfter`,
+		})).status).toBe(200)
+		expect((await api('POST', `/cards/${sharedCardId}/comments`, {
+			body: `and again ![shot](${src})`,
+		})).status).toBe(200)
+		expect((await api('PUT', `/boards/${sharedBoardId}/public-share/comments`, { enabled: true })).status).toBe(200)
+		shareToken = (await api('POST', `/boards/${sharedBoardId}/public-share`)).body.token
+		expect(shareToken).toBeTruthy()
+
+		// A SECOND, NEVER-SHARED board with its own image. This is the thing the
+		// share token must not be able to reach.
+		otherBoardId = (await api('POST', '/boards', { title: 'Private Images E2E' })).body.id
+		const otherStackId = (await api('POST', '/stacks', { boardId: otherBoardId, title: 'To do' })).body.id
+		otherCardId = (await api('POST', '/cards', { stackId: otherStackId, title: 'Private card' })).body.id
+		otherAttachmentId = (await uploadPng(otherCardId, 'private.png')).id
+
+		// A second image UPLOADED to the shared card but never written into any
+		// text. Attachments are not part of the public snapshot, so this one was
+		// never published even though its card was.
+		unembeddedAttachmentId = (await uploadPng(sharedCardId, 'never-embedded.png')).id
+
+		// And a HIDDEN card on the SHARED board, carrying an embedded image. The
+		// board is shared; this card is not on it.
+		hiddenCardId = (await api('POST', '/cards', { stackId, title: 'Hidden card' })).body.id
+		const hiddenAttachment = await uploadPng(hiddenCardId, 'hidden.png')
+		hiddenAttachmentId = hiddenAttachment.id
+		expect((await api('PATCH', `/cards/${hiddenCardId}`, {
+			description: `![hidden](/apps/kanso/api/cards/${hiddenCardId}/attachments/${hiddenAttachment.id}/inline)`,
+			visibility: 'private',
+		})).status).toBe(200)
+	})
+
+	test.afterAll(async () => {
+		if (sharedBoardId) await api('DELETE', `/boards/${sharedBoardId}`)
+		if (otherBoardId) await api('DELETE', `/boards/${otherBoardId}`)
+	})
+
+	test('the anonymous payload re-points the image at the share token, not the authenticated route', async () => {
+		const { status, body } = await fetchPublic(shareToken)
+		expect(status).toBe(200)
+		const card = body.cards.find((c) => c.id === sharedCardId)
+		const publicSrc = `/apps/kanso/api/public/${shareToken}/cards/${sharedCardId}/attachments/`
+		expect(card.description).toContain(publicSrc)
+		expect(card.comments[0].body).toContain(publicSrc)
+		// The session-only path must be gone: leaving it would ship the bug.
+		expect(card.description).not.toContain(`/api/cards/${sharedCardId}/attachments/`)
+		expect(card.comments[0].body).not.toContain(`/api/cards/${sharedCardId}/attachments/`)
+	})
+
+	test('an anonymous visitor DECODES the description and comment images, not a broken box', async ({ page }) => {
+		// Prove the opt-out is in effect before asserting anything that a live
+		// admin session would also satisfy.
+		expect((await page.context().storageState()).cookies).toHaveLength(0)
+
+		const responses = []
+		page.on('response', (r) => {
+			if (r.url().includes('/attachments/')) responses.push(r.status())
+		})
+
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${shareToken}`)
+		await page.locator('.public-card').first().click()
+		await expect(page.locator('.public-detail')).toBeVisible()
+
+		for (const selector of ['.public-detail__desc img', '.public-comment__body img']) {
+			const img = page.locator(selector).first()
+			await expect(img).toBeVisible()
+			// naturalWidth is the real assertion: an <img> whose request 401s is
+			// still "visible" (the browser lays out an alt box), so only the
+			// DECODED intrinsic size separates a rendered picture from the bug.
+			await expect.poll(
+				async () => img.evaluate((el) => el.naturalWidth),
+				{ timeout: 10_000, message: `${selector} never decoded — the bytes did not arrive` },
+			).toBe(PNG_W)
+			expect(await img.evaluate((el) => el.naturalHeight)).toBe(PNG_H)
+		}
+
+		// …and every byte came over HTTP 200, never a 401/404.
+		expect(responses.length).toBeGreaterThan(0)
+		expect(responses.every((s) => s === 200)).toBe(true)
+	})
+
+	test('the image bytes come back with an inline, nosniff, image/png response', async () => {
+		const card = (await fetchPublic(shareToken)).body.cards.find((c) => c.id === sharedCardId)
+		const path = card.description.match(/\/apps\/kanso\/api\/public\/\S+?\/inline/)[0]
+		const r = await fetch(`${BASE}/index.php${path}`)
+		expect(r.status).toBe(200)
+		expect(r.headers.get('content-type')).toBe('image/png')
+		expect(r.headers.get('content-disposition')).toBe('inline')
+		expect(r.headers.get('x-content-type-options')).toBe('nosniff')
+		expect(Buffer.from(await r.arrayBuffer()).length).toBe(Buffer.from(PNG_B64, 'base64').length)
+	})
+
+	// THE denial. A token for board A must not reach an attachment on board B —
+	// and the card id is attacker-choosable, so this is the check that decides it.
+	test('a token for one board cannot fetch an attachment belonging to another board', async () => {
+		const r = await fetch(
+			`${BASE}/index.php/apps/kanso/api/public/${shareToken}`
+			+ `/cards/${otherCardId}/attachments/${otherAttachmentId}/inline`,
+		)
+		expect(r.status).toBe(404)
+		expect(r.headers.get('content-type')).toContain('json')
+		// Nothing resembling PNG bytes came back.
+		expect(await r.text()).not.toContain('PNG')
+	})
+
+	// The card is really shared, the attachment is really embedded on it, and the
+	// URL is the one that works — ONLY the token is wrong. Anything less (a guessed
+	// attachment id, say) would 404 for a reason that has nothing to do with the
+	// token and prove nothing.
+	test('a made-up token reaches nothing, even for the exact URL that works', async () => {
+		const card = (await fetchPublic(shareToken)).body.cards.find((c) => c.id === sharedCardId)
+		const working = card.description.match(/\/apps\/kanso\/api\/public\/\S+?\/inline/)[0]
+		expect((await fetch(`${BASE}/index.php${working}`)).status).toBe(200)
+
+		const bogus = working.replace(shareToken, 'z'.repeat(64))
+		expect((await fetch(`${BASE}/index.php${bogus}`)).status).toBe(404)
+	})
+
+	// The in-board half of the denial: `applyPublicOnly` exists for exactly this,
+	// and the cross-board test above does not exercise it.
+	test('a hidden card on the SHARED board keeps its image to itself', async () => {
+		// It is genuinely absent from the payload — otherwise this asserts nothing.
+		const payload = await fetchPublic(shareToken)
+		expect(payload.body.cards.some((c) => c.id === hiddenCardId)).toBe(false)
+
+		const r = await fetch(
+			`${BASE}/index.php/apps/kanso/api/public/${shareToken}`
+			+ `/cards/${hiddenCardId}/attachments/${hiddenAttachmentId}/inline`,
+		)
+		expect(r.status).toBe(404)
+	})
+
+	// Attachments are not part of the public snapshot. Only an image the author
+	// EMBEDDED in text the visitor can read is published; one merely uploaded to
+	// the same card is not, or the route would hand out every raster attachment of
+	// every public card to anyone counting ids up from 1.
+	test('an attachment uploaded to the shared card but never embedded is refused', async () => {
+		const r = await fetch(
+			`${BASE}/index.php/apps/kanso/api/public/${shareToken}`
+			+ `/cards/${sharedCardId}/attachments/${unembeddedAttachmentId}/inline`,
+		)
+		expect(r.status).toBe(404)
+
+		// …while the embedded one on that very same card still serves, so the
+		// refusal above is about the attachment, not about the card.
+		const card = (await fetchPublic(shareToken)).body.cards.find((c) => c.id === sharedCardId)
+		const embedded = card.description.match(/\/apps\/kanso\/api\/public\/\S+?\/inline/)[0]
+		expect((await fetch(`${BASE}/index.php${embedded}`)).status).toBe(200)
+	})
+})

@@ -117,6 +117,36 @@ class PublicShareService {
 	 */
 	private const MAX_EXPIRES_AT = 253402300799;
 
+	/**
+	 * The AUTHENTICATED inline-attachment path as it is stored inside a
+	 * description or a comment body: whatever webroot/index.php prefix the
+	 * instance uses, then the app's own `api/cards/<id>/attachments/<id>/inline`.
+	 *
+	 * Mirrors the sanitiser's INLINE_ATTACHMENT_SRC_RE in src/services/markdown.js,
+	 * which is the only shape a rendered `<img>` src is ever allowed to have. Used
+	 * by {@see self::rewriteInlineImages()}; nothing else in the text is touched.
+	 *
+	 * THE LOOKBEHIND IS LOAD-BEARING, and it is the whole reason this constant has
+	 * a comment. The JS twin is anchored `^…$` because it validates one complete
+	 * attribute value; this one runs over free text and so cannot be, which means
+	 * without a left boundary it also matches INSIDE an absolute URL - the path
+	 * part of `https://evil.example/apps/kanso/api/cards/1/attachments/2/inline`
+	 * matches just as well as a same-origin path. The rewrite would then splice the
+	 * board's share TOKEN into an attacker-controlled external link, and any EDIT
+	 * member (who cannot otherwise read the token - {@see self::getConfig()} is
+	 * MANAGE-only) could type that into a description and collect the token from
+	 * their own server the first time any anonymous visitor clicked it.
+	 *
+	 * `(?<![\w:/@.-])` forbids the character classes that can precede a path only
+	 * inside a larger URL: a scheme colon, the second slash of `//host`, and the
+	 * host/userinfo text itself. A legitimate stored src is always preceded by a
+	 * markdown `(`, whitespace, or start-of-string, so none of them is affected.
+	 * `@` and `:` are excluded from the prefix charset too, so an authority can
+	 * never be captured into it even if the boundary were somehow reached.
+	 */
+	private const INLINE_SRC_RE
+		= '~(?<![\w:/@.-])(?P<prefix>/(?:[^/\\\\\s()<>"\'@:]+/)*apps/kanso/api)/cards/(?P<card>\d+)/attachments/(?P<attachment>\d+)/inline~';
+
 	public function __construct(
 		private BoardMapper $boardMapper,
 		private StackMapper $stackMapper,
@@ -125,6 +155,7 @@ class PublicShareService {
 		private ChecklistItemMapper $checklistItemMapper,
 		private LabelMapper $labelMapper,
 		private CommentMapper $commentMapper,
+		private CardAttachmentService $attachmentService,
 		private PermissionService $permissionService,
 		private ISecureRandom $secureRandom,
 		private IURLGenerator $urlGenerator,
@@ -439,7 +470,14 @@ class PublicShareService {
 				// as a literal `@uid` inside the description text, so the raw column
 				// would hand an anonymous reader a real login uid. It goes out with
 				// those mentions redacted; the stored row is untouched.
-				'description' => $this->redactMentions($card->getDescription(), $board, $displayNames, $members),
+				// …and the inline-image srcs it embeds are re-pointed at the public
+				// route (#152), because the authenticated one they are stored as needs
+				// a session this reader does not have. Payload-only, like the redaction
+				// above: the stored row keeps the authenticated path.
+				'description' => $this->rewriteInlineImages(
+					$this->redactMentions($card->getDescription(), $board, $displayNames, $members),
+					$token
+				),
 				'labels' => $labels,
 				'duedate' => $card->getDuedate()?->format(\DateTimeInterface::ATOM),
 				// Presentational, non-person card attributes (#3951): a cover colour
@@ -481,7 +519,7 @@ class PublicShareService {
 			];
 
 			if ($commentsEnabled) {
-				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $board, $displayNames, $members);
+				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $board, $token, $displayNames, $members);
 			}
 
 			$cards[] = $cardPayload;
@@ -541,12 +579,17 @@ class PublicShareService {
 	 * only the FREE-TEXT side - where any EDIT member can type any candidate uid -
 	 * that is an enumeration oracle and therefore gated.
 	 *
+	 * An inline image embedded in the body is re-pointed at the public route the
+	 * same way a description's is (#152) - `.public-comment__body img` is a real
+	 * rendered surface, so a comment picture was as broken as a description one.
+	 *
 	 * @param Comment[] $comments
+	 * @param string $token the share token this payload is being built for
 	 * @param array<string, ?string> $displayNames uid => display name (null = no such account) cache, reused across cards
 	 * @param array<string, bool> $members uid => holds READ on this board, cache reused across cards
 	 * @return list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>
 	 */
-	private function serializeComments(array $comments, Board $board, array &$displayNames, array &$members): array {
+	private function serializeComments(array $comments, Board $board, string $token, array &$displayNames, array &$members): array {
 		$out = [];
 		foreach ($comments as $comment) {
 			$uid = (string)$comment->getAuthor();
@@ -559,7 +602,10 @@ class PublicShareService {
 				'id' => (int)$comment->getId(),
 				'parentCommentId' => $comment->getParentCommentId(),
 				'author' => $author,
-				'body' => $this->redactMentions($comment->getBody(), $board, $displayNames, $members),
+				'body' => $this->rewriteInlineImages(
+					$this->redactMentions($comment->getBody(), $board, $displayNames, $members),
+					$token
+				),
 				'createdAt' => $comment->getCreatedAt() ?? 0,
 				'editedAt' => $comment->getEditedAt() ?? 0,
 			];
@@ -940,6 +986,184 @@ class PublicShareService {
 
 	private function publicUrl(string $token): string {
 		return $this->urlGenerator->linkToRouteAbsolute('kanso.publicShare.show', ['token' => $token]);
+	}
+
+	/**
+	 * Re-points every embedded inline-image src in a piece of public free text at
+	 * the share's OWN attachment route (#152).
+	 *
+	 * An image pasted into a description is stored as
+	 * `![alt](/…/apps/kanso/api/cards/N/attachments/M/inline)` - the AUTHENTICATED
+	 * endpoint, which resolves the reader from the session. A public-share visitor
+	 * has no session, so that request answered 401 and the picture rendered as a
+	 * broken-image box on a board that had been deliberately shared. The text goes
+	 * out pointing at `…/apps/kanso/api/public/<token>/cards/N/attachments/M/inline`
+	 * instead, which {@see self::getPublicInlineAttachment()} serves.
+	 *
+	 * This is a payload-only rewrite, exactly like {@see self::redactMentions()}:
+	 * the stored row is untouched and an authenticated reader still gets the
+	 * authenticated path.
+	 *
+	 * It grants NOTHING on its own. The card id in the text is attacker-choosable
+	 * (any EDIT member can type one), so rewriting it is not a decision about
+	 * access - the route it points at re-resolves the token and refuses any card
+	 * that is not part of THIS share. A rewritten link to another board's card is
+	 * simply a 404.
+	 *
+	 * @param ?string $text the already-redacted public text, or null
+	 * @param string $token the share token this payload is being built for
+	 */
+	private function rewriteInlineImages(?string $text, string $token): ?string {
+		if ($text === null || $text === '') {
+			return $text;
+		}
+		// Cheap reject: the overwhelming majority of descriptions carry no image
+		// at all, and this keeps the regex off them entirely.
+		if (!str_contains($text, 'apps/kanso/api/cards/')) {
+			return $text;
+		}
+		// preg_replace_callback, not preg_replace: a `$` or `\` sequence can never
+		// be interpreted out of the replacement string. (The token is 64 chars of
+		// ISecureRandom::CHAR_ALPHANUMERIC, so it carries neither - but the
+		// callback makes that a property of the code rather than of the generator.)
+		$out = preg_replace_callback(
+			self::INLINE_SRC_RE,
+			static fn (array $m): string => $m['prefix']
+				. '/public/' . $token
+				. '/cards/' . $m['card']
+				. '/attachments/' . $m['attachment']
+				. '/inline',
+			$text
+		);
+		// A preg failure (backtrack limit on a pathological body) returns null.
+		// Serve the text unrewritten rather than dropping a description entirely:
+		// a broken image is the bug being fixed, a blank card would be worse.
+		return $out ?? $text;
+	}
+
+	/**
+	 * The bytes of ONE inline image embedded in a SHARED board's card (#152), for
+	 * an anonymous visitor holding that board's share token.
+	 *
+	 * The security shape, in order, is the whole point of this method:
+	 *  1. The TOKEN resolves the board - {@see self::assertTokenValid()}, the same
+	 *     gate the page and the payload use, so a disabled, rotated or EXPIRED
+	 *     link gets nothing here either (an expired share must not keep serving
+	 *     pictures after its board stopped loading).
+	 *  2. The CARD must be one this share already exposes -
+	 *     {@see CardMapper::findPublicByBoardAndId()} scopes by the token's board
+	 *     id AND the anonymous public-only visibility scope, so a token for board
+	 *     A cannot address a card on board B, nor an internal/private/archived/
+	 *     templated/deleted card on board A. The card id in the URL is
+	 *     attacker-choosable, so this is where the answer is decided.
+	 *  3. The ATTACHMENT must actually be REFERENCED by that card's own public text
+	 *     - {@see self::isReferencedInline()}. Steps 1-2 alone would make EVERY
+	 *     raster attachment of a public card anonymously fetchable by counting
+	 *     `attachmentId` up from 1, and attachments are NOT part of the public
+	 *     snapshot at all (the payload carries no attachment list, and a board can
+	 *     hide the section outright). A screenshot merely ATTACHED to a shared card
+	 *     was never published; only one the author embedded in text was. So the
+	 *     text the visitor can read is the allow-list, and it is read from the same
+	 *     fields the payload serves: the description always, and the comment bodies
+	 *     only when the `public_share_comments` opt-in is ON - an image embedded in
+	 *     a comment on a board whose comments are hidden stays unreachable.
+	 *  4. The ATTACHMENT must be on that card and must be an allow-listed raster
+	 *     image - {@see CardAttachmentService::inlineForAuthorizedShare()}, the
+	 *     same IDOR guard and same four bitmap mimes the authenticated route uses.
+	 *     An SVG or a PDF on a shared card is a 404 here, as it is there.
+	 *
+	 * Every failure is the SAME DoesNotExistException, so the caller answers one
+	 * uniform 404 and this never becomes an oracle for which boards, cards or
+	 * attachments exist.
+	 *
+	 * Note what it deliberately does NOT widen: there is no public route to an
+	 * attachment LIST, no download (Content-Disposition: attachment) route, and no
+	 * way to reach a board that has no live token. The only thing an anonymous
+	 * visitor gains is the picture already embedded in text they can read.
+	 *
+	 * @return array{0: \OCA\Kanso\Db\CardAttachment, 1: string} [metadata, bytes]
+	 * @throws DoesNotExistException if the token, card or attachment is not part of a live share
+	 */
+	public function getPublicInlineAttachment(string $token, int $cardId, int $attachmentId): array {
+		$board = $this->assertTokenValid($token);
+		$refused = new DoesNotExistException('Card ' . $cardId . ' is not part of this public share');
+
+		$card = $this->cardMapper->findPublicByBoardAndId((int)$board->getId(), $cardId);
+		if ($card === null) {
+			throw $refused;
+		}
+		// A card whose stack is archived is not on the public board either - mirror
+		// the payload's own filter so the two can never disagree about what is
+		// shared.
+		try {
+			$stack = $this->stackMapper->find((int)$card->getStackId());
+		} catch (DoesNotExistException) {
+			throw $refused;
+		}
+		if ($stack->getArchived() || (int)$stack->getBoardId() !== (int)$board->getId()) {
+			throw $refused;
+		}
+
+		if (!$this->isReferencedInline($card, $attachmentId, $board)) {
+			throw $refused;
+		}
+
+		return $this->attachmentService->inlineForAuthorizedShare($cardId, $attachmentId);
+	}
+
+	/**
+	 * Whether this card's PUBLIC text embeds `<cardId>/attachments/<attachmentId>`
+	 * as an inline image - the "the visitor can already read it" half of the gate
+	 * in {@see self::getPublicInlineAttachment()}.
+	 *
+	 * Matched with {@see self::INLINE_SRC_RE}, the same pattern the payload rewrite
+	 * uses, so a src that gets rewritten into a public URL is exactly a src this
+	 * will honour, and one that does not (an absolute URL to another host, say) is
+	 * exactly one it will not. The card id in the text must ALSO be this card's -
+	 * the UI can only ever embed the open card's own attachment
+	 * (src/components/MarkdownEditor.vue binds `inlineUrl` to the current card), so
+	 * a reference naming a different card is hand-written markdown and does not
+	 * widen this share.
+	 *
+	 * The comment bodies are consulted ONLY when the MANAGE user opted comments in.
+	 * With the toggle off their bodies are not in the payload, so they cannot
+	 * authorise anything either.
+	 */
+	private function isReferencedInline(Card $card, int $attachmentId, Board $board): bool {
+		$cardId = (int)$card->getId();
+		if ($this->embedsAttachment($card->getDescription(), $cardId, $attachmentId)) {
+			return true;
+		}
+		if (!($board->getPublicShareComments() ?? false)) {
+			return false;
+		}
+		foreach ($this->commentMapper->findByCard($cardId) as $comment) {
+			/** @var Comment $comment */
+			if ($this->embedsAttachment($comment->getBody(), $cardId, $attachmentId)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * True iff `$text` carries an inline-image src for exactly this card and
+	 * attachment. Same pattern, same boundary rules as the payload rewrite.
+	 */
+	private function embedsAttachment(?string $text, int $cardId, int $attachmentId): bool {
+		if ($text === null || $text === '') {
+			return false;
+		}
+		if (preg_match_all(self::INLINE_SRC_RE, $text, $matches, PREG_SET_ORDER) === false) {
+			// A preg failure must not be read as "authorised".
+			return false;
+		}
+		foreach ($matches as $match) {
+			if ((int)$match['card'] === $cardId && (int)$match['attachment'] === $attachmentId) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

@@ -234,6 +234,33 @@ test.describe('Search', () => {
 		await expect(page.locator('.search-box__dropdown')).not.toBeVisible()
 	})
 
+	// #10522 — Escape has to hand the keyboard back, not just wipe the text.
+	// While the caret stayed in the field, BoardView's shell handler treated every
+	// following keypress as typing and dropped it, so the board was keyboard-dead
+	// until you clicked somewhere else.
+	test('pressing Escape releases the search box so a board shortcut fires with no intervening click', async ({ page }) => {
+		await goToBoard(page)
+
+		const searchInput = page.locator('.search-box__input')
+		await expect(searchInput).toBeVisible({ timeout: 5000 })
+
+		await searchInput.fill('Alpha')
+		await expect(page.locator('.search-box__dropdown')).toBeVisible({ timeout: 5000 })
+
+		await searchInput.press('Escape')
+
+		// The input must no longer be document.activeElement.
+		await expect(searchInput).not.toBeFocused()
+		const activeClass = await page.evaluate(() => document.activeElement?.className ?? '')
+		expect(activeClass).not.toContain('search-box__input')
+
+		// …and the very next keypress must reach the board. 'j' is the vim alias
+		// for ArrowDown, which seeds the focus ring onto the first card of the
+		// first non-empty stack. No click in between — that is the whole point.
+		await page.keyboard.press('j')
+		await expect(page.locator('.card-tile').first()).toBeFocused({ timeout: 15_000 })
+	})
+
 	test('pressing "/" keyboard shortcut focuses the search box', async ({ page }) => {
 		await goToBoard(page)
 

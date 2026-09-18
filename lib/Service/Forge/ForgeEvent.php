@@ -32,8 +32,15 @@ final class ForgeEvent {
 	public const KIND_ISSUE = 'issue';
 
 	/**
+	 * `changedLabel` is deliberately separate from `labels`: on an `unlabeled`
+	 * delivery the removed label is already ABSENT from the issue's label array,
+	 * so that array cannot express the delta - only the payload's top-level
+	 * `label` object can. It is attacker-controlled free text on a public repo,
+	 * and is never used for anything but a label-title comparison.
+	 *
 	 * @param string[] $labels lowercase-comparable label names carried by the payload
 	 * @param string[] $urlCandidates URL spellings this issue/PR may be attached under
+	 * @param ?string $changedLabel the one label this delivery added or removed
 	 */
 	public function __construct(
 		public readonly string $kind,
@@ -45,6 +52,7 @@ final class ForgeEvent {
 		public readonly bool $merged = false,
 		public readonly array $labels = [],
 		public readonly array $urlCandidates = [],
+		public readonly ?string $changedLabel = null,
 	) {
 	}
 

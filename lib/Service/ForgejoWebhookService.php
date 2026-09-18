@@ -40,6 +40,14 @@ use OCA\Kanso\Service\Forge\ForgeEvent;
  *    reverse-lookup candidates.
  *  - Host. Self-hosted, so nothing may be pinned; the delivery's own html_url is
  *    the match key, which needs no host knowledge at all.
+ *  - Label changes. Forgejo does NOT carry them the way the label mirror
+ *    (#10491) reads them: it spells the action `label_updated` / `label_cleared`
+ *    and ships no top-level `label` object, only the issue's full (post-change)
+ *    label set. There is therefore no delta to mirror, and `changedLabel` is
+ *    deliberately left null here - a label change on a Forgejo issue is the
+ *    accepted no-op every unrecognized action already is. Mirroring a full label
+ *    SET is different work (diffing against the card's current labels) on an
+ *    unauthenticated path, and is out of scope until someone asks for it.
  */
 class ForgejoWebhookService extends AbstractForgeWebhookService {
 	/** A raw hex HMAC-SHA256 digest is exactly this many lowercase hex chars. */

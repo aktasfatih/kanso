@@ -13,6 +13,8 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Label;
+use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\CardLinkService;
@@ -20,6 +22,7 @@ use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\GithubWebhookService;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\IURLGenerator;
@@ -40,6 +43,8 @@ class GithubWebhookServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private ISecureRandom&MockObject $secureRandom;
 	private IURLGenerator&MockObject $urlGenerator;
+	private LabelService&MockObject $labelService;
+	private LabelMapper&MockObject $labelMapper;
 	private GithubWebhookService $service;
 
 	protected function setUp(): void {
@@ -57,6 +62,8 @@ class GithubWebhookServiceTest extends TestCase {
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
+		$this->labelService = $this->createMock(LabelService::class);
+		$this->labelMapper = $this->createMock(LabelMapper::class);
 		$this->service = new GithubWebhookService(
 			$this->boardMapper,
 			$this->stackMapper,
@@ -68,6 +75,8 @@ class GithubWebhookServiceTest extends TestCase {
 			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->labelService,
+			$this->labelMapper,
 		);
 	}
 
@@ -539,6 +548,173 @@ class GithubWebhookServiceTest extends TestCase {
 		self::assertSame(9, $result['cardId']);
 	}
 
+	// ---- label mirroring (#10491) -----------------------------------------
+
+	private function label(int $id, string $title, int $boardId = 1): Label {
+		$l = new Label();
+		$l->setId($id);
+		$l->setBoardId($boardId);
+		$l->setTitle($title);
+		return $l;
+	}
+
+	/**
+	 * A `labeled`/`unlabeled` delivery: the changed label rides at the TOP level,
+	 * beside `issue`. On `unlabeled` GitHub has already dropped it from
+	 * `issue.labels`, which is exactly why that array cannot express the delta.
+	 *
+	 * @param array<int, array{name: string}> $remaining what `issue.labels` still lists
+	 */
+	private function labelBody(string $action, string $labelName, array $remaining = []): string {
+		return json_encode([
+			'action' => $action,
+			'label' => ['name' => $labelName, 'color' => 'ff0000'],
+			'issue' => [
+				'html_url' => 'https://github.com/octo/app/issues/7',
+				'state' => 'open',
+				'title' => 'Crash on load',
+				'labels' => $remaining,
+			],
+		]);
+	}
+
+	public function testLabeledIssueAssignsTheMatchingBoardLabelToEveryLinkedCard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')
+			->willReturn([$this->link(11, 9), $this->link(12, 10)]);
+		// Matching is by TITLE, case-insensitively: GitHub's `bug` finds `Bug`.
+		$this->labelMapper->expects(self::once())->method('findByBoard')->with(1)
+			->willReturn([$this->label(3, 'Wontfix'), $this->label(5, 'Bug')]);
+
+		$assigned = [];
+		$this->labelService->expects(self::exactly(2))->method('assign')
+			->willReturnCallback(function (int $cardId, int $labelId, string $uid) use (&$assigned): void {
+				$assigned[] = [$cardId, $labelId, $uid];
+			});
+		$this->labelService->expects(self::never())->method('unassign');
+
+		$body = $this->labelBody('labeled', 'bug', [['name' => 'bug']]);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		// Assigned as the BOARD OWNER - the same actor every mutation on this
+		// path uses - so LabelService's EDIT gate, the visibility guard and the
+		// kanso_changes row (VERB_LABELED) all fire.
+		self::assertSame([[9, 5, 'alice'], [10, 5, 'alice']], $assigned);
+		self::assertTrue($result['handled']);
+		self::assertFalse($result['moved']);
+		// A delivery that DID something reports no reason (it is not an unknown action).
+		self::assertArrayNotHasKey('reason', $result);
+	}
+
+	public function testUnlabeledIssueRemovesTheLabelFromEveryLinkedCard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$this->label(5, 'Bug')]);
+
+		$this->labelService->expects(self::once())->method('unassign')->with(9, 5, 'alice');
+		$this->labelService->expects(self::never())->method('assign');
+
+		// `issue.labels` is EMPTY here - the removed label is already gone from it,
+		// so only the top-level `label` can name what was removed.
+		$body = $this->labelBody('unlabeled', 'Bug');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/**
+	 * The security-relevant assertion. A label name is attacker-controlled free
+	 * text on a public repo, and this endpoint is unauthenticated and acts as the
+	 * board owner: an unknown name must be a silent no-op, NEVER a label
+	 * definition minted on the board (that is MANAGE-gated for a reason).
+	 */
+	public function testUnknownLabelNameIsASilentNoopAndNeverCreatesABoardLabel(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$this->label(5, 'Bug')]);
+
+		$this->labelService->expects(self::never())->method('create');
+		$this->labelService->expects(self::never())->method('assign');
+		$this->labelService->expects(self::never())->method('unassign');
+
+		$body = $this->labelBody('labeled', 'good first issue');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['handled']);
+		self::assertSame(GithubWebhookService::REASON_NO_LABEL_MATCH, $result['reason']);
+	}
+
+	/**
+	 * A name longer than any board label could be is rejected before any
+	 * case-folding, so a hostile payload cannot make us fold a megabyte of text
+	 * once per board label.
+	 */
+	public function testOverlongLabelNameNeverMatchesAndNeverAssigns(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$this->labelService->expects(self::never())->method('assign');
+		$this->labelService->expects(self::never())->method('create');
+
+		$body = $this->labelBody('labeled', str_repeat('x', 101));
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertSame(GithubWebhookService::REASON_NO_LABEL_MATCH, $result['reason']);
+	}
+
+	/**
+	 * The owner's constraint: labels are mirrored for ISSUES only. A
+	 * `pull_request` delivery carrying the very same top-level `label` must not
+	 * touch the card's labels - the normalized event still carries the name, so
+	 * this proves the PR path ignores it rather than merely lacking the data.
+	 */
+	public function testLabelOnAPullRequestDeliveryChangesNothing(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card(9, 1));
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$this->labelService->expects(self::never())->method('assign');
+		$this->labelService->expects(self::never())->method('unassign');
+		$this->labelService->expects(self::never())->method('create');
+
+		$body = json_encode([
+			'action' => 'labeled',
+			'label' => ['name' => 'Bug'],
+			'pull_request' => [
+				'head' => ['ref' => 'kanso-9-fix'],
+				'html_url' => 'https://github.com/octo/app/pull/3',
+				'merged' => false,
+				'title' => 'A fix',
+			],
+		]);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/** A failing assignment is swallowed - a forge disables a hook that 5xxs. */
+	public function testLabelAssignmentFailureNeverEscapes(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$this->label(5, 'Bug')]);
+		$this->labelService->method('assign')
+			->willThrowException(new NotPermittedException('hidden card'));
+
+		$body = $this->labelBody('labeled', 'Bug');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['handled']);
+	}
+
+	/** A non-label action never reads the board's labels or touches assignments. */
+	public function testNonLabelIssueActionNeverTouchesLabels(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([$this->link(11, 9)]);
+		$this->stackMapper->method('findByBoardAndRole')->willReturn(null);
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$this->labelService->expects(self::never())->method('assign');
+		$this->labelService->expects(self::never())->method('unassign');
+
+		$body = $this->issueBody('closed', state: 'closed');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		// The pre-existing reason for a delivery that could not move is unchanged.
+		self::assertSame(GithubWebhookService::REASON_NO_TARGET_STACK, $result['reason']);
+	}
+
 	// ---- issue intake (#3752) ---------------------------------------------
 
 	private function intakeBoard(int $stackId = 7, ?string $label = null): Board {
@@ -852,6 +1028,8 @@ class GithubWebhookServiceTest extends TestCase {
 			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->labelService,
+			$this->labelMapper,
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -891,6 +1069,8 @@ class GithubWebhookServiceTest extends TestCase {
 			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->labelService,
+			$this->labelMapper,
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -994,6 +1174,8 @@ class GithubWebhookServiceTest extends TestCase {
 			new CardVisibilityScope(),
 			$this->secureRandom,
 			$this->urlGenerator,
+			$this->labelService,
+			$this->labelMapper,
 		);
 	}
 
