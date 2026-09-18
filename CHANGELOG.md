@@ -11,6 +11,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.34.0](https://github.com/aktasfatih/kanso/compare/v0.33.0...v0.34.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* **card:** line the card reference up with its title instead of sitting above it ([3e92053](https://github.com/aktasfatih/kanso/commit/3e92053e22d2baf5453cd1e0b33303e9997c9250)), closes [#10523](https://github.com/aktasfatih/kanso/issues/10523)
+* **public-share:** mark a shared tile whose description is only a picture ([c855129](https://github.com/aktasfatih/kanso/commit/c8551296078efb15a33e894b3165bc964123bb2a))
+* **public-share:** show a readable text excerpt on public board tiles instead of raw markdown ([85a0f10](https://github.com/aktasfatih/kanso/commit/85a0f105998fe5c5688eb6c81f1ccc10235dee3d))
+* **search:** pressing Escape now leaves the search box so board shortcuts work again ([49bf201](https://github.com/aktasfatih/kanso/commit/49bf2017f2cba6d90bfc5e5d742a7cbcb9f47dfc))
+* **sharing:** show a card's description images on a public shared board ([78ffe50](https://github.com/aktasfatih/kanso/commit/78ffe506e6a6996cd1f0bac179abd95f3b416387)), closes [#152](https://github.com/aktasfatih/kanso/issues/152)
+
+
+### Features
+
+* **webhooks:** mirror GitHub issue label changes onto the linked cards ([9b90e9b](https://github.com/aktasfatih/kanso/commit/9b90e9bb1287cff730006aed8d828b606d6ae41c))
+
 # [0.33.0](https://github.com/aktasfatih/kanso/compare/v0.32.1...v0.33.0) (2026-09-16)
 
 
