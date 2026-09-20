@@ -354,7 +354,7 @@ msgid "%n row was skipped because it had no title."
 msgid_plural "%n rows were skipped because they had no title."
 msgstr[0] ""
 
-#: src/components/BoardTimelineView.vue:306
+#: src/components/BoardTimelineView.vue:303
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n 张未排期的卡片"
@@ -684,9 +684,9 @@ msgstr "指派了一名成员"
 msgid "Assignee"
 msgstr "负责人"
 
+#: src/components/AssigneeAvatars.vue
 #: src/components/BoardFilterBar.vue
 #: src/components/CardPreview.vue
-#: src/components/CardTile.vue
 msgid "Assignees"
 msgstr "负责人"
 

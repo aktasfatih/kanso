@@ -118,16 +118,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:class="`timeline__pane-status--${statusOf(row)}`" />
 						<span v-if="cardHumanId(row.card)" class="timeline__pane-id">{{ cardHumanId(row.card) }}</span>
 						<span class="timeline__pane-title">{{ row.card.title }}</span>
-						<span
+						<!-- Capped at 3 with a "+N" badge, same stack the kanban tile
+						     renders (#10655) -->
+						<AssigneeAvatars
 							v-if="(row.card.assigneeIds || []).length"
-							class="timeline__pane-assignees">
-							<NcAvatar
-								v-for="uid in (row.card.assigneeIds || []).slice(0, 3)"
-								:key="uid"
-								:user="uid"
-								:size="22"
-								:hide-status="true" />
-						</span>
+							class="timeline__pane-assignees"
+							:assignee-ids="row.card.assigneeIds"
+							:size="22" />
 					</div>
 				</template>
 			</div>
@@ -324,7 +321,7 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, getCurrentI
 import { useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import AssigneeAvatars from './AssigneeAvatars.vue'
 import CalendarBlankOutlineIcon from 'vue-material-design-icons/CalendarBlankOutline.vue'
 import CalendarTodayIcon from 'vue-material-design-icons/CalendarToday.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
@@ -1498,13 +1495,10 @@ onBeforeUnmount(() => {
 	white-space: nowrap;
 }
 
+/* The stack itself (overlap, overflow badge) is styled by AssigneeAvatars; the
+ * pane only keeps it from being squeezed by the title. */
 .timeline__pane-assignees {
-	display: inline-flex;
 	flex: 0 0 auto;
-}
-
-.timeline__pane-assignees > * + * {
-	margin-inline-start: -8px;
 }
 
 /* ── Track wrapper ── */

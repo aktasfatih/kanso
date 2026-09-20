@@ -396,7 +396,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/BoardTimelineView.vue:306
+#: src/components/BoardTimelineView.vue:303
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n niezaplanowana karta"
@@ -734,9 +734,9 @@ msgstr "przypisał osobę"
 msgid "Assignee"
 msgstr "Osoba przypisana"
 
+#: src/components/AssigneeAvatars.vue
 #: src/components/BoardFilterBar.vue
 #: src/components/CardPreview.vue
-#: src/components/CardTile.vue
 msgid "Assignees"
 msgstr "Osoby przypisane"
 

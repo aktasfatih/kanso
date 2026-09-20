@@ -271,17 +271,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="board-list-row__timer-running"
 								:title="t('kanso', 'Timer running')" />
 
-							<!-- Assignees -->
-							<span
+							<!-- Assignees - capped at 3 with a "+N" badge, same stack the
+							     kanban tile renders (#10655) -->
+							<AssigneeAvatars
 								v-if="(rows[vRow.index].card.assigneeIds || []).length"
-								class="board-list-row__assignees">
-								<NcAvatar
-									v-for="uid in (rows[vRow.index].card.assigneeIds || []).slice(0, 3)"
-									:key="uid"
-									:user="uid"
-									:size="24"
-									:hide-status="true" />
-							</span>
+								class="board-list-row__assignees"
+								:assignee-ids="rows[vRow.index].card.assigneeIds"
+								:size="24" />
 						</span>
 					</button>
 					<!-- Drop indicator lines (top / bottom edge). The line is indented to
@@ -372,7 +368,7 @@ import { ref, computed, inject, nextTick, reactive, watch, onMounted, onBeforeUn
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import AssigneeAvatars from './AssigneeAvatars.vue'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
@@ -1758,11 +1754,9 @@ defineExpose({ focusAddColumn })
 	50% { opacity: 0.45; }
 }
 
+/* The stack itself (overlap, overflow badge) is styled by AssigneeAvatars; the
+ * row only keeps it from being squeezed by the title. */
 .board-list-row__assignees {
-	display: inline-flex;
-}
-
-.board-list-row__assignees > * + * {
-	margin-inline-start: -8px;
+	flex: 0 0 auto;
 }
 </style>
