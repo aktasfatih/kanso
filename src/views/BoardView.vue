@@ -681,6 +681,7 @@ import { useCardMove } from '../composables/useCardMove.js'
 import { useCardHierarchy } from '../composables/useCardHierarchy.js'
 import { provideAnnouncer } from '../composables/useAnnouncer.js'
 import { useQueryClient } from '@tanstack/vue-query'
+import { apiAnswerStatus } from '../services/apiErrors.js'
 import { cssColor } from '../services/color.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
@@ -936,7 +937,12 @@ usePageTitle(() => boardData.value?.board?.title ?? '')
 // deleted board 404s; a revoked share 403s. Both should read as an explanatory
 // message with a way back to the boards list - not the generic error box. A
 // transient network/5xx failure stays retryable.
-const boardErrorStatus = computed(() => boardError.value?.response?.status ?? null)
+//
+// Read through apiAnswerStatus, not off `error.response.status`, so that a 404
+// Kanso never sent - a Nextcloud that briefly stopped routing /apps/kanso/api/*
+// answers one for every endpoint at once (#155) - lands on the retryable copy
+// instead of telling the user their board was deleted.
+const boardErrorStatus = computed(() => apiAnswerStatus(boardError.value))
 const boardIsGoneOrForbidden = computed(() =>
 	boardErrorStatus.value === 404 || boardErrorStatus.value === 403)
 const boardErrorMessage = computed(() => {

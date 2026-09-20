@@ -152,7 +152,7 @@ function harness(t, boardId) {
 	queryClient.setQueryData(boardQueryKey(boardId), payload(startId))
 	seedCursor(startId, 1)
 
-	const state = { mode: null, deltaToo: true }
+	const state = { mode: null, deltaToo: true, body: {}, headers: {} }
 	let boardReads = 0
 	let deltaReads = 0
 	axios.defaults.adapter = async (config) => {
@@ -174,11 +174,11 @@ function harness(t, boardId) {
 			status,
 			statusText: status === 200 ? 'OK' : 'Failed',
 			data: status !== 200
-				? {}
+				? state.body
 				: (isDelta
 					? { cursor: 1, resync: false, cards: { upsert: [], remove: [] }, stacks: { upsert: [], remove: [] } }
 					: payload(id)),
-			headers: {},
+			headers: status !== 200 ? state.headers : {},
 			config,
 		})
 	}
@@ -193,10 +193,20 @@ function harness(t, boardId) {
 		key: boardQueryKey(boardId),
 		boardReads: () => boardReads,
 		deltaReads: () => deltaReads,
-		/** Fail every subsequent request: a status code, or 'network'. */
-		fail: (mode, { deltaToo = true } = {}) => {
+		/**
+		 * Fail every subsequent request: a status code, or 'network'.
+		 *
+		 * `body`/`headers` describe WHO answered, which for a 404 decides whether
+		 * it is an answer at all (#155): Kanso's own is JSON out of ApiErrorTrait,
+		 * a Nextcloud that stopped routing /apps/kanso/api/* sends its HTML error
+		 * page. The defaults are Kanso's shape, so every pre-#155 test in this
+		 * file goes on describing a Kanso answer.
+		 */
+		fail: (mode, { deltaToo = true, body = { error: 'Not found' }, headers = { 'content-type': 'application/json; charset=utf-8' } } = {}) => {
 			state.mode = mode
 			state.deltaToo = deltaToo
+			state.body = body
+			state.headers = headers
 		},
 		/** Stop failing — the server (or the viewer's access) is back. */
 		heal: () => { state.mode = null },
@@ -410,8 +420,13 @@ test('a 404 is terminal too, and a healthy board is untouched by any of this', a
 	assert.equal(h.board.data.value?.cards.length, 1, 'and goes on rendering')
 
 	// A deleted board answers 404 rather than 403, and is just as terminal: the
-	// payload describes something that no longer exists.
-	h.fail(404)
+	// payload describes something that no longer exists. Spelled out as KANSO's
+	// 404 - the JSON body ApiErrorTrait::respond sends - because since #155 that
+	// is what makes it terminal; the flavour is no longer implied by the status.
+	h.fail(404, {
+		body: { error: 'Not found' },
+		headers: { 'content-type': 'application/json; charset=utf-8' },
+	})
 	tick(DELTA_CADENCE)
 	await flush()
 
@@ -419,4 +434,64 @@ test('a 404 is terminal too, and a healthy board is untouched by any of this', a
 	assert.equal(h.board.error.value?.response?.status, 404)
 	assert.equal(h.board.data.value, undefined)
 	assert.equal(h.queryClient.getQueryData(h.key), undefined)
+})
+
+test('a 404 Kanso did not send is transient, and the board recovers on its own', async (t) => {
+	// #155. The reporter's boards and cards kept closing themselves mid-use with
+	// "This board no longer exists.", and nothing had been deleted: their devtools
+	// log showed /boards/2, /boards/2/changes AND /my-cards, /reviews/mine and
+	// /inbox all 404ing in the same burst. Three of those five are not
+	// board-scoped, so this was never about board 2 - Nextcloud had briefly
+	// stopped routing /apps/kanso/api/* at all. Waiting brought it back.
+	//
+	// Kanso classified it as an access ANSWER anyway, so the board was dropped
+	// from the cache (and un-persisted from the offline snapshot with it) and the
+	// latch made sure it never asked again. That is the terminal treatment in the
+	// test above, applied to a server that was simply failing to answer - the
+	// exact failure mode the 500 and dropped-connection tests exist to prevent.
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+	const tick = (ms) => t.mock.timers.tick(ms)
+
+	const h = harness(t, 408)
+	await flush()
+	assert.equal(h.board.data.value?.cards.length, 1, 'the board starts out rendered')
+
+	// Nextcloud's own 404: its HTML error page, served as text/html. Axios leaves
+	// a non-JSON body a string, which is what tells the two apart.
+	h.fail(404, {
+		body: '<!DOCTYPE html><html><body><p>The page could not be found on the server.</p></body></html>',
+		headers: { 'content-type': 'text/html; charset=UTF-8' },
+	})
+	for (let n = 0; n < 4; n++) {
+		tick(DELTA_CADENCE)
+		await flush()
+	}
+
+	assert.ok(h.boardReads() > 0, 'the 404 must have reached a board read')
+	assert.equal(h.board.error.value?.response?.status, 404,
+		'the failure under test really is a 404 - the status is unchanged, only '
+		+ 'what the client concludes from it')
+	assert.equal(h.board.data.value?.cards.length, 1,
+		'a 404 that is not ours must leave the rendered board exactly where it was, '
+		+ 'the same as a 500: the retryable error box appears over it instead of '
+		+ '"This board no longer exists."')
+	assert.equal(h.board.data.value?.cards[0].title, 'board-408-card')
+	assert.ok(h.queryClient.getQueryData(h.key) !== undefined,
+		'and must not drop the cached payload - dropping it un-persists the offline '
+		+ 'snapshot too, so the board would not come back on the next navigation either')
+
+	// And it must go on asking. The terminal path latches `enabled` off, which is
+	// the difference that decides whether this heals itself: the routing comes
+	// back and the board has to notice without the user reloading the page.
+	const during = h.boardReads()
+	h.heal()
+	for (let n = 0; n < 14; n++) {
+		tick(DELTA_CADENCE)
+		await flush()
+	}
+	assert.ok(h.boardReads() > during,
+		'a board answered away by a foreign 404 must keep re-reading - a latched '
+		+ 'board never asks again for the life of the tab')
+	assert.equal(h.board.isError.value, false, 'and the error clears by itself once the server answers')
+	assert.equal(h.board.data.value?.cards.length, 1, 'with the board still on screen')
 })

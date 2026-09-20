@@ -206,6 +206,85 @@ test.describe('A board on screen when access is revoked (#10385)', () => {
 		}
 	})
 
+	test('a 404 Nextcloud never routed leaves the cached board on screen (#155)', async ({ browser, peer }) => {
+		// The third transient shape, and the one that used to be classified as an
+		// ANSWER. A reporter on 0.33.0 watched boards close themselves mid-use with
+		// "This board no longer exists." while nothing had been deleted: their
+		// devtools log had /boards/2, /boards/2/changes, /my-cards, /reviews/mine
+		// and /inbox all 404ing in the same burst. Three of those are not
+		// board-scoped, so no board was gone — Nextcloud had briefly stopped
+		// routing /apps/kanso/api/* at all, and waiting brought it back.
+		//
+		// Kanso's own 404 is JSON out of ApiErrorTrait; this one is Nextcloud's
+		// HTML error page, and that is the whole difference. The fault is injected
+		// across the WHOLE api prefix rather than this board's reads, because that
+		// is what the reporter saw and because it is the only shape that proves
+		// the classification rather than the board id.
+		test.setTimeout(REFETCH_INTERVAL * 4 + SLACK * 3)
+		const board = await shareBoardWithPeer(peer)
+
+		const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } })
+		try {
+			const page = await ctx.newPage()
+			await ncLogin(page, { user: peer.user, pass: peer.pass })
+			await page.goto(board.url)
+			await page.waitForSelector('.board-view__header', { timeout: 20_000 })
+
+			const card = page.locator('.card-tile', { hasText: CARD_TITLE })
+			await expect(card).toBeVisible({ timeout: 15_000 })
+
+			let faults = 0
+			const apiRequests = /\/apps\/kanso\/api\//
+			await page.route(apiRequests, async (route) => {
+				faults++
+				await route.fulfill({
+					status: 404,
+					contentType: 'text/html; charset=UTF-8',
+					body: '<!DOCTYPE html><html><head><title>Nextcloud</title></head>'
+						+ '<body><p>The page could not be found on the server.</p></body></html>',
+				})
+			})
+
+			await expect
+				.poll(() => faults, {
+					message: 'the 404 must actually have reached a board read',
+					timeout: REFETCH_INTERVAL + SLACK,
+					intervals: [1_000],
+				})
+				.toBeGreaterThan(0)
+
+			const message = page.locator('.board-view__error-msg')
+			await expect(message,
+				'a 404 that Kanso did not send must read as the retryable failure it is, '
+				+ 'not as "This board no longer exists." — nothing was deleted and the '
+				+ 'viewer has nothing to act on')
+				.toHaveText(/try again/i, { timeout: REFETCH_INTERVAL + SLACK })
+			await expect(page.locator('.board-view__error').getByRole('button', { name: 'Retry' }),
+				'and it is retryable, so the retry affordance is offered')
+				.toBeVisible()
+
+			await expect(card,
+				'while the board itself stays exactly where it was — the terminal path '
+				+ 'drops the cached payload, which on a server blip is an empty screen '
+				+ 'and, via the offline snapshot, an empty screen that outlives it')
+				.toBeVisible()
+			await expect(page.locator('.stack-column').first()).toBeVisible()
+
+			// And it heals itself. The terminal path latches the query off for the
+			// life of the tab; this one must go on asking, so that the board comes
+			// back when routing does — with nobody reloading anything.
+			await page.unroute(apiRequests)
+			await expect(message,
+				'once the server answers again the board must recover on its own — the '
+				+ '60s safety-net re-read is what does it, and a latched board would '
+				+ 'never fire it')
+				.toHaveCount(0, { timeout: REFETCH_INTERVAL * 2 + SLACK })
+			await expect(card).toBeVisible()
+		} finally {
+			await ctx.close()
+		}
+	})
+
 	test('a dropped connection leaves the cached board on screen', async ({ browser, peer }) => {
 		test.setTimeout(REFETCH_INTERVAL * 2 + SLACK * 3)
 		const board = await shareBoardWithPeer(peer)

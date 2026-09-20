@@ -303,13 +303,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4385
+#: src/components/CardDetail.vue:4392
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
 
-#: src/components/CardDetail.vue:4383
+#: src/components/CardDetail.vue:4390
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
@@ -333,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4381
+#: src/components/CardDetail.vue:4388
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -1746,7 +1746,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4574
+#: src/components/CardDetail.vue:4581
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -3147,7 +3147,7 @@ msgstr "Corsivo"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6344
+#: src/components/CardDetail.vue:6351
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3443,7 +3443,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4576
+#: src/components/CardDetail.vue:4583
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -4844,7 +4844,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6350
+#: src/components/CardDetail.vue:6357
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5531,7 +5531,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4575
+#: src/components/CardDetail.vue:4582
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5612,7 +5612,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4577
+#: src/components/CardDetail.vue:4584
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"
