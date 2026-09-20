@@ -14,21 +14,38 @@
 ?>
 <style>
 /* The public page mounts into #kanso-public inside NC's body; give it a real
-   height so the columns/cards below the fold become reachable by scrolling. */
+   height so the board below can size itself off a definite one. */
 html, body { height: 100%; }
-#kanso-public { height: 100%; overflow-y: auto; box-sizing: border-box; }
-.public-board { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; box-sizing: border-box; }
-.public-board__header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+/* #kanso-public is a flex ITEM of NC's #content (display: flex). Without an
+   explicit flex/width it falls back to `flex: 0 1 auto` and shrink-wraps to
+   max-content, so a two-column board drew as a narrow strip with most of the
+   window dead (#117). flex + width make it fill the row; min-width:0 lets the
+   stack row inside it scroll instead of forcing the item wider. */
+#kanso-public { flex: 1 1 auto; width: 100%; min-width: 0; height: 100%; overflow-y: auto; box-sizing: border-box; }
+/* The board is the page shell — a full-height column where only the middle
+   (the stack row) scrolls, exactly like the authenticated .board-view. Height
+   is INHERITED, never computed from the viewport: the real scroll box is the
+   window minus NC's header and the board's own chrome, so any
+   `calc(100vh - <magic>)` here is off by a constant at every viewport size,
+   and 100vh is the *large* viewport on mobile (collapsing URL bar) on top. */
+.public-board { height: 100%; display: flex; flex-direction: column; overflow: hidden; padding: 24px 16px 16px; box-sizing: border-box; }
+.public-board__header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex: 0 0 auto; }
 .public-board__dot { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; }
 .public-board__title { font-size: 24px; font-weight: 700; margin: 0; }
 .public-board__badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; background: var(--color-background-dark, #ededed); color: var(--color-text-maxcontrast, #666); }
 .public-board__state { color: var(--color-text-maxcontrast, #666); padding: 32px 0; }
 .public-board__state--error { color: var(--color-error-text, #c33); }
-.public-board__columns { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
-.public-col { flex: 0 0 300px; max-width: 300px; max-height: calc(100vh - 180px); display: flex; flex-direction: column; background: var(--color-background-hover, #f5f5f5); border-radius: 10px; padding: 10px; box-sizing: border-box; }
+/* The one scrolling region: sideways through the stacks, and (via the card
+   list below) down through a stack's cards. */
+.public-board__columns { display: flex; gap: 16px; align-items: stretch; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; }
+/* Fluid column, mirroring .stack-column on the authenticated board: soak up
+   spare width, never narrower than 280px, never wider than 420px. Its height
+   comes from the row stretching it, and min-height:0 is what lets the card
+   list actually scroll rather than pushing the column taller. */
+.public-col { flex: 1 1 280px; min-width: 280px; max-width: 420px; min-height: 0; display: flex; flex-direction: column; background: var(--color-background-hover, #f5f5f5); border-radius: 10px; padding: 10px; box-sizing: border-box; }
 .public-col__title { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; margin: 4px 4px 12px; padding-bottom: 6px; border-bottom: 2px solid var(--color-border, #ddd); }
 .public-col__count { font-size: 12px; color: var(--color-text-maxcontrast, #888); font-weight: 500; }
-.public-col__cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.public-col__cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; }
 .public-card { background: var(--color-main-background, #fff); border: 1px solid var(--color-border, #e0e0e0); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); cursor: pointer; }
 .public-card:hover { border-color: var(--color-primary-element, #0082c9); }
 .public-card:focus-visible { outline: 2px solid var(--color-primary-element, #0082c9); outline-offset: 1px; }
@@ -41,7 +58,23 @@ html, body { height: 100%; }
 .public-card__desc { margin: 6px 0 0; font-size: 13px; color: var(--color-text-maxcontrast, #666); white-space: pre-wrap; word-break: break-word; }
 .public-card__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-maxcontrast, #888); }
 .public-card__prio { color: var(--color-error-text, #c33); font-weight: 600; }
-.public-board__footer { margin-top: 32px; text-align: center; font-size: 12px; color: var(--color-text-maxcontrast, #999); }
+/* Core's `#body-public footer` rule already pins this to the viewport bottom
+   (computed `position: fixed`), so it is out of flow and the flex shell above
+   neither sizes it nor has to reserve room for it — but declare flex:0 0 auto
+   anyway so it lands under the stack row, not on top of it, if that rule goes. */
+.public-board__footer { flex: 0 0 auto; margin-top: 16px; text-align: center; font-size: 12px; color: var(--color-text-maxcontrast, #999); }
+
+/* Phone viewports — same treatment as the authenticated board in
+   src/styles/mobile.css (which the public bundle never loads: src/public.js
+   imports no CSS, so this inline sheet has to carry it). One column at a time
+   with a peek of the next, snapped so a swipe lands cleanly. */
+@media (max-width: 680px) {
+	.public-board { padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
+	.public-board__header { gap: 8px; margin-bottom: 16px; }
+	.public-board__title { font-size: 20px; }
+	.public-board__columns { gap: 12px; scroll-snap-type: x mandatory; scroll-padding-left: 12px; -webkit-overflow-scrolling: touch; }
+	.public-col { flex: 0 0 88vw; min-width: 0; max-width: 88vw; scroll-snap-align: start; }
+}
 
 /* Read-only card detail modal (#3945). Self-contained; no edit affordances. */
 .public-detail__backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px; overflow-y: auto; z-index: 10000; }
