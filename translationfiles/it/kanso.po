@@ -399,20 +399,20 @@ msgstr "0"
 msgid "A card was created, moved or completed, or a board was shared with you"
 msgstr "Una scheda è stata creata, spostata o completata, oppure una bacheca è stata condivisa con te"
 
-#: templates/admin-backup.php
-msgid "A folder in Files"
-msgstr ""
-
-#: templates/admin-backup.php
-msgid "A folder in Files is the option to pick when you want the archives off this server or simply want to see them: it is the only one you can browse, sync or back with an S3 External Storage mount (Kanso writes the files through Nextcloud and never holds S3 credentials). It costs what any file write costs — the entries described below, the folder account's quota, and pruned backups landing in that account's trashbin."
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "A fresh copy is created each time; this card stays as the source"
 msgstr "Ogni volta viene creata una nuova copia; questa scheda resta l'originale"
 
+#: templates/admin-backup.php
+msgid "A new one replaces the last, so a backup that keeps failing does not pile up."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Account that owns the folder"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -773,10 +773,6 @@ msgstr "Allegati"
 msgid "Auto-archive"
 msgstr "Archiviazione automatica"
 
-#: templates/admin-backup.php
-msgid "Automatically export every Kanso board to a versioned archive on a daily schedule, keeping the last few backups per board. Choose where those archives are written: inside Kanso's own app data, or in a Nextcloud folder you can browse and mount elsewhere."
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue
 msgid "Automation"
 msgstr "Automazione"
@@ -802,6 +798,10 @@ msgstr "Torna ai filtri"
 #: src/views/ProjectView.vue
 msgid "Back to projects"
 msgstr "Torna ai progetti"
+
+#: templates/admin-backup.php
+msgid "Back up boards automatically"
+msgstr ""
 
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Background jobs use a server-side mode and \"overwrite.cli.url\" is set."
@@ -2124,6 +2124,14 @@ msgstr "es. KAN"
 msgid "Each Deck board is copied into a new Kanso board you own: stacks, cards, labels and assignees. Your Deck boards are left untouched."
 msgstr "Ogni bacheca di Deck viene copiata in una nuova bacheca Kanso personale: colonne, schede, etichette e assegnatari. Le bacheche di Deck originali restano invariate."
 
+#: templates/admin-backup.php
+msgid "Each file holds one whole board, with every card and attachment on it, even private ones."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Each run adds two entries per board to this account's activity."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Edit"
@@ -2190,10 +2198,6 @@ msgstr "Attiva il collegamento pubblico"
 #: src/components/BoardSettingsModal.vue
 msgid "Enable rule"
 msgstr "Attiva regola"
-
-#: templates/admin-backup.php
-msgid "Enable scheduled backups"
-msgstr "Attiva i backup pianificati"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enabled"
@@ -2276,10 +2280,6 @@ msgid_plural "Every %n months"
 msgstr[0] "Ogni mese"
 msgstr[1] "Ogni %n mesi"
 
-#: templates/admin-backup.php
-msgid "Every run writes one backup file per board and deletes the ones that fall outside retention, so this account's Files activity gains two entries per board per run. Nextcloud records those entries for whichever account owns the folder, and no app can switch them off for a single write — the notification setting below only decides whether Kanso tells you about a run, it does not remove these entries. Point this at a dedicated service account to keep them out of your own activity feed. The tradeoff: the backups then live in that account's Files rather than yours, and sharing the folder back to yourself brings the activity entries along."
-msgstr ""
-
 #: src/components/BoardSettingsModal.vue:4558
 msgid "Every week"
 msgid_plural "Every %n weeks"
@@ -2293,7 +2293,7 @@ msgstr[0] "Ogni anno"
 msgstr[1] "Ogni %n anni"
 
 #: templates/admin-backup.php
-msgid "Everyone in the administrators group gets the notification. Each run replaces the previous one, so a backup that keeps failing leaves a single unread entry rather than one per night."
+msgid "Everyone in the administrators group gets the message."
 msgstr ""
 
 #: src/views/BoardView.vue
@@ -2951,6 +2951,10 @@ msgstr "Azioni della cartella"
 msgid "Folder and target column"
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "Folder in that account"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Forever"
 msgstr "Per sempre"
@@ -3116,6 +3120,10 @@ msgstr ""
 msgid "Importing…"
 msgstr "Importazione in corso…"
 
+#: templates/admin-backup.php
+msgid "In a Files folder"
+msgstr ""
+
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
@@ -3140,6 +3148,10 @@ msgstr "Includi archiviate"
 #: src/views/ProjectView.vue
 msgid "Inline code"
 msgstr "Codice in linea"
+
+#: templates/admin-backup.php
+msgid "Inside Kanso (recommended)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardTile.vue
@@ -3205,14 +3217,6 @@ msgstr "Kanso"
 msgid "Kanso & the Guests app"
 msgstr "Kanso e l'app Guests"
 
-#: templates/admin-backup.php
-msgid "Kanso app data (recommended)"
-msgstr ""
-
-#: templates/admin-backup.php
-msgid "Kanso app data keeps each archive inside the app's own storage, next to card attachments. Nothing is written into anyone's Files, so a run adds no Files activity entries and the archives are outside every account's quota. What you give up: they are not browsable, syncable or mountable anywhere — the list at the bottom of this page is the only way to get one back — and a backup that ages out of retention is deleted outright instead of going to a trashbin."
-msgstr ""
-
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Kanso background jobs & email links"
 msgstr "Processi in background e collegamenti email di Kanso"
@@ -3229,6 +3233,10 @@ msgstr ""
 msgid "Kanso board backups"
 msgstr "Backup delle bacheche di Kanso"
 
+#: templates/admin-backup.php
+msgid "Kanso cannot switch them off, and the notification setting below does not remove them."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board."
 msgstr ""
@@ -3236,6 +3244,10 @@ msgstr ""
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
 msgstr "Esportazione Kanso (.zip)"
+
+#: templates/admin-backup.php
+msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it."
@@ -3248,6 +3260,10 @@ msgstr "Kanso apre l'elenco delle bacheche in modo predefinito. Attiva questa op
 #: src/App.vue
 msgid "Kanso settings"
 msgstr "Impostazioni di Kanso"
+
+#: templates/admin-backup.php
+msgid "Kanso writes the files into a Files folder you can open and sync."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Keep my version"
@@ -3676,6 +3692,10 @@ msgstr "Nuovo modello"
 msgid "New view"
 msgstr "Nuova vista"
 
+#: templates/admin-backup.php
+msgid "Newest first."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Next"
 msgstr "Avanti"
@@ -3684,10 +3704,6 @@ msgstr "Avanti"
 msgid "next {date}"
 msgstr "prossima {date}"
 
-#: templates/admin-backup.php
-msgid "Nextcloud account that owns the target folder"
-msgstr "Account Nextcloud proprietario della cartella di destinazione"
-
 #: src/views/BoardList.vue
 msgid "Nextcloud Deck"
 msgstr "Nextcloud Deck"
@@ -3695,6 +3711,10 @@ msgstr "Nextcloud Deck"
 #: src/components/BoardSettingsModal.vue
 msgid "No"
 msgstr "No"
+
+#: templates/admin-backup.php
+msgid "No activity entries and no quota use, but you cannot sync the files or store them elsewhere."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "No activity yet."
@@ -3982,7 +4002,7 @@ msgid "Nothing on the selected board is assigned to you. Choose “All boards”
 msgstr "Nella bacheca selezionata non ti è assegnato nulla. Scegli «Tutte le bacheche» per vedere tutto ciò che ti è assegnato."
 
 #: templates/admin-backup.php
-msgid "Notify administrators about a run"
+msgid "Notify administrators"
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -4013,6 +4033,14 @@ msgstr "Scostamento successivo (giorni)"
 #: src/components/BoardSettingsModal.vue
 msgid "On days"
 msgstr "Nei giorni"
+
+#: templates/admin-backup.php
+msgid "Once a day, Kanso saves a copy of every board as a zip file."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Only administrators can download them, and they can never be shared by a link."
+msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
@@ -4223,6 +4251,10 @@ msgstr "Fissa la bacheca"
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Fissate"
+
+#: templates/admin-backup.php
+msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
+msgstr ""
 
 #: src/views/BoardStats.vue
 msgid "Points / week (avg)"
@@ -5119,10 +5151,6 @@ msgstr "Sistema"
 msgid "T-shirt (XS–XL)"
 msgstr "T-shirt (XS–XL)"
 
-#: templates/admin-backup.php
-msgid "Target folder (Nextcloud path under that account)"
-msgstr "Cartella di destinazione (percorso Nextcloud all'interno di quell'account)"
-
 #: src/components/BoardSettingsModal.vue
 msgid "Target stack"
 msgstr "Colonna di destinazione"
@@ -5169,7 +5197,7 @@ msgid "That is not a date we can use. Pick a day, or clear the field for no expi
 msgstr ""
 
 #: templates/admin-backup.php
-msgid "The archives currently kept in the destination above, newest first. Each one is a full export of a single board — every card and every attachment on it, including ones you cannot normally see — so downloading it is an administrator-only action and the file is never shareable by link."
+msgid "The backups then live in that account's Files."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5183,6 +5211,10 @@ msgstr "Il CSV deve avere una riga di intestazione e almeno una riga di dati."
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "L'app Deck non è installata su questo server, quindi non c'è nulla da importare."
+
+#: templates/admin-backup.php
+msgid "The files use that account's quota, and each write shows up in its activity."
+msgstr ""
 
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app is enabled but its app whitelist is missing: %1$s. Guest accounts shared onto a Kanso board cannot open it (card deep links from emails fail with a generic denial). Add the missing app(s) in Administration settings > Guests."
@@ -5206,6 +5238,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "The only way to get one back is the list at the bottom of this page."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -5635,7 +5671,7 @@ msgid "When someone requests your review on a card it will appear here."
 msgstr "Quando viene richiesta una revisione su una scheda, appare qui."
 
 #: templates/admin-backup.php
-msgid "Where backups are written"
+msgid "Where to keep the backups"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5715,6 +5751,10 @@ msgstr "Sì"
 #: src/views/TrashView.vue
 msgid "Yes, delete"
 msgstr "Sì, elimina"
+
+#: templates/admin-backup.php
+msgid "You can also point that folder at another server with external storage."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "you can edit"

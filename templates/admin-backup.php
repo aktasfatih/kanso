@@ -20,15 +20,20 @@ $notifyLabels = [
 	BackupService::NOTIFY_ALWAYS => $l->t('After every backup'),
 ];
 $destinationLabels = [
-	BackupService::DEST_APPDATA => $l->t('Kanso app data (recommended)'),
-	BackupService::DEST_FILES => $l->t('A folder in Files'),
+	BackupService::DEST_APPDATA => $l->t('Inside Kanso (recommended)'),
+	BackupService::DEST_FILES => $l->t('In a Files folder'),
 ];
 $usesAppData = $config['destination'] === BackupService::DEST_APPDATA;
+$hideIf = static function (bool $hidden): void {
+	if ($hidden) {
+		print_unescaped(' style="display: none;"');
+	}
+};
 ?>
 <div class="section" id="kanso-backup-settings">
 	<h2><?php p($l->t('Kanso board backups')); ?></h2>
 	<p class="settings-hint">
-		<?php p($l->t('Automatically export every Kanso board to a versioned archive on a daily schedule, keeping the last few backups per board. Choose where those archives are written: inside Kanso\'s own app data, or in a Nextcloud folder you can browse and mount elsewhere.')); ?>
+		<?php p($l->t('Once a day, Kanso saves a copy of every board as a zip file.')); ?>
 	</p>
 
 	<p>
@@ -36,11 +41,11 @@ $usesAppData = $config['destination'] === BackupService::DEST_APPDATA;
 			<?php if ($config['enabled']) {
 				print_unescaped('checked');
 			} ?> />
-		<label for="kanso-backup-enabled"><?php p($l->t('Enable scheduled backups')); ?></label>
+		<label for="kanso-backup-enabled"><?php p($l->t('Back up boards automatically')); ?></label>
 	</p>
 
 	<p>
-		<label for="kanso-backup-destination"><?php p($l->t('Where backups are written')); ?></label><br />
+		<label for="kanso-backup-destination"><?php p($l->t('Where to keep the backups')); ?></label><br />
 		<select id="kanso-backup-destination" style="width: 300px;">
 			<?php foreach ($destinationLabels as $value => $label) { ?>
 				<option value="<?php p($value); ?>"
@@ -50,27 +55,36 @@ $usesAppData = $config['destination'] === BackupService::DEST_APPDATA;
 			<?php } ?>
 		</select>
 	</p>
-	<p class="settings-hint" id="kanso-backup-destination-hint-appdata">
-		<?php p($l->t('Kanso app data keeps each archive inside the app\'s own storage, next to card attachments. Nothing is written into anyone\'s Files, so a run adds no Files activity entries and the archives are outside every account\'s quota. What you give up: they are not browsable, syncable or mountable anywhere — the list at the bottom of this page is the only way to get one back — and a backup that ages out of retention is deleted outright instead of going to a trashbin.')); ?>
+	<?php /* Only the selected destination's explanation is on screen; the other
+		   one would describe a store this instance is not using. The server
+		   renders the right one so a reload never flashes the wrong text, and
+		   admin-backup.js keeps them in step from then on. */ ?>
+	<p class="settings-hint" id="kanso-backup-destination-hint-appdata"<?php $hideIf(!$usesAppData); ?>>
+		<?php p($l->t('Kanso keeps the files itself. Nothing goes into anyone\'s Files folder.')); ?>
+		<?php p($l->t('No activity entries and no quota use, but you cannot sync the files or store them elsewhere.')); ?>
+		<?php p($l->t('The only way to get one back is the list at the bottom of this page.')); ?>
 	</p>
-	<p class="settings-hint" id="kanso-backup-destination-hint-files">
-		<?php p($l->t('A folder in Files is the option to pick when you want the archives off this server or simply want to see them: it is the only one you can browse, sync or back with an S3 External Storage mount (Kanso writes the files through Nextcloud and never holds S3 credentials). It costs what any file write costs — the entries described below, the folder account\'s quota, and pruned backups landing in that account\'s trashbin.')); ?>
+	<p class="settings-hint" id="kanso-backup-destination-hint-files"<?php $hideIf($usesAppData); ?>>
+		<?php p($l->t('Kanso writes the files into a Files folder you can open and sync.')); ?>
+		<?php p($l->t('You can also point that folder at another server with external storage.')); ?>
+		<?php p($l->t('The files use that account\'s quota, and each write shows up in its activity.')); ?>
 	</p>
 
-	<div id="kanso-backup-files-config"<?php if ($usesAppData) {
-		print_unescaped(' style="display: none;"');
-	} ?>>
+	<div id="kanso-backup-files-config"<?php $hideIf($usesAppData); ?>>
 		<p>
-			<label for="kanso-backup-account"><?php p($l->t('Nextcloud account that owns the target folder')); ?></label><br />
+			<label for="kanso-backup-account"><?php p($l->t('Account that owns the folder')); ?></label><br />
 			<input type="text" id="kanso-backup-account" placeholder="admin"
 				value="<?php p($config['account']); ?>" style="width: 200px;" />
 		</p>
 		<p class="settings-hint" id="kanso-backup-account-hint">
-			<?php p($l->t('Every run writes one backup file per board and deletes the ones that fall outside retention, so this account\'s Files activity gains two entries per board per run. Nextcloud records those entries for whichever account owns the folder, and no app can switch them off for a single write — the notification setting below only decides whether Kanso tells you about a run, it does not remove these entries. Point this at a dedicated service account to keep them out of your own activity feed. The tradeoff: the backups then live in that account\'s Files rather than yours, and sharing the folder back to yourself brings the activity entries along.')); ?>
+			<?php p($l->t('Each run adds two entries per board to this account\'s activity.')); ?>
+			<?php p($l->t('Kanso cannot switch them off, and the notification setting below does not remove them.')); ?>
+			<?php p($l->t('Point this at a separate account nobody signs in to, and they land in its feed instead of yours.')); ?>
+			<?php p($l->t('The backups then live in that account\'s Files.')); ?>
 		</p>
 
 		<p>
-			<label for="kanso-backup-path"><?php p($l->t('Target folder (Nextcloud path under that account)')); ?></label><br />
+			<label for="kanso-backup-path"><?php p($l->t('Folder in that account')); ?></label><br />
 			<input type="text" id="kanso-backup-path" placeholder="/kanso-backups"
 				value="<?php p($config['path']); ?>" style="width: 360px;" />
 		</p>
@@ -83,7 +97,7 @@ $usesAppData = $config['destination'] === BackupService::DEST_APPDATA;
 	</p>
 
 	<p>
-		<label for="kanso-backup-notify"><?php p($l->t('Notify administrators about a run')); ?></label><br />
+		<label for="kanso-backup-notify"><?php p($l->t('Notify administrators')); ?></label><br />
 		<select id="kanso-backup-notify" style="width: 240px;">
 			<?php foreach ($notifyLabels as $value => $label) { ?>
 				<option value="<?php p($value); ?>"
@@ -94,7 +108,8 @@ $usesAppData = $config['destination'] === BackupService::DEST_APPDATA;
 		</select>
 	</p>
 	<p class="settings-hint" id="kanso-backup-notify-hint">
-		<?php p($l->t('Everyone in the administrators group gets the notification. Each run replaces the previous one, so a backup that keeps failing leaves a single unread entry rather than one per night.')); ?>
+		<?php p($l->t('Everyone in the administrators group gets the message.')); ?>
+		<?php p($l->t('A new one replaces the last, so a backup that keeps failing does not pile up.')); ?>
 	</p>
 
 	<p>
@@ -114,7 +129,9 @@ $usesAppData = $config['destination'] === BackupService::DEST_APPDATA;
 	<div id="kanso-backup-stored">
 		<h3><?php p($l->t('Stored backups')); ?></h3>
 		<p class="settings-hint" id="kanso-backup-stored-hint">
-			<?php p($l->t('The archives currently kept in the destination above, newest first. Each one is a full export of a single board — every card and every attachment on it, including ones you cannot normally see — so downloading it is an administrator-only action and the file is never shareable by link.')); ?>
+			<?php p($l->t('Newest first.')); ?>
+			<?php p($l->t('Each file holds one whole board, with every card and attachment on it, even private ones.')); ?>
+			<?php p($l->t('Only administrators can download them, and they can never be shared by a link.')); ?>
 		</p>
 		<table id="kanso-backup-file-list" class="grid" style="max-width: 720px;">
 			<thead>

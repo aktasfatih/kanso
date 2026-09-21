@@ -27,6 +27,11 @@ import { test, expect, ncLogin, authFor, ADMIN, TESTER, BASE } from './helpers.j
 // Hence the guard below runs over the Files-mode copy specifically, and the
 // app-data hint is asserted separately on what it must admit: the archives leave
 // Files entirely, so Kanso is then the only way to get one back.
+//
+// Because the two destinations say opposite things about activity, exactly one
+// of them may be on screen at a time — both at once read as if both stores were
+// in use. The separation test below pins that, and the length test pins the
+// register: these hints are settings copy, not the README.
 test.describe('Kanso admin backup settings', () => {
 	// The admin settings page is admin-only, and under E2E_ISOLATE the worker's
 	// stored session is a plain per-worker user that would just get a 403 here.
@@ -53,6 +58,27 @@ test.describe('Kanso admin backup settings', () => {
 		'#kanso-backup-notify-hint',
 	]
 
+	// A settings page states what a control does; it does not argue. These hints
+	// grew to 400-640 characters over three rounds of work, which is how an admin
+	// panel turns into documentation nobody reads. The long version lives in the
+	// README; this cap is what keeps it from creeping back here.
+	const HINT_MAX_CHARS = 360
+	const ALL_HINTS = [
+		'#kanso-backup-destination-hint-appdata',
+		'#kanso-backup-destination-hint-files',
+		'#kanso-backup-account-hint',
+		'#kanso-backup-notify-hint',
+		'#kanso-backup-stored-hint',
+	]
+
+	// Fields and copy that only mean something when the archives go into Files.
+	const FILES_ONLY_CONTROLS = [
+		'#kanso-backup-files-config',
+		'#kanso-backup-account',
+		'#kanso-backup-path',
+		'#kanso-backup-destination-hint-files',
+	]
+
 	const gotoPanel = async (page) => {
 		await ncLogin(page, ADMIN)
 		await page.goto(`${BASE}/settings/admin/kanso`)
@@ -69,15 +95,17 @@ test.describe('Kanso admin backup settings', () => {
 		await page.selectOption('#kanso-backup-destination', 'files')
 		await expect(page.locator('#kanso-backup-account')).toBeVisible()
 
-		// 1. The escape hatch is surfaced, right where the setting it depends on is.
+		// 1. The cost is stated plainly, and the escape hatch is right where the
+		// setting it depends on is.
 		const hint = page.locator('#kanso-backup-account-hint')
 		await expect(hint).toBeVisible()
 		const hintText = (await hint.innerText()).toLowerCase()
-		expect(hintText).toContain('service account')
 		expect(hintText).toContain('activity')
-		// ...including the tradeoff, so nobody switches accounts and then wonders
+		expect(hintText).toMatch(/separate account|service account|dedicated account/)
+		expect(hintText).toMatch(/instead of yours|out of your own|not yours/)
+		// ...including what it costs, so nobody switches accounts and then wonders
 		// where their backups went.
-		expect(hintText).toContain('tradeoff')
+		expect(hintText).toMatch(/backups then live|backups live/)
 
 		// 2. And it keeps the run notification apart from the activity entries:
 		// silencing the notification does not remove a single row.
@@ -114,19 +142,117 @@ test.describe('Kanso admin backup settings', () => {
 
 		// App data: quiet and quota-free, but the archives leave Files entirely,
 		// so the panel has to say how they come back.
-		const appdata = (await page.locator('#kanso-backup-destination-hint-appdata').innerText()).toLowerCase()
+		await page.selectOption('#kanso-backup-destination', 'appdata')
+		const appdataHint = page.locator('#kanso-backup-destination-hint-appdata')
+		await expect(appdataHint).toBeVisible()
+		const appdata = (await appdataHint.innerText()).toLowerCase()
+		expect(appdata.length, 'the app-data hint must carry real copy').toBeGreaterThan(40)
 		expect(appdata).toContain('activity')
-		expect(appdata).toMatch(/not browsable|not (?:browsable|syncable)|only way to get one back|list at the bottom/)
+		expect(appdata).toMatch(/cannot sync|not browsable|not (?:browsable|syncable)/)
+		expect(appdata).toMatch(/only way to get one back|list at the bottom/)
 
 		// Files folder: browsable and off-site-capable, and it says so.
-		const files = (await page.locator('#kanso-backup-destination-hint-files').innerText()).toLowerCase()
-		expect(files).toMatch(/external storage|off this server|browse/)
-
-		// The account/path fields belong to the Files destination only.
-		await page.selectOption('#kanso-backup-destination', 'appdata')
-		await expect(page.locator('#kanso-backup-files-config')).toBeHidden()
 		await page.selectOption('#kanso-backup-destination', 'files')
-		await expect(page.locator('#kanso-backup-files-config')).toBeVisible()
+		const filesHint = page.locator('#kanso-backup-destination-hint-files')
+		await expect(filesHint).toBeVisible()
+		const files = (await filesHint.innerText()).toLowerCase()
+		expect(files.length, 'the Files hint must carry real copy').toBeGreaterThan(40)
+		expect(files).toMatch(/external storage|off this server|open and sync|browse/)
+		// ...including the price: quota, and entries in that account's activity.
+		expect(files).toContain('activity')
+	})
+
+	test('only the selected destination is on screen, from the saved value on load', async ({ page }) => {
+		await gotoPanel(page)
+
+		const appdataHint = page.locator('#kanso-backup-destination-hint-appdata')
+		const filesHint = page.locator('#kanso-backup-destination-hint-files')
+		// Shared controls belong to neither destination and must not move when the
+		// picker does.
+		const shared = [
+			// The input itself is parked off-screen by Nextcloud's own .checkbox
+			// rule, so the label is what an admin actually sees and clicks.
+			'label[for="kanso-backup-enabled"]',
+			'#kanso-backup-retention',
+			'#kanso-backup-notify',
+			'#kanso-backup-stored',
+		]
+
+		// App data: every Files-only control is gone — not merely disabled. A
+		// field that means nothing in this mode must not sit there looking
+		// configurable.
+		await page.selectOption('#kanso-backup-destination', 'appdata')
+		await expect(appdataHint).toBeVisible()
+		await expect(filesHint).toBeHidden()
+		for (const selector of FILES_ONLY_CONTROLS) {
+			await expect(page.locator(selector), `${selector} must be hidden under app data`).toBeHidden()
+		}
+		for (const selector of shared) {
+			await expect(page.locator(selector), `${selector} is shared and must stay put`).toBeVisible()
+		}
+
+		// Files: they come back, and so does the explanation that goes with them.
+		await page.selectOption('#kanso-backup-destination', 'files')
+		await expect(filesHint).toBeVisible()
+		await expect(appdataHint).toBeHidden()
+		for (const selector of FILES_ONLY_CONTROLS) {
+			await expect(page.locator(selector), `${selector} must be shown under Files`).toBeVisible()
+		}
+		for (const selector of shared) {
+			await expect(page.locator(selector), `${selector} is shared and must stay put`).toBeVisible()
+		}
+
+		// A round trip keeps what was typed — hiding a field must not erase it.
+		const account = page.locator('#kanso-backup-account')
+		const path = page.locator('#kanso-backup-path')
+		const savedAccount = await account.inputValue()
+		const savedPath = await path.inputValue()
+		await account.fill('backup-bot')
+		await path.fill('/kanso-archive')
+		await page.selectOption('#kanso-backup-destination', 'appdata')
+		await page.selectOption('#kanso-backup-destination', 'files')
+		await expect(account).toHaveValue('backup-bot')
+		await expect(path).toHaveValue('/kanso-archive')
+		await account.fill(savedAccount)
+		await path.fill(savedPath)
+
+		// And the SAVED value drives the initial state: the server renders the
+		// right half hidden, so a reload in app-data mode never flashes the Files
+		// fields on its way to hiding them.
+		await page.selectOption('#kanso-backup-destination', 'appdata')
+		// Wait for the PUT to land: reloading before it does would re-render the
+		// OLD destination and test nothing.
+		await Promise.all([
+			page.waitForResponse((r) => r.url().includes('/api/admin/backup')
+				&& r.request().method() === 'PUT' && r.ok()),
+			page.click('#kanso-backup-save'),
+		])
+		await page.reload()
+		await expect(page.locator('#kanso-backup-destination')).toHaveValue('appdata')
+		await expect(appdataHint).toBeVisible()
+		for (const selector of FILES_ONLY_CONTROLS) {
+			await expect(page.locator(selector), `${selector} must be hidden on load under app data`).toBeHidden()
+		}
+		// The template — not the script — is what hid them, so this holds even
+		// before admin-backup.js has run.
+		const inlineHidden = await page.locator('#kanso-backup-files-config').getAttribute('style')
+		expect(inlineHidden).toContain('none')
+	})
+
+	test('the hints stay short enough to read', async ({ page }) => {
+		await gotoPanel(page)
+		// Both destinations, so the copy of each is measured as rendered.
+		for (const mode of ['appdata', 'files']) {
+			await page.selectOption('#kanso-backup-destination', mode)
+			for (const selector of ALL_HINTS) {
+				// A hidden element's innerText falls back to raw textContent, so
+				// collapse the template's own indentation before measuring.
+				const text = (await page.locator(selector).innerText()).replace(/\s+/g, ' ').trim()
+				expect(text.length, `${selector} must carry real copy`).toBeGreaterThan(10)
+				expect(text.length, `${selector} is back to documentation length (${text.length} chars)`)
+					.toBeLessThanOrEqual(HINT_MAX_CHARS)
+			}
+		}
 	})
 
 	test('a run into app data lists its backups and the download returns a real zip', async ({ page, request }) => {
@@ -135,7 +261,13 @@ test.describe('Kanso admin backup settings', () => {
 		// Switch to app data and take a backup from the panel itself — the whole
 		// round trip an admin does, not an API call behind its back.
 		await page.selectOption('#kanso-backup-destination', 'appdata')
-		await page.check('#kanso-backup-enabled')
+		// Nextcloud's .checkbox rule parks the input at left:-10000px and paints
+		// the label, so the label is the only clickable half of the control.
+		const enabledBox = page.locator('#kanso-backup-enabled')
+		if (!await enabledBox.isChecked()) {
+			await page.click('label[for="kanso-backup-enabled"]')
+		}
+		await expect(enabledBox).toBeChecked()
 		await page.fill('#kanso-backup-retention', '2')
 		await page.click('#kanso-backup-run')
 

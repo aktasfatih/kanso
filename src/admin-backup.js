@@ -49,6 +49,8 @@ function boot() {
 	const enabled = document.getElementById('kanso-backup-enabled')
 	const destination = document.getElementById('kanso-backup-destination')
 	const filesConfig = document.getElementById('kanso-backup-files-config')
+	const appdataHint = document.getElementById('kanso-backup-destination-hint-appdata')
+	const filesHint = document.getElementById('kanso-backup-destination-hint-files')
 	const path = document.getElementById('kanso-backup-path')
 	const account = document.getElementById('kanso-backup-account')
 	const retention = document.getElementById('kanso-backup-retention')
@@ -71,15 +73,28 @@ function boot() {
 		notify: (notify && notify.value) || 'failure',
 	})
 
-	// The account/path fields only mean anything for the Files destination —
-	// showing them under app data would invite an admin to fill in a folder that
-	// nothing reads. Their VALUES are still saved, so switching back and forth
-	// does not make anyone retype a path.
+	// Exactly one destination is on screen at a time. The account/path fields
+	// only mean anything for the Files destination — showing them under app data
+	// would invite an admin to fill in a folder that nothing reads — and the same
+	// goes for the two explanations: leaving both up made the page read as if
+	// both stores were in use. Their VALUES are still saved, so switching back
+	// and forth does not make anyone retype a path.
+	//
+	// The template already renders the right half hidden, so this only has to
+	// keep up with changes; nothing flashes on load.
 	const applyDestination = () => {
-		if (!filesConfig || !destination) {
+		if (!destination) {
 			return
 		}
-		filesConfig.style.display = destination.value === DEST_APPDATA ? 'none' : ''
+		const appdata = destination.value === DEST_APPDATA
+		const toggle = (el, shownUnderAppData) => {
+			if (el) {
+				el.style.display = appdata === shownUnderAppData ? '' : 'none'
+			}
+		}
+		toggle(appdataHint, true)
+		toggle(filesHint, false)
+		toggle(filesConfig, false)
 	}
 
 	const applyLastRun = (config) => {

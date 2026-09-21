@@ -266,25 +266,36 @@ Kanso can write a timestamped `.zip` export of every board on cron, keeping the
 most recent few per board. Turn it on in **Administration settings → Kanso**,
 where you also set how many backups to keep per board and whether a finished run
 announces itself to the administrators (never, only on failure — the default —
-or after every run).
+or after every run). That message goes to everyone in the administrators group,
+and each run replaces the previous one, so a backup that fails every night
+leaves a single unread notification rather than one per night.
+
+The admin panel states each of these in a line or two; this section is the long
+version of the same facts.
 
 **Where they are written** is yours to choose, and the two options trade off
 against each other:
 
-- **Kanso app data** (the default for a new installation) keeps the archives in
-  the app's own storage, alongside card attachments. Nothing is written into
-  anyone's Files, so a run adds no Files activity entries and the archives are
-  outside every account's quota. In exchange they are not browsable, syncable or
-  mountable anywhere: the **Stored backups** list at the bottom of the admin
-  panel is the only way to get one back, and a backup that ages out of retention
-  is deleted outright rather than moved to a trashbin.
-- **A folder in Files** writes them into a Nextcloud folder under an account you
+- **Inside Kanso** (the app's own app data, and the default for a new
+  installation) keeps the archives in Kanso's storage, alongside card
+  attachments. Nothing is written into anyone's Files, so a run adds no Files
+  activity entries and the archives are outside every account's quota. In
+  exchange they are not browsable, syncable or mountable anywhere: the **Stored
+  backups** list at the bottom of the admin panel is the only way to get one
+  back, and a backup that ages out of retention is deleted outright rather than
+  moved to a trashbin.
+- **In a Files folder** writes them into a Nextcloud folder under an account you
   name. This is the one to pick when you want the copies off this server or
   simply want to see them — it is the only destination you can browse, sync, or
   back with an S3 External Storage mount (Kanso writes files through Nextcloud
   and never holds S3 credentials). It costs what any file write costs: the
   activity entries described below, that account's quota (a full quota fails the
   run), and pruned backups landing in its trashbin.
+
+The panel shows the fields for the destination you picked and only those: choose
+**Inside Kanso** and the account and folder fields disappear, because nothing
+would read them. Whatever you typed is kept, so switching back brings it
+straight back.
 
 Downloading a stored backup is an administrator-only action, whichever
 destination is in use: an archive is a full export of a board including cards and
@@ -307,8 +318,8 @@ does not pretend otherwise: it will not silently stop logging your backups, and
 the run notification setting above is about Kanso's own message — setting it to
 *Never* leaves those Files entries exactly where they were.
 
-What you *can* choose is whose feed they land in. Set **Nextcloud account that
-owns the target folder** to a dedicated service account nobody signs in to, and
+What you *can* choose is whose feed they land in. Set **Account that owns the
+folder** to a dedicated service account nobody signs in to, and
 the entries land in that account's stream instead of yours. The tradeoffs are
 real and worth stating up front: the backups then live in that account's Files,
 so you no longer see them in your own — and if you share the folder back to
