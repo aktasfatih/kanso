@@ -198,19 +198,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CheckDecagramOutlineIcon v-else :size="12" />
 				</span>
 				<!-- Assignee avatar stack - pushed to the right via margin-left:auto -->
-				<div v-if="card.assigneeIds && card.assigneeIds.length" class="card-tile__assignees" :aria-label="t('kanso', 'Assignees')">
-					<NcAvatar
-						v-for="uid in visibleAssigneeIds"
-						:key="uid"
-						:user="uid"
-						:size="compact ? 20 : 24"
-						:hide-status="true"
-						:disable-tooltip="false"
-						class="card-tile__avatar" />
-					<span v-if="extraAssigneeCount > 0" class="card-tile__avatar-overflow">
-						+{{ extraAssigneeCount }}
-					</span>
-				</div>
+				<AssigneeAvatars
+					v-if="card.assigneeIds && card.assigneeIds.length"
+					class="card-tile__assignees"
+					:assignee-ids="card.assigneeIds"
+					:size="compact ? 20 : 24" />
 			</div>
 		</button>
 
@@ -250,7 +242,7 @@ import BugIcon from 'vue-material-design-icons/Bug.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import CheckboxMarkedCircleOutlineIcon from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
 import BroomIcon from 'vue-material-design-icons/Broom.vue'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import AssigneeAvatars from './AssigneeAvatars.vue'
 import { translate as t } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { CARD_TYPES } from '../composables/useCardType.js'
@@ -489,19 +481,6 @@ const waitingTitle = computed(() => {
 })
 
 const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.type) ?? null)
-
-// Assignee avatar stack: max 3 visible + overflow count
-const MAX_VISIBLE_ASSIGNEES = 3
-
-const visibleAssigneeIds = computed(() => {
-	const ids = Array.isArray(props.card.assigneeIds) ? props.card.assigneeIds : []
-	return ids.slice(0, MAX_VISIBLE_ASSIGNEES)
-})
-
-const extraAssigneeCount = computed(() => {
-	const ids = Array.isArray(props.card.assigneeIds) ? props.card.assigneeIds : []
-	return Math.max(0, ids.length - MAX_VISIBLE_ASSIGNEES)
-})
 </script>
 
 <style scoped>
@@ -780,7 +759,7 @@ const extraAssigneeCount = computed(() => {
  * distinguishable against a done tile. */
 .card-tile--done .card-tile__label-chip--no-color,
 .card-tile--done .card-tile__estimate,
-.card-tile--done .card-tile__avatar-overflow {
+.card-tile--done :deep(.assignee-stack__overflow) {
 	background: var(--color-main-background);
 }
 
@@ -1006,40 +985,11 @@ const extraAssigneeCount = computed(() => {
 	border: 1px solid var(--color-border);
 }
 
-/* Assignee avatar stack - inside .card-tile__meta, pushed to the right */
+/* Assignee avatar stack (AssigneeAvatars) - inside .card-tile__meta, pushed to
+ * the right. The stack's own layout lives in that component; the tile only
+ * places it. */
 .card-tile__assignees {
-	display: flex;
-	align-items: center;
 	margin-left: auto;
-}
-
-.card-tile__avatar {
-	margin-left: -6px;
-	flex-shrink: 0;
-	aspect-ratio: 1;
-	border: 2px solid var(--color-main-background);
-	border-radius: 50%;
-}
-
-.card-tile__assignees .card-tile__avatar:first-child {
-	margin-left: 0;
-}
-
-.card-tile__avatar-overflow {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 24px;
-	height: 24px;
-	flex-shrink: 0;
-	aspect-ratio: 1;
-	border-radius: 50%;
-	background: var(--color-background-dark);
-	border: 2px solid var(--color-main-background);
-	color: var(--color-text-maxcontrast);
-	font-size: 0.65rem;
-	font-weight: 700;
-	margin-left: -6px;
 }
 
 /* ── Compact density (#3415) ───────────────────────────────────────────────────
@@ -1119,11 +1069,6 @@ const extraAssigneeCount = computed(() => {
 	height: 12px;
 }
 
-/* Smaller overflow badge to match the 20px compact avatars (NcAvatar itself is
- * sized via its :size prop above). */
-.card-tile--compact .card-tile__avatar-overflow {
-	width: 20px;
-	height: 20px;
-	font-size: 0.6rem;
-}
+/* The compact overflow badge shrinks with the avatars automatically - both are
+ * sized off the :size prop handed to AssigneeAvatars above. */
 </style>

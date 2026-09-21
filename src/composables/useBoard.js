@@ -12,6 +12,7 @@ import {
 	restoreStack as apiRestoreStack,
 	createCard as apiCreateCard,
 } from '../services/api.js'
+import { apiAnswerStatus } from '../services/apiErrors.js'
 import { pushActive } from '../services/realtime.js'
 import { isBoardMovePending } from './useCardMove.js'
 import { seedCursor, syncBoardDelta } from './useBoardDelta.js'
@@ -38,17 +39,19 @@ export { boardQueryKey } from './queryKeys.js'
  *
  * 403 on this GET can only be Kanso's own ACL answer. 404 is the looser of the
  * two - a reverse proxy, a disabled app or a mid-upgrade Nextcloud can produce
- * one that Kanso never saw - and it is classified with it anyway, because that is
- * already the answer BoardView gives such a response ("This board no longer
- * exists.", #3662) and a client cannot tell the difference from the body either.
- * The cost of being wrong is one re-read: the board comes back as soon as the
- * viewer navigates to it again.
+ * one that Kanso never saw - and it used to be classified with it anyway, on
+ * the grounds that a client could not tell the difference from the body either.
+ * It can (#155): Kanso's own API 404 is JSON, `{"error":"Not found"}` out of
+ * ApiErrorTrait, and Nextcloud's router 404 is an HTML error page. A 404 that
+ * is not ours therefore falls to the transient side above - it is a server
+ * failing to answer, not an answer - and apiAnswerStatus is where that line is
+ * drawn, for this file and for the views that pick the copy alike.
  *
  * @param {unknown} error - a rejected fetchBoard error, or null
  * @return {boolean} true only for an authorisation/existence answer
  */
 function isAccessAnswer(error) {
-	const status = error?.response?.status
+	const status = apiAnswerStatus(error)
 	return status === 403 || status === 404
 }
 

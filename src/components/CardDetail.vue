@@ -2559,6 +2559,7 @@ import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, moveCard as apiMoveCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
 import { useCardFields } from '../composables/useCardFields.js'
+import { apiAnswerStatus } from '../services/apiErrors.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
@@ -2698,9 +2699,15 @@ const isError = computed(() => cardIsError.value || refResolveError.value)
 // resolve to a live card - treat it as a 404 (gone). Otherwise read the real HTTP
 // status off the axios rejection: 404 = deleted, 403 = access revoked, anything
 // else (incl. a network error with no response) = transient/retryable.
+//
+// "The real HTTP status" is what apiAnswerStatus returns, and a 404 that Kanso
+// did not send is not one: a Nextcloud that briefly stops routing
+// /apps/kanso/api/* 404s every endpoint at once (#155), and the card that was
+// open when it happened was being declared deleted. Those are transient here,
+// which also restores the Retry button on them.
 const cardErrorStatus = computed(() => {
 	if (refResolveError.value) return 404
-	return cardError.value?.response?.status ?? null
+	return apiAnswerStatus(cardError.value)
 })
 const cardIsGone = computed(() => cardErrorStatus.value === 404)
 const cardIsForbidden = computed(() => cardErrorStatus.value === 403)

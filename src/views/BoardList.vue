@@ -270,6 +270,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- ── Body ───────────────────────────────────────────────────────── -->
 		<div class="board-list-body">
+			<!-- A failed re-read over a list we already hold (#155). TanStack keeps
+			     `data` on error, and a Nextcloud that briefly stops routing
+			     /apps/kanso/api/* 404s this feed along with every other endpoint -
+			     so swapping the grid for "Failed to load boards." turned a blip
+			     into an empty page. Say the same thing above the list instead and
+			     leave the list alone; the next refetch clears it by itself. -->
+			<div v-if="isError && hasBoards" class="board-list-error" data-test="boards-stale-error">
+				<p>{{ t('kanso', 'Failed to load boards. Please try again.') }}</p>
+			</div>
+
 			<!-- Skeleton placeholders while cold-loading -->
 			<div v-if="isLoading" class="board-grid">
 				<div v-for="i in 6" :key="i" class="board-tile board-tile--skeleton">
@@ -278,8 +288,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</div>
 
-			<!-- Error state -->
-			<div v-else-if="isError" class="board-list-error">
+			<!-- Error state: nothing cached to fall back on. -->
+			<div v-else-if="isError && !hasBoards" class="board-list-error">
 				<p>{{ t('kanso', 'Failed to load boards. Please try again.') }}</p>
 			</div>
 
@@ -562,6 +572,8 @@ import { fetchDeckImportBoards, importDeckBoard, importBoardFile, importTrelloBo
 const router = useRouter()
 const queryClient = useQueryClient()
 const { data: boards, isLoading, isError, createBoard, updateBoard, togglePin } = useBoards()
+// Is there a cached list to keep rendering when a re-read fails? (#155)
+const hasBoards = computed(() => Array.isArray(boards.value) && boards.value.length > 0)
 const {
 	data: groupsData,
 	createGroup,

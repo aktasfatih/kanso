@@ -303,13 +303,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:4385
+#: src/components/CardDetail.vue:4392
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
 msgstr[1] "vor %n Tagen"
 
-#: src/components/CardDetail.vue:4383
+#: src/components/CardDetail.vue:4390
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
@@ -333,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4381
+#: src/components/CardDetail.vue:4388
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -375,7 +375,7 @@ msgid_plural "%n rows were skipped because they had no title."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardTimelineView.vue:306
+#: src/components/BoardTimelineView.vue:303
 msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n nicht geplante Karte"
@@ -709,9 +709,9 @@ msgstr "hat ein Mitglied zugewiesen"
 msgid "Assignee"
 msgstr "Zugewiesen"
 
+#: src/components/AssigneeAvatars.vue
 #: src/components/BoardFilterBar.vue
 #: src/components/CardPreview.vue
-#: src/components/CardTile.vue
 msgid "Assignees"
 msgstr "Zugewiesene"
 
@@ -1746,7 +1746,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4574
+#: src/components/CardDetail.vue:4581
 msgid "day"
 msgid_plural "days"
 msgstr[0] "Tag"
@@ -3147,7 +3147,7 @@ msgstr "Kursiv"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6344
+#: src/components/CardDetail.vue:6351
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3443,7 +3443,7 @@ msgid "Mon"
 msgstr "Mo"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4576
+#: src/components/CardDetail.vue:4583
 msgid "month"
 msgid_plural "months"
 msgstr[0] "Monat"
@@ -4844,7 +4844,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Diskussionsbereich anzeigen"
 
-#: src/components/CardDetail.vue:6350
+#: src/components/CardDetail.vue:6357
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
@@ -5531,7 +5531,7 @@ msgid "Wed"
 msgstr "Mi"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4575
+#: src/components/CardDetail.vue:4582
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "Woche"
@@ -5612,7 +5612,7 @@ msgid "wrote"
 msgstr "schrieb"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4577
+#: src/components/CardDetail.vue:4584
 msgid "year"
 msgid_plural "years"
 msgstr[0] "Jahr"

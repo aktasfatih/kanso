@@ -383,14 +383,29 @@ test.describe('Public board is interactive read-only', () => {
 		await expect(detail.locator('.public-subcards')).toHaveCount(0)
 	})
 
-	test('scrolls vertically and opens a read-only card detail with full description', async ({ page }) => {
+	test('scrolls inside the column and opens a read-only card detail with full description', async ({ page }) => {
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		await expect(page.locator('.public-board__title')).toHaveText('Public Interactive E2E')
 
-		// The mount is a real scroll container (all cards reachable, not just the
-		// top of the fold).
-		const scrollable = await page.locator('#kanso-public').evaluate((el) => el.scrollHeight > el.clientHeight)
-		expect(scrollable).toBe(true)
+		// #117: this used to assert the OPPOSITE — that #kanso-public itself
+		// overflows — which pinned the bug as the spec. Two vertical scrollers
+		// fought each other: the column was capped at `calc(100vh - 180px)` while
+		// its real box is the window minus NC's header and the board's own chrome,
+		// so the page over-scrolled by a constant at every viewport size. The mount
+		// is now a fixed-height shell that does NOT scroll…
+		const outer = await page.locator('#kanso-public').evaluate((el) => ({
+			scrollHeight: el.scrollHeight,
+			clientHeight: el.clientHeight,
+		}))
+		expect(outer.scrollHeight).toBeLessThanOrEqual(outer.clientHeight)
+
+		// …and the card list inside the column is the thing that scrolls (18 cards
+		// do not fit a phone- or laptop-height column).
+		const inner = await page.locator('.public-col__cards').first().evaluate((el) => ({
+			scrollHeight: el.scrollHeight,
+			clientHeight: el.clientHeight,
+		}))
+		expect(inner.scrollHeight).toBeGreaterThan(inner.clientHeight)
 
 		// The long-description tile is truncated on the board (tail marker hidden).
 		const tile = page.locator('.public-card').filter({ hasText: 'Card with long description' })
@@ -432,6 +447,93 @@ test.describe('Public board is interactive read-only', () => {
 		await detail.locator('.public-detail__close').click()
 		await expect(page.locator('.public-detail')).toHaveCount(0)
 	})
+})
+
+// #117: the public share has to be a PROPER page — fill the window, and keep
+// its scrolling INSIDE the board instead of around it.
+//
+// Two columns is the case that exposes the shrink-wrap: #kanso-public is a flex
+// item of NC's #content (display: flex), and with no flex/width it fell back to
+// `flex: 0 1 auto` and sized to max-content, so a 2-column board drew in a 648px
+// strip on a 1600px screen with 936px dead. Six columns would hide it — their
+// max-content already exceeds the viewport.
+test.describe('Public board layout fills the window', () => {
+	// True anonymous reader (opt out of the shared admin storageState) — under
+	// the admin session NC renders its own app chrome around #content and these
+	// width/overflow numbers would be measured on a different page.
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	let boardId = 0
+	let token = ''
+
+	test.beforeAll(async () => {
+		boardId = (await api('POST', '/boards', { title: 'Public Layout E2E' })).body.id
+		const todo = (await api('POST', '/stacks', { boardId, title: 'To do' })).body.id
+		await api('POST', '/stacks', { boardId, title: 'Done' })
+		// Enough cards that the first column's list must scroll at any viewport
+		// tested below — that inner scroll is the one that has to exist.
+		for (let i = 1; i <= 25; i++) {
+			await api('POST', '/cards', { stackId: todo, title: `Layout card ${i}` })
+		}
+		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
+	})
+
+	test.afterAll(async () => {
+		if (boardId) await api('DELETE', `/boards/${boardId}`)
+	})
+
+	// Desktop, laptop and phone. The bug was viewport-INDEPENDENT (the same
+	// shrink-wrapped strip, and an outer overflow of a constant ~60-90px at every
+	// size), so one viewport would not have shown it was arithmetic.
+	for (const vp of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+		test(`fills #content and scrolls inside the column at ${vp.width}x${vp.height}`, async ({ page }) => {
+			await page.setViewportSize(vp)
+			await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+			await expect(page.locator('.public-board__title')).toHaveText('Public Layout E2E')
+			await expect(page.locator('.public-col')).toHaveCount(2)
+
+			const m = await page.evaluate(() => {
+				const q = (s) => document.querySelector(s)
+				const content = q('#content')
+				const mount = q('#kanso-public')
+				const cols = q('.public-board__columns')
+				const list = q('.public-col__cards')
+				const footer = q('.public-board__footer')
+				return {
+					contentWidth: content.getBoundingClientRect().width,
+					boardWidth: q('.public-board').getBoundingClientRect().width,
+					outerOverflow: mount.scrollHeight - mount.clientHeight,
+					docOverflow: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+					colsOverflowY: cols.scrollHeight - cols.clientHeight,
+					listOverflow: list.scrollHeight - list.clientHeight,
+					footerBottom: footer.getBoundingClientRect().bottom,
+					innerHeight: window.innerHeight,
+				}
+			})
+
+			// The board fills the row it sits in rather than shrink-wrapping to its
+			// columns (this was 648 vs 1584 at 1600px wide).
+			expect(m.boardWidth).toBeGreaterThanOrEqual(m.contentWidth - 1)
+
+			// Nothing scrolls vertically AROUND the board: no outer scroller on the
+			// mount, the document, or the stack row. This is the assertion that used
+			// to be inverted — it asserted the mount DOES overflow, which pinned the
+			// two-fighting-scrollers bug as the expected behaviour.
+			expect(m.outerOverflow).toBeLessThanOrEqual(0)
+			expect(m.docOverflow).toBeLessThanOrEqual(0)
+			expect(m.colsOverflowY).toBeLessThanOrEqual(0)
+
+			// The column's card list is what scrolls instead.
+			expect(m.listOverflow).toBeGreaterThan(0)
+
+			// And the footer is on screen without any outer scrolling. Honest note:
+			// core's `#body-public footer` rule pins it to the viewport bottom
+			// (computed `position: fixed`), so this holds by construction rather
+			// than by the flex shell — it is a tripwire for a future change that
+			// takes it out of that rule, not the discriminating assertion above.
+			expect(m.footerBottom).toBeLessThanOrEqual(m.innerHeight + 1)
+		})
+	}
 })
 
 // Opt-in exposure toggle (#3949): the public board is person-free by default,

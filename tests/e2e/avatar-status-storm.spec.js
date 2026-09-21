@@ -51,8 +51,8 @@ test.describe('Avatar user-status storm on board load (#3663)', () => {
 
 		// Wait for the assignee avatars to actually render — this is the mount
 		// point that used to fire the storm.
-		await page.waitForSelector('.card-tile__avatar', { timeout: 30_000 })
-		await expect(page.locator('.card-tile__avatar').first()).toBeVisible()
+		await page.waitForSelector('.card-tile__assignees .assignee-stack__avatar', { timeout: 30_000 })
+		await expect(page.locator('.card-tile__assignees .assignee-stack__avatar').first()).toBeVisible()
 		// Give any (mis)fired status requests a moment to land.
 		await page.waitForTimeout(1500)
 

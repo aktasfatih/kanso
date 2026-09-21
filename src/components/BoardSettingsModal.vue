@@ -5389,10 +5389,23 @@ async function doDeleteAutoRule(rule) {
 	align-items: center;
 	gap: 8px;
 	position: relative;
+	/* Last-resort safety net: the settings drawer is only ~295px of content
+	   wide, and on a phone (where it goes full-width under a 164px rail) it is
+	   narrower still. If the row's fixed children alone outgrow it, wrap the
+	   trailing button onto a second line instead of pushing it out of the
+	   drawer behind a horizontal scrollbar. */
+	flex-wrap: wrap;
 }
 
 .label-settings__create-input {
 	flex: 1;
+	/* `flex: 1` alone does NOT let this shrink: an <input> has an intrinsic
+	   minimum width (~136px in Chromium) and `min-width: auto` floors the flex
+	   item at it. On the Review types row — swatch + name + Stage spinner + Add
+	   — that floor made the row ~336px inside a 295px column, so the Add button
+	   rendered off the edge and could only be reached by scrolling sideways.
+	   `min-width: 0` lets the name field give up the space instead. */
+	min-width: 0;
 	height: 36px;
 	padding: 0 10px;
 	border: 1px solid var(--color-border);
