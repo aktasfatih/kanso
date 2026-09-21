@@ -61,6 +61,7 @@ function boot() {
 	const fileRows = document.getElementById('kanso-backup-file-rows')
 	const fileList = document.getElementById('kanso-backup-file-list')
 	const fileEmpty = document.getElementById('kanso-backup-file-empty')
+	const fileError = document.getElementById('kanso-backup-file-error')
 
 	const payload = () => ({
 		enabled: !!enabled.checked,
@@ -150,6 +151,30 @@ function boot() {
 		if (fileEmpty) {
 			fileEmpty.style.display = any ? 'none' : ''
 		}
+		// A listing that arrived clears whatever the last failed one said.
+		if (fileError) {
+			fileError.style.display = 'none'
+		}
+	}
+
+	// "The request failed" and "there are no backups" are different facts, and an
+	// admin must be able to tell them apart: with the app-data destination this
+	// table is the ONLY view of the stored archives, so rendering the empty state
+	// after a failed request would claim the backups are gone.
+	const showFilesError = () => {
+		if (fileRows) {
+			fileRows.replaceChildren()
+		}
+		if (fileList) {
+			fileList.style.display = 'none'
+		}
+		if (fileEmpty) {
+			fileEmpty.style.display = 'none'
+		}
+		if (fileError) {
+			fileError.textContent = t('kanso', 'Could not load the stored backups.')
+			fileError.style.display = ''
+		}
 	}
 
 	const loadFiles = async () => {
@@ -157,7 +182,7 @@ function boot() {
 			const { data } = await axios.get(url('/api/admin/backup/files'))
 			renderFiles((data && data.files) || [])
 		} catch (e) {
-			renderFiles([])
+			showFilesError()
 		}
 	}
 

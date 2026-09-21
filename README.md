@@ -310,8 +310,8 @@ whenever you like; the folder and account you typed are remembered either way.
 **Keeping the backups out of your own activity feed** (Files folder only).
 Nextcloud's Activity app
 records a *file created* entry for every backup written and a *file deleted*
-entry for every one that ages out of retention, so a run over N boards adds 2N
-entries to the activity stream of whichever account owns the target folder.
+entry for every one that ages out of retention, so a run over N boards adds up
+to 2N entries to the activity stream of whichever account owns the target folder.
 Those entries come from Nextcloud's own Files hooks rather than from Kanso, and
 no app API in Nextcloud 32–34 suppresses them for an individual write. Kanso
 does not pretend otherwise: it will not silently stop logging your backups, and

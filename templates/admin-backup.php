@@ -77,7 +77,7 @@ $hideIf = static function (bool $hidden): void {
 				value="<?php p($config['account']); ?>" style="width: 200px;" />
 		</p>
 		<p class="settings-hint" id="kanso-backup-account-hint">
-			<?php p($l->t('Each run adds two entries per board to this account\'s activity.')); ?>
+			<?php p($l->t('Each run adds up to two entries per board to this account\'s activity.')); ?>
 			<?php p($l->t('Kanso cannot switch them off, and the notification setting below does not remove them.')); ?>
 			<?php p($l->t('Point this at a separate account nobody signs in to, and they land in its feed instead of yours.')); ?>
 			<?php p($l->t('The backups then live in that account\'s Files.')); ?>
@@ -147,5 +147,11 @@ $hideIf = static function (bool $hidden): void {
 			</tbody>
 		</table>
 		<p class="settings-hint" id="kanso-backup-file-empty"><?php p($l->t('No backups stored yet.')); ?></p>
+		<?php /* A listing that could not be fetched is NOT an empty listing: under
+			   the app-data destination this table is the only view of the stored
+			   archives, so showing "No backups stored yet." after a failed request
+			   would tell an admin their backups are gone. admin-backup.js fills and
+			   shows this instead, and hides it again on the next good listing. */ ?>
+		<p class="settings-hint" id="kanso-backup-file-error" style="display: none;"></p>
 	</div>
 </div>

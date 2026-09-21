@@ -7,9 +7,9 @@ import { test, expect, ncLogin, authFor, ADMIN, TESTER, BASE } from './helpers.j
 // GitHub #161 — where scheduled backups are written, and what the panel is
 // allowed to say about it.
 //
-// A backup written into a user's Files folder adds two Files-activity entries
-// per board per run (one created, one deleted by retention pruning) to the
-// stream of whoever owns the folder. Nextcloud's own Files hooks write those; no
+// A backup written into a user's Files folder adds up to two Files-activity
+// entries per board per run (one created, plus one deleted once retention has
+// something to prune) to the stream of whoever owns the folder. Nextcloud's own Files hooks write those; no
 // app API in NC 32-34 suppresses them for an individual write, and measurement
 // confirmed it: OCP\Activity\IManager::setCurrentUserId() does not reach them at
 // all (the Activity app reads OCA\Activity\CurrentUser, i.e. the user SESSION),
@@ -253,6 +253,48 @@ test.describe('Kanso admin backup settings', () => {
 					.toBeLessThanOrEqual(HINT_MAX_CHARS)
 			}
 		}
+	})
+
+	test('a listing that could not be fetched says so instead of claiming there are none', async ({ page }) => {
+		// With the app-data destination this table is the ONLY view of the stored
+		// archives, so an admin who meets "No backups stored yet." after a failed
+		// request reads it as "my backups are gone". The two states must differ.
+		let failListing = true
+		await page.route('**/api/admin/backup/files*', (route) => {
+			if (failListing) {
+				return route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'boom' }),
+				})
+			}
+			return route.continue()
+		})
+
+		await gotoPanel(page)
+
+		const error = page.locator('#kanso-backup-file-error')
+		const empty = page.locator('#kanso-backup-file-empty')
+		await expect(error).toBeVisible()
+		await expect(error).toContainText(/could not load/i)
+		// ...and NOT the empty state, nor a table an admin could read as complete.
+		await expect(empty).toBeHidden()
+		await expect(page.locator('#kanso-backup-file-list')).toBeHidden()
+
+		// A later good listing clears it — the panel must not stay stuck on an
+		// error the server has since recovered from. Saving reloads the list.
+		failListing = false
+		await Promise.all([
+			page.waitForResponse((r) => r.url().includes('/api/admin/backup/files') && r.ok()),
+			page.click('#kanso-backup-save'),
+		])
+		await expect(error).toBeHidden()
+		// And exactly one of the two real states is back on screen, whichever it is.
+		await expect.poll(async () => {
+			const listed = await page.locator('#kanso-backup-file-list').isVisible()
+			const none = await empty.isVisible()
+			return listed !== none
+		}, { message: 'after a good listing the panel shows either the table or the empty hint' }).toBe(true)
 	})
 
 	test('a run into app data lists its backups and the download returns a real zip', async ({ page, request }) => {

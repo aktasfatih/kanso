@@ -1584,6 +1584,10 @@ msgstr ""
 msgid "Could not load that board’s columns."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "Could not load the stored backups."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Could not load your boards."
 msgstr ""
@@ -2128,7 +2132,7 @@ msgid "Each file holds one whole board, with every card and attachment on it, ev
 msgstr ""
 
 #: templates/admin-backup.php
-msgid "Each run adds two entries per board to this account's activity."
+msgid "Each run adds up to two entries per board to this account's activity."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
