@@ -38,6 +38,36 @@ use Psr\Log\LoggerInterface;
  * leaves a trace and nobody visits it nightly. What it announces is the admin's
  * choice - {@see KEY_NOTIFY}: never, only on failure (the default), or always.
  * See {@see announce()}.
+ *
+ * ON THE FILES-ACTIVITY ENTRIES THIS PRODUCES (#161). Writing into a real user
+ * folder trips Nextcloud's `post_create`/`post_delete` hooks, so every run adds
+ * a "created" entry per board plus a "deleted" entry per pruned file - 2N rows
+ * per run - to the backup account's activity stream, authored by nobody (cron
+ * has no session user), which the Activity app renders as "deleted account".
+ * These rows are NOT the notification above and {@see KEY_NOTIFY} does not
+ * govern them: NOTIFY_NEVER silences Kanso's own message and leaves every one
+ * of these rows in place. Kanso does NOT try to suppress them, and two candidate
+ * mechanisms were MEASURED against NC 34 / activity 7.0.0 before that was
+ * settled:
+ *
+ *   - `IActivityManager::setCurrentUserId()` does nothing here. The Activity app
+ *     never consults it when authoring file events - `FilesHooks` reads
+ *     `OCA\Activity\CurrentUser`, which reads the user SESSION. It is only used
+ *     to pick a RENDERING language/recipient in the mail and notification paths.
+ *     Wrapping the sweep in it left the rows byte-for-byte unchanged.
+ *   - Forcing the session user (`IUserSession::setVolatileActiveUser()`) does
+ *     change them - author becomes the backup account and the rows turn into
+ *     self-actions, which suppresses the notification and email halves - but it
+ *     is not safe to ship: `OCA\Activity\CurrentUser` memoises the UID on first
+ *     use and there is no API to reset it. So the effect is order-dependent
+ *     inside a shared cron process (any earlier file write in the same process
+ *     makes it a no-op) and, when it does take, it leaks onto file activity
+ *     written by LATER jobs in that process. Both directions were reproduced.
+ *
+ * The honest remedy is therefore a configuration one, and it is the one the
+ * admin panel documents: point {@see KEY_ACCOUNT} at a dedicated service account
+ * so the rows land in a stream nobody reads. Nothing in the UI or the docs may
+ * claim the entries stop being recorded - see tests/e2e/admin-backup-settings.
  */
 class BackupService {
 	public const APP_ID = 'kanso';

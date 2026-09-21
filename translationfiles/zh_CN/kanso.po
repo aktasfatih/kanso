@@ -2231,6 +2231,10 @@ msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
+#: templates/admin-backup.php
+msgid "Every run writes one backup file per board and deletes the ones that fall outside retention, so this account's Files activity gains two entries per board per run. Nextcloud records those entries for whichever account owns the folder, and no app can switch them off for a single write — the notification setting below only decides whether Kanso tells you about a run, it does not remove these entries. Point this at a dedicated service account to keep them out of your own activity feed. The tradeoff: the backups then live in that account's Files rather than yours, and sharing the folder back to yourself brings the activity entries along."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue:4558
 msgid "Every week"
 msgid_plural "Every %n weeks"

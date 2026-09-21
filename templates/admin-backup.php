@@ -39,6 +39,9 @@ $notifyLabels = [
 		<input type="text" id="kanso-backup-account" placeholder="admin"
 			value="<?php p($config['account']); ?>" style="width: 200px;" />
 	</p>
+	<p class="settings-hint" id="kanso-backup-account-hint">
+		<?php p($l->t('Every run writes one backup file per board and deletes the ones that fall outside retention, so this account\'s Files activity gains two entries per board per run. Nextcloud records those entries for whichever account owns the folder, and no app can switch them off for a single write — the notification setting below only decides whether Kanso tells you about a run, it does not remove these entries. Point this at a dedicated service account to keep them out of your own activity feed. The tradeoff: the backups then live in that account\'s Files rather than yours, and sharing the folder back to yourself brings the activity entries along.')); ?>
+	</p>
 
 	<p>
 		<label for="kanso-backup-path"><?php p($l->t('Target folder (Nextcloud path under that account)')); ?></label><br />

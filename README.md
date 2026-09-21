@@ -258,6 +258,34 @@ themselves. Restoring a board from a Kanso export is exempt — an archive is
 already bounded by its own size limit, and stopping a restore midway would leave
 a half-restored board.
 
+### Scheduled board backups
+
+Kanso can write a timestamped `.zip` export of every board into a Nextcloud
+folder on cron, keeping the most recent few per board. Turn it on in
+**Administration settings → Kanso**, where you also set the target folder, the
+account that owns it, how many backups to keep per board, and whether a finished
+run announces itself to the administrators (never, only on failure — the
+default — or after every run). Back that folder with an S3 External Storage
+mount if you want off-site copies — Kanso only writes files through Nextcloud
+and never holds S3 credentials.
+
+**Keeping the backups out of your own activity feed.** Nextcloud's Activity app
+records a *file created* entry for every backup written and a *file deleted*
+entry for every one that ages out of retention, so a run over N boards adds 2N
+entries to the activity stream of whichever account owns the target folder.
+Those entries come from Nextcloud's own Files hooks rather than from Kanso, and
+no app API in Nextcloud 32–34 suppresses them for an individual write. Kanso
+does not pretend otherwise: it will not silently stop logging your backups, and
+the run notification setting above is about Kanso's own message — setting it to
+*Never* leaves those Files entries exactly where they were.
+
+What you *can* choose is whose feed they land in. Set **Nextcloud account that
+owns the target folder** to a dedicated service account nobody signs in to, and
+the entries land in that account's stream instead of yours. The tradeoffs are
+real and worth stating up front: the backups then live in that account's Files,
+so you no longer see them in your own — and if you share the folder back to
+yourself to browse or download them, the activity entries come with it.
+
 ### Offline data on the device
 
 Kanso is an installable PWA: a service worker caches the app shell, and the
