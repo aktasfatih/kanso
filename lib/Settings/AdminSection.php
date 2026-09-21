@@ -37,8 +37,19 @@ class AdminSection implements IIconSection {
 		return 80;
 	}
 
+	/**
+	 * The settings navigation renders this icon with
+	 * `filter: var(--background-invert-if-dark)` — `no` on light themes,
+	 * `invert(100%)` on dark ones. So the source asset has to be DARK: black
+	 * stays black on light themes and is inverted to white on dark ones.
+	 *
+	 * `img/app.svg` is the app-menu icon and is deliberately white (issue #162
+	 * — it rendered invisible here); every other app ships a separate dark
+	 * variant for its section (theming, privacy, serverinfo, … all return
+	 * `app-dark.svg`), which is what this returns.
+	 */
 	#[\Override]
 	public function getIcon(): string {
-		return $this->urlGenerator->imagePath('kanso', 'app.svg');
+		return $this->urlGenerator->imagePath('kanso', 'app-dark.svg');
 	}
 }
