@@ -11,6 +11,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.34.1](https://github.com/aktasfatih/kanso/compare/v0.34.0...v0.34.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* make the public share link fill the window instead of a narrow strip ([c56432d](https://github.com/aktasfatih/kanso/commit/c56432d53dedb259e53a1b1ce1c54cf0aaff1f13)), closes [#117](https://github.com/aktasfatih/kanso/issues/117)
+* refuse to install on a PHP version too old to run Kanso ([c69bb2a](https://github.com/aktasfatih/kanso/commit/c69bb2adace4537c436a2ddd0ff9d40f2d0038b6)), closes [#158](https://github.com/aktasfatih/kanso/issues/158)
+* **settings:** show the Kanso icon in Administration in your theme's colour, not always white ([12ac951](https://github.com/aktasfatih/kanso/commit/12ac951c019d51d2a91680cd043d4ee023ec8222)), closes [#162](https://github.com/aktasfatih/kanso/issues/162)
+* stop reporting a server hiccup as "This board no longer exists" ([902b74e](https://github.com/aktasfatih/kanso/commit/902b74ebdaf0c8a1e8b9ba1d7820dcdb677e9728)), closes [#155](https://github.com/aktasfatih/kanso/issues/155)
+* stop the "Add review type" button from sliding off the board settings sidebar ([60439b5](https://github.com/aktasfatih/kanso/commit/60439b5f2c48a39942669a18791ac246a673710e))
+* stop the 4th assignee from vanishing in list and timeline views ([a408ede](https://github.com/aktasfatih/kanso/commit/a408eded49fa008feb111d06a81e8fa46088c19f))
+
 # [0.34.0](https://github.com/aktasfatih/kanso/compare/v0.33.0...v0.34.0) (2026-09-18)
 
 
