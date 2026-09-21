@@ -490,12 +490,18 @@ class BackupService {
 	 * returns an empty list - that is a real state, and the only one allowed to
 	 * produce the empty hint.
 	 *
+	 * READING NEVER CREATES ANYTHING. Opening the admin panel is not a backup
+	 * run, so it resolves the destination through {@see resolveReadTarget()},
+	 * which looks but does not build - a typo in the configured folder used to
+	 * make that folder appear in the account's Files, and then report the empty
+	 * folder it had just created as "no backups".
+	 *
 	 * @return list<array{name: string, size: int, mtime: int, boardId: int}>
 	 * @throws \RuntimeException when the configured destination cannot be read
 	 */
 	public function listBackups(): array {
 		try {
-			$target = $this->resolveTarget();
+			$target = $this->resolveReadTarget();
 		} catch (\RuntimeException $e) {
 			$this->logger->warning('Kanso backup: cannot list backups', [
 				'destination' => $this->getDestination(),
@@ -503,6 +509,12 @@ class BackupService {
 				'exception' => $e,
 			]);
 			throw $e;
+		}
+
+		if ($target === null) {
+			// App data Kanso has never written into: the store is fine, it simply
+			// holds nothing yet. See resolveReadTarget().
+			return [];
 		}
 
 		$backups = [];
@@ -544,6 +556,10 @@ class BackupService {
 	 * reached or a file that could not be opened is a \RuntimeException - a
 	 * server error, never "your backup is missing".
 	 *
+	 * Like the listing, this NEVER creates the destination - a download attempt
+	 * is a read, and a read that builds the folder it was looking in would both
+	 * mutate the admin's Files and turn a wrong path into "your backup is gone".
+	 *
 	 * @return array{stream: resource, size: int, name: string}
 	 * @throws NotFoundException when the name is not an allow-listed backup name, or no such backup exists
 	 * @throws \RuntimeException when the destination cannot be reached or the file cannot be opened
@@ -555,7 +571,14 @@ class BackupService {
 			throw new NotFoundException('No such backup');
 		}
 
-		$target = $this->resolveTarget();
+		$target = $this->resolveReadTarget();
+		if ($target === null) {
+			// App data with nothing written into it yet holds no backup of any
+			// name - the same 404 as any other absent file, and honest: no
+			// destination failed here.
+			throw new NotFoundException('No such backup');
+		}
+
 		$size = 0;
 		foreach ($target->listFiles() as $file) {
 			if ($file['name'] === $name) {
@@ -583,7 +606,12 @@ class BackupService {
 	// ---- helpers ----------------------------------------------------------
 
 	/**
-	 * The destination this run writes to, ready to use.
+	 * The destination this RUN writes to, ready to use - the only resolution
+	 * allowed to create anything. A first run into a destination that does not
+	 * exist yet is expected to make it (an admin types a folder that is not there
+	 * and presses Save), so the app-data subfolder and the configured Files
+	 * folder are both created here when missing. Reads go through
+	 * {@see resolveReadTarget()} instead.
 	 *
 	 * EVERY failure here is a \RuntimeException, for BOTH destinations - that is
 	 * what lets the callers tell "the destination is broken" apart from "there is
@@ -605,17 +633,77 @@ class BackupService {
 			}
 		}
 
+		return $this->filesTarget(true);
+	}
+
+	/**
+	 * The destination a READ looks in. Resolves exactly what
+	 * {@see resolveTarget()} resolves, minus the creating: merely listing the
+	 * backups - which the admin panel does on every load - must not write to
+	 * storage, and a folder conjured by a read would make a typo'd path look like
+	 * a healthy empty destination.
+	 *
+	 * WHAT A MISSING DESTINATION MEANS DIFFERS BY DESTINATION, because what the
+	 * admin configured differs:
+	 *
+	 *   - {@see DEST_FILES}: the destination IS the configured folder, an
+	 *     assertion by the admin about where their archives are. If it is not
+	 *     there, the server could not read what it was pointed at: that is a
+	 *     \RuntimeException and the panel says the listing failed. It is
+	 *     ambiguous from storage alone (wrong path, or right path and no run yet)
+	 *     and deliberately resolved the pessimistic way - after the first
+	 *     successful run the folder always exists, so a path that is simply
+	 *     wrong can never again hide behind "No backups stored yet.", and the
+	 *     panel's last-run line says whether a run has happened.
+	 *   - {@see DEST_APPDATA}: the destination is Kanso's own app data, which no
+	 *     admin configures, spells or can get wrong. The `backups` subfolder
+	 *     inside it is created by the first run and by nothing else, so its
+	 *     absence is not a misconfiguration to report - it is an empty
+	 *     destination, the state every install is in until a backup runs.
+	 *     Reporting "your backups could not be read" there would be false on
+	 *     every fresh install. Hence null: no target, no failure, no folder
+	 *     created. A store that is present but UNUSABLE (no permission, broken
+	 *     storage) still throws, so a real app-data failure is still never a 404.
+	 *
+	 * @return BackupTarget|null null when app data simply holds no backups yet
+	 * @throws \RuntimeException when the configured destination cannot be read
+	 */
+	private function resolveReadTarget(): ?BackupTarget {
+		if ($this->usesAppData()) {
+			try {
+				return new AppDataBackupTarget($this->appData->getFolder(self::APPDATA_FOLDER));
+			} catch (NotFoundException) {
+				return null;
+			} catch (\RuntimeException $e) {
+				throw $e;
+			} catch (\Throwable $e) {
+				throw new \RuntimeException('Kanso app data is not usable: ' . $e->getMessage(), 0, $e);
+			}
+		}
+
+		return $this->filesTarget(false);
+	}
+
+	/**
+	 * The {@see DEST_FILES} half of both resolutions, shared so the two can never
+	 * drift into disagreeing about what the configured path means. `$create` is
+	 * the only difference between them - see {@see resolveFolder()}.
+	 *
+	 * @throws \RuntimeException when the configured path cannot be used
+	 */
+	private function filesTarget(bool $create): FilesBackupTarget {
 		$path = $this->getTargetPath();
 		if ($path === '') {
 			throw new \RuntimeException('No backup target path is configured');
 		}
 		try {
-			return new FilesBackupTarget($this->resolveFolder($path), $path);
+			return new FilesBackupTarget($this->resolveFolder($path, $create), $path);
 		} catch (\RuntimeException $e) {
 			// Already carries a specific, admin-readable reason.
 			throw $e;
 		} catch (\Throwable $e) {
-			throw new \RuntimeException('Backup target path is unset or unwritable: ' . $e->getMessage(), 0, $e);
+			$reason = $create ? 'Backup target path is unset or unwritable: ' : 'Backup target path could not be read: ';
+			throw new \RuntimeException($reason . $e->getMessage(), 0, $e);
 		}
 	}
 
@@ -630,12 +718,18 @@ class BackupService {
 
 	/**
 	 * Resolves the configured absolute path to a writable {@see Folder} under
-	 * the backup account, creating missing intermediate folders. Throws if the
-	 * resolved node exists but is a file, or is not creatable/updatable.
+	 * the backup account. Throws if the resolved node exists but is a file, or
+	 * is not creatable/updatable.
+	 *
+	 * `$create` is the whole difference between a run and a read. A run may make
+	 * the folder (and its missing parents) - that is how a freshly configured
+	 * path gets its first backup. A read may not: it would put a directory in
+	 * someone's Files just for opening the admin panel, and then answer for the
+	 * folder it had created rather than for the one the admin meant.
 	 *
 	 * @throws NotFoundException|\OCP\Files\NotPermittedException|\RuntimeException
 	 */
-	private function resolveFolder(string $path): Folder {
+	private function resolveFolder(string $path, bool $create): Folder {
 		$account = $this->getAccount();
 		$relative = trim($path, '/');
 
@@ -661,8 +755,10 @@ class BackupService {
 				throw new \RuntimeException('Backup path is a file, not a folder: ' . $path);
 			}
 			$target = $node;
-		} else {
+		} elseif ($create) {
 			$target = $userFolder->newFolder($relative);
+		} else {
+			throw new \RuntimeException('Backup folder does not exist: ' . $path);
 		}
 
 		if (!$target->isCreatable()) {

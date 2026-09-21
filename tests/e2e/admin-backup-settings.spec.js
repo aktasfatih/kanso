@@ -354,6 +354,84 @@ test.describe('Kanso admin backup settings', () => {
 		}, { message: 'a healthy destination shows either the table or the empty hint' }).toBe(true)
 	})
 
+	test('a backup folder that is not there fails the listing and is never created by looking', async ({ page }) => {
+		// The case the round above missed. A nonexistent ACCOUNT and a path that
+		// points at a file both failed loudly already; a folder that is simply not
+		// there did not — the listing resolved its destination through the same
+		// path a backup RUN does, which creates the folder when it is missing. So
+		// a typo'd path silently made that directory in the backup account's Files
+		// and then reported the empty folder it had just created as "No backups
+		// stored yet.", which is precisely the sentence the error state exists to
+		// keep off this screen. Reads look; only runs build.
+		const absent = 'kanso-e2e-absent-' + Date.now()
+		const dav = `${BASE}/remote.php/dav/files/${ADMIN.user}/${absent}`
+		// Its own context: Nextcloud hands back a session cookie for a Basic-auth
+		// request and prefers it afterwards, so a shared one would test whoever
+		// authenticated first.
+		const asAdmin = await apiRequest.newContext()
+		const exists = async () => {
+			const r = await asAdmin.fetch(dav, {
+				method: 'PROPFIND',
+				headers: { Authorization: authFor(ADMIN.user, ADMIN.pass), Depth: '0' },
+			})
+			return r.status() !== 404
+		}
+
+		await gotoPanel(page)
+
+		const error = page.locator('#kanso-backup-file-error')
+		const empty = page.locator('#kanso-backup-file-empty')
+		const list = page.locator('#kanso-backup-file-list')
+		const account = page.locator('#kanso-backup-account')
+		const path = page.locator('#kanso-backup-path')
+
+		await page.selectOption('#kanso-backup-destination', 'files')
+		const savedAccount = await account.inputValue()
+		const savedPath = await path.inputValue()
+
+		try {
+			expect(await exists(), 'the folder must not exist before the test').toBe(false)
+
+			await account.fill(ADMIN.user)
+			await path.fill('/' + absent)
+			await Promise.all([
+				page.waitForResponse((r) => r.url().includes('/api/admin/backup/files')),
+				page.click('#kanso-backup-save'),
+			])
+
+			// 1. The panel says the listing failed...
+			await expect(error).toBeVisible()
+			await expect(error).toContainText(/could not load/i)
+			// ...and never the sentence that would tell an admin their archives are
+			// gone when the truth is the server was pointed at the wrong folder.
+			await expect(empty).toBeHidden()
+			await expect(list).toBeHidden()
+
+			// 2. And the read left the account's Files exactly as it found them.
+			// This is the half that regressed silently: the panel could show the
+			// right thing while still having written to storage to get there.
+			expect(await exists(), 'reading the backups must not create the folder').toBe(false)
+
+			// A reload reads it again — still no folder, still an error.
+			await page.reload()
+			await expect(error).toBeVisible()
+			expect(await exists(), 'a second read must not create it either').toBe(false)
+		} finally {
+			await asAdmin.dispose()
+			// Put the config back whatever happened, so the rest of the file runs
+			// against a destination that resolves.
+			await page.reload()
+			await page.selectOption('#kanso-backup-destination', 'files')
+			await account.fill(savedAccount)
+			await path.fill(savedPath)
+			await page.selectOption('#kanso-backup-destination', 'appdata')
+			await Promise.all([
+				page.waitForResponse((r) => r.url().includes('/api/admin/backup/files') && r.ok()),
+				page.click('#kanso-backup-save'),
+			])
+		}
+	})
+
 	test('a run into app data lists its backups and the download returns a real zip', async ({ page, request }) => {
 		await gotoPanel(page)
 

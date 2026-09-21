@@ -206,6 +206,24 @@ class BackupServiceTest extends TestCase {
 		);
 	}
 
+	/**
+	 * The service under test with a DIFFERENT app data store than the one wired
+	 * in setUp() - which always resolves. Used by the tests that need app data to
+	 * be absent or unusable.
+	 */
+	private function serviceWith(IAppData $appData): BackupService {
+		return new BackupService(
+			$this->boardMapper,
+			$this->archiveService,
+			$this->rootFolder,
+			$appData,
+			$this->config,
+			$this->time,
+			$this->logger,
+			$this->notificationService,
+		);
+	}
+
 	// ---- disabled / unconfigured no-ops -----------------------------------
 
 	public function testDisabledIsNoOp(): void {
@@ -859,23 +877,16 @@ class BackupServiceTest extends TestCase {
 	}
 
 	public function testOpenBackupSurfacesABrokenAppDataFolderAsSomethingOtherThanNotFound(): void {
-		// App data raises NotFoundException for an absent folder, so without the
-		// wrapping in resolveTarget() an unusable app data store would reach the
-		// download endpoint as "no such backup".
+		// App data raises Files-layer exceptions for a store it cannot open, so
+		// without the wrapping in the target resolution an unusable app data store
+		// would reach the download endpoint as "no such backup". (A store that is
+		// merely EMPTY is a different case - see the absent-folder tests below -
+		// and this one is deliberately unusable rather than absent.)
 		$this->enableAppData();
 		$appData = $this->createMock(IAppData::class);
-		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->method('getFolder')->willThrowException(new NotPermittedException('read-only app data'));
 		$appData->method('newFolder')->willThrowException(new NotPermittedException('read-only app data'));
-		$service = new BackupService(
-			$this->boardMapper,
-			$this->archiveService,
-			$this->rootFolder,
-			$appData,
-			$this->config,
-			$this->time,
-			$this->logger,
-			$this->notificationService,
-		);
+		$service = $this->serviceWith($appData);
 
 		try {
 			$service->openBackup('kanso-board-7-20260804-153000.zip');
@@ -910,6 +921,171 @@ class BackupServiceTest extends TestCase {
 		$this->stubAppDataFolder([], $written, $deleted);
 
 		self::assertSame([], $this->service->listBackups());
+	}
+
+	// ---- reading never creates the destination ----------------------------
+	//
+	// Listing and downloading are READS. They used to resolve the destination
+	// through the same creating path a run does, so merely opening the admin
+	// panel with a typo'd folder created that folder in the backup account's
+	// Files - and then reported the empty folder it had just made as "No backups
+	// stored yet.", which is exactly the failure the listing error state exists
+	// to prevent. A missing folder is the likeliest misconfiguration there is.
+
+	public function testListingNeverCreatesAMissingFilesFolder(): void {
+		// The typo case, end to end: a path that is not there must come back as a
+		// listing failure, and must leave the account's Files untouched.
+		$this->enable('/kanso-bakcups');
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(false);
+		$userFolder->method('isCreatable')->willReturn(true);
+		// The account root DOES hold a Kanso backup. A read that quietly fell back
+		// to it would answer with a plausible listing for a folder the admin never
+		// named, so this has to fail rather than list anything at all.
+		$stray = $this->createMock(File::class);
+		$stray->method('getName')->willReturn('kanso-board-3-20260804-153000.zip');
+		$stray->method('getSize')->willReturn(11);
+		$stray->method('getMTime')->willReturn(self::NOW);
+		$userFolder->method('getDirectoryListing')->willReturn([$stray]);
+		// The guard: a read may not build what it was looking for.
+		$userFolder->expects(self::never())->method('newFolder');
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		try {
+			$list = $this->service->listBackups();
+			self::fail('a destination that is not there must not list as empty, got ' . count($list) . ' entries');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('/kanso-bakcups', $e->getMessage());
+		}
+	}
+
+	public function testDownloadingNeverCreatesAMissingFilesFolder(): void {
+		// Same for the download: a wrong path is a broken destination, NOT a
+		// missing archive - reporting 404 here would send the admin looking for a
+		// backup that is sitting safely in the folder they meant to type.
+		$this->enable('/kanso-bakcups');
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(false);
+		$userFolder->method('isCreatable')->willReturn(true);
+		$userFolder->method('getDirectoryListing')->willReturn([]);
+		$userFolder->expects(self::never())->method('newFolder');
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		try {
+			$this->service->openBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('a destination that is not there must not open a backup');
+		} catch (NotFoundException) {
+			self::fail('a missing destination must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('/kanso-bakcups', $e->getMessage());
+		}
+	}
+
+	public function testARunStillCreatesAMissingFilesFolder(): void {
+		// The other half, and the thing that must not regress: the FIRST run into
+		// a freshly configured folder is expected to create it. Only reads were
+		// made non-creating.
+		$this->enable();
+
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('nodeExists')->willReturn(false);
+		$target->method('getDirectoryListing')->willReturn([]);
+		$written = [];
+		$target->method('newFile')->willReturnCallback(
+			function (string $name, $content) use (&$written): File {
+				$written[$name] = (string)stream_get_contents($content);
+				return $this->createMock(File::class);
+			},
+		);
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->with('kanso-backups')->willReturn(false);
+		$userFolder->expects(self::once())
+			->method('newFolder')
+			->with('kanso-backups')
+			->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(['kanso-board-7-20260804-153000.zip'], array_keys($written));
+	}
+
+	public function testListingDoesNotCreateTheAppDataFolderAndReportsNoBackups(): void {
+		// App data is Kanso's own store: no admin configures, spells or mistypes
+		// it, and the `backups` subfolder is created by the first RUN and nothing
+		// else. So its absence is not a misconfiguration to report - it is the
+		// empty destination every install has until a backup runs, and calling
+		// that "your backups could not be read" would be false on every fresh
+		// install. What it must not do either way is create the folder.
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::never())->method('newFolder');
+
+		self::assertSame([], $this->serviceWith($appData)->listBackups());
+	}
+
+	public function testDownloadingFromAnUnwrittenAppDataStoreIsAMissingBackup(): void {
+		// ...and there, a 404 is the honest answer: nothing failed, the store
+		// simply holds no file of any name. (Contrast the unusable-app-data test
+		// above, which must stay a server error.)
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::never())->method('newFolder');
+
+		$this->expectException(NotFoundException::class);
+		$this->serviceWith($appData)->openBackup('kanso-board-7-20260804-153000.zip');
+	}
+
+	public function testListingStillFailsLoudlyWhenAppDataIsUnusable(): void {
+		// The distinction the test above depends on: an app data store that is
+		// PRESENT but cannot be opened is a real failure and still reaches the
+		// panel as one. Only an absent folder is an empty destination.
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotPermittedException('read-only app data'));
+
+		$this->expectException(\RuntimeException::class);
+		$this->serviceWith($appData)->listBackups();
+	}
+
+	public function testARunStillCreatesTheAppDataFolder(): void {
+		// The creating path for app data, preserved: the first run makes the
+		// `backups` subfolder that the reads above refuse to make.
+		$this->enableAppData();
+
+		$folder = $this->createMock(ISimpleFolder::class);
+		$folder->method('getDirectoryListing')->willReturn([]);
+		$folder->method('getFile')->willThrowException(new NotFoundException('no such file'));
+		$written = [];
+		$folder->method('newFile')->willReturnCallback(
+			function (string $name, $content = null) use (&$written): ISimpleFile {
+				$written[$name] = is_resource($content) ? (string)stream_get_contents($content) : (string)$content;
+				return $this->createMock(ISimpleFile::class);
+			},
+		);
+
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::once())
+			->method('newFolder')
+			->with(BackupService::APPDATA_FOLDER)
+			->willReturn($folder);
+
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+
+		$result = $this->serviceWith($appData)->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(['kanso-board-7-20260804-153000.zip'], array_keys($written));
 	}
 
 	public function testIsBackupNameAcceptsWhatTheRunWrites(): void {
