@@ -14,6 +14,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Notification\Notifier;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -55,22 +56,27 @@ class NotifierTest extends TestCase {
 			$this->visibilityGuard,
 		);
 
-		// IL10N is not in the OCP dev stub; a tiny stand-in with t() suffices
-		// (IFactory::get has no declared return type, so this is accepted).
-		$l = new class {
-			public function t(string $text, array $parameters = []): string {
-				return $text;
-			}
-		};
+		// A REAL IL10N mock, not an anonymous stand-in: IFactory::get() has no
+		// declared return type, so a stand-in is accepted by prepare() itself and
+		// then blows up the moment a branch passes $l to a helper that DOES type
+		// it (prepareBackup()) - i.e. exactly in the code paths a stand-in would
+		// leave untested. Identity translation keeps the assertions on the
+		// English source strings.
+		$l = $this->createMock(IL10N::class);
+		$l->method('t')->willReturnCallback(static fn (string $text): string => $text);
 		$this->l10nFactory->method('get')->willReturn($l);
 		$this->urlGenerator->method('imagePath')->willReturn('/img/app.svg');
 		$this->urlGenerator->method('getAbsoluteURL')->willReturnArgument(0);
 		// Card links use the fragment-free server route (#3744): the deep-link
 		// route with the card id, never a `#/…` hash under the index page.
 		$this->urlGenerator->method('linkToRouteAbsolute')->willReturnCallback(
-			static fn (string $route, array $args = []): string => $route === 'kanso.deepLink.card'
-				? 'https://nc.example/apps/kanso/card/' . $args['id']
-				: 'https://nc.example/apps/kanso/'
+			static fn (string $route, array $args = []): string => match ($route) {
+				'kanso.deepLink.card' => 'https://nc.example/apps/kanso/card/' . $args['id'],
+				// The backup-run notifications point at the admin settings
+				// section rather than at a card (#161).
+				'settings.AdminSettings.index' => 'https://nc.example/settings/admin/' . ($args['section'] ?? ''),
+				default => 'https://nc.example/apps/kanso/',
+			}
 		);
 	}
 
@@ -144,6 +150,80 @@ class NotifierTest extends TestCase {
 					&& $p['card']['id'] === '9'
 					&& $p['card']['name'] === 'Fix the bug')
 			)->willReturnSelf();
+
+		self::assertSame($n, $this->notifier->prepare($n, 'en'));
+	}
+
+	/**
+	 * An instance-wide backup-run notification as {@see NotificationService::notifyBackupResult()}
+	 * queues it: no actor, no card, and an object id ('run') that is not a card
+	 * id at all. Built by hand rather than via notification() so every setter the
+	 * backup branch touches is asserted rather than pre-stubbed.
+	 */
+	private function backupNotification(string $subject, string $message): INotification&MockObject {
+		$n = $this->createMock(INotification::class);
+		$n->method('getApp')->willReturn('kanso');
+		$n->method('getSubject')->willReturn($subject);
+		$n->method('getSubjectParameters')->willReturn(['message' => $message]);
+		$n->method('getObjectId')->willReturn('run');
+		$n->method('setIcon')->willReturnSelf();
+		return $n;
+	}
+
+	public function testPrepareBackupOkRendersWithoutACardLookup(): void {
+		// The backup subjects branch BEFORE the card lookup, and nothing else in
+		// the suite renders them: NotificationServiceTest only asserts the stored
+		// subject key. A regression here would make the manager reject every
+		// queued backup notification - it would sit in the database and never
+		// reach the bell, silently. Hence: render it.
+		$n = $this->backupNotification('backup_ok', 'Backed up 7 board(s)');
+		// No card, no board, no visibility gate - the branch must not reach them
+		// (object id 'run' is not a card id).
+		$this->cardMapper->expects(self::never())->method('find');
+
+		$n->expects(self::once())->method('setLink')
+			->with('https://nc.example/settings/admin/kanso')->willReturnSelf();
+		$n->expects(self::once())->method('setParsedSubject')
+			->with('Kanso board backup completed')->willReturnSelf();
+		$n->expects(self::once())->method('setRichSubject')
+			->with('Kanso board backup completed')->willReturnSelf();
+		// The run's own summary line is the message.
+		$n->expects(self::once())->method('setParsedMessage')
+			->with('Backed up 7 board(s)')->willReturnSelf();
+		$n->expects(self::once())->method('setRichMessage')
+			->with('Backed up 7 board(s)')->willReturnSelf();
+
+		self::assertSame($n, $this->notifier->prepare($n, 'en'));
+	}
+
+	public function testPrepareBackupFailedRendersTheFailureSubject(): void {
+		$n = $this->backupNotification('backup_failed', 'Backed up 2 board(s); 1 failed');
+		$this->cardMapper->expects(self::never())->method('find');
+
+		$n->expects(self::once())->method('setLink')
+			->with('https://nc.example/settings/admin/kanso')->willReturnSelf();
+		$n->expects(self::once())->method('setParsedSubject')
+			->with('Kanso board backup failed')->willReturnSelf();
+		$n->expects(self::once())->method('setRichSubject')
+			->with('Kanso board backup failed')->willReturnSelf();
+		$n->expects(self::once())->method('setParsedMessage')
+			->with('Backed up 2 board(s); 1 failed')->willReturnSelf();
+		$n->expects(self::once())->method('setRichMessage')
+			->with('Backed up 2 board(s); 1 failed')->willReturnSelf();
+
+		self::assertSame($n, $this->notifier->prepare($n, 'en'));
+	}
+
+	public function testPrepareBackupWithoutASummarySetsNoMessage(): void {
+		// A blank summary must leave the message unset rather than render an
+		// empty line under the subject.
+		$n = $this->backupNotification('backup_ok', '   ');
+		$n->method('setLink')->willReturnSelf();
+		$n->method('setParsedSubject')->willReturnSelf();
+		$n->method('setRichSubject')->willReturnSelf();
+
+		$n->expects(self::never())->method('setParsedMessage');
+		$n->expects(self::never())->method('setRichMessage');
 
 		self::assertSame($n, $this->notifier->prepare($n, 'en'));
 	}
