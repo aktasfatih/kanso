@@ -10,6 +10,9 @@
 			"composer/package-versions-deprecated": true
 		}
 	},
+	"require": {
+		"php": ">=8.2"
+	},
 	"require-dev": {
 		"nextcloud/ocp": "^34.0",
 		"nextcloud/coding-standard": "^1.4",

@@ -432,6 +432,29 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-timeline.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-analytics.png</screenshot>
 	<dependencies>
+		<!-- PHP floor is 8.2 because the shipped tree USES 8.2 syntax - today
+		     `readonly class` in lib/Access/ViewerContext.php, which 8.1 cannot
+		     even parse. Without this element nothing stops an older PHP: the
+		     App Store offers the app, `occ app:enable` accepts it, and then
+		     every request that loads that class dies before any Kanso code runs
+		     -
+		       Exception: syntax error, unexpected token "readonly" ... at
+		       lib/private/AppFramework/Http/Dispatcher.php line 150
+		     - which reaches the user as a bare HTTP 500 on the boards list
+		     (#158, reported on PHP 8.1.2 + NC 32.0.15). Nextcloud 32 itself
+		     still runs on 8.1, so the server had no reason to refuse us; the
+		     app has to state its own floor.
+
+		     Invisible to CI by construction: unit-php runs 8.2/8.3, psalm's
+		     platform is pinned to 8.2.27, and every nextcloud:* image ships
+		     8.3 - so the one version that breaks is the one nothing executes.
+		     The declaration IS the guard: Nextcloud refuses to enable the app
+		     below this floor and says why.
+
+		     Deliberately no max-version: a ceiling would strand servers on a
+		     newer PHP that works fine, exactly as a patch-level nextcloud
+		     min-version would (see below). -->
+		<php min-version="8.2"/>
 		<!-- Floor is 32, not 30: opening the app binds
 		     IQueryBuilder::PARAM_DATETIME_MUTABLE in the boards-list stats, and
 		     that constant is only @since 31.0.0 - so on NC 30 the very first
