@@ -534,6 +534,10 @@ msgstr "添加中…"
 msgid "After a specific card"
 msgstr "在指定卡片之后"
 
+#: templates/admin-backup.php
+msgid "After every backup"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "After N occurrences"
 msgstr "在 N 次之后"
@@ -2237,6 +2241,10 @@ msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
 
+#: templates/admin-backup.php
+msgid "Everyone in the administrators group gets the notification. Each run replaces the previous one, so a backup that keeps failing leaves a single unread entry rather than one per night."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "退出多选"
@@ -3149,6 +3157,14 @@ msgstr "Kanso 与 Guests 应用"
 msgid "Kanso background jobs & email links"
 msgstr "Kanso 后台任务与邮件链接"
 
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup completed"
+msgstr ""
+
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup failed"
+msgstr ""
+
 #: templates/admin-backup.php
 msgid "Kanso board backups"
 msgstr "Kanso 看板备份"
@@ -3545,6 +3561,10 @@ msgstr "需要你评审"
 msgid "never"
 msgstr "从未"
 
+#: templates/admin-backup.php
+msgid "Never"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "New board name…"
 msgstr "新看板名称…"
@@ -3896,6 +3916,10 @@ msgstr "这里还没有内容——你完成的任务会显示在此部分。"
 msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
 msgstr "所选看板上没有分配给你的内容。选择“所有看板”即可查看分配给你的全部内容。"
 
+#: templates/admin-backup.php
+msgid "Notify administrators about a run"
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "now"
@@ -3940,6 +3964,10 @@ msgstr "仅带指定标签的 issue"
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
 msgstr "仅加载前 {count} 张分配的卡片，因此此列表中缺少你的部分任务。"
+
+#: templates/admin-backup.php
+msgid "Only when a backup fails"
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "open"

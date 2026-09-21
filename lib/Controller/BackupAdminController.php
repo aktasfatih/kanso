@@ -38,16 +38,18 @@ class BackupAdminController extends Controller {
 
 	/**
 	 * Persists the backup config (enabled flag, target path, retention count,
-	 * and the account whose files back the target path).
+	 * the account whose files back the target path, and when a finished run
+	 * should notify the administrators).
 	 */
 	public function update(
 		bool $enabled = false,
 		string $path = '',
 		int $retention = BackupService::DEFAULT_RETENTION,
 		string $account = BackupService::DEFAULT_ACCOUNT,
+		string $notify = BackupService::DEFAULT_NOTIFY,
 	): JSONResponse {
-		return $this->respond(function () use ($enabled, $path, $retention, $account): JSONResponse {
-			$this->backupService->saveConfig($enabled, $path, $retention, $account);
+		return $this->respond(function () use ($enabled, $path, $retention, $account, $notify): JSONResponse {
+			$this->backupService->saveConfig($enabled, $path, $retention, $account, $notify);
 			return new JSONResponse($this->backupService->getConfig());
 		});
 	}

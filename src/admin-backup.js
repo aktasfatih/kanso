@@ -23,6 +23,7 @@ function boot() {
 	const path = document.getElementById('kanso-backup-path')
 	const account = document.getElementById('kanso-backup-account')
 	const retention = document.getElementById('kanso-backup-retention')
+	const notify = document.getElementById('kanso-backup-notify')
 	const saveBtn = document.getElementById('kanso-backup-save')
 	const runBtn = document.getElementById('kanso-backup-run')
 	const lastRun = document.getElementById('kanso-backup-lastrun')
@@ -32,6 +33,9 @@ function boot() {
 		path: path.value.trim(),
 		account: (account.value.trim() || 'admin'),
 		retention: Math.max(1, Math.min(365, parseInt(retention.value, 10) || 7)),
+		// Server-side is the authority on the allowed values; an unrecognised one
+		// falls back to the default there rather than silencing the run.
+		notify: (notify && notify.value) || 'failure',
 	})
 
 	const applyLastRun = (config) => {

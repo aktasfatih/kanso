@@ -12,6 +12,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\L10N\IFactory;
@@ -67,8 +68,20 @@ class Notifier implements INotifier {
 			&& $subject !== NotificationService::SUBJECT_CARD_DUE
 			&& $subject !== NotificationService::SUBJECT_CARD_DUE_SOON
 			&& $subject !== NotificationService::SUBJECT_CARD_REMINDER
+			&& $subject !== NotificationService::SUBJECT_BACKUP_OK
+			&& $subject !== NotificationService::SUBJECT_BACKUP_FAILED
 			&& $subject !== NotificationService::SUBJECT_STEP_ASSIGNED) {
 			throw new UnknownNotificationException();
+		}
+
+		// The backup-run subjects are instance-wide admin events: no actor, no
+		// card, and their object is the backup run rather than a board object.
+		// They must be handled BEFORE the card lookup below, which would
+		// otherwise throw UnknownNotificationException on their non-card object
+		// id and swallow every backup notification.
+		if ($subject === NotificationService::SUBJECT_BACKUP_OK
+			|| $subject === NotificationService::SUBJECT_BACKUP_FAILED) {
+			return $this->prepareBackup($notification, $subject, $l);
 		}
 
 		$params = $notification->getSubjectParameters();
@@ -158,6 +171,35 @@ class Notifier implements INotifier {
 					'card' => ['type' => 'highlight', 'id' => (string)$cardId, 'name' => $cardTitle],
 				]
 			);
+
+		return $notification;
+	}
+
+	/**
+	 * Renders a backup-run notification (#161). Deliberately plain: the run's
+	 * own summary line ("Backed up 7 board(s)", or the error that stopped it) is
+	 * carried in the subject parameters and shown as the message, and the entry
+	 * links to the Kanso backup settings - the one page where the admin can see
+	 * the full last-run record and change the target.
+	 */
+	private function prepareBackup(INotification $notification, string $subject, IL10N $l): INotification {
+		$params = $notification->getSubjectParameters();
+		$message = trim((string)($params['message'] ?? ''));
+		$failed = $subject === NotificationService::SUBJECT_BACKUP_FAILED;
+
+		$plain = $failed
+			? $l->t('Kanso board backup failed')
+			: $l->t('Kanso board backup completed');
+
+		$notification
+			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+			->setLink($this->urlGenerator->linkToRouteAbsolute('settings.AdminSettings.index', ['section' => 'kanso']))
+			->setParsedSubject($plain)
+			->setRichSubject($plain);
+
+		if ($message !== '') {
+			$notification->setParsedMessage($message)->setRichMessage($message);
+		}
 
 		return $notification;
 	}

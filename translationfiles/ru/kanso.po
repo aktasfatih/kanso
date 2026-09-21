@@ -580,6 +580,10 @@ msgstr "Добавление…"
 msgid "After a specific card"
 msgstr "После определенной карточки"
 
+#: templates/admin-backup.php
+msgid "After every backup"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "After N occurrences"
 msgstr "После N повторов"
@@ -2297,6 +2301,10 @@ msgstr[0] "Каждый %n год"
 msgstr[1] "Каждые %n года"
 msgstr[2] "Каждые %n лет"
 
+#: templates/admin-backup.php
+msgid "Everyone in the administrators group gets the notification. Each run replaces the previous one, so a backup that keeps failing leaves a single unread entry rather than one per night."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "Выйти из множественного выбора"
@@ -3211,6 +3219,14 @@ msgstr "Kanso и приложение Guests"
 msgid "Kanso background jobs & email links"
 msgstr "Фоновые задачи Kanso и ссылки в письмах"
 
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup completed"
+msgstr ""
+
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup failed"
+msgstr ""
+
 #: templates/admin-backup.php
 msgid "Kanso board backups"
 msgstr "Резервные копии досок Kanso"
@@ -3609,6 +3625,10 @@ msgstr "Требуется ваша проверка"
 msgid "never"
 msgstr "никогда"
 
+#: templates/admin-backup.php
+msgid "Never"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "New board name…"
 msgstr "Название новой доски…"
@@ -3960,6 +3980,10 @@ msgstr "Здесь пока пусто — завершённые задачи �
 msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
 msgstr "На выбранной доске вам ничего не назначено. Выберите «Все доски», чтобы увидеть всё, что назначено вам."
 
+#: templates/admin-backup.php
+msgid "Notify administrators about a run"
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "now"
@@ -4004,6 +4028,10 @@ msgstr "Только issue с меткой"
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
 msgstr "Загружаются только первые {count} назначенных карточек, поэтому часть ваших задач отсутствует в этом списке."
+
+#: templates/admin-backup.php
+msgid "Only when a backup fails"
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "open"

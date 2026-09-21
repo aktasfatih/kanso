@@ -11,6 +11,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Service\BackupService;
 use OCA\Kanso\Service\BoardArchiveService;
+use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -29,6 +30,7 @@ class BackupServiceTest extends TestCase {
 	private IRootFolder&MockObject $rootFolder;
 	private ITimeFactory&MockObject $time;
 	private LoggerInterface&MockObject $logger;
+	private NotificationService&MockObject $notificationService;
 	private FakeConfig $config;
 	private BackupService $service;
 	/** Temp archives handed to the service, cleaned up after each test. */
@@ -44,6 +46,7 @@ class BackupServiceTest extends TestCase {
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->config = new FakeConfig();
 		$this->service = new BackupService(
 			$this->boardMapper,
@@ -52,6 +55,7 @@ class BackupServiceTest extends TestCase {
 			$this->config,
 			$this->time,
 			$this->logger,
+			$this->notificationService,
 		);
 	}
 
@@ -389,6 +393,126 @@ class BackupServiceTest extends TestCase {
 		self::assertSame(1700000000, $cfg['lastRunAt']);
 		self::assertSame(BackupService::STATUS_OK, $cfg['lastRunStatus']);
 		self::assertSame('Backed up 4 board(s)', $cfg['lastRunMessage']);
+	}
+
+	// ---- run notifications (#161) -----------------------------------------
+
+	/**
+	 * Wires a folder that accepts writes, so run() reaches STATUS_OK. Kept
+	 * separate from the happy-path test's fixture because these cases care only
+	 * about what gets announced, not about the bytes.
+	 */
+	private function stubWritableTarget(): void {
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('nodeExists')->willReturn(false);
+		$target->method('getDirectoryListing')->willReturn([]);
+		$target->method('newFile')->willReturn($this->createMock(File::class));
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(true);
+		$userFolder->method('get')->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+	}
+
+	/** A run that cannot start at all: enabled, but no target path configured. */
+	private function stubFailingRun(): void {
+		$this->config->setAppValue('kanso', BackupService::KEY_ENABLED, 'yes');
+		$this->config->setAppValue('kanso', BackupService::KEY_PATH, '');
+	}
+
+	public function testDefaultPolicyIsOnlyOnFailure(): void {
+		// Nothing is emitted today, so there is no prior behaviour to preserve -
+		// the default is the one the issue asked for.
+		self::assertSame(BackupService::NOTIFY_FAILURE, $this->service->getNotifyPolicy());
+		self::assertSame(BackupService::NOTIFY_FAILURE, $this->service->getConfig()['notify']);
+	}
+
+	public function testFailedRunNotifies(): void {
+		$this->stubFailingRun();
+		$this->notificationService->expects(self::once())
+			->method('notifyBackupResult')
+			->with(false, self::stringContains('path'));
+
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_ERROR, $result['status']);
+	}
+
+	public function testSuccessfulRunNotifiesWhenPolicyIsAlways(): void {
+		$this->enable();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_ALWAYS);
+		$this->stubWritableTarget();
+		$this->notificationService->expects(self::once())
+			->method('notifyBackupResult')
+			->with(true, 'Backed up 1 board(s)');
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testSuccessfulRunIsSilentOnTheDefaultFailureOnlyPolicy(): void {
+		$this->enable();
+		$this->stubWritableTarget();
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testNeverPolicyIsSilentOnSuccess(): void {
+		$this->enable();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_NEVER);
+		$this->stubWritableTarget();
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testNeverPolicyIsSilentOnFailureToo(): void {
+		$this->stubFailingRun();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_NEVER);
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame(BackupService::STATUS_ERROR, $this->service->run()['status']);
+	}
+
+	public function testDisabledRunNotifiesNothingEvenOnAlways(): void {
+		// Disabled is not a failure, and it returns before the last-run record
+		// is touched - so it must stay silent whatever the policy says.
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_ALWAYS);
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame('disabled', $this->service->run()['status']);
+	}
+
+	public function testNotificationFailureCannotFailTheBackup(): void {
+		$this->enable();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_ALWAYS);
+		$this->stubWritableTarget();
+		$this->notificationService->method('notifyBackupResult')
+			->willThrowException(new \RuntimeException('notification backend down'));
+		$this->logger->expects(self::once())->method('warning');
+
+		// The files are already written; a broken bell must not rewrite history.
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(BackupService::STATUS_OK, $this->config->getAppValue('kanso', BackupService::KEY_LAST_RUN_STATUS, ''));
+	}
+
+	public function testSaveConfigRejectsAnUnknownPolicy(): void {
+		$this->service->saveConfig(true, '/foo', 3, 'admin', 'whenever-i-feel-like-it');
+
+		self::assertSame(BackupService::NOTIFY_FAILURE, $this->service->getNotifyPolicy());
+	}
+
+	public function testSaveConfigPersistsEachValidPolicy(): void {
+		foreach (BackupService::NOTIFY_CHOICES as $choice) {
+			$this->service->saveConfig(true, '/foo', 3, 'admin', $choice);
+			self::assertSame($choice, $this->service->getNotifyPolicy());
+		}
 	}
 }
 

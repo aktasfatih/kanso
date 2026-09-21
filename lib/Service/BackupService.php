@@ -32,6 +32,12 @@ use Psr\Log\LoggerInterface;
  * same second is overwritten in place), and per-board error-isolated so one bad
  * board cannot abort the run. The last-run time and result are recorded via
  * {@see IConfig} app values for the admin panel to surface.
+ *
+ * A finished run also ANNOUNCES itself to the instance's admins as a Nextcloud
+ * notification (#161), because the admin panel is the only other place a run
+ * leaves a trace and nobody visits it nightly. What it announces is the admin's
+ * choice - {@see KEY_NOTIFY}: never, only on failure (the default), or always.
+ * See {@see announce()}.
  */
 class BackupService {
 	public const APP_ID = 'kanso';
@@ -41,12 +47,27 @@ class BackupService {
 	public const KEY_PATH = 'backup_path';
 	public const KEY_RETENTION = 'backup_retention';
 	public const KEY_ACCOUNT = 'backup_account';
+	public const KEY_NOTIFY = 'backup_notify';
 	public const KEY_LAST_RUN_AT = 'backup_last_run_at';
 	public const KEY_LAST_RUN_STATUS = 'backup_last_run_status';
 	public const KEY_LAST_RUN_MESSAGE = 'backup_last_run_message';
 
 	public const STATUS_OK = 'ok';
 	public const STATUS_ERROR = 'error';
+
+	/**
+	 * When the run should tell the admins about itself. `failure` is the default
+	 * because a backup that silently stopped working is the failure mode worth
+	 * interrupting someone for, while a nightly "it worked" is the one that turns
+	 * the bell into noise.
+	 */
+	public const NOTIFY_NEVER = 'never';
+	public const NOTIFY_FAILURE = 'failure';
+	public const NOTIFY_ALWAYS = 'always';
+	public const DEFAULT_NOTIFY = self::NOTIFY_FAILURE;
+
+	/** @var list<string> */
+	public const NOTIFY_CHOICES = [self::NOTIFY_NEVER, self::NOTIFY_FAILURE, self::NOTIFY_ALWAYS];
 
 	/** Default kept-per-board count when unset/blank. */
 	public const DEFAULT_RETENTION = 7;
@@ -70,6 +91,7 @@ class BackupService {
 		private IConfig $config,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
+		private NotificationService $notificationService,
 	) {
 	}
 
@@ -93,6 +115,16 @@ class BackupService {
 		return $account === '' ? self::DEFAULT_ACCOUNT : $account;
 	}
 
+	/**
+	 * When a finished run should notify the admins: one of {@see NOTIFY_CHOICES}.
+	 * An unrecognised stored value (hand-edited config, a downgrade) falls back
+	 * to the default rather than silencing the run.
+	 */
+	public function getNotifyPolicy(): string {
+		$raw = trim($this->config->getAppValue(self::APP_ID, self::KEY_NOTIFY, self::DEFAULT_NOTIFY));
+		return in_array($raw, self::NOTIFY_CHOICES, true) ? $raw : self::DEFAULT_NOTIFY;
+	}
+
 	public function getRetention(): int {
 		$raw = (int)$this->config->getAppValue(self::APP_ID, self::KEY_RETENTION, (string)self::DEFAULT_RETENTION);
 		if ($raw < self::MIN_RETENTION) {
@@ -107,7 +139,7 @@ class BackupService {
 	/**
 	 * The persisted admin config plus last-run result, for the admin panel.
 	 *
-	 * @return array{enabled: bool, path: string, account: string, retention: int, lastRunAt: int, lastRunStatus: string, lastRunMessage: string}
+	 * @return array{enabled: bool, path: string, account: string, retention: int, notify: string, lastRunAt: int, lastRunStatus: string, lastRunMessage: string}
 	 */
 	public function getConfig(): array {
 		return [
@@ -115,6 +147,7 @@ class BackupService {
 			'path' => $this->getTargetPath(),
 			'account' => $this->getAccount(),
 			'retention' => $this->getRetention(),
+			'notify' => $this->getNotifyPolicy(),
 			'lastRunAt' => (int)$this->config->getAppValue(self::APP_ID, self::KEY_LAST_RUN_AT, '0'),
 			'lastRunStatus' => $this->config->getAppValue(self::APP_ID, self::KEY_LAST_RUN_STATUS, ''),
 			'lastRunMessage' => $this->config->getAppValue(self::APP_ID, self::KEY_LAST_RUN_MESSAGE, ''),
@@ -124,15 +157,27 @@ class BackupService {
 	/**
 	 * Persists the admin config. The path/account are trimmed; retention is
 	 * clamped to [MIN_RETENTION, MAX_RETENTION]. A blank account falls back to
-	 * the default.
+	 * the default, and an unrecognised notify policy to {@see DEFAULT_NOTIFY}.
 	 */
-	public function saveConfig(bool $enabled, string $path, int $retention, string $account = self::DEFAULT_ACCOUNT): void {
+	public function saveConfig(
+		bool $enabled,
+		string $path,
+		int $retention,
+		string $account = self::DEFAULT_ACCOUNT,
+		string $notify = self::DEFAULT_NOTIFY,
+	): void {
 		$this->config->setAppValue(self::APP_ID, self::KEY_ENABLED, $enabled ? 'yes' : 'no');
 		$this->config->setAppValue(self::APP_ID, self::KEY_PATH, trim($path));
 		$account = trim($account);
 		$this->config->setAppValue(self::APP_ID, self::KEY_ACCOUNT, $account === '' ? self::DEFAULT_ACCOUNT : $account);
 		$clamped = max(self::MIN_RETENTION, min(self::MAX_RETENTION, $retention));
 		$this->config->setAppValue(self::APP_ID, self::KEY_RETENTION, (string)$clamped);
+		$notify = trim($notify);
+		$this->config->setAppValue(
+			self::APP_ID,
+			self::KEY_NOTIFY,
+			in_array($notify, self::NOTIFY_CHOICES, true) ? $notify : self::DEFAULT_NOTIFY,
+		);
 	}
 
 	// ---- the sweep --------------------------------------------------------
@@ -365,5 +410,38 @@ class BackupService {
 		$this->config->setAppValue(self::APP_ID, self::KEY_LAST_RUN_AT, (string)$this->time->getTime());
 		$this->config->setAppValue(self::APP_ID, self::KEY_LAST_RUN_STATUS, $status);
 		$this->config->setAppValue(self::APP_ID, self::KEY_LAST_RUN_MESSAGE, $message);
+		$this->announce($status, $message);
+	}
+
+	/**
+	 * Tells the admins how the run went, subject to the configured policy. This
+	 * is the ONLY notification Kanso emits for backups, and it hangs off
+	 * {@see recordRun()} because that is the single funnel every terminating
+	 * path goes through - including the two that never touch a board (no target
+	 * path configured, target path unwritable). A backup that cannot even start
+	 * is precisely the state an admin needs to hear about.
+	 *
+	 * A disabled run returns before recordRun() and so stays silent, which is
+	 * the correct reading of "backups are off".
+	 *
+	 * Notification delivery must never turn a good backup into a failed one, so
+	 * anything thrown here is logged and swallowed: the files are already
+	 * written and the last-run record is already persisted.
+	 */
+	private function announce(string $status, string $message): void {
+		$policy = $this->getNotifyPolicy();
+		$failed = $status === self::STATUS_ERROR;
+		if ($policy === self::NOTIFY_NEVER) {
+			return;
+		}
+		if ($policy === self::NOTIFY_FAILURE && !$failed) {
+			return;
+		}
+
+		try {
+			$this->notificationService->notifyBackupResult(!$failed, $message);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Kanso backup: could not send the run notification', ['exception' => $e]);
+		}
 	}
 }

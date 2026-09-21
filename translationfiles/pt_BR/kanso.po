@@ -557,6 +557,10 @@ msgstr "Adicionando…"
 msgid "After a specific card"
 msgstr "Depois de um cartão específico"
 
+#: templates/admin-backup.php
+msgid "After every backup"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "After N occurrences"
 msgstr "Após N ocorrências"
@@ -2267,6 +2271,10 @@ msgid_plural "Every %n years"
 msgstr[0] "Todo ano"
 msgstr[1] "A cada %n anos"
 
+#: templates/admin-backup.php
+msgid "Everyone in the administrators group gets the notification. Each run replaces the previous one, so a backup that keeps failing leaves a single unread entry rather than one per night."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "Sair da seleção múltipla"
@@ -3180,6 +3188,14 @@ msgstr "Kanso e o aplicativo Guests"
 msgid "Kanso background jobs & email links"
 msgstr "Tarefas em segundo plano e links de e-mail do Kanso"
 
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup completed"
+msgstr ""
+
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup failed"
+msgstr ""
+
 #: templates/admin-backup.php
 msgid "Kanso board backups"
 msgstr "Backups dos quadros do Kanso"
@@ -3577,6 +3593,10 @@ msgstr "Precisa da sua revisão"
 msgid "never"
 msgstr "nunca"
 
+#: templates/admin-backup.php
+msgid "Never"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "New board name…"
 msgstr "Nome do novo quadro…"
@@ -3928,6 +3948,10 @@ msgstr "Ainda não há nada aqui — as tarefas que você concluir aparecerão n
 msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
 msgstr "Nada no quadro selecionado está atribuído a você. Escolha “Todos os quadros” para ver tudo o que está atribuído a você."
 
+#: templates/admin-backup.php
+msgid "Notify administrators about a run"
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "now"
@@ -3972,6 +3996,10 @@ msgstr "Apenas issues com uma etiqueta"
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
 msgstr "Apenas os primeiros {count} cartões atribuídos são carregados, então algumas das suas tarefas faltam nesta lista."
+
+#: templates/admin-backup.php
+msgid "Only when a backup fails"
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "open"
