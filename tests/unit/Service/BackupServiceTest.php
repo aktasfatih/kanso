@@ -18,6 +18,7 @@ use OCP\Files\Folder;
 use OCP\Files\IAppData;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\Files\NotPermittedException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IConfig;
@@ -822,6 +823,93 @@ class BackupServiceTest extends TestCase {
 				// Expected - and indistinguishable from "no such backup".
 			}
 		}
+	}
+
+	public function testOpenBackupOfAValidNameWithNoFileIsTheSameNotFound(): void {
+		// The no-oracle property, from the other side: a well-formed name with
+		// nothing behind it must fail EXACTLY as a malformed one does, or the 404
+		// the endpoint returns would start telling callers which names are even
+		// valid. Same exception type, same handling, same answer.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-7-20260804-153000.zip' => 'ZIPBYTES'], $written, $deleted);
+
+		$this->expectException(NotFoundException::class);
+		$this->service->openBackup('kanso-board-99-20200101-000000.zip');
+	}
+
+	public function testOpenBackupSurfacesAStorageFailureAsSomethingOtherThanNotFound(): void {
+		// A destination that cannot be reached is NOT a missing backup: the
+		// download endpoint answers 404 for NotFoundException and lets anything
+		// else surface as a server error, so this type is what keeps a dead mount
+		// from being reported as a deleted archive.
+		$this->enable('/kanso-backups');
+		$this->rootFolder->method('getUserFolder')
+			->willThrowException(new \RuntimeException('storage backend unavailable'));
+
+		try {
+			$this->service->openBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('a broken destination must not open a backup');
+		} catch (NotFoundException) {
+			self::fail('a storage failure must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('Backup account', $e->getMessage());
+		}
+	}
+
+	public function testOpenBackupSurfacesABrokenAppDataFolderAsSomethingOtherThanNotFound(): void {
+		// App data raises NotFoundException for an absent folder, so without the
+		// wrapping in resolveTarget() an unusable app data store would reach the
+		// download endpoint as "no such backup".
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->method('newFolder')->willThrowException(new NotPermittedException('read-only app data'));
+		$service = new BackupService(
+			$this->boardMapper,
+			$this->archiveService,
+			$this->rootFolder,
+			$appData,
+			$this->config,
+			$this->time,
+			$this->logger,
+			$this->notificationService,
+		);
+
+		try {
+			$service->openBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('an unusable app data store must not open a backup');
+		} catch (NotFoundException) {
+			self::fail('a storage failure must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('app data', $e->getMessage());
+		}
+	}
+
+	public function testListBackupsFailsLoudlyWhenTheDestinationCannotBeRead(): void {
+		// The listing used to swallow this and answer [], which the admin panel
+		// renders as "No backups stored yet." - a failure wearing the costume of
+		// an empty folder, on the one screen that is the only view of an app-data
+		// archive. It must throw so the endpoint can answer non-2xx.
+		$this->enable('/kanso-backups');
+		$this->rootFolder->method('getUserFolder')
+			->willThrowException(new \RuntimeException('no such account'));
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->listBackups();
+	}
+
+	public function testListBackupsReturnsAnEmptyListForAHealthyEmptyDestination(): void {
+		// ...and the other half: a destination that resolved fine and simply holds
+		// nothing is still an empty list, not an error. "No backups yet" is a real
+		// state and the only one allowed to produce the empty hint.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([], $written, $deleted);
+
+		self::assertSame([], $this->service->listBackups());
 	}
 
 	public function testIsBackupNameAcceptsWhatTheRunWrites(): void {

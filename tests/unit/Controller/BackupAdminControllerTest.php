@@ -94,6 +94,49 @@ class BackupAdminControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
 	}
 
+	public function testDownloadDoesNotReportAStorageFailureAsAMissingBackup(): void {
+		// The regression this pins: a blanket catch(\Throwable) turned a dead
+		// mount, an unreachable destination and an unopenable file into the same
+		// "Backup not found" as a deleted archive, so an admin whose storage was
+		// down went looking for a file that is still there. Only the not-found
+		// case is a 404; a genuine failure surfaces as a server error.
+		$service = $this->createMock(BackupService::class);
+		$service->method('openBackup')
+			->willThrowException(new \RuntimeException('Could not open backup kanso-board-7-20260804-153000.zip'));
+
+		$this->expectException(\RuntimeException::class);
+		$this->controller($service)->download('kanso-board-7-20260804-153000.zip');
+	}
+
+	public function testFilesReportsABrokenDestinationInsteadOfAnEmptyList(): void {
+		// The same class of bug one layer down: listBackups() used to swallow an
+		// unresolvable destination and answer [], so the panel rendered "No
+		// backups stored yet." over an intact set of archives. It must be a
+		// non-2xx, which is what the panel's error state keys off.
+		$service = $this->createMock(BackupService::class);
+		$service->method('listBackups')
+			->willThrowException(new \RuntimeException('Backup account "backup-bot" has no files folder'));
+
+		$response = $this->controller($service)->files();
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		// Nothing a client could mistake for a complete listing.
+		self::assertArrayNotHasKey('files', (array)$response->getData());
+	}
+
+	public function testFilesStillAnswers200ForAHealthyButEmptyDestination(): void {
+		// "No backups yet" is a real, correct state and must stay distinguishable
+		// from "could not read the destination".
+		$service = $this->createMock(BackupService::class);
+		$service->method('listBackups')->willReturn([]);
+		$service->method('getDestination')->willReturn('appdata');
+
+		$response = $this->controller($service)->files();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame(['destination' => 'appdata', 'files' => []], $response->getData());
+	}
+
 	public function testDownloadStreamsWithoutAnEtag(): void {
 		$stream = fopen('php://memory', 'r+b');
 		fwrite($stream, 'PK-ZIP-BYTES');

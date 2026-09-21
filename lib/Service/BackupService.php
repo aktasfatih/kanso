@@ -482,16 +482,27 @@ class BackupService {
 	 * folder is a real folder an admin may have put other things in, and neither
 	 * this list nor the download endpoint is a general-purpose file browser.
 	 *
+	 * A DESTINATION THAT CANNOT BE READ IS NOT AN EMPTY ONE, and this method used
+	 * to conflate them by answering `[]`. It does not: a missing backup account,
+	 * a folder that is gone or a dead mount THROWS, so the admin panel can say
+	 * the listing failed instead of rendering "No backups stored yet." over an
+	 * intact set of archives. A healthy destination with nothing in it still
+	 * returns an empty list - that is a real state, and the only one allowed to
+	 * produce the empty hint.
+	 *
 	 * @return list<array{name: string, size: int, mtime: int, boardId: int}>
+	 * @throws \RuntimeException when the configured destination cannot be read
 	 */
 	public function listBackups(): array {
 		try {
 			$target = $this->resolveTarget();
-		} catch (\Throwable $e) {
-			// An unconfigured or unreachable destination simply holds nothing we
-			// can show; the last-run record is where a broken target is reported.
-			$this->logger->debug('Kanso backup: cannot list backups', ['exception' => $e]);
-			return [];
+		} catch (\RuntimeException $e) {
+			$this->logger->warning('Kanso backup: cannot list backups', [
+				'destination' => $this->getDestination(),
+				'path' => $this->getTargetPath(),
+				'exception' => $e,
+			]);
+			throw $e;
 		}
 
 		$backups = [];
@@ -526,8 +537,16 @@ class BackupService {
 	 * second and the size is returned alongside; between them there is nothing an
 	 * ETag would add.
 	 *
+	 * The two ways to fail are deliberately distinct TYPES, because the endpoint
+	 * turns them into different answers: a name that is not ours and a name with
+	 * no file behind it are the same {@see NotFoundException} (a 404 that is no
+	 * oracle for which names exist), while a destination that could not be
+	 * reached or a file that could not be opened is a \RuntimeException - a
+	 * server error, never "your backup is missing".
+	 *
 	 * @return array{stream: resource, size: int, name: string}
 	 * @throws NotFoundException when the name is not an allow-listed backup name, or no such backup exists
+	 * @throws \RuntimeException when the destination cannot be reached or the file cannot be opened
 	 */
 	public function openBackup(string $name): array {
 		if (!self::isBackupName($name)) {
@@ -566,11 +585,24 @@ class BackupService {
 	/**
 	 * The destination this run writes to, ready to use.
 	 *
+	 * EVERY failure here is a \RuntimeException, for BOTH destinations - that is
+	 * what lets the callers tell "the destination is broken" apart from "there is
+	 * no such backup". In particular it keeps a storage failure from reaching
+	 * {@see openBackup()}'s caller as a {@see NotFoundException} (app data raises
+	 * one for an absent folder, and the Files layer for an absent path segment),
+	 * which the download endpoint would then report as a missing archive.
+	 *
 	 * @throws \RuntimeException when the configured destination cannot be used
 	 */
 	private function resolveTarget(): BackupTarget {
 		if ($this->usesAppData()) {
-			return new AppDataBackupTarget($this->appDataFolder());
+			try {
+				return new AppDataBackupTarget($this->appDataFolder());
+			} catch (\RuntimeException $e) {
+				throw $e;
+			} catch (\Throwable $e) {
+				throw new \RuntimeException('Kanso app data is not usable: ' . $e->getMessage(), 0, $e);
+			}
 		}
 
 		$path = $this->getTargetPath();

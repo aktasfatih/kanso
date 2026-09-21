@@ -14,6 +14,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\StreamResponse;
+use OCP\Files\NotFoundException;
 use OCP\IRequest;
 
 /**
@@ -75,12 +76,30 @@ class BackupAdminController extends Controller {
 	 * The backups currently stored in the configured destination, newest first.
 	 * With the app-data destination this listing is the admin's only view of
 	 * them - they are not in anyone's Files.
+	 *
+	 * A DESTINATION THAT COULD NOT BE READ IS NOT AN EMPTY ONE. Answering 200
+	 * with `files: []` for a missing account, a deleted folder or a dead mount
+	 * would render the panel's "No backups stored yet." - telling an admin their
+	 * archives are gone when the truth is that the server never looked. So a
+	 * listing failure is a 5xx, which is what the panel's error state keys off.
+	 * An empty-but-healthy destination keeps answering 200 with an empty list:
+	 * "no backups yet" is a real state and must stay distinguishable.
 	 */
 	public function files(): JSONResponse {
-		return $this->respond(fn (): JSONResponse => new JSONResponse([
-			'destination' => $this->backupService->getDestination(),
-			'files' => $this->backupService->listBackups(),
-		]));
+		return $this->respond(function (): JSONResponse {
+			try {
+				$files = $this->backupService->listBackups();
+			} catch (\RuntimeException $e) {
+				// The message names the configured account/path; this endpoint is
+				// admin-only and that is exactly who has to fix it.
+				return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			}
+
+			return new JSONResponse([
+				'destination' => $this->backupService->getDestination(),
+				'files' => $files,
+			]);
+		});
 	}
 
 	/**
@@ -92,7 +111,17 @@ class BackupAdminController extends Controller {
 	 * of a GET download hands the bytes to the victim's own browser, never to the
 	 * forging site - the response body stays unreadable to it.
 	 *
-	 * An invalid name and a missing file are the same 404 on purpose.
+	 * An invalid name and a missing file are the same 404 on purpose:
+	 * {@see BackupService::openBackup()} raises the same
+	 * {@see \OCP\Files\NotFoundException} for both, so the endpoint never
+	 * confirms which names are even well-formed.
+	 *
+	 * A STORAGE FAILURE IS NOT A 404. Both targets throw a RuntimeException when
+	 * the destination is unreachable or a file cannot be opened, and reporting
+	 * that as "Backup not found" would send an admin looking for an archive they
+	 * never deleted. Only the not-found case is caught here; a genuine failure is
+	 * left to surface as a server error (and to be logged with its stack trace by
+	 * Nextcloud's exception middleware, which swallowing it here would prevent).
 	 *
 	 * NO ETag is set, deliberately: an in-place same-second overwrite leaves the
 	 * app-data ETag unchanged while the bytes change (measured), so revalidating
@@ -103,7 +132,7 @@ class BackupAdminController extends Controller {
 	public function download(string $name = ''): Response {
 		try {
 			$backup = $this->backupService->openBackup($name);
-		} catch (\Throwable $e) {
+		} catch (NotFoundException) {
 			return new JSONResponse(['message' => 'Backup not found'], Http::STATUS_NOT_FOUND);
 		}
 

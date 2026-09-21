@@ -297,6 +297,63 @@ test.describe('Kanso admin backup settings', () => {
 		}, { message: 'after a good listing the panel shows either the table or the empty hint' }).toBe(true)
 	})
 
+	test('a destination the server cannot read says so instead of showing an empty list', async ({ page }) => {
+		// The server-side half of the test above, with nothing mocked. The listing
+		// endpoint used to swallow an unresolvable destination and answer 200 with
+		// an empty list, so a misconfigured Files folder reached the admin as "No
+		// backups stored yet." — a failure wearing the costume of an empty folder,
+		// on the screen where an admin goes to check their backups exist. Point the
+		// config at an account that does not exist and the panel must say the
+		// listing failed.
+		await gotoPanel(page)
+
+		const error = page.locator('#kanso-backup-file-error')
+		const empty = page.locator('#kanso-backup-file-empty')
+		const list = page.locator('#kanso-backup-file-list')
+		const account = page.locator('#kanso-backup-account')
+		const path = page.locator('#kanso-backup-path')
+
+		await page.selectOption('#kanso-backup-destination', 'files')
+		const savedAccount = await account.inputValue()
+		const savedPath = await path.inputValue()
+
+		try {
+			await account.fill('kanso-no-such-backup-account')
+			await path.fill('/kanso-backups')
+			await Promise.all([
+				page.waitForResponse((r) => r.url().includes('/api/admin/backup/files')),
+				page.click('#kanso-backup-save'),
+			])
+
+			await expect(error).toBeVisible()
+			await expect(error).toContainText(/could not load/i)
+			// The state that must NOT appear: an admin reading this would conclude
+			// their archives are gone.
+			await expect(empty).toBeHidden()
+			await expect(list).toBeHidden()
+		} finally {
+			// Put the config back whatever happened, so the rest of the file runs
+			// against a destination that resolves.
+			await account.fill(savedAccount)
+			await path.fill(savedPath)
+			await page.selectOption('#kanso-backup-destination', 'appdata')
+			await Promise.all([
+				page.waitForResponse((r) => r.url().includes('/api/admin/backup/files') && r.ok()),
+				page.click('#kanso-backup-save'),
+			])
+		}
+
+		// And a destination that DOES resolve is a 200 again — including when it
+		// holds nothing. "No backups stored yet." is still reachable; it just no
+		// longer stands in for a failure.
+		await expect(error).toBeHidden()
+		await expect.poll(async () => {
+			const listed = await list.isVisible()
+			const none = await empty.isVisible()
+			return listed !== none
+		}, { message: 'a healthy destination shows either the table or the empty hint' }).toBe(true)
+	})
+
 	test('a run into app data lists its backups and the download returns a real zip', async ({ page, request }) => {
 		await gotoPanel(page)
 
