@@ -166,7 +166,6 @@
         "Attaching…": "附加中…",
         "Attachments": "附件",
         "Auto-archive": "自动归档",
-        "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials.": "按每日计划自动把每个 Kanso 看板导出为带版本的 JSON 文件，每个看板保留最近几份备份。请指向一个 Nextcloud 文件夹；把该文件夹挂载为 S3 外部存储即可保存异地副本。Kanso 通过 Nextcloud 写入文件，从不持有 S3 凭据。",
         "Automation": "自动化",
         "Average days": "平均天数",
         "Back": "上一步",

@@ -143,7 +143,6 @@ OC.L10N.register(
     "Attaching…" : "İliştiriliyor…",
     "Attachments" : "Ekler",
     "Auto-archive" : "Otomatik arşivleme",
-    "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials." : "Her Kanso panosunu günlük olarak sürümlenmiş bir JSON dosyasına otomatik aktar ve pano başına son birkaç yedeği sakla. Bunu bir Nextcloud klasörüne yönlendir; kopyaları kurum dışında tutmak için o klasörü S3 Harici Depolama olarak bağla. Kanso dosyaları Nextcloud üzerinden yazar, hiçbir zaman S3 kimlik bilgisi tutmaz.",
     "Automation" : "Otomasyon",
     "Average days" : "Ortalama gün",
     "Back" : "Geri",

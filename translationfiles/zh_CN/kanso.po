@@ -376,6 +376,14 @@ msgstr "0"
 msgid "A card was created, moved or completed, or a board was shared with you"
 msgstr "有卡片被创建、移动或完成，或有看板与你共享"
 
+#: templates/admin-backup.php
+msgid "A folder in Files"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "A folder in Files is the option to pick when you want the archives off this server or simply want to see them: it is the only one you can browse, sync or back with an S3 External Storage mount (Kanso writes the files through Nextcloud and never holds S3 credentials). It costs what any file write costs — the entries described below, the folder account's quota, and pruned backups landing in that account's trashbin."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "A fresh copy is created each time; this card stays as the source"
 msgstr "每次都会创建一份新副本；本卡片保留为源卡片"
@@ -741,8 +749,8 @@ msgid "Auto-archive"
 msgstr "自动归档"
 
 #: templates/admin-backup.php
-msgid "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials."
-msgstr "按每日计划自动把每个 Kanso 看板导出为带版本的 JSON 文件，每个看板保留最近几份备份。请指向一个 Nextcloud 文件夹；把该文件夹挂载为 S3 外部存储即可保存异地副本。Kanso 通过 Nextcloud 写入文件，从不持有 S3 凭据。"
+msgid "Automatically export every Kanso board to a versioned archive on a daily schedule, keeping the last few backups per board. Choose where those archives are written: inside Kanso's own app data, or in a Nextcloud folder you can browse and mount elsewhere."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Automation"
@@ -783,6 +791,10 @@ msgstr "后台任务使用 AJAX 模式，只有页面打开时才会运行 — K
 #: src/components/StackColumn.vue
 msgid "Backlog"
 msgstr "待办列表"
+
+#: templates/admin-backup.php
+msgid "Backup"
+msgstr ""
 
 #: src/admin-backup.js
 msgid "Backup completed"
@@ -840,6 +852,7 @@ msgstr "蓝色"
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
 #: src/views/ViewPage.vue
+#: templates/admin-backup.php
 msgid "Board"
 msgstr "看板"
 
@@ -1989,6 +2002,10 @@ msgstr "启用完成门禁的列会在所有评审通过之前，阻止把卡片
 #: src/views/ProjectStats.vue
 msgid "Down vs previous period"
 msgstr "较上一周期下降"
+
+#: src/admin-backup.js
+msgid "Download"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Download a backup of this board, attachments included."
@@ -3157,6 +3174,14 @@ msgstr "Kanso"
 msgid "Kanso & the Guests app"
 msgstr "Kanso 与 Guests 应用"
 
+#: templates/admin-backup.php
+msgid "Kanso app data (recommended)"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso app data keeps each archive inside the app's own storage, next to card attachments. Nothing is written into anyone's Files, so a run adds no Files activity entries and the archives are outside every account's quota. What you give up: they are not browsable, syncable or mountable anywhere — the list at the bottom of this page is the only way to get one back — and a backup that ages out of retention is deleted outright instead of going to a trashbin."
+msgstr ""
+
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Kanso background jobs & email links"
 msgstr "Kanso 后台任务与邮件链接"
@@ -3662,6 +3687,10 @@ msgstr "暂无自动归档规则。"
 #: src/components/BoardSettingsModal.vue
 msgid "No background"
 msgstr "无背景"
+
+#: templates/admin-backup.php
+msgid "No backups stored yet."
+msgstr ""
 
 #: src/App.vue
 msgid "No boards in this folder"
@@ -4883,6 +4912,10 @@ msgstr "侧边栏"
 msgid "Single date"
 msgstr "单个日期"
 
+#: templates/admin-backup.php
+msgid "Size"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Skip while open"
 msgstr "有未完成的卡片时跳过"
@@ -5008,6 +5041,10 @@ msgstr "停止计时器"
 msgid "Stop watching this card"
 msgstr "取消关注这张卡片"
 
+#: templates/admin-backup.php
+msgid "Stored backups"
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 msgid "Strikethrough"
 msgstr "删除线"
@@ -5094,6 +5131,10 @@ msgstr "该卡片已不在此看板上。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "The archives currently kept in the destination above, newest first. Each one is a full export of a single board — every card and every attachment on it, including ones you cannot normally see — so downloading it is an administrator-only action and the file is never shareable by link."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5557,6 +5598,10 @@ msgstr "当卡片进入以下角色的列时"
 msgid "When someone requests your review on a card it will appear here."
 msgstr "当有人请求你评审某张卡片时，它会显示在这里。"
 
+#: templates/admin-backup.php
+msgid "Where backups are written"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Which Forgejo issues to take in"
 msgstr ""
@@ -5602,6 +5647,10 @@ msgstr "工作流"
 #: src/views/ProjectView.vue
 msgid "Write a reply…"
 msgstr "写下回复…"
+
+#: templates/admin-backup.php
+msgid "Written"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "wrote"

@@ -143,7 +143,6 @@ OC.L10N.register(
     "Attaching…" : "Прикрепление…",
     "Attachments" : "Вложения",
     "Auto-archive" : "Автоархивация",
-    "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials." : "Ежедневно автоматически экспортировать каждую доску Kanso в версионированный файл JSON, сохраняя несколько последних копий для каждой доски. Укажите папку Nextcloud; подключите эту папку как внешнее хранилище S3, чтобы держать копии за пределами сервера. Kanso записывает файлы через Nextcloud и никогда не хранит учетные данные S3.",
     "Automation" : "Автоматизация",
     "Average days" : "Среднее, дней",
     "Back" : "Назад",

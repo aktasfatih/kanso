@@ -86,8 +86,10 @@ your work, on your own Nextcloud, laid out plainly.
 - **Export, duplicate, back up**: download any board as a zip (its attachments
   included) and import that zip back on any instance; or duplicate a board, with
   or without its cards. Administrators can additionally schedule **periodic
-  backups of every board** into a Nextcloud folder, keeping the most recent few
-  per board — off until an admin turns it on in Nextcloud's admin settings.
+  backups of every board**, keeping the most recent few per board — into Kanso's
+  own storage (quiet, listed and downloadable from the admin panel) or into a
+  Nextcloud folder you can browse and mount off-site. Off until an admin turns it
+  on in Nextcloud's admin settings.
 - **Calendar**: every board you can read appears as a **read-only CalDAV
   calendar** of its due-dated cards, so they show up in Nextcloud Calendar and
   Tasks and on your phone — nothing to copy or paste, and you can hide a board
@@ -260,16 +262,42 @@ a half-restored board.
 
 ### Scheduled board backups
 
-Kanso can write a timestamped `.zip` export of every board into a Nextcloud
-folder on cron, keeping the most recent few per board. Turn it on in
-**Administration settings → Kanso**, where you also set the target folder, the
-account that owns it, how many backups to keep per board, and whether a finished
-run announces itself to the administrators (never, only on failure — the
-default — or after every run). Back that folder with an S3 External Storage
-mount if you want off-site copies — Kanso only writes files through Nextcloud
-and never holds S3 credentials.
+Kanso can write a timestamped `.zip` export of every board on cron, keeping the
+most recent few per board. Turn it on in **Administration settings → Kanso**,
+where you also set how many backups to keep per board and whether a finished run
+announces itself to the administrators (never, only on failure — the default —
+or after every run).
 
-**Keeping the backups out of your own activity feed.** Nextcloud's Activity app
+**Where they are written** is yours to choose, and the two options trade off
+against each other:
+
+- **Kanso app data** (the default for a new installation) keeps the archives in
+  the app's own storage, alongside card attachments. Nothing is written into
+  anyone's Files, so a run adds no Files activity entries and the archives are
+  outside every account's quota. In exchange they are not browsable, syncable or
+  mountable anywhere: the **Stored backups** list at the bottom of the admin
+  panel is the only way to get one back, and a backup that ages out of retention
+  is deleted outright rather than moved to a trashbin.
+- **A folder in Files** writes them into a Nextcloud folder under an account you
+  name. This is the one to pick when you want the copies off this server or
+  simply want to see them — it is the only destination you can browse, sync, or
+  back with an S3 External Storage mount (Kanso writes files through Nextcloud
+  and never holds S3 credentials). It costs what any file write costs: the
+  activity entries described below, that account's quota (a full quota fails the
+  run), and pruned backups landing in its trashbin.
+
+Downloading a stored backup is an administrator-only action, whichever
+destination is in use: an archive is a full export of a board including cards and
+attachments that ordinary members may not be able to see, so it is never
+shareable by link and never served to a non-administrator.
+
+**Upgrading?** Nothing moves. An installation that already had a target folder
+configured stays on that folder — the new default applies to fresh installations
+and to instances that never configured backups at all. Switch destinations
+whenever you like; the folder and account you typed are remembered either way.
+
+**Keeping the backups out of your own activity feed** (Files folder only).
+Nextcloud's Activity app
 records a *file created* entry for every backup written and a *file deleted*
 entry for every one that ages out of retention, so a run over N boards adds 2N
 entries to the activity stream of whichever account owns the target folder.
@@ -285,6 +313,12 @@ the entries land in that account's stream instead of yours. The tradeoffs are
 real and worth stating up front: the backups then live in that account's Files,
 so you no longer see them in your own — and if you share the folder back to
 yourself to browse or download them, the activity entries come with it.
+
+The other way out is the app-data destination above, which leaves no entries for
+a different reason: nothing is written into a user folder at all, so Nextcloud's
+Files hooks have nobody to record the write for. That is a property of where the
+bytes land, not of Kanso hiding anything — pick the Files folder and its entries
+are recorded exactly as before.
 
 ### Offline data on the device
 

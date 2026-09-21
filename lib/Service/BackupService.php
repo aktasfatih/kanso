@@ -9,11 +9,15 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Service\Backup\AppDataBackupTarget;
+use OCA\Kanso\Service\Backup\BackupTarget;
+use OCA\Kanso\Service\Backup\FilesBackupTarget;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\Files\File;
 use OCP\Files\Folder;
+use OCP\Files\IAppData;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IConfig;
 use Psr\Log\LoggerInterface;
 
@@ -21,10 +25,32 @@ use Psr\Log\LoggerInterface;
  * Scheduled instance-wide board backups (#3615). On each run - when enabled -
  * every non-deleted board is packed via {@see BoardArchiveService} into its
  * versioned export archive (`board.json` plus the card attachments) and written
- * as one timestamped .zip per board into an admin-configured Nextcloud path
- * (via the Files API, {@see IRootFolder}). The admin backs that path with an S3
- * External Storage mount if they want off-site copies: Kanso itself holds NO S3
- * client and NO credentials - it only writes files to a folder.
+ * as one timestamped .zip per board into the destination the administrator
+ * chose ({@see KEY_DESTINATION}).
+ *
+ * TWO DESTINATIONS, one backup body. The zip building, the naming and the
+ * retention sweep below are shared; the only thing that varies is the
+ * {@see BackupTarget} they run against:
+ *
+ *   - {@see DEST_APPDATA} (the default for a new install) writes into Kanso's
+ *     own app data, `appdata_<instanceid>/kanso/backups/` - the storage the app
+ *     already keeps card attachments in. Silent (no Files-activity entries,
+ *     measured - see below) and outside every user quota, but the files are not
+ *     in anyone's Files: the ONLY way to retrieve one is the admin-gated
+ *     download endpoint on {@see \OCA\Kanso\Controller\BackupAdminController},
+ *     and a pruned one is hard-deleted rather than trashed.
+ *   - {@see DEST_FILES} writes into an admin-configured Nextcloud path under the
+ *     backup account ({@see KEY_ACCOUNT}), via the Files API ({@see IRootFolder}).
+ *     Browsable, syncable, and the only destination that can be pointed OFF-SITE:
+ *     the admin backs that folder with an S3 External Storage mount, because only
+ *     a Files folder can carry a mount. Kanso itself holds NO S3 client and NO
+ *     credentials - it only writes files to a folder. The cost is the activity
+ *     entries and the account's quota, both of them Nextcloud's, not Kanso's.
+ *
+ * An install that was already backing up into a Files folder KEEPS doing that:
+ * absent an explicit {@see KEY_DESTINATION}, a non-empty {@see KEY_PATH} means
+ * "this instance predates the setting and chose Files" - see
+ * {@see getDestination()}. Nobody's backups are relocated by an update.
  *
  * Each board keeps the last N backups (retention); older files for that board
  * are pruned. The sweep is bounded (all boards in one pass, but each board is a
@@ -39,8 +65,9 @@ use Psr\Log\LoggerInterface;
  * choice - {@see KEY_NOTIFY}: never, only on failure (the default), or always.
  * See {@see announce()}.
  *
- * ON THE FILES-ACTIVITY ENTRIES THIS PRODUCES (#161). Writing into a real user
- * folder trips Nextcloud's `post_create`/`post_delete` hooks, so every run adds
+ * ON THE FILES-ACTIVITY ENTRIES {@see DEST_FILES} PRODUCES (#161). Writing into
+ * a real user folder trips Nextcloud's `post_create`/`post_delete` hooks, so
+ * every run adds
  * a "created" entry per board plus a "deleted" entry per pruned file - 2N rows
  * per run - to the backup account's activity stream, authored by nobody (cron
  * has no session user), which the Activity app renders as "deleted account".
@@ -64,16 +91,30 @@ use Psr\Log\LoggerInterface;
  *     makes it a no-op) and, when it does take, it leaks onto file activity
  *     written by LATER jobs in that process. Both directions were reproduced.
  *
- * The honest remedy is therefore a configuration one, and it is the one the
- * admin panel documents: point {@see KEY_ACCOUNT} at a dedicated service account
- * so the rows land in a stream nobody reads. Nothing in the UI or the docs may
- * claim the entries stop being recorded - see tests/e2e/admin-backup-settings.
+ * So for an instance that wants a Files folder, the remedy stays a configuration
+ * one, and it is the one the admin panel documents: point {@see KEY_ACCOUNT} at
+ * a dedicated service account so the rows land in a stream nobody reads.
+ *
+ * What DOES make a run leave no activity trace is not suppressing the rows but
+ * not writing into a user folder at all - {@see DEST_APPDATA}. App data lives on
+ * the local root storage rather than a `home::` storage, so `FilesHooks`
+ * resolves an empty affected-user list and the row-writing loop never runs.
+ * Measured on NC 34 / activity 7.0.0, with `notify_*_file_changed` enabled, in a
+ * real cron context: a 4-board run at retention 1 wrote 8 `oc_activity` + 8
+ * `oc_activity_mq` + 8 `oc_notifications` rows into a user folder, and 0 / 0 / 0
+ * into app data - folder create, stream write, in-place overwrite, a 300 MB
+ * write, single-file delete and recursive folder delete alike.
+ *
+ * That is a property of WHERE the bytes land, never of Kanso hiding anything:
+ * nothing in the UI or the docs may claim that a Files-folder run's entries stop
+ * being recorded - see tests/e2e/admin-backup-settings.
  */
 class BackupService {
 	public const APP_ID = 'kanso';
 
 	// IConfig app-value keys (app-wide config, admin-owned).
 	public const KEY_ENABLED = 'backup_enabled';
+	public const KEY_DESTINATION = 'backup_destination';
 	public const KEY_PATH = 'backup_path';
 	public const KEY_RETENTION = 'backup_retention';
 	public const KEY_ACCOUNT = 'backup_account';
@@ -99,6 +140,32 @@ class BackupService {
 	/** @var list<string> */
 	public const NOTIFY_CHOICES = [self::NOTIFY_NEVER, self::NOTIFY_FAILURE, self::NOTIFY_ALWAYS];
 
+	/**
+	 * Where a run writes. `appdata` is the default for a NEW install: someone who
+	 * wants off-site copies will go looking for this setting, while someone who
+	 * just switches backups on should not have to discover a feed-spam problem
+	 * first. An install that predates the setting is NOT moved - see
+	 * {@see getDestination()}.
+	 */
+	public const DEST_APPDATA = 'appdata';
+	public const DEST_FILES = 'files';
+	public const DEFAULT_DESTINATION = self::DEST_APPDATA;
+
+	/** @var list<string> */
+	public const DESTINATION_CHOICES = [self::DEST_APPDATA, self::DEST_FILES];
+
+	/** App-data subfolder holding the backups when {@see DEST_APPDATA} is in use. */
+	public const APPDATA_FOLDER = 'backups';
+
+	/**
+	 * The exact shape of a Kanso backup filename: `kanso-board-<id>-<YYYYMMDD>-<HHMMSS>.zip`
+	 * (or the pre-#10060 `.json`). Kanso generates every one of them, so this is
+	 * an allow-list, not a sanitizer: the download endpoint refuses anything that
+	 * does not match rather than trying to clean it up, which is what keeps a
+	 * client-supplied name from ever selecting a path.
+	 */
+	private const NAME_PATTERN = '/^kanso-board-[0-9]+-[0-9]{8}-[0-9]{6}\.(?:zip|json)$/';
+
 	/** Default kept-per-board count when unset/blank. */
 	public const DEFAULT_RETENTION = 7;
 
@@ -108,9 +175,9 @@ class BackupService {
 
 	/**
 	 * Default account whose root folder backs the configured path when the admin
-	 * has not overridden it. The admin mounts the backup target (e.g. an S3
-	 * External Storage) for this account. Using getUserFolder keeps the write
-	 * inside a real, permission-checked storage rather than app-data.
+	 * has not overridden it, for {@see DEST_FILES}. The admin mounts the backup
+	 * target (e.g. an S3 External Storage) for this account. Ignored entirely by
+	 * {@see DEST_APPDATA}, which has no owning account.
 	 */
 	public const DEFAULT_ACCOUNT = 'admin';
 
@@ -118,6 +185,7 @@ class BackupService {
 		private BoardMapper $boardMapper,
 		private BoardArchiveService $archiveService,
 		private IRootFolder $rootFolder,
+		private IAppData $appData,
 		private IConfig $config,
 		private ITimeFactory $time,
 		private LoggerInterface $logger,
@@ -133,6 +201,36 @@ class BackupService {
 
 	public function getTargetPath(): string {
 		return trim($this->config->getAppValue(self::APP_ID, self::KEY_PATH, ''));
+	}
+
+	/**
+	 * Where a run writes: one of {@see DESTINATION_CHOICES}.
+	 *
+	 * THE MIGRATION RULE lives here, and "existing install" is a single explicit
+	 * test: the destination key is ABSENT (no admin has ever chosen) AND a
+	 * backup path is configured. Only a release that predates this setting could
+	 * leave that combination behind, and on such an instance the backups are
+	 * already sitting in that Files folder - so it stays on {@see DEST_FILES}
+	 * and nothing moves. An install with no configured path has no backups to
+	 * relocate and gets the new default. {@see saveConfig()} always writes the
+	 * key, and {@see \OCA\Kanso\Migration\Version006300Date20260921000000} stamps
+	 * it once at upgrade, so this inference is a floor rather than a permanent
+	 * dependency on another setting's value.
+	 *
+	 * An unrecognised stored value (hand-edited config, a downgrade) falls back
+	 * the same way rather than failing the run.
+	 */
+	public function getDestination(): string {
+		$raw = trim($this->config->getAppValue(self::APP_ID, self::KEY_DESTINATION, ''));
+		if (in_array($raw, self::DESTINATION_CHOICES, true)) {
+			return $raw;
+		}
+		return $this->getTargetPath() !== '' ? self::DEST_FILES : self::DEFAULT_DESTINATION;
+	}
+
+	/** True when this run writes into Kanso's own app data. */
+	public function usesAppData(): bool {
+		return $this->getDestination() === self::DEST_APPDATA;
 	}
 
 	/**
@@ -169,11 +267,12 @@ class BackupService {
 	/**
 	 * The persisted admin config plus last-run result, for the admin panel.
 	 *
-	 * @return array{enabled: bool, path: string, account: string, retention: int, notify: string, lastRunAt: int, lastRunStatus: string, lastRunMessage: string}
+	 * @return array{enabled: bool, destination: string, path: string, account: string, retention: int, notify: string, lastRunAt: int, lastRunStatus: string, lastRunMessage: string}
 	 */
 	public function getConfig(): array {
 		return [
 			'enabled' => $this->isEnabled(),
+			'destination' => $this->getDestination(),
 			'path' => $this->getTargetPath(),
 			'account' => $this->getAccount(),
 			'retention' => $this->getRetention(),
@@ -187,7 +286,11 @@ class BackupService {
 	/**
 	 * Persists the admin config. The path/account are trimmed; retention is
 	 * clamped to [MIN_RETENTION, MAX_RETENTION]. A blank account falls back to
-	 * the default, and an unrecognised notify policy to {@see DEFAULT_NOTIFY}.
+	 * the default, an unrecognised notify policy to {@see DEFAULT_NOTIFY}, and an
+	 * unrecognised destination to {@see DEFAULT_DESTINATION}.
+	 *
+	 * The path is persisted whatever the destination is, so switching to app data
+	 * and back does not make an admin retype their folder.
 	 */
 	public function saveConfig(
 		bool $enabled,
@@ -195,8 +298,15 @@ class BackupService {
 		int $retention,
 		string $account = self::DEFAULT_ACCOUNT,
 		string $notify = self::DEFAULT_NOTIFY,
+		string $destination = self::DEFAULT_DESTINATION,
 	): void {
 		$this->config->setAppValue(self::APP_ID, self::KEY_ENABLED, $enabled ? 'yes' : 'no');
+		$destination = trim($destination);
+		$this->config->setAppValue(
+			self::APP_ID,
+			self::KEY_DESTINATION,
+			in_array($destination, self::DESTINATION_CHOICES, true) ? $destination : self::DEFAULT_DESTINATION,
+		);
 		$this->config->setAppValue(self::APP_ID, self::KEY_PATH, trim($path));
 		$account = trim($account);
 		$this->config->setAppValue(self::APP_ID, self::KEY_ACCOUNT, $account === '' ? self::DEFAULT_ACCOUNT : $account);
@@ -214,9 +324,10 @@ class BackupService {
 
 	/**
 	 * The cron / run-now entry point. No-op (and records nothing) when disabled.
-	 * When enabled but the target path is unset or unwritable, records an error
-	 * status and returns without touching boards. Otherwise exports every board
-	 * and prunes to the retention count, isolating per-board failures.
+	 * When enabled but the chosen destination is unusable (for the Files folder:
+	 * an unset, traversing or unwritable path), records an error status and
+	 * returns without touching boards. Otherwise exports every board and prunes
+	 * to the retention count, isolating per-board failures.
 	 *
 	 * @return array{status: string, boards: int, failures: int, message: string}
 	 */
@@ -226,16 +337,15 @@ class BackupService {
 			return ['status' => 'disabled', 'boards' => 0, 'failures' => 0, 'message' => 'Backups are disabled'];
 		}
 
-		$path = $this->getTargetPath();
-		if ($path === '') {
-			return $this->recordError('No backup target path is configured');
-		}
-
 		try {
-			$folder = $this->resolveFolder($path);
+			$target = $this->resolveTarget();
 		} catch (\Throwable $e) {
-			$this->logger->warning('Kanso backup: target path unusable', ['path' => $path, 'exception' => $e]);
-			return $this->recordError('Backup target path is unset or unwritable: ' . $e->getMessage());
+			$this->logger->warning('Kanso backup: target unusable', [
+				'destination' => $this->getDestination(),
+				'path' => $this->getTargetPath(),
+				'exception' => $e,
+			]);
+			return $this->recordError($e->getMessage());
 		}
 
 		$retention = $this->getRetention();
@@ -243,7 +353,7 @@ class BackupService {
 		$failures = 0;
 		foreach ($this->boardMapper->findAll() as $board) {
 			try {
-				$this->backupBoard($folder, $board, $retention);
+				$this->backupBoard($target, $board, $retention);
 				$boards++;
 			} catch (\Throwable $e) {
 				// Per-board isolation: one bad board must not abort the run.
@@ -278,18 +388,18 @@ class BackupService {
 	 * ATTACHMENTS, including files on cards a normal exporter could not see.
 	 * That is deliberate, not an oversight: a backup that dropped the files of
 	 * hidden cards would not restore the instance, which is the only thing a
-	 * backup is for. What makes it safe is where it lands - an
-	 * admin-configured folder, never an HTTP response (#3743). Every
-	 * user-facing export goes through {@see BoardPortabilityController}, which
-	 * always passes a real viewer.
+	 * backup is for. What makes it safe is where it lands - an admin-only
+	 * destination, and an HTTP response only through the ADMIN-gated download
+	 * endpoint (#3743). Every user-facing export goes through
+	 * {@see BoardPortabilityController}, which always passes a real viewer.
 	 *
-	 * The archive is a temp FILE streamed into the Files API, so a board with
-	 * large attachments never has to fit in the cron worker's memory.
+	 * The archive is a temp FILE streamed into the target, so a board with large
+	 * attachments never has to fit in the cron worker's memory.
 	 *
 	 * @throws \OCP\DB\Exception
 	 * @throws \OCP\Files\NotPermittedException
 	 */
-	private function backupBoard(Folder $folder, Board $board, int $retention): void {
+	private function backupBoard(BackupTarget $target, Board $board, int $retention): void {
 		$archivePath = $this->archiveService->build($board, null);
 		$handle = @fopen($archivePath, 'rb');
 		if ($handle === false) {
@@ -299,18 +409,7 @@ class BackupService {
 
 		$filename = $this->fileNameFor($board->getId());
 		try {
-			if ($folder->nodeExists($filename)) {
-				// Same-second re-run: overwrite in place so we never duplicate.
-				$node = $folder->get($filename);
-				if (!$node instanceof File) {
-					// A non-file already occupies the name (e.g. a folder). Fail this
-					// board rather than silently "succeeding" without writing.
-					throw new \RuntimeException('Backup path collides with a non-file node: ' . $filename);
-				}
-				$node->putContent($handle);
-			} else {
-				$folder->newFile($filename, $handle);
-			}
+			$target->write($filename, $handle);
 		} finally {
 			// The Files layer may consume and close the stream itself; only close
 			// it if it is still open (a double fclose raises a warning that
@@ -322,7 +421,7 @@ class BackupService {
 			@unlink($archivePath);
 		}
 
-		$this->prune($folder, $board->getId(), $filename, $retention);
+		$this->prune($target, $board->getId(), $filename, $retention);
 	}
 
 	/**
@@ -336,16 +435,20 @@ class BackupService {
 	 * Both suffixes count: backups written before #10060 are bare `.json`
 	 * documents, and they must keep ageing out of retention rather than piling
 	 * up beside the `.zip` archives forever.
+	 *
+	 * Shared by BOTH destinations - app data hard-deletes here, a Files folder
+	 * moves the file to that account's trashbin, and that difference is
+	 * Nextcloud's, not a difference in what gets pruned.
 	 */
-	private function prune(Folder $folder, int $boardId, string $justWritten, int $retention): void {
+	private function prune(BackupTarget $target, int $boardId, string $justWritten, int $retention): void {
 		$prefix = $this->filePrefixFor($boardId);
 		// The names of this board's backups; the just-written one is guaranteed
 		// present regardless of listing staleness. Names only (no nodes) - each
-		// deletion is resolved from the folder by name, so a stale cache cannot
+		// deletion is resolved from the target by name, so a stale cache cannot
 		// hand us a node that no longer exists.
 		$names = [$justWritten => true];
-		foreach ($folder->getDirectoryListing() as $node) {
-			$name = $node->getName();
+		foreach ($target->listFiles() as $file) {
+			$name = $file['name'];
 			if (str_starts_with($name, $prefix)
 				&& (str_ends_with($name, '.zip') || str_ends_with($name, '.json'))) {
 				$names[$name] = true;
@@ -362,13 +465,136 @@ class BackupService {
 				// Never delete the file we just wrote.
 				continue;
 			}
-			if ($folder->nodeExists($name)) {
-				$folder->get($name)->delete();
-			}
+			$target->delete($name);
 		}
 	}
 
+	// ---- retrieval (the admin panel's list + download) --------------------
+
+	/**
+	 * Every stored backup in the CURRENT destination, newest first.
+	 *
+	 * Sorted by NAME descending, which is chronological because the embedded UTC
+	 * stamp is fixed-width - the same invariant {@see prune()} relies on, so the
+	 * list and the retention sweep can never disagree about which file is oldest.
+	 *
+	 * Only files Kanso itself wrote are listed ({@see isBackupName()}): a Files
+	 * folder is a real folder an admin may have put other things in, and neither
+	 * this list nor the download endpoint is a general-purpose file browser.
+	 *
+	 * @return list<array{name: string, size: int, mtime: int, boardId: int}>
+	 */
+	public function listBackups(): array {
+		try {
+			$target = $this->resolveTarget();
+		} catch (\Throwable $e) {
+			// An unconfigured or unreachable destination simply holds nothing we
+			// can show; the last-run record is where a broken target is reported.
+			$this->logger->debug('Kanso backup: cannot list backups', ['exception' => $e]);
+			return [];
+		}
+
+		$backups = [];
+		foreach ($target->listFiles() as $file) {
+			if (!self::isBackupName($file['name'])) {
+				continue;
+			}
+			$backups[] = [
+				'name' => $file['name'],
+				'size' => $file['size'],
+				'mtime' => $file['mtime'],
+				'boardId' => $this->boardIdFromName($file['name']),
+			];
+		}
+		usort($backups, static fn (array $a, array $b): int => strcmp($b['name'], $a['name']));
+		return $backups;
+	}
+
+	/**
+	 * Opens ONE stored backup for streaming to an administrator.
+	 *
+	 * The name is an allow-listed Kanso backup filename or nothing at all: it is
+	 * matched against {@see NAME_PATTERN} BEFORE it reaches a target, so it can
+	 * contain no separator, no `..` and no extension of our choosing. Combined
+	 * with the targets being filename-addressed (never path-addressed), there is
+	 * no input here that can select a file outside the backups folder.
+	 *
+	 * The caller owns the returned stream and must close it. Callers must NOT
+	 * revalidate this response with an ETag: an in-place same-second overwrite
+	 * leaves the app-data ETag unchanged while the bytes change (measured:
+	 * identical etag across 132850 -> 530655 bytes). The filename is unique per
+	 * second and the size is returned alongside; between them there is nothing an
+	 * ETag would add.
+	 *
+	 * @return array{stream: resource, size: int, name: string}
+	 * @throws NotFoundException when the name is not an allow-listed backup name, or no such backup exists
+	 */
+	public function openBackup(string $name): array {
+		if (!self::isBackupName($name)) {
+			// Deliberately the SAME failure as "no such file": an admin-only
+			// endpoint still should not answer "that name would have been valid".
+			throw new NotFoundException('No such backup');
+		}
+
+		$target = $this->resolveTarget();
+		$size = 0;
+		foreach ($target->listFiles() as $file) {
+			if ($file['name'] === $name) {
+				$size = $file['size'];
+				break;
+			}
+		}
+
+		return ['stream' => $target->read($name), 'size' => $size, 'name' => $name];
+	}
+
+	/**
+	 * Whether a name is one Kanso itself would have written. The download
+	 * endpoint's whole input validation, and the listing's filter.
+	 */
+	public static function isBackupName(string $name): bool {
+		return preg_match(self::NAME_PATTERN, $name) === 1;
+	}
+
+	/** The board id embedded in a backup filename (0 if it somehow has none). */
+	private function boardIdFromName(string $name): int {
+		return preg_match('/^kanso-board-([0-9]+)-/', $name, $m) === 1 ? (int)$m[1] : 0;
+	}
+
 	// ---- helpers ----------------------------------------------------------
+
+	/**
+	 * The destination this run writes to, ready to use.
+	 *
+	 * @throws \RuntimeException when the configured destination cannot be used
+	 */
+	private function resolveTarget(): BackupTarget {
+		if ($this->usesAppData()) {
+			return new AppDataBackupTarget($this->appDataFolder());
+		}
+
+		$path = $this->getTargetPath();
+		if ($path === '') {
+			throw new \RuntimeException('No backup target path is configured');
+		}
+		try {
+			return new FilesBackupTarget($this->resolveFolder($path), $path);
+		} catch (\RuntimeException $e) {
+			// Already carries a specific, admin-readable reason.
+			throw $e;
+		} catch (\Throwable $e) {
+			throw new \RuntimeException('Backup target path is unset or unwritable: ' . $e->getMessage(), 0, $e);
+		}
+	}
+
+	/** Kanso's app-data backups folder, created on demand. */
+	private function appDataFolder(): ISimpleFolder {
+		try {
+			return $this->appData->getFolder(self::APPDATA_FOLDER);
+		} catch (NotFoundException) {
+			return $this->appData->newFolder(self::APPDATA_FOLDER);
+		}
+	}
 
 	/**
 	 * Resolves the configured absolute path to a writable {@see Folder} under

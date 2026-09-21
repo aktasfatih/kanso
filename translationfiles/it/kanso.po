@@ -399,6 +399,14 @@ msgstr "0"
 msgid "A card was created, moved or completed, or a board was shared with you"
 msgstr "Una scheda è stata creata, spostata o completata, oppure una bacheca è stata condivisa con te"
 
+#: templates/admin-backup.php
+msgid "A folder in Files"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "A folder in Files is the option to pick when you want the archives off this server or simply want to see them: it is the only one you can browse, sync or back with an S3 External Storage mount (Kanso writes the files through Nextcloud and never holds S3 credentials). It costs what any file write costs — the entries described below, the folder account's quota, and pruned backups landing in that account's trashbin."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "A fresh copy is created each time; this card stays as the source"
 msgstr "Ogni volta viene creata una nuova copia; questa scheda resta l'originale"
@@ -766,8 +774,8 @@ msgid "Auto-archive"
 msgstr "Archiviazione automatica"
 
 #: templates/admin-backup.php
-msgid "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials."
-msgstr "Esporta automaticamente ogni bacheca di Kanso in un file JSON versionato con cadenza giornaliera, conservando gli ultimi backup di ciascuna bacheca. Indicare qui una cartella di Nextcloud; montare quella cartella come Archiviazione esterna S3 per conservare copie fuori sede. Kanso scrive i file tramite Nextcloud e non gestisce mai credenziali S3."
+msgid "Automatically export every Kanso board to a versioned archive on a daily schedule, keeping the last few backups per board. Choose where those archives are written: inside Kanso's own app data, or in a Nextcloud folder you can browse and mount elsewhere."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Automation"
@@ -808,6 +816,10 @@ msgstr "I processi in background usano la modalità AJAX, che viene eseguita sol
 #: src/components/StackColumn.vue
 msgid "Backlog"
 msgstr "Backlog"
+
+#: templates/admin-backup.php
+msgid "Backup"
+msgstr ""
 
 #: src/admin-backup.js
 msgid "Backup completed"
@@ -865,6 +877,7 @@ msgstr "Blu"
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
 #: src/views/ViewPage.vue
+#: templates/admin-backup.php
 msgid "Board"
 msgstr "Bacheca"
 
@@ -2015,6 +2028,10 @@ msgstr "Le colonne con blocco sul completamento impediscono il passaggio a Fatto
 #: src/views/ProjectStats.vue
 msgid "Down vs previous period"
 msgstr "In calo rispetto al periodo precedente"
+
+#: src/admin-backup.js
+msgid "Download"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Download a backup of this board, attachments included."
@@ -3188,6 +3205,14 @@ msgstr "Kanso"
 msgid "Kanso & the Guests app"
 msgstr "Kanso e l'app Guests"
 
+#: templates/admin-backup.php
+msgid "Kanso app data (recommended)"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso app data keeps each archive inside the app's own storage, next to card attachments. Nothing is written into anyone's Files, so a run adds no Files activity entries and the archives are outside every account's quota. What you give up: they are not browsable, syncable or mountable anywhere — the list at the bottom of this page is the only way to get one back — and a backup that ages out of retention is deleted outright instead of going to a trashbin."
+msgstr ""
+
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Kanso background jobs & email links"
 msgstr "Processi in background e collegamenti email di Kanso"
@@ -3694,6 +3719,10 @@ msgstr "Ancora nessuna regola di archiviazione automatica."
 #: src/components/BoardSettingsModal.vue
 msgid "No background"
 msgstr "Nessuno sfondo"
+
+#: templates/admin-backup.php
+msgid "No backups stored yet."
+msgstr ""
 
 #: src/App.vue
 msgid "No boards in this folder"
@@ -4918,6 +4947,10 @@ msgstr "Barra laterale"
 msgid "Single date"
 msgstr "Data singola"
 
+#: templates/admin-backup.php
+msgid "Size"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Skip while open"
 msgstr "Salta se ancora aperta"
@@ -5043,6 +5076,10 @@ msgstr "Ferma il timer"
 msgid "Stop watching this card"
 msgstr "Smetti di osservare questa scheda"
 
+#: templates/admin-backup.php
+msgid "Stored backups"
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 msgid "Strikethrough"
 msgstr "Barrato"
@@ -5129,6 +5166,10 @@ msgstr "Questa scheda non è più in questa bacheca."
 
 #: src/components/BoardSettingsModal.vue
 msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "The archives currently kept in the destination above, newest first. Each one is a full export of a single board — every card and every attachment on it, including ones you cannot normally see — so downloading it is an administrator-only action and the file is never shareable by link."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5593,6 +5634,10 @@ msgstr "Quando una scheda entra nel ruolo"
 msgid "When someone requests your review on a card it will appear here."
 msgstr "Quando viene richiesta una revisione su una scheda, appare qui."
 
+#: templates/admin-backup.php
+msgid "Where backups are written"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Which Forgejo issues to take in"
 msgstr ""
@@ -5638,6 +5683,10 @@ msgstr "Flusso di lavoro"
 #: src/views/ProjectView.vue
 msgid "Write a reply…"
 msgstr "Scrivi una risposta…"
+
+#: templates/admin-backup.php
+msgid "Written"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "wrote"

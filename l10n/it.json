@@ -178,7 +178,6 @@
         "Attaching…": "Allegato in corso…",
         "Attachments": "Allegati",
         "Auto-archive": "Archiviazione automatica",
-        "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials.": "Esporta automaticamente ogni bacheca di Kanso in un file JSON versionato con cadenza giornaliera, conservando gli ultimi backup di ciascuna bacheca. Indicare qui una cartella di Nextcloud; montare quella cartella come Archiviazione esterna S3 per conservare copie fuori sede. Kanso scrive i file tramite Nextcloud e non gestisce mai credenziali S3.",
         "Automation": "Automazione",
         "Average days": "Giorni medi",
         "Back": "Indietro",
