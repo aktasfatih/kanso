@@ -11,6 +11,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.35.0](https://github.com/aktasfatih/kanso/compare/v0.34.1...v0.35.0) (2026-09-22)
+
+
+### Bug Fixes
+
+* **backup:** plainer backup settings that show only the destination you chose ([ac8d0aa](https://github.com/aktasfatih/kanso/commit/ac8d0aac0f39bba031011b27e2b540abc105f8c7)), closes [#161](https://github.com/aktasfatih/kanso/issues/161)
+* **backup:** say a backup listing failed instead of showing an empty one ([7669124](https://github.com/aktasfatih/kanso/commit/76691240d97c3b7d3b3f5349c2c6ae1d4588f328))
+* **backup:** say when your backups could not be read, instead of reporting none ([9e49a79](https://github.com/aktasfatih/kanso/commit/9e49a79031bfceaac3eb08f6cefaadc1747ba57c))
+* **backup:** stop the settings page creating a backup folder it only meant to read ([b459fe4](https://github.com/aktasfatih/kanso/commit/b459fe42f8e3cf60cdf3cffb00cc7b6903a7ba84))
+
+
+### Features
+
+* **backup:** choose where scheduled backups are stored — Kanso's own storage or a Files folder ([a2b600c](https://github.com/aktasfatih/kanso/commit/a2b600c37e617959df77f6e96b97842277b57781)), closes [#10673](https://github.com/aktasfatih/kanso/issues/10673) [#161](https://github.com/aktasfatih/kanso/issues/161)
+* **backup:** show admins how to keep scheduled backups out of their own activity feed ([8e11ce1](https://github.com/aktasfatih/kanso/commit/8e11ce14cf287bdc6a79ad8823ca7ffd239b7b5d)), closes [#161](https://github.com/aktasfatih/kanso/issues/161)
+* **backup:** tell administrators how a scheduled backup run went ([84aab88](https://github.com/aktasfatih/kanso/commit/84aab88d2d4f1250016fd396e74a8beb77c371bf)), closes [#161](https://github.com/aktasfatih/kanso/issues/161)
+
 ## [0.34.1](https://github.com/aktasfatih/kanso/compare/v0.34.0...v0.34.1) (2026-09-21)
 
 
