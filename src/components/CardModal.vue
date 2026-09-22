@@ -120,12 +120,47 @@ function onDetailClose() {
 }
 </script>
 
-<!-- Widen the modal container for the two-pane card view (teleported outside
+<!-- Size the modal container for the two-pane card view (teleported outside
      scoped styles, so this block is intentionally global). -->
 <style>
 .card-modal-modal .modal-container,
 .modal-container.card-modal-modal {
 	width: min(1180px, 94vw) !important;
 	max-width: min(1180px, 94vw) !important;
+}
+
+/* Height, not just MAX-height (#10657).
+ *
+ * NcModal's size rules give the container a `max-height` and no `height`, so it
+ * shrink-wraps its content. That is fine for a dialog, but the card view is a
+ * two-pane shell whose discussion pane is supposed to take whatever vertical
+ * slack is going: CardDetail declares a `flex: 1; min-height: 0` chain down to
+ * `.card-modal__thread-scroll`, and a chain like that distributes nothing
+ * unless some ancestor states a DEFINITE height. Without one the panes fell
+ * back to a fixed `64vh` cap, which under-claimed what the modal already
+ * affords and left the comments in a small scroller.
+ *
+ * The value is deliberately the SAME expression NcModal uses for its own
+ * `max-height` - this claims the space the shell already grants, it does not
+ * take more.
+ *
+ * Scoped to the wide two-pane regime, matching the rules in CardDetail that
+ * consume it (`@media not all and (max-width: 680px)`). Narrower than that the
+ * card is one tabbed column that scrolls as a single document, and a container
+ * taller than its content would just draw an empty box below it. The extra
+ * `min-height` guard keeps NcModal's own short-window rule
+ * (`(max-width: 512px) or (max-height: 400px)`, which already gives the
+ * container a definite full-screen height) untouched. */
+@media only screen and (min-width: 681px) and (min-height: 401px) {
+	.card-modal-modal .modal-container,
+	.modal-container.card-modal-modal {
+		height: min(90%, 100% - 2 * var(--header-height) - 2 * var(--body-container-margin)) !important;
+	}
+
+	/* Pass that height through NcModal's own content wrapper so `.card-modal`
+	 * has a definite parent to fill. */
+	.card-modal-modal .modal-container__content {
+		height: 100%;
+	}
 }
 </style>

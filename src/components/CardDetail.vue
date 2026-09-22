@@ -9302,6 +9302,45 @@ async function handleToggleProject(projectId) {
    stacked-layout query, so a fractional viewport width (zoom, display scaling)
    can never fall between the two and leave the toggle inert. */
 @media not all and (max-width: 680px) {
+	/* ── The discussion pane claims the modal's height (#10657) ───────────────
+	   NcModal grants the card container a `max-height` and no `height`, so it
+	   shrink-wrapped; the `flex: 1; min-height: 0` chain this file already
+	   declares (body -> discussion -> thread-scroll) then had no definite
+	   ancestor height to distribute, and the `64vh` caps below became the real
+	   constraint - a guess at what the modal affords that under-claimed it, and
+	   by more the taller the screen. CardModal.vue now states the container's
+	   height; these three rules carry it down to the comment scroller.
+
+	   Wide layout only, like everything else in this block. Below 680px the card
+	   is a single tabbed column that scrolls as ONE document inside the modal,
+	   and the phone description editor centres itself in whichever scroller it
+	   finds - pinning the panes there would shrink that scroller and put the
+	   caret back under the soft keyboard (tests/e2e/mobile-pwa.spec.js). */
+	.card-modal:not(.card-modal--mode-page) {
+		/* Fill the container instead of shrink-wrapping inside it. This is the
+		   link that makes the flex chain below effective at all: as a plain
+		   block child of NcModal's content wrapper, `.card-modal` sizes to its
+		   content, so giving the container a height alone changes nothing
+		   downstream. The full-page view is not inside a modal and keeps its
+		   height from the page. */
+		height: 100%;
+	}
+	.card-modal__body {
+		/* ONE row, and it may not outgrow the body. An implicit `auto` row is
+		   sized to its tallest item and only ever stretched, never shrunk, so a
+		   long thread would push the panes - and the composer pinned to the
+		   bottom of one - straight past the modal's clip. `minmax(0, 1fr)` pins
+		   the row to the body's own height, which is where the panes' internal
+		   scrollers take over. The bottom layout resets this below: there the
+		   body IS the scroller and its two stacked rows are meant to grow. */
+		grid-template-rows: minmax(0, 1fr);
+	}
+	.card-modal__content,
+	.card-modal__discussion {
+		/* Drop the 64vh guesses: the row above now has the modal's real height. */
+		max-height: none;
+	}
+
 	.card-modal--discussion-collapsed:not(.card-modal--discussion-bottom) .card-modal__body {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -9324,12 +9363,17 @@ async function handleToggleProject(projectId) {
 	   by CSS structure, not by remembering to clear it. */
 	.card-modal--discussion-bottom .card-modal__body {
 		grid-template-columns: minmax(0, 1fr);
+		/* Undo the side layout's single pinned row: here the card and the
+		   discussion stack as two content-sized rows inside one scroller. */
+		grid-template-rows: auto auto;
 		overflow: auto;
-		/* The SAME 64vh the two panes each use in the side layout - it is what the
-		   modal container actually affords. Anything taller puts the bottom of the
-		   body past the modal's clip, and that is exactly where the sticky composer
-		   sits, so the Post button becomes unreachable. */
-		max-height: 64vh;
+		/* No vh cap. The body must end exactly where the modal's clip does - any
+		   taller and its bottom edge, where the sticky composer sits, is cut off
+		   and the Post button becomes unreachable. That used to be spelled as a
+		   fixed 64vh, a guess at what the container affords; the shell now states
+		   a real height (#10657) and the `flex: 1; min-height: 0` above sizes
+		   this to it exactly, at any viewport. */
+		max-height: none;
 	}
 	/* Hand scrolling to the body: the panes must grow to their content instead of
 	   each opening a nested scroller. */
