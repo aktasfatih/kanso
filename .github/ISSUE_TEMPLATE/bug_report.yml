@@ -77,7 +77,7 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I'm on a supported version (Nextcloud 32–34, PHP 8.2–8.3)
+        - label: I'm on a supported version (Nextcloud 32–34, PHP 8.2–8.5)
           required: false
         - label: I searched the existing issues and this isn't already reported
           required: true

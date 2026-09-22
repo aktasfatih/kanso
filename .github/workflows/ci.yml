@@ -168,16 +168,36 @@ jobs:
         run: composer psalm
 
   # Unit tests DO exercise the runtime, so run them across the supported PHP
-  # range (8.2 for NC 30–33, 8.3 for NC 34) to catch version-specific breakage.
+  # range to catch version-specific breakage.
+  #
+  # The range is 8.2-8.5, not 8.2-8.3. 8.2 is the floor `appinfo/info.xml`
+  # declares (`<php min-version="8.2"/>`); there is deliberately NO max-version,
+  # so Nextcloud will happily run Kanso on 8.4 and 8.5 and until now nothing
+  # executed either - the same blind spot that let #158 ship, just at the other
+  # end. setup-php lists 8.4 and 8.5 as Stable on self-hosted runners, so both
+  # legs are real, not aspirational.
+  #
+  # These legs are only worth having because `phpunit.xml` sets
+  # `failOnDeprecation`/`failOnNotice`. Without them PHPUnit 10.5 prints
+  # "OK, but there were issues!" and exits 0 on a deprecation, so a newer-PHP
+  # leg would go green while ignoring precisely what it was added to catch -
+  # measured: PHP 8.5 flagged 3 deprecations (one of them a real runtime bug in
+  # lib/Service/ReviewService.php) and still exited 0 before those flags landed.
+  # Do not remove them to "quieten" a leg.
   unit-php:
     runs-on: kanso-runners
-    # One value covers both legs, so it is sized for the slow one: 8.2 has been
-    # observed at 2-6m but 8.3 at 3-21m.
+    # One value covers every leg, so it is sized for the slow one: 8.2 has been
+    # observed at 2-6m but 8.3 at 3-21m. The 8.4/8.5 legs run the identical
+    # suite (measured at ~6s of phpunit each locally, i.e. the runtime here is
+    # almost entirely checkout + setup-php + composer), and they run in
+    # PARALLEL with the existing two, so they add runner load but not wall
+    # clock - the ~1.5h figure for the whole workflow is set by `e2e`, which
+    # this does not touch.
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.2', '8.3']
+        php-version: ['8.2', '8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v7
       # See cs-check above for why this step exists and why it is not `grep -q`.
@@ -219,6 +239,43 @@ jobs:
           tools: composer
       - name: Verify the PHP binary starts
         run: php -v
+      # Parse the tree that actually SHIPS (lib/, appinfo/, templates/) on every
+      # PHP in the matrix, so a construct that a NEWER PHP rejects or deprecates
+      # is caught the way info.xml's min-version catches an older one. The
+      # install-matrix cannot cover this: every nextcloud:* image pins its own
+      # PHP (8.3 today), so no job there ever sees 8.4 or 8.5.
+      #
+      # Crucially this does NOT trust the exit code alone. `php -l` returns
+      # non-zero ONLY for a parse error; a COMPILE-time deprecation is printed
+      # and the exit status stays 0. Measured on this repo's containers:
+      #
+      #   $ php -l implicit_nullable.php   # PHP 8.4 / 8.5
+      #   Deprecated: f(): Implicitly marking parameter $x as nullable is
+      #   deprecated, the explicit nullable type must be used instead ...
+      #   No syntax errors detected in implicit_nullable.php
+      #   $ echo $?
+      #   0
+      #
+      # The same file is silent on 8.3. So an exit-code-only check would be
+      # vacuous on exactly the newer legs it exists for - which is the whole
+      # point of the step. Instead every line of output is inspected and
+      # anything that is not "No syntax errors detected" fails the job.
+      - name: Parse-check the shipped tree
+        run: |
+          set -uo pipefail
+          out="$(mktemp)"
+          rc=0
+          find lib appinfo templates -name '*.php' -print0 \
+            | xargs -0 -r -n1 php -l > "$out" 2>&1 || rc=$?
+          # Drop the per-file success lines and the blank lines PHP prints
+          # before a diagnostic; whatever survives is a real complaint.
+          noise="$(grep -vE '^(No syntax errors detected in |$)' "$out" || true)"
+          if [ "$rc" -ne 0 ] || [ -n "$noise" ]; then
+            echo "::error::php -l reported problems in the shipped tree on PHP $(php -r 'echo PHP_VERSION;')"
+            printf '%s\n' "$noise"
+            exit 1
+          fi
+          echo "Shipped tree parses cleanly and silently on PHP $(php -r 'echo PHP_VERSION;')"
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Run unit tests
