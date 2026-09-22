@@ -307,7 +307,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4444
+#: src/components/CardDetail.vue:4456
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
@@ -319,7 +319,7 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4442
+#: src/components/CardDetail.vue:4454
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
@@ -343,7 +343,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4440
+#: src/components/CardDetail.vue:4452
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -367,13 +367,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1064
+#: src/components/CardDetail.vue:1076
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
 msgstr[1] "%n projecten"
 
-#: src/components/CardDetail.vue:2078
+#: src/components/CardDetail.vue:2090
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1812,7 +1812,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4633
+#: src/components/CardDetail.vue:4645
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3271,7 +3271,7 @@ msgstr "Cursief"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6403
+#: src/components/CardDetail.vue:6415
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3591,7 +3591,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4635
+#: src/components/CardDetail.vue:4647
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -5040,7 +5040,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:6409
+#: src/components/CardDetail.vue:6421
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5756,7 +5756,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4634
+#: src/components/CardDetail.vue:4646
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -5849,7 +5849,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4636
+#: src/components/CardDetail.vue:4648
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

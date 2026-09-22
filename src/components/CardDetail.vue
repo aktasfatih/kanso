@@ -825,7 +825,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:hide-status="true"
 							:disable-tooltip="true" />
 						<span class="card-modal__assignee-name" :title="participantName(uid)">{{ participantName(uid) }}</span>
+						<!-- Unassigning is a write (#10703): a member shared in with READ
+						     only keeps the avatar and the name - the whole point of the
+						     pill - but is not offered a button the server answers 403 to. -->
 						<button
+							v-if="canEdit"
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
 							:disabled="toggleAssignee.isPending.value"
@@ -844,8 +848,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					     control on the card, which read as "one assignee is the
 					     maximum" and was the actual multi-assign dead-end (#10603).
 					     Staying open also makes adding a 2nd and 3rd person one click
-					     each instead of reopening the picker every time. -->
-					<div class="card-modal__attr">
+					     each instead of reopening the picker every time.
+					     Editors only (#10703) - assigning is a write, and the server
+					     answers 403 to a read-only member, so offering the pill only
+					     invited them to fail. Presentation gate; the server check is
+					     untouched and stays the real one. -->
+					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed"
 							data-pill="assign"
@@ -972,9 +980,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:style="label.color ? { background: cssColor(label.color), color: readableColor(label.color) } : {}">
 						{{ label.title }}
 					</span>
-					<div class="card-modal__attr">
+					<!-- The chips above stay for everyone - they are the card's labels.
+					     The picker is the write half, so it follows the same rule as the
+					     assign control (#10703): editors only. -->
+					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							data-pill="label"
 							:aria-expanded="openPicker === 'label'"
 							@click="togglePicker('label')">
 							<PlusIcon :size="12" />
